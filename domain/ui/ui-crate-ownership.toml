@@ -9,6 +9,7 @@
 # path = crate path relative to repository root.
 # layer = one of:
 #   foundation, definition, definition_adapter, program, render, proof, surface, retained, testing
+#   composition
 #
 # Stable dependencies:
 #   allowed_dependencies
@@ -76,6 +77,20 @@ path = "domain/ui/ui_layout"
 layer = "foundation"
 owned_responsibility = "Layout contracts and layout facts."
 allowed_dependencies = ["ui_math"]
+
+[crate.ui_composition]
+package = "ui_composition"
+path = "domain/ui/ui_composition"
+layer = "composition"
+owned_responsibility = "App-neutral structural composition definitions, ratified state, typed transactions, structural history, diagnostics, promotion primitives, and fixture contracts."
+allowed_dependencies = []
+
+[crate.ui_adaptive_composition]
+package = "ui_adaptive_composition"
+path = "domain/ui/ui_adaptive_composition"
+layer = "composition"
+owned_responsibility = "Transient adaptive projection, proposal, preview, interaction-session, promotion-delta, accessibility metadata, and benchmark fixture mechanism."
+allowed_dependencies = ["ui_composition", "ui_input", "ui_math"]
 
 [crate.ui_tree]
 package = "ui_tree"
@@ -365,13 +380,17 @@ layer = "testing"
 owned_responsibility = "UI conformance and test utilities."
 allowed_dependencies = [
   "ui_accessibility",
+  "ui_adaptive_composition",
   "ui_artifacts",
   "ui_binding",
   "ui_compiler",
+  "ui_composition",
   "ui_definition",
   "ui_evaluator",
   "ui_geometry",
   "ui_hosts",
+  "ui_input",
+  "ui_math",
   "ui_program",
   "ui_schema",
   "ui_state",

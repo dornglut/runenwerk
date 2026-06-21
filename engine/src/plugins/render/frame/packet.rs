@@ -14,7 +14,7 @@ use ui_render_data::ViewportSurfaceBindingRegistry;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct PreparedRenderFrameResource {
-    frame: Option<PreparedRenderFrame>,
+    frames: BTreeMap<RenderSurfaceId, PreparedRenderFrame>,
     next_frame_index: u64,
     next_prepare_epoch: u64,
 }
@@ -23,19 +23,48 @@ impl PreparedRenderFrameResource {
     pub fn publish(&mut self, frame: PreparedRenderFrame) {
         self.next_frame_index = frame.context.frame_index.saturating_add(1);
         self.next_prepare_epoch = frame.context.prepare_epoch.saturating_add(1);
-        self.frame = Some(frame);
+        self.frames.clear();
+        self.frames.insert(frame.surface.render_surface_id, frame);
+    }
+
+    pub fn publish_set(&mut self, frames: impl IntoIterator<Item = PreparedRenderFrame>) {
+        self.frames.clear();
+        for frame in frames {
+            self.next_frame_index = self
+                .next_frame_index
+                .max(frame.context.frame_index.saturating_add(1));
+            self.next_prepare_epoch = self
+                .next_prepare_epoch
+                .max(frame.context.prepare_epoch.saturating_add(1));
+            self.frames.insert(frame.surface.render_surface_id, frame);
+        }
     }
 
     pub fn clear(&mut self) {
-        self.frame = None;
+        self.frames.clear();
     }
 
     pub fn frame(&self) -> Option<&PreparedRenderFrame> {
-        self.frame.as_ref()
+        self.frames
+            .get(&RenderSurfaceId::primary())
+            .or_else(|| self.frames.values().next())
+    }
+
+    pub fn frames(&self) -> impl Iterator<Item = &PreparedRenderFrame> {
+        self.frames.values()
     }
 
     pub fn take(&mut self) -> Option<PreparedRenderFrame> {
-        self.frame.take()
+        let render_surface_id = if self.frames.contains_key(&RenderSurfaceId::primary()) {
+            RenderSurfaceId::primary()
+        } else {
+            self.frames.keys().next().copied()?
+        };
+        self.frames.remove(&render_surface_id)
+    }
+
+    pub fn take_all(&mut self) -> Vec<PreparedRenderFrame> {
+        std::mem::take(&mut self.frames).into_values().collect()
     }
 
     pub fn allocate_frame_index(&mut self) -> u64 {

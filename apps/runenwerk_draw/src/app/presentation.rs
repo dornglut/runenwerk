@@ -8,7 +8,7 @@ use ui_render_data::{
     UiSortKey, UiSurface, UiSurfaceId,
 };
 
-use crate::app::DrawingWorkspaceProjection;
+use crate::app::DrawingCompositionProjection;
 
 pub const DRAWING_UI_SURFACE_ID: UiSurfaceId = UiSurfaceId(4_001);
 pub const DRAWING_CANVAS_LAYER_ID: UiLayerId = UiLayerId(4_010);
@@ -57,50 +57,50 @@ pub struct DrawingImmediateStrokeProjection<'a> {
     pub width_px: f32,
 }
 
-pub fn build_workspace_frame(workspace: &DrawingWorkspaceProjection) -> UiFrame {
-    build_workspace_frame_with_ink(workspace, &[], &[])
+pub fn build_composition_frame(composition: &DrawingCompositionProjection) -> UiFrame {
+    build_composition_frame_with_ink(composition, &[], &[])
 }
 
-pub fn build_workspace_frame_with_ink(
-    workspace: &DrawingWorkspaceProjection,
+pub fn build_composition_frame_with_ink(
+    composition: &DrawingCompositionProjection,
     ink_tiles: &[DrawingInkTileProduct],
     preview_tiles: &[DrawingInkTileProduct],
 ) -> UiFrame {
     let ink_tiles = ink_tiles.iter().collect::<Vec<_>>();
     let preview_tiles = preview_tiles.iter().collect::<Vec<_>>();
-    build_workspace_frame_with_ink_refs_and_stroke(workspace, &ink_tiles, &preview_tiles, None)
+    build_composition_frame_with_ink_refs_and_stroke(composition, &ink_tiles, &preview_tiles, None)
 }
 
-pub fn build_workspace_frame_with_ink_and_stroke(
-    workspace: &DrawingWorkspaceProjection,
+pub fn build_composition_frame_with_ink_and_stroke(
+    composition: &DrawingCompositionProjection,
     ink_tiles: &[DrawingInkTileProduct],
     preview_tiles: &[DrawingInkTileProduct],
     immediate_stroke: Option<DrawingImmediateStrokeProjection<'_>>,
 ) -> UiFrame {
     let ink_tiles = ink_tiles.iter().collect::<Vec<_>>();
     let preview_tiles = preview_tiles.iter().collect::<Vec<_>>();
-    build_workspace_frame_with_ink_refs_and_stroke(
-        workspace,
+    build_composition_frame_with_ink_refs_and_stroke(
+        composition,
         &ink_tiles,
         &preview_tiles,
         immediate_stroke,
     )
 }
 
-pub(crate) fn build_workspace_frame_with_ink_surface_refs_and_strokes(
-    workspace: &DrawingWorkspaceProjection,
+pub(crate) fn build_composition_frame_with_ink_surface_refs_and_strokes(
+    composition: &DrawingCompositionProjection,
     ink_tiles: &[DrawingInkSurfaceProjection<'_>],
     preview_tiles: &[DrawingInkSurfaceProjection<'_>],
     immediate_strokes: &[DrawingImmediateStrokeProjection<'_>],
 ) -> UiFrame {
     let mut layer = UiLayer::new(DRAWING_CANVAS_LAYER_ID);
-    push_workspace_base(&mut layer, workspace);
-    push_projected_ink_surfaces(&mut layer, workspace, ink_tiles, 10);
-    push_projected_ink_surfaces(&mut layer, workspace, preview_tiles, 20_000);
+    push_composition_base(&mut layer, composition);
+    push_projected_ink_surfaces(&mut layer, composition, ink_tiles, 10);
+    push_projected_ink_surfaces(&mut layer, composition, preview_tiles, 20_000);
     for (index, stroke) in immediate_strokes.iter().copied().enumerate() {
         push_immediate_stroke(
             &mut layer,
-            workspace,
+            composition,
             stroke,
             IMMEDIATE_STROKE_PRIMITIVE_ORDER.saturating_add(index as u32),
         );
@@ -108,29 +108,29 @@ pub(crate) fn build_workspace_frame_with_ink_surface_refs_and_strokes(
 
     UiFrame::with_surfaces(vec![UiSurface::with_layers(
         DRAWING_UI_SURFACE_ID,
-        workspace.window_size,
+        composition.window_size,
         vec![layer],
     )])
 }
 
-pub(crate) fn build_workspace_frame_with_ink_refs_and_stroke(
-    workspace: &DrawingWorkspaceProjection,
+pub(crate) fn build_composition_frame_with_ink_refs_and_stroke(
+    composition: &DrawingCompositionProjection,
     ink_tiles: &[&DrawingInkTileProduct],
     preview_tiles: &[&DrawingInkTileProduct],
     immediate_stroke: Option<DrawingImmediateStrokeProjection<'_>>,
 ) -> UiFrame {
     let mut layer = UiLayer::new(DRAWING_CANVAS_LAYER_ID);
-    push_workspace_base(&mut layer, workspace);
+    push_composition_base(&mut layer, composition);
     push_ink_surfaces(
         &mut layer,
-        workspace,
+        composition,
         ink_tiles,
         DrawingInkSurfaceKind::Committed,
         10,
     );
     push_ink_surfaces(
         &mut layer,
-        workspace,
+        composition,
         preview_tiles,
         DrawingInkSurfaceKind::Preview,
         20_000,
@@ -138,7 +138,7 @@ pub(crate) fn build_workspace_frame_with_ink_refs_and_stroke(
     if let Some(stroke) = immediate_stroke {
         push_immediate_stroke(
             &mut layer,
-            workspace,
+            composition,
             stroke,
             IMMEDIATE_STROKE_PRIMITIVE_ORDER,
         );
@@ -146,41 +146,41 @@ pub(crate) fn build_workspace_frame_with_ink_refs_and_stroke(
 
     UiFrame::with_surfaces(vec![UiSurface::with_layers(
         DRAWING_UI_SURFACE_ID,
-        workspace.window_size,
+        composition.window_size,
         vec![layer],
     )])
 }
 
-fn push_workspace_base(layer: &mut UiLayer, workspace: &DrawingWorkspaceProjection) {
+fn push_composition_base(layer: &mut UiLayer, composition: &DrawingCompositionProjection) {
     push_rect(
         layer,
         UiRect::new(
             0.0,
             0.0,
-            workspace.window_size.width,
-            workspace.window_size.height,
+            composition.window_size.width,
+            composition.window_size.height,
         ),
         UiPaint::rgba(0.055, 0.058, 0.062, 1.0),
         0,
     );
     push_rect(
         layer,
-        workspace.toolbar_bounds,
+        composition.tool_rail_bounds,
         UiPaint::rgba(0.095, 0.1, 0.108, 1.0),
         1,
     );
-    if workspace.layer_panel_bounds.width > 0.0 {
+    if composition.support_panel_bounds.width > 0.0 {
         push_rect(
             layer,
-            workspace.layer_panel_bounds,
+            composition.support_panel_bounds,
             UiPaint::rgba(0.09, 0.092, 0.098, 1.0),
             2,
         );
-        push_tablet_panel(layer, workspace, 30_000);
+        push_tablet_panel(layer, composition, 30_000);
     }
     push_rect(
         layer,
-        workspace.canvas_view.screen_bounds,
+        composition.canvas_view.screen_bounds,
         UiPaint::rgba(0.93, 0.925, 0.9, 1.0),
         3,
     );
@@ -188,14 +188,14 @@ fn push_workspace_base(layer: &mut UiLayer, workspace: &DrawingWorkspaceProjecti
 
 fn push_immediate_stroke(
     layer: &mut UiLayer,
-    workspace: &DrawingWorkspaceProjection,
+    composition: &DrawingCompositionProjection,
     projection: DrawingImmediateStrokeProjection<'_>,
     primitive_order: u32,
 ) {
     let points = projection
         .samples
         .iter()
-        .filter_map(|sample| workspace.canvas_view.canvas_to_screen(sample.position))
+        .filter_map(|sample| composition.canvas_view.canvas_to_screen(sample.position))
         .collect::<Vec<UiPoint>>();
     if points.is_empty() {
         return;
@@ -210,7 +210,7 @@ fn push_immediate_stroke(
             DRAW_KEY_SOLID,
             UiSortKey::new(0, 0, primitive_order),
         )
-        .with_clip(workspace.canvas_view.screen_bounds),
+        .with_clip(composition.canvas_view.screen_bounds),
     ));
 }
 
@@ -241,14 +241,14 @@ fn bounded_immediate_stroke_points(points: Vec<UiPoint>, max_point_count: usize)
 
 fn push_tablet_panel(
     layer: &mut UiLayer,
-    workspace: &DrawingWorkspaceProjection,
+    composition: &DrawingCompositionProjection,
     primitive_order_start: u32,
 ) {
-    let panel = workspace.layer_panel_bounds;
+    let panel = composition.support_panel_bounds;
     if panel.width <= 0.0 || panel.height <= 0.0 {
         return;
     }
-    let state = &workspace.tablet_panel;
+    let state = &composition.tablet_panel;
     let x = panel.x + 16.0;
     let width = (panel.width - 32.0).max(0.0);
     let mut y = panel.y + 16.0;
@@ -389,17 +389,17 @@ fn push_rect(layer: &mut UiLayer, rect: UiRect, paint: UiPaint, primitive_order:
 
 fn push_ink_surfaces(
     layer: &mut UiLayer,
-    workspace: &DrawingWorkspaceProjection,
+    composition: &DrawingCompositionProjection,
     ink_tiles: &[&DrawingInkTileProduct],
     surface_kind: DrawingInkSurfaceKind,
     primitive_order_start: u32,
 ) {
     let mut primitive_order = primitive_order_start;
     for product in ink_tiles {
-        let Some(rect) = workspace
+        let Some(rect) = composition
             .canvas_view
             .canvas_rect_to_screen(product.metadata.invalidation_bounds)
-            .and_then(|rect| rect.intersect(workspace.canvas_view.screen_bounds))
+            .and_then(|rect| rect.intersect(composition.canvas_view.screen_bounds))
         else {
             continue;
         };
@@ -427,7 +427,7 @@ fn push_ink_surfaces(
 
 fn push_projected_ink_surfaces(
     layer: &mut UiLayer,
-    workspace: &DrawingWorkspaceProjection,
+    composition: &DrawingCompositionProjection,
     ink_tiles: &[DrawingInkSurfaceProjection<'_>],
     primitive_order_start: u32,
 ) {
@@ -435,7 +435,7 @@ fn push_projected_ink_surfaces(
     for projection in ink_tiles {
         push_ink_surface(
             layer,
-            workspace,
+            composition,
             projection.product,
             projection.surface_kind,
             primitive_order,
@@ -446,15 +446,15 @@ fn push_projected_ink_surfaces(
 
 fn push_ink_surface(
     layer: &mut UiLayer,
-    workspace: &DrawingWorkspaceProjection,
+    composition: &DrawingCompositionProjection,
     product: &DrawingInkTileProduct,
     surface_kind: DrawingInkSurfaceKind,
     primitive_order: u32,
 ) {
-    let Some(rect) = workspace
+    let Some(rect) = composition
         .canvas_view
         .canvas_rect_to_screen(product.metadata.invalidation_bounds)
-        .and_then(|rect| rect.intersect(workspace.canvas_view.screen_bounds))
+        .and_then(|rect| rect.intersect(composition.canvas_view.screen_bounds))
     else {
         return;
     };

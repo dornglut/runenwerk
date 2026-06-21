@@ -22,7 +22,7 @@ legend right
 endlegend
 
 package "Current Implementation Candidates" {
-  component "WR-181 Composition core contracts\nstate=current_candidate\nscore=2.0 V5 B2\ncall=deterministic core\ntyped transactions\nno app semantics" as UICOMP02 <<candidate>>
+  component "WR-186 Editor docking runtime\nstate=current_candidate\nscore=1.2 V5 B2\ncall=selected docking UX\nreal cross-window move\ntransaction-only mutation" as UICOMP07 <<candidate>>
 
 }
 

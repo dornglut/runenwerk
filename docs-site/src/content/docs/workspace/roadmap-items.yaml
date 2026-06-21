@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap
-  last_reviewed: '2026-06-19'
+  last_reviewed: '2026-06-20'
   owner: workspace
 render:
   decision_register: docs-site/src/content/docs/workspace/roadmap-decision-register.md
@@ -738,319 +738,6 @@ items:
     WRs must add focused GPU-layout derivation, residency diagnostics, candidate bounds, distance-mip safety, far-origin camera-relative,
     shader-binding, evidence, and benchmark tests before implementation closeout.
   ownership_mode: Complicated-subsystem renderer platform with stream-aligned SDF and world-product producer collaboration.
-- id: WR-181
-  title: UI Composition Core Contracts And Invariants
-  diagram_title: Composition core contracts
-  alias: UICOMP02
-  lane: UI architecture
-  dependency_level: L4
-  gate: Region Compass selected and checkpoint 1 closed
-  planning_state: current_candidate
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 5
-  rr_oe: 5
-  du: 5
-  effort: 8
-  confidence: 0.8
-  expected_score: 2.0
-  rice: N/A
-  kano: Must-be
-  dependencies:
-  - WR-180
-  write_scopes:
-  - Cargo.toml
-  - new:domain/ui/ui_composition
-  - domain/ui/ui-crate-ownership.toml
-  - domain/ui/ui_testing
-  - docs-site/src/content/docs/domain/ui
-  - docs-site/src/content/docs/reports/implementation-plans
-  - docs-site/src/content/docs/reports/closeouts
-  validations:
-  - cargo fmt --check
-  - cargo test -p ui_composition
-  - cargo test -p ui_testing composition_fixture
-  - task ui:dependencies
-  - task docs:validate
-  - task planning:validate
-  next_evidence: PM-UI-COMPOSITION-001 closed with selected Region Compass evidence; WR-181 decision-complete plan.contract.yaml
-    accepted on 2026-06-19
-  current_decision: PM-UI-COMPOSITION-001 closed with selected Region Compass evidence; WR-181 decision-complete plan.contract.yaml
-    accepted on 2026-06-19
-  current_call: Implement the smallest complete core authority; do not add adaptive or app semantics.
-  first_move: Run task production:plan for PM-UI-COMPOSITION-002 and inspect exact existing ID, diagnostic, ratification,
-    and fixture patterns.
-  main_blocker: Checkpoint 1 must complete its transactional closeout.
-  why_not_ready: Awaiting checkpoint 1 closeout and explicit roadmap promotion.
-  completion_quality: not_applicable
-  known_quality_gaps:
-  - Persistence storage and runtime consumers are owned by later checkpoints.
-  completion_audit: ''
-  diagram_call:
-  - deterministic core
-  - typed transactions
-  - no app semantics
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Core contracts must implement the accepted structural authority.
-  ddd_owner: domain/ui/ui_composition
-  adr_requirement: Satisfied by ADR 0013.
-  fitness_function_requirement: Focused core tests, property invariants, atomic rejection, structural inverse revalidation,
-    fixtures, dependency checks, docs, and planning validation.
-  ownership_mode: Complicated-subsystem UI composition owner.
-- id: WR-182
-  title: Composition Persistence Envelopes And Deterministic Bundles
-  diagram_title: Composition persistence bundles
-  alias: UICOMP03
-  lane: UI architecture
-  dependency_level: L4
-  gate: Core composition contracts runtime-proven
-  planning_state: ready_next
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 5
-  rr_oe: 5
-  du: 5
-  effort: 8
-  confidence: 0.8
-  expected_score: 2.0
-  rice: N/A
-  kano: Must-be
-  dependencies:
-  - WR-181
-  write_scopes:
-  - domain/ui/ui_composition
-  - new:domain/ui/ui_composition/benches
-  - docs-site/src/content/docs/domain/ui
-  - docs-site/src/content/docs/reports/implementation-plans
-  - docs-site/src/content/docs/reports/closeouts
-  validations:
-  - cargo fmt --check
-  - cargo test -p ui_composition persistence
-  - cargo test -p ui_composition deterministic
-  - cargo bench -p ui_composition --bench composition_persistence --no-run
-  - task docs:validate
-  - task planning:validate
-  next_evidence: Canonical RON, linked core/app envelopes, BLAKE3 mismatch detection, generation-pointer atomicity, last-good
-    recovery, and legacy rejection proofs.
-  current_decision: Implement generic persistence and promotion contracts without wiring editor or Draw storage.
-  current_call: Prove deterministic bytes and atomic bundle activation before consumer migration.
-  first_move: Run task production:plan for PM-UI-COMPOSITION-003 and define golden/failure-injection fixtures.
-  main_blocker: WR-181 core identities, formation, revision, and promotion primitives must be runtime-proven.
-  why_not_ready: Depends on the completed core checkpoint.
-  completion_quality: not_applicable
-  known_quality_gaps:
-  - Editor and Draw extension adapters are later checkpoints.
-  completion_audit: ''
-  diagram_call:
-  - canonical RON
-  - linked hashes
-  - atomic activation
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Persistence must implement the accepted deterministic bundle contract.
-  ddd_owner: domain/ui/ui_composition persistence mechanism with app-owned storage adapters
-  adr_requirement: Satisfied by ADR 0013.
-  fitness_function_requirement: Byte-golden, insertion-order, round-trip, hash-link, mismatch, crash/failure, legacy rejection,
-    and benchmark tests.
-  ownership_mode: UI platform persistence mechanism with app adapter boundaries.
-- id: WR-183
-  title: Editor Static Composition Projection Cutover
-  diagram_title: Editor static projection
-  alias: UICOMP04
-  lane: Editor UI
-  dependency_level: L4
-  gate: Core and persistence checkpoints complete
-  planning_state: ready_next
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 4
-  rr_oe: 5
-  du: 5
-  effort: 13
-  confidence: 0.8
-  expected_score: 1.2
-  rice: N/A
-  kano: Must-be
-  dependencies:
-  - WR-182
-  write_scopes:
-  - new:domain/editor/editor_shell/src/composition
-  - domain/editor/editor_shell/src/workspace
-  - domain/editor/editor_shell/src/lib.rs
-  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
-  - apps/runenwerk_editor/src/shell
-  - docs-site/src/content/docs/apps/runenwerk-editor
-  - docs-site/src/content/docs/reports/implementation-plans
-  - docs-site/src/content/docs/reports/closeouts
-  validations:
-  - cargo fmt --check
-  - cargo test -p editor_shell composition
-  - cargo test -p editor_shell workspace
-  - cargo test -p runenwerk_editor composition
-  - task ui:dependencies
-  - task docs:validate
-  - task planning:validate
-  next_evidence: The existing editor arrangement renders from CompositionState and editor-owned extension/providers while
-    legacy WorkspaceState is read-only migration input.
-  current_decision: Convert editor static structure and persistence projection without implementing redesigned docking chrome.
-  current_call: At closeout, enforce compile-time/read-only guards on legacy workspace mutation.
-  first_move: Run task production:plan for PM-UI-COMPOSITION-004 and inventory every WorkspaceState writer and projection
-    consumer.
-  main_blocker: WR-182 must prove persistence and promotion before editor authority moves.
-  why_not_ready: Depends on deterministic persistence.
-  completion_quality: not_applicable
-  known_quality_gaps:
-  - Adaptive docking and full legacy deletion are later checkpoints.
-  completion_audit: ''
-  diagram_call:
-  - editor static projection
-  - legacy read-only
-  - no docking redesign yet
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Editor migration must consume generic composition without recreating workspace authority.
-  ddd_owner: editor_shell specialization over domain/ui composition
-  adr_requirement: Satisfied by ADR 0013.
-  fitness_function_requirement: Editor projection, provider liveness, extension bundle, legacy read-only, unsupported V1-V5,
-    dependency, docs, and planning tests.
-  ownership_mode: Stream-aligned editor integration over UI composition platform.
-- id: WR-184
-  title: Draw Static Composition Projection
-  diagram_title: Draw static projection
-  alias: UICOMP05
-  lane: Draw UI
-  dependency_level: L4
-  gate: Editor static projection and legacy read-only gate complete
-  planning_state: ready_next
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 4
-  rr_oe: 5
-  du: 5
-  effort: 8
-  confidence: 0.8
-  expected_score: 1.9
-  rice: N/A
-  kano: Must-be
-  dependencies:
-  - WR-183
-  write_scopes:
-  - apps/runenwerk_draw/src/app/workspace.rs
-  - apps/runenwerk_draw/src/app/presentation.rs
-  - apps/runenwerk_draw/src/app
-  - apps/runenwerk_draw/Cargo.toml
-  - docs-site/src/content/docs/apps
-  - docs-site/src/content/docs/reports/implementation-plans
-  - docs-site/src/content/docs/reports/closeouts
-  validations:
-  - cargo fmt --check
-  - cargo test -p runenwerk_draw --test app_shell
-  - cargo test -p runenwerk_draw composition
-  - task docs:validate
-  - task planning:validate
-  next_evidence: Draw wide layout renders from generic composition with app-owned content and extension state while drawing-document
-    authority remains unchanged.
-  current_decision: Prove a real non-editor consumer before adaptive behavior.
-  current_call: Replace static workspace projection naming and ownership without adding responsive drawers yet.
-  first_move: Run task production:plan for PM-UI-COMPOSITION-005 and map current canvas/toolbar/panel projection into a definition
-    fixture.
-  main_blocker: WR-183 must prove the first runtime consumer and read-only legacy boundary.
-  why_not_ready: Depends on editor static projection.
-  completion_quality: not_applicable
-  known_quality_gaps:
-  - Narrow responsive behavior belongs to WR-187.
-  completion_audit: ''
-  diagram_call:
-  - Draw static proof
-  - app-owned content
-  - no document authority move
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Draw must prove the same neutral structural contract.
-  ddd_owner: Runenwerk Draw app integration over domain/ui composition
-  adr_requirement: Satisfied by ADR 0013.
-  fitness_function_requirement: Draw composition, extension, liveness fallback, document-authority guard, docs, and planning
-    tests.
-  ownership_mode: Stream-aligned Draw consumer of UI composition platform.
-- id: WR-185
-  title: Adaptive Composition Headless Proposals And Semantic Input
-  diagram_title: Adaptive headless proposals
-  alias: UICOMP06
-  lane: UI architecture
-  dependency_level: L4
-  gate: Editor and Draw static projections prove neutral core
-  planning_state: ready_next
-  priority: P0
-  value: 5
-  blocker: 2
-  tc: 5
-  rr_oe: 5
-  du: 5
-  effort: 8
-  confidence: 0.8
-  expected_score: 2.0
-  rice: N/A
-  kano: Must-be
-  dependencies:
-  - WR-184
-  write_scopes:
-  - Cargo.toml
-  - new:domain/ui/ui_adaptive_composition
-  - domain/ui/ui_input
-  - domain/ui/ui_testing
-  - docs-site/src/content/docs/domain/ui
-  - docs-site/src/content/docs/reports/implementation-plans
-  - docs-site/src/content/docs/reports/closeouts
-  validations:
-  - cargo fmt --check
-  - cargo test -p ui_adaptive_composition
-  - cargo test -p ui_input semantic
-  - task ui:dependencies
-  - task docs:validate
-  - task planning:validate
-  next_evidence: Headless projection, edit classification, docking proposals, semantic input, promotion deltas, fixtures,
-    accessibility metadata, and benchmark harness pass.
-  current_decision: Implement adaptive mechanism headlessly before editor chrome consumes it.
-  current_call: No app-specific docking semantics or direct structural mutation may enter the adaptive crate.
-  first_move: Run task production:plan for PM-UI-COMPOSITION-006 and implement fixture-driven projection/proposal contracts.
-  main_blocker: WR-184 must prove editor and Draw can consume the core without adaptive coupling.
-  why_not_ready: Depends on both static runtime proofs.
-  completion_quality: not_applicable
-  known_quality_gaps:
-  - Runtime editor and Draw interaction remain later checkpoints.
-  completion_audit: ''
-  diagram_call:
-  - derived projection
-  - proposal only
-  - semantic input
-  decision_gates:
-  - kind: design
-    path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
-    required_status: accepted
-    applies_to: implementation
-    reason: Adaptive mechanism must follow the accepted proposal-only contract and selected visual direction.
-  ddd_owner: domain/ui/ui_adaptive_composition and domain/ui/ui_input semantic actions
-  adr_requirement: Satisfied by ADR 0013.
-  fitness_function_requirement: Fixture, projection, transient/structural/promotion classification, semantic parity, accessibility
-    metadata, allocation, clone, and benchmark tests.
-  ownership_mode: Complicated-subsystem adaptive UI mechanism owner.
 - id: WR-186
   title: Editor Docking And Cross-Window Composition Runtime
   diagram_title: Editor docking runtime
@@ -1058,7 +745,7 @@ items:
   lane: Editor UI
   dependency_level: L4
   gate: Adaptive headless proposal contracts runtime-proven
-  planning_state: ready_next
+  planning_state: current_candidate
   priority: P0
   value: 5
   blocker: 2
@@ -1075,10 +762,26 @@ items:
   write_scopes:
   - domain/editor/editor_shell/src/composition
   - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/commands
+  - domain/editor/editor_shell/Cargo.toml
   - apps/runenwerk_editor/src/shell
   - apps/runenwerk_editor/src/runtime
+  - apps/runenwerk_editor/src/editor_app
+  - apps/runenwerk_editor/tests
+  - apps/runenwerk_editor/Cargo.toml
   - engine/src/runtime/window.rs
   - engine/src/runtime/platform.rs
+  - engine/src/runtime/winit_runner.rs
+  - engine/src/plugins/render/backend/surface.rs
+  - engine/src/plugins/render/backend/wgpu_ctx.rs
+  - engine/src/plugins/render/features/ui
+  - engine/src/plugins/render/frame
+  - engine/src/plugins/render/renderer/mod.rs
+  - engine/src/plugins/render/runtime/frame_prepare.rs
+  - engine/src/plugins/render/runtime/frame_submit.rs
+  - engine/tests/render_multi_surface.rs
+  - domain/ui/ui_composition/src/transaction
+  - domain/ui/ui_composition/tests
   - docs-site/src/content/docs/apps/runenwerk-editor
   - docs-site/src/content/docs/reports/implementation-plans
   - docs-site/src/content/docs/reports/closeouts
@@ -1088,16 +791,15 @@ items:
   - cargo test -p runenwerk_editor docking
   - cargo test -p runenwerk_editor window
   - cargo test -p engine window
+  - cargo test -p engine --test render_multi_surface
   - task docs:validate
   - task planning:validate
-  next_evidence: Selected docking UX, pointer/keyboard/touch/controller parity, real native-window movement, close veto/rehome,
-    accessibility, and transaction-only structural mutation pass.
-  current_decision: Complete the editor interaction proof and switch all structural writers to composition transactions.
+  next_evidence: A governed WR-186 implementation contract that maps every Region Compass state, app-owned policy decision, native-window lifecycle edge, and ordered core transaction.
+  current_decision: Region Compass is selected; WR-185 is runtime-proven with typed five-zone intent and host-owned transaction materialization.
   current_call: At closeout, direct workspace structural mutation is forbidden and guarded.
-  first_move: Run task production:plan for PM-UI-COMPOSITION-007 and convert selected visual direction into exact runtime
-    states.
-  main_blocker: WR-185 adaptive proposals and semantic input must be runtime-proven.
-  why_not_ready: Depends on adaptive headless contracts.
+  first_move: Complete architecture governance and production planning for PM-UI-COMPOSITION-007, then bind the selected visual states to exact runtime contracts before code changes.
+  main_blocker: The asynchronous OS-window lifecycle and atomic composition/extension transaction boundary must be fully specified before implementation.
+  why_not_ready: Implementation contract and visual-state mapping are not yet complete.
   completion_quality: not_applicable
   known_quality_gaps:
   - Draw adaptive runtime and legacy deletion remain later checkpoints.

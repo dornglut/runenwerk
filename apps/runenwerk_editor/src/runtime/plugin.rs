@@ -12,6 +12,10 @@ use engine::{BarrierKind, ExecutionBarrier, SystemSetKey};
 
 use crate::asset_pipeline::publish_pending_field_product_publications;
 use crate::material_lab::publish_pending_material_preview_publications;
+use crate::runtime::composition::{
+    EditorCompositionTransitionRuntimeResource, EditorTargetInputRuntimeResource,
+    dispatch_editor_target_input_system, sync_editor_composition_transitions_system,
+};
 use crate::runtime::procgen::{
     publish_procgen_products_at_barrier, publish_procgen_query_snapshots_at_barrier,
     sync_procgen_viewport_overlay_system,
@@ -48,6 +52,8 @@ pub struct EditorAppPlugin;
 pub enum EditorRuntimeSet {
     Picking,
     InputBridge,
+    CompositionTransitions,
+    TargetInput,
     WindowPresentationRequests,
     ViewportLifecycle,
     FrameSubmit,
@@ -69,6 +75,12 @@ impl IntoSystemSetKey for EditorRuntimeSet {
             Self::Picking => SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::Picking"),
             Self::InputBridge => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::InputBridge")
+            }
+            Self::CompositionTransitions => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::CompositionTransitions")
+            }
+            Self::TargetInput => {
+                SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::TargetInput")
             }
             Self::WindowPresentationRequests => {
                 SystemSetKey::of::<EditorRuntimeSet>("EditorRuntimeSet::WindowPresentationRequests")
@@ -119,6 +131,8 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<RuntimePreviewProcessResource>();
         app.init_resource::<EditorInputBridgeState>();
         app.init_resource::<EditorViewportRenderState>();
+        app.init_resource::<EditorCompositionTransitionRuntimeResource>();
+        app.init_resource::<EditorTargetInputRuntimeResource>();
         app.init_resource::<ViewportProductRegistryResource>();
         app.init_resource::<ViewportProductTargetRegistryResource>();
         app.init_resource::<ViewportPresentationStateResource>();
@@ -188,9 +202,25 @@ impl Plugin for EditorAppPlugin {
         );
         app.add_systems(
             Update,
+            sync_editor_composition_transitions_system
+                .in_set(EditorRuntimeSet::CompositionTransitions)
+                .after(EditorRuntimeSet::InputBridge)
+                .after(CoreSet::Input)
+                .after(CoreSet::Time),
+        );
+        app.add_systems(
+            Update,
+            dispatch_editor_target_input_system
+                .in_set(EditorRuntimeSet::TargetInput)
+                .after(EditorRuntimeSet::CompositionTransitions)
+                .after(CoreSet::Input)
+                .after(CoreSet::Time),
+        );
+        app.add_systems(
+            Update,
             sync_editor_window_presentation_requests_system
                 .in_set(EditorRuntimeSet::WindowPresentationRequests)
-                .after(EditorRuntimeSet::InputBridge)
+                .after(EditorRuntimeSet::TargetInput)
                 .after(CoreSet::Input)
                 .after(CoreSet::Time),
         );

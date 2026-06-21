@@ -756,6 +756,8 @@ mod tests {
 
     fn material_graph_request() -> SurfaceProviderRequest {
         SurfaceProviderRequest {
+            mounted_unit_id: ui_composition::MountedUnitId::new(1),
+            unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
             workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
                 document_id: editor_core::DocumentId(6),

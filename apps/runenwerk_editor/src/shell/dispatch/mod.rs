@@ -97,8 +97,14 @@ pub(crate) fn resolve_legacy_surface_command_contract(
     // validation, but the lookup is stable-key authoritative.
     let tool_surface_id = target.active_tool_surface?;
     let resolved_kind = if let Some(state) = shell_state {
-        let surface = state.workspace_state().tool_surface(tool_surface_id)?;
-        tool_surface_kind_for_stable_key(surface.stable_surface_key())?
+        let mounted_unit_id = target.mounted_unit_id?;
+        let extension = state
+            .composition_runtime()
+            .extension()
+            .mounted_unit(mounted_unit_id)?;
+        let stable_key =
+            editor_shell::ToolSurfaceStableKey::new(extension.stable_content_key.clone()).ok()?;
+        tool_surface_kind_for_stable_key(&stable_key)?
     } else {
         fallback_kind
     };

@@ -9,7 +9,7 @@ permissions_required:
 - product_code
 - product_implementation
 - crate_creation
-writer_strategy: agent_writer
+writer_strategy: verification_writer
 allowed_outputs:
 - Cargo.toml
 - domain/ui/ui-crate-ownership.toml

@@ -27,6 +27,8 @@ members = [
     "domain/ui/ui_text",
     "domain/ui/ui_theme",
     "domain/ui/ui_render_data",
+    "domain/ui/ui_composition",
+    "domain/ui/ui_adaptive_composition",
     "domain/ui/ui_surface",
     "domain/ui/ui_graph_editor",
     "domain/ui/ui_definition",
@@ -105,6 +107,8 @@ ui_layout = { path = "domain/ui/ui_layout" }
 ui_text = { path = "domain/ui/ui_text" }
 ui_theme = { path = "domain/ui/ui_theme" }
 ui_render_data = { path = "domain/ui/ui_render_data" }
+ui_composition = { path = "domain/ui/ui_composition" }
+ui_adaptive_composition = { path = "domain/ui/ui_adaptive_composition" }
 ui_surface = { path = "domain/ui/ui_surface" }
 ui_graph_editor = { path = "domain/ui/ui_graph_editor" }
 ui_definition = { path = "domain/ui/ui_definition" }

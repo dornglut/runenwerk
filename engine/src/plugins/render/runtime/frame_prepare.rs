@@ -1,8 +1,10 @@
-use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
+use crate::plugins::render::backend::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
 use crate::plugins::scene::SceneResource;
-use crate::runtime::{CatchupBudget, FixedTimeConfig, FixedTimeState, ResMut, WorldMut};
+use crate::runtime::{
+    CatchupBudget, FixedTimeConfig, FixedTimeState, NativeWindowLifecycleState, ResMut, WorldMut,
+};
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
@@ -53,15 +55,9 @@ pub(crate) fn frame_render_prepare_system(
             window_h.max(1.0).round() as u32,
         )
     };
+    let surface_infos = prepared_surface_infos(&mut world, target_size);
 
-    let (
-        flow_registry_revision,
-        compiled_flows,
-        execution_feature_ids,
-        flows,
-        views,
-        flow_invocations,
-    ) = {
+    let (flow_registry_revision, compiled_flows, execution_feature_ids, surface_packets) = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
             Ok(registry) => registry,
             Err(_) => {
@@ -73,27 +69,30 @@ pub(crate) fn frame_render_prepare_system(
         let compiled_flows = flow_registry.compiled_flows();
         let execution_feature_ids = collect_execution_feature_ids(compiled_flows);
         let extracted = collect_flow_declared_state_resources(&world, compiled_flows);
-        let flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
         let frame_requests = world
             .resource::<PreparedRenderFrameRequestResource>()
             .ok()
             .cloned()
             .unwrap_or_default();
-        let views = build_prepared_views(target_size, &frame_requests)?;
-        let flow_invocations = build_prepared_flow_invocations(
-            compiled_flows,
-            &extracted,
-            &flows,
-            &views,
-            &frame_requests,
-        )?;
+        let mut surface_packets = Vec::with_capacity(surface_infos.len());
+        for surface in surface_infos {
+            let target_size = surface.target_size_px();
+            let flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
+            let views = build_prepared_views(target_size, &frame_requests)?;
+            let flow_invocations = build_prepared_flow_invocations(
+                compiled_flows,
+                &extracted,
+                &flows,
+                &views,
+                &frame_requests,
+            )?;
+            surface_packets.push((surface, flows, views, flow_invocations));
+        }
         (
             flow_registry.revision(),
             compiled_flows.len(),
             execution_feature_ids,
-            flows,
-            views,
-            flow_invocations,
+            surface_packets,
         )
     };
 
@@ -135,32 +134,43 @@ pub(crate) fn frame_render_prepare_system(
         .map(|resource| resource.registry().clone())
         .unwrap_or_default();
 
-    let prepared = PreparedRenderFrame {
-        context: PreparedFrameContext {
-            frame_index,
-            flow_registry_revision,
-            shader_registry_revision: shader_registry.revision(),
-            prepare_epoch,
-        },
-        surface: prepared_surface_info(&mut world, target_size),
-        views,
-        flows,
-        flow_invocations,
-        dynamic_texture_targets,
-        dynamic_texture_uploads,
-        product_selections,
-        viewport_surface_bindings,
-        contributions,
-        shader: PreparedShaderSnapshot {
-            registry_revision: shader_registry.revision(),
-        },
-    };
+    let prepared_frames = surface_packets
+        .into_iter()
+        .map(|(surface, flows, views, flow_invocations)| {
+            let mut surface_contributions = contributions.clone();
+            apply_surface_ui_contribution(
+                &world,
+                surface.render_surface_id,
+                &mut surface_contributions,
+            );
+            PreparedRenderFrame {
+                context: PreparedFrameContext {
+                    frame_index,
+                    flow_registry_revision,
+                    shader_registry_revision: shader_registry.revision(),
+                    prepare_epoch,
+                },
+                surface,
+                views,
+                flows,
+                flow_invocations,
+                dynamic_texture_targets: dynamic_texture_targets.clone(),
+                dynamic_texture_uploads: dynamic_texture_uploads.clone(),
+                product_selections: product_selections.clone(),
+                viewport_surface_bindings: viewport_surface_bindings.clone(),
+                contributions: surface_contributions,
+                shader: PreparedShaderSnapshot {
+                    registry_revision: shader_registry.revision(),
+                },
+            }
+        })
+        .collect::<Vec<_>>();
 
     if let Ok(prepared_resource) = world.resource_mut::<PreparedRenderFrameResource>() {
-        prepared_resource.publish(prepared);
+        prepared_resource.publish_set(prepared_frames);
     } else {
         let mut prepared_resource = PreparedRenderFrameResource::default();
-        prepared_resource.publish(prepared);
+        prepared_resource.publish_set(prepared_frames);
         world.insert_resource(prepared_resource);
     }
 
@@ -173,20 +183,52 @@ pub(crate) fn frame_render_prepare_system(
     Ok(())
 }
 
-fn prepared_surface_info(world: &mut WorldMut, target_size: (u32, u32)) -> PreparedSurfaceInfo {
-    let native_window_id = world
+fn prepared_surface_infos(
+    world: &mut WorldMut,
+    primary_target_size: (u32, u32),
+) -> Vec<PreparedSurfaceInfo> {
+    let primary_native_window_id = world
         .resource::<crate::runtime::WindowStateRegistryResource>()
         .ok()
         .and_then(|registry| registry.primary_window_id())
         .unwrap_or_else(crate::runtime::NativeWindowId::primary);
+    if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
+        registry.ensure_surface_for_native_window(primary_native_window_id, primary_target_size);
+    }
 
-    let render_surface_id = world
-        .resource_mut::<RenderSurfaceRegistryResource>()
+    let created_windows = world
+        .resource::<crate::runtime::WindowStateRegistryResource>()
         .ok()
-        .map(|registry| registry.ensure_surface_for_native_window(native_window_id, target_size))
-        .unwrap_or_else(RenderSurfaceId::primary);
+        .map(|registry| {
+            registry
+                .records()
+                .filter(|record| record.lifecycle_state == NativeWindowLifecycleState::Created)
+                .map(|record| record.native_window_id)
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_else(|| BTreeSet::from([primary_native_window_id]));
 
-    PreparedSurfaceInfo::for_surface(render_surface_id, native_window_id, target_size)
+    world
+        .resource::<RenderSurfaceRegistryResource>()
+        .ok()
+        .map(|registry| {
+            registry
+                .records()
+                .filter(|record| {
+                    record.lifecycle_state == RenderSurfaceLifecycleState::Registered
+                        && created_windows.contains(&record.native_window_id)
+                })
+                .map(|record| {
+                    PreparedSurfaceInfo::for_surface(
+                        record.render_surface_id,
+                        record.native_window_id,
+                        record.target_size_px,
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|surfaces| !surfaces.is_empty())
+        .unwrap_or_else(|| vec![PreparedSurfaceInfo::primary(primary_target_size)])
 }
 
 fn build_prepared_views(
@@ -472,6 +514,22 @@ pub(crate) fn build_frame_feature_contributions(
     }
 
     contributions
+}
+
+fn apply_surface_ui_contribution(
+    world: &ecs::World,
+    render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+    contributions: &mut PreparedFrameContributions,
+) {
+    let Ok(resource) = world.resource::<PreparedUiFrameResource>() else {
+        return;
+    };
+    let ui_policy = feature_policy(world, UI_RENDER_FEATURE_ID, resource.fallback_policy);
+    contributions.insert_ui(
+        resource.payload_for_surface(render_surface_id).clone(),
+        resource.status_for_surface(render_surface_id),
+        ui_policy,
+    );
 }
 
 fn collect_registered_feature_contributions(

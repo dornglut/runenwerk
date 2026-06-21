@@ -1,0 +1,144 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-002
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+evidence_kind: runtime_test
+name: transaction_history_promotion
+status: passed
+produced_at: '2026-06-19T13:45:25Z'
+paths:
+- domain/ui/ui_composition/src/transaction/apply.rs
+- domain/ui/ui_composition/src/history/journal.rs
+- domain/ui/ui_composition/tests/transaction_atomicity.rs
+- domain/ui/ui_composition/tests/structural_history.rs
+subject_paths:
+- domain/ui/ui_composition/src/transaction/apply.rs
+- domain/ui/ui_composition/src/history/journal.rs
+- domain/ui/ui_composition/tests/transaction_atomicity.rs
+- domain/ui/ui_composition/tests/structural_history.rs
+subject_digests:
+  domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+  domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+  domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+  domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p ui_composition) -> exit 0
+- cargo:test (cargo test -p ui_testing composition_fixture) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: ea75c55d06927789c86f3ddbe62dbe25eef7b11a8abe05c9ce347b498ac7dd88
+  subject_digests:
+    domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+    domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+    domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+    domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 09cebd9a13dec74d5207275a48decc00fbe2a466d8390990b45556f3f9cf68f5
+  subject_digests:
+    domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+    domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+    domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+    domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - composition_fixture
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 2b526474b10b642256e2f7e400f3fd3e640ceb482f5150d452c3352294aad740
+  subject_digests:
+    domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+    domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+    domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+    domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: 23a42da79ac0ee579e0ed83d0e53469dc8f734526ab8188450a97514d9fdfb03
+  subject_digests:
+    domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+    domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+    domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+    domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: cb1c36b73bfc0da53f49fd22413b5772e214f667ff4beb9304f99d39f0394df5
+  subject_digests:
+    domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+    domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+    domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+    domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: b2095476ff9e7464e0e408aa60a956cf4c649ceb996e88bad92c8093098e827c
+  subject_digests:
+    domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+    domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+    domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+    domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: e67828008c5cef7a1734f530bd14a6c810d87f09ed767aaeb04a8914593d2402
+  subject_digests:
+    domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+    domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+    domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+    domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-134356z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-002:WR-181
+  validation_result_digest: b5c22376b90c6afc97b98cc18d1cce5466279126a42d8b05c83b5c2e76393ea4
+  subject_digests:
+    domain/ui/ui_composition/src/history/journal.rs: 7aa643326be307491317f47996a220ab0cfe1f695372a64b30190fccafa6bc67
+    domain/ui/ui_composition/src/transaction/apply.rs: f161accfe65fbd3117ad420da8f0c95b23c78e983c0617439a857d5dddfbbe89
+    domain/ui/ui_composition/tests/structural_history.rs: 2f334c92e9476449d929e0e2f74de74c1a7ce0a2740414882bcb47686cca6016
+    domain/ui/ui_composition/tests/transaction_atomicity.rs: e0df19f3323c97309cb3c7cd3d77769b6f1ccdddeb7808d5ee9b8c9a111c9fc6

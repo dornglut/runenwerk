@@ -56,14 +56,14 @@ fn minimal_document_opens_as_the_app_shell_document() {
     assert_eq!(document.pending_strokes.len(), 0);
     assert_eq!(app.active_brush_id().raw(), 1);
     assert_eq!(app.active_layer_entry_id().raw(), 1);
-    assert!(app.workspace().canvas_area_ratio() > 0.45);
+    assert!(app.composition_projection().canvas_area_ratio() > 0.45);
     assert!(!app.last_frame().is_empty());
 }
 
 #[test]
 fn stylus_input_routes_to_preview_stroke_without_committing_document_truth() {
     let mut app = RunenwerkDrawApp::new();
-    let position = center_of_canvas(app.workspace().canvas_view.screen_bounds);
+    let position = center_of_canvas(app.composition_projection().canvas_view.screen_bounds);
     let shell_rect_count = rect_primitive_count(app.last_frame());
 
     let packet = PointerPacket::stylus(PointerDeviceId(42), PointerToolKind::Pen)
@@ -134,10 +134,10 @@ fn stylus_input_routes_to_preview_stroke_without_committing_document_truth() {
 #[test]
 fn hover_scroll_and_ignored_inputs_do_not_mutate_document_or_preview_state() {
     let mut app = RunenwerkDrawApp::new();
-    let position = center_of_canvas(app.workspace().canvas_view.screen_bounds);
+    let position = center_of_canvas(app.composition_projection().canvas_view.screen_bounds);
     let outside = UiPoint::new(
-        app.workspace().canvas_view.screen_bounds.x - 32.0,
-        app.workspace().canvas_view.screen_bounds.y - 32.0,
+        app.composition_projection().canvas_view.screen_bounds.x - 32.0,
+        app.composition_projection().canvas_view.screen_bounds.y - 32.0,
     );
     let initial_revision = app.document().unwrap().revision;
     let initial_stroke_count = app.document().unwrap().strokes.len();
@@ -285,7 +285,7 @@ fn text_input_remains_noop_for_draw_tool_control() {
 #[test]
 fn coalesced_pointer_samples_append_ordered_preview_samples_before_current_sample() {
     let mut app = RunenwerkDrawApp::new();
-    let position = center_of_canvas(app.workspace().canvas_view.screen_bounds);
+    let position = center_of_canvas(app.composition_projection().canvas_view.screen_bounds);
     app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
         PointerEventKind::Down,
         position,
@@ -494,7 +494,7 @@ fn active_stroke_continues_outside_canvas_and_commits_on_outside_release() {
     let mut app = RunenwerkDrawApp::new();
     let start = screen_point_for_canvas(&app, 64.0, 64.0);
     let outside = app
-        .workspace()
+        .composition_projection()
         .canvas_view
         .canvas_to_screen(CanvasCoordinate::new(-128.0, -96.0))
         .expect("unbounded canvas point should project to screen space");
@@ -1221,7 +1221,7 @@ fn native_tablet_hover_down_still_begins_stroke_from_event_kind() {
 }
 
 #[test]
-fn native_tablet_diagnostics_project_into_workspace_panel() {
+fn native_tablet_diagnostics_project_into_composition_support_panel() {
     let mut runtime = build_headless_app()
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
@@ -1250,7 +1250,7 @@ fn native_tablet_diagnostics_project_into_workspace_panel() {
         .world()
         .resource::<DrawingHostResource>()
         .expect("drawing host resource should exist");
-    let panel = &host.app.workspace().tablet_panel;
+    let panel = &host.app.composition_projection().tablet_panel;
     assert_eq!(panel.active_backend, "Windows Pointer/Ink");
     assert_eq!(panel.sample_rate_hz, 180.0);
     assert_eq!(panel.max_segment_gap_px, 18.0);
@@ -1261,7 +1261,7 @@ fn native_tablet_diagnostics_project_into_workspace_panel() {
 #[test]
 fn pointer_up_commits_preview_stroke_into_authoritative_document() {
     let mut app = RunenwerkDrawApp::new();
-    let position = center_of_canvas(app.workspace().canvas_view.screen_bounds);
+    let position = center_of_canvas(app.composition_projection().canvas_view.screen_bounds);
 
     app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
         PointerEventKind::Down,
@@ -1379,7 +1379,7 @@ fn released_preview_products_stay_visible_until_committed_replacement() {
 fn committed_ink_products_publish_snapshot_and_become_visible_only_after_barriers() {
     let mut app = RunenwerkDrawApp::new();
     let shell_only_count = rect_primitive_count(app.last_frame());
-    let position = center_of_canvas(app.workspace().canvas_view.screen_bounds);
+    let position = center_of_canvas(app.composition_projection().canvas_view.screen_bounds);
     app.dispatch_input(&UiInputEvent::Pointer(PointerEvent::new(
         PointerEventKind::Down,
         position,
@@ -1439,7 +1439,7 @@ fn committed_ink_products_publish_snapshot_and_become_visible_only_after_barrier
     assert_eq!(stroke_primitive_count(app.last_frame()), 0);
     assert!(app.ink_runtime().visible_products().next().is_some());
 
-    let size = app.workspace().window_size;
+    let size = app.composition_projection().window_size;
     app.rebuild_frame(size);
     assert_eq!(
         rect_primitive_count(app.last_frame()),
@@ -1460,7 +1460,7 @@ fn committed_ink_products_publish_snapshot_and_become_visible_only_after_barrier
 #[test]
 fn pointer_release_keeps_last_accepted_ink_visible_before_new_barriers() {
     let mut app = RunenwerkDrawApp::new();
-    let position = center_of_canvas(app.workspace().canvas_view.screen_bounds);
+    let position = center_of_canvas(app.composition_projection().canvas_view.screen_bounds);
     draw_stroke(
         &mut app,
         position,
@@ -1577,7 +1577,7 @@ fn four_committed_strokes_publish_and_remain_drawable() {
         );
     }
 
-    app.rebuild_frame(app.workspace().window_size);
+    app.rebuild_frame(app.composition_projection().window_size);
     assert_eq!(app.document().expect("document is open").strokes.len(), 4);
     assert!(
         product_surface_primitive_count(app.last_frame()) > 0,
@@ -1732,7 +1732,7 @@ fn runtime_winit_fallback_keeps_long_stroke_publishing_through_barriers() {
             .world()
             .resource::<DrawingHostResource>()
             .expect("drawing host resource should exist");
-        let canvas = host.app.workspace().canvas_view.screen_bounds;
+        let canvas = host.app.composition_projection().canvas_view.screen_bounds;
         let start = UiPoint::new(canvas.x + 1.0, canvas.y + 1.0);
         let end = UiPoint::new(
             canvas.x + canvas.width - 1.0,
@@ -1838,7 +1838,7 @@ fn active_preview_survives_previous_committed_query_acceptance() {
 #[test]
 fn formation_failure_preserves_last_good_visible_ink_and_records_diagnostics() {
     let mut app = RunenwerkDrawApp::new();
-    let position = center_of_canvas(app.workspace().canvas_view.screen_bounds);
+    let position = center_of_canvas(app.composition_projection().canvas_view.screen_bounds);
     draw_stroke(
         &mut app,
         position,
@@ -1881,7 +1881,7 @@ fn long_stroke_batches_dirty_tiles_instead_of_clearing_canvas() {
     let mut app = RunenwerkDrawApp::new();
     let mut publications = ProductPublicationRuntimeResource::default();
     let mut snapshots = QuerySnapshotRuntimeResource::default();
-    let canvas = app.workspace().canvas_view.screen_bounds;
+    let canvas = app.composition_projection().canvas_view.screen_bounds;
     draw_stroke(
         &mut app,
         UiPoint::new(canvas.x + 1.0, canvas.y + 1.0),
@@ -1925,7 +1925,7 @@ fn long_stroke_batches_dirty_tiles_instead_of_clearing_canvas() {
     assert!(app.ink_runtime().diagnostics().iter().all(|diagnostic| {
         diagnostic.code != DrawingTileFormationDiagnosticCode::TooManyAffectedTiles
     }));
-    app.rebuild_frame(app.workspace().window_size);
+    app.rebuild_frame(app.composition_projection().window_size);
     let product_surface_count = product_surface_primitive_count(app.last_frame());
     assert!(
         product_surface_count > 1,
@@ -2383,7 +2383,8 @@ fn gpu_validation_promotion_and_failure_keep_cpu_fallback_available() {
             changed_pixel_ratio: 0.0,
         },
     );
-    app.set_window_size(app.workspace().window_size);
+    app.set_window_size(app.composition_projection().window_size)
+        .unwrap();
     assert!(
         product_surface_target_ids(app.last_frame())
             .iter()
@@ -2396,7 +2397,8 @@ fn gpu_validation_promotion_and_failure_keep_cpu_fallback_available() {
         &product,
         "forced validation failure",
     );
-    app.set_window_size(app.workspace().window_size);
+    app.set_window_size(app.composition_projection().window_size)
+        .unwrap();
     assert!(
         product_surface_target_ids(app.last_frame())
             .iter()
@@ -2441,7 +2443,8 @@ fn stale_gpu_validation_does_not_promote_new_tile_generation() {
         old_product.descriptor_generation,
         new_product.descriptor_generation
     );
-    app.set_window_size(app.workspace().window_size);
+    app.set_window_size(app.composition_projection().window_size)
+        .unwrap();
 
     let target_ids = product_surface_target_ids(app.last_frame());
     assert!(
@@ -2793,7 +2796,7 @@ fn headless_runtime_starts_and_submits_canvas_first_frame() {
         .resource::<DrawingHostResource>()
         .expect("drawing host resource should exist");
     assert!(host.app.document().is_some());
-    assert!(host.app.workspace().canvas_area_ratio() > 0.45);
+    assert!(host.app.composition_projection().canvas_area_ratio() > 0.45);
 
     let submissions = app
         .world()
@@ -2854,10 +2857,10 @@ fn center_of_canvas(rect: ui_math::UiRect) -> UiPoint {
 }
 
 fn screen_point_for_canvas(app: &RunenwerkDrawApp, x: f64, y: f64) -> UiPoint {
-    app.workspace()
+    app.composition_projection()
         .canvas_view
         .canvas_to_screen(CanvasCoordinate::new(x, y))
-        .expect("test canvas point should project into the workspace")
+        .expect("test canvas point should project into the composition")
 }
 
 fn assert_canvas_position_close(actual: CanvasCoordinate, expected_x: f64, expected_y: f64) {

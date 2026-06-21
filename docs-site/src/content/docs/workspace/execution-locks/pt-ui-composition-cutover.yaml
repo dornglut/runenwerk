@@ -1,24 +1,24 @@
 track_id: PT-UI-COMPOSITION-CUTOVER
-locked_by: track-control
-locked_at: '2026-06-19T12:57:09Z'
+locked_by: codex
+locked_at: '2026-06-20T13:36:59Z'
 lock_scope: full-track
-contract_pack_digest: 8b04e70b3931d26f12d44cad4d42fe79fb2968f78fddd067ba068f8ef869a814
+contract_pack_digest: 9c635b4e746be34f5998048438c0c38ce9b53e7ba18575c3d0b8a4a19eee1dd8
 source_digests:
-  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml: 903c26d6b9047500d411d7c4105190d7b34647786036bd575694f6de479c5913
-  docs-site/src/content/docs/workspace/production-tracks.yaml: 9adcd375bc66fde0d67498d95a4a5525cf436671ba40be8680de3b0fa52daaf2
-  docs-site/src/content/docs/workspace/roadmap-items.yaml: 8da691197eba2f9b567fbfa88004554e0b3b767361cca13a8e556d4d79ac8aa0
+  docs-site/src/content/docs/workspace/track-execution-manifests/pt-ui-composition-cutover.yaml: d4de5692b7a4949da5f08a851072251f9417d0dff361396825d1de124a29de1b
+  docs-site/src/content/docs/workspace/production-tracks.yaml: 22b173be3164afc242f07aa56bdaee7673556a8245bd0fbd51f954a51ccb66ee
+  docs-site/src/content/docs/workspace/roadmap-items.yaml: 8edc0a90f31dcf94f098c74582a37bf681993b2e40af95c97e50566682e74efe
   docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md: cbca912e0d0cd54bc6586a456ffccf11e2cec6e38c72a787303b6bc42850c92a
   docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md: 3d6027ca22cabcfa6f2cc6840be8f8232c4bcfbd4ca8b2a310f024689ee7726c
   docs-site/src/content/docs/adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md: 7be9b55cfa7f156b5d71009384174448326f0eb8cf020c64fe0a2f58b1f30908
   docs-site/src/content/docs/design/accepted/editor-native-multi-window-presentation-design.md: c3c252a21bc85147044d0cf7104bcd568292283ca458a47b86f6ed0c97605527
-  ? docs-site/src/content/docs/reports/implementation-plans/wr-181-ui-composition-core-contracts-and-invariants/plan.contract.yaml
-  : 543c9aa8474f2236e632590a9be446d6f226c77afe62767b24ff872ca819c591
-  docs-site/src/content/docs/reports/implementation-plans/wr-181-ui-composition-core-contracts-and-invariants/plan.md: c5c6537b3ba9a4b1ca08a15468a0d0ec6ad4ea34e48169e67b440144a61ccd5e
+  ? docs-site/src/content/docs/reports/implementation-plans/wr-186-editor-docking-and-cross-window-composition-runtime/plan.contract.yaml
+  : 454fc99053ceac94eeacb0932e3c2cb96a7d79bbe17cf861f3f9c45655744e09
+  docs-site/src/content/docs/reports/implementation-plans/wr-186-editor-docking-and-cross-window-composition-runtime/plan.md: a7091c9bb5a2b4d8001c249c5d8333c19874ed65cdfe1fc28140b0b2c82ec9cc
   tools/workflow/execution/__init__.py: 67ae0aafa2e3a1abb0328962cae0b4f53932e586f9a03b73bca46b78e2a32f59
   tools/workflow/execution/cli.py: 6716a8fbcf2d089f43d9497321cc74087ee14b470a17bc29ec5a8b3da7cb7313
   tools/workflow/execution/closeout_claims.py: 3b6122f50713e62055c2cbc5e659fda32bb0d8f0175af55727b7cf7315dc97d1
   tools/workflow/execution/closeouts.py: 7761275759ef7d3da494546117b8754aa83760fcde46634361a77146097e4bfd
-  tools/workflow/execution/compiler.py: d327c954fb4a0ee375a5c8c11b53985096f17dd0ca996109b711eee990faf685
+  tools/workflow/execution/compiler.py: dbe97100320329004d55a38b8ddb7d5c0f067f1ee75d476c8067604bb20b6b06
   tools/workflow/execution/contracts.py: f705c7dffe19850efb121efc14dd8f8563ffda3be6de44a9bbf27ac2449092a2
   tools/workflow/execution/evidence.py: 96874ddbb9484945934ed77a871866fb8fc8227d4f0a52f18b00f442a9ed990d
   tools/workflow/execution/ledger.py: 88e307bb84b719ed8911f00813ed7a02c9dc83e3a0ddf02b230a8a31318dab2f
@@ -41,10 +41,8 @@ source_digests:
   tools/workflow/production_state.py: 0b1846ffa3c2a70de19d69af7bf3978b040bd6ba5014d55a950e54c99ed469d0
   tools/workflow/roadmap_state.py: 381cea68eee9778b0aa004af4219f9a704b4d16be2a6e5748f920da35cc1ddd8
 granted_permissions:
-- agent_closeout
 - agent_design
-- crate_creation
 - product_code
 - product_implementation
-denied_permissions:
-- foundation_extraction
+- runtime_closeout
+denied_permissions: []

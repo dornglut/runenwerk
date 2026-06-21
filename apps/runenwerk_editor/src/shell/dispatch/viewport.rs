@@ -49,13 +49,16 @@ pub(crate) fn dispatch_session_mutation(
         ));
         return Ok(());
     }
-    let Some(surface_id) = target.active_tool_surface else {
+    let Some(mounted_unit_id) = target.mounted_unit_id else {
         app.append_console_line(
             "[viewport] session mutation ignored (missing tool-surface session target)".to_string(),
         );
         return Ok(());
     };
-    let session = app.surface_sessions_mut().session_mut(surface_id);
+    let Some(surface_id) = target.active_tool_surface else {
+        return Ok(());
+    };
+    let session = app.surface_sessions_mut().session_mut(mounted_unit_id);
     match mutation {
         ViewportSessionMutation::ToggleDetails => {
             session.viewport_details_visible = !session.viewport_details_visible;

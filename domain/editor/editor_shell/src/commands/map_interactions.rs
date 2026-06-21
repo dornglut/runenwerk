@@ -776,6 +776,7 @@ fn command_for_table_row(
 
 fn command_target(context: StructuralWidgetRoutingContext) -> StructuralCommandTarget {
     StructuralCommandTarget {
+        mounted_unit_id: context.mounted_unit_id,
         panel_instance_id: context.panel_instance_id,
         active_tool_surface: context.active_tool_surface,
         tab_stack_id: context.tab_stack_id,

@@ -6,20 +6,24 @@ use editor_definition::{
     EditorWorkspaceSplitAxisDefinition,
 };
 use editor_shell::{
-    FloatingHostBounds, ShellCommand, TabDropDestination, TabStackPopupMenuKind,
-    ToolbarCommandKind, UI_DESIGNER_WORKBENCH_TARGET_PROFILE, WorkspaceMutation,
-    editor_design_system_recipe_library,
+    DockSplitSide, EditorCompositionRejection, EditorDockingDestination, EditorDockingIntent,
+    EditorStructuralEditPlan, ShellCommand, TabDropDestination, TabStackPopupMenuKind,
+    ToolbarCommandKind, UI_DESIGNER_WORKBENCH_TARGET_PROFILE, editor_design_system_recipe_library,
+    plan_editor_activate_unit, plan_editor_close_other_units, plan_editor_close_stack,
+    plan_editor_close_unit, plan_editor_create_unit, plan_editor_duplicate_stack,
+    plan_editor_reset_stack, plan_editor_set_stack_lock, plan_editor_split_with_new_unit,
 };
+use ui_adaptive_composition::DockZone;
+use ui_composition::CompositionPolicies;
 
 use crate::editor_app::RunenwerkEditorApp;
 use crate::editor_features::{redo_last_scene_change, undo_last_scene_change};
 use crate::editor_runtime::{bootstrap_mvp_scene_if_empty, register_mvp_component_types};
 use crate::persistence::{
-    WorkspaceLayoutReadResult, default_workspace_layout_path_for_profile,
-    legacy_workspace_layout_path_for_scene, load_scene_file_into_runtime_classified,
-    read_retained_change_log, read_workspace_layout_with_metadata_and_registry,
-    retained_change_log_path_for_scene, write_retained_change_log, write_scene_file,
-    write_workspace_layout_for_profile,
+    default_composition_layout_root_for_profile, load_editor_composition_layout,
+    load_scene_file_into_runtime_classified, probe_legacy_layout_path, read_retained_change_log,
+    retained_change_log_path_for_scene, save_editor_composition_layout, write_retained_change_log,
+    write_scene_file,
 };
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
@@ -35,8 +39,9 @@ use crate::shell::providers::{
 };
 use crate::shell::self_authoring::EditorLabProductPathEvidenceCapture;
 use crate::shell::{
-    EditorCommandAvailabilityContext, ROTATE_TOOL_ID, RunenwerkEditorShellState, SCALE_TOOL_ID,
-    SELECT_TOOL_ID, TRANSLATE_TOOL_ID, editor_command_catalog,
+    EditorCommandAvailabilityContext, EditorCompositionPolicy, ROTATE_TOOL_ID,
+    RunenwerkEditorShellState, SCALE_TOOL_ID, SELECT_TOOL_ID, TRANSLATE_TOOL_ID,
+    editor_command_catalog,
 };
 use ui_theme::ThemeTokens;
 
@@ -217,6 +222,34 @@ pub fn dispatch_shell_command_with_viewport_commands(
             {
                 app.append_console_line(format!("[history] redo: {}", entry.transaction.label));
             }
+        }
+        ShellCommand::UndoCompositionLayout => {
+            let shell_state = shell_state.as_deref_mut().ok_or_else(|| {
+                EditorMutationError::runtime_rejected("missing shell state for composition undo")
+            })?;
+            let policy = EditorCompositionPolicy;
+            let policies = CompositionPolicies {
+                lifecycle: &policy,
+                capability: &policy,
+                target: &policy,
+            };
+            shell_state
+                .undo_structural_composition(policies)
+                .map_err(|rejection| record_composition_rejection(app, rejection))?;
+        }
+        ShellCommand::RedoCompositionLayout => {
+            let shell_state = shell_state.as_deref_mut().ok_or_else(|| {
+                EditorMutationError::runtime_rejected("missing shell state for composition redo")
+            })?;
+            let policy = EditorCompositionPolicy;
+            let policies = CompositionPolicies {
+                lifecycle: &policy,
+                capability: &policy,
+                target: &policy,
+            };
+            shell_state
+                .redo_structural_composition(policies)
+                .map_err(|rejection| record_composition_rejection(app, rejection))?;
         }
         ShellCommand::SaveScene => {
             let shell_state =
@@ -635,267 +668,282 @@ pub fn dispatch_shell_command_with_viewport_commands(
         ShellCommand::SetTabStackActivePanel {
             tab_stack_id,
             panel_instance_id,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            shell_state
-                .apply_workspace_mutation(WorkspaceMutation::SetTabStackActivePanel {
-                    tab_stack_id,
-                    active_panel: Some(panel_instance_id),
-                })
-                .map_err(|_| EditorMutationError::runtime_rejected("workspace mutation failed"))?;
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "activate tab",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let unit = composition_unit_for_panel(shell_state, panel_instance_id)?;
+            let plan = plan_editor_activate_unit(
+                shell_state.composition_runtime(),
+                stack,
+                unit,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::CommitTabDrop {
             panel_instance_id,
             source_tab_stack_id,
             destination,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            apply_tab_drop(
-                shell_state,
-                panel_instance_id,
-                source_tab_stack_id,
+            let shell_state = shell_state.as_deref_mut().ok_or_else(|| {
+                EditorMutationError::runtime_rejected("missing shell state for composition docking")
+            })?;
+            if !shell_state.is_projection_epoch_current(projection_epoch) {
+                return Err(EditorMutationError::runtime_rejected(
+                    "stale editor composition docking projection",
+                ));
+            }
+            let unit = shell_state
+                .mounted_unit_id_for_panel(panel_instance_id)
+                .ok_or_else(|| {
+                    EditorMutationError::runtime_rejected(
+                        "docked panel has no mounted composition unit",
+                    )
+                })?;
+            let source_region = shell_state
+                .region_id_for_tab_stack(source_tab_stack_id)
+                .ok_or_else(|| {
+                    EditorMutationError::runtime_rejected(
+                        "docking source tab stack has no composition region",
+                    )
+                })?;
+            let actual_source = shell_state
+                .composition_runtime()
+                .composition()
+                .definition()
+                .regions()
+                .iter()
+                .find(|region| region.kind.mounted_units().contains(&unit))
+                .map(|region| region.id);
+            if actual_source != Some(source_region) {
+                return Err(EditorMutationError::runtime_rejected(
+                    "docking source no longer owns the mounted unit",
+                ));
+            }
+            let destination = docking_destination(shell_state, destination)?;
+            shell_state.queue_docking_intent(EditorDockingIntent {
+                source_revision: shell_state.composition_runtime().composition().revision(),
+                unit,
                 destination,
+            });
+        }
+        ShellCommand::CommitCompositionDock {
+            intent,
+            projection_epoch,
+        } => {
+            let shell_state = shell_state.as_deref_mut().ok_or_else(|| {
+                EditorMutationError::runtime_rejected("missing shell state for composition docking")
+            })?;
+            if !shell_state.is_projection_epoch_current(projection_epoch) {
+                return Err(EditorMutationError::runtime_rejected(
+                    "stale editor composition docking projection",
+                ));
+            }
+            if intent.source_revision != shell_state.composition_runtime().composition().revision()
+            {
+                return Err(EditorMutationError::runtime_rejected(
+                    "stale editor composition docking revision",
+                ));
+            }
+            shell_state.queue_docking_intent(intent);
+        }
+        ShellCommand::ResizeCompositionSplit {
+            split,
+            fraction,
+            expected_revision,
+            projection_epoch,
+        } => {
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "resize composition split",
+            )?;
+            if shell_state.composition_runtime().composition().revision() != expected_revision {
+                return Err(EditorMutationError::runtime_rejected(
+                    "stale editor composition resize revision",
+                ));
+            }
+            let plan = editor_shell::plan_editor_resize_split(
+                shell_state.composition_runtime(),
+                split,
+                fraction,
+                shell_state.composition_identity_allocator(),
             )
-            .map_err(|_| EditorMutationError::runtime_rejected("workspace tab drop failed"))?;
-            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::CreatePanelTabStableKey {
             tab_stack_id,
             panel_kind,
             stable_surface_key,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            shell_state.close_tab_stack_popup_menu();
-            shell_state
-                .try_apply_workspace_mutation_with_allocations(|allocator| {
-                    let panel_id = allocator.allocate_panel_instance_id();
-                    let tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                    Ok((
-                        WorkspaceMutation::AddPanelTab {
-                            tab_stack_id,
-                            panel_id,
-                            panel_kind,
-                            tool_surface_id,
-                            stable_surface_key: stable_surface_key.clone(),
-                            activate_panel: true,
-                        },
-                        (),
-                    ))
-                })
-                .map_err(|_| EditorMutationError::runtime_rejected("create panel tab failed"))?;
-            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "create tab",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let plan = plan_editor_create_unit(
+                shell_state.composition_runtime(),
+                stack,
+                panel_kind,
+                stable_surface_key,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::ClosePanelTab {
             tab_stack_id,
             panel_instance_id,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            let tab_count = shell_state
-                .workspace_state()
-                .tab_stack(tab_stack_id)
-                .map(|stack| stack.ordered_panels.len())
-                .unwrap_or(0);
-            if tab_count <= 1 {
-                shell_state
-                    .apply_workspace_mutation(WorkspaceMutation::CloseTabStackArea { tab_stack_id })
-                    .map_err(|_| EditorMutationError::runtime_rejected("close area failed"))?;
-            } else {
-                shell_state
-                    .apply_workspace_mutation(WorkspaceMutation::ClosePanelTab {
-                        tab_stack_id,
-                        panel_id: panel_instance_id,
-                    })
-                    .map_err(|_| EditorMutationError::runtime_rejected("close panel tab failed"))?;
-            }
-            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "close tab",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let unit = composition_unit_for_panel(shell_state, panel_instance_id)?;
+            require_unit_source(shell_state, unit, stack)?;
+            let plan = plan_editor_close_unit(
+                shell_state.composition_runtime(),
+                unit,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::CloseOtherPanelTabs {
             tab_stack_id,
             keep_panel_instance_id,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            shell_state
-                .apply_workspace_mutation(WorkspaceMutation::CloseOtherPanelTabs {
-                    tab_stack_id,
-                    keep_panel_id: keep_panel_instance_id,
-                })
-                .map_err(|_| {
-                    EditorMutationError::runtime_rejected("close other panel tabs failed")
-                })?;
-            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "close other tabs",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let keep = composition_unit_for_panel(shell_state, keep_panel_instance_id)?;
+            let plan = plan_editor_close_other_units(
+                shell_state.composition_runtime(),
+                stack,
+                keep,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::SplitTabStackAreaStableKey {
             tab_stack_id,
             axis,
             panel_kind,
             stable_surface_key,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            shell_state.close_tab_stack_popup_menu();
-            shell_state
-                .try_apply_workspace_mutation_with_allocations(|allocator| {
-                    let split_host_id = allocator.allocate_panel_host_id();
-                    let first_child_host_id = allocator.allocate_panel_host_id();
-                    let second_child_host_id = allocator.allocate_panel_host_id();
-                    let new_tab_stack_id = allocator.allocate_tab_stack_id();
-                    let new_panel_id = allocator.allocate_panel_instance_id();
-                    let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                    Ok((
-                        WorkspaceMutation::SplitTabStackArea {
-                            tab_stack_id,
-                            axis,
-                            split_host_id,
-                            first_child_host_id,
-                            second_child_host_id,
-                            new_tab_stack_id,
-                            new_panel_id,
-                            new_panel_kind: panel_kind,
-                            new_tool_surface_id,
-                            new_stable_surface_key: stable_surface_key.clone(),
-                            fraction: 0.5,
-                        },
-                        (),
-                    ))
-                })
-                .map_err(|_| {
-                    EditorMutationError::runtime_rejected("split tab stack area failed")
-                })?;
-            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "split area",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let plan = plan_editor_split_with_new_unit(
+                shell_state.composition_runtime(),
+                stack,
+                axis,
+                panel_kind,
+                stable_surface_key,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::DuplicateTabStackArea {
             tab_stack_id,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            shell_state.close_tab_stack_popup_menu();
-            shell_state
-                .apply_workspace_mutation_with_allocations(|allocator| {
-                    let new_panel_id = allocator.allocate_panel_instance_id();
-                    let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                    (
-                        WorkspaceMutation::DuplicateTabStackArea {
-                            tab_stack_id,
-                            new_panel_id,
-                            new_tool_surface_id,
-                        },
-                        (),
-                    )
-                })
-                .map_err(|_| {
-                    EditorMutationError::runtime_rejected("duplicate tab stack area failed")
-                })?;
-            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "duplicate area",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let plan = plan_editor_duplicate_stack(
+                shell_state.composition_runtime(),
+                stack,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::CloseTabStackArea {
             tab_stack_id,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            shell_state.close_tab_stack_popup_menu();
-            shell_state
-                .apply_workspace_mutation(WorkspaceMutation::CloseTabStackArea { tab_stack_id })
-                .map_err(|_| {
-                    EditorMutationError::runtime_rejected("close tab stack area failed")
-                })?;
-            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "close area",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let plan = plan_editor_close_stack(
+                shell_state.composition_runtime(),
+                stack,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::ResetTabStackAreaStableKey {
             tab_stack_id,
             panel_kind,
             stable_surface_key,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            shell_state.close_tab_stack_popup_menu();
-            shell_state
-                .try_apply_workspace_mutation_with_allocations(|allocator| {
-                    let panel_id = allocator.allocate_panel_instance_id();
-                    let tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                    Ok((
-                        WorkspaceMutation::ResetTabStackArea {
-                            tab_stack_id,
-                            panel_id,
-                            panel_kind,
-                            tool_surface_id,
-                            stable_surface_key: stable_surface_key.clone(),
-                        },
-                        (),
-                    ))
-                })
-                .map_err(|_| {
-                    EditorMutationError::runtime_rejected("reset tab stack area failed")
-                })?;
-            app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "reset area",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let plan = plan_editor_reset_stack(
+                shell_state.composition_runtime(),
+                stack,
+                panel_kind,
+                stable_surface_key,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::LockTabStackAreaStableKey {
             tab_stack_id,
             locked_stable_surface_key,
-            projection_epoch: _,
+            projection_epoch,
         } => {
-            let shell_state =
-                shell_state
-                    .as_deref_mut()
-                    .ok_or(EditorMutationError::runtime_rejected(
-                        "missing shell state for workspace command",
-                    ))?;
-            shell_state.close_tab_stack_popup_menu();
-            shell_state
-                .apply_workspace_mutation(WorkspaceMutation::LockTabStackAreaStableKey {
-                    tab_stack_id,
-                    locked_stable_surface_key,
-                })
-                .map_err(|_| EditorMutationError::runtime_rejected("lock tab stack area failed"))?;
+            let shell_state = require_composition_shell_state(
+                shell_state.as_deref_mut(),
+                projection_epoch,
+                "change area lock",
+            )?;
+            let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
+            let plan = plan_editor_set_stack_lock(
+                shell_state.composition_runtime(),
+                stack,
+                locked_stable_surface_key,
+                shell_state.composition_identity_allocator(),
+            )
+            .map_err(|rejection| record_composition_rejection(app, rejection))?;
+            apply_editor_structural_plan(app, shell_state, plan)?;
         }
         ShellCommand::ActivateDocumentTab { document_id } => {
             app.runtime_mut()
@@ -1452,6 +1500,8 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::CloseWorkspaceProfile { .. } => "CloseWorkspaceProfile",
         ShellCommand::Undo => "Undo",
         ShellCommand::Redo => "Redo",
+        ShellCommand::UndoCompositionLayout => "UndoCompositionLayout",
+        ShellCommand::RedoCompositionLayout => "RedoCompositionLayout",
         ShellCommand::SaveScene => "SaveScene",
         ShellCommand::LoadScene => "LoadScene",
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
@@ -1469,6 +1519,8 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ApplyTextureSurfaceAction { .. } => "ApplyTextureSurfaceAction",
         ShellCommand::SetTabStackActivePanel { .. } => "SetTabStackActivePanel",
         ShellCommand::CommitTabDrop { .. } => "CommitTabDrop",
+        ShellCommand::CommitCompositionDock { .. } => "CommitCompositionDock",
+        ShellCommand::ResizeCompositionSplit { .. } => "ResizeCompositionSplit",
         ShellCommand::CreatePanelTabStableKey { .. } => "CreatePanelTabStableKey",
         ShellCommand::ClosePanelTab { .. } => "ClosePanelTab",
         ShellCommand::CloseOtherPanelTabs { .. } => "CloseOtherPanelTabs",
@@ -1547,120 +1599,185 @@ fn default_scene_file_path() -> PathBuf {
     PathBuf::from(DEFAULT_EDITOR_SCENE_PATH)
 }
 
-fn apply_tab_drop(
-    shell_state: &mut RunenwerkEditorShellState,
+fn require_composition_shell_state<'a>(
+    shell_state: Option<&'a mut RunenwerkEditorShellState>,
+    projection_epoch: u64,
+    operation: &'static str,
+) -> Result<&'a mut RunenwerkEditorShellState, EditorMutationError> {
+    let shell_state = shell_state.ok_or_else(|| {
+        EditorMutationError::runtime_rejected("missing shell state for composition edit")
+    })?;
+    if !shell_state.is_projection_epoch_current(projection_epoch) {
+        return Err(EditorMutationError::runtime_rejected(match operation {
+            "activate tab" => "stale composition projection for tab activation",
+            "create tab" => "stale composition projection for tab creation",
+            "close tab" => "stale composition projection for tab close",
+            "close other tabs" => "stale composition projection for close-other-tabs",
+            "split area" => "stale composition projection for area split",
+            "duplicate area" => "stale composition projection for area duplicate",
+            "close area" => "stale composition projection for area close",
+            "reset area" => "stale composition projection for area reset",
+            "change area lock" => "stale composition projection for area lock",
+            _ => "stale composition projection for structural edit",
+        }));
+    }
+    Ok(shell_state)
+}
+
+fn composition_region_for_stack(
+    shell_state: &RunenwerkEditorShellState,
+    tab_stack_id: editor_shell::TabStackId,
+) -> Result<ui_composition::RegionId, EditorMutationError> {
+    shell_state
+        .region_id_for_tab_stack(tab_stack_id)
+        .ok_or_else(|| {
+            EditorMutationError::runtime_rejected(
+                "tab stack has no region in the current composition projection",
+            )
+        })
+}
+
+fn composition_unit_for_panel(
+    shell_state: &RunenwerkEditorShellState,
     panel_instance_id: editor_shell::PanelInstanceId,
-    source_tab_stack_id: editor_shell::TabStackId,
+) -> Result<ui_composition::MountedUnitId, EditorMutationError> {
+    shell_state
+        .mounted_unit_id_for_panel(panel_instance_id)
+        .ok_or_else(|| {
+            EditorMutationError::runtime_rejected(
+                "panel has no mounted unit in the current composition projection",
+            )
+        })
+}
+
+fn require_unit_source(
+    shell_state: &RunenwerkEditorShellState,
+    unit: ui_composition::MountedUnitId,
+    expected: ui_composition::RegionId,
+) -> Result<(), EditorMutationError> {
+    let actual = shell_state
+        .composition_runtime()
+        .composition()
+        .definition()
+        .regions()
+        .iter()
+        .find(|region| region.kind.mounted_units().contains(&unit))
+        .map(|region| region.id);
+    if actual == Some(expected) {
+        Ok(())
+    } else {
+        Err(EditorMutationError::runtime_rejected(
+            "panel no longer belongs to the selected composition stack",
+        ))
+    }
+}
+
+fn apply_editor_structural_plan(
+    app: &mut RunenwerkEditorApp,
+    shell_state: &mut RunenwerkEditorShellState,
+    plan: EditorStructuralEditPlan,
+) -> Result<(), EditorMutationError> {
+    let policy = EditorCompositionPolicy;
+    let policies = CompositionPolicies {
+        lifecycle: &policy,
+        capability: &policy,
+        target: &policy,
+    };
+    shell_state
+        .apply_structural_edit_plan(plan, policies)
+        .map_err(|rejection| record_composition_rejection(app, rejection))?;
+    shell_state.close_tab_stack_popup_menu();
+    Ok(())
+}
+
+fn record_composition_rejection(
+    app: &mut RunenwerkEditorApp,
+    rejection: EditorCompositionRejection,
+) -> EditorMutationError {
+    for diagnostic in rejection.diagnostics() {
+        app.append_console_line(format!(
+            "[{}] {}",
+            diagnostic.code().as_str(),
+            diagnostic.message()
+        ));
+    }
+    EditorMutationError::runtime_rejected("editor composition structural edit rejected")
+}
+
+fn docking_destination(
+    shell_state: &RunenwerkEditorShellState,
     destination: TabDropDestination,
-) -> Result<(), editor_shell::WorkspaceStateError> {
+) -> Result<EditorDockingDestination, EditorMutationError> {
+    let region_destination = |target_region, ordinal, zone| {
+        Ok(EditorDockingDestination::Region {
+            target_region,
+            ordinal,
+            zone,
+        })
+    };
     match destination {
         TabDropDestination::TabStack {
             tab_stack_id,
             insert_index,
-        } => shell_state.apply_workspace_mutation(WorkspaceMutation::MovePanelBetweenTabStacks {
-            panel_id: panel_instance_id,
-            source_tab_stack_id,
-            destination_tab_stack_id: tab_stack_id,
-            destination_index: insert_index,
-            activate_panel: true,
-        }),
+        } => region_destination(
+            shell_state
+                .region_id_for_tab_stack(tab_stack_id)
+                .ok_or_else(|| {
+                    EditorMutationError::runtime_rejected(
+                        "docking destination tab stack has no composition region",
+                    )
+                })?,
+            insert_index,
+            DockZone::Center,
+        ),
         TabDropDestination::SplitIntoArea {
             target_tab_stack_id,
             side,
-        } => shell_state.apply_workspace_mutation_with_allocations(|allocator| {
-            let split_host_id = allocator.allocate_panel_host_id();
-            let target_child_host_id = allocator.allocate_panel_host_id();
-            let new_child_host_id = allocator.allocate_panel_host_id();
-            let new_tab_stack_id = allocator.allocate_tab_stack_id();
-            (
-                WorkspaceMutation::MovePanelToNewSplitArea {
-                    panel_id: panel_instance_id,
-                    source_tab_stack_id,
-                    target_tab_stack_id,
-                    split_host_id,
-                    target_child_host_id,
-                    new_child_host_id,
-                    new_tab_stack_id,
-                    axis: side.axis(),
-                    target_is_first_child: side.target_is_first_child(),
-                    fraction: 0.5,
-                },
-                (),
-            )
-        }),
+        } => region_destination(
+            shell_state
+                .region_id_for_tab_stack(target_tab_stack_id)
+                .ok_or_else(|| {
+                    EditorMutationError::runtime_rejected(
+                        "split destination tab stack has no composition region",
+                    )
+                })?,
+            0,
+            dock_zone(side),
+        ),
         TabDropDestination::SplitIntoHost {
             target_host_id,
             side,
-        } => shell_state.apply_workspace_mutation_with_allocations(|allocator| {
-            let split_host_id = allocator.allocate_panel_host_id();
-            let new_child_host_id = allocator.allocate_panel_host_id();
-            let new_tab_stack_id = allocator.allocate_tab_stack_id();
-            (
-                WorkspaceMutation::MovePanelToNewHostSplitArea {
-                    panel_id: panel_instance_id,
-                    source_tab_stack_id,
-                    target_host_id,
-                    split_host_id,
-                    new_child_host_id,
-                    new_tab_stack_id,
-                    axis: side.axis(),
-                    target_is_first_child: side.target_is_first_child(),
-                    fraction: 0.5,
-                },
-                (),
-            )
-        }),
-        TabDropDestination::SplitIntoRoot { side } => {
-            let target_host_id = shell_state.workspace_state().root_host_id();
-            shell_state.apply_workspace_mutation_with_allocations(|allocator| {
-                let split_host_id = allocator.allocate_panel_host_id();
-                let new_child_host_id = allocator.allocate_panel_host_id();
-                let new_tab_stack_id = allocator.allocate_tab_stack_id();
-                (
-                    WorkspaceMutation::MovePanelToNewHostSplitArea {
-                        panel_id: panel_instance_id,
-                        source_tab_stack_id,
-                        target_host_id,
-                        split_host_id,
-                        new_child_host_id,
-                        new_tab_stack_id,
-                        axis: side.axis(),
-                        target_is_first_child: side.target_is_first_child(),
-                        fraction: 0.5,
-                    },
-                    (),
+        } => region_destination(
+            shell_state
+                .stack_region_for_host(target_host_id)
+                .ok_or_else(|| {
+                    EditorMutationError::runtime_rejected(
+                        "split destination host has no stack composition region",
+                    )
+                })?,
+            0,
+            dock_zone(side),
+        ),
+        TabDropDestination::SplitIntoRoot { side } => region_destination(
+            shell_state.primary_stack_region().ok_or_else(|| {
+                EditorMutationError::runtime_rejected(
+                    "primary composition root has no stack destination",
                 )
-            })
-        }
-        TabDropDestination::NewFloatingHost => {
-            let bounds = default_floating_host_bounds(shell_state);
-            shell_state.apply_workspace_mutation_with_allocations(|allocator| {
-                let floating_host_id = allocator.allocate_panel_host_id();
-                let floating_tab_stack_id = allocator.allocate_tab_stack_id();
-                (
-                    WorkspaceMutation::MovePanelToNewFloatingHost {
-                        panel_id: panel_instance_id,
-                        source_tab_stack_id,
-                        floating_host_id,
-                        floating_tab_stack_id,
-                        bounds,
-                    },
-                    (),
-                )
-            })
-        }
+            })?,
+            0,
+            dock_zone(side),
+        ),
+        TabDropDestination::NewFloatingHost => Ok(EditorDockingDestination::NewTarget),
     }
 }
 
-fn default_floating_host_bounds(shell_state: &RunenwerkEditorShellState) -> FloatingHostBounds {
-    let bounds = shell_state
-        .last_bounds()
-        .unwrap_or(ui_math::UiRect::new(0.0, 0.0, 1280.0, 720.0));
-    let width = (bounds.width * 0.46).clamp(360.0, 920.0);
-    let height = (bounds.height * 0.42).clamp(240.0, 680.0);
-    let x = (bounds.width - width).max(0.0) * 0.5;
-    let y = (bounds.height - height).max(0.0) * 0.33;
-    FloatingHostBounds::new(x, y, width, height)
+fn dock_zone(side: DockSplitSide) -> DockZone {
+    match side {
+        DockSplitSide::Left => DockZone::Left,
+        DockSplitSide::Right => DockZone::Right,
+        DockSplitSide::Top => DockZone::Top,
+        DockSplitSide::Bottom => DockZone::Bottom,
+    }
 }
 
 fn dispatch_toolbar_command(
@@ -1872,102 +1989,38 @@ fn load_workspace_profile_layout(
         .ok_or(EditorMutationError::runtime_rejected(
             "workspace profile missing",
         ))?;
-    let workspace_layout_path = default_workspace_layout_path_for_profile(profile_id);
-    let workspace_state = if workspace_layout_path.exists() {
-        let saved_workspace = match read_workspace_layout_with_metadata_and_registry(
-            &workspace_layout_path,
-            app.workbench_host().tool_surface_registry(),
-        ) {
-            Ok(saved_workspace) => saved_workspace,
-            Err(error) => {
-                app.append_console_line(format!(
-                    "[workspace] failed to load workspace layout {}: {}",
-                    workspace_layout_path.display(),
-                    error_chain_summary(&error)
-                ));
-                return Err(workspace_layout_load_rejection(&error));
-            }
-        };
-        if workspace_layout_matches_profile(&saved_workspace, &profile) {
-            saved_workspace.workspace_state
-        } else {
+    let composition_root = default_composition_layout_root_for_profile(profile_id);
+    if composition_root.join("active-generation.ron").exists() {
+        let runtime = load_editor_composition_layout(&composition_root).map_err(|error| {
             app.append_console_line(format!(
-                "[workspace] ignored stale/incompatible saved {} workspace layout; rebuilt default",
-                profile.label
+                "[composition_persistence.load_failed] {}: {}",
+                composition_root.display(),
+                error_chain_summary(&error)
             ));
-            build_default_workspace_for_profile(app, &profile)?
+            EditorMutationError::runtime_rejected("failed to load composition layout")
+        })?;
+        if runtime.extension().workspace_profile_raw() != profile_id.raw() {
+            return Err(EditorMutationError::runtime_rejected(
+                "composition profile identity mismatch",
+            ));
         }
+        shell_state
+            .install_composition_runtime(runtime)
+            .map_err(|_| EditorMutationError::runtime_rejected("composition install failed"))?;
     } else {
-        build_default_workspace_for_profile(app, &profile)?
-    };
-    shell_state.set_active_workspace_profile_id(profile_id);
-    shell_state.replace_workspace_state(workspace_state);
-    app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
-    app.append_console_line(format!("[workspace] loaded {} workspace", profile.label));
-    Ok(())
-}
-
-fn build_default_workspace_for_profile(
-    app: &RunenwerkEditorApp,
-    profile: &editor_shell::WorkspaceProfile,
-) -> Result<editor_shell::WorkspaceState, EditorMutationError> {
-    let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-    let workspace_id = allocator.allocate_workspace_id();
-    profile
-        .build_default_workspace_state_with_registry(
-            workspace_id,
-            &mut allocator,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .map_err(|_| {
-            EditorMutationError::runtime_rejected(
-                "workspace profile is incompatible with tool-surface registry",
+        shell_state
+            .activate_workspace_profile_ref_with_registry(
+                &profile.profile_ref,
+                app.workbench_host().workspace_profile_registry(),
+                app.workbench_host().tool_surface_registry(),
             )
-        })
-}
-
-fn workspace_layout_matches_profile(
-    saved_workspace: &WorkspaceLayoutReadResult,
-    profile: &editor_shell::WorkspaceProfile,
-) -> bool {
-    if saved_workspace
-        .workspace_profile_id
-        .is_some_and(|profile_id| profile_id != profile.id)
-    {
-        return false;
+            .map_err(|_| {
+                EditorMutationError::runtime_rejected("composition profile import failed")
+            })?;
     }
-    if !profile.required_tool_surfaces_are_present(&saved_workspace.workspace_state) {
-        return false;
-    }
-
-    match (
-        saved_workspace.layout_template.as_deref(),
-        saved_workspace.layout_template_version,
-    ) {
-        (Some(template), Some(version)) => {
-            template == profile.default_layout_template.contract_id()
-                && version == profile.default_layout_template.contract_version()
-        }
-        _ => profile
-            .default_layout_template
-            .default_graph_matches(&saved_workspace.workspace_state),
-    }
-}
-
-fn workspace_layout_load_rejection(error: &anyhow::Error) -> EditorMutationError {
-    if error_chain_contains(error, "persisted workspace version") {
-        EditorMutationError::runtime_rejected(
-            "failed to load workspace layout: saved schema unsupported",
-        )
-    } else {
-        EditorMutationError::runtime_rejected("failed to load workspace layout")
-    }
-}
-
-fn error_chain_contains(error: &anyhow::Error, needle: &str) -> bool {
-    error
-        .chain()
-        .any(|cause| cause.to_string().contains(needle))
+    app.prune_surface_sessions_for_composition(shell_state.composition_runtime());
+    app.append_console_line(format!("[composition] loaded {} layout", profile.label));
+    Ok(())
 }
 
 fn error_chain_summary(error: &anyhow::Error) -> String {
@@ -1982,22 +2035,14 @@ fn save_workspace_layout_for_active_profile(
     app: &mut RunenwerkEditorApp,
     shell_state: &RunenwerkEditorShellState,
 ) -> Result<(), EditorMutationError> {
-    let workspace_layout_path =
-        default_workspace_layout_path_for_profile(shell_state.active_workspace_profile_id());
-    if let Some(parent) = workspace_layout_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|_| {
-            EditorMutationError::runtime_rejected("failed to create workspace layout folder")
-        })?;
-    }
-    write_workspace_layout_for_profile(
-        &workspace_layout_path,
-        shell_state.workspace_state(),
-        shell_state.active_workspace_profile_id(),
-    )
-    .map_err(|_| EditorMutationError::runtime_rejected("failed to save workspace layout"))?;
+    ensure_composition_save_allowed(app, shell_state)?;
+    let composition_root =
+        default_composition_layout_root_for_profile(shell_state.active_workspace_profile_id());
+    save_editor_composition_layout(&composition_root, shell_state.composition_runtime())
+        .map_err(|_| EditorMutationError::runtime_rejected("failed to save composition layout"))?;
     app.append_console_line(format!(
-        "[workspace] saved layout {}",
-        workspace_layout_path.display()
+        "[composition] saved layout {}",
+        composition_root.display()
     ));
     Ok(())
 }
@@ -2006,6 +2051,7 @@ fn save_scene_to_default_path(
     app: &mut RunenwerkEditorApp,
     shell_state: &RunenwerkEditorShellState,
 ) -> Result<(), EditorMutationError> {
+    ensure_composition_save_allowed(app, shell_state)?;
     let path = default_scene_file_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|_| {
@@ -2016,21 +2062,12 @@ fn save_scene_to_default_path(
     write_scene_file(&path, app.runtime())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save editor scene"))?;
     let retained_path = retained_change_log_path_for_scene(&path);
-    let workspace_layout_path =
-        default_workspace_layout_path_for_profile(shell_state.active_workspace_profile_id());
+    let composition_root =
+        default_composition_layout_root_for_profile(shell_state.active_workspace_profile_id());
     let entry_count = write_retained_change_log(&retained_path, app.runtime())
         .map_err(|_| EditorMutationError::runtime_rejected("failed to save retained change log"))?;
-    if let Some(parent) = workspace_layout_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|_| {
-            EditorMutationError::runtime_rejected("failed to create workspace layout folder")
-        })?;
-    }
-    write_workspace_layout_for_profile(
-        &workspace_layout_path,
-        shell_state.workspace_state(),
-        shell_state.active_workspace_profile_id(),
-    )
-    .map_err(|_| EditorMutationError::runtime_rejected("failed to save workspace layout"))?;
+    save_editor_composition_layout(&composition_root, shell_state.composition_runtime())
+        .map_err(|_| EditorMutationError::runtime_rejected("failed to save composition layout"))?;
     app.runtime_mut()
         .record_workflow_event(editor_core::WorkflowEventKind::SceneSaved {
             path: path.display().to_string(),
@@ -2047,10 +2084,26 @@ fn save_scene_to_default_path(
         retained_path.display()
     ));
     app.append_console_line(format!(
-        "[io] saved workspace layout {}",
-        workspace_layout_path.display()
+        "[io] saved composition layout {}",
+        composition_root.display()
     ));
     Ok(())
+}
+
+fn ensure_composition_save_allowed(
+    app: &mut RunenwerkEditorApp,
+    shell_state: &RunenwerkEditorShellState,
+) -> Result<(), EditorMutationError> {
+    if !shell_state.composition_coordination_pending() {
+        return Ok(());
+    }
+    app.append_console_line(format!(
+        "[{}] Wait for the pending composition transition to commit or roll back before saving.",
+        editor_shell::EditorCompositionDiagnosticCode::CoordinationPending.as_str()
+    ));
+    Err(EditorMutationError::runtime_rejected(
+        "composition save blocked by pending coordination",
+    ))
 }
 
 fn load_scene_from_default_path(
@@ -2085,9 +2138,9 @@ fn load_scene_from_default_path(
         }
     };
     let retained_path = retained_change_log_path_for_scene(&path);
-    let workspace_layout_path =
-        default_workspace_layout_path_for_profile(shell_state.active_workspace_profile_id());
-    let legacy_workspace_layout_path = legacy_workspace_layout_path_for_scene(&path);
+    let composition_root =
+        default_composition_layout_root_for_profile(shell_state.active_workspace_profile_id());
+    let legacy_workspace_layout_path = path.with_extension("workspace.ron");
     let retained = if retained_path.exists() {
         Some(read_retained_change_log(&retained_path).map_err(|_| {
             EditorMutationError::runtime_rejected("failed to load retained change log")
@@ -2121,50 +2174,35 @@ fn load_scene_from_default_path(
             retained_path.display()
         ));
     }
-    let layout_path_to_load = if workspace_layout_path.exists() {
-        Some(workspace_layout_path.clone())
-    } else if legacy_workspace_layout_path.exists() {
-        Some(legacy_workspace_layout_path.clone())
-    } else {
-        None
-    };
-
-    if let Some(layout_path_to_load) = layout_path_to_load {
-        match read_workspace_layout_with_metadata_and_registry(
-            &layout_path_to_load,
-            app.workbench_host().tool_surface_registry(),
-        ) {
-            Ok(saved_workspace) => {
-                let active_profile = app
-                    .workbench_host()
-                    .workspace_profile(shell_state.active_workspace_profile_id());
-                if active_profile.is_some_and(|profile| {
-                    workspace_layout_matches_profile(&saved_workspace, profile)
-                }) {
-                    shell_state.replace_workspace_state(saved_workspace.workspace_state);
-                    app.prune_surface_sessions_for_workspace(shell_state.workspace_state());
-                    app.append_console_line(format!(
-                        "[io] loaded workspace layout {}",
-                        layout_path_to_load.display()
-                    ));
-                } else {
-                    app.append_console_line(format!(
-                        "[io] ignored workspace layout for inactive profile: {}",
-                        layout_path_to_load.display()
-                    ));
-                }
-            }
-            Err(error) => {
+    if composition_root.join("active-generation.ron").exists() {
+        match load_editor_composition_layout(&composition_root) {
+            Ok(runtime) => {
+                shell_state
+                    .install_composition_runtime(runtime)
+                    .map_err(|_| {
+                        EditorMutationError::runtime_rejected("composition install failed")
+                    })?;
+                app.prune_surface_sessions_for_composition(shell_state.composition_runtime());
                 app.append_console_line(format!(
-                    "[io] workspace layout load failed, keeping current layout: {} ({error})",
-                    layout_path_to_load.display()
+                    "[io] loaded composition layout {}",
+                    composition_root.display()
                 ));
             }
+            Err(error) => app.append_console_line(format!(
+                "[io] composition layout load failed, keeping current layout: {} ({error})",
+                composition_root.display()
+            )),
         }
+    } else if legacy_workspace_layout_path.exists() {
+        let _ = probe_legacy_layout_path(&legacy_workspace_layout_path);
+        app.append_console_line(format!(
+            "[composition_persistence.legacy_unsupported] left legacy layout unchanged: {}",
+            legacy_workspace_layout_path.display()
+        ));
     } else {
         app.append_console_line(format!(
-            "[io] workspace layout missing, keeping current layout: {}",
-            workspace_layout_path.display()
+            "[io] composition layout missing, keeping current layout: {}",
+            composition_root.display()
         ));
     }
     app.append_console_line(format!("[io] loaded {}", path.display()));
@@ -2181,6 +2219,24 @@ fn migration_failure_class_label(class: editor_core::MigrationFailureClass) -> &
 }
 
 #[cfg(test)]
+mod composition_tests {
+    use super::*;
+
+    #[test]
+    fn pending_composition_coordination_blocks_save_before_io() {
+        let mut app = RunenwerkEditorApp::new();
+        let mut shell = RunenwerkEditorShellState::new();
+        shell.set_composition_coordination_pending(true);
+
+        assert!(ensure_composition_save_allowed(&mut app, &shell).is_err());
+        assert!(app.console_lines().iter().any(|line| {
+            line.text
+                .contains("editor_composition.coordination.pending")
+        }));
+    }
+}
+
+#[cfg(all(test, any()))]
 mod tests {
     use super::*;
     use editor_shell::{

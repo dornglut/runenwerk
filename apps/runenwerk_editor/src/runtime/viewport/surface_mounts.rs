@@ -1,7 +1,10 @@
 //! File: apps/runenwerk_editor/src/runtime/viewport/surface_mounts.rs
 //! Purpose: Runtime resources for ui_surface definitions and mounted surface lifecycle.
 
-use editor_shell::{WorkspaceState, editor_surface_definitions, mounted_surface_instances};
+use editor_shell::{
+    EditorCompositionRuntime, ToolSurfaceStableKey, editor_surface_definitions,
+    tool_surface_definition_id, tool_surface_kind_for_stable_key,
+};
 use ui_surface::{
     MountedSurfaceInstance, MountedSurfaceRegistry, SurfaceDefinition, SurfaceDefinitionId,
     SurfaceDefinitionRegistry, SurfaceInstanceId,
@@ -61,9 +64,32 @@ impl MountedSurfaceRegistryResource {
         self.registry.is_empty()
     }
 
-    pub fn sync_from_workspace_state(&mut self, workspace_state: &WorkspaceState) {
-        self.registry
-            .rebuild(mounted_surface_instances(workspace_state));
+    pub fn sync_from_composition(&mut self, runtime: &EditorCompositionRuntime) {
+        let mounts = runtime
+            .extension()
+            .mounted_units()
+            .iter()
+            .filter_map(|record| {
+                let stable_key =
+                    ToolSurfaceStableKey::new(record.stable_content_key.clone()).ok()?;
+                let kind = tool_surface_kind_for_stable_key(&stable_key)?;
+                Some(MountedSurfaceInstance::new(
+                    SurfaceInstanceId::new(record.compatibility_surface_raw),
+                    tool_surface_definition_id(kind),
+                    ui_surface::SurfaceHostInstanceId::new(record.panel_instance_raw),
+                ))
+            });
+        self.registry.rebuild(mounts);
+    }
+
+    #[cfg(test)]
+    pub fn sync_from_workspace_state(&mut self, workspace: &editor_shell::WorkspaceState) {
+        let runtime = editor_shell::import_legacy_workspace(
+            editor_shell::SCENE_WORKSPACE_PROFILE_ID,
+            workspace,
+        )
+        .unwrap();
+        self.sync_from_composition(&runtime);
     }
 }
 

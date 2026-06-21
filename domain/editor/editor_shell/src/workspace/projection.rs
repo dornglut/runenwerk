@@ -1,134 +1,16 @@
 //! File: domain/editor/editor_shell/src/workspace/projection.rs
 //! Purpose: Pure projection from canonical workspace graph into shell composition slots.
 
-use std::collections::BTreeMap;
+use ui_composition::MountedUnitId;
 
 use crate::{
-    CONSOLE_BODY_WIDGET_ID, CONSOLE_LIST_WIDGET_ID, CONSOLE_PANEL_WIDGET_ID,
-    CONSOLE_SCROLL_WIDGET_ID, DockSplitSide, ENTITY_TABLE_BODY_WIDGET_ID,
-    ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID, ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID,
-    ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID, ENTITY_TABLE_HEADER_SCROLL_WIDGET_ID,
-    ENTITY_TABLE_LIST_WIDGET_ID, ENTITY_TABLE_PANEL_WIDGET_ID,
-    ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID, ENTITY_TABLE_SCROLL_WIDGET_ID,
-    ENTITY_TABLE_SEARCH_WIDGET_ID, ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID,
-    ENTITY_TABLE_TABLE_SCROLL_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, INSPECTOR_BODY_WIDGET_ID,
-    INSPECTOR_LIST_WIDGET_ID, INSPECTOR_PANEL_WIDGET_ID, INSPECTOR_SCROLL_WIDGET_ID,
-    OUTLINER_BODY_WIDGET_ID, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID,
-    OUTLINER_SCROLL_WIDGET_ID, PanelHostId, PanelHostKind, PanelInstanceId, PanelKind,
-    TabStackHostState, TabStackId, ToolSurfaceInstanceId, ToolSurfaceStableKey,
-    VIEWPORT_BODY_WIDGET_ID, VIEWPORT_CANVAS_CONTENT_WIDGET_ID, VIEWPORT_CANVAS_WIDGET_ID,
-    VIEWPORT_PANEL_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID, WidgetId, WorkspaceSplitAxis,
-    WorkspaceState, WorkspaceStateError, floating_host_widget_id, surface_widget_id,
-    tab_button_widget_id, tab_drop_zone_widget_id, tab_strip_widget_id,
-    workspace_split_handle_widget_id, workspace_split_host_widget_id,
+    PanelHostId, PanelHostKind, ProjectedFloatingHostSlot, ProjectedPanelSlot, ProjectedTabButton,
+    ProjectedTabDropSlot, ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, TabStackHostState,
+    TabStackId, WorkspaceProjectionArtifact, WorkspaceState, WorkspaceStateError,
+    assemble_editor_shell_projection, floating_host_widget_id, tab_button_widget_id,
+    tab_drop_zone_widget_id, tab_strip_widget_id, workspace_split_handle_widget_id,
+    workspace_split_host_widget_id,
 };
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectedPanelSlot {
-    pub panel_instance_id: PanelInstanceId,
-    pub panel_kind: PanelKind,
-    pub active_tool_surface: Option<ToolSurfaceInstanceId>,
-    pub active_stable_surface_key: Option<ToolSurfaceStableKey>,
-    pub tab_stack_id: TabStackId,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectedTabButton {
-    pub widget_id: WidgetId,
-    pub panel: ProjectedPanelSlot,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProjectedTabDropSlot {
-    pub widget_id: WidgetId,
-    pub insert_index: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectedTabStackSlot {
-    pub tab_strip_widget_id: WidgetId,
-    pub tab_stack_id: TabStackId,
-    pub tabs: Vec<ProjectedTabButton>,
-    pub drop_slots: Vec<ProjectedTabDropSlot>,
-    pub active_panel: Option<ProjectedPanelSlot>,
-    pub locked_stable_surface_key: Option<ToolSurfaceStableKey>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ProjectedFloatingHostSlot {
-    pub host_id: PanelHostId,
-    pub host_widget_id: WidgetId,
-    pub bounds: crate::FloatingHostBounds,
-    pub tab_stack: ProjectedTabStackSlot,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ProjectedWorkspaceHostSlot {
-    Split {
-        host_id: PanelHostId,
-        widget_id: WidgetId,
-        handle_widget_id: WidgetId,
-        axis: WorkspaceSplitAxis,
-        fraction: f32,
-        first_child: Box<ProjectedWorkspaceHostSlot>,
-        second_child: Box<ProjectedWorkspaceHostSlot>,
-    },
-    TabStack {
-        host_id: PanelHostId,
-        tab_stack: ProjectedTabStackSlot,
-    },
-    EmptyFloatingPlaceholder {
-        host_id: PanelHostId,
-        widget_id: WidgetId,
-    },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct StructuralWidgetRoutingContext {
-    pub panel_instance_id: PanelInstanceId,
-    pub active_tool_surface: Option<ToolSurfaceInstanceId>,
-    pub tab_stack_id: TabStackId,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProjectedTabButtonRoute {
-    pub panel_instance_id: PanelInstanceId,
-    pub tab_stack_id: TabStackId,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProjectedTabDropTarget {
-    TabStack {
-        tab_stack_id: TabStackId,
-        insert_index: usize,
-    },
-    SplitIntoArea {
-        target_tab_stack_id: TabStackId,
-        side: DockSplitSide,
-    },
-    SplitIntoHost {
-        target_host_id: PanelHostId,
-        side: DockSplitSide,
-    },
-    SplitIntoRoot {
-        side: DockSplitSide,
-    },
-    NewFloatingHost,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProjectedTabDropRoute {
-    pub target: ProjectedTabDropTarget,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct WorkspaceProjectionArtifact {
-    pub root_host: ProjectedWorkspaceHostSlot,
-    pub floating_hosts: Vec<ProjectedFloatingHostSlot>,
-    pub widget_context_by_id: BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
-    pub tab_button_route_by_widget_id: BTreeMap<WidgetId, ProjectedTabButtonRoute>,
-    pub tab_drop_route_by_widget_id: BTreeMap<WidgetId, ProjectedTabDropRoute>,
-}
 
 pub fn project_workspace_for_shell(
     workspace_state: &WorkspaceState,
@@ -136,48 +18,7 @@ pub fn project_workspace_for_shell(
     workspace_state.validate_integrity()?;
     let root_host = project_host_slot(workspace_state, workspace_state.root_host_id())?;
     let floating_hosts = project_floating_hosts(workspace_state)?;
-    let mut widget_context_by_id = BTreeMap::new();
-    let mut tab_button_route_by_widget_id = BTreeMap::new();
-    let mut tab_drop_route_by_widget_id = BTreeMap::new();
-
-    for stack_slot in projected_host_tab_stacks(&root_host) {
-        register_tab_stack_routes(
-            stack_slot,
-            &mut tab_button_route_by_widget_id,
-            &mut tab_drop_route_by_widget_id,
-        );
-        register_active_panel_widget_contexts(
-            &mut widget_context_by_id,
-            stack_slot.active_panel.as_ref(),
-        );
-    }
-
-    for floating in &floating_hosts {
-        register_tab_stack_routes(
-            &floating.tab_stack,
-            &mut tab_button_route_by_widget_id,
-            &mut tab_drop_route_by_widget_id,
-        );
-        register_active_panel_widget_contexts(
-            &mut widget_context_by_id,
-            floating.tab_stack.active_panel.as_ref(),
-        );
-    }
-
-    tab_drop_route_by_widget_id.insert(
-        FLOATING_DROP_ZONE_WIDGET_ID,
-        ProjectedTabDropRoute {
-            target: ProjectedTabDropTarget::NewFloatingHost,
-        },
-    );
-
-    Ok(WorkspaceProjectionArtifact {
-        root_host,
-        floating_hosts,
-        widget_context_by_id,
-        tab_button_route_by_widget_id,
-        tab_drop_route_by_widget_id,
-    })
+    Ok(assemble_editor_shell_projection(root_host, floating_hosts))
 }
 
 fn project_host_slot(
@@ -233,156 +74,6 @@ fn project_floating_hosts(
     Ok(floating_hosts)
 }
 
-pub fn projected_host_tab_stacks(host: &ProjectedWorkspaceHostSlot) -> Vec<&ProjectedTabStackSlot> {
-    match host {
-        ProjectedWorkspaceHostSlot::Split {
-            first_child,
-            second_child,
-            ..
-        } => {
-            let mut stacks = projected_host_tab_stacks(first_child);
-            stacks.extend(projected_host_tab_stacks(second_child));
-            stacks
-        }
-        ProjectedWorkspaceHostSlot::TabStack { tab_stack, .. } => vec![tab_stack],
-        ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { .. } => Vec::new(),
-    }
-}
-
-fn register_tab_stack_routes(
-    stack_slot: &ProjectedTabStackSlot,
-    tab_button_routes: &mut BTreeMap<WidgetId, ProjectedTabButtonRoute>,
-    tab_drop_routes: &mut BTreeMap<WidgetId, ProjectedTabDropRoute>,
-) {
-    for tab in &stack_slot.tabs {
-        tab_button_routes.insert(
-            tab.widget_id,
-            ProjectedTabButtonRoute {
-                panel_instance_id: tab.panel.panel_instance_id,
-                tab_stack_id: tab.panel.tab_stack_id,
-            },
-        );
-    }
-
-    for slot in &stack_slot.drop_slots {
-        tab_drop_routes.insert(
-            slot.widget_id,
-            ProjectedTabDropRoute {
-                target: ProjectedTabDropTarget::TabStack {
-                    tab_stack_id: stack_slot.tab_stack_id,
-                    insert_index: slot.insert_index,
-                },
-            },
-        );
-    }
-}
-
-fn register_active_panel_widget_contexts(
-    map: &mut BTreeMap<WidgetId, StructuralWidgetRoutingContext>,
-    active_panel: Option<&ProjectedPanelSlot>,
-) {
-    let Some(panel) = active_panel else {
-        return;
-    };
-
-    let context = StructuralWidgetRoutingContext {
-        panel_instance_id: panel.panel_instance_id,
-        active_tool_surface: panel.active_tool_surface,
-        tab_stack_id: panel.tab_stack_id,
-    };
-
-    for widget_id in panel_widget_ids(panel.panel_kind) {
-        let widget_id = panel
-            .active_tool_surface
-            .map(|surface_id| surface_widget_id(surface_id, *widget_id))
-            .unwrap_or(*widget_id);
-        map.insert(widget_id, context);
-    }
-}
-
-fn panel_widget_ids(panel_kind: PanelKind) -> &'static [WidgetId] {
-    match panel_kind {
-        PanelKind::Outliner => &[
-            OUTLINER_PANEL_WIDGET_ID,
-            OUTLINER_BODY_WIDGET_ID,
-            OUTLINER_LIST_WIDGET_ID,
-            OUTLINER_SCROLL_WIDGET_ID,
-        ],
-        PanelKind::EntityTable => &[
-            ENTITY_TABLE_PANEL_WIDGET_ID,
-            ENTITY_TABLE_BODY_WIDGET_ID,
-            ENTITY_TABLE_SEARCH_WIDGET_ID,
-            ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
-            ENTITY_TABLE_CLEAR_SEARCH_WIDGET_ID,
-            ENTITY_TABLE_SELECTED_ONLY_TOGGLE_WIDGET_ID,
-            ENTITY_TABLE_ROOTS_ONLY_TOGGLE_WIDGET_ID,
-            ENTITY_TABLE_COMPONENT_FILTER_SELECT_WIDGET_ID,
-            ENTITY_TABLE_LIST_WIDGET_ID,
-            ENTITY_TABLE_SCROLL_WIDGET_ID,
-            ENTITY_TABLE_HEADER_SCROLL_WIDGET_ID,
-            ENTITY_TABLE_TABLE_SCROLL_WIDGET_ID,
-        ],
-        PanelKind::Viewport => &[
-            VIEWPORT_PANEL_WIDGET_ID,
-            VIEWPORT_BODY_WIDGET_ID,
-            VIEWPORT_CANVAS_WIDGET_ID,
-            VIEWPORT_CANVAS_CONTENT_WIDGET_ID,
-            VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-        ],
-        PanelKind::Inspector => &[
-            INSPECTOR_PANEL_WIDGET_ID,
-            INSPECTOR_BODY_WIDGET_ID,
-            INSPECTOR_LIST_WIDGET_ID,
-            INSPECTOR_SCROLL_WIDGET_ID,
-        ],
-        PanelKind::Console => &[
-            CONSOLE_PANEL_WIDGET_ID,
-            CONSOLE_BODY_WIDGET_ID,
-            CONSOLE_LIST_WIDGET_ID,
-            CONSOLE_SCROLL_WIDGET_ID,
-        ],
-        PanelKind::EditorDesignOutliner
-        | PanelKind::UiHierarchy
-        | PanelKind::UiCanvas
-        | PanelKind::StyleInspector
-        | PanelKind::Bindings
-        | PanelKind::DockLayoutPreview
-        | PanelKind::ThemeEditor
-        | PanelKind::ShortcutEditor
-        | PanelKind::MenuEditor
-        | PanelKind::DefinitionValidation
-        | PanelKind::CommandDiff
-        | PanelKind::AssetBrowser
-        | PanelKind::ImportInspector
-        | PanelKind::FieldProductViewer
-        | PanelKind::SdfBrushBrowser
-        | PanelKind::GraphCanvas
-        | PanelKind::Diagnostics
-        | PanelKind::RuntimeDebug
-        | PanelKind::FieldLayerStack
-        | PanelKind::SdfGraphCanvas
-        | PanelKind::MaterialGraphCanvas
-        | PanelKind::MaterialInspector
-        | PanelKind::MaterialPreview
-        | PanelKind::TextureViewer
-        | PanelKind::VolumeTextureViewer
-        | PanelKind::ProcgenGraphCanvas
-        | PanelKind::ProcgenPreview
-        | PanelKind::GameplayGraphCanvas
-        | PanelKind::GameplayCompilerDiagnostics
-        | PanelKind::ParticleGraphCanvas
-        | PanelKind::ParticlePreview
-        | PanelKind::PhysicsAuthoring
-        | PanelKind::PhysicsDebug
-        | PanelKind::Timeline
-        | PanelKind::CurveEditor
-        | PanelKind::AnimationGraphCanvas
-        | PanelKind::SimulationPreview
-        | PanelKind::SimulationDiagnostics => &[],
-        PanelKind::Placeholder => &[],
-    }
-}
-
 fn project_tab_stack_slot_by_id(
     workspace_state: &WorkspaceState,
     tab_stack_id: TabStackId,
@@ -397,6 +88,9 @@ fn project_tab_stack_slot_by_id(
             .panel(panel_id)
             .ok_or(WorkspaceStateError::MissingPanel(panel_id))?;
         let panel_slot = ProjectedPanelSlot {
+            mounted_unit_id: panel
+                .active_tool_surface
+                .and_then(|surface_id| MountedUnitId::try_from_raw(surface_id.raw()).ok()),
             panel_instance_id: panel.id,
             panel_kind: panel.panel_kind,
             active_tool_surface: panel.active_tool_surface,
@@ -439,7 +133,9 @@ fn project_tab_stack_slot_by_id(
 mod tests {
     use super::*;
     use crate::{
-        FloatingHostBounds, WorkspaceIdentityAllocator, WorkspaceMutation, reduce_workspace,
+        FloatingHostBounds, OUTLINER_LIST_WIDGET_ID, OUTLINER_PANEL_WIDGET_ID, PanelKind,
+        ToolSurfaceInstanceId, VIEWPORT_PANEL_WIDGET_ID, WorkspaceIdentityAllocator,
+        WorkspaceMutation, projected_host_tab_stacks, reduce_workspace, surface_widget_id,
     };
 
     fn bootstrap_workspace() -> WorkspaceState {

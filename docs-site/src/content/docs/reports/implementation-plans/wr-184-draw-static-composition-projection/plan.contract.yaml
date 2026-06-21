@@ -1,0 +1,101 @@
+version: 1
+status: accepted
+wr_id: WR-184
+milestone_id: PM-UI-COMPOSITION-005
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: exact_draw_static_composition_cutover
+permissions_required:
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- apps/runenwerk_draw/Cargo.toml
+- apps/runenwerk_draw/src/app/mod.rs
+- apps/runenwerk_draw/src/app/presentation.rs
+- apps/runenwerk_draw/src/app/state.rs
+- apps/runenwerk_draw/src/app/workspace.rs
+- apps/runenwerk_draw/src/runtime/ink.rs
+- apps/runenwerk_draw/tests/app_shell.rs
+- docs-site/src/content/docs/apps/runenwerk-draw/README.md
+- docs-site/src/content/docs/apps/runenwerk-draw/roadmap.md
+new_outputs:
+- apps/runenwerk_draw/src/app/composition/mod.rs
+- apps/runenwerk_draw/src/app/composition/content.rs
+- apps/runenwerk_draw/src/app/composition/definition.rs
+- apps/runenwerk_draw/src/app/composition/diagnostic.rs
+- apps/runenwerk_draw/src/app/composition/extension.rs
+- apps/runenwerk_draw/src/app/composition/projection.rs
+- apps/runenwerk_draw/src/app/composition/runtime.rs
+- apps/runenwerk_draw/tests/composition_architecture_guards.rs
+- docs-site/src/content/docs/apps/runenwerk-draw/composition-layouts.md
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-005/runtime_test-draw-static-composition-projection.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-005/fixture-draw-definition-extension-authority.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-005/diagnostics-draw-content-liveness.yaml
+forbidden_outputs:
+- domain/ui/ui_composition
+- domain/ui/ui_adaptive_composition
+- domain/ui/ui_surface
+- domain/drawing
+- domain/editor
+- apps/runenwerk_editor
+- engine
+- adapters
+- net
+forbidden_patterns: []
+template_outputs: {}
+patches: []
+validation_commands:
+- cargo fmt --all --check
+- cargo test -p runenwerk_draw --test app_shell
+- cargo test -p runenwerk_draw --test composition_architecture_guards
+- cargo test -p runenwerk_draw composition
+- task ui:dependencies
+- task docs:validate
+- task planning:validate
+evidence_required: &evidence
+- kind: runtime_test
+  name: draw_static_composition_projection
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-005/runtime_test-draw-static-composition-projection.yaml
+  subject_paths:
+  - apps/runenwerk_draw/src/app/composition/runtime.rs
+  - apps/runenwerk_draw/src/app/composition/projection.rs
+  - apps/runenwerk_draw/src/app/state.rs
+  - apps/runenwerk_draw/src/app/presentation.rs
+  - apps/runenwerk_draw/tests/app_shell.rs
+  - apps/runenwerk_draw/tests/composition_architecture_guards.rs
+  validation_command_ids:
+  - cargo:test
+- kind: fixture
+  name: draw_definition_extension_authority
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-005/fixture-draw-definition-extension-authority.yaml
+  subject_paths:
+  - apps/runenwerk_draw/src/app/composition/definition.rs
+  - apps/runenwerk_draw/src/app/composition/extension.rs
+  - apps/runenwerk_draw/src/app/composition/runtime.rs
+  - apps/runenwerk_draw/tests/composition_architecture_guards.rs
+- kind: diagnostics
+  name: draw_content_liveness
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-005/diagnostics-draw-content-liveness.yaml
+  subject_paths:
+  - apps/runenwerk_draw/src/app/composition/content.rs
+  - apps/runenwerk_draw/src/app/composition/diagnostic.rs
+  - apps/runenwerk_draw/src/app/composition/projection.rs
+  - apps/runenwerk_draw/tests/composition_architecture_guards.rs
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *evidence
+rollback_policy: reject the checkpoint without aliases or dual projection authority; preserve PM-004 evidence and all drawing document state
+stop_conditions:
+- stop if projection uses an independent hard-coded topology instead of the ratified region graph
+- stop if DrawingWorkspaceProjection or public workspace access remains active
+- stop if drawing document stroke brush layer or history authority moves
+- stop if the Draw extension duplicates core topology or mounted-content references
+- stop if core and Draw extension can install partially
+- stop if content liveness mutates or invalidates composition structure
+- stop if narrow width silently removes or hides a mounted region
+- stop before editor adaptive ui_surface engine windowing native-window persistence repository or Region Compass runtime changes

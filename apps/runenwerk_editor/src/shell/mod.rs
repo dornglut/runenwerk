@@ -1,6 +1,7 @@
 pub mod applied_editor_definition;
 pub mod command_catalog;
 pub mod command_resolution;
+pub mod composition_runtime;
 pub mod compositions;
 pub mod controller;
 pub mod dispatch;
@@ -22,6 +23,7 @@ mod toolbar_adapter;
 pub use applied_editor_definition::*;
 pub use command_catalog::*;
 pub use command_resolution::*;
+pub use composition_runtime::*;
 pub use controller::*;
 pub use dispatch_shell_command::*;
 pub use editor_lab_evidence::*;

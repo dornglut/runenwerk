@@ -28,7 +28,7 @@ impl EditorSurfaceProvider for SelfAuthoringProvider {
         let surface_kind =
             tool_surface_kind_for_stable_key(request.stable_key()).ok_or_else(|| {
                 SurfaceProviderDiagnostic::new(
-                    "editor.surface.unknown_self_authoring_key",
+                    "editor_composition.provider.unknown_self_authoring_key",
                     format!(
                         "self-authoring provider does not recognize stable surface key `{}`",
                         request.stable_key().as_str()

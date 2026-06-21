@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use ui_adaptive_composition::DockZone;
 use ui_definition::{
     FormedChromeSlot, FormedDockDropZone, FormedInteractionModel, FormedMenuSizing,
     FormedMenuStackScope, FormedScrollOwner, FormedUiRoute, FormedViewportStatusMetric,
@@ -25,28 +26,27 @@ use crate::{
 };
 use ui_math::UiSize;
 
-use crate::workspace::{
-    ProjectedFloatingHostSlot, ProjectedTabStackSlot, ProjectedWorkspaceHostSlot,
-    StructuralWidgetRoutingContext, WorkspaceProjectionArtifact, project_workspace_for_shell,
-    projected_host_tab_stacks,
-};
+use crate::workspace::project_workspace_for_shell;
 use crate::{
     BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
     FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID,
     MODELLING_WORKSPACE_PROFILE_ID, PanelInstanceId, PanelKind, ROOT_WIDGET_ID,
-    SCENE_WORKSPACE_PROFILE_ID, SurfaceLocalAction, SurfaceProviderId, TabStackId,
-    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceStableKey, ToolbarCommandKind,
-    ToolbarMenuKind, VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_DETAILS_LABEL_WIDGET_ID,
-    VIEWPORT_OPTIONS_BUTTON_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID,
-    VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_WIDGET_ID,
-    VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID, VIEWPORT_STATISTICS_LABEL_WIDGET_ID,
-    VIEWPORT_STATUS_WIDGET_ID, VIEWPORT_SURFACE_EMBED_WIDGET_ID,
-    VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID, VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID,
-    VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID, VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId,
-    WorkspaceProfileId, WorkspaceSplitAxis, WorkspaceState,
-    build_defined_toolbar_menu_popup_with_binding, build_defined_toolbar_with_template,
-    dock_split_preview_label_widget_id, dock_split_preview_overlay_widget_id,
-    dock_split_preview_panel_widget_id, surface_widget_id, tab_active_indicator_widget_id,
+    RegionCompassAccessibility, RegionCompassSessionState, RegionCompassTargetState,
+    RegionCompassTargetViewModel, RegionCompassViewModel, SCENE_WORKSPACE_PROFILE_ID,
+    SurfaceLocalAction, SurfaceProviderId, TabStackId, TabStackPopupMenuKind,
+    ToolSurfaceInstanceId, ToolSurfaceStableKey, ToolbarCommandKind, ToolbarMenuKind,
+    VIEWPORT_CANVAS_WIDGET_ID, VIEWPORT_DETAILS_LABEL_WIDGET_ID, VIEWPORT_OPTIONS_BUTTON_WIDGET_ID,
+    VIEWPORT_OPTIONS_POPUP_LIST_WIDGET_ID, VIEWPORT_OPTIONS_POPUP_SCROLL_WIDGET_ID,
+    VIEWPORT_OPTIONS_POPUP_WIDGET_ID, VIEWPORT_OVERLAY_STATUS_LABEL_WIDGET_ID,
+    VIEWPORT_STATISTICS_LABEL_WIDGET_ID, VIEWPORT_STATUS_WIDGET_ID,
+    VIEWPORT_SURFACE_EMBED_WIDGET_ID, VIEWPORT_TOOL_RADIAL_BUTTON_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_LIST_WIDGET_ID, VIEWPORT_TOOLS_MENU_SCROLL_WIDGET_ID,
+    VIEWPORT_TOOLS_MENU_WIDGET_ID, WidgetId, WorkspaceProfileId, WorkspaceSplitAxis,
+    WorkspaceState, build_defined_toolbar_menu_popup_with_binding,
+    build_defined_toolbar_with_template, dock_split_preview_overlay_widget_id,
+    region_compass_cell_widget_id, region_compass_detach_button_widget_id,
+    region_compass_detach_overlay_widget_id, region_compass_overlay_widget_id,
+    region_compass_panel_widget_id, surface_widget_id, tab_active_indicator_widget_id,
     tab_chrome_widget_id, tab_close_button_widget_id, tab_stack_action_menu_list_widget_id,
     tab_stack_action_menu_popup_widget_id, tab_stack_action_menu_scroll_widget_id,
     tab_stack_close_area_button_widget_id, tab_stack_container_widget_id,
@@ -58,6 +58,10 @@ use crate::{
     tab_stack_split_vertical_button_widget_id, tab_strip_scroll_widget_id,
 };
 use crate::{EditorShellFrameModel, ToolSurfaceCreateCandidate};
+use crate::{
+    ProjectedFloatingHostSlot, ProjectedTabStackSlot, ProjectedWorkspaceHostSlot,
+    StructuralWidgetRoutingContext, WorkspaceProjectionArtifact, projected_host_tab_stacks,
+};
 
 use super::surface_definition_context::contrast_popup_theme;
 
@@ -222,18 +226,21 @@ pub struct DockDropCandidate {
     pub state: DockDropCandidateState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ActiveTabDragVisualState {
     pub panel_instance_id: PanelInstanceId,
     pub source_tab_stack_id: TabStackId,
     pub preview_target: Option<DockingPreviewDropTarget>,
     pub preview_candidates: Vec<DockDropCandidate>,
+    pub region_compass_anchor: Option<WidgetId>,
+    pub region_compass: Option<RegionCompassViewModel>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct DockingInteractionVisualState {
     pub active_tab_drag: Option<ActiveTabDragVisualState>,
     pub active_split_border_widget: Option<WidgetId>,
+    pub active_split_preview_fraction: Option<(WidgetId, f32)>,
 }
 
 const TAB_REORDER_DROP_PRIORITY: u16 = 0;
@@ -265,6 +272,69 @@ pub fn build_editor_shell_frame(
     build_editor_shell_frame_with_docking_visual_state(frame_model, theme, workspace_state, None)
 }
 
+pub fn build_editor_shell_frame_from_composition_projection(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    composition_projection: &crate::EditorCompositionProjectionArtifact,
+) -> EditorShellBuildResult {
+    build_editor_shell_frame_from_composition_projection_with_docking_visual_state(
+        frame_model,
+        theme,
+        composition_projection,
+        None,
+    )
+}
+
+pub fn build_editor_shell_frame_from_composition_projection_with_docking_visual_state(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    composition_projection: &crate::EditorCompositionProjectionArtifact,
+    docking_visual_state: Option<&DockingInteractionVisualState>,
+) -> EditorShellBuildResult {
+    build_editor_shell_frame_from_projection(
+        frame_model,
+        theme,
+        &composition_projection.shell,
+        docking_visual_state,
+        false,
+    )
+}
+
+pub fn build_editor_shell_frame_for_target_from_composition_projection(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    composition_projection: &crate::EditorCompositionProjectionArtifact,
+    target_id: ui_composition::PresentationTargetId,
+) -> Option<EditorShellBuildResult> {
+    build_editor_shell_frame_for_target_from_composition_projection_with_docking_visual_state(
+        frame_model,
+        theme,
+        composition_projection,
+        target_id,
+        None,
+    )
+}
+
+pub fn build_editor_shell_frame_for_target_from_composition_projection_with_docking_visual_state(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    composition_projection: &crate::EditorCompositionProjectionArtifact,
+    target_id: ui_composition::PresentationTargetId,
+    docking_visual_state: Option<&DockingInteractionVisualState>,
+) -> Option<EditorShellBuildResult> {
+    composition_projection
+        .shell_for_target(target_id)
+        .map(|projection| {
+            build_editor_shell_frame_from_projection(
+                frame_model,
+                theme,
+                projection,
+                docking_visual_state,
+                false,
+            )
+        })
+}
+
 pub fn build_editor_shell_frame_with_docking_visual_state(
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
@@ -273,6 +343,22 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
 ) -> EditorShellBuildResult {
     let workspace_projection = project_workspace_for_shell(workspace_state)
         .expect("workspace state is invalid for editor-shell projection");
+    build_editor_shell_frame_from_projection(
+        frame_model,
+        theme,
+        &workspace_projection,
+        docking_visual_state,
+        true,
+    )
+}
+
+fn build_editor_shell_frame_from_projection(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    workspace_projection: &WorkspaceProjectionArtifact,
+    docking_visual_state: Option<&DockingInteractionVisualState>,
+    structural_interactions_enabled: bool,
+) -> EditorShellBuildResult {
     let root_host = workspace_projection.root_host.clone();
     let floating_hosts = workspace_projection.floating_hosts.clone();
     let toolbar = build_defined_toolbar_with_template(
@@ -293,11 +379,13 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         toolbar_routes_by_widget_id.extend(popup.routes_by_widget_id.clone());
         interaction_model.extend(popup.interaction_model.clone());
     }
-    interaction_model.extend(tab_stack_chrome_interaction_model(&workspace_projection));
-    interaction_model.extend(dock_drop_zone_interaction_model(
-        &workspace_projection,
-        docking_visual_state,
-    ));
+    if structural_interactions_enabled {
+        interaction_model.extend(tab_stack_chrome_interaction_model(&workspace_projection));
+        interaction_model.extend(dock_drop_zone_interaction_model(
+            &workspace_projection,
+            docking_visual_state,
+        ));
+    }
     interaction_model.extend(tab_stack_popup_interaction_model(frame_model));
     interaction_model.extend(viewport_surface_interaction_model(frame_model));
     let (widget_actions_by_id, widget_structural_context_by_id) = build_frame_widget_routes(
@@ -310,7 +398,7 @@ pub fn build_editor_shell_frame_with_docking_visual_state(
         widget_actions_by_id,
         widget_structural_context_by_id,
         interaction_model,
-        workspace: workspace_projection,
+        workspace: workspace_projection.clone(),
     };
 
     let body_with_console =
@@ -1278,127 +1366,215 @@ fn build_dock_split_preview_overlays(
         return Vec::new();
     };
 
-    active_drag
-        .preview_candidates
-        .clone()
-        .into_iter()
-        .map(|candidate| build_dock_split_preview_overlay(candidate, theme))
-        .collect()
+    let (Some(anchor), Some(compass)) = (
+        active_drag.region_compass_anchor,
+        active_drag.region_compass.as_ref(),
+    ) else {
+        return Vec::new();
+    };
+    vec![
+        build_region_compass(anchor, compass, theme),
+        build_region_compass_detach(anchor, compass, theme),
+    ]
 }
 
-fn build_dock_split_preview_overlay(candidate: DockDropCandidate, theme: &ThemeTokens) -> UiNode {
-    let anchor_widget_id = candidate.anchor_widget_id;
-    let popup_side = dock_preview_side(candidate.side);
-    let active = candidate.state.is_active();
-    let invalid = matches!(candidate.state, DockDropCandidateState::Invalid { .. });
-    let thickness = if active {
-        match popup_side {
-            PopupSide::Left | PopupSide::Right => (theme.spacing.lg * 6.0).clamp(80.0, 132.0),
-            PopupSide::Top | PopupSide::Bottom => (theme.spacing.xl * 1.20).clamp(28.0, 42.0),
-        }
-    } else {
-        (theme.spacing.md * 0.45).clamp(4.0, 10.0)
-    };
-    let opacity = if active {
-        0.34
-    } else if invalid {
-        0.18
-    } else {
-        0.12
-    };
-    let border_opacity = if active {
-        0.92
-    } else if invalid {
-        0.72
-    } else {
-        0.38
-    };
-    let mut preview_theme = theme.clone();
-    let preview_color = if invalid {
-        theme.status_error
-    } else {
-        theme.accent
-    };
-    preview_theme.background_panel =
-        UiColor::new(preview_color.r, preview_color.g, preview_color.b, opacity);
-    preview_theme.border = UiColor::new(
-        preview_color.r,
-        preview_color.g,
-        preview_color.b,
-        border_opacity,
+fn build_region_compass(
+    anchor_widget_id: WidgetId,
+    compass: &RegionCompassViewModel,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let cell_extent = (48.0 * compass.accessibility.text_scale).max(48.0);
+    let cell_size = UiSize::new(cell_extent, cell_extent);
+    let top = compass_cell(
+        anchor_widget_id,
+        0,
+        compass_target(compass, DockZone::Top),
+        compass.accessibility,
+        theme,
     );
-    preview_theme.border_width = if active {
-        theme.border_width.max(1.75)
-    } else {
-        theme.border_width.max(1.0)
-    };
-    preview_theme.radius.sm = theme.radius.sm.min(4.0);
-    preview_theme.radius.md = theme.radius.sm.min(4.0);
-    preview_theme.radius.lg = theme.radius.sm.min(4.0);
-    let mut children = Vec::new();
-    if active {
-        let mut text_style = compact_shell_text_style(theme);
-        text_style.color = [
-            theme.foreground.r,
-            theme.foreground.g,
-            theme.foreground.b,
-            theme.foreground.a,
-        ];
-        children.push(label(
-            dock_split_preview_label_widget_id(anchor_widget_id),
-            dock_drop_scope_label(candidate.scope),
-            text_style,
-        ));
-    }
-
-    let mut preview_panel = panel(
-        dock_split_preview_panel_widget_id(anchor_widget_id),
-        preview_theme,
-        children,
+    let left = compass_cell(
+        anchor_widget_id,
+        1,
+        compass_target(compass, DockZone::Left),
+        compass.accessibility,
+        theme,
     );
-    if let UiNodeKind::Panel(panel) = &mut preview_panel.kind {
-        panel.padding = if active {
-            UiInsets::new(
-                theme.spacing.xs,
-                theme.spacing.sm,
-                theme.spacing.xs,
-                theme.spacing.sm,
-            )
-        } else {
-            UiInsets::ZERO
-        };
-        panel.min_size = match popup_side {
-            PopupSide::Left | PopupSide::Right => UiSize::new(thickness, 0.0),
-            PopupSide::Top | PopupSide::Bottom => UiSize::new(0.0, thickness),
-        };
+    let center = compass_cell(
+        anchor_widget_id,
+        2,
+        compass_target(compass, DockZone::Center),
+        compass.accessibility,
+        theme,
+    );
+    let right = compass_cell(
+        anchor_widget_id,
+        3,
+        compass_target(compass, DockZone::Right),
+        compass.accessibility,
+        theme,
+    );
+    let bottom = compass_cell(
+        anchor_widget_id,
+        4,
+        compass_target(compass, DockZone::Bottom),
+        compass.accessibility,
+        theme,
+    );
+    let top_row = hstack_with_policies(
+        region_compass_cell_widget_id(anchor_widget_id, 10),
+        0.0,
+        vec![SizePolicy::Auto; 3],
+        vec![
+            spacer(
+                region_compass_cell_widget_id(anchor_widget_id, 11),
+                cell_size,
+            ),
+            top,
+            spacer(
+                region_compass_cell_widget_id(anchor_widget_id, 12),
+                cell_size,
+            ),
+        ],
+    );
+    let middle_row = hstack_with_policies(
+        region_compass_cell_widget_id(anchor_widget_id, 13),
+        0.0,
+        vec![SizePolicy::Auto; 3],
+        vec![left, center, right],
+    );
+    let bottom_row = hstack_with_policies(
+        region_compass_cell_widget_id(anchor_widget_id, 14),
+        0.0,
+        vec![SizePolicy::Auto; 3],
+        vec![
+            spacer(
+                region_compass_cell_widget_id(anchor_widget_id, 15),
+                cell_size,
+            ),
+            bottom,
+            spacer(
+                region_compass_cell_widget_id(anchor_widget_id, 16),
+                cell_size,
+            ),
+        ],
+    );
+    let mut compass_theme = contrast_popup_theme(theme);
+    compass_theme.border = theme.accent;
+    compass_theme.border_width = theme.border_width.max(1.0);
+    let mut compass_panel = panel(
+        region_compass_panel_widget_id(anchor_widget_id),
+        compass_theme,
+        vec![vstack_with_policies(
+            region_compass_cell_widget_id(anchor_widget_id, 17),
+            0.0,
+            vec![SizePolicy::Auto; 3],
+            vec![top_row, middle_row, bottom_row],
+        )],
+    );
+    if let UiNodeKind::Panel(panel) = &mut compass_panel.kind {
+        panel.padding = UiInsets::ZERO;
+        panel.min_size = UiSize::new(cell_extent * 3.0, cell_extent * 3.0);
     }
-
     UiNode::with_children(
-        dock_split_preview_overlay_widget_id(anchor_widget_id),
-        UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_edge(
+        region_compass_overlay_widget_id(anchor_widget_id),
+        UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_center(
             anchor_widget_id,
-            popup_side,
-            thickness,
         )),
-        vec![preview_panel],
+        vec![compass_panel],
     )
 }
 
-fn dock_drop_scope_label(scope: DockDropScope) -> &'static str {
-    match scope {
-        DockDropScope::Area => "Split area",
-        DockDropScope::Group => "Split group",
-        DockDropScope::Workspace => "Split workspace",
+fn compass_cell(
+    anchor_widget_id: WidgetId,
+    ordinal: u64,
+    target: &RegionCompassTargetViewModel,
+    accessibility: RegionCompassAccessibility,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let active = target.state == RegionCompassTargetState::Focused;
+    let invalid = target.state == RegionCompassTargetState::Invalid;
+    let mut cell_theme = contrast_popup_theme(theme);
+    cell_theme.border = theme.accent;
+    cell_theme.border_width = theme.border_width.max(if accessibility.high_contrast {
+        3.0
+    } else if invalid {
+        1.0
+    } else {
+        2.0
+    });
+    if active {
+        cell_theme.background_panel = theme.accent;
     }
+    let mut text_style = compact_shell_text_style(theme);
+    text_style.font_size *= accessibility.text_scale;
+    text_style.line_height = Some(text_style.font_size * 1.35);
+    let mut node = button_selected(
+        region_compass_cell_widget_id(anchor_widget_id, ordinal),
+        target.short_label,
+        text_style,
+        cell_theme,
+        active,
+    );
+    if let UiNodeKind::Button(button) = &mut node.kind {
+        button.accessible_label = Some(target.label.clone());
+        button.enabled = !invalid;
+        button.padding = UiInsets::ZERO;
+        let extent = (48.0 * accessibility.text_scale)
+            .max(accessibility.minimum_hit_size)
+            .max(44.0);
+        button.min_size = UiSize::new(extent, extent);
+        button.corner_radius = Some(0.0);
+    }
+    node
 }
 
-fn dock_preview_side(side: crate::DockSplitSide) -> PopupSide {
-    match side {
-        crate::DockSplitSide::Left => PopupSide::Left,
-        crate::DockSplitSide::Right => PopupSide::Right,
-        crate::DockSplitSide::Top => PopupSide::Top,
-        crate::DockSplitSide::Bottom => PopupSide::Bottom,
+fn compass_target(
+    compass: &RegionCompassViewModel,
+    zone: DockZone,
+) -> &RegionCompassTargetViewModel {
+    compass
+        .targets
+        .iter()
+        .find(|target| target.zone == zone)
+        .expect("Region Compass view model must contain all five zones")
+}
+
+fn build_region_compass_detach(
+    anchor_widget_id: WidgetId,
+    compass: &RegionCompassViewModel,
+    theme: &ThemeTokens,
+) -> UiNode {
+    let active = compass.session == RegionCompassSessionState::DetachFocused;
+    let mut detach_theme = contrast_popup_theme(theme);
+    detach_theme.border = theme.accent;
+    if active {
+        detach_theme.background_panel = theme.accent;
     }
+    let mut detach = button_selected(
+        region_compass_detach_button_widget_id(anchor_widget_id),
+        "New window",
+        compact_shell_text_style(theme),
+        detach_theme,
+        active,
+    );
+    if let UiNodeKind::Button(button) = &mut detach.kind {
+        button.accessible_label = Some(compass.detach_label.clone());
+        button.text_style.font_size *= compass.accessibility.text_scale;
+        button.text_style.line_height = Some(button.text_style.font_size * 1.35);
+        button.min_size = UiSize::new(
+            132.0 * compass.accessibility.text_scale,
+            compass.accessibility.minimum_hit_size.max(44.0),
+        );
+        button.corner_radius = Some(0.0);
+    }
+    UiNode::with_children(
+        region_compass_detach_overlay_widget_id(anchor_widget_id),
+        UiNodeKind::OverlayAdornment(OverlayAdornmentNode::anchored_inside_top_end(
+            anchor_widget_id,
+            theme.spacing.md,
+        )),
+        vec![detach],
+    )
 }
 
 fn tab_stack_action_menu_item(
@@ -1516,6 +1692,11 @@ fn build_resizable_split_with_handle(
     } else {
         gap
     };
+    let ratio = docking_visual_state
+        .and_then(|value| value.active_split_preview_fraction)
+        .filter(|(widget_id, _)| *widget_id == split_widget_id)
+        .map(|(_, preview)| preview)
+        .unwrap_or(ratio);
     split(split_widget_id, axis, ratio, split_gap, vec![first, second])
 }
 
@@ -1649,6 +1830,7 @@ fn build_frame_widget_routes(
 
     for surface in frame_model.surfaces.values() {
         let context = StructuralWidgetRoutingContext {
+            mounted_unit_id: Some(surface.mounted_unit_id),
             panel_instance_id: surface.panel_instance_id,
             active_tool_surface: Some(surface.surface_instance_id),
             tab_stack_id: surface.tab_stack_id,
@@ -1978,7 +2160,7 @@ fn root_background_opaque_enabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workspace::{ProjectedPanelSlot, ProjectedTabButton, ProjectedTabDropSlot};
+    use crate::{ProjectedPanelSlot, ProjectedTabButton, ProjectedTabDropSlot};
 
     const STABLE_KEY_ONLY_TEST_SURFACE: &str = "runenwerk.test.stable_only_surface";
 
@@ -2001,6 +2183,7 @@ mod tests {
     fn stack_with_active_surface(key: &str, panel_kind: PanelKind) -> ProjectedTabStackSlot {
         let tab_stack_id = tab_stack_id(10);
         let panel = ProjectedPanelSlot {
+            mounted_unit_id: Some(ui_composition::MountedUnitId::new(12)),
             panel_instance_id: panel_id(11),
             panel_kind,
             active_tool_surface: Some(surface_id(12)),
@@ -2176,5 +2359,85 @@ mod tests {
                 ..
             }) if stable_surface_key.as_str() == "runenwerk.scene.viewport"
         ));
+    }
+
+    #[test]
+    fn region_compass_projects_five_labeled_minimum_size_targets_and_center_anchor() {
+        let anchor = WidgetId(77);
+        let model = RegionCompassViewModel::active(
+            ui_composition::PresentationTargetId::new(1),
+            ui_composition::RegionId::new(2),
+            ui_composition::MountedUnitId::new(3),
+            DockZone::Left,
+            "Scene Viewport",
+            "Inspector region",
+            RegionCompassAccessibility::default(),
+        );
+
+        let compass = build_region_compass(anchor, &model, &ThemeTokens::default());
+        assert!(matches!(
+            compass.kind,
+            UiNodeKind::OverlayAdornment(OverlayAdornmentNode {
+                placement: ui_tree::PopupPlacement::InsideCenter,
+                ..
+            })
+        ));
+        let buttons = collect_buttons(&compass);
+        assert_eq!(buttons.len(), 5);
+        assert_eq!(
+            buttons
+                .iter()
+                .map(|button| button.label.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Top", "Left", "Tab", "Right", "Bottom"]
+        );
+        assert!(
+            buttons
+                .iter()
+                .all(|button| button.min_size.width >= 44.0 && button.min_size.height >= 44.0)
+        );
+    }
+
+    #[test]
+    fn region_compass_applies_accessibility_labels_contrast_scaling_and_reduced_motion() {
+        let accessibility = RegionCompassAccessibility {
+            text_scale: 2.0,
+            high_contrast: true,
+            reduced_motion: true,
+            minimum_hit_size: 56.0,
+        };
+        let model = RegionCompassViewModel::active(
+            ui_composition::PresentationTargetId::new(1),
+            ui_composition::RegionId::new(2),
+            ui_composition::MountedUnitId::new(3),
+            DockZone::Center,
+            "Scene Viewport",
+            "Inspector region",
+            accessibility,
+        );
+
+        let compass = build_region_compass(WidgetId(78), &model, &ThemeTokens::default());
+        let buttons = collect_buttons(&compass);
+        assert_eq!(accessibility.transition_duration_ms(), 0);
+        assert!(buttons.iter().all(|button| {
+            button
+                .accessible_label
+                .as_deref()
+                .is_some_and(|label| label.starts_with("Dock Scene Viewport"))
+                && button.min_size.width >= 96.0
+                && button.min_size.height >= 96.0
+                && button.theme.border_width >= 3.0
+        }));
+    }
+
+    fn collect_buttons(node: &UiNode) -> Vec<&ui_tree::ButtonNode> {
+        let mut buttons = Vec::new();
+        if let UiNodeKind::Button(button) = &node.kind {
+            buttons.push(button);
+        }
+        for child in &node.children {
+            buttons.extend(collect_buttons(child));
+        }
+        buttons
     }
 }

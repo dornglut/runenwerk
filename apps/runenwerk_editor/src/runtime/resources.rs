@@ -15,7 +15,6 @@ use editor_scene::{
 };
 use editor_shell::{
     EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID, ToolSurfaceInstanceId,
-    WorkspaceIdentityAllocator, form_workspace_state_from_definition_with_registry,
     workbench_composition_manifest_from_definition,
     workspace_profile_manifests_from_authored_documents,
 };
@@ -374,11 +373,11 @@ impl EditorHostResource {
                 registry_id,
                 registry,
             }) => {
-                let workspace = self.shell_state.workspace_state().clone();
+                let composition = self.shell_state.composition_runtime().clone();
                 match self
                     .shell_state
                     .active_editor_definitions_mut()
-                    .install_panel_registry(registry, &workspace)
+                    .install_panel_registry(registry, &composition)
                 {
                     Ok(()) => {
                         self.app.append_console_line(format!(
@@ -418,11 +417,11 @@ impl EditorHostResource {
                 registry_id,
                 registry,
             }) => {
-                let workspace = self.shell_state.workspace_state().clone();
+                let composition = self.shell_state.composition_runtime().clone();
                 match self
                     .shell_state
                     .active_editor_definitions_mut()
-                    .install_tool_surface_registry(registry, &workspace)
+                    .install_tool_surface_registry(registry, &composition)
                 {
                     Ok(()) => {
                         self.app.append_console_line(format!(
@@ -462,47 +461,56 @@ impl EditorHostResource {
                 workspace_id,
                 layout,
             }) => {
-                let mut allocator = WorkspaceIdentityAllocator::from_seed(
-                    self.shell_state.workspace_state().next_identity_seed(),
-                );
-                let next_workspace_id = allocator.allocate_workspace_id();
-                match form_workspace_state_from_definition_with_registry(
+                let mut identities = editor_shell::WorkspaceIdentityAllocator::new();
+                let legacy_workspace_id = identities.allocate_workspace_id();
+                let result = editor_shell::form_workspace_state_from_definition_with_registry(
                     &layout,
-                    next_workspace_id,
-                    &mut allocator,
+                    legacy_workspace_id,
+                    &mut identities,
                     self.app.workbench_host().tool_surface_registry(),
-                ) {
-                    Ok(workspace_state) => {
-                        self.shell_state.replace_workspace_state(workspace_state);
+                )
+                .map_err(|error| format!("authored layout formation failed: {error:?}"))
+                .and_then(|workspace| {
+                    editor_shell::import_legacy_workspace(
+                        self.shell_state.active_workspace_profile_id(),
+                        &workspace,
+                    )
+                    .map_err(|error| format!("composition import failed: {error:?}"))
+                })
+                .and_then(|runtime| {
+                    self.shell_state
+                        .install_composition_runtime(runtime)
+                        .map_err(|error| format!("composition install failed: {error:?}"))
+                });
+                match result {
+                    Ok(()) => {
                         self.app.append_console_line(format!(
-                            "[editor-definition] activated live workspace layout {workspace_id}"
+                            "[editor-definition] activated composition layout {workspace_id}"
                         ));
                         self.app.record_editor_definition_activation_report(
                             EditorDefinitionActivationReport::from_request(
                                 &request,
                                 EditorDefinitionActivationStatus::Applied,
-                                vec![format!("activated live workspace layout {workspace_id}")],
+                                vec![format!("activated composition layout {workspace_id}")],
                                 Vec::new(),
                                 false,
                             ),
                         );
                         activated += 1;
                     }
-                    Err(error) => {
+                    Err(message) => {
                         let diagnostic = UiDefinitionDiagnostic::error(
-                            "editor.definition.activation.workspace_layout_blocked",
-                            format!("workspace layout activation blocked: {error:?}"),
+                            editor_shell::EditorCompositionDiagnosticCode::LayoutActivationFailed
+                                .as_str(),
+                            message,
                         );
-                        self.app.append_console_line(format!(
-                            "[editor-definition] workspace layout activation blocked: {error:?}"
-                        ));
                         self.app
                             .preserve_failed_editor_definition_activation(request.clone());
                         self.app.record_editor_definition_activation_report(
                             EditorDefinitionActivationReport::from_request(
                                 &request,
                                 EditorDefinitionActivationStatus::Failed,
-                                vec!["workspace layout activation blocked".to_string()],
+                                vec!["composition layout activation failed".to_string()],
                                 vec![diagnostic],
                                 true,
                             ),
@@ -566,7 +574,7 @@ impl EditorHostResource {
                     .self_authoring_mut()
                     .record_applied_workbench_composition_payload(&request.payload);
                 self.app
-                    .prune_surface_sessions_for_workspace(self.shell_state.workspace_state());
+                    .prune_surface_sessions_for_composition(self.shell_state.composition_runtime());
                 self.app.append_console_line(format!(
                     "[editor-definition] activated workbench composition package {composition_id}"
                 ));

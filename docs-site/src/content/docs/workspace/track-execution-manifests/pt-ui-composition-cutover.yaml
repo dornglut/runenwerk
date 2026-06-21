@@ -235,7 +235,7 @@ milestones:
   stop_conditions:
   - stop if validation fails
   - stop if WR or plan authority is missing
-  next_legal_action: Create or validate the owning WR and implementation plan before execution.
+  next_legal_action: PM-UI-COMPOSITION-002 closed as runtime_proven; recompile the Contract Pack for the next milestone.
   may_create_code: true
   may_create_crates: true
   may_modify_production_behavior: true
@@ -343,6 +343,12 @@ milestones:
     - cargo test -p ui_composition
     - cargo test -p ui_testing composition_fixture
     - task ui:dependencies
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
     - task docs:validate
     - task planning:validate
     completion_quality_allowed:
@@ -371,8 +377,8 @@ milestones:
   predecessor_dependencies:
   - PM-UI-COMPOSITION-002
   write_scope:
+  - Cargo.lock
   - domain/ui/ui_composition
-  - new:domain/ui/ui_composition/benches
   - docs-site/src/content/docs/domain/ui
   - docs-site/src/content/docs/reports/implementation-plans
   - docs-site/src/content/docs/reports/closeouts
@@ -395,7 +401,7 @@ milestones:
   stop_conditions:
   - stop if validation fails
   - stop if WR or plan authority is missing
-  next_legal_action: Create or validate the owning WR and implementation plan before execution.
+  next_legal_action: PM-UI-COMPOSITION-003 closed as runtime_proven; recompile the Contract Pack for the next milestone.
   may_create_code: true
   may_create_crates: false
   may_modify_production_behavior: true
@@ -452,8 +458,8 @@ milestones:
     required_active_wr_state: current_candidate
     required_accepted_implementation_plan: docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.contract.yaml
     exact_allowed_implementation_write_scopes:
+    - Cargo.lock
     - domain/ui/ui_composition
-    - new:domain/ui/ui_composition/benches
     - docs-site/src/content/docs/domain/ui
     required_function_method_scope:
     - canonical persistence DTO writer reader and hash formation
@@ -477,6 +483,7 @@ milestones:
     - cargo fmt --all --check
     - cargo test -p ui_composition persistence
     - cargo test -p ui_composition deterministic
+    - cargo test -p ui_composition --bench composition_persistence --no-run
     - task docs:validate
     - task planning:validate
     rollback_compatibility_expectations:
@@ -497,6 +504,13 @@ milestones:
     - cargo fmt --all --check
     - cargo test -p ui_composition persistence
     - cargo test -p ui_composition deterministic
+    - cargo test -p ui_composition --bench composition_persistence --no-run
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
     - task docs:validate
     - task planning:validate
     completion_quality_allowed:
@@ -524,11 +538,16 @@ milestones:
   predecessor_dependencies:
   - PM-UI-COMPOSITION-003
   write_scope:
-  - new:domain/editor/editor_shell/src/composition
-  - domain/editor/editor_shell/src/workspace
-  - domain/editor/editor_shell/src/lib.rs
+  - Cargo.lock
+  - domain/editor/editor_shell/Cargo.toml
+  - domain/editor/editor_shell/src
+  - apps/runenwerk_editor/Cargo.toml
+  - apps/runenwerk_editor/src/editor_app/facade.rs
+  - apps/runenwerk_editor/src/editor_app/state.rs
   - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  - apps/runenwerk_editor/src/runtime
   - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/tests
   - docs-site/src/content/docs/apps/runenwerk-editor
   - docs-site/src/content/docs/reports/implementation-plans
   - docs-site/src/content/docs/reports/closeouts
@@ -551,7 +570,7 @@ milestones:
   stop_conditions:
   - stop if validation fails
   - stop if WR or plan authority is missing
-  next_legal_action: Create or validate the owning WR and implementation plan before execution.
+  next_legal_action: PM-UI-COMPOSITION-004 closed as runtime_proven; recompile the Contract Pack for the next milestone.
   may_create_code: true
   may_create_crates: false
   may_modify_production_behavior: true
@@ -607,15 +626,22 @@ milestones:
     required_active_wr_state: current_candidate
     required_accepted_implementation_plan: docs-site/src/content/docs/reports/implementation-plans/wr-183-editor-static-composition-projection-cutover/plan.contract.yaml
     exact_allowed_implementation_write_scopes:
-    - new:domain/editor/editor_shell/src/composition
-    - domain/editor/editor_shell/src/workspace
-    - domain/editor/editor_shell/src/lib.rs
+    - Cargo.lock
+    - domain/editor/editor_shell/Cargo.toml
+    - domain/editor/editor_shell/src
+    - apps/runenwerk_editor/Cargo.toml
+    - apps/runenwerk_editor/src/editor_app/facade.rs
+    - apps/runenwerk_editor/src/editor_app/state.rs
     - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+    - apps/runenwerk_editor/src/runtime
     - apps/runenwerk_editor/src/shell
+    - apps/runenwerk_editor/tests
     - docs-site/src/content/docs/apps/runenwerk-editor
     required_function_method_scope:
     - editor composition definition extension provider and shell projection modules
     - legacy workspace load-only adapter and mutation guards
+    - runtime viewport mounted-unit projection and session-pruning consumers
+    - startup/render guards proving production no longer reads writable WorkspaceState
     forbidden_implementation_scopes:
     - domain/ui/ui_surface
     - domain/ui/ui_adaptive_composition
@@ -634,6 +660,7 @@ milestones:
     - cargo test -p editor_shell composition
     - cargo test -p editor_shell workspace
     - cargo test -p runenwerk_editor composition
+    - cargo test -p runenwerk_editor --test startup_render_smoke
     - task docs:validate
     - task planning:validate
     rollback_compatibility_expectations:
@@ -655,17 +682,28 @@ milestones:
     - cargo test -p editor_shell composition
     - cargo test -p editor_shell workspace
     - cargo test -p runenwerk_editor composition
+    - cargo test -p runenwerk_editor --test startup_render_smoke
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
     - task docs:validate
     - task planning:validate
     completion_quality_allowed:
     - runtime_proven
     closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md
     files_changed_report:
-    - domain/editor/editor_shell/src/composition
-    - domain/editor/editor_shell/src/workspace
-    - domain/editor/editor_shell/src/lib.rs
+    - domain/editor/editor_shell/src
+    - domain/editor/editor_shell/Cargo.toml
+    - apps/runenwerk_editor/src/editor_app/state.rs
+    - apps/runenwerk_editor/src/editor_app/facade.rs
     - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+    - apps/runenwerk_editor/src/runtime
     - apps/runenwerk_editor/src/shell
+    - apps/runenwerk_editor/Cargo.toml
+    - apps/runenwerk_editor/tests
     known_gap_reporting:
     - report adaptive docking and final legacy deletion as later scope
     production_roadmap_state_updates:
@@ -684,13 +722,14 @@ milestones:
   predecessor_dependencies:
   - PM-UI-COMPOSITION-004
   write_scope:
-  - apps/runenwerk_draw/src/app/workspace.rs
-  - apps/runenwerk_draw/src/app/presentation.rs
   - apps/runenwerk_draw/src/app
+  - apps/runenwerk_draw/src/runtime/ink.rs
+  - apps/runenwerk_draw/tests/app_shell.rs
+  - new:apps/runenwerk_draw/tests/composition_architecture_guards.rs
   - apps/runenwerk_draw/Cargo.toml
-  - docs-site/src/content/docs/apps
-  - docs-site/src/content/docs/reports/implementation-plans
-  - docs-site/src/content/docs/reports/closeouts
+  - docs-site/src/content/docs/apps/runenwerk-draw
+  - docs-site/src/content/docs/reports/implementation-plans/wr-184-draw-static-composition-projection
+  - new:docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection
   forbidden_scope:
   - product code unless an active WR and plan explicitly authorize it
   - crate creation unless exact crate paths are authorized
@@ -710,7 +749,7 @@ milestones:
   stop_conditions:
   - stop if validation fails
   - stop if WR or plan authority is missing
-  next_legal_action: Create or validate the owning WR and implementation plan before execution.
+  next_legal_action: PM-UI-COMPOSITION-005 closed as runtime_proven; recompile the Contract Pack for the next milestone.
   may_create_code: true
   may_create_crates: false
   may_modify_production_behavior: true
@@ -765,11 +804,12 @@ milestones:
     required_active_wr_state: current_candidate
     required_accepted_implementation_plan: docs-site/src/content/docs/reports/implementation-plans/wr-184-draw-static-composition-projection/plan.contract.yaml
     exact_allowed_implementation_write_scopes:
-    - apps/runenwerk_draw/src/app/workspace.rs
-    - apps/runenwerk_draw/src/app/presentation.rs
     - apps/runenwerk_draw/src/app
+    - apps/runenwerk_draw/src/runtime/ink.rs
+    - apps/runenwerk_draw/tests/app_shell.rs
+    - new:apps/runenwerk_draw/tests/composition_architecture_guards.rs
     - apps/runenwerk_draw/Cargo.toml
-    - docs-site/src/content/docs/apps
+    - docs-site/src/content/docs/apps/runenwerk-draw
     required_function_method_scope:
     - DrawingCompositionProjection and composition-backed frame builders
     - Draw provider extension and unavailable content adapters
@@ -809,6 +849,12 @@ milestones:
     - cargo fmt --all --check
     - cargo test -p runenwerk_draw --test app_shell
     - cargo test -p runenwerk_draw composition
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
     - task docs:validate
     - task planning:validate
     completion_quality_allowed:
@@ -816,8 +862,11 @@ milestones:
     closeout_path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md
     files_changed_report:
     - apps/runenwerk_draw/src/app
+    - apps/runenwerk_draw/src/runtime/ink.rs
+    - apps/runenwerk_draw/tests/app_shell.rs
+    - apps/runenwerk_draw/tests/composition_architecture_guards.rs
     - apps/runenwerk_draw/Cargo.toml
-    - docs-site/src/content/docs/apps
+    - docs-site/src/content/docs/apps/runenwerk-draw
     known_gap_reporting:
     - report adaptive Draw behavior as later scope
     production_roadmap_state_updates:
@@ -837,12 +886,26 @@ milestones:
   - PM-UI-COMPOSITION-005
   write_scope:
   - Cargo.toml
+  - Cargo.lock
+  - domain/ui/ui-crate-ownership.toml
+  - domain/ui/ui_composition/src/transaction/apply.rs
+  - domain/ui/ui_composition/src/history/journal.rs
+  - domain/ui/ui_composition/tests/transaction_atomicity.rs
   - new:domain/ui/ui_adaptive_composition
-  - domain/ui/ui_input
-  - domain/ui/ui_testing
-  - docs-site/src/content/docs/domain/ui
-  - docs-site/src/content/docs/reports/implementation-plans
-  - docs-site/src/content/docs/reports/closeouts
+  - domain/ui/ui_input/Cargo.toml
+  - domain/ui/ui_input/src/lib.rs
+  - new:domain/ui/ui_input/src/semantic.rs
+  - domain/ui/ui_testing/Cargo.toml
+  - domain/ui/ui_testing/src/lib.rs
+  - domain/ui/ui_testing/src/composition_fixture.rs
+  - new:domain/ui/ui_testing/src/adaptive_composition_fixture.rs
+  - docs-site/src/content/docs/domain/ui/README.md
+  - docs-site/src/content/docs/domain/ui/architecture.md
+  - docs-site/src/content/docs/domain/ui/crate-ownership.md
+  - docs-site/src/content/docs/domain/ui/dependency-boundaries.md
+  - new:docs-site/src/content/docs/domain/ui/ui-adaptive-composition-usage.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-185-adaptive-composition-headless-proposals-and-semantic-input
+  - new:docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals
   forbidden_scope:
   - product code unless an active WR and plan explicitly authorize it
   - crate creation unless exact crate paths are authorized
@@ -862,13 +925,14 @@ milestones:
   stop_conditions:
   - stop if validation fails
   - stop if WR or plan authority is missing
-  next_legal_action: Create or validate the owning WR and implementation plan before execution.
+  next_legal_action: Correct and re-prove adaptive proposal intent before WR-186 materializes editor transactions.
   may_create_code: true
   may_create_crates: true
   may_modify_production_behavior: true
   execution_kind: implementation_proof
   permission_classes_required:
   - agent_design
+  - crate_creation
   - product_code
   - product_implementation
   - runtime_closeout
@@ -921,10 +985,24 @@ milestones:
     required_accepted_implementation_plan: docs-site/src/content/docs/reports/implementation-plans/wr-185-adaptive-composition-headless-proposals-and-semantic-input/plan.contract.yaml
     exact_allowed_implementation_write_scopes:
     - Cargo.toml
+    - Cargo.lock
+    - domain/ui/ui-crate-ownership.toml
+    - domain/ui/ui_composition/src/transaction/apply.rs
+    - domain/ui/ui_composition/src/history/journal.rs
+    - domain/ui/ui_composition/tests/transaction_atomicity.rs
     - new:domain/ui/ui_adaptive_composition
-    - domain/ui/ui_input
-    - domain/ui/ui_testing
-    - docs-site/src/content/docs/domain/ui
+    - domain/ui/ui_input/Cargo.toml
+    - domain/ui/ui_input/src/lib.rs
+    - new:domain/ui/ui_input/src/semantic.rs
+    - domain/ui/ui_testing/Cargo.toml
+    - domain/ui/ui_testing/src/lib.rs
+    - domain/ui/ui_testing/src/composition_fixture.rs
+    - new:domain/ui/ui_testing/src/adaptive_composition_fixture.rs
+    - docs-site/src/content/docs/domain/ui/README.md
+    - docs-site/src/content/docs/domain/ui/architecture.md
+    - docs-site/src/content/docs/domain/ui/crate-ownership.md
+    - docs-site/src/content/docs/domain/ui/dependency-boundaries.md
+    - new:docs-site/src/content/docs/domain/ui/ui-adaptive-composition-usage.md
     required_function_method_scope:
     - adaptive projection graph policy sessions proposals previews and promotion delta modules
     - semantic navigation action mapping and headless fixture contracts
@@ -947,6 +1025,7 @@ milestones:
     - cargo fmt --all --check
     - cargo test -p ui_adaptive_composition
     - cargo test -p ui_input semantic
+    - cargo test -p ui_composition
     - task docs:validate
     - task planning:validate
     rollback_compatibility_expectations:
@@ -967,6 +1046,12 @@ milestones:
     - cargo fmt --all --check
     - cargo test -p ui_adaptive_composition
     - cargo test -p ui_input semantic
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
     - task docs:validate
     - task planning:validate
     completion_quality_allowed:
@@ -975,6 +1060,9 @@ milestones:
     files_changed_report:
     - Cargo.toml
     - domain/ui/ui_adaptive_composition
+    - domain/ui/ui_composition/src/transaction/apply.rs
+    - domain/ui/ui_composition/src/history/journal.rs
+    - domain/ui/ui_composition/tests/transaction_atomicity.rs
     - domain/ui/ui_input
     - domain/ui/ui_testing
     - docs-site/src/content/docs/domain/ui
@@ -998,10 +1086,26 @@ milestones:
   write_scope:
   - domain/editor/editor_shell/src/composition
   - domain/editor/editor_shell/src/workspace
+  - domain/editor/editor_shell/src/commands
+  - domain/editor/editor_shell/Cargo.toml
   - apps/runenwerk_editor/src/shell
   - apps/runenwerk_editor/src/runtime
+  - apps/runenwerk_editor/src/editor_app
+  - apps/runenwerk_editor/tests
+  - apps/runenwerk_editor/Cargo.toml
+  - domain/ui/ui_composition/src/transaction
+  - domain/ui/ui_composition/tests
   - engine/src/runtime/window.rs
   - engine/src/runtime/platform.rs
+  - engine/src/runtime/winit_runner.rs
+  - engine/src/plugins/render/backend/surface.rs
+  - engine/src/plugins/render/backend/wgpu_ctx.rs
+  - engine/src/plugins/render/features/ui
+  - engine/src/plugins/render/frame
+  - engine/src/plugins/render/renderer/mod.rs
+  - engine/src/plugins/render/runtime/frame_prepare.rs
+  - engine/src/plugins/render/runtime/frame_submit.rs
+  - engine/tests/render_multi_surface.rs
   - docs-site/src/content/docs/apps/runenwerk-editor
   - docs-site/src/content/docs/reports/implementation-plans
   - docs-site/src/content/docs/reports/closeouts
@@ -1084,14 +1188,32 @@ milestones:
     exact_allowed_implementation_write_scopes:
     - domain/editor/editor_shell/src/composition
     - domain/editor/editor_shell/src/workspace
+    - domain/editor/editor_shell/src/commands
+    - domain/editor/editor_shell/Cargo.toml
     - apps/runenwerk_editor/src/shell
     - apps/runenwerk_editor/src/runtime
+    - apps/runenwerk_editor/src/editor_app
+    - apps/runenwerk_editor/tests
+    - apps/runenwerk_editor/Cargo.toml
+    - domain/ui/ui_composition/src/transaction
+    - domain/ui/ui_composition/tests
     - engine/src/runtime/window.rs
     - engine/src/runtime/platform.rs
+    - engine/src/runtime/winit_runner.rs
+    - engine/src/plugins/render/backend/surface.rs
+    - engine/src/plugins/render/backend/wgpu_ctx.rs
+    - engine/src/plugins/render/features/ui
+    - engine/src/plugins/render/frame
+    - engine/src/plugins/render/renderer/mod.rs
+    - engine/src/plugins/render/runtime/frame_prepare.rs
+    - engine/src/plugins/render/runtime/frame_submit.rs
+    - engine/tests/render_multi_surface.rs
     - docs-site/src/content/docs/apps/runenwerk-editor
     required_function_method_scope:
     - editor docking interaction projection policy and transaction adapters
     - native window target binding movement close veto and rehome orchestration
+    - target-scoped UI input and real generic multi-surface WGPU presentation
+    - compound app-neutral split and root relocation commands
     - legacy structural writer removal guards
     forbidden_implementation_scopes:
     - domain/ui/ui_surface
@@ -1114,6 +1236,7 @@ milestones:
     - cargo test -p runenwerk_editor docking
     - cargo test -p runenwerk_editor window
     - cargo test -p engine window
+    - cargo test -p engine --test render_multi_surface
     - task docs:validate
     - task planning:validate
     rollback_compatibility_expectations:
@@ -1136,6 +1259,13 @@ milestones:
     - cargo test -p runenwerk_editor docking
     - cargo test -p runenwerk_editor window
     - cargo test -p engine window
+    - cargo test -p engine --test render_multi_surface
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
     - task docs:validate
     - task planning:validate
     completion_quality_allowed:
@@ -1148,6 +1278,16 @@ milestones:
     - apps/runenwerk_editor/src/runtime
     - engine/src/runtime/window.rs
     - engine/src/runtime/platform.rs
+    - engine/src/runtime/winit_runner.rs
+    - engine/src/plugins/render/backend
+    - engine/src/plugins/render/features/ui
+    - engine/src/plugins/render/frame
+    - engine/src/plugins/render/renderer/mod.rs
+    - engine/src/plugins/render/runtime/frame_prepare.rs
+    - engine/src/plugins/render/runtime/frame_submit.rs
+    - engine/tests/render_multi_surface.rs
+    - domain/ui/ui_composition/src/transaction
+    - domain/ui/ui_composition/tests
     known_gap_reporting:
     - report Draw adaptive and cleanup work as later scope
     production_roadmap_state_updates:
@@ -1287,6 +1427,12 @@ milestones:
     - cargo fmt --all --check
     - cargo test -p runenwerk_draw --test app_shell
     - cargo test -p runenwerk_draw adaptive
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
     - task docs:validate
     - task planning:validate
     completion_quality_allowed:
@@ -1455,6 +1601,12 @@ milestones:
     - cargo fmt --all --check
     - cargo check --workspace
     - cargo test --workspace
+    - task production:render
+    - task production:validate
+    - task production:check
+    - task roadmap:render
+    - task roadmap:validate
+    - task roadmap:check
     - task docs:validate
     - task planning:validate
     completion_quality_allowed:

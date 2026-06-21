@@ -2,6 +2,7 @@
 //! Purpose: Shell-level commands emitted from UI interactions.
 
 use editor_core::DocumentId;
+use ui_composition::{MountedUnitId, RegionId, SplitFraction, StateRevision};
 
 use crate::{
     DockSplitSide, EditorDomainMutation, MaterialSurfaceAction, PanelHostId, PanelInstanceId,
@@ -13,6 +14,7 @@ use crate::{SurfaceInteraction, SurfaceLocalAction, SurfaceProviderId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StructuralCommandTarget {
+    pub mounted_unit_id: Option<MountedUnitId>,
     pub panel_instance_id: PanelInstanceId,
     pub active_tool_surface: Option<ToolSurfaceInstanceId>,
     pub tab_stack_id: TabStackId,
@@ -70,6 +72,8 @@ pub enum ShellCommand {
     },
     Undo,
     Redo,
+    UndoCompositionLayout,
+    RedoCompositionLayout,
     SaveScene,
     LoadScene,
     ToggleDebugLogs,
@@ -124,6 +128,16 @@ pub enum ShellCommand {
         panel_instance_id: PanelInstanceId,
         source_tab_stack_id: TabStackId,
         destination: TabDropDestination,
+        projection_epoch: u64,
+    },
+    CommitCompositionDock {
+        intent: crate::EditorDockingIntent,
+        projection_epoch: u64,
+    },
+    ResizeCompositionSplit {
+        split: RegionId,
+        fraction: SplitFraction,
+        expected_revision: StateRevision,
         projection_epoch: u64,
     },
     CreatePanelTabStableKey {
@@ -269,6 +283,12 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::CommitTabDrop {
+                projection_epoch, ..
+            }
+            | Self::CommitCompositionDock {
+                projection_epoch, ..
+            }
+            | Self::ResizeCompositionSplit {
                 projection_epoch, ..
             }
             | Self::CreatePanelTabStableKey {

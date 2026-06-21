@@ -120,6 +120,20 @@ impl RenderSurfaceRegistryResource {
         self.records.values()
     }
 
+    pub fn retire_surface_for_native_window(
+        &mut self,
+        native_window_id: NativeWindowId,
+    ) -> Option<RenderSurfaceId> {
+        let render_surface_id = self.surfaces_by_native_window.remove(&native_window_id)?;
+        if let Some(record) = self.records.get_mut(&render_surface_id) {
+            record.lifecycle_state = RenderSurfaceLifecycleState::Retired;
+        }
+        if self.primary_surface_id == Some(render_surface_id) {
+            self.primary_surface_id = None;
+        }
+        Some(render_surface_id)
+    }
+
     pub fn diagnostics(&self) -> &[RenderSurfaceDiagnostic] {
         &self.diagnostics
     }
@@ -248,6 +262,25 @@ mod tests {
                 .record(secondary)
                 .map(|record| record.native_window_id),
             Some(secondary_window)
+        );
+    }
+
+    #[test]
+    fn retiring_surface_removes_window_lookup_and_preserves_auditable_record() {
+        let mut registry = RenderSurfaceRegistryResource::default();
+        let secondary_window = NativeWindowId::try_from_raw(2).expect("secondary window id");
+        let surface = registry.ensure_surface_for_native_window(secondary_window, (640, 480));
+
+        assert_eq!(
+            registry.retire_surface_for_native_window(secondary_window),
+            Some(surface)
+        );
+        assert_eq!(registry.surface_for_native_window(secondary_window), None);
+        assert_eq!(
+            registry
+                .record(surface)
+                .map(|record| record.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Retired)
         );
     }
 }

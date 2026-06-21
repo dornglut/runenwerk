@@ -14,7 +14,7 @@ use crate::runtime::viewport::{
 };
 use crate::shell::{RunenwerkEditorShellController, RunenwerkEditorShellState};
 use editor_core::EditorMutationError;
-use editor_shell::{ToolSurfaceInstanceId, UiInputOutcome};
+use editor_shell::UiInputOutcome;
 use editor_viewport::ArtifactObservationFrame;
 use ui_input::UiInputEvent;
 use ui_math::UiRect;
@@ -82,18 +82,31 @@ impl RunenwerkEditorApp {
         ViewportToolState::from_runtime(&self.tool_runtime_state)
     }
 
-    pub fn dispatch_viewport_interaction_for_surface(
+    pub fn dispatch_viewport_interaction_for_mounted_unit(
         &mut self,
-        tool_surface_instance_id: ToolSurfaceInstanceId,
+        mounted_unit_id: ui_composition::MountedUnitId,
         command: ViewportInteractionCommand,
     ) -> Result<(), EditorMutationError> {
         let mut state = self
             .surface_sessions_mut()
-            .take_viewport_interaction_state(tool_surface_instance_id);
+            .take_viewport_interaction_state(mounted_unit_id);
         let result = ViewportInteractionController::dispatch(self, &mut state, command);
         self.surface_sessions_mut()
-            .replace_viewport_interaction_state(tool_surface_instance_id, state);
+            .replace_viewport_interaction_state(mounted_unit_id, state);
         result
+    }
+
+    #[cfg(test)]
+    pub fn dispatch_viewport_interaction_for_surface(
+        &mut self,
+        tool_surface_instance_id: editor_shell::ToolSurfaceInstanceId,
+        command: ViewportInteractionCommand,
+    ) -> Result<(), EditorMutationError> {
+        let mounted_unit_id = ui_composition::MountedUnitId::try_from_raw(
+            tool_surface_instance_id.raw(),
+        )
+        .map_err(|_| EditorMutationError::runtime_rejected("invalid test mounted-unit id"))?;
+        self.dispatch_viewport_interaction_for_mounted_unit(mounted_unit_id, command)
     }
 
     pub fn reconcile_shared_change(
@@ -175,6 +188,33 @@ impl RunenwerkEditorApp {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn build_shell_expression_frame_for_target_with_surface_resources(
+        &self,
+        shell_state: &mut RunenwerkEditorShellState,
+        target_id: ui_composition::PresentationTargetId,
+        bounds: UiRect,
+        theme: &ThemeTokens,
+        atlas_source: &dyn FontAtlasSource,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
+        frame_metrics: Option<crate::shell::EditorShellFrameMetrics>,
+    ) -> Option<editor_shell::ShellUiExpressionFrame> {
+        RunenwerkEditorShellController::build_expression_frame_for_target_with_surface_resources(
+            self,
+            shell_state,
+            target_id,
+            bounds,
+            theme,
+            atlas_source,
+            viewport_observations,
+            tool_surface_bindings,
+            viewport_instances,
+            frame_metrics,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn dispatch_shell_input(
         &mut self,
         shell_state: &mut RunenwerkEditorShellState,
@@ -195,6 +235,35 @@ impl RunenwerkEditorApp {
             theme,
             event,
             viewport_products,
+            viewport_presentations,
+            viewport_observations,
+            tool_surface_bindings,
+            viewport_instances,
+            viewport_render_commands,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_shell_input_for_target(
+        &mut self,
+        shell_state: &mut RunenwerkEditorShellState,
+        target_id: ui_composition::PresentationTargetId,
+        bounds: UiRect,
+        theme: &ThemeTokens,
+        event: &UiInputEvent,
+        viewport_presentations: Option<&mut ViewportPresentationStateResource>,
+        viewport_observations: Option<&ViewportArtifactObservationResource>,
+        tool_surface_bindings: Option<&ToolSurfaceRuntimeBindingRegistryResource>,
+        viewport_instances: Option<&ViewportInstanceRegistryResource>,
+        viewport_render_commands: Option<&mut ViewportRenderStateCommandQueueResource>,
+    ) -> Result<UiInputOutcome, editor_core::EditorMutationError> {
+        RunenwerkEditorShellController::dispatch_input_for_target_with_viewport_products(
+            self,
+            shell_state,
+            target_id,
+            bounds,
+            theme,
+            event,
             viewport_presentations,
             viewport_observations,
             tool_surface_bindings,

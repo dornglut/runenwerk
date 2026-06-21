@@ -377,6 +377,7 @@ mod tests {
         artifact.widget_context_by_id.insert(
             widget_id,
             StructuralWidgetRoutingContext {
+                mounted_unit_id: None,
                 panel_instance_id: PanelInstanceId::try_from_raw(999).unwrap(),
                 active_tool_surface: None,
                 tab_stack_id,

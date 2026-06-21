@@ -155,6 +155,16 @@ impl OverlayAdornmentNode {
             stretch_child: true,
         }
     }
+
+    pub fn anchored_inside_center(anchor: WidgetId) -> Self {
+        Self {
+            anchor,
+            placement: PopupPlacement::InsideCenter,
+            offset: 0.0,
+            min_size: UiSize::ZERO,
+            stretch_child: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -181,6 +191,7 @@ pub enum PopupPlacement {
     InsideRight,
     InsideTop,
     InsideBottom,
+    InsideCenter,
     Outside {
         preferred_side: PopupSide,
         align: PopupAlign,
@@ -355,6 +366,7 @@ impl LabelNode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ButtonNode {
     pub label: String,
+    pub accessible_label: Option<String>,
     pub text_style: TextStyle,
     pub padding: UiInsets,
     pub min_size: UiSize,
@@ -379,6 +391,7 @@ impl ButtonNode {
         );
         Self {
             label: label.into(),
+            accessible_label: None,
             text_style,
             padding,
             min_size: UiSize::new(

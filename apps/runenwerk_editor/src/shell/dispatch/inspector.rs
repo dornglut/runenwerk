@@ -121,14 +121,14 @@ fn dispatch_activate_field(
         }
     }
 
-    let Some(tool_surface_id) = target.active_tool_surface else {
+    let Some(mounted_unit_id) = target.mounted_unit_id else {
         app.append_console_line(
             "[inspector] field activation ignored (missing tool-surface session target)"
                 .to_string(),
         );
         return Ok(());
     };
-    let mut session = app.surface_sessions().session_or_default(tool_surface_id);
+    let mut session = app.surface_sessions().session_or_default(mounted_unit_id);
     let inspector_view =
         InspectorPanelPresenter::build_view_model(app.runtime(), &session.inspector_ui_state);
     let presentation_model =
@@ -196,7 +196,7 @@ fn dispatch_activate_field(
         }
         Err(RatificationDispatchError::Adapter(error)) => return Err(error),
     }
-    *app.surface_sessions_mut().session_mut(tool_surface_id) = session;
+    *app.surface_sessions_mut().session_mut(mounted_unit_id) = session;
     Ok(())
 }
 
@@ -383,14 +383,14 @@ fn mutate_inspector_surface_session(
         &mut EditorInspectorUiState,
     ) -> Result<(), EditorMutationError>,
 ) -> Result<(), EditorMutationError> {
-    let Some(surface_id) = target.active_tool_surface else {
+    let Some(mounted_unit_id) = target.mounted_unit_id else {
         return Err(EditorMutationError::inspector_rejected(
             "inspector command requires surface instance target",
         ));
     };
-    let mut session = app.surface_sessions().session_or_default(surface_id);
+    let mut session = app.surface_sessions().session_or_default(mounted_unit_id);
     let result = mutate(app, &mut session.inspector_ui_state);
-    *app.surface_sessions_mut().session_mut(surface_id) = session;
+    *app.surface_sessions_mut().session_mut(mounted_unit_id) = session;
     result
 }
 

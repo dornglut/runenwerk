@@ -218,17 +218,7 @@ package "PT-GAME-WORLDSPACE-UI Game World-Space UI" {
 }
 
 package "PT-UI-COMPOSITION-CUTOVER App-Neutral UI Composition Clean Cutover" {
-  component "PT-UI-COMPOSITION-CUTOVER completed prerequisites\nmilestones=1\nquality=bounded_contract=1" as PT_UI_COMPOSITION_CUTOVER_COMPLETED <<completed>>
-
-  component "PM-UI-COMPOSITION-002 Core Contracts And Invariants\nkind=implementation\nstate=ready_next\nWR=WR-181" as PM_UI_COMPOSITION_002 <<ready_next>>
-
-  component "PM-UI-COMPOSITION-003 Persistence Envelopes And Deterministic Bundles\nkind=implementation\nstate=ready_next\nWR=WR-182" as PM_UI_COMPOSITION_003 <<ready_next>>
-
-  component "PM-UI-COMPOSITION-004 Editor Static Projection\nkind=implementation\nstate=ready_next\nWR=WR-183" as PM_UI_COMPOSITION_004 <<ready_next>>
-
-  component "PM-UI-COMPOSITION-005 Draw Static Projection\nkind=implementation\nstate=ready_next\nWR=WR-184" as PM_UI_COMPOSITION_005 <<ready_next>>
-
-  component "PM-UI-COMPOSITION-006 Adaptive Headless Proposals\nkind=implementation\nstate=ready_next\nWR=WR-185" as PM_UI_COMPOSITION_006 <<ready_next>>
+  component "PT-UI-COMPOSITION-CUTOVER completed prerequisites\nmilestones=1\nquality=runtime_proven=1" as PT_UI_COMPOSITION_CUTOVER_COMPLETED <<completed>>
 
   component "PM-UI-COMPOSITION-007 Editor Docking And Cross-Window Runtime\nkind=implementation\nstate=ready_next\nWR=WR-186" as PM_UI_COMPOSITION_007 <<ready_next>>
 
@@ -305,12 +295,7 @@ PM_GAME_WORLDSPACE_UI_002 -down-> PM_GAME_WORLDSPACE_UI_003 : production prerequ
 PM_VIEWPORT_PROJECTION_003 -down-> PM_GAME_WORLDSPACE_UI_003 : PT-VIEWPORT-PROJECTION production prerequisite
 PM_GAME_WORLDSPACE_UI_003 -down-> PM_GAME_WORLDSPACE_UI_004 : production prerequisite
 PM_GAME_WORLDSPACE_UI_004 -down-> PM_GAME_WORLDSPACE_UI_005 : production prerequisite
-PT_UI_COMPOSITION_CUTOVER_COMPLETED -down-> PM_UI_COMPOSITION_002 : completed prerequisite
-PM_UI_COMPOSITION_002 -down-> PM_UI_COMPOSITION_003 : production prerequisite
-PM_UI_COMPOSITION_003 -down-> PM_UI_COMPOSITION_004 : production prerequisite
-PM_UI_COMPOSITION_004 -down-> PM_UI_COMPOSITION_005 : production prerequisite
-PM_UI_COMPOSITION_005 -down-> PM_UI_COMPOSITION_006 : production prerequisite
-PM_UI_COMPOSITION_006 -down-> PM_UI_COMPOSITION_007 : production prerequisite
+PT_UI_COMPOSITION_CUTOVER_COMPLETED -down-> PM_UI_COMPOSITION_007 : completed prerequisite
 PM_UI_COMPOSITION_007 -down-> PM_UI_COMPOSITION_008 : production prerequisite
 PM_UI_COMPOSITION_008 -down-> PM_UI_COMPOSITION_009 : production prerequisite
 PM_UI_COMPOSITION_009 -down-> PM_UI_COMPOSITION_010 : production prerequisite

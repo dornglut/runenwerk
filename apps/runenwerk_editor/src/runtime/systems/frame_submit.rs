@@ -1,13 +1,11 @@
-use editor_shell::{
-    ComputedLayoutMap, UiNode, UiNodeKind, WorkspaceState, viewport_embed_slot_for,
-};
+use editor_shell::{ComputedLayoutMap, UiNode, UiNodeKind, viewport_embed_slot_for};
 use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::WindowState;
 use engine::plugins::render::{
     EditorPickingTarget, UiFontAtlasResource, UiFrameProducerId, UiFrameRoute, UiFrameSubmission,
     UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
 };
-use engine::runtime::{Res, ResMut};
+use engine::runtime::{Res, ResMut, WindowStateRegistryResource};
 use scene::LocalTransform;
 use ui_math::UiRect;
 use ui_render_data::{
@@ -55,6 +53,7 @@ pub fn submit_editor_frame_system(
     mut mounted_surfaces: ResMut<MountedSurfaceRegistryResource>,
     atlas: Res<UiFontAtlasResource>,
     viewport_picking_results: Res<ViewportPickingResultsResource>,
+    window_registry: Res<WindowStateRegistryResource>,
     mut submissions: ResMut<UiFrameSubmissionRegistryResource>,
 ) {
     let bounds = window_bounds(&window);
@@ -66,6 +65,16 @@ pub fn submit_editor_frame_system(
         theme,
     } = &mut *host;
     let shell_theme = scaled_shell_theme(theme, window.scale_factor);
+    let target_presentations = shell_state
+        .composition_target_bindings()
+        .collect::<Vec<_>>();
+    let primary_target_id = shell_state
+        .composition_runtime()
+        .composition()
+        .definition()
+        .targets()
+        .first()
+        .map(|target| target.id);
     let viewport_products = resolve_structural_viewport_products(
         shell_state,
         &viewport_observations,
@@ -82,24 +91,71 @@ pub fn submit_editor_frame_system(
             expression.into_ui_frame(),
         )
     } else {
-        let expression = app.build_shell_expression_frame_with_surface_resources(
-            shell_state,
-            bounds,
-            &shell_theme,
-            &*atlas,
-            Some(&viewport_observations),
-            Some(&tool_surface_bindings),
-            Some(&viewport_instances),
-            Some(crate::shell::EditorShellFrameMetrics {
-                fps_ema: debug_metrics.fps_ema,
-                frame_ms_ema: debug_metrics.frame_ms_ema,
-            }),
-        );
+        let expression = primary_target_id
+            .and_then(|target_id| {
+                app.build_shell_expression_frame_for_target_with_surface_resources(
+                    shell_state,
+                    target_id,
+                    bounds,
+                    &shell_theme,
+                    &*atlas,
+                    Some(&viewport_observations),
+                    Some(&tool_surface_bindings),
+                    Some(&viewport_instances),
+                    Some(crate::shell::EditorShellFrameMetrics {
+                        fps_ema: debug_metrics.fps_ema,
+                        frame_ms_ema: debug_metrics.frame_ms_ema,
+                    }),
+                )
+            })
+            .unwrap_or_else(|| {
+                app.build_shell_expression_frame_with_surface_resources(
+                    shell_state,
+                    bounds,
+                    &shell_theme,
+                    &*atlas,
+                    Some(&viewport_observations),
+                    Some(&tool_surface_bindings),
+                    Some(&viewport_instances),
+                    Some(crate::shell::EditorShellFrameMetrics {
+                        fps_ema: debug_metrics.fps_ema,
+                        frame_ms_ema: debug_metrics.frame_ms_ema,
+                    }),
+                )
+            });
         (
             expression.metadata.source_version,
             expression.into_ui_frame(),
         )
     };
+    let secondary_frames = target_presentations
+        .iter()
+        .filter(|entry| Some(entry.target_id) != primary_target_id)
+        .filter_map(|entry| {
+            let record = window_registry.record(entry.binding.native_window_id)?;
+            let target_bounds = UiRect::new(
+                0.0,
+                0.0,
+                record.size_px.0.max(1) as f32,
+                record.size_px.1.max(1) as f32,
+            );
+            app.build_shell_expression_frame_for_target_with_surface_resources(
+                shell_state,
+                entry.target_id,
+                target_bounds,
+                &shell_theme,
+                &*atlas,
+                Some(&viewport_observations),
+                Some(&tool_surface_bindings),
+                Some(&viewport_instances),
+                Some(crate::shell::EditorShellFrameMetrics {
+                    fps_ema: debug_metrics.fps_ema,
+                    frame_ms_ema: debug_metrics.frame_ms_ema,
+                }),
+            )
+            .map(|expression| (entry.binding.render_surface_id, expression.into_ui_frame()))
+        })
+        .collect::<Vec<_>>();
     let rendered_viewport_bounds = primary_viewport_bounds_from_frame(&frame);
     let viewport_bounds = active_viewport_id
         .and_then(|viewport_id| viewport_bounds_from_frame(&frame, viewport_id.0))
@@ -123,14 +179,13 @@ pub fn submit_editor_frame_system(
         .rebuild_from_layout_map_with_instances(&viewport_layout_map, &viewport_instances);
     sync_viewport_render_states_from_bindings(
         app,
-        shell_state.workspace_state(),
         &mut viewport_render_states,
         &tool_surface_bindings,
         shell_scale,
         viewport_debug_stage(),
         root_background_opaque_enabled(),
     );
-    mounted_surfaces.sync_from_workspace_state(shell_state.workspace_state());
+    mounted_surfaces.sync_from_composition(shell_state.composition_runtime());
     if app.debug_logs_enabled() {
         for rebind in tool_surface_bindings.latest_rebinds() {
             app.append_console_line(format!(
@@ -220,17 +275,36 @@ pub fn submit_editor_frame_system(
         }
     }
 
-    submissions.replace(
-        UiFrameSubmission::new(EDITOR_SHELL_UI_PRODUCER_ID)
-            .with_route(UiFrameRoute::Screen)
-            .with_order(UiFrameSubmissionOrder::new(10, 0))
-            .with_frame(frame),
+    let primary_surface_id = primary_target_id
+        .and_then(|target_id| shell_state.composition_target_binding(target_id))
+        .map(|binding| binding.render_surface_id)
+        .unwrap_or_else(engine::plugins::render::backend::RenderSurfaceId::primary);
+    submissions.replace_for_surface(
+        EDITOR_SHELL_UI_PRODUCER_ID,
+        primary_surface_id,
+        |producer_id| {
+            UiFrameSubmission::new(producer_id)
+                .with_route(UiFrameRoute::Screen)
+                .with_order(UiFrameSubmissionOrder::new(10, 0))
+                .with_frame(frame)
+        },
     );
+    for (render_surface_id, frame) in secondary_frames {
+        submissions.replace_for_surface(
+            EDITOR_SHELL_UI_PRODUCER_ID,
+            render_surface_id,
+            |producer_id| {
+                UiFrameSubmission::new(producer_id)
+                    .with_route(UiFrameRoute::Screen)
+                    .with_order(UiFrameSubmissionOrder::new(10, 0))
+                    .with_frame(frame)
+            },
+        );
+    }
 }
 
 fn sync_viewport_render_states_from_bindings(
     app: &crate::editor_app::RunenwerkEditorApp,
-    workspace_state: &WorkspaceState,
     viewport_render_states: &mut ViewportRenderStateResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
     shell_scale: f32,
@@ -242,12 +316,6 @@ fn sync_viewport_render_states_from_bindings(
         let mut render_state = viewport_render_states
             .state_for(binding.viewport_id)
             .map(|previous| previous.render_state.clone())
-            .or_else(|| {
-                workspace_state
-                    .tool_surface(binding.tool_surface_id)
-                    .and_then(|surface| surface.viewport_settings)
-                    .map(EditorViewportRenderState::from_viewport_settings)
-            })
             .unwrap_or_else(|| {
                 let mut state = EditorViewportRenderState::default();
                 state.set_debug_stage(default_debug_stage);
@@ -696,15 +764,9 @@ mod tests {
         ));
         let mut render_states = ViewportRenderStateResource::default();
         let app = crate::editor_app::RunenwerkEditorApp::new();
-        let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-        let workspace = editor_shell::WorkspaceState::bootstrap_current_layout(
-            editor_shell::WorkspaceId::try_from_raw(1).unwrap(),
-            &mut allocator,
-        );
 
         sync_viewport_render_states_from_bindings(
             &app,
-            &workspace,
             &mut render_states,
             &bindings,
             1.0,
@@ -727,7 +789,6 @@ mod tests {
         });
         sync_viewport_render_states_from_bindings(
             &app,
-            &workspace,
             &mut render_states,
             &bindings,
             1.0,

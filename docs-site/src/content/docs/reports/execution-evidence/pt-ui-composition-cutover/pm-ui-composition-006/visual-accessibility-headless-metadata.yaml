@@ -1,0 +1,127 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-006
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+evidence_kind: visual
+name: accessibility_headless_metadata
+status: passed
+produced_at: '2026-06-20T13:17:07Z'
+paths:
+- domain/ui/ui_adaptive_composition/src/accessibility/mod.rs
+- domain/ui/ui_input/src/semantic.rs
+subject_paths:
+- domain/ui/ui_adaptive_composition/src/accessibility/mod.rs
+- domain/ui/ui_input/src/semantic.rs
+subject_digests:
+  domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+  domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p ui_adaptive_composition) -> exit 0
+- cargo:test (cargo test -p ui_input semantic) -> exit 0
+- cargo:test (cargo test -p ui_testing adaptive_composition) -> exit 0
+- cargo:test (cargo test -p ui_composition) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-131534z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+  validation_result_digest: 19a72edd198942bc9804a46d1a07336bbb0741a4cf90940c697974c476ce58ee
+  subject_digests:
+    domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+    domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_adaptive_composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-131534z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+  validation_result_digest: c4bd927a8c3d6a410e318580aab837b70be14c5be31e76dae76c3b3791ca0589
+  subject_digests:
+    domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+    domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_input
+  - semantic
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-131534z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+  validation_result_digest: 4be68489c8527af9a52c1f9ee0a01d162f56dc4dd9c34499e7224898af8ff1e4
+  subject_digests:
+    domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+    domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_testing
+  - adaptive_composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-131534z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+  validation_result_digest: 3fcb3110d6504b30d82a9ba5acd4c055be6c83c0ef838d1b6ec6c423db10edb4
+  subject_digests:
+    domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+    domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-131534z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+  validation_result_digest: 60a91848ff149d43fa8649f40fffc5595a141bfae40c15574cd570ff8316a3ec
+  subject_digests:
+    domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+    domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-131534z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+  validation_result_digest: e3342bb25b480a58587be0d0947128e24a136a9f9f67a02cce66dc31728eca48
+  subject_digests:
+    domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+    domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-131534z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+  validation_result_digest: 3fbb9948e31b39d4a4896d98f468221a18fd67235fbd5da48d54b7cea78b06ca
+  subject_digests:
+    domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+    domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-131534z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-006:WR-185
+  validation_result_digest: 2c676b6910f58b886bb408fe7c519aa189bb965e536555a8e4a439574682a1d2
+  subject_digests:
+    domain/ui/ui_adaptive_composition/src/accessibility/mod.rs: 4d7223678bbe8b75759d060c91285b0c8a981aed42289da95c5058fd7904d651
+    domain/ui/ui_input/src/semantic.rs: 75f0bacc0a6e91426762f5e6ca369057ac08e665f88a87b3da6c149571543003

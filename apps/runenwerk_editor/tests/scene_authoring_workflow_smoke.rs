@@ -85,20 +85,22 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
 
     let workspace = default_workspace_state();
     let viewport_surface = default_surface_by_kind(&workspace, editor_shell::PanelKind::Viewport);
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    let viewport_mounted_unit =
+        ui_composition::MountedUnitId::try_from_raw(viewport_surface.raw()).unwrap();
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerDown {
             hit: ViewportHitResult::gizmo_axis("X", 0.0),
         },
     )
     .expect("viewport gizmo down should succeed");
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerDragAxis { amount: 6.0 },
     )
     .expect("viewport drag should succeed");
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerUp,
     )
     .expect("viewport up should succeed");
@@ -126,22 +128,22 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         None,
     )
     .expect("rotate tool activation should succeed");
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerDown {
             hit: ViewportHitResult::gizmo_axis("Y", 0.0),
         },
     )
     .expect("viewport rotate gizmo down should succeed");
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerDragAxis {
             amount: std::f32::consts::FRAC_PI_2,
         },
     )
     .expect("viewport rotate drag should succeed");
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerUp,
     )
     .expect("viewport rotate up should succeed");
@@ -156,20 +158,20 @@ fn scene_authoring_workflow_smoke_select_edit_translate_undo_redo() {
         None,
     )
     .expect("scale tool activation should succeed");
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerDown {
             hit: ViewportHitResult::gizmo_axis("Z", 0.0),
         },
     )
     .expect("viewport scale gizmo down should succeed");
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerDragAxis { amount: 1.5 },
     )
     .expect("viewport scale drag should succeed");
-    app.dispatch_viewport_interaction_for_surface(
-        viewport_surface,
+    app.dispatch_viewport_interaction_for_mounted_unit(
+        viewport_mounted_unit,
         ViewportInteractionCommand::PointerUp,
     )
     .expect("viewport scale up should succeed");

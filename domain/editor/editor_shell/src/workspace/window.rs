@@ -134,6 +134,20 @@ impl EditorWindowRegistry {
         true
     }
 
+    pub fn remove_window(
+        &mut self,
+        editor_window_id: EditorWindowId,
+    ) -> Option<EditorWindowRecord> {
+        if editor_window_id == self.primary_window_id {
+            return None;
+        }
+        let removed = self.records.remove(&editor_window_id)?;
+        if self.active_window_id == editor_window_id {
+            self.active_window_id = self.primary_window_id;
+        }
+        Some(removed)
+    }
+
     pub fn len(&self) -> usize {
         self.records.len()
     }

@@ -325,7 +325,10 @@ fn node_requires_overflow_policy(kind: &UiNodeKind) -> bool {
 fn node_accessible_label(kind: &UiNodeKind) -> Option<String> {
     match kind {
         UiNodeKind::Label(label) => Some(label.text.clone()),
-        UiNodeKind::Button(button) => Some(button.label.clone()),
+        UiNodeKind::Button(button) => button
+            .accessible_label
+            .clone()
+            .or_else(|| Some(button.label.clone())),
         UiNodeKind::TextInput(input) if !input.placeholder.trim().is_empty() => {
             Some(input.placeholder.clone())
         }

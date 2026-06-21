@@ -1,0 +1,150 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-003
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+evidence_kind: artifact
+name: persistence_benchmark
+status: passed
+produced_at: '2026-06-19T19:18:09Z'
+paths:
+- domain/ui/ui_composition/benches/composition_persistence.rs
+- docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+subject_paths:
+- domain/ui/ui_composition/benches/composition_persistence.rs
+- docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+subject_digests:
+  ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+  : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+  domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p ui_composition persistence) -> exit 0
+- cargo:test (cargo test -p ui_composition deterministic) -> exit 0
+- cargo:test (cargo test -p ui_composition --bench composition_persistence --no-run) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:production:validate (task production:validate) -> exit 0
+- task:roadmap:validate (task roadmap:validate) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 35e461402f7d8de425980fa8db4d8079559d0c2d61061c5fe9bddac59b49f0bb
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - persistence
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 3510ce1edcaf391c29275c2d2cb31af268d8d28392cadc22d75caee2c4f3dd6d
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - deterministic
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 1dd527d61141bac2a0fda298a22a0cc8d7fdc8e8f0c4df0907237091c717f9e9
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - ui_composition
+  - --bench
+  - composition_persistence
+  - --no-run
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: dc654632e2be1a09c0f3ed8c59cbb77a38235058d0c52062e556ac053fa46994
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 6614f207b9502fcbd309a528ac5f0dd2230ac9c60de8d7010f782b03ef53efe3
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+- command_id: task:production:validate
+  argv:
+  - task
+  - production:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 7a8edd3b3aa390e9f5433f960cc56b8ae7183b1b92c70e1616e9be4fe1f43cd0
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+- command_id: task:roadmap:validate
+  argv:
+  - task
+  - roadmap:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: bd7b97f84724bc0bf7af6491bf4b088b475a00b56415208f1665097cd8b03b0d
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 89ba753aa7dc2b65f57336e06a228a077b35b6c16a0d38651212d88c1c3e3f4b
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260619-191641z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-003:WR-182
+  validation_result_digest: 313951df569f32e5bc72fc075f9cde50afbae496ecd52ea7bb5bf9c3dd44d0fb
+  subject_digests:
+    ? docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md
+    : ec0acddc1d6d2ae6dfd028300abac30e0248c93cfaf876e2be437d70737158e8
+    domain/ui/ui_composition/benches/composition_persistence.rs: acb4fe8c53b78125c82692ae5db84a80af86a575d0c6cb0f4d86490e39e8076c

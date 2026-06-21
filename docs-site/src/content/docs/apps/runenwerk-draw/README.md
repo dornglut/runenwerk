@@ -5,7 +5,7 @@ status: active
 owner: drawing
 layer: app
 canonical: true
-last_reviewed: 2026-05-19
+last_reviewed: 2026-06-20
 related_designs:
   - ../../design/active/drawing-authoring-and-comic-layout-platform-design.md
   - ../../design/active/drawing-domain-crate-design.md
@@ -33,6 +33,9 @@ shared engine runtime, UI frame contracts, render submission registry, and pure
 - `apps/runenwerk_draw/src/runtime/plugin.rs`: drawing app runtime plugin.
 - `apps/runenwerk_draw/src/app/state.rs`: app-owned drawing state, committed
   stroke routing, and ink visibility facade.
+- `apps/runenwerk_draw/src/app/composition/`: built-in app-neutral composition
+  definition, Draw extension, mounted-content liveness, recursive static
+  projection, and typed diagnostics.
 - `apps/runenwerk_draw/src/app/ink/mod.rs`: app-owned ink runtime aggregate for
   preview products, publication, visibility, cache, GPU validation, fallback
   state, and query snapshot journals.
@@ -50,6 +53,9 @@ shared engine runtime, UI frame contracts, render submission registry, and pure
 
 ## Next Rendering Foundation
 
+- [Draw composition layouts](./composition-layouts.md): current structural
+  ownership, public API, unavailable-content behavior, and static/adaptive
+  boundary.
 - [Runenwerk Draw Rendering Foundation Roadmap](./roadmap.md): preview/final
   tile profiles, app-derived tile caching, product-surface bridging, GPU ink
   proof through public render-flow APIs, and CPU current or last-good fallback
@@ -61,9 +67,18 @@ shared engine runtime, UI frame contracts, render submission registry, and pure
 ## Current Behavior
 
 The app starts independently, opens a ratified minimal `DrawingDocument`,
-projects a canvas-first workspace, presents visible paper/chrome shell UI
-through the shared render UI pipeline, and routes pointer/stylus-compatible
-`ui_input` events into app-owned drawing runtime state.
+forms a ratified app-neutral `CompositionState`, projects the top bar, tool
+rail, canvas, and support panel from that region graph, and presents visible
+paper/chrome shell UI through the shared render UI pipeline. Pointer/stylus-
+compatible `ui_input` events still route into app-owned drawing runtime state.
+
+`DrawingCompositionRuntime` pairs the core structure with a deterministic
+`DrawingCompositionExtensionV1`. `DrawingCompositionContentState` keeps live
+content availability keyed by `MountedUnitId`; unresolved content uses the
+required app fallback, neutral placeholder, then explicitly permitted hide
+order without changing structural or drawing state. The active public
+projection is `DrawingCompositionProjection` through
+`RunenwerkDrawApp::composition_projection()`.
 
 The current DRF1-DRF5 ink path is present and hardened for last-good
 visibility:
@@ -139,6 +154,10 @@ menu behavior, or new advanced GPU drawing behavior.
 - Native tablet packet routing and fallback suppression exist, but backend
   arbitration, real Windows Ink/Wacom/macOS hardware acceptance, and device
   setup UX are still open.
+- The current composition profile is static and wide. Narrow responsive
+  drawers, collapse/reflow proposals, and Region Compass interactions remain
+  later adaptive-composition work; target width never silently removes a
+  mounted Draw region in the current checkpoint.
 
 ## Runenwerk Draw Authority Map
 
@@ -148,13 +167,18 @@ before derived products can be formed. `domain/drawing` owns drawing semantics,
 ratification, document revision, deterministic CPU ink tile formation,
 invalidation, tile lineage, and product descriptor/cache identity helpers.
 
-`apps/runenwerk_draw` owns product-level wiring, canvas-first workspace setup,
-tool input/session runtime, app state, runtime plugin registration, shell-level
-input routing, dirty tile batching, app cache payloads, pending/current/last-good
+`domain/ui/ui_composition` owns the Draw layout's structural target, root,
+regions, mounted-unit identities, and ratified state. It does not own canvas
+coordinates, drawing content roles, target pixels, tablet state, app providers,
+or native windows.
+
+`apps/runenwerk_draw` owns the typed composition extension, static target
+projection, mounted-content liveness, canvas-first view calculation, tool
+input/session runtime, app state, runtime plugin registration, shell-level input
+routing, dirty tile batching, app cache payloads, pending/current/last-good
 visibility, product publication and query snapshot handling, GPU validation
 records, visible product promotion, and fallback policy. These are runtime
-state derived from document truth and current app input; they are not drawing
-truth.
+state derived from composition and document truth; they are not drawing truth.
 
 `engine/render` owns generic render-flow execution, dynamic texture allocation,
 upload, capture/readback, texture diff, and UI composition execution. Renderer

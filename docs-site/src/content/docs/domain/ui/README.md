@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-16
+last_reviewed: 2026-06-20
 ---
 
 # UI Domain
@@ -39,6 +39,8 @@ Renderer output is derived product data. It is not UI authority.
 ## Current UI Truth
 
 - [UI Definition Usage](./ui-definition-usage.md)
+- [UI Composition Usage](./ui-composition-usage.md)
+- [Adaptive Composition Usage](./ui-adaptive-composition-usage.md)
 - [Current Architecture](./architecture.md)
 - [Roadmap](./roadmap.md)
 - [Story Acceptance and Review Checklist](./story-acceptance-and-review-checklist.md)
@@ -54,13 +56,38 @@ Renderer output is derived product data. It is not UI authority.
 - [UI Definition Formation Framework Design](../../design/implemented/ui-definition-formation-foundation-design.md)
 - [Editor Self-Authoring and UI Workspace Design](../../design/implemented/editor-self-authoring-and-final-ui-design.md)
 
+## Structural Composition
+
+- [App-Neutral UI Composition Design](../../design/accepted/app-neutral-ui-composition-design.md)
+- [ADR 0013: App-Neutral UI Composition Clean Cutover](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md)
+- [UI Composition Usage](./ui-composition-usage.md)
+- [Adaptive Composition Usage](./ui-adaptive-composition-usage.md)
+
+`domain/ui/ui_composition` is the app-neutral structural authority for saved
+composition definitions, ratified mutable structure, typed transactions,
+structural history, explicit promotion, content liveness vocabulary,
+deterministic linked persistence bundles, atomic generation activation, and
+headless fixture contracts. It does not own adaptive projection, app-extension
+meaning, storage-root policy, native windows, product content, or editor
+semantics.
+
+`domain/ui/ui_adaptive_composition` derives transient projection, reflow,
+hit-test, preview, drag/resize-session, proposal, accessibility, and explicit
+promotion-delta products from immutable composition snapshots. It cannot
+mutate or persist canonical composition state.
+
+Editor and Draw static structure now project through `ui_composition`. Legacy
+editor workspace structure is read-only compatibility input until the governed
+docking-runtime gate. `ui_surface` remains a temporary mapped compatibility
+boundary; neither legacy area is a parallel target authority.
+
 ## Interaction / Runtime
 
 - [Editor UI Runtime V2 and Interaction Formation Design](../../design/active/editor-ui-runtime-v2-and-interaction-formation-design.md)
 - [ADR 0009: UI Interaction Formation V2](../../adr/accepted/0009-ui-interaction-formation-v2.md)
 - [Editor UI Popup, Adornment, And Drop Preview Contract](../../design/active/editor-ui-popup-adornment-drop-preview-contract.md)
 
-## Shell / Workspace / Tool Surfaces
+## Legacy Shell / Workspace / Tool Surfaces
 
 - [Editor UI Workspace Tool Surface Architecture](../../design/active/editor-ui-workspace-tool-surface-architecture.md)
 - [Editor Workspace Document Mode Panel Architecture](../../design/implemented/editor-workspace-document-mode-panel-architecture.md)
@@ -119,9 +146,12 @@ cite the named Interaction V2 slice it consumes.
 ## Scope Boundary
 
 `domain/ui` owns substrate/runtime contracts (`ui_tree`, `ui_runtime`,
-`ui_widgets`, `ui_surface`) and generic UI definition formation. It does not
-own editor-shell workspace semantics, app runtime wiring, provider behavior,
-app IO, renderer execution policy, or concrete command execution.
+`ui_widgets`), app-neutral structural composition (`ui_composition`), transient
+adaptive mechanism (`ui_adaptive_composition`), temporary generic surface
+compatibility contracts (`ui_surface`), and generic UI definition formation.
+It does not own editor-shell product wording or app extensions, app runtime
+wiring, provider behavior, app IO, native-window lifecycle, renderer execution
+policy, or concrete command execution.
 
 Authored UI definitions must not persist runtime `WidgetId`, ECS entity ids,
 app IO, provider state, provider behavior, or command execution. Editor command

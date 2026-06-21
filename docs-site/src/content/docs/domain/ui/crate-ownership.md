@@ -2,6 +2,10 @@
 title: UI Crate Ownership
 description: Ownership, layer, and dependency boundaries for Runenwerk UI crates.
 status: active
+owner: ui
+layer: domain
+canonical: true
+last_reviewed: 2026-06-20
 ---
 
 # UI Crate Ownership
@@ -38,6 +42,7 @@ authored source
 | `program` | UI semantic program, controls, lowering, compiler, artifacts, evaluator, runtime view, binding, host contracts. |
 | `render` | Renderer-neutral render facts and primitive-generation contracts. |
 | `proof` | Story/proof/inspection/static-headless proof contracts. |
+| `composition` | App-neutral saved/ratified structural composition and transient adaptive-mechanism contracts. No app/editor/provider/native-window semantics. |
 | `surface` | Generic surface/mount/intent envelopes. No concrete game/editor/world semantics. |
 | `retained` | Existing retained UI runtime/widges/tree/graph-editor compatibility layer. |
 | `testing` | Test helpers and conformance utilities. |
@@ -78,6 +83,8 @@ ui_definition -> ui_tree / ui_widgets / ui_runtime / ui_render_data
 ui_story -> apps/runenwerk_editor or editor_* crates
 ui_program -> ui_definition assets or app/editor crates
 ui_compiler -> app/editor crates
+ui_composition -> any other production UI crate
+ui_adaptive_composition -> app/editor/engine/ui_surface crates
 ui_surface -> concrete game/editor/world semantic ownership
 domain/ui crates -> apps/*
 ```
@@ -108,9 +115,51 @@ game HUD semantics
 world-space/entity-attached UI semantics
 ```
 
-## Surface ownership rule
+## Composition ownership rule
 
-`ui_surface` owns generic surface envelopes only:
+`ui_composition` owns:
+
+```text
+versioned saved structural definitions
+presentation target and structural root identities
+split / stack / overlay / mount-point region algebra
+opaque typed mounted-content references
+ratified structural state and immutable snapshots
+typed policy-authorized structural transactions
+structural-only journal and undo/redo
+core-only promotion candidates
+content liveness and unavailable-content fallback vocabulary
+ui_composition.* diagnostics and neutral fixture contracts
+```
+
+It does not own app extension documents, providers, sessions, product content,
+adaptive projection, native windows, monitor/DPI/restore policy, rendering,
+editor workspace product semantics, Draw semantics, or game behavior. The
+machine-readable ownership map enforces that it has no production dependency
+on another UI crate; `ui_testing` may consume it for conformance fixtures.
+
+`ui_adaptive_composition` owns:
+
+```text
+transient projection from immutable CompositionSnapshot values
+adaptive target constraints and region policy
+immutable hit indexes and bounded preview state
+drag and resize sessions with cancel/rollback
+typed structural proposals and exact edit classification
+explicit named and scoped promotion deltas
+semantic input parity and accessibility/inspection metadata
+ui_adaptive_composition.* diagnostics, neutral fixtures, and performance probes
+```
+
+It may depend only on `ui_composition`, `ui_input`, and `ui_math`. It may not
+hold mutable composition state, execute transactions, persist canonical state,
+or import app/editor/Draw/game/engine/windowing/provider/session semantics.
+Hosts own policy acceptance and any later typed transaction submission.
+
+## Temporary surface ownership rule
+
+Until its responsibility-by-responsibility supersession map is completed,
+`ui_surface` remains a temporary generic compatibility boundary for:
 
 ```text
 surface definition id
@@ -123,6 +172,11 @@ observation/presentation envelope
 mount/session metadata
 diagnostics
 ```
+
+This is current-code description, not target ownership. No new composition
+authority may be added to `ui_surface`, and it must not be deleted until each
+useful neutral contract has a replacement contract and proof or an explicit
+deferred non-goal.
 
 Concrete semantic verbs like `SelectEntity`, `ActivateField`, `FocusEntity`, world-space prompt behavior, nameplates, damage numbers, world anchors, culling, occlusion, and gameplay binding belong to later editor/game/world-space tracks.
 

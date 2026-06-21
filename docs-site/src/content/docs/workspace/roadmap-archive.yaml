@@ -1,7 +1,7 @@
 version: 1
 roadmap:
   title: Runenwerk Value-Weighted Dependency Roadmap Archive
-  last_reviewed: '2026-05-26'
+  last_reviewed: '2026-06-20'
   owner: workspace
 items:
 - id: WR-001
@@ -12469,3 +12469,334 @@ items:
   adr_requirement: Satisfied by accepted ADR 0013; any later extraction or network-collaboration expansion requires a separate ADR.
   fitness_function_requirement: Governance validators and exact three-option visual evidence now; later rows add focused core, persistence, editor, Draw, adaptive, accessibility, performance, cleanup, and truth-certification checks.
   ownership_mode: Complicated-subsystem UI composition platform with stream-aligned editor and Draw integration owners.
+- id: WR-181
+  title: UI Composition Core Contracts And Invariants
+  diagram_title: Composition core contracts
+  alias: UICOMP02
+  lane: UI architecture
+  dependency_level: L4
+  gate: Region Compass selected and checkpoint 1 closed
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-180
+  write_scopes:
+  - Cargo.toml
+  - new:domain/ui/ui_composition
+  - domain/ui/ui-crate-ownership.toml
+  - domain/ui/ui_testing
+  - docs-site/src/content/docs/domain/ui
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
+  validations:
+  - cargo fmt --check
+  - cargo test -p ui_composition
+  - cargo test -p ui_testing composition_fixture
+  - task ui:dependencies
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-COMPOSITION-001 closed with selected Region Compass evidence; WR-181 decision-complete plan.contract.yaml accepted on 2026-06-19
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md.
+  current_call: Implement the smallest complete core authority; do not add adaptive or app semantics.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-002 and inspect exact existing ID, diagnostic, ratification, and fixture patterns.
+  main_blocker: Checkpoint 1 must complete its transactional closeout.
+  why_not_ready: Awaiting checkpoint 1 closeout and explicit roadmap promotion.
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Persistence storage and runtime consumers are owned by later checkpoints.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
+  diagram_call:
+  - deterministic core
+  - typed transactions
+  - no app semantics
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Core contracts must implement the accepted structural authority.
+  ddd_owner: domain/ui/ui_composition
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Focused core tests, property invariants, atomic rejection, structural inverse revalidation, fixtures, dependency checks, docs, and planning validation.
+  ownership_mode: Complicated-subsystem UI composition owner.
+- id: WR-182
+  title: Composition Persistence Envelopes And Deterministic Bundles
+  diagram_title: Composition persistence bundles
+  alias: UICOMP03
+  lane: UI architecture
+  dependency_level: L4
+  gate: Core composition contracts runtime-proven
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-181
+  write_scopes:
+  - Cargo.lock
+  - domain/ui/ui_composition
+  - docs-site/src/content/docs/domain/ui
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-composition-003-persistence-envelopes-and-deterministic-bundles/closeout.md
+  validations:
+  - cargo fmt --check
+  - cargo test -p ui_composition persistence
+  - cargo test -p ui_composition deterministic
+  - cargo test -p ui_composition --bench composition_persistence --no-run
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Accepted decision-complete WR-182 persistence contract at docs-site/src/content/docs/reports/implementation-plans/wr-182-composition-persistence-envelopes-and-deterministic-bundles/plan.md; PM-UI-COMPOSITION-002 runtime closeout is completed.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-composition-003-persistence-envelopes-and-deterministic-bundles/closeout.md.
+  current_call: Prove deterministic bytes and atomic bundle activation before consumer migration.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-003 and define golden/failure-injection fixtures.
+  main_blocker: WR-181 core identities, formation, revision, and promotion primitives must be runtime-proven.
+  why_not_ready: Depends on the completed core checkpoint.
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Editor and Draw extension adapters are later checkpoints.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-003-persistence-envelopes-and-deterministic-bundles/closeout.md
+  diagram_call:
+  - canonical RON
+  - linked hashes
+  - atomic activation
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Persistence must implement the accepted deterministic bundle contract.
+  ddd_owner: domain/ui/ui_composition persistence mechanism with app-owned storage adapters
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Byte-golden, insertion-order, round-trip, hash-link, mismatch, crash/failure, legacy rejection, and benchmark tests.
+  ownership_mode: UI platform persistence mechanism with app adapter boundaries.
+- id: WR-183
+  title: Editor Static Composition Projection Cutover
+  diagram_title: Editor static projection
+  alias: UICOMP04
+  lane: Editor UI
+  dependency_level: L4
+  gate: Core and persistence checkpoints complete
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 13
+  confidence: 0.8
+  expected_score: 1.2
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-182
+  write_scopes:
+  - Cargo.lock
+  - domain/editor/editor_shell/Cargo.toml
+  - domain/editor/editor_shell/src
+  - apps/runenwerk_editor/Cargo.toml
+  - apps/runenwerk_editor/src/editor_app/facade.rs
+  - apps/runenwerk_editor/src/editor_app/state.rs
+  - apps/runenwerk_editor/src/persistence/workspace_layout.rs
+  - apps/runenwerk_editor/src/runtime
+  - apps/runenwerk_editor/src/shell
+  - apps/runenwerk_editor/tests
+  - docs-site/src/content/docs/apps/runenwerk-editor
+  - docs-site/src/content/docs/reports/implementation-plans
+  - docs-site/src/content/docs/reports/closeouts
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md
+  validations:
+  - cargo fmt --check
+  - cargo test -p editor_shell composition
+  - cargo test -p editor_shell workspace
+  - cargo test -p runenwerk_editor composition
+  - cargo test -p runenwerk_editor --test startup_render_smoke
+  - task ui:dependencies
+  - task docs:validate
+  - task planning:validate
+  next_evidence: Accepted decision-complete plan and PM-UI-COMPOSITION-003 runtime-proven closeout
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md.
+  current_call: At closeout, enforce compile-time/read-only guards on legacy workspace mutation.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-004 and inventory every WorkspaceState writer and projection consumer.
+  main_blocker: WR-182 must prove persistence and promotion before editor authority moves.
+  why_not_ready: Depends on deterministic persistence.
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Adaptive docking and full legacy deletion are later checkpoints.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md
+  diagram_call:
+  - editor static projection
+  - legacy read-only
+  - no docking redesign yet
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Editor migration must consume generic composition without recreating workspace authority.
+  ddd_owner: editor_shell specialization over domain/ui composition
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Editor projection, provider liveness, extension bundle, legacy read-only, unsupported V1-V5, dependency, docs, and planning tests.
+  ownership_mode: Stream-aligned editor integration over UI composition platform.
+- id: WR-184
+  title: Draw Static Composition Projection
+  diagram_title: Draw static projection
+  alias: UICOMP05
+  lane: Draw UI
+  dependency_level: L4
+  gate: Editor static projection and legacy read-only gate complete
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 4
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 1.9
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-183
+  write_scopes:
+  - apps/runenwerk_draw/src/app
+  - apps/runenwerk_draw/src/runtime/ink.rs
+  - apps/runenwerk_draw/tests/app_shell.rs
+  - new:apps/runenwerk_draw/tests/composition_architecture_guards.rs
+  - apps/runenwerk_draw/Cargo.toml
+  - docs-site/src/content/docs/apps/runenwerk-draw
+  - docs-site/src/content/docs/reports/implementation-plans/wr-184-draw-static-composition-projection
+  - new:docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md
+  validations:
+  - cargo fmt --check
+  - cargo test -p runenwerk_draw --test app_shell
+  - cargo test -p runenwerk_draw composition
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-COMPOSITION-005 runtime closeout and resolver-backed runtime_test, fixture, and diagnostics evidence passed all declared validation gates.
+  current_decision: Completed by Track Execution Harness runtime closeout for docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md.
+  current_call: Replace static workspace projection naming and ownership without adding responsive drawers yet.
+  first_move: Run task production:plan for PM-UI-COMPOSITION-005 and map current canvas/toolbar/panel projection into a definition fixture.
+  main_blocker: WR-183 must prove the first runtime consumer and read-only legacy boundary.
+  why_not_ready: Depends on editor static projection.
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Adaptive Draw reflow, narrow-target drawers, and Region Compass integration remain later governed checkpoints.
+  - The clean-cutover branch cannot merge before the legacy cleanup and final perfectionist closeout gates pass.
+  - Repository-wide Clippy is blocked by pre-existing ui_composition and ui_artifacts warnings; WR-189 can own ui_composition cleanup, while ui_artifacts requires an owning-track fix or explicit final-gate scope amendment before merge.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md
+  diagram_call:
+  - Draw static proof
+  - app-owned content
+  - no document authority move
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Draw must prove the same neutral structural contract.
+  ddd_owner: Runenwerk Draw app integration over domain/ui composition
+  adr_requirement: Satisfied by ADR 0013.
+  fitness_function_requirement: Draw composition, extension, liveness fallback, document-authority guard, docs, and planning tests.
+  ownership_mode: Stream-aligned Draw consumer of UI composition platform.
+- id: WR-185
+  title: Adaptive Composition Headless Proposals And Semantic Input
+  diagram_title: Adaptive headless proposals
+  alias: UICOMP06
+  lane: UI architecture
+  dependency_level: L4
+  gate: Editor and Draw static projections prove neutral core
+  planning_state: completed
+  priority: P0
+  value: 5
+  blocker: 2
+  tc: 5
+  rr_oe: 5
+  du: 5
+  effort: 8
+  confidence: 0.8
+  expected_score: 2.0
+  rice: N/A
+  kano: Must-be
+  dependencies:
+  - WR-184
+  write_scopes:
+  - Cargo.toml
+  - Cargo.lock
+  - domain/ui/ui-crate-ownership.toml
+  - domain/ui/ui_composition/src/transaction/apply.rs
+  - domain/ui/ui_composition/src/history/journal.rs
+  - domain/ui/ui_composition/tests/transaction_atomicity.rs
+  - new:domain/ui/ui_adaptive_composition
+  - domain/ui/ui_input/Cargo.toml
+  - domain/ui/ui_input/src/lib.rs
+  - new:domain/ui/ui_input/src/semantic.rs
+  - domain/ui/ui_testing/Cargo.toml
+  - domain/ui/ui_testing/src/lib.rs
+  - domain/ui/ui_testing/src/composition_fixture.rs
+  - new:domain/ui/ui_testing/src/adaptive_composition_fixture.rs
+  - docs-site/src/content/docs/domain/ui/README.md
+  - docs-site/src/content/docs/domain/ui/architecture.md
+  - docs-site/src/content/docs/domain/ui/crate-ownership.md
+  - docs-site/src/content/docs/domain/ui/dependency-boundaries.md
+  - new:docs-site/src/content/docs/domain/ui/ui-adaptive-composition-usage.md
+  - docs-site/src/content/docs/reports/implementation-plans/wr-185-adaptive-composition-headless-proposals-and-semantic-input
+  - new:docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals
+  - docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals/closeout.md
+  validations:
+  - cargo fmt --check
+  - cargo test -p ui_adaptive_composition
+  - cargo test -p ui_input semantic
+  - cargo test -p ui_composition
+  - cargo bench -p ui_adaptive_composition --bench adaptive_composition
+  - task ui:dependencies
+  - task docs:validate
+  - task planning:validate
+  next_evidence: PM-UI-COMPOSITION-006 runtime closeout and resolver-backed runtime, fixture, visual-accessibility, diagnostics, and benchmark evidence passed all declared gates.
+  current_decision: Completed by Track Execution Harness runtime closeout after correcting the typed intent and host transaction-materialization boundary.
+  current_call: Adaptive owns revision-bound intent; editor host owns topology-aware transaction materialization.
+  first_move: Remove commands from AdaptiveProposal, cover all five dock zones, and regenerate locked evidence.
+  main_blocker: Resolved; all five zones preserve typed intent and adaptive active source has no structural command materialization authority.
+  why_not_ready: ''
+  completion_quality: runtime_proven
+  known_quality_gaps:
+  - Region Compass runtime chrome, editor transaction materialization, and native-window coordination remain governed by WR-186.
+  - Draw adaptive runtime, legacy-authority deletion, and independent perfectionist verification remain later checkpoints.
+  - Repository-wide Clippy findings in ui_composition, ui_artifacts, and ui_story remain explicit final-gate blockers requiring owning scope.
+  completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals/closeout.md
+  diagram_call:
+  - derived projection
+  - typed proposal only
+  - semantic input
+  decision_gates:
+  - kind: design
+    path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
+    required_status: accepted
+    applies_to: implementation
+    reason: Adaptive mechanism must follow the accepted proposal-only contract and selected visual direction.
+  ddd_owner: domain/ui/ui_adaptive_composition and domain/ui/ui_input semantic actions
+  adr_requirement: Satisfied by ADR 0013; the proposal correction restores its host-policy boundary.
+  fitness_function_requirement: Fixture, projection, five-zone intent, semantic parity, accessibility metadata, allocation, clone, and enforced large-layout benchmark tests.
+  ownership_mode: Complicated-subsystem adaptive UI mechanism owner.

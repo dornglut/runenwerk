@@ -6668,7 +6668,7 @@ tracks:
   - id: PM-UI-COMPOSITION-002
     title: Core Contracts And Invariants
     kind: implementation
-    state: ready_next
+    state: completed
     goal: Implement deterministic composition definitions, ratified state, typed transactions, diagnostics, liveness, promotion primitives, fixtures, and structural history.
     outcome: The app-neutral core exists without adaptive, editor, Draw, provider-session, or app semantics.
     dependencies:
@@ -6680,19 +6680,21 @@ tracks:
       path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
       required_status: accepted
       reason: Core code follows the accepted structural contract.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-002 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - Formation, invariant, transaction, rejection, revision, inverse, liveness, diagnostic, and fixture contracts pass focused tests.
     - No app-specific enum, provider session, arbitrary payload, or UiProgram coupling enters the core.
     - Runtime/chrome/docking implementation remains untouched.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - Persistence and runtime consumers are later milestones.
-    completion_audit: ''
+    completion_quality: runtime_proven
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-002-core-contracts-and-invariants/closeout.md
   - id: PM-UI-COMPOSITION-003
     title: Persistence Envelopes And Deterministic Bundles
     kind: implementation
-    state: ready_next
+    state: completed
     goal: Implement canonical RON, stable ordering, linked core/app hashes, atomic generation activation, promotion, last-good recovery, and legacy rejection.
     outcome: Deterministic persistence is proven before editor or Draw state migrates.
     dependencies:
@@ -6704,19 +6706,21 @@ tracks:
       path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
       required_status: accepted
       reason: Persistence implements the accepted bundle contract.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-003-persistence-envelopes-and-deterministic-bundles/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-003 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - Repeated and insertion-order-varied serialization is byte-identical and hash-stable.
     - Core/extension mismatch and interrupted writes preserve last-good state with stable diagnostics.
     - V1-V5 workspace files are left untouched and explicitly rejected.
-    completion_quality: not_applicable
-    known_quality_gaps:
-    - App adapters remain later milestones.
-    completion_audit: ''
+    completion_quality: runtime_proven
+    known_quality_gaps: []
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-003-persistence-envelopes-and-deterministic-bundles/closeout.md
   - id: PM-UI-COMPOSITION-004
     title: Editor Static Projection
     kind: implementation
-    state: ready_next
+    state: completed
     goal: Render the editor static arrangement from composition and editor-owned extension/provider state.
     outcome: CompositionState becomes editor structural source while legacy WorkspaceState is read-only migration input.
     dependencies:
@@ -6728,19 +6732,23 @@ tracks:
       path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
       required_status: accepted
       reason: Editor projection must consume, not duplicate, the core authority.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-004 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - Static editor projection, provider resolution, liveness fallback, and extension persistence pass.
     - Legacy workspace mutation is compile-time or dependency guarded as read-only after closeout.
     - Redesigned docking chrome remains out of this milestone.
-    completion_quality: not_applicable
+    completion_quality: runtime_proven
     known_quality_gaps:
-    - Adaptive editor behavior and legacy deletion remain later milestones.
-    completion_audit: ''
+    - Adaptive docking and full legacy workspace/surface deletion remain later governed checkpoints.
+    - The static cutover state is branch-local and cannot merge before the remaining cleanup and final closeout gates.
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-004-editor-static-projection/closeout.md
   - id: PM-UI-COMPOSITION-005
     title: Draw Static Projection
     kind: implementation
-    state: ready_next
+    state: completed
     goal: Prove Runenwerk Draw as a real non-editor composition consumer without moving drawing-document truth.
     outcome: Draw wide layout renders from generic composition and app-owned extension/provider state.
     dependencies:
@@ -6752,19 +6760,24 @@ tracks:
       path: docs-site/src/content/docs/design/accepted/app-neutral-ui-composition-design.md
       required_status: accepted
       reason: Draw proves the same neutral core contract.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-005 requires its completed runtime closeout evidence.
     acceptance_criteria:
     - Canvas, toolbar, and support panels project from composition.
     - Drawing document, stroke history, and product semantics remain app/domain-owned.
     - No responsive drawer implementation lands yet.
-    completion_quality: not_applicable
+    completion_quality: runtime_proven
     known_quality_gaps:
-    - Adaptive Draw runtime remains later.
-    completion_audit: ''
+    - Adaptive Draw reflow, narrow-target drawers, and Region Compass integration remain later governed checkpoints.
+    - The clean-cutover branch cannot merge before the legacy cleanup and final perfectionist closeout gates pass.
+    - Repository-wide Clippy is blocked by pre-existing ui_composition and ui_artifacts warnings; WR-189 can own ui_composition cleanup, while ui_artifacts requires an owning-track fix or explicit final-gate scope amendment before merge.
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-005-draw-static-projection/closeout.md
   - id: PM-UI-COMPOSITION-006
     title: Adaptive Headless Proposals
     kind: implementation
-    state: ready_next
+    state: completed
     goal: Implement transient adaptive projection, edit classification, reflow, docking proposals, previews, semantic input, promotion deltas, fixtures, and benchmark harnesses.
     outcome: Adaptive mechanics are proven headlessly before product chrome consumes them.
     dependencies:
@@ -6776,15 +6789,20 @@ tracks:
       path: docs-site/src/content/docs/design/accepted/adaptive-ui-composition-design.md
       required_status: accepted
       reason: Adaptive code follows proposal-only ownership and the selected direction.
-    evidence_gates: []
+    evidence_gates:
+    - path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals/closeout.md
+      required_status: completed
+      reason: PM-UI-COMPOSITION-006 requires completed runtime and benchmark closeout evidence.
     acceptance_criteria:
     - Transient, structural, and promotion-candidate edits are classified deterministically.
     - Pointer, keyboard, touch, and controller map through semantic actions.
     - Browser, terminal, dashboard, mobile, and game fixtures contain no product behavior or forbidden imports.
-    completion_quality: not_applicable
+    completion_quality: runtime_proven
     known_quality_gaps:
-    - Editor and Draw runtime integration remain later.
-    completion_audit: ''
+    - Region Compass runtime chrome, editor transaction materialization, and native-window coordination remain governed by WR-186.
+    - Draw adaptive runtime, legacy-authority deletion, and independent perfectionist verification remain later checkpoints.
+    - Repository-wide Clippy findings in ui_composition, ui_artifacts, and ui_story remain explicit final-gate blockers requiring owning scope.
+    completion_audit: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-006-adaptive-headless-proposals/closeout.md
   - id: PM-UI-COMPOSITION-007
     title: Editor Docking And Cross-Window Runtime
     kind: implementation

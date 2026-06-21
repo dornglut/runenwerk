@@ -1,983 +1,158 @@
+//! Editor composition bundle persistence and read-only legacy source probing.
+
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
-use editor_persistence::{decode_ron, encode_ron_pretty};
-use serde::Deserialize;
-
+use anyhow::{Context, Result, anyhow};
 use editor_shell::{
-    PERSISTED_WORKSPACE_STATE_VERSION_V1, PERSISTED_WORKSPACE_STATE_VERSION_V2,
-    PERSISTED_WORKSPACE_STATE_VERSION_V3, PERSISTED_WORKSPACE_STATE_VERSION_V4,
-    PERSISTED_WORKSPACE_STATE_VERSION_V5, PersistedWorkspaceStateV5, ToolSurfaceRegistry,
-    WorkspaceProfileId, WorkspaceState, compact_empty_tab_stack_areas,
-    default_workspace_profile_registry,
+    EDITOR_COMPOSITION_EXTENSION_PROFILE, EditorCompositionExtensionSnapshot,
+    EditorCompositionExtensionV1, EditorCompositionRuntime,
+};
+use ui_composition::{
+    AppProfileId, AppSchemaVersion, CompositionBundleRepository, CompositionCompatibility,
+    CompositionCompatibilityRequirement, CompositionLayoutScope, CompositionSourceSchema,
+    CompositionState, LayoutDisplayName, probe_composition_source,
 };
 
-#[derive(Debug, Deserialize)]
-struct PersistedWorkspaceVersionProbe {
-    version: u32,
+const EDITOR_COMPOSITION_APP_PROFILE: &str = "runenwerk.editor";
+const EDITOR_COMPOSITION_APP_SCHEMA_VERSION: u32 = 1;
+
+pub fn default_composition_layout_root_for_profile(
+    profile_id: editor_shell::WorkspaceProfileId,
+) -> PathBuf {
+    PathBuf::from("editor-scenes")
+        .join("compositions")
+        .join(format!("profile-{}", profile_id.raw()))
 }
 
-#[derive(Debug)]
-pub struct WorkspaceLayoutReadResult {
-    pub workspace_state: WorkspaceState,
-    pub workspace_profile_id: Option<WorkspaceProfileId>,
-    pub layout_template: Option<String>,
-    pub layout_template_version: Option<u32>,
-    pub last_saved_at_unix_seconds: Option<u64>,
+pub fn save_editor_composition_layout(
+    root: &Path,
+    runtime: &EditorCompositionRuntime,
+) -> Result<ui_composition::CompositionActivation> {
+    let repository = CompositionBundleRepository::new(root);
+    let expected_generation = repository
+        .current_pointer()
+        .context("read active editor composition generation")?
+        .map(|pointer| pointer.active);
+    let compatibility = editor_compatibility()?;
+    let display_name = LayoutDisplayName::new(format!(
+        "Runenwerk editor profile {}",
+        runtime.extension().workspace_profile_raw()
+    ))
+    .context("form editor composition display name")?;
+    let promotion = runtime.composition().promote_definition(
+        runtime.composition().definition().id(),
+        display_name,
+        CompositionLayoutScope::User,
+        compatibility,
+    );
+    let snapshot = EditorCompositionExtensionSnapshot::new(runtime.extension());
+    let candidate = promotion
+        .snapshot_bundle(&snapshot)
+        .context("snapshot linked editor composition bundle")?;
+    repository
+        .activate(&candidate, expected_generation.as_ref())
+        .context("activate editor composition generation")
 }
 
-const DEFAULT_WORKSPACE_LAYOUT_DIR: &str = "editor-scenes/workspaces";
-
-pub fn default_workspace_layout_dir() -> PathBuf {
-    PathBuf::from(DEFAULT_WORKSPACE_LAYOUT_DIR)
-}
-
-pub fn workspace_layout_path_for_profile(root: &Path, profile_id: WorkspaceProfileId) -> PathBuf {
-    root.join(format!("profile-{}.workspace.ron", profile_id.raw()))
-}
-
-pub fn default_workspace_layout_path_for_profile(profile_id: WorkspaceProfileId) -> PathBuf {
-    workspace_layout_path_for_profile(&default_workspace_layout_dir(), profile_id)
-}
-
-pub fn legacy_workspace_layout_path_for_scene(scene_path: &Path) -> PathBuf {
-    let file_name = scene_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| format!("{name}.workspace.ron"))
-        .unwrap_or_else(|| "scene.workspace.ron".to_string());
-    scene_path.with_file_name(file_name)
-}
-
-pub fn write_workspace_layout(path: &Path, workspace_state: &WorkspaceState) -> Result<()> {
-    write_workspace_layout_with_profile(path, workspace_state, None)
-}
-
-pub fn write_workspace_layout_for_profile(
-    path: &Path,
-    workspace_state: &WorkspaceState,
-    profile_id: WorkspaceProfileId,
-) -> Result<()> {
-    write_workspace_layout_with_profile(path, workspace_state, Some(profile_id))
-}
-
-fn write_workspace_layout_with_profile(
-    path: &Path,
-    workspace_state: &WorkspaceState,
-    profile_id: Option<WorkspaceProfileId>,
-) -> Result<()> {
-    let workspace_state = compact_empty_tab_stack_areas(workspace_state)
-        .map_err(|error| anyhow::Error::msg(error.to_string()))
-        .context("failed to normalize workspace layout before saving")?;
-    let mut persisted = workspace_state
-        .to_persisted_v5()
-        .map_err(|error| anyhow::Error::msg(error.to_string()))
-        .context("failed to form v5 persisted workspace layout")?;
-    persisted.workspace_profile_id = profile_id.map(|id| id.raw());
-    if let Some(profile_id) = profile_id
-        && let Some(profile) = default_workspace_profile_registry().profile(profile_id)
-    {
-        persisted.layout_template = Some(profile.default_layout_template.contract_id().to_string());
-        persisted.layout_template_version =
-            Some(profile.default_layout_template.contract_version());
+pub fn load_editor_composition_layout(root: &Path) -> Result<EditorCompositionRuntime> {
+    let repository = CompositionBundleRepository::new(root);
+    let requirement = editor_compatibility_requirement()?;
+    let loaded = repository
+        .load_active(Some(&requirement))
+        .context("load active editor composition generation")?;
+    let bundle = loaded.bundle;
+    let extension = bundle
+        .extensions()
+        .iter()
+        .find(|extension| {
+            extension.link.identity.profile.as_str() == EDITOR_COMPOSITION_EXTENSION_PROFILE
+        })
+        .ok_or_else(|| anyhow!("editor composition extension is missing"))?;
+    if bundle.extensions().len() != 1 {
+        return Err(anyhow!(
+            "editor composition bundle must contain exactly one editor extension"
+        ));
     }
-    persisted.last_saved_at_unix_seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()
-        .map(|duration| duration.as_secs());
-    let ron =
-        encode_ron_pretty(&persisted).context("failed to encode persisted workspace layout")?;
-    std::fs::write(path, ron)
-        .with_context(|| format!("failed to write workspace layout: {}", path.display()))
+    let extension = EditorCompositionExtensionV1::decode_canonical(&extension.payload_ron)
+        .map_err(|error| anyhow!(error.to_string()))?;
+    let state = CompositionState::form(bundle.core().definition.clone())
+        .map_err(|error| anyhow!(error.to_string()))?;
+    EditorCompositionRuntime::install(state, extension).map_err(|error| anyhow!(error.to_string()))
 }
 
-/// Legacy/test compatibility reader that does not have access to the
-/// tool-surface registry. Production app paths must use
-/// `read_workspace_layout_with_metadata_and_registry`.
-pub fn read_workspace_layout_legacy_no_registry(path: &Path) -> Result<WorkspaceState> {
-    Ok(read_workspace_layout_with_metadata_legacy_no_registry(path)?.workspace_state)
-}
-
-/// Legacy/test compatibility reader that decodes without stable-key registry
-/// validation. Production app paths must use
-/// `read_workspace_layout_with_metadata_and_registry`.
-pub fn read_workspace_layout_with_metadata_legacy_no_registry(
-    path: &Path,
-) -> Result<WorkspaceLayoutReadResult> {
-    read_workspace_layout_with_optional_registry(path, None)
-}
-
-pub fn read_workspace_layout_with_metadata_and_registry(
-    path: &Path,
-    registry: &ToolSurfaceRegistry,
-) -> Result<WorkspaceLayoutReadResult> {
-    read_workspace_layout_with_optional_registry(path, Some(registry))
-}
-
-fn read_workspace_layout_with_optional_registry(
-    path: &Path,
-    registry: Option<&ToolSurfaceRegistry>,
-) -> Result<WorkspaceLayoutReadResult> {
+pub fn probe_legacy_layout_path(path: &Path) -> Result<CompositionSourceSchema> {
     let source = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read workspace layout: {}", path.display()))?;
-    let probe: PersistedWorkspaceVersionProbe =
-        decode_ron(&source).context("failed to decode persisted workspace layout version")?;
-    let (
-        workspace_state,
-        workspace_profile_id,
-        layout_template,
-        layout_template_version,
-        last_saved_at_unix_seconds,
-    ) = match probe.version {
-        PERSISTED_WORKSPACE_STATE_VERSION_V1
-        | PERSISTED_WORKSPACE_STATE_VERSION_V2
-        | PERSISTED_WORKSPACE_STATE_VERSION_V3
-        | PERSISTED_WORKSPACE_STATE_VERSION_V4 => (
-            Err(editor_shell::WorkspaceStateError::PersistedVersionUnsupported(probe.version)),
-            None,
-            None,
-            None,
-            None,
-        ),
-        PERSISTED_WORKSPACE_STATE_VERSION_V5 => {
-            let persisted: PersistedWorkspaceStateV5 =
-                decode_ron(&source).context("failed to decode v5 persisted workspace layout")?;
-            let workspace_profile_id = persisted
-                .workspace_profile_id
-                .and_then(|raw| WorkspaceProfileId::try_from_raw(raw).ok());
-            let layout_template = persisted.layout_template.clone();
-            let layout_template_version = persisted.layout_template_version;
-            let last_saved_at_unix_seconds = persisted.last_saved_at_unix_seconds;
-            (
-                WorkspaceState::from_persisted_v5(persisted, registry),
-                workspace_profile_id,
-                layout_template,
-                layout_template_version,
-                last_saved_at_unix_seconds,
-            )
-        }
-        version => (
-            Err(editor_shell::WorkspaceStateError::PersistedVersionUnsupported(version)),
-            None,
-            None,
-            None,
-            None,
-        ),
-    };
-    let workspace_state = workspace_state
-        .map_err(|error| anyhow::Error::msg(error.to_string()))
-        .context("failed to validate persisted workspace layout")?;
-    let workspace_state = compact_empty_tab_stack_areas(&workspace_state)
-        .map_err(|error| anyhow::Error::msg(error.to_string()))
-        .context("failed to normalize persisted workspace layout")?;
-    Ok(WorkspaceLayoutReadResult {
-        workspace_state,
-        workspace_profile_id,
-        layout_template,
-        layout_template_version,
-        last_saved_at_unix_seconds,
+        .with_context(|| format!("read composition source probe at {}", path.display()))?;
+    probe_composition_source(&source).map_err(|error| anyhow!(error.to_string()))
+}
+
+fn editor_compatibility() -> Result<CompositionCompatibility> {
+    let profile = AppProfileId::new(EDITOR_COMPOSITION_APP_PROFILE)
+        .map_err(|error| anyhow!(error.to_string()))?;
+    let version = AppSchemaVersion::new(EDITOR_COMPOSITION_APP_SCHEMA_VERSION)
+        .map_err(|error| anyhow!(error.to_string()))?;
+    CompositionCompatibility::new(profile, version, version)
+        .map_err(|error| anyhow!(error.to_string()))
+}
+
+fn editor_compatibility_requirement() -> Result<CompositionCompatibilityRequirement> {
+    Ok(CompositionCompatibilityRequirement {
+        app_profile: AppProfileId::new(EDITOR_COMPOSITION_APP_PROFILE)
+            .map_err(|error| anyhow!(error.to_string()))?,
+        app_schema_version: AppSchemaVersion::new(EDITOR_COMPOSITION_APP_SCHEMA_VERSION)
+            .map_err(|error| anyhow!(error.to_string()))?,
     })
+}
+
+#[cfg(test)]
+pub fn write_workspace_layout(path: &Path, workspace: &editor_shell::WorkspaceState) -> Result<()> {
+    let runtime =
+        editor_shell::import_legacy_workspace(editor_shell::SCENE_WORKSPACE_PROFILE_ID, workspace)
+            .map_err(|error| anyhow!(error.to_string()))?;
+    save_editor_composition_layout(path, &runtime).map(|_| ())
+}
+
+#[cfg(test)]
+pub fn read_workspace_layout_legacy_no_registry(
+    _path: &Path,
+) -> Result<editor_shell::WorkspaceState> {
+    Err(anyhow!(
+        "reverse composition-to-workspace loading is intentionally unsupported"
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        editor_app::RunenwerkEditorApp,
-        shell::tool_suites::{
-            MATERIAL_GRAPH_CANVAS_SURFACE_KEY, MATERIAL_INSPECTOR_SURFACE_KEY,
-            MATERIAL_PREVIEW_SURFACE_KEY, TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
-        },
-        shell::{
-            RunenwerkEditorShellState, SurfaceProviderBuildContext, SurfaceSessionState,
-            mounted_surface_requests_with_registry,
-        },
-    };
     use editor_shell::{
-        MATERIAL_WORKSPACE_PROFILE_ID, PanelKind, PersistedPanelHostKindV1,
-        PersistedPanelHostNodeV1, PersistedPanelInstanceStateV2, PersistedPanelKindV2,
-        PersistedTabStackStateV1, PersistedToolSurfaceKindV2, PersistedToolSurfaceMountV1,
-        PersistedToolSurfaceStateV2, PersistedWorkspaceStateV2, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
-        ToolSurfaceStableKey, WorkspaceDefaultToolSurface, WorkspaceIdentityAllocator,
-        WorkspaceMutation, reduce_workspace,
+        SCENE_WORKSPACE_PROFILE_ID, WorkspaceIdentityAllocator, default_workspace_profile_registry,
+        import_legacy_workspace,
     };
-    use editor_shell::{SurfaceDocumentContext, SurfaceProviderAvailability};
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use ui_theme::ThemeTokens;
 
-    static TEMP_WORKSPACE_LAYOUT_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    fn temp_workspace_layout_path() -> PathBuf {
-        let mut path = std::env::temp_dir();
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
-        let sequence = TEMP_WORKSPACE_LAYOUT_COUNTER.fetch_add(1, Ordering::Relaxed);
-        path.push(format!(
-            "runenwerk_workspace_layout_{}_{}_{}.ron",
-            std::process::id(),
-            nanos,
-            sequence
-        ));
-        path
-    }
-
-    fn material_lab_workspace() -> WorkspaceState {
-        WorkspaceState::from_persisted_v2(PersistedWorkspaceStateV2 {
-            version: PERSISTED_WORKSPACE_STATE_VERSION_V2,
-            workspace_id: 1,
-            root_host_id: 1,
-            hosts: vec![PersistedPanelHostNodeV1 {
-                id: 1,
-                kind: PersistedPanelHostKindV1::TabStackHost { tab_stack_id: 1 },
-            }],
-            tab_stacks: vec![PersistedTabStackStateV1 {
-                id: 1,
-                ordered_panels: vec![1, 2, 3],
-                active_panel: Some(1),
-                locked_tool_surface_kind: Some(PersistedToolSurfaceKindV2::MaterialGraphCanvas),
-            }],
-            panels: vec![
-                PersistedPanelInstanceStateV2 {
-                    id: 1,
-                    panel_kind: PersistedPanelKindV2::MaterialGraphCanvas,
-                    active_tool_surface: Some(1),
-                },
-                PersistedPanelInstanceStateV2 {
-                    id: 2,
-                    panel_kind: PersistedPanelKindV2::MaterialInspector,
-                    active_tool_surface: Some(2),
-                },
-                PersistedPanelInstanceStateV2 {
-                    id: 3,
-                    panel_kind: PersistedPanelKindV2::MaterialPreview,
-                    active_tool_surface: Some(3),
-                },
-            ],
-            tool_surfaces: vec![
-                PersistedToolSurfaceStateV2 {
-                    id: 1,
-                    tool_surface_kind: PersistedToolSurfaceKindV2::MaterialGraphCanvas,
-                    mount: PersistedToolSurfaceMountV1::Mounted { panel_id: 1 },
-                },
-                PersistedToolSurfaceStateV2 {
-                    id: 2,
-                    tool_surface_kind: PersistedToolSurfaceKindV2::MaterialInspector,
-                    mount: PersistedToolSurfaceMountV1::Mounted { panel_id: 2 },
-                },
-                PersistedToolSurfaceStateV2 {
-                    id: 3,
-                    tool_surface_kind: PersistedToolSurfaceKindV2::MaterialPreview,
-                    mount: PersistedToolSurfaceMountV1::Mounted { panel_id: 3 },
-                },
-            ],
-        })
-        .expect("material lab persisted fixture should load")
-    }
-
-    fn placeholder_workspace() -> WorkspaceState {
-        WorkspaceState::from_persisted_v2(PersistedWorkspaceStateV2 {
-            version: PERSISTED_WORKSPACE_STATE_VERSION_V2,
-            workspace_id: 1,
-            root_host_id: 1,
-            hosts: vec![PersistedPanelHostNodeV1 {
-                id: 1,
-                kind: PersistedPanelHostKindV1::TabStackHost { tab_stack_id: 1 },
-            }],
-            tab_stacks: vec![PersistedTabStackStateV1 {
-                id: 1,
-                ordered_panels: vec![1],
-                active_panel: Some(1),
-                locked_tool_surface_kind: None,
-            }],
-            panels: vec![PersistedPanelInstanceStateV2 {
-                id: 1,
-                panel_kind: PersistedPanelKindV2::Placeholder,
-                active_tool_surface: Some(1),
-            }],
-            tool_surfaces: vec![PersistedToolSurfaceStateV2 {
-                id: 1,
-                tool_surface_kind: PersistedToolSurfaceKindV2::Placeholder,
-                mount: PersistedToolSurfaceMountV1::Mounted { panel_id: 1 },
-            }],
-        })
-        .expect("unmapped placeholder persisted fixture should load")
-    }
-
-    fn stable_key_native_material_lab_default_surfaces() -> Vec<WorkspaceDefaultToolSurface> {
-        vec![
-            WorkspaceDefaultToolSurface::new_with_panel_kind(
-                ToolSurfaceStableKey::new(MATERIAL_GRAPH_CANVAS_SURFACE_KEY).unwrap(),
-                PanelKind::MaterialGraphCanvas,
-            ),
-            WorkspaceDefaultToolSurface::new_with_panel_kind(
-                ToolSurfaceStableKey::new(MATERIAL_INSPECTOR_SURFACE_KEY).unwrap(),
-                PanelKind::MaterialInspector,
-            ),
-            WorkspaceDefaultToolSurface::new_with_panel_kind(
-                ToolSurfaceStableKey::new(MATERIAL_PREVIEW_SURFACE_KEY).unwrap(),
-                PanelKind::MaterialPreview,
-            ),
-        ]
-    }
-
-    fn stable_key_native_material_lab_workspace() -> WorkspaceState {
+    #[test]
+    fn composition_linked_editor_bundle_round_trips_atomically() {
+        let profiles = default_workspace_profile_registry();
+        let profile = profiles.profile(SCENE_WORKSPACE_PROFILE_ID).unwrap();
         let mut allocator = WorkspaceIdentityAllocator::new();
         let workspace_id = allocator.allocate_workspace_id();
-        WorkspaceState::bootstrap_tool_workspace_layout_with_stable_surfaces(
-            workspace_id,
-            &mut allocator,
-            &stable_key_native_material_lab_default_surfaces(),
-        )
-        .expect("stable-key-native Material Lab workspace should build")
-    }
+        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
+        let runtime = import_legacy_workspace(profile.id, &workspace).unwrap();
+        let directory = tempfile::tempdir().unwrap();
 
-    fn runtime_debug_inspector_workspace(app: &RunenwerkEditorApp) -> WorkspaceState {
-        let profile_registry = default_workspace_profile_registry();
-        let profile = profile_registry
-            .profile(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
-            .expect("runtime debug profile should exist");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
+        save_editor_composition_layout(directory.path(), &runtime).unwrap();
+        let loaded = load_editor_composition_layout(directory.path()).unwrap();
 
-        profile
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut allocator,
-                app.workbench_host().tool_surface_registry(),
-            )
-            .expect("runtime debug profile should build with hosted registry")
-    }
-
-    fn runtime_debug_locked_inspector_workspace(app: &RunenwerkEditorApp) -> WorkspaceState {
-        let workspace = runtime_debug_inspector_workspace(app);
-        let (inspector_stack, _) = tab_stack_and_panel_by_surface_key(
-            &workspace,
-            TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
-        );
-        let inspector_key = ToolSurfaceStableKey::new(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
-            .expect("inspector stable key should be valid");
-
-        reduce_workspace(
-            &workspace,
-            WorkspaceMutation::LockTabStackAreaStableKey {
-                tab_stack_id: inspector_stack,
-                locked_stable_surface_key: Some(inspector_key),
-            },
-        )
-        .expect("stable-key-only inspector lock should apply")
-    }
-
-    fn tab_stack_and_panel_by_surface_key(
-        workspace: &WorkspaceState,
-        stable_surface_key: &str,
-    ) -> (editor_shell::TabStackId, editor_shell::PanelInstanceId) {
-        let stable_surface_key = ToolSurfaceStableKey::new(stable_surface_key)
-            .expect("test stable surface key should be valid");
-        let surface_id = workspace
-            .tool_surfaces()
-            .find(|surface| surface.stable_surface_key() == &stable_surface_key)
-            .expect("surface should exist by stable key")
-            .id;
-        let panel_id = workspace
-            .panels()
-            .find(|panel| panel.active_tool_surface == Some(surface_id))
-            .expect("stable-key surface should be active in a panel")
-            .id;
-        let tab_stack_id = workspace
-            .tab_stacks()
-            .find(|stack| stack.ordered_panels.contains(&panel_id))
-            .expect("stable-key surface panel should be mounted in a tab stack")
-            .id;
-
-        (tab_stack_id, panel_id)
-    }
-
-    fn material_surface_keys(workspace: &WorkspaceState) -> Vec<String> {
-        workspace
-            .tool_surfaces()
-            .filter(|surface| {
-                surface
-                    .stable_surface_key()
-                    .as_str()
-                    .starts_with("runenwerk.material_lab.")
-            })
-            .map(|surface| surface.stable_surface_key().as_str().to_string())
-            .collect()
-    }
-
-    fn tab_stack_shape(workspace: &WorkspaceState) -> Vec<(usize, bool)> {
-        workspace
-            .tab_stacks()
-            .map(|stack| (stack.ordered_panels.len(), stack.active_panel.is_some()))
-            .collect()
-    }
-
-    fn error_chain_contains(error: &anyhow::Error, needle: &str) -> bool {
-        error
-            .chain()
-            .any(|cause| cause.to_string().contains(needle))
-    }
-
-    fn context<'a>(
-        app: &'a RunenwerkEditorApp,
-        shell_state: &'a RunenwerkEditorShellState,
-        theme: &'a ThemeTokens,
-    ) -> SurfaceProviderBuildContext<'a> {
-        SurfaceProviderBuildContext {
-            app,
-            shell_state,
-            theme,
-            frame_metrics: None,
-            viewport_observations: None,
-            tool_surface_bindings: None,
-            viewport_instances: None,
-        }
-    }
-
-    fn write_persisted_layout<T: serde::Serialize>(path: &Path, persisted: &T) {
-        let ron = encode_ron_pretty(persisted).expect("persisted layout should encode");
-        std::fs::write(path, ron).expect("persisted layout should write");
+        assert_eq!(loaded, runtime);
     }
 
     #[test]
-    fn app_workspace_layout_save_writes_v5() {
-        let workspace = material_lab_workspace();
-
-        let path = temp_workspace_layout_path();
-        write_workspace_layout(&path, &workspace)
-            .expect("workspace layout should write successfully");
-        let source = std::fs::read_to_string(&path).expect("workspace layout should exist");
-        let probe: PersistedWorkspaceVersionProbe =
-            decode_ron(&source).expect("workspace layout version should decode");
-
-        assert_eq!(probe.version, PERSISTED_WORKSPACE_STATE_VERSION_V5);
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn app_workspace_layout_v5_save_uses_stable_surface_key_primary_identity() {
-        let workspace = material_lab_workspace();
-
-        let path = temp_workspace_layout_path();
-        write_workspace_layout(&path, &workspace)
-            .expect("workspace layout should write successfully");
-        let source = std::fs::read_to_string(&path).expect("workspace layout should exist");
-
-        assert!(source.contains("stable_surface_key"));
-        assert!(!source.contains("legacy_tool_surface_kind"));
-        assert!(
-            !source
-                .lines()
-                .map(str::trim_start)
-                .any(|line| line.starts_with("tool_surface_kind:")),
-            "V5 app save must not serialize tool_surface_kind as primary identity"
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn app_workspace_layout_v5_round_trip_preserves_layout() {
-        let workspace = material_lab_workspace();
-
-        let path = temp_workspace_layout_path();
-        write_workspace_layout(&path, &workspace)
-            .expect("workspace layout should write successfully");
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("workspace layout should decode");
-
-        assert_eq!(workspace, loaded);
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn app_v5_layout_load_uses_registry_for_stable_key_only_surface() {
-        let app = RunenwerkEditorApp::new();
-        let workspace = runtime_debug_inspector_workspace(&app);
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, &workspace).expect("runtime debug workspace should write");
-        let loaded = read_workspace_layout_with_metadata_and_registry(
-            &path,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect("registry-aware app reader should load stable-key-only inspector layout");
-
-        let inspector_key = ToolSurfaceStableKey::new(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
-            .expect("inspector stable key should be valid");
-        let inspector_surface = loaded
-            .workspace_state
-            .tool_surfaces()
-            .find(|surface| surface.stable_surface_key() == &inspector_key)
-            .expect("loaded workspace should preserve inspector stable key");
-
-        assert_eq!(
-            inspector_surface.stable_surface_key().as_str(),
-            TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn runtime_debug_inspector_v5_layout_round_trips_through_real_app_read_path() {
-        let app = RunenwerkEditorApp::new();
-        let workspace = runtime_debug_inspector_workspace(&app);
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout_for_profile(&path, &workspace, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
-            .expect("runtime debug workspace should write with profile metadata");
-        let loaded = read_workspace_layout_with_metadata_and_registry(
-            &path,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect("registry-aware app reader should load runtime debug layout");
-
-        assert_eq!(loaded.workspace_state, workspace);
-        assert_eq!(
-            loaded.workspace_profile_id,
-            Some(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn v5_stable_key_only_tab_stack_lock_loads_through_app_workspace_layout_reader() {
-        let app = RunenwerkEditorApp::new();
-        let workspace = runtime_debug_locked_inspector_workspace(&app);
-        let (inspector_stack, _) = tab_stack_and_panel_by_surface_key(
-            &workspace,
-            TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
-        );
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, &workspace)
-            .expect("locked runtime debug workspace should write");
-        let loaded = read_workspace_layout_with_metadata_and_registry(
-            &path,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect("registry-aware app reader should load stable-key-only tab-stack lock");
-        let loaded_stack = loaded
-            .workspace_state
-            .tab_stack(inspector_stack)
-            .expect("loaded inspector tab stack should exist");
-
-        assert_eq!(
-            loaded_stack
-                .locked_stable_surface_key
-                .as_ref()
-                .map(|key| key.as_str()),
-            Some(TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn v5_unknown_stable_key_still_fails_closed_with_registry() {
-        let app = RunenwerkEditorApp::new();
-        let workspace = runtime_debug_locked_inspector_workspace(&app);
-        let mut persisted = workspace
-            .to_persisted_v5()
-            .expect("runtime debug workspace should form v5");
-        let (inspector_stack, _) = tab_stack_and_panel_by_surface_key(
-            &workspace,
-            TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
-        );
-        let stack_id = inspector_stack.raw();
-        let persisted_stack = persisted
-            .tab_stacks
-            .iter_mut()
-            .find(|stack| stack.id == stack_id)
-            .expect("persisted inspector stack should exist");
-        persisted_stack.locked_stable_surface_key =
-            Some("runenwerk.unknown.stable_only_surface".to_string());
-
-        let path = temp_workspace_layout_path();
-        write_persisted_layout(&path, &persisted);
-        let error = read_workspace_layout_with_metadata_and_registry(
-            &path,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect_err("unknown V5 lock stable key should fail with registry");
-
-        assert!(
-            error
-                .to_string()
-                .contains("failed to validate persisted workspace layout")
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn material_lab_v5_round_trip_preserves_graph_canvas_surface_key() {
-        let workspace = stable_key_native_material_lab_workspace();
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, &workspace)
-            .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("stable-key-native Material Lab workspace should load");
-
-        assert!(
-            material_surface_keys(&loaded)
-                .iter()
-                .any(|key| key == MATERIAL_GRAPH_CANVAS_SURFACE_KEY)
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn material_lab_v5_round_trip_preserves_inspector_surface_key() {
-        let workspace = stable_key_native_material_lab_workspace();
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, &workspace)
-            .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("stable-key-native Material Lab workspace should load");
-
-        assert!(
-            material_surface_keys(&loaded)
-                .iter()
-                .any(|key| key == MATERIAL_INSPECTOR_SURFACE_KEY)
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn material_lab_v5_round_trip_preserves_preview_surface_key() {
-        let workspace = stable_key_native_material_lab_workspace();
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, &workspace)
-            .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("stable-key-native Material Lab workspace should load");
-
-        assert!(
-            material_surface_keys(&loaded)
-                .iter()
-                .any(|key| key == MATERIAL_PREVIEW_SURFACE_KEY)
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn material_lab_v5_round_trip_writes_no_legacy_tool_surface_kind_for_material_surfaces() {
-        let workspace = stable_key_native_material_lab_workspace();
-        let persisted = workspace
-            .to_persisted_v5()
-            .expect("stable-key-native Material Lab workspace should form V5");
-
-        for stable_key in [
-            MATERIAL_GRAPH_CANVAS_SURFACE_KEY,
-            MATERIAL_INSPECTOR_SURFACE_KEY,
-            MATERIAL_PREVIEW_SURFACE_KEY,
-        ] {
-            let persisted_surface = persisted
-                .tool_surfaces
-                .iter()
-                .find(|surface| surface.stable_surface_key == stable_key)
-                .expect("Material Lab surface should be persisted by stable key");
-
-            assert_eq!(persisted_surface.legacy_tool_surface_kind, None);
-        }
-    }
-
-    #[test]
-    fn material_lab_v5_round_trip_preserves_tab_stack_layout() {
-        let workspace = stable_key_native_material_lab_workspace();
-        let expected_shape = tab_stack_shape(&workspace);
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, &workspace)
-            .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("stable-key-native Material Lab workspace should load");
-
-        assert_eq!(tab_stack_shape(&loaded), expected_shape);
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn material_lab_loaded_workspace_resolves_material_providers() {
-        let app = RunenwerkEditorApp::new();
-        let host = app.workbench_host();
-        let workspace = stable_key_native_material_lab_workspace();
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, &workspace)
-            .expect("stable-key-native Material Lab workspace should write");
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("stable-key-native Material Lab workspace should load");
-
-        let mut shell_state =
-            RunenwerkEditorShellState::new_with_tool_surface_registry(host.tool_surface_registry())
-                .expect("shell state should build with hosted registry");
-        shell_state.set_active_workspace_profile_id(MATERIAL_WORKSPACE_PROFILE_ID);
-        shell_state.replace_workspace_state(loaded);
-
-        let requests = mounted_surface_requests_with_registry(
-            &shell_state,
-            SurfaceDocumentContext::Resolved {
-                document_id: editor_core::DocumentId(6),
-                document_kind: editor_core::DocumentKind::MaterialGraph,
-            },
-            Some(host.tool_surface_registry()),
-        );
-        let theme = ThemeTokens::default();
-        let cases = [
-            (MATERIAL_GRAPH_CANVAS_SURFACE_KEY, 12),
-            (MATERIAL_INSPECTOR_SURFACE_KEY, 13),
-            (MATERIAL_PREVIEW_SURFACE_KEY, 14),
-        ];
-
-        for (stable_key, expected_provider_id) in cases {
-            let request = requests
-                .iter()
-                .find(|request| request.stable_key().as_str() == stable_key)
-                .expect("Material Lab mounted request should be present");
-
-            let frame = host
-                .provider_registry()
-                .resolve_frame_with_provider_family_map(
-                    &context(&app, &shell_state, &theme),
-                    request,
-                    &SurfaceSessionState::default(),
-                    Some(host.provider_family_provider_map()),
-                );
-
-            assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
-            assert_eq!(
-                frame.provider_id.map(|id| id.raw()),
-                Some(expected_provider_id)
-            );
-            assert_eq!(frame.stable_surface_key.as_str(), stable_key);
-        }
-
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn workspace_layout_round_trip_preserves_default_profile_shape_after_c3() {
-        let app = RunenwerkEditorApp::new();
-        let shell_state = RunenwerkEditorShellState::new_with_tool_surface_registry(
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect("default profile workspace should build with hosted registry");
-        let workspace = shell_state.workspace_state();
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, workspace).expect("workspace layout should write");
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("workspace layout should decode");
-
-        assert_eq!(&loaded, workspace);
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn workspace_layout_round_trip_still_builds_stable_key_provider_requests() {
-        let app = RunenwerkEditorApp::new();
-        let mut shell_state = RunenwerkEditorShellState::new_with_tool_surface_registry(
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect("default profile workspace should build with hosted registry");
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, shell_state.workspace_state())
-            .expect("workspace layout should write");
-        let loaded = read_workspace_layout_legacy_no_registry(&path)
-            .expect("workspace layout should decode");
-        shell_state.replace_workspace_state(loaded);
-        let requests = mounted_surface_requests_with_registry(
-            &shell_state,
-            SurfaceDocumentContext::NoActiveDocument,
-            Some(app.workbench_host().tool_surface_registry()),
-        );
-
-        assert!(!requests.is_empty());
-        assert!(requests.iter().all(|request| {
-            app.workbench_host()
-                .tool_surface_registry()
-                .get(request.stable_key())
-                .is_some()
-        }));
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn app_workspace_layout_v4_is_unsupported() {
-        let workspace = material_lab_workspace();
-        let persisted = workspace.to_persisted_v4();
-
-        let path = temp_workspace_layout_path();
-        write_persisted_layout(&path, &persisted);
-        let error = read_workspace_layout_legacy_no_registry(&path)
-            .expect_err("v4 workspace layout should be unsupported");
-
-        assert!(error_chain_contains(
-            &error,
-            "persisted workspace version 4 is unsupported"
-        ));
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn v1_to_v4_workspace_layout_loads_are_unsupported() {
-        let app = RunenwerkEditorApp::new();
-        let workspace = placeholder_workspace();
-
-        let path_v1 = temp_workspace_layout_path();
-        write_persisted_layout(&path_v1, &workspace.to_persisted_v1());
-        let error_v1 = read_workspace_layout_with_metadata_and_registry(
-            &path_v1,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect_err("v1 workspace layout should be unsupported");
-        assert!(error_chain_contains(
-            &error_v1,
-            "persisted workspace version 1 is unsupported"
-        ));
-        let _ = std::fs::remove_file(path_v1);
-
-        let path_v2 = temp_workspace_layout_path();
-        write_persisted_layout(&path_v2, &workspace.to_persisted_v2());
-        let error_v2 = read_workspace_layout_with_metadata_and_registry(
-            &path_v2,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect_err("v2 workspace layout should be unsupported");
-        assert!(error_chain_contains(
-            &error_v2,
-            "persisted workspace version 2 is unsupported"
-        ));
-        let _ = std::fs::remove_file(path_v2);
-
-        let path_v3 = temp_workspace_layout_path();
-        write_persisted_layout(&path_v3, &workspace.to_persisted_v3());
-        let error_v3 = read_workspace_layout_with_metadata_and_registry(
-            &path_v3,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect_err("v3 workspace layout should be unsupported");
-        assert!(error_chain_contains(
-            &error_v3,
-            "persisted workspace version 3 is unsupported"
-        ));
-        let _ = std::fs::remove_file(path_v3);
-
-        let path_v4 = temp_workspace_layout_path();
-        write_persisted_layout(&path_v4, &workspace.to_persisted_v4());
-        let error_v4 = read_workspace_layout_with_metadata_and_registry(
-            &path_v4,
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect_err("v4 workspace layout should be unsupported");
-        assert!(error_chain_contains(
-            &error_v4,
-            "persisted workspace version 4 is unsupported"
-        ));
-        let _ = std::fs::remove_file(path_v4);
-    }
-
-    #[test]
-    fn app_workspace_layout_v5_invalid_stable_key_fails_explicitly() {
-        let workspace = material_lab_workspace();
-        let mut persisted = workspace
-            .to_persisted_v5()
-            .expect("material lab workspace should form v5");
-        persisted.tool_surfaces[0].stable_surface_key = "Runenwerk.material_lab.graph".to_string();
-
-        let path = temp_workspace_layout_path();
-        write_persisted_layout(&path, &persisted);
-        let error = read_workspace_layout_legacy_no_registry(&path)
-            .expect_err("invalid v5 stable key should fail explicit validation");
-
-        assert!(
-            error
-                .to_string()
-                .contains("failed to validate persisted workspace layout")
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn app_workspace_layout_v5_key_legacy_mismatch_fails_explicitly() {
-        let workspace = material_lab_workspace();
-        let mut persisted = workspace
-            .to_persisted_v5()
-            .expect("material lab workspace should form v5");
-        persisted.tool_surfaces[0].legacy_tool_surface_kind =
-            Some(PersistedToolSurfaceKindV2::MaterialPreview);
-
-        let path = temp_workspace_layout_path();
-        write_persisted_layout(&path, &persisted);
-        let error = read_workspace_layout_legacy_no_registry(&path)
-            .expect_err("v5 stable key and legacy metadata mismatch should fail");
-
-        assert!(
-            error
-                .to_string()
-                .contains("failed to validate persisted workspace layout")
-        );
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn app_workspace_layout_v5_persists_placeholder_fallback_surface_explicitly() {
-        let workspace = placeholder_workspace();
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout(&path, &workspace)
-            .expect("placeholder fallback surface should persist");
-        let source = std::fs::read_to_string(&path).expect("workspace layout should exist");
-
-        assert!(source.contains("runenwerk.diagnostics.placeholder"));
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn profile_layout_path_is_not_derived_from_scene_path() {
-        let path = default_workspace_layout_path_for_profile(MATERIAL_WORKSPACE_PROFILE_ID);
-
-        assert_eq!(
-            path,
-            PathBuf::from("editor-scenes/workspaces/profile-5.workspace.ron")
-        );
-    }
-
-    #[test]
-    fn legacy_scene_layout_path_remains_available_for_load_migration() {
-        let path =
-            legacy_workspace_layout_path_for_scene(Path::new("editor-scenes/default.scene.ron"));
-
-        assert_eq!(
-            path,
-            PathBuf::from("editor-scenes/default.scene.ron.workspace.ron")
-        );
-    }
-
-    #[test]
-    fn profile_workspace_layout_roundtrip_preserves_profile_metadata() {
-        let workspace = material_lab_workspace();
-        let path = temp_workspace_layout_path();
-
-        write_workspace_layout_for_profile(&path, &workspace, MATERIAL_WORKSPACE_PROFILE_ID)
-            .expect("workspace layout should write with profile metadata");
-        let loaded = read_workspace_layout_with_metadata_legacy_no_registry(&path)
-            .expect("workspace layout should decode with profile metadata");
-
-        assert_eq!(loaded.workspace_state, workspace);
-        assert_eq!(
-            loaded.workspace_profile_id,
-            Some(MATERIAL_WORKSPACE_PROFILE_ID)
-        );
-        assert_eq!(loaded.layout_template.as_deref(), Some("tool-workspace"));
-        assert_eq!(loaded.layout_template_version, Some(1));
-        assert!(loaded.last_saved_at_unix_seconds.is_some());
-
-        let _ = std::fs::remove_file(path);
+    fn composition_legacy_probe_rejects_without_modifying_source() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("legacy.workspace.ron");
+        let source = "(version:5)\n";
+        std::fs::write(&path, source).unwrap();
+
+        assert!(probe_legacy_layout_path(&path).is_err());
+        assert_eq!(std::fs::read_to_string(path).unwrap(), source);
     }
 }

@@ -178,6 +178,11 @@ pub const WORKSPACE_SPLIT_HANDLE_WIDGET_ID_BASE: u64 = 2_350_000;
 pub const DOCK_SPLIT_PREVIEW_OVERLAY_WIDGET_ID_BASE: u64 = 2_400_000;
 pub const DOCK_SPLIT_PREVIEW_PANEL_WIDGET_ID_BASE: u64 = 2_450_000;
 pub const DOCK_SPLIT_PREVIEW_LABEL_WIDGET_ID_BASE: u64 = 2_500_000;
+pub const REGION_COMPASS_OVERLAY_WIDGET_ID_BASE: u64 = 2_550_000;
+pub const REGION_COMPASS_PANEL_WIDGET_ID_BASE: u64 = 2_600_000;
+pub const REGION_COMPASS_CELL_WIDGET_ID_BASE: u64 = 2_650_000;
+pub const REGION_COMPASS_DETACH_OVERLAY_WIDGET_ID_BASE: u64 = 2_700_000;
+pub const REGION_COMPASS_DETACH_BUTTON_WIDGET_ID_BASE: u64 = 2_750_000;
 pub const FLOATING_COLUMN_WIDGET_ID: WidgetId = WidgetId(1_800_001);
 pub const FLOATING_DROP_ZONE_WIDGET_ID: WidgetId = WidgetId(1_800_002);
 
@@ -519,6 +524,28 @@ pub fn dock_split_preview_panel_widget_id(anchor_widget_id: WidgetId) -> WidgetI
 
 pub fn dock_split_preview_label_widget_id(anchor_widget_id: WidgetId) -> WidgetId {
     WidgetId(DOCK_SPLIT_PREVIEW_LABEL_WIDGET_ID_BASE + anchor_widget_id.0)
+}
+
+pub fn region_compass_overlay_widget_id(anchor_widget_id: WidgetId) -> WidgetId {
+    WidgetId(REGION_COMPASS_OVERLAY_WIDGET_ID_BASE + anchor_widget_id.0)
+}
+
+pub fn region_compass_panel_widget_id(anchor_widget_id: WidgetId) -> WidgetId {
+    WidgetId(REGION_COMPASS_PANEL_WIDGET_ID_BASE + anchor_widget_id.0)
+}
+
+pub fn region_compass_cell_widget_id(anchor_widget_id: WidgetId, ordinal: u64) -> WidgetId {
+    WidgetId(
+        REGION_COMPASS_CELL_WIDGET_ID_BASE + anchor_widget_id.0 * STACK_WIDGET_STRIDE + ordinal,
+    )
+}
+
+pub fn region_compass_detach_overlay_widget_id(anchor_widget_id: WidgetId) -> WidgetId {
+    WidgetId(REGION_COMPASS_DETACH_OVERLAY_WIDGET_ID_BASE + anchor_widget_id.0)
+}
+
+pub fn region_compass_detach_button_widget_id(anchor_widget_id: WidgetId) -> WidgetId {
+    WidgetId(REGION_COMPASS_DETACH_BUTTON_WIDGET_ID_BASE + anchor_widget_id.0)
 }
 
 pub fn outliner_row_index(widget_id: WidgetId) -> Option<usize> {

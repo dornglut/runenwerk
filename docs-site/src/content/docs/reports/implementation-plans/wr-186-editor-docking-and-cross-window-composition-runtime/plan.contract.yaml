@@ -1,0 +1,159 @@
+version: 1
+status: accepted
+wr_id: WR-186
+milestone_id: PM-UI-COMPOSITION-007
+execution_kind: implementation_proof
+executor_kind: product_implementation
+authority_level: exact_editor_region_compass_cross_window_cutover
+permissions_required:
+- agent_design
+- product_code
+- product_implementation
+writer_strategy: verification_writer
+allowed_outputs:
+- domain/editor/editor_shell/Cargo.toml
+- domain/editor/editor_shell/src/composition
+- domain/editor/editor_shell/src/workspace
+- domain/editor/editor_shell/src/commands
+- apps/runenwerk_editor/Cargo.toml
+- apps/runenwerk_editor/src/shell
+- apps/runenwerk_editor/src/runtime
+- apps/runenwerk_editor/src/editor_app
+- apps/runenwerk_editor/tests
+- domain/ui/ui_composition/src/transaction
+- domain/ui/ui_composition/tests
+- engine/src/runtime/window.rs
+- engine/src/runtime/platform.rs
+- engine/src/runtime/winit_runner.rs
+- engine/src/plugins/render/backend/surface.rs
+- engine/src/plugins/render/backend/wgpu_ctx.rs
+- engine/src/plugins/render/features/ui
+- engine/src/plugins/render/frame
+- engine/src/plugins/render/renderer/mod.rs
+- engine/src/plugins/render/runtime/frame_prepare.rs
+- engine/src/plugins/render/runtime/frame_submit.rs
+- engine/tests/render_multi_surface.rs
+- docs-site/src/content/docs/apps/runenwerk-editor
+new_outputs:
+- domain/editor/editor_shell/src/composition/docking/mod.rs
+- domain/editor/editor_shell/src/composition/docking/intent.rs
+- domain/editor/editor_shell/src/composition/docking/policy.rs
+- domain/editor/editor_shell/src/composition/docking/transaction.rs
+- domain/editor/editor_shell/src/composition/docking/view_model.rs
+- domain/editor/editor_shell/src/composition/docking/accessibility.rs
+- domain/editor/editor_shell/src/composition/structural/identity.rs
+- domain/editor/editor_shell/src/composition/structural/transaction.rs
+- apps/runenwerk_editor/src/shell/composition_runtime/adaptive.rs
+- apps/runenwerk_editor/src/shell/composition_runtime/coordination.rs
+- apps/runenwerk_editor/src/shell/composition_runtime/policy.rs
+- apps/runenwerk_editor/src/shell/composition_runtime/target_runtime.rs
+- apps/runenwerk_editor/src/shell/composition_runtime/window_binding.rs
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/runtime_test-editor-composition-transactions.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/runtime_test-cross-window-presentation.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/visual-region-compass-accessibility.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/migration-transaction-only-cutover.yaml
+- docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/diagnostics-coordination-and-performance.yaml
+forbidden_outputs:
+- domain/ui/ui_surface
+- domain/ui/ui_adaptive_composition
+- apps/runenwerk_draw
+- domain/drawing
+- foundation
+- net
+- adapters
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-1-edge-rails.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
+- docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-3-structural-lanes.png
+forbidden_patterns: []
+template_outputs: {}
+patches: []
+validation_commands:
+- cargo fmt --all --check
+- cargo test -p ui_composition
+- cargo test -p editor_shell composition
+- cargo test -p editor_shell docking
+- cargo test -p runenwerk_editor docking
+- cargo test -p runenwerk_editor window
+- cargo test -p runenwerk_editor --test composition_architecture_guards
+- cargo test -p engine window
+- cargo test -p engine --test render_multi_surface
+- task ui:dependencies
+- task docs:validate
+- task planning:validate
+evidence_required: &evidence
+- kind: runtime_test
+  name: editor_composition_transactions
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/runtime_test-editor-composition-transactions.yaml
+  subject_paths:
+  - domain/ui/ui_composition/src/transaction/command.rs
+  - domain/ui/ui_composition/src/transaction/apply.rs
+  - domain/ui/ui_composition/tests/transaction_atomicity.rs
+  - domain/editor/editor_shell/src/composition/structural/transaction.rs
+  - domain/editor/editor_shell/src/composition/docking/transaction.rs
+  - domain/editor/editor_shell/src/composition/structural/extension.rs
+  validation_command_ids: [cargo:test]
+- kind: runtime_test
+  name: cross_window_presentation
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/runtime_test-cross-window-presentation.yaml
+  subject_paths:
+  - apps/runenwerk_editor/src/shell/composition_runtime/coordination.rs
+  - apps/runenwerk_editor/src/shell/composition_runtime/window_binding.rs
+  - apps/runenwerk_editor/src/runtime/plugin.rs
+  - apps/runenwerk_editor/src/runtime/systems/frame_submit.rs
+  - engine/src/runtime/window.rs
+  - engine/src/runtime/winit_runner.rs
+  - engine/src/plugins/render/backend/wgpu_ctx.rs
+  - engine/src/plugins/render/runtime/frame_prepare.rs
+  - engine/src/plugins/render/runtime/frame_submit.rs
+  - engine/tests/render_multi_surface.rs
+  validation_command_ids: [cargo:test]
+- kind: visual
+  name: region_compass_accessibility
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/visual-region-compass-accessibility.yaml
+  subject_paths:
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/selection.md
+  - docs-site/src/content/docs/reports/design/ui-composition-visual-direction/option-2-region-compass.png
+  - domain/editor/editor_shell/src/composition/docking/view_model.rs
+  - domain/editor/editor_shell/src/composition/docking/accessibility.rs
+  - domain/editor/editor_shell/src/composition/build_editor_shell.rs
+  - apps/runenwerk_editor/src/shell/composition_runtime/adaptive.rs
+- kind: migration
+  name: transaction_only_cutover
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/migration-transaction-only-cutover.yaml
+  subject_paths:
+  - apps/runenwerk_editor/src/shell/state.rs
+  - apps/runenwerk_editor/src/shell/dispatch_shell_command.rs
+  - apps/runenwerk_editor/tests/composition_architecture_guards.rs
+  - domain/editor/editor_shell/src/composition/structural/projection.rs
+- kind: diagnostics
+  name: coordination_and_performance
+  paths:
+  - docs-site/src/content/docs/reports/execution-evidence/pt-ui-composition-cutover/pm-ui-composition-007/diagnostics-coordination-and-performance.yaml
+  subject_paths:
+  - domain/editor/editor_shell/src/composition/structural/diagnostic.rs
+  - apps/runenwerk_editor/src/shell/composition_runtime/coordination.rs
+  - engine/src/runtime/window.rs
+  - engine/src/plugins/render/backend/surface.rs
+  - apps/runenwerk_editor/tests/composition_architecture_guards.rs
+closeout_contract:
+  path: docs-site/src/content/docs/reports/closeouts/pm-ui-composition-007-editor-docking-and-cross-window-runtime/closeout.md
+  completion_quality: runtime_proven
+  evidence_required: *evidence
+rollback_policy: discard prepared editor state and compensate any created native window or surface; never restore writable legacy workspace mutation or commit partial core extension binding window or render state
+stop_conditions:
+- stop if adaptive code gains CompositionCommand materialization or mutable composition authority
+- stop if editor or ui domain code imports native window render surface or WGPU handles
+- stop if engine code imports editor composition panel provider workspace or app semantics
+- stop if core and editor extension cannot prepare commit reject undo and redo atomically
+- stop if any structural shell command bypasses ui_composition transaction execution
+- stop if legacy workspace becomes writable or remains an active mutation oracle
+- stop if a secondary window is proven only by registry metadata instead of a distinct presented frame
+- stop if native creation close veto or surface failure can leave partial structural state
+- stop if input focus capture or events can fall back to the wrong target
+- stop if Region Compass diverges from the selected five-zone plus explicit detach contract
+- stop if keyboard touch controller focus contrast text scale reduced motion labels or cancel acceptance is incomplete
+- stop if pointer updates clone the full composition or region graph or per-surface rendering clones full canonical state

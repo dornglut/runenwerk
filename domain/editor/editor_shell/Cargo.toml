@@ -27,6 +27,9 @@ ui_math.workspace = true
 ui_tree.workspace = true
 ui_runtime.workspace = true
 ui_widgets.workspace = true
+ui_composition.workspace = true
+ui_adaptive_composition.workspace = true
+diagnostics = { path = "../../../foundation/diagnostics" }
 id = { path = "../../../foundation/id" }
 id_macros = { path = "../../../foundation/id_macros" }
 foundation_ratification = { package = "ratification", path = "../../../foundation/ratification" }

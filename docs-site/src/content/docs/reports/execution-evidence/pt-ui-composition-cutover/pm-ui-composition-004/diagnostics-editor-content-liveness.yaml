@@ -1,0 +1,174 @@
+version: 1
+track_id: PT-UI-COMPOSITION-CUTOVER
+milestone_id: PM-UI-COMPOSITION-004
+action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+evidence_kind: diagnostics
+name: editor_content_liveness
+status: passed
+produced_at: '2026-06-20T05:33:10Z'
+paths:
+- domain/editor/editor_shell/src/composition/structural/diagnostic.rs
+- domain/editor/editor_shell/src/surface_provider.rs
+- apps/runenwerk_editor/src/shell/providers/common.rs
+- apps/runenwerk_editor/src/shell/providers/mod.rs
+- apps/runenwerk_editor/src/shell/providers/tests.rs
+- apps/runenwerk_editor/src/shell/surface_session.rs
+subject_paths:
+- domain/editor/editor_shell/src/composition/structural/diagnostic.rs
+- domain/editor/editor_shell/src/surface_provider.rs
+- apps/runenwerk_editor/src/shell/providers/common.rs
+- apps/runenwerk_editor/src/shell/providers/mod.rs
+- apps/runenwerk_editor/src/shell/providers/tests.rs
+- apps/runenwerk_editor/src/shell/surface_session.rs
+subject_digests:
+  apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+  apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+  apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+  apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+  domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+  domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c
+validation_commands:
+- cargo:fmt (cargo fmt --all --check) -> exit 0
+- cargo:test (cargo test -p editor_shell composition) -> exit 0
+- cargo:test (cargo test -p editor_shell workspace) -> exit 0
+- cargo:test (cargo test -p runenwerk_editor composition) -> exit 0
+- cargo:test (cargo test -p runenwerk_editor --test startup_render_smoke) -> exit 0
+- task:ui:dependencies (task ui:dependencies) -> exit 0
+- task:docs:validate (task docs:validate) -> exit 0
+- task:planning:validate (task planning:validate) -> exit 0
+validation_provenance:
+- command_id: cargo:fmt
+  argv:
+  - cargo
+  - fmt
+  - --all
+  - --check
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: e9250ac52d054444af9959613aeff7b88ed63fe670cbc3e6fc9ea6f93ad67582
+  subject_digests:
+    apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+    apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+    apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+    apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+    domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+    domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - editor_shell
+  - composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: 3f1f5888349e37ea41ccc482fc39450f16b368ba21dc0b7cd41acc71f4a83639
+  subject_digests:
+    apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+    apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+    apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+    apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+    domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+    domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - editor_shell
+  - workspace
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: f47363ec4ae13f84332dfd893cc461df547a1a9dbc31bf8ff3dbe31339edd76a
+  subject_digests:
+    apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+    apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+    apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+    apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+    domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+    domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_editor
+  - composition
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: 7731d5a89e95aa93be11d1a83c3f2224ef226848fa1364ee26822d943e96bd40
+  subject_digests:
+    apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+    apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+    apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+    apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+    domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+    domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c
+- command_id: cargo:test
+  argv:
+  - cargo
+  - test
+  - -p
+  - runenwerk_editor
+  - --test
+  - startup_render_smoke
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: a29cc8096975ced069c7d1b8846109fc247184640b7856f3d1a056cc7b99ec78
+  subject_digests:
+    apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+    apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+    apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+    apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+    domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+    domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c
+- command_id: task:ui:dependencies
+  argv:
+  - task
+  - ui:dependencies
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: 09e8a3609b7cffa40aaeb10c8fcee1cc459c4c263cf213b4a6fa14165d8c226c
+  subject_digests:
+    apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+    apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+    apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+    apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+    domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+    domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c
+- command_id: task:docs:validate
+  argv:
+  - task
+  - docs:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: f6622aa0a12f9cf2634663f734444c08ee94e1f002f0b94e98f728ef1a078ffe
+  subject_digests:
+    apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+    apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+    apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+    apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+    domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+    domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c
+- command_id: task:planning:validate
+  argv:
+  - task
+  - planning:validate
+  returncode: 0
+  run_ledger_path: docs-site/src/content/docs/reports/track-execution-runs/pt-ui-composition-cutover/pt-ui-composition-cutover-20260620-053012z.yaml
+  run_action_id: PT-UI-COMPOSITION-CUTOVER:PM-UI-COMPOSITION-004:WR-183
+  validation_result_digest: ed975a9eee2c9205e2b9db7722ff073c99abfeb8075633600fdd246a56bdfc41
+  subject_digests:
+    apps/runenwerk_editor/src/shell/providers/common.rs: 9a011c75e6cd7a24d054614c241cdf3e17a750a1c79873eece37737f7b794407
+    apps/runenwerk_editor/src/shell/providers/mod.rs: d60d48ab60a45ef8286493df2e1dd2fd60d6935c77fd41429b4ce6ec4bcd93d0
+    apps/runenwerk_editor/src/shell/providers/tests.rs: f0a8e0cb4dd0fb592f66391df51f335843d1cfd5856457c75ba3bacc8f56d20b
+    apps/runenwerk_editor/src/shell/surface_session.rs: a3b8aff2fcb921a8c4de28c782b2e20bd5c38cb854a32af7980f19607845c5a2
+    domain/editor/editor_shell/src/composition/structural/diagnostic.rs: 25b8b432ad8f19a6532912b3d94aaa7083da8250318086ce8ea9448d6d00eaa1
+    domain/editor/editor_shell/src/surface_provider.rs: 1211b5f0945f74faebd7004c3d8016575cfdd864b4508e6e43d4cd157f73066c

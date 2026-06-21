@@ -2,6 +2,7 @@ use crate::app::App;
 use crate::app::domain::mode::AppMode;
 use crate::plugins::InputState;
 use crate::prelude::Time;
+use crate::runtime::platform::PlatformWindowEventQueueResource;
 use crate::*;
 
 impl App {
@@ -42,6 +43,13 @@ impl App {
             if let Some(registry) = registry {
                 self.world.insert_resource(registry);
             }
+        }
+        if !self
+            .world
+            .has_resource::<PlatformWindowEventQueueResource>()
+        {
+            self.world
+                .insert_resource(PlatformWindowEventQueueResource::default());
         }
         if !self
             .world

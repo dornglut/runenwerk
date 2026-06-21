@@ -4,11 +4,10 @@
 use std::collections::BTreeMap;
 
 use editor_shell::{
-    EditorToolSuite, PERSISTED_WORKSPACE_STATE_VERSION_V5, PanelInstanceId, PanelKind,
-    PersistedToolSurfaceMountV1, PersistedWorkspaceStateV5, SurfaceDocumentContext,
+    EditorToolSuite, PanelInstanceId, PanelKind, SurfaceDocumentContext,
     SurfaceProviderAvailability, SurfaceProviderId, SurfaceProviderSupportMode, TabStackId,
     ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfaceInstanceId, ToolSurfaceKind,
-    ToolSurfaceRoute, WorkspaceProfileId, WorkspaceState,
+    ToolSurfaceRoute, WorkspaceProfileId,
 };
 
 use crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY;
@@ -178,7 +177,7 @@ pub(super) struct ToolSuiteRegistryInspectorPersistedSurfacePreviewRow {
     pub tool_surface_instance_id: Option<ToolSurfaceInstanceId>,
     pub stable_surface_key: String,
     pub legacy_tool_surface_kind: Option<String>,
-    pub v5_primary_identity: String,
+    pub composition_identity: String,
     pub legacy_metadata_status: ToolSuiteRegistryInspectorLegacyMetadataStatus,
     pub validation_status: ToolSuiteRegistryInspectorPersistenceValidationStatus,
     pub diagnostics: Vec<ToolSuiteRegistryInspectorDiagnosticRow>,
@@ -193,7 +192,6 @@ pub(super) enum ToolSuiteRegistryInspectorPersistencePreviewStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ToolSuiteRegistryInspectorLegacyMetadataStatus {
     Absent,
-    MetadataOnly,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -307,15 +305,12 @@ pub(super) fn build_tool_suite_registry_inspector_view_model(
         provider_registry,
     );
     let (persistence_preview_summary, persistence_preview_rows) =
-        build_v5_persistence_preview_for_workspace(
-            shell_state.active_workspace_profile_id(),
-            shell_state.workspace_state(),
-        );
+        build_composition_persistence_preview(shell_state);
     let diagnostic_rows = diagnostic_rows(
         tool_suite_registry,
         provider_family_provider_map,
         &provider_labels,
-        shell_state.workspace_state(),
+        shell_state.composition_runtime(),
         &surface_rows,
         &mounted_surface_rows,
         &persistence_preview_rows,
@@ -428,7 +423,7 @@ fn diagnostic_rows(
     tool_suite_registry: &ToolSuiteRegistry,
     provider_family_provider_map: &ProviderFamilyProviderMap,
     provider_labels: &BTreeMap<SurfaceProviderId, String>,
-    workspace_state: &WorkspaceState,
+    composition: &editor_shell::EditorCompositionRuntime,
     surface_rows: &[ToolSuiteRegistryInspectorSurfaceRow],
     mounted_surface_rows: &[ToolSuiteRegistryInspectorMountedSurfaceRow],
     persistence_preview_rows: &[ToolSuiteRegistryInspectorPersistedSurfacePreviewRow],
@@ -511,68 +506,30 @@ fn diagnostic_rows(
         }
     }
 
-    let compatibility = workspace_state
-        .validate_tool_surface_registry_compatibility(tool_suite_registry.surfaces());
-    for unknown in compatibility.unknown_stable_keys {
-        diagnostics.push(
-            diagnostic_row(
-                ToolSuiteRegistryInspectorDiagnosticSeverity::Error,
-                ToolSuiteRegistryInspectorDiagnosticScope::Surface,
-                "inspector.surface.unknown_stable_key",
-                format!(
-                    "mounted surface `{}` references unknown stable key `{}`",
-                    unknown.tool_surface_id,
-                    unknown.stable_surface_key.as_str()
-                ),
-            )
-            .with_surface_key(unknown.stable_surface_key.as_str().to_string())
-            .with_mounted_surface_id(unknown.tool_surface_id),
-        );
-    }
-    for incompatible in compatibility.incompatible_surfaces {
-        diagnostics.push(
-            diagnostic_row(
-                ToolSuiteRegistryInspectorDiagnosticSeverity::Error,
-                ToolSuiteRegistryInspectorDiagnosticScope::Surface,
-                "inspector.surface.legacy_metadata_mismatch",
-                format!(
-                    "mounted surface `{}` has legacy metadata that does not match stable key `{}`",
-                    incompatible.tool_surface_id,
-                    incompatible.actual_stable_surface_key.as_str()
-                ),
-            )
-            .with_surface_key(incompatible.actual_stable_surface_key.as_str().to_string())
-            .with_mounted_surface_id(incompatible.tool_surface_id),
-        );
-    }
-    for unregistered in compatibility.unregistered_legacy_surfaces {
-        diagnostics.push(
-            diagnostic_row(
-                ToolSuiteRegistryInspectorDiagnosticSeverity::Warning,
-                ToolSuiteRegistryInspectorDiagnosticScope::Surface,
-                "inspector.surface.unregistered_legacy_metadata",
-                format!(
-                    "mounted surface `{}` has legacy metadata not registered in the current surface registry",
-                    unregistered.tool_surface_id
-                ),
-            )
-            .with_surface_key(unregistered.stable_surface_key.as_str().to_string())
-            .with_mounted_surface_id(unregistered.tool_surface_id),
-        );
-    }
-    for unmapped in compatibility.unmapped_legacy_surfaces {
-        diagnostics.push(
-            diagnostic_row(
-                ToolSuiteRegistryInspectorDiagnosticSeverity::Warning,
-                ToolSuiteRegistryInspectorDiagnosticScope::Surface,
-                "inspector.surface.unmapped_legacy_metadata",
-                format!(
-                    "mounted surface `{}` has legacy metadata that cannot map to a stable key",
-                    unmapped.tool_surface_id
-                ),
-            )
-            .with_mounted_surface_id(unmapped.tool_surface_id),
-        );
+    for mounted_unit in composition.extension().mounted_units() {
+        let Ok(stable_key) = ToolSurfaceStableKey::new(mounted_unit.stable_content_key.clone())
+        else {
+            continue;
+        };
+        if tool_suite_registry.surfaces().get(&stable_key).is_none()
+            && let Ok(tool_surface_id) =
+                ToolSurfaceInstanceId::try_from_raw(mounted_unit.compatibility_surface_raw)
+        {
+            diagnostics.push(
+                diagnostic_row(
+                    ToolSuiteRegistryInspectorDiagnosticSeverity::Error,
+                    ToolSuiteRegistryInspectorDiagnosticScope::Surface,
+                    "inspector.surface.unknown_stable_key",
+                    format!(
+                        "mounted unit `{}` references unknown stable key `{}`",
+                        mounted_unit.mounted_unit_id.raw(),
+                        stable_key.as_str()
+                    ),
+                )
+                .with_surface_key(stable_key.as_str().to_string())
+                .with_mounted_surface_id(tool_surface_id),
+            );
+        }
     }
 
     diagnostics.extend(mounted_surface_diagnostics(mounted_surface_rows));
@@ -769,10 +726,13 @@ fn mounted_surface_rows(
     )
     .into_iter()
     .filter_map(|request| {
-        let panel_kind = shell_state
-            .workspace_state()
-            .panel(request.panel_instance_id)
-            .map(|panel| panel.panel_kind)?;
+        let panel_kind_key = &shell_state
+            .composition_runtime()
+            .extension()
+            .mounted_unit(request.mounted_unit_id)?
+            .panel_kind_key;
+        let panel_kind = editor_shell::tool_surface_kind_from_definition_key(panel_kind_key)
+            .map(editor_shell::panel_kind_for_tool_surface_kind)?;
         let observation = provider_registry.observe_resolution_for_request(
             &request,
             workspace_profile_registry,
@@ -822,160 +782,92 @@ fn mounted_surface_rows(
     .collect()
 }
 
-fn build_v5_persistence_preview_for_workspace(
-    workspace_profile_id: WorkspaceProfileId,
-    workspace_state: &WorkspaceState,
+fn build_composition_persistence_preview(
+    shell_state: &RunenwerkEditorShellState,
 ) -> (
     ToolSuiteRegistryInspectorPersistencePreviewSummary,
     Vec<ToolSuiteRegistryInspectorPersistedSurfacePreviewRow>,
 ) {
-    match workspace_state.to_persisted_v5() {
-        Ok(persisted) => {
-            let rows = persisted_v5_preview_rows(workspace_profile_id, workspace_state, &persisted);
-            let summary = ToolSuiteRegistryInspectorPersistencePreviewSummary {
-                version: persisted.version,
-                surface_count: rows.len(),
-                stable_key_count: rows
-                    .iter()
-                    .filter(|row| !row.stable_surface_key.is_empty())
-                    .count(),
-                legacy_metadata_count: rows
-                    .iter()
-                    .filter(|row| row.legacy_tool_surface_kind.is_some())
-                    .count(),
-                invalid_surface_count: rows
-                    .iter()
-                    .filter(|row| {
-                        row.validation_status
-                            == ToolSuiteRegistryInspectorPersistenceValidationStatus::Error
-                    })
-                    .count(),
-                preview_status: ToolSuiteRegistryInspectorPersistencePreviewStatus::Available,
-            };
-            (summary, rows)
-        }
-        Err(error) => {
-            let message = error.to_string();
-            let rows = live_workspace_preview_error_rows(
-                workspace_profile_id,
-                workspace_state,
-                message.clone(),
-            );
-            let summary = ToolSuiteRegistryInspectorPersistencePreviewSummary {
-                version: PERSISTED_WORKSPACE_STATE_VERSION_V5,
-                surface_count: rows.len(),
-                stable_key_count: rows
-                    .iter()
-                    .filter(|row| !row.stable_surface_key.is_empty())
-                    .count(),
-                legacy_metadata_count: rows
-                    .iter()
-                    .filter(|row| row.legacy_tool_surface_kind.is_some())
-                    .count(),
-                invalid_surface_count: rows.len(),
-                preview_status: ToolSuiteRegistryInspectorPersistencePreviewStatus::Error,
-            };
-            (summary, rows)
-        }
-    }
-}
-
-fn persisted_v5_preview_rows(
-    workspace_profile_id: WorkspaceProfileId,
-    workspace_state: &WorkspaceState,
-    persisted: &PersistedWorkspaceStateV5,
-) -> Vec<ToolSuiteRegistryInspectorPersistedSurfacePreviewRow> {
-    persisted
-        .tool_surfaces
+    let runtime = shell_state.composition_runtime();
+    let rows = runtime
+        .extension()
+        .mounted_units()
         .iter()
-        .map(|surface| {
-            let panel_instance_id = panel_id_from_persisted_mount(&surface.mount);
-            ToolSuiteRegistryInspectorPersistedSurfacePreviewRow {
-                workspace_profile_id,
-                panel_instance_id,
-                tab_stack_id: panel_instance_id
-                    .and_then(|panel_id| tab_stack_id_for_panel(workspace_state, panel_id)),
-                tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(surface.id).ok(),
-                stable_surface_key: surface.stable_surface_key.clone(),
-                legacy_tool_surface_kind: surface
-                    .legacy_tool_surface_kind
-                    .map(|kind| format!("{kind:?}")),
-                v5_primary_identity: surface.stable_surface_key.clone(),
-                legacy_metadata_status: legacy_metadata_status(
-                    surface.legacy_tool_surface_kind.is_some(),
-                ),
-                validation_status: ToolSuiteRegistryInspectorPersistenceValidationStatus::Valid,
-                diagnostics: Vec::new(),
-            }
-        })
-        .collect()
-}
-
-fn live_workspace_preview_error_rows(
-    workspace_profile_id: WorkspaceProfileId,
-    workspace_state: &WorkspaceState,
-    error_message: String,
-) -> Vec<ToolSuiteRegistryInspectorPersistedSurfacePreviewRow> {
-    workspace_state
-        .tool_surfaces()
-        .map(|surface| {
-            let panel_instance_id = match surface.mount {
-                editor_shell::ToolSurfaceMount::Mounted { panel_id } => Some(panel_id),
-                editor_shell::ToolSurfaceMount::Unmounted => None,
-            };
-            ToolSuiteRegistryInspectorPersistedSurfacePreviewRow {
-                workspace_profile_id,
-                panel_instance_id,
-                tab_stack_id: panel_instance_id
-                    .and_then(|panel_id| tab_stack_id_for_panel(workspace_state, panel_id)),
-                tool_surface_instance_id: Some(surface.id),
-                stable_surface_key: surface.stable_surface_key().as_str().to_string(),
-                legacy_tool_surface_kind: None,
-                v5_primary_identity: surface.stable_surface_key().as_str().to_string(),
-                legacy_metadata_status: legacy_metadata_status(false),
-                validation_status: ToolSuiteRegistryInspectorPersistenceValidationStatus::Error,
-                diagnostics: vec![
-                    diagnostic_row(
+        .map(|record| {
+            let panel_instance_id = PanelInstanceId::try_from_raw(record.panel_instance_raw).ok();
+            let tool_surface_instance_id =
+                ToolSurfaceInstanceId::try_from_raw(record.compatibility_surface_raw).ok();
+            let tab_stack_id = runtime
+                .composition()
+                .definition()
+                .regions()
+                .iter()
+                .find_map(|region| {
+                    let ui_composition::RegionKind::Stack { ordered_units, .. } = &region.kind
+                    else {
+                        return None;
+                    };
+                    ordered_units.contains(&record.mounted_unit_id).then(|| {
+                        runtime
+                            .extension()
+                            .region(region.id)
+                            .and_then(|extension| extension.tab_stack_raw)
+                            .and_then(|raw| TabStackId::try_from_raw(raw).ok())
+                    })?
+                });
+            let valid = panel_instance_id.is_some()
+                && tool_surface_instance_id.is_some()
+                && tab_stack_id.is_some();
+            let diagnostics = (!valid)
+                .then(|| {
+                    vec![diagnostic_row(
                         ToolSuiteRegistryInspectorDiagnosticSeverity::Error,
                         ToolSuiteRegistryInspectorDiagnosticScope::PersistencePreview,
-                        "inspector.v5_preview.conversion_error",
-                        error_message.clone(),
-                    )
-                    .with_surface_key(surface.stable_surface_key().as_str().to_string())
-                    .with_mounted_surface_id(surface.id),
-                ],
+                        "inspector.composition_preview.invalid_editor_binding",
+                        format!(
+                            "mounted unit {} has invalid editor compatibility bindings",
+                            record.mounted_unit_id.raw()
+                        ),
+                    )]
+                })
+                .unwrap_or_default();
+            ToolSuiteRegistryInspectorPersistedSurfacePreviewRow {
+                workspace_profile_id: shell_state.active_workspace_profile_id(),
+                panel_instance_id,
+                tab_stack_id,
+                tool_surface_instance_id,
+                stable_surface_key: record.stable_content_key.clone(),
+                legacy_tool_surface_kind: None,
+                composition_identity: format!("mounted-unit:{}", record.mounted_unit_id.raw()),
+                legacy_metadata_status: ToolSuiteRegistryInspectorLegacyMetadataStatus::Absent,
+                validation_status: if valid {
+                    ToolSuiteRegistryInspectorPersistenceValidationStatus::Valid
+                } else {
+                    ToolSuiteRegistryInspectorPersistenceValidationStatus::Error
+                },
+                diagnostics,
             }
         })
-        .collect()
-}
-
-fn panel_id_from_persisted_mount(mount: &PersistedToolSurfaceMountV1) -> Option<PanelInstanceId> {
-    match mount {
-        PersistedToolSurfaceMountV1::Mounted { panel_id } => {
-            PanelInstanceId::try_from_raw(*panel_id).ok()
-        }
-        PersistedToolSurfaceMountV1::Unmounted => None,
-    }
-}
-
-fn tab_stack_id_for_panel(
-    workspace_state: &WorkspaceState,
-    panel_id: PanelInstanceId,
-) -> Option<TabStackId> {
-    workspace_state
-        .tab_stacks()
-        .find(|stack| stack.ordered_panels.contains(&panel_id))
-        .map(|stack| stack.id)
-}
-
-fn legacy_metadata_status(
-    has_legacy_metadata: bool,
-) -> ToolSuiteRegistryInspectorLegacyMetadataStatus {
-    if has_legacy_metadata {
-        ToolSuiteRegistryInspectorLegacyMetadataStatus::MetadataOnly
-    } else {
-        ToolSuiteRegistryInspectorLegacyMetadataStatus::Absent
-    }
+        .collect::<Vec<_>>();
+    let invalid_surface_count = rows
+        .iter()
+        .filter(|row| {
+            row.validation_status == ToolSuiteRegistryInspectorPersistenceValidationStatus::Error
+        })
+        .count();
+    let summary = ToolSuiteRegistryInspectorPersistencePreviewSummary {
+        version: editor_shell::EditorCompositionExtensionV1::SCHEMA_VERSION.into(),
+        surface_count: rows.len(),
+        stable_key_count: rows.len(),
+        legacy_metadata_count: 0,
+        invalid_surface_count,
+        preview_status: if invalid_surface_count == 0 {
+            ToolSuiteRegistryInspectorPersistencePreviewStatus::Available
+        } else {
+            ToolSuiteRegistryInspectorPersistencePreviewStatus::Error
+        },
+    };
+    (summary, rows)
 }
 
 fn inspector_lines(view_model: &ToolSuiteRegistryInspectorViewModel) -> Vec<String> {
@@ -1071,7 +963,7 @@ fn inspector_lines(view_model: &ToolSuiteRegistryInspectorViewModel) -> Vec<Stri
         }));
     }
     lines.push(String::new());
-    lines.push("V5 Persistence Preview".to_string());
+    lines.push("Composition Persistence Preview".to_string());
     lines.push(format!(
         "- version={} surfaces={} stable_keys={} legacy_metadata={} invalid={} status={:?}",
         view_model.persistence_preview_summary.version,
@@ -1104,7 +996,7 @@ fn inspector_lines(view_model: &ToolSuiteRegistryInspectorViewModel) -> Vec<Stri
                 panel_id,
                 tab_stack_id,
                 row.stable_surface_key,
-                row.v5_primary_identity,
+                row.composition_identity,
                 legacy,
                 row.legacy_metadata_status,
                 row.validation_status
@@ -1248,30 +1140,6 @@ mod tests {
             app.workbench_host().tool_surface_registry(),
         )
         .expect("shell state should build from hosted registry")
-    }
-
-    fn workspace_with_registered_stable_key_replacement() -> WorkspaceState {
-        let shell_state = shell_state();
-        let workspace = shell_state.workspace_state();
-        let panel_id = workspace
-            .panels()
-            .find(|panel| panel.active_tool_surface.is_some())
-            .expect("default workspace should have a mounted panel")
-            .id;
-        let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
-
-        reduce_workspace(
-            workspace,
-            WorkspaceMutation::ReplacePanelToolSurfaceStableKey {
-                panel_id,
-                tool_surface_id: allocator.allocate_tool_surface_instance_id(),
-                stable_surface_key: editor_shell::ToolSurfaceStableKey::new(
-                    "runenwerk.material_lab.preview",
-                )
-                .expect("test stable key should be valid"),
-            },
-        )
-        .expect("test workspace should accept compatibility metadata before V5 validation")
     }
 
     fn workspace_with_unknown_stable_key() -> WorkspaceState {
@@ -1565,148 +1433,27 @@ mod tests {
     }
 
     #[test]
-    fn inspector_phase_b_does_not_write_v5_files() {
-        let inspector_source = include_str!("tool_suite_registry_inspector.rs");
-        let forbidden = [
-            ["save_", "workspace_layout"].concat(),
-            ["write_", "workspace_layout"].concat(),
-            ["persist_", "workspace_layout"].concat(),
-        ];
-
-        for pattern in forbidden {
-            assert!(
-                !inspector_source.contains(&pattern),
-                "Inspector provider should not write V5 workspace layout files"
-            );
-        }
-    }
-
-    #[test]
-    fn inspector_provider_remains_read_only_after_phase_e() {
-        let inspector_source = include_str!("tool_suite_registry_inspector.rs");
-        let provider_source = inspector_source
-            .split("#[cfg(test)]")
-            .next()
-            .expect("provider source should precede tests");
-
-        assert!(provider_source.contains("fn map_action"));
-        assert!(provider_source.contains("Ok(None)"));
-        assert!(!provider_source.contains("WorkspaceMutation"));
-        assert!(!provider_source.contains("SurfaceCommandProposal::Shell"));
-        assert!(!provider_source.contains("SurfaceCommandProposal::EditorDomain"));
-    }
-
-    #[test]
-    fn inspector_view_model_includes_v5_persistence_preview_section() {
+    fn composition_preview_is_read_only_and_uses_mounted_unit_identity() {
         let view_model = view_model();
-
         assert_eq!(
             view_model.persistence_preview_summary.version,
-            PERSISTED_WORKSPACE_STATE_VERSION_V5
+            editor_shell::EditorCompositionExtensionV1::SCHEMA_VERSION as u32,
         );
         assert!(!view_model.persistence_preview_rows.is_empty());
-    }
-
-    #[test]
-    fn inspector_v5_preview_uses_in_memory_conversion_only() {
-        let inspector_source = include_str!("tool_suite_registry_inspector.rs");
-
-        assert!(inspector_source.contains("to_persisted_v5"));
-        assert!(!inspector_source.contains(&["write_", "workspace_layout"].concat()));
-        assert!(!inspector_source.contains(&["save_", "workspace_layout"].concat()));
-    }
-
-    #[test]
-    fn inspector_v5_preview_does_not_persist_layout_file() {
-        let inspector_source = include_str!("tool_suite_registry_inspector.rs");
-        let forbidden = [
-            ["std::fs", "::write"].concat(),
-            ["write_", "workspace_layout"].concat(),
-            ["save_", "workspace_layout"].concat(),
-        ];
-
-        for pattern in forbidden {
-            assert!(
-                !inspector_source.contains(&pattern),
-                "Inspector Phase C preview must not write workspace layout files"
-            );
-        }
-    }
-
-    #[test]
-    fn inspector_v5_preview_lists_stable_surface_keys() {
-        let view_model = view_model();
-
-        assert!(
-            view_model
-                .persistence_preview_rows
-                .iter()
-                .all(|row| row.stable_surface_key.starts_with("runenwerk.")
-                    && row.v5_primary_identity == row.stable_surface_key)
-        );
-    }
-
-    #[test]
-    fn inspector_v5_preview_marks_legacy_kind_as_metadata_only() {
-        let view_model = view_model();
-
-        assert!(
-            view_model
-                .persistence_preview_rows
-                .iter()
-                .filter(|row| row.legacy_tool_surface_kind.is_some())
-                .all(|row| row.legacy_metadata_status
-                    == ToolSuiteRegistryInspectorLegacyMetadataStatus::MetadataOnly)
-        );
-    }
-
-    #[test]
-    fn inspector_v5_preview_accepts_registered_stable_key_replacement() {
-        let workspace = workspace_with_registered_stable_key_replacement();
-
-        let (summary, rows) = build_v5_persistence_preview_for_workspace(
-            editor_shell::SCENE_WORKSPACE_PROFILE_ID,
-            &workspace,
-        );
-
-        assert_eq!(
-            summary.preview_status,
-            ToolSuiteRegistryInspectorPersistencePreviewStatus::Available
-        );
-        assert_eq!(summary.invalid_surface_count, 0);
-        assert!(rows.iter().any(|row| {
-            row.stable_surface_key == "runenwerk.material_lab.preview"
-                && row.v5_primary_identity == row.stable_surface_key
+        assert!(view_model.persistence_preview_rows.iter().all(|row| {
+            row.stable_surface_key.starts_with("runenwerk.")
+                && row.composition_identity.starts_with("mounted-unit:")
                 && row.validation_status
                     == ToolSuiteRegistryInspectorPersistenceValidationStatus::Valid
         }));
-    }
 
-    #[test]
-    fn registered_stable_key_replacement_has_no_persistence_preview_error() {
-        let app = RunenwerkEditorApp::new();
-        let mut shell_state = shell_state();
-        shell_state.replace_workspace_state(workspace_with_registered_stable_key_replacement());
-
-        let view_model = view_model_from_shell_state(&app, &shell_state);
-
-        assert!(!view_model.diagnostic_rows.iter().any(|row| {
-            row.scope == ToolSuiteRegistryInspectorDiagnosticScope::PersistencePreview
-                && row.code == "inspector.v5_preview.conversion_error"
-        }));
-    }
-
-    #[test]
-    fn inspector_v5_preview_does_not_mutate_workspace_state() {
-        let shell_state = shell_state();
-        let workspace_before = shell_state.workspace_state().clone();
-
-        let (_summary, _rows) = build_v5_persistence_preview_for_workspace(
-            shell_state.active_workspace_profile_id(),
-            shell_state.workspace_state(),
-        );
-
-        assert_eq!(shell_state.workspace_state(), &workspace_before);
+        let provider_source = include_str!("tool_suite_registry_inspector.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap();
+        assert!(!provider_source.contains("PersistedWorkspaceStateV5"));
+        assert!(!provider_source.contains("to_persisted_v5"));
+        assert!(!provider_source.contains("WorkspaceMutation"));
     }
 
     #[test]

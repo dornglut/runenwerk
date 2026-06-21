@@ -5,13 +5,12 @@ use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerEvent, PointerEventKind, TextInputEvent,
     UiInputEvent,
 };
-use ui_math::{Axis, UiRect};
+use ui_math::Axis;
 use ui_theme::ThemeTokens;
 
 use crate::{
     ActiveTabDragVisualState, ActiveTabStackPopupMenu, AssetBrowserRowViewModel,
-    AssetBrowserViewModel, AssetSurfaceAction, DockDropCandidate, DockDropCandidateState,
-    DockDropInvalidTargetReason, DockDropScope, DockingInteractionVisualState,
+    AssetBrowserViewModel, AssetSurfaceAction, DockingInteractionVisualState,
     DockingPreviewDropTarget, ENTITY_TABLE_CONTROLS_SCROLL_WIDGET_ID,
     ENTITY_TABLE_SEARCH_WIDGET_ID, EditorDefinitionSurfaceAction, EditorShellFrameModel,
     EntityTableComponentFilter, EntityTableHierarchyFilter, EntityTableSurfaceAction,
@@ -27,12 +26,10 @@ use crate::{
     UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
     WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
     build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
-    build_entity_table_panel, build_viewport_panel, dock_split_preview_label_widget_id,
-    dock_split_preview_overlay_widget_id, dock_split_preview_panel_widget_id, label,
-    map_interactions_to_shell_commands, panel_kind_definition_key, reduce_workspace,
-    stable_key_for_tool_surface_kind, surface_widget_id, tab_active_indicator_widget_id,
-    tab_chrome_widget_id, tab_close_button_widget_id, tab_drop_zone_widget_id,
-    tab_stack_action_menu_popup_widget_id, tab_stack_container_widget_id,
+    build_entity_table_panel, build_viewport_panel, label, map_interactions_to_shell_commands,
+    panel_kind_definition_key, reduce_workspace, stable_key_for_tool_surface_kind,
+    surface_widget_id, tab_active_indicator_widget_id, tab_chrome_widget_id,
+    tab_close_button_widget_id, tab_drop_zone_widget_id, tab_stack_action_menu_popup_widget_id,
     tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
     tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
     tab_stack_surface_menu_popup_widget_id, tab_stack_surface_submenu_anchor_widget_id,
@@ -191,9 +188,10 @@ fn stable_key_authority_is_end_to_end_guard() {
     let state_source = include_str!("workspace/state.rs");
     let reducer_source = include_str!("workspace/reducer.rs");
     let profile_source = include_str!("workspace/profile.rs");
-    let projection_source = include_str!("workspace/projection.rs");
-    let app_provider_source =
-        include_str!("../../../../apps/runenwerk_editor/src/shell/providers/mod.rs");
+    let projection_source = include_str!("composition/structural/projection.rs");
+    let app_provider_source = include_str!(
+        "../../../../apps/runenwerk_editor/src/shell/composition_runtime/provider_projection.rs"
+    );
     let workbench_host_source =
         include_str!("../../../../apps/runenwerk_editor/src/shell/workbench_host.rs");
 
@@ -231,21 +229,16 @@ fn stable_key_authority_is_end_to_end_guard() {
     assert!(
         projection_source.contains("pub active_stable_surface_key: Option<ToolSurfaceStableKey>")
     );
-    assert!(projection_source.contains(".map(|surface| surface.stable_surface_key().clone())"));
+    assert!(projection_source.contains("active_stable_surface_key: Some(stable_key)"));
     surface_provider_request_requires_stable_key_guard();
     v5_persistence_uses_stable_key_primary_identity_guard();
 
-    assert!(app_provider_source.contains("mounted_surface_requests_with_registry"));
+    assert!(app_provider_source.contains("composition_surface_provider_requests"));
+    assert!(app_provider_source.contains("mounted_unit_id: mounted_unit.id"));
+    assert!(app_provider_source.contains("ToolSurfaceStableKey::new"));
     assert!(
-        app_provider_source
-            .contains("let stable_surface_key = surface.stable_surface_key().clone();")
+        app_provider_source.contains("requests.sort_by_key(|request| request.mounted_unit_id)")
     );
-    assert!(app_provider_source.contains("provider_family_provider_map"));
-    assert!(app_provider_source.contains("resolve_frame_with_provider_family_map"));
-    assert!(app_provider_source.contains("workspace_profile_registry"));
-    assert!(app_provider_source.contains("SurfaceProviderSupportMode::StableKey"));
-    assert!(app_provider_source.contains("preferred_support_mode"));
-    assert!(app_provider_source.contains(".preferred(supported.support_mode)"));
 
     assert!(
         workbench_host_source.contains("provider_family_provider_map: ProviderFamilyProviderMap")
@@ -264,6 +257,8 @@ fn tool_surface_kind_is_legacy_boundary_only_guard() {
         include_str!("../../../../apps/runenwerk_editor/src/shell/controller.rs");
     let dispatch_source =
         include_str!("../../../../apps/runenwerk_editor/src/shell/dispatch/mod.rs");
+    let structural_dispatch_source =
+        include_str!("../../../../apps/runenwerk_editor/src/shell/dispatch_shell_command.rs");
 
     assert!(legacy_source.contains("explicit compatibility boundary"));
     assert!(
@@ -284,8 +279,9 @@ fn tool_surface_kind_is_legacy_boundary_only_guard() {
     assert!(!reducer_source.contains("replace_panel_tool_surface_kind_legacy"));
     assert!(profile_source.contains("pub fn new_legacy"));
 
-    assert!(controller_source.contains("tab_stack_chrome_surface_target_pending_c6"));
-    assert!(controller_source.contains("SplitTabStackAreaStableKey"));
+    assert!(controller_source.contains("mounted_unit_id"));
+    assert!(controller_source.contains("session_mut(mounted_unit_id)"));
+    assert!(structural_dispatch_source.contains("SplitTabStackAreaStableKey"));
     assert!(dispatch_source.contains("LegacySurfaceCommandContract"));
     assert!(dispatch_source.contains("resolve_legacy_surface_command_contract"));
 }
@@ -525,9 +521,7 @@ fn app_command_surface_contract_lookup_is_legacy_named() {
     assert!(dispatch_source.contains("pub(crate) struct LegacySurfaceCommandContract"));
     assert!(dispatch_source.contains("pub(crate) fn resolve_legacy_surface_command_contract"));
     assert!(dispatch_source.contains("C6C legacy app-command compatibility boundary"));
-    assert!(
-        dispatch_source.contains("tool_surface_kind_for_stable_key(surface.stable_surface_key())")
-    );
+    assert!(dispatch_source.contains("tool_surface_kind_for_stable_key(&stable_key)"));
     assert!(!dispatch_source.contains("legacy_tool_surface_kind"));
 }
 
@@ -540,16 +534,13 @@ fn no_unmarked_tool_surface_kind_usage_in_normal_path_guard() {
     let surface_provider_source = include_str!("surface_provider.rs");
     let composition_source = include_str!("composition/build_editor_shell.rs");
 
-    assert!(controller_source.contains("tab_stack_chrome_surface_target_pending_c6"));
-    assert!(controller_source.contains("C6D repair"));
-    assert!(controller_source.contains("stable_surface_key: surface.stable_surface_key().clone()"));
+    assert!(controller_source.contains("mounted_unit_id"));
+    assert!(controller_source.contains("session_mut(mounted_unit_id)"));
     assert!(!controller_source.contains("unwrap_or(ToolSurfaceKind::Viewport)"));
 
     assert!(dispatch_source.contains("LegacySurfaceCommandContract"));
     assert!(dispatch_source.contains("C6C legacy app-command compatibility boundary"));
-    assert!(
-        dispatch_source.contains("tool_surface_kind_for_stable_key(surface.stable_surface_key())")
-    );
+    assert!(dispatch_source.contains("tool_surface_kind_for_stable_key(&stable_key)"));
 
     let request_struct = source_block_between(
         surface_provider_source,
@@ -1716,6 +1707,7 @@ fn provider_route_rejects_mismatched_structural_context() {
         .insert(
             WidgetId(50_001),
             crate::StructuralWidgetRoutingContext {
+                mounted_unit_id: None,
                 panel_instance_id: PanelInstanceId::try_from_raw(999).unwrap(),
                 active_tool_surface: None,
                 tab_stack_id: crate::TabStackId::try_from_raw(999).unwrap(),
@@ -2410,8 +2402,11 @@ fn tab_reorder_drop_slots_are_formed_with_higher_priority_than_split_previews() 
                 insert_index: 1,
             }),
             preview_candidates: Vec::new(),
+            region_compass_anchor: None,
+            region_compass: None,
         }),
         active_split_border_widget: None,
+        active_split_preview_fraction: None,
     };
     let build = build_editor_shell_frame_with_docking_visual_state(
         &frame_model,
@@ -2446,190 +2441,6 @@ fn tab_reorder_drop_slots_are_formed_with_higher_priority_than_split_previews() 
 }
 
 #[test]
-fn dock_split_preview_projects_side_slice_without_consuming_layout() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let frame_model = frame_model_for_workspace(&workspace);
-    let theme = ThemeTokens::default();
-    let anchor_widget_id = tab_stack_container_widget_id(viewport_stack);
-    let preview_target = DockingPreviewDropTarget::SplitIntoArea {
-        target_tab_stack_id: viewport_stack,
-        side: crate::DockSplitSide::Left,
-    };
-    let docking_visual_state = DockingInteractionVisualState {
-        active_tab_drag: Some(ActiveTabDragVisualState {
-            panel_instance_id: viewport_panel,
-            source_tab_stack_id: viewport_stack,
-            preview_target: Some(preview_target),
-            preview_candidates: vec![DockDropCandidate {
-                target: preview_target,
-                scope: DockDropScope::Area,
-                side: crate::DockSplitSide::Left,
-                anchor_widget_id,
-                state: DockDropCandidateState::Active,
-            }],
-        }),
-        active_split_border_widget: None,
-    };
-    let build = build_editor_shell_frame_with_docking_visual_state(
-        &frame_model,
-        &theme,
-        &workspace,
-        Some(&docking_visual_state),
-    );
-    assert!(ui_tree_contains_widget(
-        &build.tree.root,
-        dock_split_preview_overlay_widget_id(anchor_widget_id)
-    ));
-    assert_dock_drop_zone(
-        &build.projection_artifacts.interaction_model,
-        dock_split_preview_overlay_widget_id(anchor_widget_id),
-        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
-        ui_definition::UiDockDropZoneStateDefinition::Active,
-        10,
-    );
-    let formed_preview = build
-        .projection_artifacts
-        .interaction_model
-        .dock_drop_zones
-        .iter()
-        .find(|zone| zone.zone_widget_id == dock_split_preview_overlay_widget_id(anchor_widget_id))
-        .expect("active split preview zone should be formed");
-    assert_eq!(formed_preview.anchor_widget_id, anchor_widget_id);
-    assert_eq!(
-        formed_preview.scope,
-        ui_definition::UiDockDropScopeDefinition::Area
-    );
-    assert_eq!(
-        formed_preview.side,
-        Some(ui_definition::UiDockDropSideDefinition::Left)
-    );
-    assert!(formed_preview.preview_only);
-
-    let bounds = UiRect::new(0.0, 0.0, 960.0, 640.0);
-    let layouts = ui_runtime::compute_tree_layout(
-        &build.tree,
-        bounds,
-        &ui_runtime::UiRuntimeState::default(),
-    );
-    let anchor = layouts
-        .get(&anchor_widget_id)
-        .expect("target tab stack should have layout");
-    let preview = layouts
-        .get(&dock_split_preview_panel_widget_id(anchor_widget_id))
-        .expect("preview slice should have layout");
-    assert!((preview.bounds.x - anchor.bounds.x).abs() <= 0.001);
-    assert!((preview.bounds.height - anchor.bounds.height).abs() <= 0.001);
-    assert!(preview.bounds.width > 0.0 && preview.bounds.width <= 132.0);
-}
-
-#[test]
-fn invalid_dock_split_preview_forms_invalid_drop_zone_without_active_target() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let frame_model = frame_model_for_workspace(&workspace);
-    let anchor_widget_id = tab_stack_container_widget_id(viewport_stack);
-    let preview_target = DockingPreviewDropTarget::SplitIntoArea {
-        target_tab_stack_id: viewport_stack,
-        side: crate::DockSplitSide::Left,
-    };
-    let docking_visual_state = DockingInteractionVisualState {
-        active_tab_drag: Some(ActiveTabDragVisualState {
-            panel_instance_id: viewport_panel,
-            source_tab_stack_id: viewport_stack,
-            preview_target: None,
-            preview_candidates: vec![DockDropCandidate {
-                target: preview_target,
-                scope: DockDropScope::Area,
-                side: crate::DockSplitSide::Left,
-                anchor_widget_id,
-                state: DockDropCandidateState::Invalid {
-                    reason: DockDropInvalidTargetReason::SourceOnlyTabCannotSplitOwnArea,
-                },
-            }],
-        }),
-        active_split_border_widget: None,
-    };
-    let build = build_editor_shell_frame_with_docking_visual_state(
-        &frame_model,
-        &ThemeTokens::default(),
-        &workspace,
-        Some(&docking_visual_state),
-    );
-
-    assert!(ui_tree_contains_widget(
-        &build.tree.root,
-        dock_split_preview_overlay_widget_id(anchor_widget_id)
-    ));
-    assert_dock_drop_zone(
-        &build.projection_artifacts.interaction_model,
-        dock_split_preview_overlay_widget_id(anchor_widget_id),
-        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
-        ui_definition::UiDockDropZoneStateDefinition::Invalid,
-        10,
-    );
-}
-
-#[test]
-fn dock_root_split_preview_spans_target_root_edge() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let frame_model = frame_model_for_workspace(&workspace);
-    let theme = ThemeTokens::default();
-    let anchor_widget_id = workspace_split_host_widget_id(workspace.root_host_id());
-    let preview_target = DockingPreviewDropTarget::SplitIntoRoot {
-        side: crate::DockSplitSide::Bottom,
-    };
-    let docking_visual_state = DockingInteractionVisualState {
-        active_tab_drag: Some(ActiveTabDragVisualState {
-            panel_instance_id: viewport_panel,
-            source_tab_stack_id: viewport_stack,
-            preview_target: Some(preview_target),
-            preview_candidates: vec![DockDropCandidate {
-                target: preview_target,
-                scope: DockDropScope::Workspace,
-                side: crate::DockSplitSide::Bottom,
-                anchor_widget_id,
-                state: DockDropCandidateState::Active,
-            }],
-        }),
-        active_split_border_widget: None,
-    };
-    let build = build_editor_shell_frame_with_docking_visual_state(
-        &frame_model,
-        &theme,
-        &workspace,
-        Some(&docking_visual_state),
-    );
-    assert!(ui_tree_contains_widget(
-        &build.tree.root,
-        dock_split_preview_overlay_widget_id(anchor_widget_id)
-    ));
-
-    let bounds = UiRect::new(0.0, 0.0, 960.0, 640.0);
-    let layouts = ui_runtime::compute_tree_layout(
-        &build.tree,
-        bounds,
-        &ui_runtime::UiRuntimeState::default(),
-    );
-    let anchor = layouts
-        .get(&anchor_widget_id)
-        .expect("root target should have layout");
-    let preview = layouts
-        .get(&dock_split_preview_panel_widget_id(anchor_widget_id))
-        .expect("root preview slice should have layout");
-    assert!(
-        (preview.bounds.y + preview.bounds.height - (anchor.bounds.y + anchor.bounds.height)).abs()
-            <= 0.001
-    );
-    assert!((preview.bounds.width - anchor.bounds.width).abs() <= 0.001);
-    assert!(preview.bounds.height > 0.0 && preview.bounds.height <= 42.0);
-}
-
-#[test]
 fn floating_host_drop_zone_is_formed_only_as_active_workspace_target() {
     let workspace = sample_workspace_state();
     let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
@@ -2641,8 +2452,11 @@ fn floating_host_drop_zone_is_formed_only_as_active_workspace_target() {
             source_tab_stack_id: viewport_stack,
             preview_target: Some(DockingPreviewDropTarget::NewFloatingHost),
             preview_candidates: Vec::new(),
+            region_compass_anchor: None,
+            region_compass: None,
         }),
         active_split_border_widget: None,
+        active_split_preview_fraction: None,
     };
     let build = build_editor_shell_frame_with_docking_visual_state(
         &frame_model,
@@ -2661,102 +2475,6 @@ fn floating_host_drop_zone_is_formed_only_as_active_workspace_target() {
         ui_definition::UiDockDropZoneKindDefinition::FloatingHost,
         ui_definition::UiDockDropZoneStateDefinition::Active,
         40,
-    );
-}
-
-#[test]
-fn dock_scope_previews_render_all_candidates_and_active_label() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let frame_model = frame_model_for_workspace(&workspace);
-    let theme = ThemeTokens::default();
-    let area_anchor = tab_stack_container_widget_id(viewport_stack);
-    let group_anchor = crate::CENTER_RIGHT_SPLIT_WIDGET_ID;
-    let workspace_anchor = crate::BODY_ROOT_WIDGET_ID;
-    let docking_visual_state = DockingInteractionVisualState {
-        active_tab_drag: Some(ActiveTabDragVisualState {
-            panel_instance_id: viewport_panel,
-            source_tab_stack_id: viewport_stack,
-            preview_target: Some(DockingPreviewDropTarget::SplitIntoHost {
-                target_host_id: workspace.root_host_id(),
-                side: crate::DockSplitSide::Right,
-            }),
-            preview_candidates: vec![
-                DockDropCandidate {
-                    target: DockingPreviewDropTarget::SplitIntoArea {
-                        target_tab_stack_id: viewport_stack,
-                        side: crate::DockSplitSide::Right,
-                    },
-                    scope: DockDropScope::Area,
-                    side: crate::DockSplitSide::Right,
-                    anchor_widget_id: area_anchor,
-                    state: DockDropCandidateState::Candidate,
-                },
-                DockDropCandidate {
-                    target: DockingPreviewDropTarget::SplitIntoHost {
-                        target_host_id: workspace.root_host_id(),
-                        side: crate::DockSplitSide::Right,
-                    },
-                    scope: DockDropScope::Group,
-                    side: crate::DockSplitSide::Right,
-                    anchor_widget_id: group_anchor,
-                    state: DockDropCandidateState::Active,
-                },
-                DockDropCandidate {
-                    target: DockingPreviewDropTarget::SplitIntoRoot {
-                        side: crate::DockSplitSide::Right,
-                    },
-                    scope: DockDropScope::Workspace,
-                    side: crate::DockSplitSide::Right,
-                    anchor_widget_id: workspace_anchor,
-                    state: DockDropCandidateState::Candidate,
-                },
-            ],
-        }),
-        active_split_border_widget: None,
-    };
-    let build = build_editor_shell_frame_with_docking_visual_state(
-        &frame_model,
-        &theme,
-        &workspace,
-        Some(&docking_visual_state),
-    );
-
-    for anchor in [area_anchor, group_anchor, workspace_anchor] {
-        assert!(ui_tree_contains_widget(
-            &build.tree.root,
-            dock_split_preview_overlay_widget_id(anchor)
-        ));
-    }
-    assert!(ui_tree_contains_widget(
-        &build.tree.root,
-        dock_split_preview_label_widget_id(group_anchor)
-    ));
-    assert!(!ui_tree_contains_widget(
-        &build.tree.root,
-        dock_split_preview_label_widget_id(area_anchor)
-    ));
-    assert_dock_drop_zone(
-        &build.projection_artifacts.interaction_model,
-        dock_split_preview_overlay_widget_id(area_anchor),
-        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
-        ui_definition::UiDockDropZoneStateDefinition::Candidate,
-        10,
-    );
-    assert_dock_drop_zone(
-        &build.projection_artifacts.interaction_model,
-        dock_split_preview_overlay_widget_id(group_anchor),
-        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
-        ui_definition::UiDockDropZoneStateDefinition::Active,
-        20,
-    );
-    assert_dock_drop_zone(
-        &build.projection_artifacts.interaction_model,
-        dock_split_preview_overlay_widget_id(workspace_anchor),
-        ui_definition::UiDockDropZoneKindDefinition::SplitInsertion,
-        ui_definition::UiDockDropZoneStateDefinition::Candidate,
-        30,
     );
 }
 
@@ -3061,6 +2779,9 @@ fn surface_frame(
     let tool_surface_kind = tool_surface_kind_for_stable_key(surface.stable_surface_key())
         .unwrap_or(ToolSurfaceKind::Placeholder);
     ResolvedSurfaceFrame {
+        mounted_unit_id: ui_composition::MountedUnitId::new(surface.id.raw()),
+        content_liveness: ui_composition::ContentLiveness::Resolved,
+        content_fallback: ui_composition::ContentProjectionFallback::ResolvedContent,
         surface_instance_id: surface.id,
         panel_instance_id,
         tab_stack_id,

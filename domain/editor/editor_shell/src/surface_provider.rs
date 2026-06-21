@@ -6,14 +6,19 @@ use std::collections::BTreeMap;
 use editor_core::{DocumentId, DocumentKind};
 use editor_definition::EditorToolbarBinding;
 use id_macros::id;
+use ui_composition::{
+    CompositionDiagnosticSeverity, ContentLiveness, ContentProjectionFallback, MountedUnitId,
+    UnavailableContentPolicy,
+};
 use ui_definition::NormalizedUiTemplate;
 use ui_surface::{SurfaceCapability, SurfaceCapabilitySet, SurfaceDefinitionId};
 
 use crate::{
-    AssetSurfaceAction, EditorDefinitionSurfaceAction, EntityTableDomainMutation,
-    EntityTableSessionMutation, EntityTableSurfaceAction, InspectorSessionMutation,
-    InspectorSurfaceAction, MaterialSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction,
-    PanelInstanceId, PanelKind, ProviderFamilyId, RoutedShellAction, SdfOperationDomainMutation,
+    AssetSurfaceAction, EditorCompositionDiagnosticStage, EditorCompositionDiagnosticSubject,
+    EditorDefinitionSurfaceAction, EntityTableDomainMutation, EntityTableSessionMutation,
+    EntityTableSurfaceAction, InspectorSessionMutation, InspectorSurfaceAction,
+    MaterialSurfaceAction, OutlinerDomainMutation, OutlinerSurfaceAction, PanelInstanceId,
+    PanelKind, ProviderFamilyId, RoutedShellAction, SdfOperationDomainMutation,
     SdfOperationSessionMutation, SdfOperationSurfaceAction, StructuralCommandTarget, TabStackId,
     TextureSurfaceAction, ToolSurfaceInstanceId, ToolSurfaceRoute, ToolSurfaceStableKey,
     ToolbarViewModel, UiNode, ViewportDomainMutation, ViewportSessionMutation,
@@ -83,6 +88,8 @@ impl SurfaceDocumentContext {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SurfaceProviderRequest {
+    pub mounted_unit_id: MountedUnitId,
+    pub unavailable_content_policy: UnavailableContentPolicy,
     pub workspace_profile_id: crate::WorkspaceProfileId,
     pub document_context: SurfaceDocumentContext,
     pub panel_instance_id: PanelInstanceId,
@@ -150,6 +157,9 @@ pub enum SurfaceProviderAvailability {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SurfaceProviderDiagnostic {
     pub code: &'static str,
+    pub severity: CompositionDiagnosticSeverity,
+    pub stage: EditorCompositionDiagnosticStage,
+    pub subject: EditorCompositionDiagnosticSubject,
     pub message: String,
 }
 
@@ -157,8 +167,18 @@ impl SurfaceProviderDiagnostic {
     pub fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
+            severity: CompositionDiagnosticSeverity::Error,
+            stage: EditorCompositionDiagnosticStage::Provider,
+            subject: EditorCompositionDiagnosticSubject::General(
+                "surface-provider-resolution".to_owned(),
+            ),
             message: message.into(),
         }
+    }
+
+    pub fn for_mounted_unit(mut self, mounted_unit_id: MountedUnitId) -> Self {
+        self.subject = EditorCompositionDiagnosticSubject::MountedUnit(mounted_unit_id.raw());
+        self
     }
 }
 
@@ -279,6 +299,9 @@ impl SurfaceRouteTable {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedSurfaceFrame {
+    pub mounted_unit_id: MountedUnitId,
+    pub content_liveness: ContentLiveness,
+    pub content_fallback: ContentProjectionFallback,
     pub surface_instance_id: ToolSurfaceInstanceId,
     pub panel_instance_id: PanelInstanceId,
     pub tab_stack_id: TabStackId,
@@ -317,9 +340,14 @@ impl ResolvedSurfaceFrame {
         request: &SurfaceProviderRequest,
         title: impl Into<String>,
         availability: SurfaceProviderAvailability,
+        content_liveness: ContentLiveness,
+        content_fallback: ContentProjectionFallback,
         artifact: SurfacePresentationArtifact,
     ) -> Self {
         Self {
+            mounted_unit_id: request.mounted_unit_id,
+            content_liveness,
+            content_fallback,
             surface_instance_id: request.tool_surface_instance_id,
             panel_instance_id: request.panel_instance_id,
             tab_stack_id: request.tab_stack_id,
@@ -485,6 +513,7 @@ pub fn editor_domain_proposal(
 
 pub fn surface_command_target(request: &SurfaceProviderRequest) -> StructuralCommandTarget {
     StructuralCommandTarget {
+        mounted_unit_id: Some(request.mounted_unit_id),
         panel_instance_id: request.panel_instance_id,
         active_tool_surface: Some(request.tool_surface_instance_id),
         tab_stack_id: request.tab_stack_id,
@@ -506,6 +535,8 @@ mod tests {
         let provider_family_id = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
 
         let request = SurfaceProviderRequest {
+            mounted_unit_id: MountedUnitId::new(1),
+            unavailable_content_policy: UnavailableContentPolicy::ShowFallback,
             workspace_profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
                 document_id: DocumentId(1),
@@ -617,6 +648,8 @@ mod tests {
 
     fn material_graph_request_with_stable_key(stable_key: &str) -> SurfaceProviderRequest {
         SurfaceProviderRequest {
+            mounted_unit_id: MountedUnitId::new(1),
+            unavailable_content_policy: UnavailableContentPolicy::ShowFallback,
             workspace_profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
                 document_id: DocumentId(1),

@@ -1,21 +1,23 @@
 //! Drawing app shell state.
 
 use drawing::{
-    BrushId, ColorRgba, DrawingCommand, DrawingDocument, DrawingDocumentRevision,
-    DrawingInkPreviewStroke, DrawingRatificationReport, DrawingTileFormationPolicy,
-    DrawingTransaction, LayerStackEntryId, PaintTarget, StrokeId, StrokeSample,
-    drawing_ink_tile_invalidation_for_preview_stroke, ratify_drawing_document,
+    BrushId, CanvasCoordinate, CanvasRect, ColorRgba, DrawingCommand, DrawingDocument,
+    DrawingDocumentRevision, DrawingInkPreviewStroke, DrawingRatificationReport,
+    DrawingTileFormationPolicy, DrawingTransaction, LayerStackEntryId, PaintTarget, StrokeId,
+    StrokeSample, drawing_ink_tile_invalidation_for_preview_stroke, ratify_drawing_document,
 };
+use ui_composition::{ContentLiveness, MountedUnitId};
 use ui_input::{PointerEventKind, UiInputEvent};
 use ui_math::UiSize;
 use ui_render_data::UiFrame;
 
 use crate::app::{
-    DrawingImmediateStrokeProjection, DrawingInkRuntimeState, DrawingInkSurfaceKind,
-    DrawingInkSurfaceProjection, DrawingPreviewStroke, DrawingTabletPanelProjection,
-    DrawingToolControlInputEvent, DrawingToolInputEvent, DrawingToolIntent, DrawingToolSession,
-    DrawingWorkspaceProjection, build_workspace_frame,
-    build_workspace_frame_with_ink_surface_refs_and_strokes, minimal_drawing_document,
+    DrawingCompositionContentState, DrawingCompositionProjection, DrawingCompositionRejection,
+    DrawingCompositionRuntime, DrawingImmediateStrokeProjection, DrawingInkRuntimeState,
+    DrawingInkSurfaceKind, DrawingInkSurfaceProjection, DrawingPreviewStroke,
+    DrawingTabletPanelProjection, DrawingToolControlInputEvent, DrawingToolInputEvent,
+    DrawingToolIntent, DrawingToolSession, build_composition_frame,
+    build_composition_frame_with_ink_surface_refs_and_strokes, minimal_drawing_document,
 };
 
 pub const DEFAULT_DRAWING_BRUSH_ID: BrushId = BrushId::new(1);
@@ -45,7 +47,10 @@ pub struct DrawingPreviewTileJobTracker {
 #[derive(Debug, Clone)]
 pub struct RunenwerkDrawApp {
     document: Option<DrawingDocument>,
-    workspace: DrawingWorkspaceProjection,
+    composition_runtime: DrawingCompositionRuntime,
+    composition_content: DrawingCompositionContentState,
+    composition_projection: DrawingCompositionProjection,
+    tablet_panel: DrawingTabletPanelProjection,
     active_brush_id: BrushId,
     active_layer_entry_id: LayerStackEntryId,
     tool_session: DrawingToolSession,
@@ -78,11 +83,25 @@ impl RunenwerkDrawApp {
     }
 
     pub fn empty() -> Self {
-        let workspace = DrawingWorkspaceProjection::default();
-        let last_frame = build_workspace_frame(&workspace);
+        let composition_runtime =
+            DrawingCompositionRuntime::builtin().expect("built-in Draw composition should form");
+        let composition_content = DrawingCompositionContentState::resolved(&composition_runtime);
+        let tablet_panel = DrawingTabletPanelProjection::default();
+        let composition_projection = DrawingCompositionProjection::project(
+            &composition_runtime,
+            &composition_content,
+            UiSize::new(1280.0, 720.0),
+            default_canvas_bounds(),
+            tablet_panel.clone(),
+        )
+        .expect("built-in Draw composition should project");
+        let last_frame = build_composition_frame(&composition_projection);
         Self {
             document: None,
-            workspace,
+            composition_runtime,
+            composition_content,
+            composition_projection,
+            tablet_panel,
             active_brush_id: DEFAULT_DRAWING_BRUSH_ID,
             active_layer_entry_id: DEFAULT_DRAWING_LAYER_ENTRY_ID,
             tool_session: DrawingToolSession::default(),
@@ -110,12 +129,14 @@ impl RunenwerkDrawApp {
             return Err(report);
         }
 
-        let tablet_panel = self.workspace.tablet_panel.clone();
-        self.workspace = DrawingWorkspaceProjection::canvas_first(
-            self.workspace.window_size,
+        self.composition_projection = DrawingCompositionProjection::project(
+            &self.composition_runtime,
+            &self.composition_content,
+            self.composition_projection.window_size,
             document.canvas_bounds,
+            self.tablet_panel.clone(),
         )
-        .with_tablet_panel(tablet_panel);
+        .expect("ratified drawing document should project into the active composition");
         self.document = Some(document);
         self.tool_session = DrawingToolSession::default();
         self.routed_inputs.clear();
@@ -129,7 +150,7 @@ impl RunenwerkDrawApp {
         self.ink_runtime = DrawingInkRuntimeState::default();
         self.next_preview_stroke_id = 1;
         self.next_preview_sequence = 1;
-        self.last_frame = build_workspace_frame(&self.workspace);
+        self.last_frame = build_composition_frame(&self.composition_projection);
         Ok(())
     }
 
@@ -137,8 +158,16 @@ impl RunenwerkDrawApp {
         self.document.as_ref()
     }
 
-    pub fn workspace(&self) -> &DrawingWorkspaceProjection {
-        &self.workspace
+    pub fn composition_runtime(&self) -> &DrawingCompositionRuntime {
+        &self.composition_runtime
+    }
+
+    pub fn composition_content(&self) -> &DrawingCompositionContentState {
+        &self.composition_content
+    }
+
+    pub fn composition_projection(&self) -> &DrawingCompositionProjection {
+        &self.composition_projection
     }
 
     pub fn active_brush_id(&self) -> BrushId {
@@ -291,30 +320,52 @@ impl RunenwerkDrawApp {
         self.rebuild_last_frame();
     }
 
-    pub fn set_window_size(&mut self, size: UiSize) {
+    pub fn set_window_size(&mut self, size: UiSize) -> Result<(), DrawingCompositionRejection> {
         let canvas_bounds = self
             .document
             .as_ref()
             .map(|document| document.canvas_bounds)
-            .unwrap_or(self.workspace.canvas_view.canvas_bounds);
-        let tablet_panel = self.workspace.tablet_panel.clone();
-        self.workspace = DrawingWorkspaceProjection::canvas_first(size, canvas_bounds)
-            .with_tablet_panel(tablet_panel);
+            .unwrap_or(self.composition_projection.canvas_view.canvas_bounds);
+        let projection = DrawingCompositionProjection::project(
+            &self.composition_runtime,
+            &self.composition_content,
+            size,
+            canvas_bounds,
+            self.tablet_panel.clone(),
+        )?;
+        self.composition_projection = projection;
         self.rebuild_last_frame();
+        Ok(())
     }
 
     pub fn update_tablet_panel(&mut self, tablet_panel: DrawingTabletPanelProjection) {
-        if self.workspace.tablet_panel != tablet_panel {
-            self.workspace.tablet_panel = tablet_panel;
+        if self.tablet_panel != tablet_panel {
+            self.tablet_panel = tablet_panel;
+            self.rebuild_composition_projection()
+                .expect("tablet state should not invalidate composition projection");
             self.rebuild_last_frame();
         }
     }
 
+    pub fn set_composition_content_liveness(
+        &mut self,
+        mounted_unit: MountedUnitId,
+        liveness: ContentLiveness,
+    ) -> Result<(), DrawingCompositionRejection> {
+        self.composition_content
+            .set_liveness(&self.composition_runtime, mounted_unit, liveness)?;
+        self.rebuild_composition_projection()?;
+        self.rebuild_last_frame();
+        Ok(())
+    }
+
     pub fn rebuild_frame(&mut self, size: UiSize) -> &UiFrame {
-        let size_changed = (self.workspace.window_size.width - size.width).abs() > f32::EPSILON
-            || (self.workspace.window_size.height - size.height).abs() > f32::EPSILON;
+        let size_changed = (self.composition_projection.window_size.width - size.width).abs()
+            > f32::EPSILON
+            || (self.composition_projection.window_size.height - size.height).abs() > f32::EPSILON;
         if size_changed {
-            self.set_window_size(size);
+            self.set_window_size(size)
+                .expect("native window size should be a finite composition target");
         }
         &self.last_frame
     }
@@ -328,7 +379,7 @@ impl RunenwerkDrawApp {
                     .is_some_and(|preview| preview.active);
                 let routed = DrawingToolInputEvent::from_pointer_with_capture(
                     pointer,
-                    self.workspace.canvas_view,
+                    self.composition_projection.canvas_view,
                     capture_active,
                 );
                 let outcome = self.tool_session.handle_input(routed.clone());
@@ -584,7 +635,7 @@ impl RunenwerkDrawApp {
                     .map(|brush| brush.ink.size.max)
             })
             .unwrap_or(4.0);
-        (f64::from(brush_width_canvas) * self.workspace.canvas_view.zoom) as f32
+        (f64::from(brush_width_canvas) * self.composition_projection.canvas_view.zoom) as f32
     }
 
     fn rebuild_last_frame(&mut self) {
@@ -611,8 +662,8 @@ impl RunenwerkDrawApp {
                 })
                 .collect::<Vec<_>>();
             let immediate_strokes = self.immediate_stroke_projections();
-            build_workspace_frame_with_ink_surface_refs_and_strokes(
-                &self.workspace,
+            build_composition_frame_with_ink_surface_refs_and_strokes(
+                &self.composition_projection,
                 &visible_products,
                 &preview_products,
                 &immediate_strokes,
@@ -620,4 +671,27 @@ impl RunenwerkDrawApp {
         };
         self.last_frame = frame;
     }
+
+    fn rebuild_composition_projection(&mut self) -> Result<(), DrawingCompositionRejection> {
+        let canvas_bounds = self
+            .document
+            .as_ref()
+            .map(|document| document.canvas_bounds)
+            .unwrap_or(self.composition_projection.canvas_view.canvas_bounds);
+        self.composition_projection = DrawingCompositionProjection::project(
+            &self.composition_runtime,
+            &self.composition_content,
+            self.composition_projection.window_size,
+            canvas_bounds,
+            self.tablet_panel.clone(),
+        )?;
+        Ok(())
+    }
+}
+
+fn default_canvas_bounds() -> CanvasRect {
+    CanvasRect::new(
+        CanvasCoordinate::new(0.0, 0.0),
+        CanvasCoordinate::new(4096.0, 4096.0),
+    )
 }

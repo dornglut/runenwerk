@@ -29,6 +29,17 @@ This checkpoint creates `domain/ui/ui_composition` as the app-neutral
 structural authority. It changes no editor, Draw, engine, windowing, chrome,
 docking, adaptive projection, persistence storage, or legacy authority.
 
+### Execution handoff amendment
+
+On 2026-06-19 the isolated `agent_writer` backend stopped before changing files
+because its external Codex quota was exhausted. The primary governed branch
+completed the exact accepted implementation scope in-process. The contract now
+uses `verification_writer` so the Track Execution Harness performs the declared
+validation and resolver-backed evidence phases without replaying product edits.
+The failed run ledger remains preserved as execution history; scope,
+permissions, tests, evidence requirements, rollback policy, stop conditions,
+and closeout quality are unchanged.
+
 ## Current Code Truth And Reuse Inventory
 
 - `foundation/id::TypedId` is the reusable non-zero typed identity primitive.

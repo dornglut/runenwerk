@@ -419,11 +419,11 @@ dependency-checked execution graph.
 | ID | Milestone | Kind | State | Roadmap links | Outcome |
 |---|---|---|---|---|---|
 | PM-UI-COMPOSITION-001 | Governance And Visual Direction Gate | design | completed | WR-180 | Checkpoint 1 closes only after governance validates and the user selects one visual direction. |
-| PM-UI-COMPOSITION-002 | Core Contracts And Invariants | implementation | ready_next | WR-181 | The app-neutral core exists without adaptive, editor, Draw, provider-session, or app semantics. |
-| PM-UI-COMPOSITION-003 | Persistence Envelopes And Deterministic Bundles | implementation | ready_next | WR-182 | Deterministic persistence is proven before editor or Draw state migrates. |
-| PM-UI-COMPOSITION-004 | Editor Static Projection | implementation | ready_next | WR-183 | CompositionState becomes editor structural source while legacy WorkspaceState is read-only migration input. |
-| PM-UI-COMPOSITION-005 | Draw Static Projection | implementation | ready_next | WR-184 | Draw wide layout renders from generic composition and app-owned extension/provider state. |
-| PM-UI-COMPOSITION-006 | Adaptive Headless Proposals | implementation | ready_next | WR-185 | Adaptive mechanics are proven headlessly before product chrome consumes them. |
+| PM-UI-COMPOSITION-002 | Core Contracts And Invariants | implementation | completed | WR-181 | The app-neutral core exists without adaptive, editor, Draw, provider-session, or app semantics. |
+| PM-UI-COMPOSITION-003 | Persistence Envelopes And Deterministic Bundles | implementation | completed | WR-182 | Deterministic persistence is proven before editor or Draw state migrates. |
+| PM-UI-COMPOSITION-004 | Editor Static Projection | implementation | completed | WR-183 | CompositionState becomes editor structural source while legacy WorkspaceState is read-only migration input. |
+| PM-UI-COMPOSITION-005 | Draw Static Projection | implementation | completed | WR-184 | Draw wide layout renders from generic composition and app-owned extension/provider state. |
+| PM-UI-COMPOSITION-006 | Adaptive Headless Proposals | implementation | completed | WR-185 | Adaptive mechanics are proven headlessly before product chrome consumes them. |
 | PM-UI-COMPOSITION-007 | Editor Docking And Cross-Window Runtime | implementation | ready_next | WR-186 | The editor proves complete adaptive docking and all structural mutation passes through composition transactions. |
 | PM-UI-COMPOSITION-008 | Draw Adaptive Runtime | implementation | ready_next | WR-187 | Draw proves policy-driven adaptive composition while preserving a usable primary canvas and drawing truth boundaries. |
 | PM-UI-COMPOSITION-009 | Legacy Authority Cleanup | hardening | ready_next | WR-188 | No compatibility authority or unmapped surface responsibility survives. |

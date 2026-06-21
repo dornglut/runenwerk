@@ -126,6 +126,7 @@ mod tests {
 
     fn target() -> StructuralCommandTarget {
         StructuralCommandTarget {
+            mounted_unit_id: None,
             panel_instance_id: PanelInstanceId::try_from_raw(1).unwrap(),
             active_tool_surface: Some(ToolSurfaceInstanceId::try_from_raw(2).unwrap()),
             tab_stack_id: TabStackId::try_from_raw(3).unwrap(),
@@ -136,27 +137,18 @@ mod tests {
         shell_state: &RunenwerkEditorShellState,
         kind: ToolSurfaceKind,
     ) -> StructuralCommandTarget {
-        let (panel_instance_id, tool_surface_id) = shell_state
-            .workspace_state()
-            .panels()
-            .filter_map(|panel| {
-                let tool_surface_id = panel.active_tool_surface?;
-                let surface = shell_state
-                    .workspace_state()
-                    .tool_surface(tool_surface_id)?;
-                editor_shell::stable_key_for_tool_surface_kind(kind)
-                    .as_ref()
-                    .is_some_and(|key| surface.stable_surface_key() == key)
-                    .then_some((panel.id, tool_surface_id))
-            })
-            .next()
+        let stable_key = editor_shell::stable_key_for_tool_surface_kind(kind).unwrap();
+        let mounted_unit_id = shell_state
+            .composition_runtime()
+            .extension()
+            .mounted_units()
+            .iter()
+            .find(|unit| unit.stable_content_key == stable_key.as_str())
+            .map(|unit| unit.mounted_unit_id)
             .expect("default shell state should contain requested surface kind");
-
-        StructuralCommandTarget {
-            panel_instance_id,
-            active_tool_surface: Some(tool_surface_id),
-            tab_stack_id: TabStackId::try_from_raw(1).unwrap(),
-        }
+        shell_state
+            .structural_command_target_for_mounted_unit(mounted_unit_id)
+            .expect("mounted unit should have a complete structural command target")
     }
 
     #[test]

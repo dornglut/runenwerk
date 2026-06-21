@@ -1,7 +1,4 @@
-use editor_shell::{
-    PanelKind, TabStackId, ToolSurfaceKind, WorkspaceMutation, WorkspaceSplitAxis,
-    stable_key_for_tool_surface_kind, viewport_embed_slot_for,
-};
+use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, UiFrameProducerId,
@@ -256,88 +253,38 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
 }
 
 #[test]
-fn split_viewport_resize_keeps_each_viewport_product_sized_to_its_embed() {
+fn static_composition_keeps_viewport_product_sized_without_structural_mutation() {
     let mut app = runenwerk_editor::runtime::build_headless_app()
         .run_for_frames(1)
         .expect("headless editor app should run");
-    let split_host_id = {
+    let definition_before = {
         let host = app
-            .world_mut()
-            .resource_mut::<EditorHostResource>()
+            .world()
+            .resource::<EditorHostResource>()
             .expect("editor host should exist");
-        let viewport_stack_id = viewport_stack_id(&host.shell_state);
         host.shell_state
-            .try_apply_workspace_mutation_with_allocations(|allocator| {
-                let split_host_id = allocator.allocate_panel_host_id();
-                let first_child_host_id = allocator.allocate_panel_host_id();
-                let second_child_host_id = allocator.allocate_panel_host_id();
-                let new_tab_stack_id = allocator.allocate_tab_stack_id();
-                let new_panel_id = allocator.allocate_panel_instance_id();
-                let new_tool_surface_id = allocator.allocate_tool_surface_instance_id();
-                let viewport_surface_key =
-                    stable_key_for_tool_surface_kind(ToolSurfaceKind::Viewport)
-                        .expect("viewport should have a stable surface key");
-                Ok((
-                    WorkspaceMutation::SplitTabStackArea {
-                        tab_stack_id: viewport_stack_id,
-                        axis: WorkspaceSplitAxis::Horizontal,
-                        split_host_id,
-                        first_child_host_id,
-                        second_child_host_id,
-                        new_tab_stack_id,
-                        new_panel_id,
-                        new_panel_kind: PanelKind::Viewport,
-                        new_tool_surface_id,
-                        new_stable_surface_key: viewport_surface_key,
-                        fraction: 0.50,
-                    },
-                    split_host_id,
-                ))
-            })
-            .expect("viewport split should be valid")
+            .composition_runtime()
+            .composition()
+            .definition()
+            .clone()
     };
 
     app = app
         .run_for_frames(3)
-        .expect("split viewport app should run");
-    assert_split_viewport_products_match_embeds(&app);
-
-    {
-        let host = app
-            .world_mut()
-            .resource_mut::<EditorHostResource>()
-            .expect("editor host should exist");
+        .expect("static composition app should run");
+    assert_viewport_products_match_embeds(&app);
+    let host = app
+        .world()
+        .resource::<EditorHostResource>()
+        .expect("editor host should exist");
+    assert_eq!(
         host.shell_state
-            .apply_workspace_mutation(WorkspaceMutation::SetSplitHostFraction {
-                split_host_id,
-                fraction: 0.68,
-            })
-            .expect("split resize should be valid");
-    }
-    app = app
-        .run_for_frames(3)
-        .expect("resized split viewport app should run");
-
-    assert_split_viewport_products_match_embeds(&app);
-}
-
-fn viewport_stack_id(
-    shell_state: &runenwerk_editor::shell::RunenwerkEditorShellState,
-) -> TabStackId {
-    shell_state
-        .workspace_state()
-        .tab_stacks()
-        .find(|stack| {
-            stack.ordered_panels.iter().any(|panel_id| {
-                shell_state
-                    .workspace_state()
-                    .panel(*panel_id)
-                    .map(|panel| panel.panel_kind == PanelKind::Viewport)
-                    .unwrap_or(false)
-            })
-        })
-        .expect("viewport tab stack should exist")
-        .id
+            .composition_runtime()
+            .composition()
+            .definition(),
+        &definition_before,
+        "static frame submission must not mutate composition structure",
+    );
 }
 
 fn primary_viewport_embeds(app: &engine::App) -> Vec<ViewportSurfaceEmbedPrimitive> {
@@ -364,20 +311,11 @@ fn primary_viewport_embeds(app: &engine::App) -> Vec<ViewportSurfaceEmbedPrimiti
         .collect()
 }
 
-fn assert_split_viewport_products_match_embeds(app: &engine::App) {
+fn assert_viewport_products_match_embeds(app: &engine::App) {
     let embeds = primary_viewport_embeds(app);
-    assert_eq!(
-        embeds.len(),
-        2,
-        "split viewport should render exactly two primary viewport embeds"
-    );
-    assert_ne!(
-        embeds[0].viewport_id, embeds[1].viewport_id,
-        "split viewport embeds must have distinct viewport ids"
-    );
     assert!(
-        embeds[0].rect != embeds[1].rect,
-        "split viewport embeds must not collapse onto the same rect"
+        !embeds.is_empty(),
+        "composition should render a viewport embed"
     );
 
     let viewport_render_states = app

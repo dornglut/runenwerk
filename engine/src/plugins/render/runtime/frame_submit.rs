@@ -49,20 +49,19 @@ pub(crate) fn frame_render_submit_system(
     let timing_log_enabled = render_timing_logging_enabled();
     set_slow_node_logging_enabled(startup_ready_before);
 
-    let prepared_frame = {
+    let (prepared_frame, additional_prepared_frames) = {
         let Some(mut prepared_resource) = world.remove_resource::<PreparedRenderFrameResource>()
         else {
             return Ok(());
         };
-        let prepared_frame = match prepared_resource.take() {
-            Some(value) => value,
-            None => {
-                world.insert_resource(prepared_resource);
-                return Ok(());
-            }
+        let mut prepared_frames = prepared_resource.take_all().into_iter();
+        let Some(prepared_frame) = prepared_frames.next() else {
+            world.insert_resource(prepared_resource);
+            return Ok(());
         };
+        let additional_prepared_frames = prepared_frames.collect::<Vec<_>>();
         world.insert_resource(prepared_resource);
-        prepared_frame
+        (prepared_frame, additional_prepared_frames)
     };
 
     validate_prepared_frame_surface_scope(&mut world, &prepared_frame)?;
@@ -83,8 +82,13 @@ pub(crate) fn frame_render_submit_system(
         .ok_or_else(|| anyhow!("prepared render frame is missing a main surface view"))?
         .target_size_px;
 
-    if gfx.ctx.surface_config.width != target_w || gfx.ctx.surface_config.height != target_h {
-        gfx.resize(target_w, target_h);
+    let render_surface_id = prepared_frame.surface.render_surface_id;
+    let surface_size = gfx
+        .ctx
+        .surface_config(render_surface_id)
+        .map(|config| (config.width, config.height));
+    if surface_size != Some((target_w, target_h)) {
+        gfx.resize(render_surface_id, target_w, target_h);
     }
 
     let ui_font_atlas = world
@@ -425,7 +429,7 @@ pub(crate) fn frame_render_submit_system(
             if let Some(surface_error) = err.downcast_ref::<SurfaceError>() {
                 match surface_error {
                     SurfaceError::Lost | SurfaceError::Outdated => {
-                        gfx.resize(target_w, target_h);
+                        gfx.resize(render_surface_id, target_w, target_h);
                         Ok(())
                     }
                     SurfaceError::Timeout => Ok(()),
@@ -438,9 +442,107 @@ pub(crate) fn frame_render_submit_system(
         }
     };
 
+    let result = result.and_then(|_| {
+        render_additional_surfaces(
+            &mut world,
+            &additional_prepared_frames,
+            &mut gfx,
+            &mut shader_registry,
+            &ui_font_atlas,
+            preflight_config,
+            &debug_control,
+            &debug_config,
+        )
+    });
+
     world.insert_resource(shader_registry);
     world.insert_resource(gfx);
     result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_additional_surfaces(
+    world: &mut WorldMut,
+    prepared_frames: &[PreparedRenderFrame],
+    gfx: &mut Gfx,
+    shader_registry: &mut ShaderRegistryResource,
+    ui_font_atlas: &UiFontAtlasResource,
+    preflight_config: RenderPreflightValidationConfigResource,
+    debug_control: &RenderDebugControlResource,
+    debug_config: &RenderDebugConfigResource,
+) -> anyhow::Result<()> {
+    for prepared_frame in prepared_frames {
+        validate_prepared_frame_surface_scope(world, prepared_frame)?;
+        let render_surface_id = prepared_frame.surface.render_surface_id;
+        if !gfx.has_surface(render_surface_id) {
+            if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
+                registry.record_diagnostic(RenderSurfaceDiagnostic {
+                    render_surface_id: Some(render_surface_id),
+                    native_window_id: prepared_frame.surface.native_window_id,
+                    message: format!(
+                        "prepared frame {} skipped because render surface {} is not attached",
+                        prepared_frame.context.frame_index,
+                        render_surface_id.raw()
+                    ),
+                });
+            }
+            continue;
+        }
+
+        let (target_w, target_h) = prepared_frame
+            .main_view()
+            .ok_or_else(|| anyhow!("prepared render frame is missing a main surface view"))?
+            .target_size_px;
+        let surface_size = gfx
+            .ctx
+            .surface_config(render_surface_id)
+            .map(|config| (config.width, config.height));
+        if surface_size != Some((target_w, target_h)) {
+            gfx.resize(render_surface_id, target_w, target_h);
+        }
+
+        let flow_registry = world
+            .resource::<RenderFlowRegistryResource>()
+            .map_err(|_| anyhow!("render flow registry is unavailable"))?;
+        if flow_registry.revision() != prepared_frame.context.flow_registry_revision {
+            continue;
+        }
+        let ui_rect_shader = prepared_frame
+            .ui()
+            .and_then(|ui| ui.first_rect_shader_asset_id())
+            .and_then(|id| shader_registry.handle(id));
+        let render_result = gfx.render(
+            prepared_frame,
+            shader_registry,
+            flow_registry.compiled_flows(),
+            ui_rect_shader,
+            ui_font_atlas,
+            &prepared_frame.viewport_surface_bindings,
+            preflight_config,
+            debug_control,
+            debug_config,
+        );
+        if let Err(err) = render_result {
+            if let Some(surface_error) = err.downcast_ref::<SurfaceError>() {
+                match surface_error {
+                    SurfaceError::Lost | SurfaceError::Outdated => {
+                        gfx.resize(render_surface_id, target_w, target_h);
+                    }
+                    SurfaceError::Timeout | SurfaceError::Other => {}
+                    SurfaceError::OutOfMemory => anyhow::bail!(
+                        "render surface {} is out of memory",
+                        render_surface_id.raw()
+                    ),
+                }
+            } else {
+                return Err(anyhow!(
+                    "render backend execution failed for surface {}: {err:#}",
+                    render_surface_id.raw()
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn should_build_full_render_diagnostics(

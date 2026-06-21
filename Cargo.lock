@@ -852,6 +852,7 @@ name = "editor_shell"
 version = "0.1.0"
 dependencies = [
  "asset",
+ "diagnostics",
  "editor_core",
  "editor_definition",
  "editor_scene",
@@ -863,6 +864,8 @@ dependencies = [
  "ratification",
  "ron",
  "serde",
+ "ui_adaptive_composition",
+ "ui_composition",
  "ui_definition",
  "ui_graph_editor",
  "ui_input",
@@ -2761,7 +2764,10 @@ dependencies = [
  "graph",
  "native_tablet_input",
  "product",
+ "ron",
+ "serde",
  "tracing",
+ "ui_composition",
  "ui_input",
  "ui_math",
  "ui_render_data",
@@ -2801,10 +2807,13 @@ dependencies = [
  "scene",
  "serde",
  "spatial 0.1.1",
+ "tempfile",
  "texture",
  "tokio",
+ "ui_adaptive_composition",
  "ui_artifacts",
  "ui_compiler",
+ "ui_composition",
  "ui_controls",
  "ui_definition",
  "ui_graph_editor",
@@ -3735,6 +3744,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ui_adaptive_composition"
+version = "0.1.0"
+dependencies = [
+ "ui_composition",
+ "ui_input",
+ "ui_math",
+]
+
+[[package]]
 name = "ui_artifacts"
 version = "0.1.0"
 dependencies = [
@@ -3763,6 +3781,21 @@ dependencies = [
  "ui_definition",
  "ui_program",
  "ui_program_lowering",
+]
+
+[[package]]
+name = "ui_composition"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "diagnostics",
+ "id",
+ "proptest",
+ "ratification",
+ "ron",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -4014,12 +4047,16 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "ui_accessibility",
+ "ui_adaptive_composition",
  "ui_artifacts",
  "ui_binding",
  "ui_compiler",
+ "ui_composition",
  "ui_evaluator",
  "ui_geometry",
  "ui_hosts",
+ "ui_input",
+ "ui_math",
  "ui_program",
  "ui_schema",
  "ui_state",
