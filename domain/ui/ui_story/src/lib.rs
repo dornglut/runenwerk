@@ -4,6 +4,7 @@ pub mod cli;
 pub mod cli_v2;
 pub mod diagnostic;
 pub mod evidence;
+pub mod fixtures_v2;
 pub mod gallery;
 pub mod identity;
 pub mod manifest;
@@ -23,6 +24,7 @@ pub use cli::*;
 pub use cli_v2::*;
 pub use diagnostic::*;
 pub use evidence::*;
+pub use fixtures_v2::*;
 pub use gallery::*;
 pub use identity::*;
 pub use manifest::{
