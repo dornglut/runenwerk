@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+use crate::identity::UiStoryWorkflowNodeId;
 use crate::manifest_v2::UiStoryMountPolicyV2;
 use crate::report_v2::{UiStoryOutcomeV2, UiStoryWorkflowReportV2};
 use crate::workflow::NODE_PREVIEW_FRAME;
-use crate::identity::UiStoryWorkflowNodeId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum UiStoryMountBlockReasonV2 {
@@ -48,12 +48,7 @@ impl UiStoryMountDecisionV2 {
             UiStoryOutcomeV2::ExpectedFailureMatched => {
                 return Self::blocked(UiStoryMountBlockReasonV2::BlockedExpectedFailure);
             }
-            UiStoryOutcomeV2::Passed => {}
-            UiStoryOutcomeV2::Failed
-            | UiStoryOutcomeV2::Blocked
-            | UiStoryOutcomeV2::InvalidManifest => {
-                return Self::blocked(UiStoryMountBlockReasonV2::BlockedFailedOutcome);
-            }
+            _ => {}
         }
 
         match mount_policy {
@@ -71,10 +66,23 @@ impl UiStoryMountDecisionV2 {
             return Self::blocked(UiStoryMountBlockReasonV2::BlockedMissingPreviewProof);
         };
 
-        if preview_report.passed_without_blockers() {
-            Self::allowed()
-        } else {
-            Self::blocked(UiStoryMountBlockReasonV2::BlockedMissingPreviewProof)
+        if !preview_report.passed_without_blockers() {
+            return Self::blocked(UiStoryMountBlockReasonV2::BlockedMissingPreviewProof);
+        }
+
+        match report.outcome() {
+            UiStoryOutcomeV2::Passed => Self::allowed(),
+            UiStoryOutcomeV2::Failed
+            | UiStoryOutcomeV2::Blocked
+            | UiStoryOutcomeV2::InvalidManifest => {
+                Self::blocked(UiStoryMountBlockReasonV2::BlockedFailedOutcome)
+            }
+            UiStoryOutcomeV2::ExpectedFailureMatched => {
+                Self::blocked(UiStoryMountBlockReasonV2::BlockedExpectedFailure)
+            }
+            UiStoryOutcomeV2::InvalidWorkflow => {
+                Self::blocked(UiStoryMountBlockReasonV2::BlockedInvalidWorkflow)
+            }
         }
     }
 
@@ -222,7 +230,7 @@ mod tests {
         assert!(!decision.is_allowed());
         assert_eq!(
             decision.reason,
-            UiStoryMountBlockReasonV2::BlockedFailedOutcome
+            UiStoryMountBlockReasonV2::BlockedMissingPreviewProof
         );
     }
 }
