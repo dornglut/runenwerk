@@ -56,11 +56,11 @@ impl<'registry> UiStoryRunnerV2<'registry> {
     pub fn begin(
         &self,
         request: impl Into<UiStoryRunRequestV2>,
-    ) -> Result<UiStoryWorkflowRunV2, UiStoryWorkflowRunResultV2> {
+    ) -> Result<UiStoryWorkflowRunV2, Box<UiStoryWorkflowRunResultV2>> {
         let request = request.into();
         let story_id = request.story_id;
         let Some(story) = self.registry.get(&story_id) else {
-            return Err(UiStoryWorkflowRunResultV2::failed_seed(
+            return Err(Box::new(UiStoryWorkflowRunResultV2::failed_seed(
                 story_id.clone(),
                 None,
                 UiStoryDiagnostic::error(
@@ -69,12 +69,12 @@ impl<'registry> UiStoryRunnerV2<'registry> {
                     UiStoryDiagnosticSubject::Story(story_id.clone()),
                     format!("unknown ui story {}", story_id.as_str()),
                 ),
-            ));
+            )));
         };
 
         let Some(workflow_graph) = resolve_builtin_workflow_graph(&story.workflow_profile_id)
         else {
-            return Err(UiStoryWorkflowRunResultV2::failed_seed(
+            return Err(Box::new(UiStoryWorkflowRunResultV2::failed_seed(
                 story_id.clone(),
                 None,
                 UiStoryDiagnostic::error(
@@ -86,7 +86,7 @@ impl<'registry> UiStoryRunnerV2<'registry> {
                         story.workflow_profile_id.as_str()
                     ),
                 ),
-            ));
+            )));
         };
 
         Ok(UiStoryWorkflowRunV2::new(story_id, workflow_graph))
