@@ -5,13 +5,11 @@
 
 use crate::diagnostic::UiStoryDiagnosticSeverity;
 use crate::evidence::UiStoryDiagnosticExpectation;
-use crate::identity::UiStoryId;
-use crate::manifest_v2::{UiStoryExpectedOutcomeV2, UiStoryMountPolicyV2, UiStoryManifestV2};
 use crate::registry_v2::{
     UiStoryManifestSourceV2, UiStoryRegistryBuildReportV2, UiStoryRegistryBuilderV2,
     ValidatedUiStoryRegistryV2,
 };
-use crate::workflow::{NODE_SOURCE_LOAD, WORKFLOW_SOURCE_LOAD_ONLY, WORKFLOW_STATIC_PREVIEW};
+use crate::workflow::NODE_SOURCE_LOAD;
 
 pub const STORY_BUTTON_BASIC: &str = "ui.gallery.button.basic";
 pub const STORY_BUTTON_SELECTED: &str = "ui.gallery.button.selected";
@@ -165,6 +163,9 @@ pub fn source_load_read_failure_expectation_v2() -> UiStoryDiagnosticExpectation
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identity::UiStoryId;
+    use crate::manifest_v2::{UiStoryExpectedOutcomeV2, UiStoryMountPolicyV2, UiStoryManifestV2};
+    use crate::workflow::{WORKFLOW_SOURCE_LOAD_ONLY, WORKFLOW_STATIC_PREVIEW};
 
     fn manifest(story_id: &str) -> UiStoryManifestV2 {
         checked_in_story_registry_v2()
