@@ -10,6 +10,7 @@ pub mod ui_gallery;
 mod ui_gallery_diagnostics;
 mod ui_gallery_execution;
 mod ui_gallery_frame;
+mod ui_gallery_host_inputs;
 mod ui_gallery_story_evidence;
 pub mod viewport;
 
