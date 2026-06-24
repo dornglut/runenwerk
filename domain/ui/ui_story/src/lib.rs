@@ -2,6 +2,7 @@
 
 pub mod cli;
 pub mod diagnostic;
+pub mod evidence;
 pub mod gallery;
 pub mod identity;
 pub mod manifest;
@@ -14,14 +15,15 @@ pub mod workflow;
 
 pub use cli::*;
 pub use diagnostic::*;
+pub use evidence::*;
 pub use gallery::*;
 pub use identity::*;
 pub use manifest::{
-    UiStoryCategory, UiStoryCompatibilityPolicy, UiStoryDiagnosticExpectation,
-    UiStoryExpectedOutcome, UiStoryExpectedVerdict, UiStoryHostInput, UiStoryHostInputValue,
-    UiStoryHostKind, UiStoryHostProfile, UiStoryManifest, UiStoryManifestDiagnostic,
-    UiStoryManifestParseError, UiStoryMigrationPolicy, UiStoryMountPolicy, UiStoryRoutePolicy,
-    UiStorySource, UiStorySourceKind, UiStoryThemeProfile, UiStoryViewportProfile,
+    UiStoryCategory, UiStoryCompatibilityPolicy, UiStoryExpectedOutcome, UiStoryExpectedVerdict,
+    UiStoryHostInput, UiStoryHostInputValue, UiStoryHostKind, UiStoryHostProfile,
+    UiStoryManifest, UiStoryManifestDiagnostic, UiStoryManifestParseError,
+    UiStoryMigrationPolicy, UiStoryMountPolicy, UiStoryRoutePolicy, UiStorySource,
+    UiStorySourceKind, UiStoryThemeProfile, UiStoryViewportProfile,
 };
 pub use mount::*;
 pub use proof::*;
