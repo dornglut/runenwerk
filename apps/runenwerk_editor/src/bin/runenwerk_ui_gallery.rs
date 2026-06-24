@@ -185,6 +185,67 @@ mod tests {
     }
 
     #[test]
+    fn editor_gallery_v2_mount_policy_blocks_passed_report_preview_publication() {
+        let valid_execution = runenwerk_editor::runtime::run_checked_in_gallery_stories()
+            .into_iter()
+            .find(|execution| execution.mounted_frame.is_some())
+            .expect("at least one checked-in story should produce a mounted frame");
+
+        let gallery = runenwerk_editor::runtime::UiGalleryResource::from_story_executions(
+            vec![runenwerk_editor::runtime::UiGalleryStoryExecution {
+                report: valid_execution.report,
+                mount_decision: UiStoryMountDecisionV2::blocked(
+                    UiStoryMountBlockReasonV2::BlockedPolicyGalleryOnly,
+                ),
+                mount_policy: UiStoryMountPolicyV2::GalleryOnly,
+                button_report: valid_execution.button_report,
+                mounted_frame: valid_execution.mounted_frame,
+            }],
+            None,
+        );
+
+        assert!(gallery.passed());
+        assert!(
+            gallery.button_count() > 0,
+            "runtime button facts should still be retained for a passed story"
+        );
+        assert!(
+            gallery.frame().is_none(),
+            "policy-blocked stories must not publish mounted preview frames"
+        );
+    }
+
+    #[test]
+    fn editor_gallery_v2_missing_actual_frame_blocks_preview_publication() {
+        let valid_execution = runenwerk_editor::runtime::run_checked_in_gallery_stories()
+            .into_iter()
+            .find(|execution| execution.mounted_frame.is_some())
+            .expect("at least one checked-in story should produce a mounted frame");
+
+        let gallery = runenwerk_editor::runtime::UiGalleryResource::from_story_executions(
+            vec![runenwerk_editor::runtime::UiGalleryStoryExecution {
+                report: valid_execution.report,
+                mount_decision: UiStoryMountDecisionV2::allowed(),
+                mount_policy: UiStoryMountPolicyV2::EligibleWhenPassed,
+                button_report: valid_execution.button_report,
+                mounted_frame: None,
+            }],
+            None,
+        );
+
+        assert!(!gallery.passed());
+        assert!(
+            gallery.button_count() > 0,
+            "runtime button facts should still be retained for a passed story"
+        );
+        assert!(gallery.frame().is_none());
+        assert!(gallery
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.code == "ui_gallery.story.preview_frame.missing"));
+    }
+
+    #[test]
     fn editor_gallery_v2_missing_required_evidence_blocks_preview_publication() {
         let valid_execution = runenwerk_editor::runtime::run_checked_in_gallery_stories()
             .into_iter()
