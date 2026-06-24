@@ -2,6 +2,7 @@
 
 use std::{fs, path::PathBuf};
 
+use super::ui_gallery_story_evidence as story_evidence;
 use engine::plugins::render::{
     DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource, UiFrameProducerId, UiFrameRoute,
     UiFrameSubmission, UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
@@ -18,14 +19,11 @@ use ui_render_primitives::UiRenderPrimitiveReport;
 use ui_runtime_view::{ButtonRuntimeHostData, ButtonRuntimeViewReport, UiRuntimeView};
 use ui_static_mount::UiStaticMountReport;
 use ui_story::{
-    NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION, NODE_RENDER_DATA,
-    NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD, NODE_SOURCE_PARSE,
-    NODE_STATIC_MOUNT, UiStoryCliReportV2, UiStoryDiagnostic, UiStoryDiagnosticOrigin,
-    UiStoryDiagnosticSeverity, UiStoryDiagnosticSubject, UiStoryEvidence, UiStoryEvidenceKey,
-    UiStoryEvidenceProducerId, UiStoryEvidenceStatus, UiStoryId, UiStoryManifestV2,
+    NODE_PREVIEW_FRAME, NODE_RUNTIME_VIEW, UiStoryCliReportV2, UiStoryDiagnostic,
+    UiStoryDiagnosticSeverity, UiStoryDiagnosticSubject, UiStoryId, UiStoryManifestV2,
     UiStoryMountBlockReasonV2, UiStoryMountDecisionV2, UiStoryMountPolicyV2, UiStoryOutcomeV2,
-    UiStoryRunRequestV2, UiStoryRunnerV2, UiStoryWorkflowNodeId, UiStoryWorkflowReportV2,
-    ValidatedUiStoryRegistryV2, WORKFLOW_SOURCE_LOAD_ONLY, checked_in_story_registry_v2,
+    UiStoryRunRequestV2, UiStoryRunnerV2, UiStoryWorkflowReportV2, ValidatedUiStoryRegistryV2,
+    WORKFLOW_SOURCE_LOAD_ONLY, checked_in_story_registry_v2,
 };
 use ui_theme::ThemeTokens;
 
@@ -34,26 +32,6 @@ const GALLERY_PREVIEW_TILE_WIDTH: f32 = 320.0;
 const GALLERY_PREVIEW_TILE_HEIGHT: f32 = 128.0;
 const GALLERY_PREVIEW_PADDING: f32 = 16.0;
 const GALLERY_PREVIEW_GAP: f32 = 12.0;
-
-const PRODUCER_SOURCE_LOADER: &str = "runenwerk_editor.ui_gallery.source_loader";
-const PRODUCER_SOURCE_PARSER: &str = "runenwerk_editor.ui_gallery.source_parser";
-const PRODUCER_PROGRAM_FORMATION: &str = "runenwerk_editor.ui_gallery.program_formation";
-const PRODUCER_COMPILER: &str = "runenwerk_editor.ui_gallery.compiler";
-const PRODUCER_RUNTIME_VIEW: &str = "runenwerk_editor.ui_gallery.runtime_view";
-const PRODUCER_RENDER_PRIMITIVES: &str = "runenwerk_editor.ui_gallery.render_primitives";
-const PRODUCER_RENDER_DATA: &str = "runenwerk_editor.ui_gallery.render_data";
-const PRODUCER_STATIC_MOUNT: &str = "runenwerk_editor.ui_gallery.static_mount";
-const PRODUCER_PREVIEW_FRAME: &str = "runenwerk_editor.ui_gallery.preview_frame";
-
-const EVIDENCE_SOURCE_LOAD: &str = "ui.gallery.source_load";
-const EVIDENCE_SOURCE_PARSE: &str = "ui.gallery.source_parse";
-const EVIDENCE_PROGRAM_FORMATION: &str = "ui.gallery.program_formation";
-const EVIDENCE_COMPILER: &str = "ui.gallery.compiler";
-const EVIDENCE_RUNTIME_VIEW: &str = "ui.gallery.runtime_view";
-const EVIDENCE_RENDER_PRIMITIVES: &str = "ui.gallery.render_primitives";
-const EVIDENCE_RENDER_DATA: &str = "ui.gallery.render_data";
-const EVIDENCE_STATIC_MOUNT: &str = "ui.gallery.static_mount";
-const EVIDENCE_PREVIEW_FRAME: &str = "ui.gallery.preview_frame";
 
 const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
     match UiFrameProducerId::try_from_raw(raw) {
@@ -437,22 +415,16 @@ fn execute_gallery_story(
         .diagnostics
         .iter()
         .map(|diagnostic| {
-            story_diagnostic(
-                NODE_PROGRAM_FORMATION,
-                PRODUCER_PROGRAM_FORMATION,
+            story_evidence::PROGRAM_FORMATION.diagnostic(
                 diagnostic.code.clone(),
                 diagnostic.message.clone(),
                 UiStoryDiagnosticSeverity::Error,
             )
         })
         .collect::<Vec<_>>();
-    run.record(evidence_from_result(
-        NODE_PROGRAM_FORMATION,
-        PRODUCER_PROGRAM_FORMATION,
-        EVIDENCE_PROGRAM_FORMATION,
-        formation_report.passed(),
-        formation_diagnostics,
-    ));
+    run.record(
+        story_evidence::PROGRAM_FORMATION.result(formation_report.passed(), formation_diagnostics),
+    );
     if !formation_report.passed() {
         return finish_gallery_story_execution(story, run, button_report, mounted_frame);
     }
@@ -464,22 +436,14 @@ fn execute_gallery_story(
         .diagnostics
         .iter()
         .map(|diagnostic| {
-            story_diagnostic(
-                NODE_COMPILER,
-                PRODUCER_COMPILER,
+            story_evidence::COMPILER.diagnostic(
                 diagnostic.code.clone(),
                 diagnostic.message.clone(),
                 runtime_artifact_severity(diagnostic.severity),
             )
         })
         .collect::<Vec<_>>();
-    run.record(evidence_from_result(
-        NODE_COMPILER,
-        PRODUCER_COMPILER,
-        EVIDENCE_COMPILER,
-        compiler_report.passed(),
-        compiler_diagnostics,
-    ));
+    run.record(story_evidence::COMPILER.result(compiler_report.passed(), compiler_diagnostics));
     if !compiler_report.passed() {
         return finish_gallery_story_execution(story, run, button_report, mounted_frame);
     }
@@ -491,22 +455,14 @@ fn execute_gallery_story(
             .diagnostics
             .iter()
             .map(|diagnostic| {
-                story_diagnostic(
-                    NODE_RUNTIME_VIEW,
-                    PRODUCER_RUNTIME_VIEW,
+                story_evidence::RUNTIME_VIEW.diagnostic(
                     diagnostic.code.clone(),
                     diagnostic.message.clone(),
                     runtime_view_severity(diagnostic.severity),
                 )
             })
             .collect::<Vec<_>>();
-        run.record(evidence_from_result(
-            NODE_RUNTIME_VIEW,
-            PRODUCER_RUNTIME_VIEW,
-            EVIDENCE_RUNTIME_VIEW,
-            false,
-            runtime_diagnostics,
-        ));
+        run.record(story_evidence::RUNTIME_VIEW.result(false, runtime_diagnostics));
         return finish_gallery_story_execution(story, run, button_report, mounted_frame);
     }
 
@@ -518,19 +474,14 @@ fn execute_gallery_story(
         .diagnostics
         .iter()
         .map(|diagnostic| {
-            story_diagnostic(
-                NODE_RUNTIME_VIEW,
-                PRODUCER_RUNTIME_VIEW,
+            story_evidence::RUNTIME_VIEW.diagnostic(
                 diagnostic.code.clone(),
                 diagnostic.message.clone(),
                 button_runtime_severity(diagnostic.severity),
             )
         })
         .collect::<Vec<_>>();
-    run.record(evidence_from_result(
-        NODE_RUNTIME_VIEW,
-        PRODUCER_RUNTIME_VIEW,
-        EVIDENCE_RUNTIME_VIEW,
+    run.record(story_evidence::RUNTIME_VIEW.result(
         button_runtime_report.passed(),
         button_diagnostics,
     ));
@@ -547,40 +498,31 @@ fn execute_gallery_story(
         atlas,
         DEFAULT_EDITOR_FONT_ID,
     );
-    run.record(render_primitive_evidence(&primitive_report));
+    run.record(story_evidence::render_primitive_report(&primitive_report));
     if !primitive_report.passed() {
         return finish_gallery_story_execution(story, run, button_report, mounted_frame);
     }
 
     let render_data_report =
         UiHeadlessRenderDataReport::from_render_primitive_report(&primitive_report);
-    run.record(render_data_evidence(&render_data_report));
+    run.record(story_evidence::render_data_report(&render_data_report));
     if !render_data_report.passed() {
         return finish_gallery_story_execution(story, run, button_report, mounted_frame);
     }
 
     let mount_report = UiStaticMountReport::from_render_data_report(&render_data_report);
-    run.record(static_mount_evidence(&mount_report));
+    run.record(story_evidence::static_mount_report(&mount_report));
     if let Some(mounted) = mount_report.mounted_frame() {
         mounted_frame = Some(mounted.frame.clone());
-        run.record(UiStoryEvidence::passed(
-            NODE_PREVIEW_FRAME,
-            PRODUCER_PREVIEW_FRAME,
-            EVIDENCE_PREVIEW_FRAME,
-        ));
+        run.record(story_evidence::PREVIEW_FRAME.passed());
     } else {
-        run.record(UiStoryEvidence::failed(
-            NODE_PREVIEW_FRAME,
-            PRODUCER_PREVIEW_FRAME,
-            EVIDENCE_PREVIEW_FRAME,
-            vec![story_diagnostic(
-                NODE_PREVIEW_FRAME,
-                PRODUCER_PREVIEW_FRAME,
+        run.record(story_evidence::PREVIEW_FRAME.failed(vec![
+            story_evidence::PREVIEW_FRAME.diagnostic(
                 "ui_gallery.story.preview_frame.missing",
                 "static mount did not produce a mounted preview frame",
                 UiStoryDiagnosticSeverity::Error,
-            )],
-        ));
+            ),
+        ]));
     }
 
     finish_gallery_story_execution(story, run, button_report, mounted_frame)
@@ -667,26 +609,17 @@ fn load_story_source(
     let path = repo_root().join(&story.source.path);
     match fs::read_to_string(&path) {
         Ok(source) => {
-            run.record(UiStoryEvidence::passed(
-                NODE_SOURCE_LOAD,
-                PRODUCER_SOURCE_LOADER,
-                EVIDENCE_SOURCE_LOAD,
-            ));
+            run.record(story_evidence::SOURCE_LOAD.passed());
             Some(source)
         }
         Err(error) => {
-            run.record(UiStoryEvidence::failed(
-                NODE_SOURCE_LOAD,
-                PRODUCER_SOURCE_LOADER,
-                EVIDENCE_SOURCE_LOAD,
-                vec![story_diagnostic(
-                    NODE_SOURCE_LOAD,
-                    PRODUCER_SOURCE_LOADER,
+            run.record(story_evidence::SOURCE_LOAD.failed(vec![
+                story_evidence::SOURCE_LOAD.diagnostic(
                     "ui_gallery.story.source.read_failed",
                     format!("failed to read {}: {error}", path.display()),
                     UiStoryDiagnosticSeverity::Error,
-                )],
-            ));
+                ),
+            ]));
             None
         }
     }
@@ -699,26 +632,17 @@ fn parse_story_node(
 ) -> Option<UiNodeDefinition> {
     match ron::from_str(source) {
         Ok(node) => {
-            run.record(UiStoryEvidence::passed(
-                NODE_SOURCE_PARSE,
-                PRODUCER_SOURCE_PARSER,
-                EVIDENCE_SOURCE_PARSE,
-            ));
+            run.record(story_evidence::SOURCE_PARSE.passed());
             Some(node)
         }
         Err(error) => {
-            run.record(UiStoryEvidence::failed(
-                NODE_SOURCE_PARSE,
-                PRODUCER_SOURCE_PARSER,
-                EVIDENCE_SOURCE_PARSE,
-                vec![story_diagnostic(
-                    NODE_SOURCE_PARSE,
-                    PRODUCER_SOURCE_PARSER,
+            run.record(story_evidence::SOURCE_PARSE.failed(vec![
+                story_evidence::SOURCE_PARSE.diagnostic(
                     "ui_gallery.story.source.parse_failed",
                     format!("failed to parse {}: {error}", story.source.path),
                     UiStoryDiagnosticSeverity::Error,
-                )],
-            ));
+                ),
+            ]));
             None
         }
     }
@@ -760,143 +684,6 @@ fn gallery_stage_for_story_diagnostic(diagnostic: &UiStoryDiagnostic) -> UiGalle
         }
         _ => UiGalleryStage::Story,
     }
-}
-
-fn render_primitive_evidence(report: &UiRenderPrimitiveReport) -> UiStoryEvidence {
-    let diagnostics = report
-        .diagnostics()
-        .iter()
-        .map(|diagnostic| {
-            story_diagnostic(
-                NODE_RENDER_PRIMITIVES,
-                PRODUCER_RENDER_PRIMITIVES,
-                diagnostic.code.clone(),
-                diagnostic.message.clone(),
-                match diagnostic.severity {
-                    ui_render_primitives::UiRenderPrimitiveDiagnosticSeverity::Info => {
-                        UiStoryDiagnosticSeverity::Info
-                    }
-                    ui_render_primitives::UiRenderPrimitiveDiagnosticSeverity::Warning => {
-                        UiStoryDiagnosticSeverity::Warning
-                    }
-                    ui_render_primitives::UiRenderPrimitiveDiagnosticSeverity::Error => {
-                        UiStoryDiagnosticSeverity::Error
-                    }
-                },
-            )
-        })
-        .collect::<Vec<_>>();
-    evidence_from_result(
-        NODE_RENDER_PRIMITIVES,
-        PRODUCER_RENDER_PRIMITIVES,
-        EVIDENCE_RENDER_PRIMITIVES,
-        report.passed(),
-        diagnostics,
-    )
-}
-
-fn render_data_evidence(report: &UiHeadlessRenderDataReport) -> UiStoryEvidence {
-    let diagnostics = report
-        .diagnostics()
-        .iter()
-        .map(|diagnostic| {
-            story_diagnostic(
-                NODE_RENDER_DATA,
-                PRODUCER_RENDER_DATA,
-                diagnostic.code.clone(),
-                diagnostic.message.clone(),
-                match diagnostic.severity {
-                    ui_headless_render_data::UiHeadlessRenderDataDiagnosticSeverity::Info => {
-                        UiStoryDiagnosticSeverity::Info
-                    }
-                    ui_headless_render_data::UiHeadlessRenderDataDiagnosticSeverity::Warning => {
-                        UiStoryDiagnosticSeverity::Warning
-                    }
-                    ui_headless_render_data::UiHeadlessRenderDataDiagnosticSeverity::Error => {
-                        UiStoryDiagnosticSeverity::Error
-                    }
-                },
-            )
-        })
-        .collect::<Vec<_>>();
-    evidence_from_result(
-        NODE_RENDER_DATA,
-        PRODUCER_RENDER_DATA,
-        EVIDENCE_RENDER_DATA,
-        report.passed(),
-        diagnostics,
-    )
-}
-
-fn static_mount_evidence(report: &UiStaticMountReport) -> UiStoryEvidence {
-    let diagnostics = report
-        .diagnostics()
-        .iter()
-        .map(|diagnostic| {
-            story_diagnostic(
-                NODE_STATIC_MOUNT,
-                PRODUCER_STATIC_MOUNT,
-                diagnostic.code.clone(),
-                diagnostic.message.clone(),
-                match diagnostic.severity {
-                    ui_static_mount::UiStaticMountDiagnosticSeverity::Info => {
-                        UiStoryDiagnosticSeverity::Info
-                    }
-                    ui_static_mount::UiStaticMountDiagnosticSeverity::Warning => {
-                        UiStoryDiagnosticSeverity::Warning
-                    }
-                    ui_static_mount::UiStaticMountDiagnosticSeverity::Error => {
-                        UiStoryDiagnosticSeverity::Error
-                    }
-                },
-            )
-        })
-        .collect::<Vec<_>>();
-    evidence_from_result(
-        NODE_STATIC_MOUNT,
-        PRODUCER_STATIC_MOUNT,
-        EVIDENCE_STATIC_MOUNT,
-        report.passed(),
-        diagnostics,
-    )
-}
-
-fn evidence_from_result(
-    node_id: &str,
-    producer_id: &str,
-    evidence_key: &str,
-    passed: bool,
-    diagnostics: Vec<UiStoryDiagnostic>,
-) -> UiStoryEvidence {
-    let status = if passed {
-        UiStoryEvidenceStatus::Passed
-    } else {
-        UiStoryEvidenceStatus::Failed
-    };
-    UiStoryEvidence::new(
-        UiStoryWorkflowNodeId::new(node_id),
-        UiStoryEvidenceProducerId::new(producer_id),
-        UiStoryEvidenceKey::new(evidence_key),
-        status,
-        diagnostics,
-    )
-}
-
-fn story_diagnostic(
-    node_id: &str,
-    producer_id: &str,
-    code: impl Into<String>,
-    message: impl Into<String>,
-    severity: UiStoryDiagnosticSeverity,
-) -> UiStoryDiagnostic {
-    UiStoryDiagnostic::new(
-        code,
-        severity,
-        UiStoryDiagnosticOrigin::ExternalProducer(UiStoryEvidenceProducerId::new(producer_id)),
-        UiStoryDiagnosticSubject::WorkflowNode(UiStoryWorkflowNodeId::new(node_id)),
-        message,
-    )
-    .with_context("producer_id", producer_id)
 }
 
 fn runtime_artifact_severity(
