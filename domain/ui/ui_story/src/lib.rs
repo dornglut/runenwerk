@@ -6,6 +6,7 @@ pub mod evidence;
 pub mod gallery;
 pub mod identity;
 pub mod manifest;
+pub mod manifest_v2;
 pub mod mount;
 pub mod proof;
 pub mod registry;
@@ -25,6 +26,7 @@ pub use manifest::{
     UiStoryMigrationPolicy, UiStoryMountPolicy, UiStoryRoutePolicy, UiStorySource,
     UiStorySourceKind, UiStoryThemeProfile, UiStoryViewportProfile,
 };
+pub use manifest_v2::*;
 pub use mount::*;
 pub use proof::*;
 pub use registry::*;
