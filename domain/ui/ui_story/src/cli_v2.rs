@@ -6,18 +6,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::diagnostic::{UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject};
-use crate::evidence::{UiStoryDiagnosticExpectation, UiStoryEvidence};
-use crate::identity::{UiStoryEvidenceProducerId, UiStoryId, UiStoryWorkflowNodeId};
-use crate::manifest_v2::{UiStoryExpectedOutcomeV2, UiStoryMountPolicyV2};
+use crate::identity::UiStoryId;
+use crate::manifest_v2::UiStoryMountPolicyV2;
 use crate::mount_v2::{UiStoryMountBlockReasonV2, UiStoryMountDecisionV2};
 use crate::report_v2::{UiStoryOutcomeV2, UiStoryWorkflowReportV2};
-use crate::run_v2::UiStoryWorkflowRunV2;
-use crate::workflow::{
-    UiStoryBuiltinWorkflowProfile, NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION,
-    NODE_RENDER_DATA, NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD,
-    NODE_SOURCE_PARSE, NODE_STATIC_MOUNT,
-};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UiStoryCliReportV2 {
@@ -122,7 +114,19 @@ impl UiStoryCliStorySummaryV2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostic::UiStoryDiagnosticSeverity;
+    use crate::diagnostic::{
+        UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSeverity,
+        UiStoryDiagnosticSubject,
+    };
+    use crate::evidence::{UiStoryDiagnosticExpectation, UiStoryEvidence};
+    use crate::identity::{UiStoryEvidenceProducerId, UiStoryWorkflowNodeId};
+    use crate::manifest_v2::UiStoryExpectedOutcomeV2;
+    use crate::run_v2::UiStoryWorkflowRunV2;
+    use crate::workflow::{
+        UiStoryBuiltinWorkflowProfile, NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION,
+        NODE_RENDER_DATA, NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD,
+        NODE_SOURCE_PARSE, NODE_STATIC_MOUNT,
+    };
 
     const PRODUCER_ID: &str = "runenwerk_editor.ui_gallery.test_producer";
 
@@ -202,7 +206,10 @@ mod tests {
         assert_eq!(cli_report.stories.len(), 1);
         assert_eq!(cli_report.stories[0].outcome, UiStoryOutcomeV2::Passed);
         assert!(cli_report.stories[0].mount_allowed);
-        assert_eq!(cli_report.stories[0].mount_reason, UiStoryMountBlockReasonV2::Allowed);
+        assert_eq!(
+            cli_report.stories[0].mount_reason,
+            UiStoryMountBlockReasonV2::Allowed
+        );
     }
 
     #[test]
@@ -280,10 +287,7 @@ mod tests {
     #[test]
     fn cli_v2_does_not_use_old_stage_report_types() {
         let report = passed_static_preview_report("ui.gallery.button.basic");
-        let cli_report = UiStoryCliReportV2::from_reports([(
-            &report,
-            UiStoryMountPolicyV2::GalleryOnly,
-        )]);
+        let cli_report = UiStoryCliReportV2::from_reports([(&report, UiStoryMountPolicyV2::GalleryOnly)]);
         let rendered = cli_report.render_text();
 
         assert!(cli_report.passed());
