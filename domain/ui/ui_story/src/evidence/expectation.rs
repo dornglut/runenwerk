@@ -47,6 +47,21 @@ impl UiStoryDiagnosticExpectation {
         )
     }
 
+    pub fn error_from_strings(
+        workflow_node_id: impl Into<String>,
+        producer_id: impl Into<String>,
+        evidence_key: impl Into<String>,
+        code: impl Into<String>,
+    ) -> Self {
+        Self::from_strings(
+            workflow_node_id,
+            producer_id,
+            evidence_key,
+            code,
+            UiStoryDiagnosticSeverity::Error,
+        )
+    }
+
     pub fn matches(&self, evidence: &UiStoryEvidence, diagnostic: &UiStoryDiagnostic) -> bool {
         self.workflow_node_id == evidence.workflow_node_id
             && self.producer_id == evidence.producer_id
@@ -100,6 +115,18 @@ mod tests {
         let expectation = matching_expectation();
 
         assert!(expectation.matches(&evidence, &diagnostic));
+    }
+
+    #[test]
+    fn error_expectation_helper_keeps_common_expected_failure_concise() {
+        let expectation = UiStoryDiagnosticExpectation::error_from_strings(
+            "source_load",
+            "runenwerk_editor.ui_gallery.source_loader",
+            "ui.gallery.source_load",
+            UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE,
+        );
+
+        assert_eq!(expectation, matching_expectation());
     }
 
     #[test]
