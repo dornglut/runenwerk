@@ -6907,3 +6907,14 @@ tracks:
     known_quality_gaps:
     - Completion is unproven until the independent audit closes every finding.
     completion_audit: ''
+
+# BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:production-milestone-mapping
+# UI Component Platform production milestone mapping:
+# PM-UI-COMPONENT-001: Track activation, vocabulary, ergonomics doctrine, anti-overfitting rules.
+# PM-UI-COMPONENT-002: Control kernel, authoring kit, story envelope, catalog/discovery, base ControlPackages.
+# PM-UI-COMPONENT-003: Input/gesture/device, generic interaction, overlay/popup/layering, route/capability, host intent.
+# PM-UI-COMPONENT-004: Minimum text editing, generic text platform, glyph-run evidence, fail-closed text diagnostics.
+# PM-UI-COMPONENT-005: Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas/GraphCanvas, ProgressionTreeView, TrackSurface/Timeline/CurveEditor.
+# PM-UI-COMPONENT-006: Generic transition/effect primitives with state timelines, reduced motion, diagnostics, renderer boundary.
+# PM-UI-COMPONENT-007: Runtime-proven closeout, Gallery/Workbench/Designer adoption, docs validation, no-bypass audit, handoffs.
+# END RUNENWERK:UI_COMPONENT_PLATFORM:production-milestone-mapping

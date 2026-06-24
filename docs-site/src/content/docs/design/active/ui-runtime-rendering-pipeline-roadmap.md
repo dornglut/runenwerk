@@ -452,3 +452,9 @@ cargo test -p ui_definition
 ```
 
 Later rendering milestones must add crate-specific validation for runtime view, layout/style/text resolution, render primitives, backend adapter, and gallery evidence when those owners exist.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:render-surface-output -->
+## Component Platform render/surface output requirements
+
+Reusable controls and surfaces must lower to renderer-neutral output with provenance. Component output may include rect, border, clip, image, glyph run, stroke, graph/surface primitive batches, product surface primitives, viewport surface embeds, layer order, sort key, draw key, primitive order, surface order, expected primitive counts, and render diagnostics. Renderer code must not own authored UI semantics.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:render-surface-output -->

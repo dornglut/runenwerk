@@ -302,3 +302,11 @@ The design is enforceable only with guard tests:
 - No ECS UI runtime implementation.
 - No movement of editor command semantics into `domain/ui`.
 - No rewrite of self-authoring source identity, route slots, or provider ratification boundaries.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:interaction-consumption -->
+## Component Platform interaction consumption
+
+`PT-UI-COMPONENT-PLATFORM` consumes Interaction V2 by making generic interaction deterministic, replayable, inspectable, and story-proven across reusable controls and surfaces.
+
+Required proof vocabulary includes hover, pressed, focus, keyboard activation, pointer capture, cancelled click, disabled non-activation, wheel ownership, scroll boundary consumption, popup outside dismiss, Escape dismiss, focus return, route/capability decisions, host intent proposals, interaction trace replay, and post-interaction frame proof.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:interaction-consumption -->

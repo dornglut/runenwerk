@@ -639,3 +639,11 @@ Stop and redesign if any implementation:
 - creates component-specific drag/drop/selection/focus systems instead of
   platform interaction primitives;
 - mounts a surface before story mount eligibility passes.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:story-workflow-consumption -->
+## Component Platform consumption of story reports
+
+`PT-UI-COMPONENT-PLATFORM` consumes UI Story as the proof orchestration substrate. `ui_story` owns manifest, registry, workflow graph contracts, app-owned evidence, reports, expected-failure matching, CLI summaries, and mount decisions. It does not own reusable control behavior, interaction execution, text shaping, surface behavior, renderer resources, Designer product authoring, game HUD behavior, or world-space UI behavior.
+
+Component Platform stories must project evidence through the story proof envelope for control state, interaction, text, accessibility, binding, theme/token, layout, render primitive, surface, budget, diagnostics, expected-failure, and mount eligibility facts.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:story-workflow-consumption -->

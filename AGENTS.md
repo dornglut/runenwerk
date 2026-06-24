@@ -245,3 +245,9 @@ Agents must always include:
 - Prefer cleanup, consolidation, and documentation before proposing larger redesigns.
 
 Use redesign only when there is a real reason, such as:
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->
+## UI Component Platform note
+
+The current UI Component Platform activation is `PT-UI-COMPONENT-PLATFORM`, starting after `PM-UI-STORY-004`. It defines reusable, story-proven `ControlPackage` and surface kernels before product-specific Gallery, Workbench, Designer, game HUD, or world-space UI behavior. See `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md` and the `ui-component-platform-*-design.md` active design docs.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->

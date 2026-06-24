@@ -244,3 +244,9 @@ Add focused tests before or with each phase:
 - radial-menu hit-testing tests for wedge selection and cancellation.
 
 For visual regressions, add a small screenshot/primitive-order harness for the editor shell after the node split. Existing unit tests catch routing and state, but the recent bugs show that frame-order and clipping need explicit coverage.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:overlay-popup-layering -->
+## Component Platform overlay/popup/layering alignment
+
+Overlay, popup, tooltip, context menu, submenu, picker popup, modal readiness, sheet readiness, z-order, anchor placement, collision/clamping, outside dismiss, Escape dismiss, focus return, scroll containment, pointer capture, and diagnostic overlays are reusable Component Platform contracts. Editor-specific popup/adornment/drop-preview behavior consumes these contracts instead of redefining them privately.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:overlay-popup-layering -->

@@ -157,3 +157,9 @@ Authored UI definitions must not persist runtime `WidgetId`, ECS entity ids,
 app IO, provider state, provider behavior, or command execution. Editor command
 semantics stay in editor/app owners and enter UI products only through explicit
 route slots and ratified command paths.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:domain-ui-note -->
+## UI Component Platform activation note
+
+The active Component Platform roadmap is `PT-UI-COMPONENT-PLATFORM`: reusable, story-proven `ControlPackage` and surface maturity after `PM-UI-STORY-004`. The platform introduces reusable kernels for control packages, authoring, story proof, catalog/discovery, input/gesture/device, state/binding/host intent, theme/token styling, accessibility/focus, layout/container/virtualization, render/surface output, overlay/popup/layering, text, Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas, ProgressionTreeView, TrackSurface/Timeline, transitions/effects, and adoption gates.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:domain-ui-note -->

@@ -276,3 +276,9 @@ Stop before implementation if a milestone would:
 - add game-runtime UI projection execution before Editor Lab V1 is proven;
 - require durable ownership or dependency changes without an accepted ADR or
   design update.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:lab-certification -->
+## Component Platform certification inputs
+
+Lab and product UX certification consume Component Platform story evidence for controls, interactions, accessibility, layout, text, theme/token use, overlay/popup behavior, Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas, ProgressionTreeView, TrackSurface/Timeline, transitions/effects, diagnostics, and budget evidence.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:lab-certification -->
