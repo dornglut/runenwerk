@@ -80,7 +80,7 @@ mod tests {
 
     #[test]
     fn ids_sort_deterministically() {
-        let mut ids = vec![
+        let mut ids = [
             UiStoryWorkflowProfileId::new("ui_story.workflow.static_preview"),
             UiStoryWorkflowProfileId::new("ui_story.workflow.compiler_only"),
             UiStoryWorkflowProfileId::new("ui_story.workflow.source_load_only"),
