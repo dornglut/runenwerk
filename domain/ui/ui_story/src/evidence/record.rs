@@ -78,7 +78,13 @@ impl UiStoryEvidence {
         } else {
             UiStoryEvidenceStatus::Failed
         };
-        Self::from_strings(workflow_node_id, producer_id, evidence_key, status, diagnostics)
+        Self::from_strings(
+            workflow_node_id,
+            producer_id,
+            evidence_key,
+            status,
+            diagnostics,
+        )
     }
 
     pub fn failed_with_diagnostic(
@@ -87,7 +93,12 @@ impl UiStoryEvidence {
         evidence_key: impl Into<String>,
         diagnostic: UiStoryDiagnostic,
     ) -> Self {
-        Self::failed(workflow_node_id, producer_id, evidence_key, vec![diagnostic])
+        Self::failed(
+            workflow_node_id,
+            producer_id,
+            evidence_key,
+            vec![diagnostic],
+        )
     }
 
     pub fn passed(
