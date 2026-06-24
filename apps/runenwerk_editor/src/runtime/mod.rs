@@ -13,6 +13,7 @@ mod ui_gallery_frame;
 mod ui_gallery_host_inputs;
 mod ui_gallery_story_evidence;
 pub mod viewport;
+mod workbench_close_policy;
 
 pub use app::{
     RunenwerkRuntimeWorkbench, build_headless_app, build_headless_app_for_workbench,
