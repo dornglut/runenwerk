@@ -50,6 +50,46 @@ impl UiStoryEvidence {
         }
     }
 
+    pub fn from_strings(
+        workflow_node_id: impl Into<String>,
+        producer_id: impl Into<String>,
+        evidence_key: impl Into<String>,
+        status: UiStoryEvidenceStatus,
+        diagnostics: Vec<UiStoryDiagnostic>,
+    ) -> Self {
+        Self::new(
+            UiStoryWorkflowNodeId::new(workflow_node_id),
+            UiStoryEvidenceProducerId::new(producer_id),
+            UiStoryEvidenceKey::new(evidence_key),
+            status,
+            diagnostics,
+        )
+    }
+
+    pub fn from_result(
+        workflow_node_id: impl Into<String>,
+        producer_id: impl Into<String>,
+        evidence_key: impl Into<String>,
+        passed: bool,
+        diagnostics: Vec<UiStoryDiagnostic>,
+    ) -> Self {
+        let status = if passed {
+            UiStoryEvidenceStatus::Passed
+        } else {
+            UiStoryEvidenceStatus::Failed
+        };
+        Self::from_strings(workflow_node_id, producer_id, evidence_key, status, diagnostics)
+    }
+
+    pub fn failed_with_diagnostic(
+        workflow_node_id: impl Into<String>,
+        producer_id: impl Into<String>,
+        evidence_key: impl Into<String>,
+        diagnostic: UiStoryDiagnostic,
+    ) -> Self {
+        Self::failed(workflow_node_id, producer_id, evidence_key, vec![diagnostic])
+    }
+
     pub fn passed(
         workflow_node_id: impl Into<String>,
         producer_id: impl Into<String>,
@@ -171,6 +211,28 @@ mod tests {
 
         assert!(evidence.blocks_node());
         assert!(!evidence.passed_without_blockers());
+    }
+
+    #[test]
+    fn result_evidence_chooses_status_without_hiding_diagnostics() {
+        let passed = UiStoryEvidence::from_result(
+            "source_load",
+            "runenwerk_editor.ui_gallery.source_loader",
+            "ui.gallery.source_load",
+            true,
+            Vec::new(),
+        );
+        let failed = UiStoryEvidence::from_result(
+            "source_load",
+            "runenwerk_editor.ui_gallery.source_loader",
+            "ui.gallery.source_load",
+            false,
+            vec![blocking_diagnostic()],
+        );
+
+        assert_eq!(passed.status, UiStoryEvidenceStatus::Passed);
+        assert_eq!(failed.status, UiStoryEvidenceStatus::Failed);
+        assert!(failed.blocks_node());
     }
 
     #[test]
