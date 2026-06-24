@@ -13,7 +13,9 @@ fn approve_primary_window_close_intent(
     window: &mut WindowState,
     windows: &mut WindowStateRegistryResource,
 ) {
-    let primary_window_id = windows.primary_window_id().unwrap_or_else(NativeWindowId::primary);
+    let primary_window_id = windows
+        .primary_window_id()
+        .unwrap_or_else(NativeWindowId::primary);
     let registry_close_intent = windows
         .record(primary_window_id)
         .is_some_and(|record| record.close_intent_pending);
@@ -52,6 +54,9 @@ mod tests {
         let record = windows.record(primary).expect("primary window record");
         assert!(record.close_requested);
         assert!(!record.close_intent_pending);
-        assert_eq!(record.lifecycle_state, NativeWindowLifecycleState::CloseApproved);
+        assert_eq!(
+            record.lifecycle_state,
+            NativeWindowLifecycleState::CloseApproved
+        );
     }
 }

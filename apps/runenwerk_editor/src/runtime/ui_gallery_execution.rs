@@ -125,8 +125,10 @@ pub(super) fn execute_gallery_story(
     }
 
     let host_data = host_data_for_story(story);
-    let button_runtime_report =
-        ButtonRuntimeViewReport::from_runtime_view_report_with_host_data(&runtime_report, &host_data);
+    let button_runtime_report = ButtonRuntimeViewReport::from_runtime_view_report_with_host_data(
+        &runtime_report,
+        &host_data,
+    );
     let button_diagnostics = button_runtime_report
         .diagnostics
         .iter()

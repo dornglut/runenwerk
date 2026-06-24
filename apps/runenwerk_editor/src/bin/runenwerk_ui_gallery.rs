@@ -77,13 +77,18 @@ mod tests {
         assert!(gallery.passed());
         assert_eq!(gallery.story_reports().len(), 3);
         assert_eq!(gallery.button_count(), 2);
-        assert!(gallery
-            .diagnostics()
-            .iter()
-            .all(|diagnostic| diagnostic.code != "ui_gallery.story.source.read_failed"));
-        assert!(gallery.diagnostics().iter().all(|diagnostic| {
-            diagnostic.code != SELECTED_BINDING_MISSING_HOST_VALUE
-        }));
+        assert!(
+            gallery
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| diagnostic.code != "ui_gallery.story.source.read_failed")
+        );
+        assert!(
+            gallery
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| { diagnostic.code != SELECTED_BINDING_MISSING_HOST_VALUE })
+        );
         let frame = gallery
             .frame()
             .expect("eligible stories should compose a frame");
@@ -149,12 +154,17 @@ mod tests {
             .expect("selected button story should produce button runtime facts");
 
         assert!(button_report.buttons.iter().any(|button| button.selected));
-        assert!(button_report.diagnostics.iter().all(|diagnostic| {
-            diagnostic.code != SELECTED_BINDING_MISSING_HOST_VALUE
-        }));
-        assert!(execution.report.diagnostics().iter().all(|diagnostic| {
-            diagnostic.code.as_str() != SELECTED_BINDING_MISSING_HOST_VALUE
-        }));
+        assert!(
+            button_report
+                .diagnostics
+                .iter()
+                .all(|diagnostic| { diagnostic.code != SELECTED_BINDING_MISSING_HOST_VALUE })
+        );
+        assert!(
+            execution.report.diagnostics().iter().all(|diagnostic| {
+                diagnostic.code.as_str() != SELECTED_BINDING_MISSING_HOST_VALUE
+            })
+        );
     }
 
     #[test]
@@ -199,10 +209,12 @@ mod tests {
             report.story_id.as_str() == "ui.gallery.button.missing_source"
                 && report.outcome() == UiStoryOutcomeV2::ExpectedFailureMatched
         }));
-        assert!(gallery
-            .diagnostics()
-            .iter()
-            .all(|diagnostic| diagnostic.code != "ui_gallery.story.source.read_failed"));
+        assert!(
+            gallery
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| diagnostic.code != "ui_gallery.story.source.read_failed")
+        );
     }
 
     #[test]

@@ -202,6 +202,8 @@ mod tests {
             outcome: UiStoryOutcomeV2::ExpectedFailureMatched,
         };
 
-        assert!(!story_report_diagnostics_surface_in_interactive_gallery(&report));
+        assert!(!story_report_diagnostics_surface_in_interactive_gallery(
+            &report
+        ));
     }
 }
