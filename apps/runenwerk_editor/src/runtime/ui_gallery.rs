@@ -310,7 +310,9 @@ pub fn run_checked_in_gallery_stories_for_render_target(
 
     registry
         .stories()
-        .map(|story| execute_gallery_story(story, &registry, &runner, &snapshot, size, theme, atlas))
+        .map(|story| {
+            execute_gallery_story(story, &registry, &runner, &snapshot, size, theme, atlas)
+        })
         .collect()
 }
 
@@ -735,17 +737,20 @@ fn append_story_report_diagnostics(
     diagnostics: &mut Vec<UiGalleryDiagnostic>,
     blocks_gallery: bool,
 ) {
-    diagnostics.extend(report.diagnostics().iter().map(|diagnostic| {
-        UiGalleryDiagnostic {
-            stage: gallery_stage_for_story_diagnostic(diagnostic),
-            story_id: Some(report.story_id.as_str().to_owned()),
-            code: diagnostic.code.as_str().to_owned(),
-            message: diagnostic.message.clone(),
-            severity: story_severity(diagnostic.severity),
-            source_map_index: None,
-            blocks_gallery,
-        }
-    }));
+    diagnostics.extend(
+        report
+            .diagnostics()
+            .iter()
+            .map(|diagnostic| UiGalleryDiagnostic {
+                stage: gallery_stage_for_story_diagnostic(diagnostic),
+                story_id: Some(report.story_id.as_str().to_owned()),
+                code: diagnostic.code.as_str().to_owned(),
+                message: diagnostic.message.clone(),
+                severity: story_severity(diagnostic.severity),
+                source_map_index: None,
+                blocks_gallery,
+            }),
+    );
 }
 
 fn gallery_stage_for_story_diagnostic(diagnostic: &UiStoryDiagnostic) -> UiGalleryStage {
@@ -902,7 +907,9 @@ fn runtime_artifact_severity(
         ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Warning => {
             UiStoryDiagnosticSeverity::Warning
         }
-        ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Error => UiStoryDiagnosticSeverity::Error,
+        ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Error => {
+            UiStoryDiagnosticSeverity::Error
+        }
     }
 }
 
@@ -922,7 +929,9 @@ fn button_runtime_severity(
     severity: ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity,
 ) -> UiStoryDiagnosticSeverity {
     match severity {
-        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Info => UiStoryDiagnosticSeverity::Info,
+        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Info => {
+            UiStoryDiagnosticSeverity::Info
+        }
         ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Warning => {
             UiStoryDiagnosticSeverity::Warning
         }
@@ -936,11 +945,15 @@ fn button_gallery_severity(
     severity: ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity,
 ) -> UiGalleryDiagnosticSeverity {
     match severity {
-        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Info => UiGalleryDiagnosticSeverity::Info,
+        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Info => {
+            UiGalleryDiagnosticSeverity::Info
+        }
         ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Warning => {
             UiGalleryDiagnosticSeverity::Warning
         }
-        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Error => UiGalleryDiagnosticSeverity::Error,
+        ui_runtime_view::ButtonRuntimeViewDiagnosticSeverity::Error => {
+            UiGalleryDiagnosticSeverity::Error
+        }
     }
 }
 
