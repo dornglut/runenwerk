@@ -107,6 +107,8 @@ Graph substrate                    -> domain/graph
 Concrete schemas                 -> owning domain
 Editor workspace concepts        -> domain/editor/editor_shell
 UI surface mounting concepts     -> domain/ui/ui_surface
+UI story proof orchestration     -> domain/ui/ui_story
+UI story concrete evidence       -> owning app/editor runtime
 Runtime scheduling               -> engine/src/runtime plus domain/scheduler
 Backend-specific details         -> backend adapter
 AI integrations                  -> apps/tools/adapters

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Tests are executable architecture documentation. They protect long-term refactors and AI-assisted changes.
+Tests are executable architecture documentation. They protect long-term refactors and assisted changes.
 
 ## Test Naming
 
@@ -37,6 +37,21 @@ WorkspaceState -> EditorShellProjection -> UiSurfaceMountPlan -> InteractionRout
 ```
 
 Golden tests should catch route drift, structural-context loss, backend leakage, and stale projection epoch behavior.
+
+## UI Story V2 Gate
+
+UI Story V2 is a proof/orchestration contract. Its focused validation gate is:
+
+```text
+cargo test -p ui_story
+cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+cargo test -p runenwerk_editor --bin runenwerk_ui_designer
+cargo fmt --all --check
+```
+
+This gate covers Manifest V2, Registry V2, workflow graphs, app-owned evidence recording, workflow reports, mount decisions, CLI summaries, and the editor gallery integration.
+
+`cargo test -p runenwerk_editor` is a broader editor package gate. Failures in editor-shell workspace facade methods such as `workspace_state`, `replace_workspace_state`, or `apply_workspace_mutation` are not UI Story proof failures unless the failing code directly touches the UI Story V2 path.
 
 ## Canonical Commands
 

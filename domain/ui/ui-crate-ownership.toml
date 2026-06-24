@@ -363,7 +363,7 @@ dev_dependency_rationale = "Dev dependencies are used only by integration tests 
 package = "ui_story"
 path = "domain/ui/ui_story"
 layer = "proof"
-owned_responsibility = "Story manifest/report/proof/verdict/mount eligibility contracts."
+owned_responsibility = "UI Story V2 proof orchestration: manifest registry, workflow graph contracts, app-owned evidence records, workflow reports, expected-failure matching, CLI summaries, and derived mount decisions."
 allowed_dependencies = ["ui_headless_render_data", "ui_render_primitives", "ui_runtime_view", "ui_static_mount"]
 forbidden_dependencies = [
   "runenwerk_editor",

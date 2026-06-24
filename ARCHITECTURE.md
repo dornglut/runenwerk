@@ -63,6 +63,20 @@ Domain crates own engine concepts and their invariants. Other layers may validat
 
 Examples include ECS, scheduler, scene, editor domains, geometry, SDF, spatial/chunking/world domains, and UI contracts.
 
+### UI Story proof architecture
+
+`domain/ui/ui_story` owns the UI Story V2 proof/orchestration contract. Its canonical flow is:
+
+```text
+Manifest V2 -> Registry V2 -> Workflow Graph -> App-owned Evidence -> Workflow Report -> Mount Decision -> CLI/Gallery
+```
+
+`ui_story` defines story identity, manifest parsing/validation, validated registries, workflow graph contracts, evidence records, expected-failure matching, workflow reports, CLI summaries, and derived mount decisions. It does not perform filesystem IO, compiler execution, renderer execution, static mount execution, editor behavior, or gallery behavior.
+
+Concrete applications such as `apps/runenwerk_editor` own source loading, parsing, compiler/runtime/render/static-mount integration, and gallery preview publication. They record evidence into `ui_story`; they do not own the story proof semantics.
+
+Old flat-stage UI Story APIs such as stage reports, run reports, required stage lists, and mount eligibility are superseded by the V2 workflow/evidence/report/mount-decision model and are not canonical.
+
 ## Engine / Runtime
 
 Runtime crates compose domain descriptions into executable behavior. They own scheduling, plugin composition, runtime resources, rendering execution, and app lifecycle.
