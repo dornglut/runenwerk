@@ -8,9 +8,8 @@ use serde::{Deserialize, Serialize};
 
 macro_rules! story_string_id {
     ($name:ident) => {
-        #[derive(
-            Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-        )]
+        #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+        #[serde(transparent)]
         pub struct $name(String);
 
         impl $name {
@@ -47,6 +46,7 @@ story_string_id!(UiStoryThemeProfileId);
 story_string_id!(UiStoryViewportProfileId);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct UiStoryRevision(u64);
 
 impl UiStoryRevision {
@@ -116,7 +116,10 @@ mod tests {
         nodes.insert(UiStoryWorkflowNodeId::new("source_load"), 1);
 
         assert_eq!(
-            nodes.keys().map(UiStoryWorkflowNodeId::as_str).collect::<Vec<_>>(),
+            nodes
+                .keys()
+                .map(UiStoryWorkflowNodeId::as_str)
+                .collect::<Vec<_>>(),
             vec!["source_load", "source_parse"]
         );
     }
