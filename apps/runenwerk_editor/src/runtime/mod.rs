@@ -6,8 +6,8 @@ pub mod preview_process;
 pub mod procgen;
 pub mod resources;
 pub mod systems;
-mod ui_gallery_story_evidence;
 pub mod ui_gallery;
+mod ui_gallery_story_evidence;
 pub mod viewport;
 
 pub use app::{
