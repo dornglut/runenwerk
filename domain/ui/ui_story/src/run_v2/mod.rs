@@ -21,10 +21,13 @@ mod tests {
     use crate::evidence::UiStoryEvidence;
     use crate::identity::{UiStoryId, UiStoryWorkflowNodeId};
     use crate::manifest_v2::{UiStoryManifestV2, UiStoryMountPolicyV2};
-    use crate::registry_v2::{UiStoryManifestSourceV2, UiStoryRegistryBuilderV2, ValidatedUiStoryRegistryV2};
+    use crate::registry_v2::{
+        UiStoryManifestSourceV2, UiStoryRegistryBuilderV2, ValidatedUiStoryRegistryV2,
+    };
     use crate::workflow::{
-        NODE_COMPILER, NODE_SOURCE_LOAD, NODE_SOURCE_PARSE, WORKFLOW_SOURCE_LOAD_ONLY,
-        WORKFLOW_STATIC_PREVIEW,
+        NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION, NODE_RENDER_DATA,
+        NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD, NODE_SOURCE_PARSE,
+        NODE_STATIC_MOUNT, WORKFLOW_SOURCE_LOAD_ONLY, WORKFLOW_STATIC_PREVIEW,
     };
 
     const STORY_ID: &str = "ui.gallery.button.basic";
@@ -70,10 +73,22 @@ mod tests {
             EVIDENCE_KEY,
             vec![UiStoryDiagnostic::error(
                 "ui_gallery.story.source.read_failed",
-                UiStoryDiagnosticOrigin::ExternalProducer(crate::identity::UiStoryEvidenceProducerId::new(PRODUCER_ID)),
-                UiStoryDiagnosticSubject::WorkflowNode(UiStoryWorkflowNodeId::new(NODE_SOURCE_LOAD)),
+                UiStoryDiagnosticOrigin::ExternalProducer(
+                    crate::identity::UiStoryEvidenceProducerId::new(PRODUCER_ID),
+                ),
+                UiStoryDiagnosticSubject::WorkflowNode(UiStoryWorkflowNodeId::new(
+                    NODE_SOURCE_LOAD,
+                )),
                 "source load failed",
             )],
+        )
+    }
+
+    fn passed_node_evidence(node_id: &str) -> UiStoryEvidence {
+        UiStoryEvidence::passed(
+            node_id,
+            "runenwerk_editor.ui_gallery.test_producer",
+            format!("ui.gallery.{node_id}"),
         )
     }
 
@@ -222,9 +237,20 @@ mod tests {
         let mut run = runner.begin(STORY_ID).expect("story should begin");
 
         run.record(source_load_failed());
+        run.record_many([
+            passed_node_evidence(NODE_SOURCE_PARSE),
+            passed_node_evidence(NODE_PROGRAM_FORMATION),
+            passed_node_evidence(NODE_COMPILER),
+            passed_node_evidence(NODE_RUNTIME_VIEW),
+            passed_node_evidence(NODE_RENDER_PRIMITIVES),
+            passed_node_evidence(NODE_RENDER_DATA),
+            passed_node_evidence(NODE_STATIC_MOUNT),
+            passed_node_evidence(NODE_PREVIEW_FRAME),
+        ]);
         let result = run.finish();
 
         assert!(result.has_blockers());
+        assert!(result.missing_required_nodes.is_empty());
         assert!(result
             .blocked_nodes
             .iter()
