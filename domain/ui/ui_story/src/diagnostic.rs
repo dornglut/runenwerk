@@ -39,6 +39,7 @@ pub const UI_STORY_MOUNT_BLOCKED_MISSING_PREVIEW: &str =
     "ui.story.mount.blocked_missing_preview";
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct UiStoryDiagnosticCode(String);
 
 impl UiStoryDiagnosticCode {
