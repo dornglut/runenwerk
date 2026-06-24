@@ -1,6 +1,9 @@
+use std::collections::BTreeSet;
+
 use ui_runtime_view::{ButtonRuntimeViewDiagnosticSeverity, UiRuntimeViewDiagnosticSeverity};
 use ui_story::{
-    UiStoryDiagnostic, UiStoryDiagnosticSeverity, UiStoryDiagnosticSubject, UiStoryWorkflowReportV2,
+    UiStoryDiagnostic, UiStoryDiagnosticSeverity, UiStoryDiagnosticSubject, UiStoryOutcomeV2,
+    UiStoryWorkflowReportV2,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,7 +38,7 @@ impl UiGalleryStage {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UiGalleryDiagnosticSeverity {
     Info,
     Warning,
@@ -52,11 +55,40 @@ impl UiGalleryDiagnosticSeverity {
     }
 }
 
-pub(super) fn append_story_report_diagnostics(
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct UiGalleryDiagnosticKey {
+    stage: String,
+    story_id: Option<String>,
+    code: String,
+    message: String,
+    severity: UiGalleryDiagnosticSeverity,
+    source_map_index: Option<u32>,
+    blocks_gallery: bool,
+}
+
+impl From<&UiGalleryDiagnostic> for UiGalleryDiagnosticKey {
+    fn from(diagnostic: &UiGalleryDiagnostic) -> Self {
+        Self {
+            stage: diagnostic.stage.as_str().to_owned(),
+            story_id: diagnostic.story_id.clone(),
+            code: diagnostic.code.clone(),
+            message: diagnostic.message.clone(),
+            severity: diagnostic.severity,
+            source_map_index: diagnostic.source_map_index,
+            blocks_gallery: diagnostic.blocks_gallery,
+        }
+    }
+}
+
+pub(super) fn append_interactive_story_report_diagnostics(
     report: &UiStoryWorkflowReportV2,
     diagnostics: &mut Vec<UiGalleryDiagnostic>,
     blocks_gallery: bool,
 ) {
+    if !story_report_diagnostics_surface_in_interactive_gallery(report) {
+        return;
+    }
+
     diagnostics.extend(
         report
             .diagnostics()
@@ -71,6 +103,17 @@ pub(super) fn append_story_report_diagnostics(
                 blocks_gallery,
             }),
     );
+}
+
+fn story_report_diagnostics_surface_in_interactive_gallery(
+    report: &UiStoryWorkflowReportV2,
+) -> bool {
+    report.outcome() != UiStoryOutcomeV2::ExpectedFailureMatched
+}
+
+pub(super) fn dedupe_gallery_diagnostics(diagnostics: &mut Vec<UiGalleryDiagnostic>) {
+    let mut seen = BTreeSet::new();
+    diagnostics.retain(|diagnostic| seen.insert(UiGalleryDiagnosticKey::from(&*diagnostic)));
 }
 
 fn gallery_stage_for_story_diagnostic(diagnostic: &UiStoryDiagnostic) -> UiGalleryStage {
@@ -116,16 +159,6 @@ pub(super) fn button_runtime_severity(
     }
 }
 
-pub(super) fn button_gallery_severity(
-    severity: ButtonRuntimeViewDiagnosticSeverity,
-) -> UiGalleryDiagnosticSeverity {
-    match severity {
-        ButtonRuntimeViewDiagnosticSeverity::Info => UiGalleryDiagnosticSeverity::Info,
-        ButtonRuntimeViewDiagnosticSeverity::Warning => UiGalleryDiagnosticSeverity::Warning,
-        ButtonRuntimeViewDiagnosticSeverity::Error => UiGalleryDiagnosticSeverity::Error,
-    }
-}
-
 fn story_severity(severity: UiStoryDiagnosticSeverity) -> UiGalleryDiagnosticSeverity {
     match severity {
         UiStoryDiagnosticSeverity::Info => UiGalleryDiagnosticSeverity::Info,
@@ -133,5 +166,42 @@ fn story_severity(severity: UiStoryDiagnosticSeverity) -> UiGalleryDiagnosticSev
         UiStoryDiagnosticSeverity::Error | UiStoryDiagnosticSeverity::Fatal => {
             UiGalleryDiagnosticSeverity::Error
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ui_story::{UiStoryId, UiStoryWorkflowReportV2};
+
+    #[test]
+    fn gallery_diagnostic_projection_deduplicates_exact_duplicates() {
+        let diagnostic = UiGalleryDiagnostic {
+            stage: UiGalleryStage::WorkflowNode("runtime_view".to_owned()),
+            story_id: Some("ui.gallery.button.selected".to_owned()),
+            code: "ui.runtime_view.button.selected_binding_missing_host_value".to_owned(),
+            message: "duplicate".to_owned(),
+            severity: UiGalleryDiagnosticSeverity::Warning,
+            source_map_index: None,
+            blocks_gallery: false,
+        };
+        let mut diagnostics = vec![diagnostic.clone(), diagnostic];
+
+        dedupe_gallery_diagnostics(&mut diagnostics);
+
+        assert_eq!(diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn expected_failure_reports_do_not_surface_as_interactive_gallery_diagnostics() {
+        let report = UiStoryWorkflowReportV2 {
+            story_id: UiStoryId::new("ui.gallery.button.missing_source"),
+            workflow_graph: None,
+            node_reports: Vec::new(),
+            diagnostics: Vec::new(),
+            outcome: UiStoryOutcomeV2::ExpectedFailureMatched,
+        };
+
+        assert!(!story_report_diagnostics_surface_in_interactive_gallery(&report));
     }
 }
