@@ -149,10 +149,9 @@ impl UiStoryManifestV2 {
         if let Some(diagnostic) = manifest.validate().into_iter().find(|diagnostic| {
             diagnostic.code.as_str() == UI_STORY_MANIFEST_SCHEMA_UNSUPPORTED
         }) {
-            return Err(UiStoryManifestV2ParseError::new(
-                diagnostic.code.as_str(),
-                diagnostic.message,
-            ));
+            let code = diagnostic.code.as_str().to_owned();
+            let message = diagnostic.message;
+            return Err(UiStoryManifestV2ParseError::new(code, message));
         }
 
         Ok(manifest)
@@ -322,7 +321,7 @@ mod tests {
     #[test]
     fn manifest_v2_rejects_empty_viewport_matrix() {
         let mut manifest = valid_manifest();
-        manifest.viewport_matrix = UiStoryViewportMatrix::new([]);
+        manifest.viewport_matrix = UiStoryViewportMatrix::new(Vec::<UiStoryViewportProfileV2>::new());
 
         assert!(manifest
             .validate()
