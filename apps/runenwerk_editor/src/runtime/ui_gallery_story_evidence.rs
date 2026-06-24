@@ -85,7 +85,12 @@ impl UiGalleryStoryEvidenceSpec {
     }
 
     pub fn failed(self, diagnostics: Vec<UiStoryDiagnostic>) -> UiStoryEvidence {
-        UiStoryEvidence::failed(self.node_id, self.producer_id, self.evidence_key, diagnostics)
+        UiStoryEvidence::failed(
+            self.node_id,
+            self.producer_id,
+            self.evidence_key,
+            diagnostics,
+        )
     }
 
     pub fn result(self, passed: bool, diagnostics: Vec<UiStoryDiagnostic>) -> UiStoryEvidence {
@@ -230,7 +235,10 @@ mod tests {
             UiStoryDiagnosticSeverity::Error,
         );
 
-        assert_eq!(diagnostic.code.as_str(), "ui_gallery.story.preview_frame.missing");
+        assert_eq!(
+            diagnostic.code.as_str(),
+            "ui_gallery.story.preview_frame.missing"
+        );
         assert_eq!(diagnostic.severity, UiStoryDiagnosticSeverity::Error);
         assert!(matches!(
             &diagnostic.subject,
