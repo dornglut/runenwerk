@@ -11,7 +11,12 @@ mod profile;
 mod topo;
 mod validate;
 
-pub use builtin::{UiStoryBuiltinWorkflowProfile, UiStoryBuiltinWorkflowProfiles};
+pub use builtin::{
+    NODE_COMPILER, NODE_MANIFEST, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION, NODE_RENDER_DATA,
+    NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD, NODE_SOURCE_PARSE,
+    NODE_STATIC_MOUNT, UiStoryBuiltinWorkflowProfile, UiStoryBuiltinWorkflowProfiles,
+    WORKFLOW_COMPILER_ONLY, WORKFLOW_SOURCE_LOAD_ONLY, WORKFLOW_STATIC_PREVIEW,
+};
 pub use edge::{UiStoryWorkflowDependency, UiStoryWorkflowEdge};
 pub use graph::UiStoryWorkflowGraph;
 pub use node::{UiStoryWorkflowNode, UiStoryWorkflowNodePolicy};
