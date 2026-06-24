@@ -33,7 +33,7 @@ impl UiStoryViewportProfileV2 {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct UiStoryViewportMatrix {
     profiles: Vec<UiStoryViewportProfileV2>,
 }
@@ -92,13 +92,5 @@ impl UiStoryViewportMatrix {
         }
 
         diagnostics
-    }
-}
-
-impl Default for UiStoryViewportMatrix {
-    fn default() -> Self {
-        Self {
-            profiles: Vec::new(),
-        }
     }
 }
