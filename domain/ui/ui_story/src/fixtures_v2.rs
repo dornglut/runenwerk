@@ -37,7 +37,7 @@ const BUTTON_BASIC_MANIFEST_RON: &str = r#"(
     category_id: "controls.button",
     source: (
         source_id: "ui.gallery.button.basic.source",
-        path: "assets/ui_gallery/stories/controls/button/basic.ron",
+        path: "assets/ui_gallery/button/basic.ron",
         kind: Node,
     ),
     program_id: "ui.gallery.button.basic.program",
@@ -66,7 +66,7 @@ const BUTTON_SELECTED_MANIFEST_RON: &str = r#"(
     category_id: "controls.button",
     source: (
         source_id: "ui.gallery.button.selected.source",
-        path: "assets/ui_gallery/stories/controls/button/selected.ron",
+        path: "assets/ui_gallery/button/selected.ron",
         kind: Node,
     ),
     program_id: "ui.gallery.button.selected.program",
