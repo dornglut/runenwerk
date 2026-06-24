@@ -10,14 +10,17 @@ use ui_math::UiSize;
 use ui_render_data::UiFrame;
 use ui_runtime_view::ButtonRuntimeViewReport;
 use ui_story::{
-    NODE_PREVIEW_FRAME, NODE_RUNTIME_VIEW, UiStoryCliReportV2, UiStoryOutcomeV2, UiStoryRunnerV2,
+    NODE_PREVIEW_FRAME, UiStoryCliReportV2, UiStoryOutcomeV2, UiStoryRunnerV2,
     UiStoryWorkflowReportV2, checked_in_story_registry_v2,
 };
 use ui_theme::ThemeTokens;
 
-use super::ui_gallery_diagnostics::{append_story_report_diagnostics, button_gallery_severity};
+use super::ui_gallery_diagnostics::{
+    append_interactive_story_report_diagnostics, dedupe_gallery_diagnostics,
+};
 use super::ui_gallery_execution::{execute_gallery_story, registry_failure_execution};
 use super::ui_gallery_frame::{compose_gallery_preview_frame, default_gallery_proof_size};
+use super::workbench_close_policy::approve_primary_window_close_intent_system;
 
 pub use super::ui_gallery_diagnostics::{
     UiGalleryDiagnostic, UiGalleryDiagnosticSeverity, UiGalleryStage,
@@ -38,6 +41,7 @@ pub struct UiGalleryPlugin;
 impl Plugin for UiGalleryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<UiGalleryResource>();
+        app.add_systems(Update, approve_primary_window_close_intent_system);
         app.add_systems(Update, submit_ui_gallery_frame_system);
     }
 }
@@ -96,27 +100,16 @@ impl UiGalleryResource {
 
         for execution in executions {
             let report_blocks_gallery = !execution.report.outcome().is_green();
-            append_story_report_diagnostics(
+            append_interactive_story_report_diagnostics(
                 &execution.report,
                 &mut diagnostics,
                 report_blocks_gallery,
             );
 
-            if let Some(report) = execution.button_report {
-                if !report_blocks_gallery {
-                    button_report.buttons.extend(report.buttons.clone());
-                }
-                diagnostics.extend(report.diagnostics.into_iter().map(|diagnostic| {
-                    UiGalleryDiagnostic {
-                        stage: UiGalleryStage::WorkflowNode(NODE_RUNTIME_VIEW.to_owned()),
-                        story_id: Some(execution.report.story_id.as_str().to_owned()),
-                        code: diagnostic.code,
-                        message: diagnostic.message,
-                        severity: button_gallery_severity(diagnostic.severity),
-                        source_map_index: diagnostic.source_map_index,
-                        blocks_gallery: report_blocks_gallery,
-                    }
-                }));
+            if let Some(report) = execution.button_report
+                && !report_blocks_gallery
+            {
+                button_report.buttons.extend(report.buttons.clone());
             }
 
             if execution.report.outcome() == UiStoryOutcomeV2::Passed
@@ -140,6 +133,7 @@ impl UiGalleryResource {
 
             story_reports.push(execution.report);
         }
+        dedupe_gallery_diagnostics(&mut diagnostics);
         let frame = compose_gallery_preview_frame(
             prepared_size.unwrap_or_else(default_gallery_proof_size),
             &mounted_previews,
