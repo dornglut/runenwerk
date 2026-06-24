@@ -10,6 +10,7 @@ pub mod proof;
 pub mod registry;
 pub mod report;
 pub mod runner;
+pub mod workflow;
 
 pub use cli::*;
 pub use diagnostic::*;
@@ -30,3 +31,4 @@ pub use report::{
     UiStoryVerdictStatus,
 };
 pub use runner::*;
+pub use workflow::*;
