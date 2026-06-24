@@ -9,7 +9,7 @@ use ui_math::UiSize;
 use ui_program_lowering::form_ui_program_report_from_node_with_registry_snapshot;
 use ui_render_data::UiFrame;
 use ui_render_primitives::UiRenderPrimitiveReport;
-use ui_runtime_view::{ButtonRuntimeHostData, ButtonRuntimeViewReport, UiRuntimeView};
+use ui_runtime_view::{ButtonRuntimeViewReport, UiRuntimeView};
 use ui_static_mount::UiStaticMountReport;
 use ui_story::{
     UiStoryDiagnostic, UiStoryDiagnosticSeverity, UiStoryId, UiStoryManifestV2,
@@ -22,6 +22,7 @@ use ui_theme::ThemeTokens;
 use super::ui_gallery_diagnostics::{
     button_runtime_severity, runtime_artifact_severity, runtime_view_severity,
 };
+use super::ui_gallery_host_inputs::host_data_for_story;
 use super::ui_gallery_story_evidence as story_evidence;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -123,10 +124,9 @@ pub(super) fn execute_gallery_story(
         return finish_gallery_story_execution(story, run, button_report, mounted_frame);
     }
 
-    let button_runtime_report = ButtonRuntimeViewReport::from_runtime_view_report_with_host_data(
-        &runtime_report,
-        &ButtonRuntimeHostData::new(),
-    );
+    let host_data = host_data_for_story(story);
+    let button_runtime_report =
+        ButtonRuntimeViewReport::from_runtime_view_report_with_host_data(&runtime_report, &host_data);
     let button_diagnostics = button_runtime_report
         .diagnostics
         .iter()
