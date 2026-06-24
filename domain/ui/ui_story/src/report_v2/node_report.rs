@@ -52,7 +52,7 @@ impl UiStoryWorkflowNodeReportV2 {
     }
 }
 
-pub(crate) fn diagnostic_belongs_to_node(
+pub fn diagnostic_belongs_to_node(
     diagnostic: &UiStoryDiagnostic,
     node_id: &UiStoryWorkflowNodeId,
 ) -> bool {
