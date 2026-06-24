@@ -12,6 +12,7 @@ pub mod proof;
 pub mod registry;
 pub mod registry_v2;
 pub mod report;
+pub mod run_v2;
 pub mod runner;
 pub mod workflow;
 
@@ -36,5 +37,6 @@ pub use report::{
     UiStoryRunReport, UiStoryStageKind, UiStoryStageReport, UiStoryStageStatus, UiStoryVerdict,
     UiStoryVerdictStatus,
 };
+pub use run_v2::*;
 pub use runner::*;
 pub use workflow::*;
