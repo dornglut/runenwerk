@@ -78,6 +78,43 @@ task puml:validate
 The batch coordinator must propose work and wait for approval before spawning
 or coordinating workers.
 
+## UI Story V2
+
+`domain/ui/ui_story` is a proof/orchestration crate. Its canonical flow is:
+
+```text
+Manifest V2 -> Registry V2 -> Workflow Graph -> App-owned Evidence -> Workflow Report -> Mount Decision -> CLI/Gallery
+```
+
+`ui_story` must not perform filesystem IO, compiler execution, renderer
+execution, static mount execution, or editor/gallery behavior. The
+editor/gallery runtime owns concrete app behavior and records evidence into the
+V2 workflow. Preview publication is derived from all three facts: the workflow
+report outcome, the mount decision, and actual mounted-frame existence.
+
+Old flat-stage APIs are superseded and are not canonical. Do not reintroduce
+`UiStoryStageKind`, `UiStoryStageReport`, `UiStoryRunReport`,
+`UiStoryMountEligibility`, `required_stages`, or
+`run_story_with_stage_reports` as active APIs.
+
+When touching UI Story V2, use the scoped validation gate:
+
+```text
+cargo test -p ui_story
+cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+cargo test -p runenwerk_editor --bin runenwerk_ui_designer
+cargo fmt --all --check
+```
+
+Broad `cargo test -p runenwerk_editor` failures in
+`RunenwerkEditorShellState::workspace_state`, `replace_workspace_state`, or
+`apply_workspace_mutation` are not UI Story proof failures unless the failure
+also touches the V2 story proof path.
+
+Do not remove V2 suffixes or add speculative interaction, accessibility,
+performance, or visual-diff workflows in polish work. Add new workflow profiles
+only when there is a real app/runtime evidence producer.
+
 ## Automation Boundary
 
 Codex and AI workflow automation may generate prompts, checklists, first
@@ -107,6 +144,8 @@ Graph substrate                    -> domain/graph
 Concrete schemas                 -> owning domain
 Editor workspace concepts        -> domain/editor/editor_shell
 UI surface mounting concepts     -> domain/ui/ui_surface
+UI story proof orchestration     -> domain/ui/ui_story
+UI story concrete evidence       -> owning app/editor runtime
 Runtime scheduling               -> engine/src/runtime plus domain/scheduler
 Backend-specific details         -> backend adapter
 AI integrations                  -> apps/tools/adapters
