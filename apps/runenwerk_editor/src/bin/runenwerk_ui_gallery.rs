@@ -239,10 +239,12 @@ mod tests {
             "runtime button facts should still be retained for a passed story"
         );
         assert!(gallery.frame().is_none());
-        assert!(gallery
-            .diagnostics()
-            .iter()
-            .any(|diagnostic| diagnostic.code == "ui_gallery.story.preview_frame.missing"));
+        assert!(
+            gallery
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == "ui_gallery.story.preview_frame.missing")
+        );
     }
 
     #[test]
