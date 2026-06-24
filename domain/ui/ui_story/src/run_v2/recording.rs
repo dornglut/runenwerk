@@ -11,6 +11,8 @@ use crate::evidence::UiStoryEvidence;
 use crate::identity::{
     UiStoryEvidenceKey, UiStoryEvidenceProducerId, UiStoryId, UiStoryWorkflowNodeId,
 };
+use crate::manifest_v2::UiStoryExpectedOutcomeV2;
+use crate::report_v2::UiStoryWorkflowReportV2;
 use crate::workflow::{
     UiStoryWorkflowDependency, UiStoryWorkflowGraph, UiStoryWorkflowNodePolicy,
 };
@@ -94,6 +96,13 @@ impl UiStoryWorkflowRunResultV2 {
             || !self.duplicate_evidence_keys.is_empty()
             || !self.blocked_nodes.is_empty()
             || self.evidence.iter().any(UiStoryEvidence::blocks_node)
+    }
+
+    pub fn into_report(
+        self,
+        expected_outcome: UiStoryExpectedOutcomeV2,
+    ) -> UiStoryWorkflowReportV2 {
+        UiStoryWorkflowReportV2::from_run_result(self, expected_outcome)
     }
 }
 
