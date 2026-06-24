@@ -8,10 +8,12 @@ pub mod identity;
 pub mod manifest;
 pub mod manifest_v2;
 pub mod mount;
+pub mod mount_v2;
 pub mod proof;
 pub mod registry;
 pub mod registry_v2;
 pub mod report;
+pub mod report_v2;
 pub mod run_v2;
 pub mod runner;
 pub mod workflow;
@@ -30,6 +32,7 @@ pub use manifest::{
 };
 pub use manifest_v2::*;
 pub use mount::*;
+pub use mount_v2::*;
 pub use proof::*;
 pub use registry::*;
 pub use registry_v2::*;
@@ -37,6 +40,7 @@ pub use report::{
     UiStoryRunReport, UiStoryStageKind, UiStoryStageReport, UiStoryStageStatus, UiStoryVerdict,
     UiStoryVerdictStatus,
 };
+pub use report_v2::*;
 pub use run_v2::*;
 pub use runner::*;
 pub use workflow::*;
