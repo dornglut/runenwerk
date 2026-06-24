@@ -54,6 +54,8 @@ Chunk/world op logs and deltas       -> domain/world_ops
 SDF world payload/collision data and current SDF field-product specialization -> domain/world_sdf
 UI substrate primitives             -> domain/ui/*
 UI surface semantics                -> domain/ui/ui_surface
+UI story proof orchestration        -> domain/ui/ui_story
+UI story concrete evidence wiring   -> apps/runenwerk_editor runtime/gallery integration
 Backend-neutral graph editor contracts -> domain/ui/ui_graph_editor
 UI definition/formation framework   -> domain/ui/ui_definition
 Editor command/session contracts    -> domain/editor/editor_core
@@ -77,6 +79,12 @@ Runtime preview child app           -> apps/runenwerk_runtime_preview
 External host integration           -> adapters/*
 Native tablet packet normalization  -> adapters/native_tablet_input
 ```
+
+## UI Story Boundary
+
+`domain/ui/ui_story` owns Manifest V2, Registry V2, workflow profiles, evidence records, workflow reports, expected-failure matching, mount decisions, and CLI summaries. It does not own filesystem IO, compiler execution, renderer execution, static mount execution, or editor/gallery behavior.
+
+The editor/gallery runtime owns concrete behavior and records app-owned evidence into the domain proof model. Preview publication must derive from `UiStoryWorkflowReportV2`, `UiStoryMountDecisionV2`, and an actual produced frame.
 
 ## Rule
 
