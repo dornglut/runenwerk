@@ -3,7 +3,6 @@
 //! This module exposes deterministic in-memory manifest sources. It does not own
 //! gallery semantics, discover files, or execute app/editor behavior.
 
-use crate::diagnostic::UiStoryDiagnosticSeverity;
 use crate::evidence::UiStoryDiagnosticExpectation;
 use crate::registry_v2::{
     UiStoryManifestSourceV2, UiStoryRegistryBuildReportV2, UiStoryRegistryBuilderV2,
@@ -152,12 +151,11 @@ pub fn checked_in_story_registry_v2()
 }
 
 pub fn source_load_read_failure_expectation_v2() -> UiStoryDiagnosticExpectation {
-    UiStoryDiagnosticExpectation::from_strings(
+    UiStoryDiagnosticExpectation::error_from_strings(
         NODE_SOURCE_LOAD,
         SOURCE_LOAD_PRODUCER_ID,
         SOURCE_LOAD_EVIDENCE_KEY,
         SOURCE_LOAD_READ_FAILED_DIAGNOSTIC,
-        UiStoryDiagnosticSeverity::Error,
     )
 }
 
