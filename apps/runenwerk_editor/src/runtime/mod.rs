@@ -6,10 +6,10 @@ pub mod preview_process;
 pub mod procgen;
 pub mod resources;
 pub mod systems;
+pub mod ui_gallery;
 mod ui_gallery_diagnostics;
 mod ui_gallery_execution;
 mod ui_gallery_frame;
-pub mod ui_gallery;
 mod ui_gallery_story_evidence;
 pub mod viewport;
 

@@ -90,7 +90,9 @@ pub(super) fn runtime_artifact_severity(
         ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Warning => {
             UiStoryDiagnosticSeverity::Warning
         }
-        ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Error => UiStoryDiagnosticSeverity::Error,
+        ui_artifacts::UiRuntimeArtifactDiagnosticSeverity::Error => {
+            UiStoryDiagnosticSeverity::Error
+        }
     }
 }
 

@@ -10,8 +10,8 @@ use ui_math::UiSize;
 use ui_render_data::UiFrame;
 use ui_runtime_view::ButtonRuntimeViewReport;
 use ui_story::{
-    NODE_PREVIEW_FRAME, NODE_RUNTIME_VIEW, UiStoryCliReportV2, UiStoryOutcomeV2,
-    UiStoryRunnerV2, UiStoryWorkflowReportV2, checked_in_story_registry_v2,
+    NODE_PREVIEW_FRAME, NODE_RUNTIME_VIEW, UiStoryCliReportV2, UiStoryOutcomeV2, UiStoryRunnerV2,
+    UiStoryWorkflowReportV2, checked_in_story_registry_v2,
 };
 use ui_theme::ThemeTokens;
 
