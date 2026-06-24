@@ -1,6 +1,7 @@
 //! Domain-owned UI story proof contracts.
 
 pub mod cli;
+pub mod cli_v2;
 pub mod diagnostic;
 pub mod evidence;
 pub mod gallery;
@@ -19,6 +20,7 @@ pub mod runner;
 pub mod workflow;
 
 pub use cli::*;
+pub use cli_v2::*;
 pub use diagnostic::*;
 pub use evidence::*;
 pub use gallery::*;
