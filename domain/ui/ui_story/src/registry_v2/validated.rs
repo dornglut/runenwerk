@@ -23,7 +23,9 @@ impl ValidatedUiStoryRegistryV2 {
         self.stories.contains_key(story_id)
     }
 
-    pub fn stories(&self) -> impl DoubleEndedIterator<Item = &UiStoryManifestV2> + ExactSizeIterator {
+    pub fn stories(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = &UiStoryManifestV2> + ExactSizeIterator {
         self.stories.values()
     }
 

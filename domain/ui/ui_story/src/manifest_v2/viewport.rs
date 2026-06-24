@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostic::{
-    UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
-    UI_STORY_MANIFEST_FIELD_MISSING,
+    UI_STORY_MANIFEST_FIELD_MISSING, UiStoryDiagnostic, UiStoryDiagnosticOrigin,
+    UiStoryDiagnosticSubject,
 };
 use crate::identity::{UiStoryId, UiStoryViewportProfileId};
 
@@ -15,12 +15,7 @@ pub struct UiStoryViewportProfileV2 {
 }
 
 impl UiStoryViewportProfileV2 {
-    pub fn new(
-        viewport_id: impl Into<String>,
-        width: u32,
-        height: u32,
-        scale: f32,
-    ) -> Self {
+    pub fn new(viewport_id: impl Into<String>, width: u32, height: u32, scale: f32) -> Self {
         Self {
             viewport_id: UiStoryViewportProfileId::new(viewport_id),
             width,
@@ -50,12 +45,7 @@ impl UiStoryViewportMatrix {
         Self { profiles }
     }
 
-    pub fn single(
-        viewport_id: impl Into<String>,
-        width: u32,
-        height: u32,
-        scale: f32,
-    ) -> Self {
+    pub fn single(viewport_id: impl Into<String>, width: u32, height: u32, scale: f32) -> Self {
         Self::new([UiStoryViewportProfileV2::new(
             viewport_id,
             width,
@@ -107,6 +97,8 @@ impl UiStoryViewportMatrix {
 
 impl Default for UiStoryViewportMatrix {
     fn default() -> Self {
-        Self { profiles: Vec::new() }
+        Self {
+            profiles: Vec::new(),
+        }
     }
 }

@@ -104,9 +104,9 @@ mod tests {
     use crate::report_v2::UiStoryWorkflowReportV2;
     use crate::run_v2::UiStoryWorkflowRunV2;
     use crate::workflow::{
-        UiStoryBuiltinWorkflowProfile, NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION,
-        NODE_RENDER_DATA, NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD,
-        NODE_SOURCE_PARSE, NODE_STATIC_MOUNT,
+        NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION, NODE_RENDER_DATA,
+        NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD, NODE_SOURCE_PARSE,
+        NODE_STATIC_MOUNT, UiStoryBuiltinWorkflowProfile,
     };
 
     const STORY_ID: &str = "ui.gallery.button.basic";
@@ -152,15 +152,16 @@ mod tests {
             "ui.gallery.source_load",
             vec![diagnostic],
         ));
-        run.finish().into_report(UiStoryExpectedOutcomeV2::expected_failure(
-            UiStoryDiagnosticExpectation::from_strings(
-                NODE_SOURCE_LOAD,
-                PRODUCER_ID,
-                "ui.gallery.source_load",
-                "ui_gallery.story.source.read_failed",
-                UiStoryDiagnosticSeverity::Error,
-            ),
-        ))
+        run.finish()
+            .into_report(UiStoryExpectedOutcomeV2::expected_failure(
+                UiStoryDiagnosticExpectation::from_strings(
+                    NODE_SOURCE_LOAD,
+                    PRODUCER_ID,
+                    "ui.gallery.source_load",
+                    "ui_gallery.story.source.read_failed",
+                    UiStoryDiagnosticSeverity::Error,
+                ),
+            ))
     }
 
     fn static_preview_missing_preview_report() -> UiStoryWorkflowReportV2 {

@@ -14,9 +14,9 @@ pub use runner::{UiStoryRunRequestV2, UiStoryRunnerV2};
 mod tests {
     use super::*;
     use crate::diagnostic::{
-        UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
         UI_STORY_RUN_DUPLICATE_EVIDENCE, UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE,
-        UI_STORY_RUN_UNKNOWN_STORY, UI_STORY_WORKFLOW_PROFILE_UNKNOWN,
+        UI_STORY_RUN_UNKNOWN_STORY, UI_STORY_WORKFLOW_PROFILE_UNKNOWN, UiStoryDiagnostic,
+        UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
     };
     use crate::evidence::UiStoryEvidence;
     use crate::identity::{UiStoryId, UiStoryWorkflowNodeId};
@@ -106,7 +106,10 @@ mod tests {
             .expect("valid story should begin a workflow run");
 
         assert_eq!(run.story_id.as_str(), STORY_ID);
-        assert_eq!(run.workflow_graph.profile_id.as_str(), WORKFLOW_SOURCE_LOAD_ONLY);
+        assert_eq!(
+            run.workflow_graph.profile_id.as_str(),
+            WORKFLOW_SOURCE_LOAD_ONLY
+        );
         assert!(run.recorded_evidence.is_empty());
     }
 
@@ -125,10 +128,12 @@ mod tests {
 
         assert!(result.has_blockers());
         assert!(result.workflow_graph.is_none());
-        assert!(result
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_RUN_UNKNOWN_STORY));
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_RUN_UNKNOWN_STORY)
+        );
     }
 
     #[test]
@@ -146,10 +151,12 @@ mod tests {
 
         assert!(result.has_blockers());
         assert!(result.workflow_graph.is_none());
-        assert!(result
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_WORKFLOW_PROFILE_UNKNOWN));
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_WORKFLOW_PROFILE_UNKNOWN)
+        );
     }
 
     #[test]
@@ -191,10 +198,11 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![NODE_SOURCE_LOAD]
         );
-        assert!(result
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE));
+        assert!(
+            result.diagnostics.iter().any(
+                |diagnostic| diagnostic.code.as_str() == UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE
+            )
+        );
     }
 
     #[test]
@@ -220,10 +228,12 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![EVIDENCE_KEY]
         );
-        assert!(result
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_RUN_DUPLICATE_EVIDENCE));
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_RUN_DUPLICATE_EVIDENCE)
+        );
     }
 
     #[test]
@@ -251,14 +261,18 @@ mod tests {
 
         assert!(result.has_blockers());
         assert!(result.missing_required_nodes.is_empty());
-        assert!(result
-            .blocked_nodes
-            .iter()
-            .any(|node_id| node_id.as_str() == NODE_SOURCE_PARSE));
-        assert!(result
-            .blocked_nodes
-            .iter()
-            .any(|node_id| node_id.as_str() == NODE_COMPILER));
+        assert!(
+            result
+                .blocked_nodes
+                .iter()
+                .any(|node_id| node_id.as_str() == NODE_SOURCE_PARSE)
+        );
+        assert!(
+            result
+                .blocked_nodes
+                .iter()
+                .any(|node_id| node_id.as_str() == NODE_COMPILER)
+        );
     }
 
     #[test]

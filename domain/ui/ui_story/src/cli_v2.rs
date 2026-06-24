@@ -35,7 +35,9 @@ impl UiStoryCliReportV2 {
     ) -> Self {
         let mut stories = reports
             .into_iter()
-            .map(|(report, mount_policy)| UiStoryCliStorySummaryV2::from_report(report, mount_policy))
+            .map(|(report, mount_policy)| {
+                UiStoryCliStorySummaryV2::from_report(report, mount_policy)
+            })
             .collect::<Vec<_>>();
         stories.sort_by(|left, right| left.story_id.cmp(&right.story_id));
         let passed = stories.iter().all(UiStoryCliStorySummaryV2::is_proof_green);
@@ -81,7 +83,10 @@ impl UiStoryCliReportV2 {
 }
 
 impl UiStoryCliStorySummaryV2 {
-    pub fn from_report(report: &UiStoryWorkflowReportV2, mount_policy: UiStoryMountPolicyV2) -> Self {
+    pub fn from_report(
+        report: &UiStoryWorkflowReportV2,
+        mount_policy: UiStoryMountPolicyV2,
+    ) -> Self {
         let mount_decision = UiStoryMountDecisionV2::from_report(report, mount_policy);
         let report_summary = report.summary();
 
@@ -123,9 +128,9 @@ mod tests {
     use crate::manifest_v2::UiStoryExpectedOutcomeV2;
     use crate::run_v2::UiStoryWorkflowRunV2;
     use crate::workflow::{
-        UiStoryBuiltinWorkflowProfile, NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION,
-        NODE_RENDER_DATA, NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD,
-        NODE_SOURCE_PARSE, NODE_STATIC_MOUNT,
+        NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION, NODE_RENDER_DATA,
+        NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD, NODE_SOURCE_PARSE,
+        NODE_STATIC_MOUNT, UiStoryBuiltinWorkflowProfile,
     };
 
     const PRODUCER_ID: &str = "runenwerk_editor.ui_gallery.test_producer";
@@ -174,15 +179,16 @@ mod tests {
             vec![failed_source_load_diagnostic()],
         ));
 
-        run.finish().into_report(UiStoryExpectedOutcomeV2::expected_failure(
-            UiStoryDiagnosticExpectation::from_strings(
-                NODE_SOURCE_LOAD,
-                PRODUCER_ID,
-                "ui.gallery.source_load",
-                "ui_gallery.story.source.read_failed",
-                UiStoryDiagnosticSeverity::Error,
-            ),
-        ))
+        run.finish()
+            .into_report(UiStoryExpectedOutcomeV2::expected_failure(
+                UiStoryDiagnosticExpectation::from_strings(
+                    NODE_SOURCE_LOAD,
+                    PRODUCER_ID,
+                    "ui.gallery.source_load",
+                    "ui_gallery.story.source.read_failed",
+                    UiStoryDiagnosticSeverity::Error,
+                ),
+            ))
     }
 
     fn failed_report(story_id: &str) -> UiStoryWorkflowReportV2 {
@@ -197,10 +203,8 @@ mod tests {
     #[test]
     fn cli_v2_reports_passed_story() {
         let report = passed_static_preview_report("ui.gallery.button.basic");
-        let cli_report = UiStoryCliReportV2::from_reports([(
-            &report,
-            UiStoryMountPolicyV2::EligibleWhenPassed,
-        )]);
+        let cli_report =
+            UiStoryCliReportV2::from_reports([(&report, UiStoryMountPolicyV2::EligibleWhenPassed)]);
 
         assert!(cli_report.passed());
         assert_eq!(cli_report.stories.len(), 1);
@@ -215,10 +219,8 @@ mod tests {
     #[test]
     fn cli_v2_reports_expected_failure_as_green_but_not_mountable() {
         let report = expected_failure_report("ui.gallery.button.missing_source");
-        let cli_report = UiStoryCliReportV2::from_reports([(
-            &report,
-            UiStoryMountPolicyV2::EligibleWhenPassed,
-        )]);
+        let cli_report =
+            UiStoryCliReportV2::from_reports([(&report, UiStoryMountPolicyV2::EligibleWhenPassed)]);
 
         assert!(cli_report.passed());
         assert_eq!(
@@ -235,10 +237,8 @@ mod tests {
     #[test]
     fn cli_v2_reports_failed_story() {
         let report = failed_report("ui.gallery.button.failed");
-        let cli_report = UiStoryCliReportV2::from_reports([(
-            &report,
-            UiStoryMountPolicyV2::EligibleWhenPassed,
-        )]);
+        let cli_report =
+            UiStoryCliReportV2::from_reports([(&report, UiStoryMountPolicyV2::EligibleWhenPassed)]);
 
         assert!(!cli_report.passed());
         assert_eq!(cli_report.stories[0].outcome, UiStoryOutcomeV2::Failed);
@@ -249,10 +249,8 @@ mod tests {
     #[test]
     fn cli_v2_render_text_includes_outcome_and_mount_reason() {
         let report = passed_static_preview_report("ui.gallery.button.basic");
-        let cli_report = UiStoryCliReportV2::from_reports([(
-            &report,
-            UiStoryMountPolicyV2::EligibleWhenPassed,
-        )]);
+        let cli_report =
+            UiStoryCliReportV2::from_reports([(&report, UiStoryMountPolicyV2::EligibleWhenPassed)]);
         let rendered = cli_report.render_text();
 
         assert!(rendered.contains("UI Story V2 report: PASSED"));
@@ -287,7 +285,8 @@ mod tests {
     #[test]
     fn cli_v2_does_not_use_old_stage_report_types() {
         let report = passed_static_preview_report("ui.gallery.button.basic");
-        let cli_report = UiStoryCliReportV2::from_reports([(&report, UiStoryMountPolicyV2::GalleryOnly)]);
+        let cli_report =
+            UiStoryCliReportV2::from_reports([(&report, UiStoryMountPolicyV2::GalleryOnly)]);
         let rendered = cli_report.render_text();
 
         assert!(cli_report.passed());

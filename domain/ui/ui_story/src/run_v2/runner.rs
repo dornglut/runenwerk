@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostic::{
-    UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
-    UI_STORY_RUN_UNKNOWN_STORY, UI_STORY_WORKFLOW_PROFILE_UNKNOWN,
+    UI_STORY_RUN_UNKNOWN_STORY, UI_STORY_WORKFLOW_PROFILE_UNKNOWN, UiStoryDiagnostic,
+    UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
 };
 use crate::identity::{UiStoryId, UiStoryWorkflowProfileId};
 use crate::registry_v2::ValidatedUiStoryRegistryV2;
@@ -72,7 +72,8 @@ impl<'registry> UiStoryRunnerV2<'registry> {
             ));
         };
 
-        let Some(workflow_graph) = resolve_builtin_workflow_graph(&story.workflow_profile_id) else {
+        let Some(workflow_graph) = resolve_builtin_workflow_graph(&story.workflow_profile_id)
+        else {
             return Err(UiStoryWorkflowRunResultV2::failed_seed(
                 story_id.clone(),
                 None,

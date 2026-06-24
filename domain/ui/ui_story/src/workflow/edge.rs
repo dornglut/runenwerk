@@ -48,8 +48,9 @@ mod tests {
 
     #[test]
     fn requires_completed_dependency_blocks_missing_upstream() {
-        assert!(UiStoryWorkflowDependency::RequiresCompleted
-            .blocks_downstream_when_upstream_missing());
+        assert!(
+            UiStoryWorkflowDependency::RequiresCompleted.blocks_downstream_when_upstream_missing()
+        );
     }
 
     #[test]

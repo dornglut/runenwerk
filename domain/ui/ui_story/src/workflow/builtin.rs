@@ -186,7 +186,9 @@ mod tests {
     #[test]
     fn static_preview_order_is_the_story_readiness_spine() {
         let graph = UiStoryBuiltinWorkflowProfile::StaticPreview.graph();
-        let order = graph.topological_nodes().expect("static preview should be valid");
+        let order = graph
+            .topological_nodes()
+            .expect("static preview should be valid");
 
         assert_eq!(
             order

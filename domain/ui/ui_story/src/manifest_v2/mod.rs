@@ -12,9 +12,9 @@ mod viewport;
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostic::{
-    UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
     UI_STORY_MANIFEST_FIELD_MISSING, UI_STORY_MANIFEST_SCHEMA_UNSUPPORTED,
-    UI_STORY_MANIFEST_SOURCE_INVALID,
+    UI_STORY_MANIFEST_SOURCE_INVALID, UiStoryDiagnostic, UiStoryDiagnosticOrigin,
+    UiStoryDiagnosticSubject,
 };
 use crate::identity::{
     UiStoryCategoryId, UiStoryHostProfileId, UiStoryId, UiStoryProgramId, UiStoryRevision,
@@ -23,7 +23,7 @@ use crate::identity::{
 
 pub use builder::UiStoryManifestBuilder;
 pub use expected::{UiStoryExpectedOutcomeV2, UiStoryMountPolicyV2};
-pub use schema::{UiStoryManifestV2ParseError, UI_STORY_MANIFEST_V2_SCHEMA_VERSION};
+pub use schema::{UI_STORY_MANIFEST_V2_SCHEMA_VERSION, UiStoryManifestV2ParseError};
 pub use source::{UiStorySourceKindV2, UiStorySourceRef};
 pub use viewport::{UiStoryViewportMatrix, UiStoryViewportProfileV2};
 
@@ -146,9 +146,11 @@ impl UiStoryManifestV2 {
             ))
         })?;
 
-        if let Some(diagnostic) = manifest.validate().into_iter().find(|diagnostic| {
-            diagnostic.code.as_str() == UI_STORY_MANIFEST_SCHEMA_UNSUPPORTED
-        }) {
+        if let Some(diagnostic) = manifest
+            .validate()
+            .into_iter()
+            .find(|diagnostic| diagnostic.code.as_str() == UI_STORY_MANIFEST_SCHEMA_UNSUPPORTED)
+        {
             let code = diagnostic.code.as_str().to_owned();
             let message = diagnostic.message;
             return Err(UiStoryManifestV2ParseError::new(code, message));
@@ -211,7 +213,7 @@ fn push_invalid_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostic::{UiStoryDiagnosticSeverity, UI_STORY_MANIFEST_FIELD_MISSING};
+    use crate::diagnostic::{UI_STORY_MANIFEST_FIELD_MISSING, UiStoryDiagnosticSeverity};
     use crate::evidence::UiStoryDiagnosticExpectation;
     use crate::workflow::{NODE_SOURCE_LOAD, WORKFLOW_STATIC_PREVIEW};
 
@@ -252,7 +254,10 @@ mod tests {
         let manifest = valid_manifest();
 
         assert!(manifest.validate().is_empty());
-        assert_eq!(manifest.workflow_profile_id.as_str(), WORKFLOW_STATIC_PREVIEW);
+        assert_eq!(
+            manifest.workflow_profile_id.as_str(),
+            WORKFLOW_STATIC_PREVIEW
+        );
     }
 
     #[test]
@@ -270,10 +275,12 @@ mod tests {
             .mount_policy(UiStoryMountPolicyV2::EligibleWhenPassed)
             .build();
 
-        assert!(manifest
-            .validate()
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_MANIFEST_FIELD_MISSING));
+        assert!(
+            manifest
+                .validate()
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_MANIFEST_FIELD_MISSING)
+        );
     }
 
     #[test]
@@ -291,10 +298,12 @@ mod tests {
             .mount_policy(UiStoryMountPolicyV2::EligibleWhenPassed)
             .build();
 
-        assert!(manifest
-            .validate()
-            .iter()
-            .any(|diagnostic| diagnostic.message.contains("title")));
+        assert!(
+            manifest
+                .validate()
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("title"))
+        );
     }
 
     #[test]
@@ -312,21 +321,26 @@ mod tests {
             .mount_policy(UiStoryMountPolicyV2::EligibleWhenPassed)
             .build();
 
-        assert!(manifest
-            .validate()
-            .iter()
-            .any(|diagnostic| diagnostic.message.contains("source path")));
+        assert!(
+            manifest
+                .validate()
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("source path"))
+        );
     }
 
     #[test]
     fn manifest_v2_rejects_empty_viewport_matrix() {
         let mut manifest = valid_manifest();
-        manifest.viewport_matrix = UiStoryViewportMatrix::new(Vec::<UiStoryViewportProfileV2>::new());
+        manifest.viewport_matrix =
+            UiStoryViewportMatrix::new(Vec::<UiStoryViewportProfileV2>::new());
 
-        assert!(manifest
-            .validate()
-            .iter()
-            .any(|diagnostic| diagnostic.message.contains("viewport_matrix")));
+        assert!(
+            manifest
+                .validate()
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("viewport_matrix"))
+        );
     }
 
     #[test]
@@ -340,7 +354,9 @@ mod tests {
         };
 
         match manifest.expected_outcome {
-            UiStoryExpectedOutcomeV2::ExpectedFailure { expectation: actual } => {
+            UiStoryExpectedOutcomeV2::ExpectedFailure {
+                expectation: actual,
+            } => {
                 assert_eq!(actual, expectation);
             }
             UiStoryExpectedOutcomeV2::Pass => panic!("expected failure should be preserved"),
@@ -365,7 +381,10 @@ mod tests {
             .to_ron_string_pretty()
             .expect("manifest should serialize");
 
-        assert_eq!(manifest.workflow_profile_id.as_str(), WORKFLOW_STATIC_PREVIEW);
+        assert_eq!(
+            manifest.workflow_profile_id.as_str(),
+            WORKFLOW_STATIC_PREVIEW
+        );
         assert!(ron.contains("workflow_profile_id"));
         assert!(!ron.contains("required_stages"));
         assert!(!ron.contains("required_stage"));

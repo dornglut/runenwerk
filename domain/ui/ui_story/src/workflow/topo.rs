@@ -36,7 +36,12 @@ pub fn topological_nodes(
     let mut outgoing = graph
         .nodes()
         .iter()
-        .map(|node| (node.node_id.clone(), BTreeSet::<UiStoryWorkflowNodeId>::new()))
+        .map(|node| {
+            (
+                node.node_id.clone(),
+                BTreeSet::<UiStoryWorkflowNodeId>::new(),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
 
     for edge in graph.edges() {
@@ -120,7 +125,10 @@ mod tests {
         let graph = UiStoryWorkflowGraph::new(
             UiStoryWorkflowProfileId::new("ui_story.workflow.invalid"),
             [UiStoryWorkflowNode::required("source_load", "Source load")],
-            [UiStoryWorkflowEdge::requires_completed("source_load", "source_parse")],
+            [UiStoryWorkflowEdge::requires_completed(
+                "source_load",
+                "source_parse",
+            )],
             UiStoryWorkflowNodeId::new("source_load"),
         );
 

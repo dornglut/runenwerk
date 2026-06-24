@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostic::UiStoryDiagnostic;
-use crate::identity::{
-    UiStoryEvidenceKey, UiStoryEvidenceProducerId, UiStoryWorkflowNodeId,
-};
+use crate::identity::{UiStoryEvidenceKey, UiStoryEvidenceProducerId, UiStoryWorkflowNodeId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum UiStoryEvidenceStatus {
@@ -122,9 +120,7 @@ impl UiStoryEvidence {
     }
 
     pub fn has_blocking_diagnostics(&self) -> bool {
-        self.diagnostics
-            .iter()
-            .any(UiStoryDiagnostic::is_blocking)
+        self.diagnostics.iter().any(UiStoryDiagnostic::is_blocking)
     }
 
     pub fn blocks_node(&self) -> bool {
@@ -140,7 +136,7 @@ impl UiStoryEvidence {
 mod tests {
     use super::*;
     use crate::diagnostic::{
-        UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject, UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE,
+        UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
     };
 
     fn blocking_diagnostic() -> UiStoryDiagnostic {

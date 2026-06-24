@@ -50,7 +50,10 @@ mod tests {
         let manifest = UiStoryManifestV2::builder("ui.gallery.invalid")
             .title("")
             .category("controls.button")
-            .source_node("assets/ui_gallery/stories/invalid.ron", "ui.gallery.invalid.source")
+            .source_node(
+                "assets/ui_gallery/stories/invalid.ron",
+                "ui.gallery.invalid.source",
+            )
             .program_id("ui.gallery.invalid.program")
             .host_profile("editor.gallery")
             .theme_profile("editor.dark")
@@ -81,9 +84,7 @@ mod tests {
             .expect("valid sources should build a validated registry");
 
         assert_eq!(registry.len(), 1);
-        assert!(registry.contains(&crate::identity::UiStoryId::new(
-            "ui.gallery.button.basic"
-        )));
+        assert!(registry.contains(&crate::identity::UiStoryId::new("ui.gallery.button.basic")));
     }
 
     #[test]
@@ -97,10 +98,12 @@ mod tests {
         assert_eq!(report.parsed_count, 1);
         assert_eq!(report.accepted_count, 0);
         assert_eq!(report.rejected_count, 1);
-        assert!(report
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_MANIFEST_FIELD_MISSING));
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_MANIFEST_FIELD_MISSING)
+        );
     }
 
     #[test]
@@ -123,10 +126,12 @@ mod tests {
         assert_eq!(report.accepted_count, 1);
         assert_eq!(report.rejected_count, 1);
         assert_eq!(report.duplicate_count, 1);
-        assert!(report
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_REGISTRY_DUPLICATE_STORY));
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_REGISTRY_DUPLICATE_STORY)
+        );
     }
 
     #[test]
@@ -162,14 +167,19 @@ mod tests {
             .find(|diagnostic| diagnostic.code.as_str() == UI_STORY_MANIFEST_FIELD_MISSING)
             .expect("manifest diagnostic should be preserved");
 
-        assert!(diagnostic
-            .context
-            .iter()
-            .any(|(key, value)| key == "manifest_source_id" && value == "manifest.invalid"));
-        assert!(diagnostic
-            .context
-            .iter()
-            .any(|(key, value)| key == "manifest_source_path" && value == "virtual/invalid.story.ron"));
+        assert!(
+            diagnostic
+                .context
+                .iter()
+                .any(|(key, value)| key == "manifest_source_id" && value == "manifest.invalid")
+        );
+        assert!(
+            diagnostic
+                .context
+                .iter()
+                .any(|(key, value)| key == "manifest_source_path"
+                    && value == "virtual/invalid.story.ron")
+        );
     }
 
     #[test]

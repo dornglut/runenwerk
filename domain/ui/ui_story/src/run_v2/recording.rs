@@ -3,9 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostic::{
-    UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
     UI_STORY_RUN_BLOCKED_DEPENDENCY, UI_STORY_RUN_DUPLICATE_EVIDENCE,
-    UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE, UI_STORY_WORKFLOW_NODE_MISSING,
+    UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE, UI_STORY_WORKFLOW_NODE_MISSING, UiStoryDiagnostic,
+    UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
 };
 use crate::evidence::UiStoryEvidence;
 use crate::identity::{
@@ -13,9 +13,7 @@ use crate::identity::{
 };
 use crate::manifest_v2::UiStoryExpectedOutcomeV2;
 use crate::report_v2::UiStoryWorkflowReportV2;
-use crate::workflow::{
-    UiStoryWorkflowDependency, UiStoryWorkflowGraph, UiStoryWorkflowNodePolicy,
-};
+use crate::workflow::{UiStoryWorkflowDependency, UiStoryWorkflowGraph, UiStoryWorkflowNodePolicy};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UiStoryWorkflowRunV2 {
@@ -89,9 +87,7 @@ impl UiStoryWorkflowRunResultV2 {
     }
 
     pub fn has_blockers(&self) -> bool {
-        self.diagnostics
-            .iter()
-            .any(UiStoryDiagnostic::is_blocking)
+        self.diagnostics.iter().any(UiStoryDiagnostic::is_blocking)
             || !self.missing_required_nodes.is_empty()
             || !self.duplicate_evidence_keys.is_empty()
             || !self.blocked_nodes.is_empty()
@@ -176,7 +172,10 @@ fn finish_workflow_run(run: UiStoryWorkflowRunV2) -> UiStoryWorkflowRunResultV2 
                         evidence.evidence_key.as_str()
                     ),
                 )
-                .with_context("workflow_node_id", evidence.workflow_node_id.as_str().to_owned())
+                .with_context(
+                    "workflow_node_id",
+                    evidence.workflow_node_id.as_str().to_owned(),
+                )
                 .with_context("producer_id", evidence.producer_id.as_str().to_owned())
                 .with_context("evidence_key", evidence.evidence_key.as_str().to_owned()),
             );
@@ -196,7 +195,10 @@ fn finish_workflow_run(run: UiStoryWorkflowRunV2) -> UiStoryWorkflowRunResultV2 
                     UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE,
                     UiStoryDiagnosticOrigin::Runner,
                     UiStoryDiagnosticSubject::WorkflowNode(node_id.clone()),
-                    format!("missing required evidence for workflow node {}", node_id.as_str()),
+                    format!(
+                        "missing required evidence for workflow node {}",
+                        node_id.as_str()
+                    ),
                 )
                 .with_context("workflow_node_id", node_id.as_str().to_owned()),
             );

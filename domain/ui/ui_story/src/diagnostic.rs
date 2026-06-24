@@ -19,12 +19,10 @@ pub const UI_STORY_REGISTRY_INVALID_MANIFEST: &str = "ui.story.registry.invalid_
 pub const UI_STORY_WORKFLOW_PROFILE_UNKNOWN: &str = "ui.story.workflow.profile_unknown";
 pub const UI_STORY_WORKFLOW_NODE_DUPLICATE: &str = "ui.story.workflow.node_duplicate";
 pub const UI_STORY_WORKFLOW_NODE_MISSING: &str = "ui.story.workflow.node_missing";
-pub const UI_STORY_WORKFLOW_EDGE_ENDPOINT_UNKNOWN: &str =
-    "ui.story.workflow.edge_endpoint_unknown";
+pub const UI_STORY_WORKFLOW_EDGE_ENDPOINT_UNKNOWN: &str = "ui.story.workflow.edge_endpoint_unknown";
 pub const UI_STORY_WORKFLOW_CYCLE: &str = "ui.story.workflow.cycle";
 pub const UI_STORY_RUN_UNKNOWN_STORY: &str = "ui.story.run.unknown_story";
-pub const UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE: &str =
-    "ui.story.run.missing_required_evidence";
+pub const UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE: &str = "ui.story.run.missing_required_evidence";
 pub const UI_STORY_RUN_BLOCKED_DEPENDENCY: &str = "ui.story.run.blocked_dependency";
 pub const UI_STORY_RUN_DUPLICATE_EVIDENCE: &str = "ui.story.run.duplicate_evidence";
 pub const UI_STORY_EXPECTED_FAILURE_TARGET_MISSING: &str =
@@ -35,8 +33,7 @@ pub const UI_STORY_EXPECTED_FAILURE_UNEXPECTED_ERROR: &str =
     "ui.story.expected_failure.unexpected_error";
 pub const UI_STORY_MOUNT_BLOCKED_OUTCOME: &str = "ui.story.mount.blocked_outcome";
 pub const UI_STORY_MOUNT_BLOCKED_POLICY: &str = "ui.story.mount.blocked_policy";
-pub const UI_STORY_MOUNT_BLOCKED_MISSING_PREVIEW: &str =
-    "ui.story.mount.blocked_missing_preview";
+pub const UI_STORY_MOUNT_BLOCKED_MISSING_PREVIEW: &str = "ui.story.mount.blocked_missing_preview";
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -134,7 +131,13 @@ impl UiStoryDiagnostic {
         subject: UiStoryDiagnosticSubject,
         message: impl Into<String>,
     ) -> Self {
-        Self::new(code, UiStoryDiagnosticSeverity::Info, origin, subject, message)
+        Self::new(
+            code,
+            UiStoryDiagnosticSeverity::Info,
+            origin,
+            subject,
+            message,
+        )
     }
 
     pub fn warning(
@@ -158,7 +161,13 @@ impl UiStoryDiagnostic {
         subject: UiStoryDiagnosticSubject,
         message: impl Into<String>,
     ) -> Self {
-        Self::new(code, UiStoryDiagnosticSeverity::Error, origin, subject, message)
+        Self::new(
+            code,
+            UiStoryDiagnosticSeverity::Error,
+            origin,
+            subject,
+            message,
+        )
     }
 
     pub fn fatal(
@@ -167,7 +176,13 @@ impl UiStoryDiagnostic {
         subject: UiStoryDiagnosticSubject,
         message: impl Into<String>,
     ) -> Self {
-        Self::new(code, UiStoryDiagnosticSeverity::Fatal, origin, subject, message)
+        Self::new(
+            code,
+            UiStoryDiagnosticSeverity::Fatal,
+            origin,
+            subject,
+            message,
+        )
     }
 
     pub fn with_context(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
@@ -202,9 +217,7 @@ mod tests {
             UiStoryDiagnostic::error(
                 UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE,
                 UiStoryDiagnosticOrigin::Runner,
-                UiStoryDiagnosticSubject::WorkflowNode(UiStoryWorkflowNodeId::new(
-                    "source_parse",
-                )),
+                UiStoryDiagnosticSubject::WorkflowNode(UiStoryWorkflowNodeId::new("source_parse")),
                 "missing source parse evidence",
             ),
             UiStoryDiagnostic::error(

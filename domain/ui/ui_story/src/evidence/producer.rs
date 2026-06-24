@@ -22,17 +22,11 @@ impl UiStoryEvidenceProducer {
         }
     }
 
-    pub fn domain_owned(
-        producer_id: impl Into<String>,
-        label: impl Into<String>,
-    ) -> Self {
+    pub fn domain_owned(producer_id: impl Into<String>, label: impl Into<String>) -> Self {
         Self::new(UiStoryEvidenceProducerId::new(producer_id), label, false)
     }
 
-    pub fn app_owned(
-        producer_id: impl Into<String>,
-        label: impl Into<String>,
-    ) -> Self {
+    pub fn app_owned(producer_id: impl Into<String>, label: impl Into<String>) -> Self {
         Self::new(UiStoryEvidenceProducerId::new(producer_id), label, true)
     }
 }

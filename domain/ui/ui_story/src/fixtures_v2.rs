@@ -21,7 +21,8 @@ pub const SOURCE_LOAD_READ_FAILED_DIAGNOSTIC: &str = "ui_gallery.story.source.re
 
 const BUTTON_BASIC_MANIFEST_SOURCE_ID: &str = "ui.story.fixture.button.basic.manifest";
 const BUTTON_SELECTED_MANIFEST_SOURCE_ID: &str = "ui.story.fixture.button.selected.manifest";
-const BUTTON_MISSING_SOURCE_MANIFEST_SOURCE_ID: &str = "ui.story.fixture.button.missing_source.manifest";
+const BUTTON_MISSING_SOURCE_MANIFEST_SOURCE_ID: &str =
+    "ui.story.fixture.button.missing_source.manifest";
 
 const BUTTON_BASIC_MANIFEST_PATH: &str = "checked-in/ui_story/v2/button/basic.story.ron";
 const BUTTON_SELECTED_MANIFEST_PATH: &str = "checked-in/ui_story/v2/button/selected.story.ron";
@@ -143,8 +144,8 @@ pub fn checked_in_story_manifest_sources_v2() -> Vec<UiStoryManifestSourceV2> {
     ]
 }
 
-pub fn checked_in_story_registry_v2(
-) -> Result<ValidatedUiStoryRegistryV2, UiStoryRegistryBuildReportV2> {
+pub fn checked_in_story_registry_v2()
+-> Result<ValidatedUiStoryRegistryV2, UiStoryRegistryBuildReportV2> {
     UiStoryRegistryBuilderV2::new()
         .add_sources(checked_in_story_manifest_sources_v2())
         .build()
@@ -164,7 +165,7 @@ pub fn source_load_read_failure_expectation_v2() -> UiStoryDiagnosticExpectation
 mod tests {
     use super::*;
     use crate::identity::UiStoryId;
-    use crate::manifest_v2::{UiStoryExpectedOutcomeV2, UiStoryMountPolicyV2, UiStoryManifestV2};
+    use crate::manifest_v2::{UiStoryExpectedOutcomeV2, UiStoryManifestV2, UiStoryMountPolicyV2};
     use crate::workflow::{WORKFLOW_SOURCE_LOAD_ONLY, WORKFLOW_STATIC_PREVIEW};
 
     fn manifest(story_id: &str) -> UiStoryManifestV2 {
@@ -208,9 +209,15 @@ mod tests {
         for story_id in [STORY_BUTTON_BASIC, STORY_BUTTON_SELECTED] {
             let manifest = manifest(story_id);
 
-            assert_eq!(manifest.workflow_profile_id.as_str(), WORKFLOW_STATIC_PREVIEW);
+            assert_eq!(
+                manifest.workflow_profile_id.as_str(),
+                WORKFLOW_STATIC_PREVIEW
+            );
             assert_eq!(manifest.expected_outcome, UiStoryExpectedOutcomeV2::Pass);
-            assert_eq!(manifest.mount_policy, UiStoryMountPolicyV2::EligibleWhenPassed);
+            assert_eq!(
+                manifest.mount_policy,
+                UiStoryMountPolicyV2::EligibleWhenPassed
+            );
         }
     }
 
@@ -245,7 +252,11 @@ mod tests {
         let sources = checked_in_story_manifest_sources_v2();
 
         assert!(sources.iter().all(|source| !source.contents.is_empty()));
-        assert!(sources.iter().all(|source| source.path.starts_with("checked-in/")));
+        assert!(
+            sources
+                .iter()
+                .all(|source| source.path.starts_with("checked-in/"))
+        );
         assert!(checked_in_story_registry_v2().is_ok());
     }
 }

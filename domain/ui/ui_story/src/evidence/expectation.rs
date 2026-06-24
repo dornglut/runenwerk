@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostic::{UiStoryDiagnostic, UiStoryDiagnosticCode, UiStoryDiagnosticSeverity};
-use crate::identity::{
-    UiStoryEvidenceKey, UiStoryEvidenceProducerId, UiStoryWorkflowNodeId,
-};
+use crate::identity::{UiStoryEvidenceKey, UiStoryEvidenceProducerId, UiStoryWorkflowNodeId};
 
 use super::record::UiStoryEvidence;
 
@@ -62,7 +60,7 @@ impl UiStoryDiagnosticExpectation {
 mod tests {
     use super::*;
     use crate::diagnostic::{
-        UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject, UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE,
+        UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
     };
 
     fn source_load_evidence() -> UiStoryEvidence {

@@ -31,7 +31,10 @@ pub fn validate_workflow_graph(graph: &UiStoryWorkflowGraph) -> Vec<UiStoryDiagn
         diagnostics.push(workflow_error(
             UI_STORY_WORKFLOW_NODE_DUPLICATE,
             UiStoryDiagnosticSubject::WorkflowNode(node_id.clone()),
-            format!("workflow node `{}` is declared more than once", node_id.as_str()),
+            format!(
+                "workflow node `{}` is declared more than once",
+                node_id.as_str()
+            ),
         ));
     }
 
@@ -102,7 +105,12 @@ fn graph_has_cycle(graph: &UiStoryWorkflowGraph) -> bool {
     let mut outgoing = graph
         .nodes()
         .iter()
-        .map(|node| (node.node_id.clone(), BTreeSet::<UiStoryWorkflowNodeId>::new()))
+        .map(|node| {
+            (
+                node.node_id.clone(),
+                BTreeSet::<UiStoryWorkflowNodeId>::new(),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
 
     for edge in graph.edges() {
@@ -159,9 +167,11 @@ mod tests {
 
         let diagnostics = graph.validate();
 
-        assert!(diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_WORKFLOW_NODE_DUPLICATE));
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_WORKFLOW_NODE_DUPLICATE)
+        );
     }
 
     #[test]
@@ -169,14 +179,21 @@ mod tests {
         let graph = UiStoryWorkflowGraph::new(
             UiStoryWorkflowProfileId::new("ui_story.workflow.invalid"),
             [UiStoryWorkflowNode::required("source_load", "Source load")],
-            [UiStoryWorkflowEdge::requires_completed("source_load", "source_parse")],
+            [UiStoryWorkflowEdge::requires_completed(
+                "source_load",
+                "source_parse",
+            )],
             UiStoryWorkflowNodeId::new("source_load"),
         );
 
         let diagnostics = graph.validate();
 
-        assert!(diagnostics.iter().any(|diagnostic| diagnostic.code.as_str()
-            == UI_STORY_WORKFLOW_EDGE_ENDPOINT_UNKNOWN));
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str()
+                    == UI_STORY_WORKFLOW_EDGE_ENDPOINT_UNKNOWN)
+        );
     }
 
     #[test]
@@ -190,9 +207,11 @@ mod tests {
 
         let diagnostics = graph.validate();
 
-        assert!(diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_WORKFLOW_NODE_MISSING));
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_WORKFLOW_NODE_MISSING)
+        );
     }
 
     #[test]
@@ -212,8 +231,10 @@ mod tests {
 
         let diagnostics = graph.validate();
 
-        assert!(diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_WORKFLOW_CYCLE));
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_WORKFLOW_CYCLE)
+        );
     }
 }

@@ -4,8 +4,7 @@ use crate::diagnostic::UiStoryDiagnostic;
 use crate::identity::{UiStoryWorkflowNodeId, UiStoryWorkflowProfileId};
 
 use super::{
-    UiStoryWorkflowEdge, UiStoryWorkflowNode, UiStoryWorkflowTopologyError,
-    validate_workflow_graph,
+    UiStoryWorkflowEdge, UiStoryWorkflowNode, UiStoryWorkflowTopologyError, validate_workflow_graph,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,7 +58,9 @@ impl UiStoryWorkflowGraph {
         self.validate().is_empty()
     }
 
-    pub fn topological_nodes(&self) -> Result<Vec<&UiStoryWorkflowNode>, UiStoryWorkflowTopologyError> {
+    pub fn topological_nodes(
+        &self,
+    ) -> Result<Vec<&UiStoryWorkflowNode>, UiStoryWorkflowTopologyError> {
         super::topo::topological_nodes(self)
     }
 }

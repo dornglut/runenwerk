@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostic::{
-    UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
-    UI_STORY_REGISTRY_DUPLICATE_STORY, UI_STORY_REGISTRY_INVALID_MANIFEST,
+    UI_STORY_REGISTRY_DUPLICATE_STORY, UI_STORY_REGISTRY_INVALID_MANIFEST, UiStoryDiagnostic,
+    UiStoryDiagnosticOrigin, UiStoryDiagnosticSubject,
 };
 use crate::identity::UiStoryId;
 use crate::manifest_v2::UiStoryManifestV2;

@@ -29,10 +29,10 @@ pub use gallery::*;
 pub use identity::*;
 pub use manifest::{
     UiStoryCategory, UiStoryCompatibilityPolicy, UiStoryExpectedOutcome, UiStoryExpectedVerdict,
-    UiStoryHostInput, UiStoryHostInputValue, UiStoryHostKind, UiStoryHostProfile,
-    UiStoryManifest, UiStoryManifestDiagnostic, UiStoryManifestParseError,
-    UiStoryMigrationPolicy, UiStoryMountPolicy, UiStoryRoutePolicy, UiStorySource,
-    UiStorySourceKind, UiStoryThemeProfile, UiStoryViewportProfile,
+    UiStoryHostInput, UiStoryHostInputValue, UiStoryHostKind, UiStoryHostProfile, UiStoryManifest,
+    UiStoryManifestDiagnostic, UiStoryManifestParseError, UiStoryMigrationPolicy,
+    UiStoryMountPolicy, UiStoryRoutePolicy, UiStorySource, UiStorySourceKind, UiStoryThemeProfile,
+    UiStoryViewportProfile,
 };
 pub use manifest_v2::*;
 pub use mount::*;

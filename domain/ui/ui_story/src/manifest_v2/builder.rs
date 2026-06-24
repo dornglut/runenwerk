@@ -5,8 +5,8 @@ use crate::identity::{
 };
 
 use super::{
-    UiStoryExpectedOutcomeV2, UiStoryManifestV2, UiStoryMountPolicyV2, UiStorySourceRef,
-    UiStoryViewportMatrix, UI_STORY_MANIFEST_V2_SCHEMA_VERSION,
+    UI_STORY_MANIFEST_V2_SCHEMA_VERSION, UiStoryExpectedOutcomeV2, UiStoryManifestV2,
+    UiStoryMountPolicyV2, UiStorySourceRef, UiStoryViewportMatrix,
 };
 
 #[derive(Clone, Debug)]

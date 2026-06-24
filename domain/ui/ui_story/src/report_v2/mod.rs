@@ -19,7 +19,7 @@ use crate::manifest_v2::UiStoryExpectedOutcomeV2;
 use crate::run_v2::UiStoryWorkflowRunResultV2;
 use crate::workflow::{UiStoryWorkflowGraph, UiStoryWorkflowNode};
 
-pub use node_report::{diagnostic_belongs_to_node, UiStoryWorkflowNodeReportV2};
+pub use node_report::{UiStoryWorkflowNodeReportV2, diagnostic_belongs_to_node};
 pub use outcome::UiStoryOutcomeV2;
 pub use summary::UiStoryWorkflowReportSummaryV2;
 
@@ -56,10 +56,7 @@ impl UiStoryWorkflowReportV2 {
         self.outcome
     }
 
-    pub fn node(
-        &self,
-        node_id: &UiStoryWorkflowNodeId,
-    ) -> Option<&UiStoryWorkflowNodeReportV2> {
+    pub fn node(&self, node_id: &UiStoryWorkflowNodeId) -> Option<&UiStoryWorkflowNodeReportV2> {
         self.node_reports
             .iter()
             .find(|node_report| &node_report.node_id == node_id)
@@ -70,7 +67,9 @@ impl UiStoryWorkflowReportV2 {
     }
 
     pub fn first_blocker(&self) -> Option<&UiStoryDiagnostic> {
-        self.diagnostics.iter().find(|diagnostic| diagnostic.is_blocking())
+        self.diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.is_blocking())
     }
 
     pub fn has_blockers(&self) -> bool {
@@ -124,14 +123,16 @@ fn build_node_reports(result: &UiStoryWorkflowRunResultV2) -> Vec<UiStoryWorkflo
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
-    let blocked_nodes = result.blocked_nodes.iter().cloned().collect::<BTreeSet<_>>();
+    let blocked_nodes = result
+        .blocked_nodes
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
 
     ordered_nodes(graph)
         .into_iter()
         .map(|node| {
-            let evidence = evidence_by_node
-                .remove(&node.node_id)
-                .unwrap_or_default();
+            let evidence = evidence_by_node.remove(&node.node_id).unwrap_or_default();
             let mut diagnostics = result
                 .diagnostics
                 .iter()
@@ -176,7 +177,10 @@ fn derive_outcome(
         || !result.missing_required_nodes.is_empty()
         || !result.blocked_nodes.is_empty()
         || diagnostics.iter().any(UiStoryDiagnostic::is_blocking)
-        || result.evidence.iter().any(|evidence| evidence.blocks_node());
+        || result
+            .evidence
+            .iter()
+            .any(|evidence| evidence.blocks_node());
 
     if expected_failure_matches(expected_outcome, result) {
         return UiStoryOutcomeV2::ExpectedFailureMatched;
@@ -216,17 +220,16 @@ fn recorded_diagnostic_matches(
 mod tests {
     use super::*;
     use crate::diagnostic::{
-        UiStoryDiagnostic, UiStoryDiagnosticOrigin, UiStoryDiagnosticSeverity,
-        UiStoryDiagnosticSubject, UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE,
-        UI_STORY_RUN_UNKNOWN_STORY,
+        UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE, UI_STORY_RUN_UNKNOWN_STORY, UiStoryDiagnostic,
+        UiStoryDiagnosticOrigin, UiStoryDiagnosticSeverity, UiStoryDiagnosticSubject,
     };
     use crate::evidence::UiStoryEvidence;
     use crate::identity::{UiStoryEvidenceProducerId, UiStoryId, UiStoryWorkflowNodeId};
     use crate::run_v2::UiStoryWorkflowRunV2;
     use crate::workflow::{
-        UiStoryBuiltinWorkflowProfile, NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION,
-        NODE_RENDER_DATA, NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD,
-        NODE_SOURCE_PARSE, NODE_STATIC_MOUNT,
+        NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION, NODE_RENDER_DATA,
+        NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD, NODE_SOURCE_PARSE,
+        NODE_STATIC_MOUNT, UiStoryBuiltinWorkflowProfile,
     };
 
     const STORY_ID: &str = "ui.gallery.button.basic";
@@ -302,17 +305,23 @@ mod tests {
     #[test]
     fn report_v2_passes_clean_source_load_only_run() {
         let mut run = source_load_only_run();
-        run.record(UiStoryEvidence::passed(NODE_SOURCE_LOAD, PRODUCER_ID, EVIDENCE_KEY));
+        run.record(UiStoryEvidence::passed(
+            NODE_SOURCE_LOAD,
+            PRODUCER_ID,
+            EVIDENCE_KEY,
+        ));
 
-        let report = UiStoryWorkflowReportV2::from_run_result(
-            run.finish(),
-            UiStoryExpectedOutcomeV2::Pass,
-        );
+        let report =
+            UiStoryWorkflowReportV2::from_run_result(run.finish(), UiStoryExpectedOutcomeV2::Pass);
 
         assert_eq!(report.outcome(), UiStoryOutcomeV2::Passed);
         assert!(!report.has_blockers());
         assert_eq!(report.node_reports.len(), 2);
-        assert!(report.node(&UiStoryWorkflowNodeId::new(NODE_SOURCE_LOAD)).is_some());
+        assert!(
+            report
+                .node(&UiStoryWorkflowNodeId::new(NODE_SOURCE_LOAD))
+                .is_some()
+        );
     }
 
     #[test]
@@ -324,22 +333,29 @@ mod tests {
 
         assert_eq!(report.outcome(), UiStoryOutcomeV2::Failed);
         assert!(report.has_blockers());
-        assert!(report
-            .diagnostics()
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_str() == UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE));
+        assert!(
+            report.diagnostics().iter().any(
+                |diagnostic| diagnostic.code.as_str() == UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE
+            )
+        );
     }
 
     #[test]
     fn report_v2_fails_duplicate_evidence() {
         let mut run = source_load_only_run();
-        run.record(UiStoryEvidence::passed(NODE_SOURCE_LOAD, PRODUCER_ID, EVIDENCE_KEY));
-        run.record(UiStoryEvidence::passed(NODE_SOURCE_LOAD, PRODUCER_ID, EVIDENCE_KEY));
+        run.record(UiStoryEvidence::passed(
+            NODE_SOURCE_LOAD,
+            PRODUCER_ID,
+            EVIDENCE_KEY,
+        ));
+        run.record(UiStoryEvidence::passed(
+            NODE_SOURCE_LOAD,
+            PRODUCER_ID,
+            EVIDENCE_KEY,
+        ));
 
-        let report = UiStoryWorkflowReportV2::from_run_result(
-            run.finish(),
-            UiStoryExpectedOutcomeV2::Pass,
-        );
+        let report =
+            UiStoryWorkflowReportV2::from_run_result(run.finish(), UiStoryExpectedOutcomeV2::Pass);
 
         assert_eq!(report.outcome(), UiStoryOutcomeV2::Failed);
         assert!(report.first_blocker().is_some());
@@ -350,10 +366,8 @@ mod tests {
         let mut run = source_load_only_run();
         run.record(failed_source_load_evidence());
 
-        let report = UiStoryWorkflowReportV2::from_run_result(
-            run.finish(),
-            expected_source_load_failure(),
-        );
+        let report =
+            UiStoryWorkflowReportV2::from_run_result(run.finish(), expected_source_load_failure());
 
         assert_eq!(report.outcome(), UiStoryOutcomeV2::ExpectedFailureMatched);
         assert!(report.has_blockers());
@@ -363,15 +377,14 @@ mod tests {
     fn report_v2_rejects_wrong_expected_failure_diagnostic() {
         let mut run = source_load_only_run();
         run.record(failed_source_load_evidence());
-        let wrong_expectation = UiStoryExpectedOutcomeV2::expected_failure(
-            UiStoryDiagnosticExpectation::from_strings(
+        let wrong_expectation =
+            UiStoryExpectedOutcomeV2::expected_failure(UiStoryDiagnosticExpectation::from_strings(
                 NODE_SOURCE_LOAD,
                 PRODUCER_ID,
                 EVIDENCE_KEY,
                 "ui_gallery.story.other_error",
                 UiStoryDiagnosticSeverity::Error,
-            ),
-        );
+            ));
 
         let report = UiStoryWorkflowReportV2::from_run_result(run.finish(), wrong_expectation);
 
@@ -391,10 +404,8 @@ mod tests {
             ),
         );
 
-        let report = UiStoryWorkflowReportV2::from_run_result(
-            result,
-            UiStoryExpectedOutcomeV2::Pass,
-        );
+        let report =
+            UiStoryWorkflowReportV2::from_run_result(result, UiStoryExpectedOutcomeV2::Pass);
 
         assert_eq!(report.outcome(), UiStoryOutcomeV2::InvalidWorkflow);
         assert!(report.workflow_graph.is_none());
@@ -403,11 +414,13 @@ mod tests {
     #[test]
     fn run_result_v2_into_report_uses_report_v2() {
         let mut run = source_load_only_run();
-        run.record(UiStoryEvidence::passed(NODE_SOURCE_LOAD, PRODUCER_ID, EVIDENCE_KEY));
+        run.record(UiStoryEvidence::passed(
+            NODE_SOURCE_LOAD,
+            PRODUCER_ID,
+            EVIDENCE_KEY,
+        ));
 
-        let report = run
-            .finish()
-            .into_report(UiStoryExpectedOutcomeV2::Pass);
+        let report = run.finish().into_report(UiStoryExpectedOutcomeV2::Pass);
 
         assert_eq!(report.outcome(), UiStoryOutcomeV2::Passed);
     }
