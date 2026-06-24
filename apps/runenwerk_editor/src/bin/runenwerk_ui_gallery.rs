@@ -33,6 +33,9 @@ mod tests {
     };
     use ui_theme::ThemeTokens;
 
+    const SELECTED_BINDING_MISSING_HOST_VALUE: &str =
+        "ui.runtime_view.button.selected_binding_missing_host_value";
+
     #[test]
     fn editor_gallery_v2_builds_checked_in_story_registry() {
         let registry =
@@ -74,6 +77,13 @@ mod tests {
         assert!(gallery.passed());
         assert_eq!(gallery.story_reports().len(), 3);
         assert_eq!(gallery.button_count(), 2);
+        assert!(gallery
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.code != "ui_gallery.story.source.read_failed"));
+        assert!(gallery.diagnostics().iter().all(|diagnostic| {
+            diagnostic.code != SELECTED_BINDING_MISSING_HOST_VALUE
+        }));
         let frame = gallery
             .frame()
             .expect("eligible stories should compose a frame");
@@ -131,6 +141,23 @@ mod tests {
     }
 
     #[test]
+    fn editor_gallery_v2_selected_button_story_supplies_selected_host_value() {
+        let execution = checked_in_execution("ui.gallery.button.selected");
+        let button_report = execution
+            .button_report
+            .as_ref()
+            .expect("selected button story should produce button runtime facts");
+
+        assert!(button_report.buttons.iter().any(|button| button.selected));
+        assert!(button_report.diagnostics.iter().all(|diagnostic| {
+            diagnostic.code != SELECTED_BINDING_MISSING_HOST_VALUE
+        }));
+        assert!(execution.report.diagnostics().iter().all(|diagnostic| {
+            diagnostic.code.as_str() != SELECTED_BINDING_MISSING_HOST_VALUE
+        }));
+    }
+
+    #[test]
     fn editor_gallery_v2_missing_source_matches_expected_failure() {
         let execution = checked_in_execution("ui.gallery.button.missing_source");
 
@@ -156,6 +183,26 @@ mod tests {
             UiStoryMountBlockReasonV2::BlockedExpectedFailure
         );
         assert!(execution.mounted_frame.is_none());
+    }
+
+    #[test]
+    fn editor_gallery_v2_expected_failure_is_not_interactive_startup_error() {
+        let atlas = UiFontAtlasResource::default();
+        let gallery =
+            runenwerk_editor::runtime::UiGalleryResource::from_checked_in_stories_for_render_target(
+                UiSize::new(720.0, 240.0),
+                &ThemeTokens::default(),
+                &atlas,
+            );
+
+        assert!(gallery.story_reports().iter().any(|report| {
+            report.story_id.as_str() == "ui.gallery.button.missing_source"
+                && report.outcome() == UiStoryOutcomeV2::ExpectedFailureMatched
+        }));
+        assert!(gallery
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.code != "ui_gallery.story.source.read_failed"));
     }
 
     #[test]
