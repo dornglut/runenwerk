@@ -189,6 +189,39 @@ Examples are part of the public API experience:
 - Keep example docs and links in sync with the current public API.
 - If docs and examples disagree, treat that as a real usability issue.
 
+## UI Story V2 Routine
+
+When touching UI Story V2, agents must preserve the proof/application split:
+
+```text
+Manifest V2 -> Registry V2 -> Workflow Graph -> App-owned Evidence -> Workflow Report -> Mount Decision -> CLI/Gallery
+```
+
+`domain/ui/ui_story` is proof/orchestration only. It must not perform filesystem
+IO, compiler execution, renderer execution, static mount execution, or
+editor/gallery behavior. The editor/gallery runtime owns concrete behavior and
+records app-owned evidence.
+
+Run the scoped UI Story V2 gate after changes:
+
+```text
+cargo test -p ui_story
+cargo test -p runenwerk_editor --bin runenwerk_ui_gallery
+cargo test -p runenwerk_editor --bin runenwerk_ui_designer
+cargo fmt --all --check
+```
+
+Do not treat broad `runenwerk_editor` workspace facade failures as UI Story
+proof failures unless they touch UI Story V2. Known out-of-scope editor-shell
+facade methods include `RunenwerkEditorShellState::workspace_state`,
+`replace_workspace_state`, and `apply_workspace_mutation`.
+
+Do not reintroduce `UiStoryStageKind`, `UiStoryStageReport`,
+`UiStoryRunReport`, `UiStoryMountEligibility`, `required_stages`, or
+`run_story_with_stage_reports` as active APIs. Do not remove V2 suffixes in the
+polish phase, and do not add speculative interaction, accessibility,
+performance, or visual-diff workflows without real evidence producers.
+
 ## Benchmark and Artifact Conventions
 
 When working on benchmarks, profiles, and reports:
@@ -300,7 +333,7 @@ If the user asks for a review:
 - Use planning internally for complex tasks but do not return only a plan unless requested.
 - Ensure each intended change is either:
   - implemented,
-  - blocked with a reason, or
+  - blocked with a reason,
   - intentionally skipped with justification.
 
 ## Final Response Style
