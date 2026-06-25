@@ -3757,6 +3757,7 @@ name = "ui_artifacts"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "ui_controls",
  "ui_program",
  "ui_schema",
 ]
