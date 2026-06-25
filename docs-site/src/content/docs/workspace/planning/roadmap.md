@@ -80,13 +80,13 @@ Notes:
 Do not reopen Phase 1 for Phase 2 authoring concerns unless validation shows actual drift.
 ```
 
-### PT-UI-COMPONENT-PLATFORM-002-PLANNING
+### PT-UI-COMPONENT-PLATFORM-002
 
-ID: `PT-UI-COMPONENT-PLATFORM-002-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-002`
 
-Title: UI Component Platform Authoring Kit design intake
+Title: UI Component Platform Authoring Kit
 
-State: active planning
+State: completed by user validation report
 
 Owner: ui
 
@@ -95,37 +95,47 @@ Dependency level: follows Phase 1 ControlPackage / ControlKernel contract
 Write scope:
 
 ```text
+domain/ui/ui_controls/src/authoring/mod.rs
+domain/ui/ui_controls/src/package.rs
+domain/ui/ui_controls/tests/control_authoring_contract.rs
 docs-site/src/content/docs/design/active/ui-component-platform-authoring-kit-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
+docs-site/src/content/docs/workspace/planning/completed-work.md
 ```
 
 Validation expectation:
 
 ```text
-Manual planning consistency review.
-No Rust implementation in the planning pass.
-Implementation validation commands are defined in the design and deferred to the later implementation pass.
+cargo fmt --all --check
+cargo check -p ui_controls
+cargo test -p ui_controls control_authoring
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_kernel
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+git diff --check
 ```
 
 Evidence:
 
 ```text
-Authoring-kit design updated with ownership, module-boundary proposal, API-shape constraints, non-goals, acceptance criteria, and implementation gate.
+User reported all Phase 2 validation commands green on 2026-06-25. The implementation adds a bounded authoring API that builds ordinary Phase 1 descriptors and proves valid output, explicit non-mount eligibility, and fail-closed invalid output through focused tests.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 2 design. After acceptance, run a bounded implementation pass on the same branch or a follow-up branch.
+Proceed to PT-UI-COMPONENT-PLATFORM-003 Story Proof Envelope design/planning. Do not implement story runner behavior before Phase 3 design acceptance.
 ```
 
 Notes:
 
 ```text
-This planning entry does not authorize runtime widget behavior, story runner behavior, Gallery previews, Designer UX, Workbench behavior, canvas surfaces, text editing, transitions, or runtime mount eligibility.
+Phase 2 does not implement runtime widget behavior, story runner behavior, Gallery previews, Designer UX, Workbench behavior, canvas surfaces, text editing, transitions, or runtime mount eligibility.
 ```
 
 ## Rules
