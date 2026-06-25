@@ -13,11 +13,11 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-002-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-003-PLANNING`
 
-Title: UI Component Platform Authoring Kit design intake
+Title: UI Component Platform Story Proof Envelope design intake
 
-State: active planning
+State: ready for planning
 
 Owner: ui
 
@@ -28,9 +28,9 @@ AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
 docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
 docs-site/src/content/docs/workspace/routines/implementation-routine.md
+docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/guidelines/programming-principles.md
-docs-site/src/content/docs/design/active/ui-component-platform-control-kernel-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-authoring-kit-design.md
 docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
 docs-site/src/content/docs/domain/ui/roadmap.md
@@ -39,11 +39,7 @@ docs-site/src/content/docs/domain/ui/roadmap.md
 Write scope:
 
 ```text
-docs-site/src/content/docs/design/active/ui-component-platform-authoring-kit-design.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
+Planning/design records only until the Story Proof Envelope design is accepted.
 ```
 
 Validation expectation:
@@ -56,21 +52,19 @@ Implementation validation is deferred until a later bounded implementation pass.
 Known blockers:
 
 ```text
-Phase 1 must be merged or the Phase 2 branch must remain intentionally based on the completed Phase 1 branch until merge.
-No Rust implementation is authorized by this planning focus alone.
+Phase 3 must not start implementation before its design and acceptance criteria are written and accepted.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 2 authoring-kit design, then start a bounded implementation pass only after the design gate is accepted.
+Open the Phase 3 Story Proof Envelope design/planning intake. Do not implement story runner behavior in the planning pass.
 ```
 
 Evidence:
 
 ```text
-Phase 1 completed by user report and prior local validation evidence in conversation.
-Phase 2 design authority exists in ui-component-platform-authoring-kit-design.md.
+Phase 2 authoring-kit implementation passed the local validation gate by user report on 2026-06-25.
 ```
 
 ## Active-work rules
