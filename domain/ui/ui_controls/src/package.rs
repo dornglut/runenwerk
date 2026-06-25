@@ -5,9 +5,16 @@ use serde::{Deserialize, Serialize};
 use ui_program::RouteCapability;
 use ui_schema::UiSchemaRef;
 
-pub use crate::ids::*;
-pub use crate::metadata::*;
-pub use crate::validation::*;
+#[path = "ids.rs"]
+pub mod ids;
+#[path = "metadata.rs"]
+pub mod metadata;
+#[path = "validation.rs"]
+pub mod validation;
+
+pub use ids::*;
+pub use metadata::*;
+pub use validation::*;
 
 use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
 use crate::kernel::{ControlKernelDescriptor, ControlKernelId, ControlKernelSet};
