@@ -388,3 +388,9 @@ task planning:validate
 - Generated production docs are current after `task production:render`.
 - No Rust source, schemas, runtime behavior, UI surfaces, roadmap execution
   state beyond registering the planning track, staging, or commits change.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:designer-consumption -->
+## Component Platform catalog consumption
+
+UI Designer consumes the control catalog, property schemas, state schemas, token requirements, accessibility requirements, binding requirements, story reports, diagnostics, and surface proofs. Designer may preview and author around Component Platform packages, but it does not own reusable control behavior.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:designer-consumption -->

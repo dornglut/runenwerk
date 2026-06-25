@@ -88,3 +88,9 @@ later accepted ADR explicitly changes the gate.
 Bounded UI proof slices may inform MaterialProgram design. They do not, by
 themselves, authorize MaterialProgram proof planning, implementation, crate
 creation, or shared platform extraction.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:uiprogram-alignment -->
+## Relationship to UI Component Platform
+
+`PT-UI-COMPONENT-PLATFORM` aligns with the UiProgram owner map. `ui_controls`, `ui_program`, `ui_artifacts`, `ui_evaluator`, `ui_binding`, `ui_state`, `ui_hosts`, `ui_accessibility`, `ui_geometry`, `ui_text`, `ui_theme`, `ui_input`, `ui_layout`, `ui_render_data`, and `ui_story` remain bounded owners. Component Platform docs define reusable package contracts and proof requirements; UiProgram proof slices remain bounded and must not become product-specific bypasses.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:uiprogram-alignment -->

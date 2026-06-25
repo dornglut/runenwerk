@@ -89,3 +89,9 @@ The editor/gallery runtime owns concrete behavior and records app-owned evidence
 ## Rule
 
 A concept belongs where its invariants are defined and enforced. Usage does not imply ownership.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->
+## UI Component Platform note
+
+The current UI Component Platform activation is `PT-UI-COMPONENT-PLATFORM`, starting after `PM-UI-STORY-004`. It defines reusable, story-proven `ControlPackage` and surface kernels before product-specific Gallery, Workbench, Designer, game HUD, or world-space UI behavior. See `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md` and the `ui-component-platform-*-design.md` active design docs.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->

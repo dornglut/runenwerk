@@ -86,3 +86,9 @@ the core UI substrate and table/query surface prove non-viewport hosting.
 Semantic graph implementation must start from one concrete owning domain and one
 formed product target. `domain/graph` must not grow into a semantic graph
 language, universal graph runtime, or editor-owned runtime authority.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:adr-consumption -->
+## Component Platform consumption note
+
+`PT-UI-COMPONENT-PLATFORM` consumes this ADR without changing its decision. The component platform makes the accepted interaction/canvas boundaries reusable and story-proven through `ControlPackage`s, `Surface2D`, `SpatialCanvas`, `NodeCanvas`, `PortGraphCanvas`, `ProgressionTreeView`, `TrackSurface`, Gallery proof, Workbench adoption, and UI Designer consumption. This ADR remains the authority for the underlying boundary; Component Platform docs define reusable package contracts and proof requirements.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:adr-consumption -->

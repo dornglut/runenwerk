@@ -414,3 +414,9 @@ Stop conditions:
 - using ECS entities, runtime widget ids, or shell session ids as durable authored UI/editor identity;
 - rendering from authored `.ron` files or package descriptors directly;
 - creating additional runtime/rendering crates or backend adapters without explicit WR/production authority.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:domain-ui-note -->
+## UI Component Platform activation note
+
+The active Component Platform roadmap is `PT-UI-COMPONENT-PLATFORM`: reusable, story-proven `ControlPackage` and surface maturity after `PM-UI-STORY-004`. The platform introduces reusable kernels for control packages, authoring, story proof, catalog/discovery, input/gesture/device, state/binding/host intent, theme/token styling, accessibility/focus, layout/container/virtualization, render/surface output, overlay/popup/layering, text, Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas, ProgressionTreeView, TrackSurface/Timeline, transitions/effects, and adoption gates.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:domain-ui-note -->

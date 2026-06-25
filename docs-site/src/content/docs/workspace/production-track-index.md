@@ -428,3 +428,16 @@ dependency-checked execution graph.
 | PM-UI-COMPOSITION-008 | Draw Adaptive Runtime | implementation | ready_next | WR-187 | Draw proves policy-driven adaptive composition while preserving a usable primary canvas and drawing truth boundaries. |
 | PM-UI-COMPOSITION-009 | Legacy Authority Cleanup | hardening | ready_next | WR-188 | No compatibility authority or unmapped surface responsibility survives. |
 | PM-UI-COMPOSITION-010 | Perfectionist Verification And Closeout | release | ready_next | WR-189 | The cutover is merge-ready only with current zero-finding evidence and no unowned, unexplained, or unaccepted risk. |
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:production-milestone-mapping -->
+## UI Component Platform production milestone mapping
+
+UI Component Platform production milestone mapping:
+PM-UI-COMPONENT-001: Track activation, vocabulary, ergonomics doctrine, anti-overfitting rules.
+PM-UI-COMPONENT-002: Control kernel, authoring kit, story envelope, catalog/discovery, base ControlPackages.
+PM-UI-COMPONENT-003: Input/gesture/device, generic interaction, overlay/popup/layering, route/capability, host intent.
+PM-UI-COMPONENT-004: Minimum text editing, generic text platform, glyph-run evidence, fail-closed text diagnostics.
+PM-UI-COMPONENT-005: Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas/GraphCanvas, ProgressionTreeView, TrackSurface/Timeline/CurveEditor.
+PM-UI-COMPONENT-006: Generic transition/effect primitives with state timelines, reduced motion, diagnostics, renderer boundary.
+PM-UI-COMPONENT-007: Runtime-proven closeout, Gallery/Workbench/Designer adoption, docs validation, no-bypass audit, handoffs.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:production-milestone-mapping -->

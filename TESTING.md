@@ -86,3 +86,9 @@ python3 tools/docs/validate_docs.py
 ## Minimum Rule
 
 Every important invariant should have at least one test or ratification case.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->
+## UI Component Platform note
+
+The current UI Component Platform activation is `PT-UI-COMPONENT-PLATFORM`, starting after `PM-UI-STORY-004`. It defines reusable, story-proven `ControlPackage` and surface kernels before product-specific Gallery, Workbench, Designer, game HUD, or world-space UI behavior. See `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md` and the `ui-component-platform-*-design.md` active design docs.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->

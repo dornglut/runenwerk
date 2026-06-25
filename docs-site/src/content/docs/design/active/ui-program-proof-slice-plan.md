@@ -364,3 +364,9 @@ task/WR that includes:
 - closeout evidence requirements.
 
 The same requirement applies to 6B, 6C, 6D, 6E, and 6F.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:uiprogram-alignment -->
+## Relationship to UI Component Platform
+
+`PT-UI-COMPONENT-PLATFORM` aligns with the UiProgram owner map. `ui_controls`, `ui_program`, `ui_artifacts`, `ui_evaluator`, `ui_binding`, `ui_state`, `ui_hosts`, `ui_accessibility`, `ui_geometry`, `ui_text`, `ui_theme`, `ui_input`, `ui_layout`, `ui_render_data`, and `ui_story` remain bounded owners. Component Platform docs define reusable package contracts and proof requirements; UiProgram proof slices remain bounded and must not become product-specific bypasses.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:uiprogram-alignment -->

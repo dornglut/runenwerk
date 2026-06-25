@@ -265,3 +265,9 @@ Stop before implementation if:
   claim that needs local-native evidence;
 - a milestone cannot name its exact scenario matrix, evidence artifacts, and hard
   gates before product code starts.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:product-ux-certification -->
+## Component Platform certification inputs
+
+Lab and product UX certification consume Component Platform story evidence for controls, interactions, accessibility, layout, text, theme/token use, overlay/popup behavior, Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas, ProgressionTreeView, TrackSurface/Timeline, transitions/effects, diagnostics, and budget evidence.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:product-ux-certification -->

@@ -1283,3 +1283,11 @@ place for traceability. Use this bottom section as the completed-work summary:
   complete;
 - remaining M6.2+ product-domain code stays gated by the SDF-first open-world
   substrate roadmap.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:workbench-adoption -->
+## Component Platform workbench adoption
+
+Workbench surfaces consume story-proven reusable controls and surfaces. Toolbar uses Button/Toggle/Navigation. Inspector uses Label/Input/NumericInput/Picker. Outliner uses Tree/List. Entity table uses Table/List/Search/Sort. Menus consume Overlay/Menu/Popup contracts. Material graph consumes PortGraphCanvas. Timeline surfaces consume TrackSurface/Timeline. Skill/progression views consume NodeCanvas/ProgressionTreeView where applicable.
+
+Workbench does not own reusable control semantics; it maps host intent proposals to editor/domain commands.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:workbench-adoption -->

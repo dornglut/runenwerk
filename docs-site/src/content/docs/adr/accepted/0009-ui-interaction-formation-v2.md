@@ -203,3 +203,9 @@ runtime input/layout ownership, editor shell migration behavior, and app
 viewport input arbitration. Roadmap rows should treat this ADR as the durable
 decision gate for Interaction V2 and not as permission to introduce alternate UI
 execution targets or renderer-owned UI semantics.
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:adr-consumption -->
+## Component Platform consumption note
+
+`PT-UI-COMPONENT-PLATFORM` consumes this ADR without changing its decision. The component platform makes the accepted interaction/canvas boundaries reusable and story-proven through `ControlPackage`s, `Surface2D`, `SpatialCanvas`, `NodeCanvas`, `PortGraphCanvas`, `ProgressionTreeView`, `TrackSurface`, Gallery proof, Workbench adoption, and UI Designer consumption. This ADR remains the authority for the underlying boundary; Component Platform docs define reusable package contracts and proof requirements.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:adr-consumption -->

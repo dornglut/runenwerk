@@ -133,3 +133,9 @@ Active SDF-first character and procedural animation architecture is tracked in:
 - `docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md`
 - `docs-site/src/content/docs/adr/accepted/0011-animated-sdf-authoring-graphs-lower-before-runtime.md`
 - `docs-site/src/content/docs/adr/proposed/animated-sdf-lowering-and-purpose-specific-products.md`
+
+<!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->
+## UI Component Platform note
+
+The current UI Component Platform activation is `PT-UI-COMPONENT-PLATFORM`, starting after `PM-UI-STORY-004`. It defines reusable, story-proven `ControlPackage` and surface kernels before product-specific Gallery, Workbench, Designer, game HUD, or world-space UI behavior. See `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md` and the `ui-component-platform-*-design.md` active design docs.
+<!-- END RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->
