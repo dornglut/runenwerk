@@ -1,250 +1,172 @@
 # AGENTS.md
 
-Repository instructions for AI coding agents (Codex, ChatGPT agents, etc.).
+Repository instructions for AI coding agents working in Runenwerk.
 
-These rules define how agents should read, modify, and explain code in this repository.
+These rules define how agents should read, modify, and explain repository changes from any interface: local checkout, GitHub connector, ChatGPT context tooling, Codex, or manual file browsing.
 
-You are Codex, based on GPT-5, running inside the Codex desktop app on macOS as a coding agent working directly with this repository.
+## Core Operating Rule
+
+Runenwerk workflows are **repository-readable first**.
+
+Do not assume that the agent can export the full repository, execute scripts, run Taskfile tasks, or regenerate derived files. Scripts and commands may be useful local helpers, but they are never the default workflow authority.
+
+For any non-trivial work, start here:
+
+```text
+docs-site/src/content/docs/workspace/start-here.md
+```
+
+Use the matching routine under:
+
+```text
+docs-site/src/content/docs/workspace/routines/
+```
+
+Use reusable task cards under:
+
+```text
+docs-site/src/content/docs/workspace/task-cards/
+```
 
 ## Repository Conventions
 
 ### Architecture
 
-- Code is organized by **domain**, not by technical layer.
-- Each domain contains its own models, services, and logic.
-- Changes should respect domain boundaries and avoid leaking logic across modules.
+- Code is organized by domain, not by technical layer.
+- Each domain owns its models, services, rules, and vocabulary.
+- Changes must respect domain boundaries and avoid leaking logic across modules.
+- Prefer long-term, architecture-correct solutions over local patches.
+- Prefer explicit types, clear interfaces, and discoverable public APIs.
+- Avoid global mutable state unless it is already an intentional repository pattern.
+- Follow nearby module and crate conventions before introducing new abstractions.
 
-### General rules
+### Module structure
 
-- I want long term solutions. If you see that a refactor or redesign would be helpfull in any way tell me.
-- Prefer explicit types and clear interfaces.
-- Avoid global mutable state unless already established in the architecture.
-- Follow the structure and conventions used in nearby modules.
+Follow `docs-site/src/content/docs/guidelines/module-structure-guidelines.md`.
 
-## Module Structure
+Key expectations:
 
-Follow the module organization rules defined in `docs-site/src/content/docs/guidelines/module-structure-guidelines.md`.
-
-### Key expectations
-
-- Organize modules by **subdomain responsibility**, not technical layers.
-- Prefer **subdomain folders with `mod.rs` boundaries** for larger subsystems.
+- Organize modules by subdomain responsibility, not technical layers.
+- Prefer subdomain folders with `mod.rs` boundaries for larger subsystems.
 - Use explicit module names that describe responsibility.
+- Avoid `include!` module composition.
+- Avoid `_internal` module suffixes.
+- Avoid catch-all files such as `utils.rs`, `helpers.rs`, or `misc.rs`.
 
-### Example pattern
+When adding new code:
 
-```text
-render/
-|-- mod.rs
-|-- renderer/
-|   |-- mod.rs
-|   |-- config.rs
-|   `-- runtime.rs
-|-- frame_graph/
-|   |-- mod.rs
-|   |-- builder.rs
-|   `-- registry.rs
-`-- shader_manager/
-    |-- mod.rs
-    |-- compiler.rs
-    `-- types.rs
-```
-
-### Avoid the following patterns
-
-- `include!` module composition
-- `_internal` module suffixes (e.g. `renderer_internal`)
-- catch-all files such as `utils.rs`, `helpers.rs`, or `misc.rs`
-
-### When adding new code
-
-1. Choose the owning domain (`foundation`, `domain`, `engine`, `net`, `apps`, `adapters`).
+1. Choose the owning domain: `foundation`, `domain`, `engine`, `net`, `apps`, or `adapters`.
 2. Choose the owning crate.
 3. Choose the owning subsystem inside that crate.
-4. Add the file/module there.
+4. Add the file or module there.
 
-Foundation is for cross-domain primitives (for example typed id/runtime-neutral shared contracts).
-Domain is for engine-agnostic reusable logic that does not depend on engine runtime glue.
-Engine is glue that composes runtime behavior around domain/foundation contracts.
+Foundation is for cross-domain primitives. Domain is for engine-agnostic reusable logic. Engine is glue that composes runtime behavior around domain and foundation contracts.
 
 ## Code Discovery
 
-Before implementing new functionality:
+Before editing:
 
-- Search the repository for existing implementations, helpers, or patterns.
+- Search or inspect for existing implementations, helpers, and patterns.
 - Prefer reuse over duplication.
-- Follow patterns from nearby modules when implementing new features.
-- If an existing helper solves the problem, use it instead of introducing new abstractions.
+- Follow patterns from nearby modules.
+- If a helper already solves the problem, use it instead of introducing a new abstraction.
+- For public APIs, inspect `lib.rs`, `prelude.rs`, README files, examples, tests, and docs together.
 
 ## Documentation Structure
 
-Documentation should be organized intentionally, not scattered opportunistically.
-The docs live in the astro docs site under docs-site/src/content/docs
-
-For full documentation placement, lifecycle states, frontmatter, refactor update rules, naming, and archival policy, follow `docs-site/src/content/docs/workspace/documentation-structure.md`.
-
-For bounded repository workflows, follow `docs-site/src/content/docs/workspace/routines/README.md`.
-
-For planning, implementation, routine selection, and closeout shape, follow `docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md`.
-
-For reusable Codex and AI-agent prompts, use `docs-site/src/content/docs/workspace/prompt-templates/README.md`.
-
-For new Codex threads, prefer the one-line repo workflow commands:
+Documentation lives under:
 
 ```text
-Run task batch:kickoff -- --next and follow the generated workflow.
-Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
+docs-site/src/content/docs
 ```
 
-`task batch:kickoff -- --next` is the normal implementation entrypoint for the
-current roadmap candidate batch. `task roadmap:intake` is the normal entrypoint
-for new designs or change ideas that need roadmap review before implementation.
-Codex CLI `/goal` may execute an accepted written contract, but it must not
-promote or complete roadmap items without the required governance, validation,
-closeout or drift-check evidence, and roadmap render/validate/check gates.
-
-For architecture-sensitive changes, run the architecture governance review before implementation when the task may affect dependency direction, domain ownership, ADR-worthy decisions, migration strategy, tradeoffs, enforcement, or ownership mode.
-Use `task ai:architecture-governance -- --task "<task>" --scope "<scope>"` as the kickoff checklist.
-
-For approved concurrent roadmap work, use the parallel roadmap batch routine.
-The coordinator must first propose candidate roadmap rows, disjoint write
-scopes, worker prompts, validation, and closeout docs, then wait for explicit
-user approval before spawning or coordinating workers.
-Use `docs-site/src/content/docs/workspace/roadmap-items.yaml` as the structured
-roadmap source and `task roadmap:render` to update
-generated roadmap tables and PUML after roadmap evidence changes.
-Use `docs-site/src/content/docs/workspace/production-tracks.yaml` as the
-structured long-term production planning source. Production tracks guide
-sequencing and outcome selection; the WR roadmap still governs implementation
-eligibility, dependency legality, validation, and closeout evidence. Run
-`task production:render`, `task production:validate`, and
-`task production:check` after production-track evidence changes.
-For substantial production-track work, start with
-`task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"` to produce
-the readiness report and implementation-contract prompt before code changes.
-
-Treat workflow output as prompt/checklist/gate automation. It does not replace repository inspection, accepted ADR/design gates, validation, or human/agent judgment.
-
-After completing any phased implementation, run the phase completion drift-check routine before starting the next phase.
-
-For documentation moves, renames, pruning, or restructuring, follow `docs-site/src/content/docs/workspace/routines/docs-refactor-routine.md`.
-
-For documentation-only validation, run:
+For placement, lifecycle states, frontmatter, naming rules, and archival policy, follow:
 
 ```text
-task docs:validate
+docs-site/src/content/docs/workspace/documentation-structure.md
 ```
 
-Raw benchmark artifacts should live in dedicated artifact folders near the owning crate, not mixed into prose docs.
+Root Markdown files are short entrypoints only. They must not become full workflow manuals, generated status views, design documents, roadmaps, or historical reports.
+
+## Scriptless Workflow
+
+Default workflow shape:
+
+```text
+Read authority files -> inspect working files -> patch exact files -> manually validate evidence -> report changed files and unresolved gaps
+```
+
+Do not make command output the only way to understand a task. If a script is unavailable, continue by reading the authority files listed by the relevant routine and report that validation was manual or not run.
+
+Optional local commands may be mentioned only as helpers. They do not replace repository inspection, architecture doctrine, dependency rules, accepted designs, ADRs, tests, manual review, or closeout evidence.
+
+## Planning and Authority
+
+Use these workspace docs:
+
+- `docs-site/src/content/docs/workspace/start-here.md` for task routing.
+- `docs-site/src/content/docs/workspace/operating-model.md` for the scriptless workflow model.
+- `docs-site/src/content/docs/workspace/authority-model.md` for authority conflicts.
+- `docs-site/src/content/docs/workspace/planning/README.md` for planning records.
+- `docs-site/src/content/docs/workspace/routines/README.md` for executable human/agent routines.
+- `docs-site/src/content/docs/workspace/task-cards/README.md` for copy-paste task cards.
+
+## Documentation Changes
 
 When creating or editing docs:
 
-- Keep regular docs-site filenames in kebab-case.
+- Keep docs-site filenames in kebab-case.
 - Use `README.md` for docs-site section landing pages.
 - Do not introduce new docs-site `readme.md` files.
-- Update internal links whenever files move or are renamed.
-
-## Documentation Ownership
-
-Documentation should live under `docs-site/src/content/docs`.
-
-When deciding where docs belong:
-- architecture and repository-wide guidelines: `docs-site/src/content/docs/guidelines/`
-- workspace/process docs: `docs-site/src/content/docs/workspace/`
-- domain/crate docs: their owning subtree inside `docs-site/src/content/docs/`
+- Update internal links when files move or are renamed.
+- Prefer moving obsolete process material to archive or migration reports over keeping active duplicate authority.
+- Do not require generated files or scripts to understand the current workflow.
 
 ## Public API, Usage Ergonomics, and Examples
 
-Ease of use is a priority in this repository.
+Ease of use is part of implementation quality.
 
 For public-facing crates and modules:
 
-- Prefer APIs that are easy to discover, easy to combine, and easy to use correctly on the first read.
-- Optimize for the common happy path. Advanced flexibility should not make normal usage harder to understand.
-- Review discoverability from `lib.rs`, `prelude.rs`, `README.md`, docs index pages, usage guides, and examples together.
-
-Keep public entry points obvious:
-
-- what most users should import
-- how they construct and run the system
-- where they go next for advanced usage
-
-Additional guidelines:
-
-- Keep prelude exports focused on common workflows.
-- Keep advanced, feature-heavy, or domain-specific APIs in their owning modules unless they are frequently needed in normal use.
-- Prefer names and module locations that reduce guesswork for users.
-- If a public API is technically correct but awkward to discover or awkward to use, treat that as a real quality issue.
-
-Documentation should support easy usage:
-
-- A crate with a meaningful public surface should have a practical usage guide.
-- Usage guides should teach normal workflows first and use complete, realistic examples.
-- Keep usage guides for features and architecture docs distinct:
-  - usage guide = normal users
-Examples are part of the public API experience:
-
-- Examples should demonstrate the preferred public usage style.
-- Avoid examples that rely on internal shortcuts when public APIs are available.
-- Keep example docs and links in sync with the current public API.
-- If docs and examples disagree, treat that as a real usability issue.
+- Prefer APIs that are easy to discover, combine, and use correctly on the first read.
+- Optimize for the common happy path.
+- Keep advanced or domain-specific APIs in owning modules unless they are commonly needed.
+- Treat awkward discoverability as a real defect.
+- Keep examples aligned with the preferred public API.
 
 ## Benchmark and Artifact Conventions
 
 When working on benchmarks, profiles, and reports:
 
-- Keep executable benchmark runners in conventional code locations such as:
-  - `benches/`
-  - `examples/`
+- Keep executable benchmark runners in conventional code locations such as `benches/` or `examples/`.
 - Keep raw outputs in dedicated artifact folders.
-- Keep human-readable reports in docs benchmark folders.
-- Do not mix raw benchmark output files and prose reports casually.
-- Preserve artifact naming stability unless the reporting scheme is intentionally being redesigned.
-
-If a benchmark suite has multiple components, keep the distinction clear between:
-
-- runner code
-- raw artifacts
-- progress/final reports
+- Keep human-readable reports in docs benchmark or report folders.
+- Do not mix raw benchmark output and prose reports casually.
 
 ## General Behavior
 
 - Act as a senior software engineer working directly inside the codebase.
-- Work autonomously: inspect context, infer conventions, implement solutions, verify them, and explain outcomes without unnecessary back-and-forth.
-- Default to delivering working code rather than only analysis or plans.
+- Work autonomously: inspect context, infer conventions, implement, verify, and explain outcomes without unnecessary back-and-forth.
+- Default to delivering working changes rather than only analysis or plans.
 - Make reasonable assumptions when details are missing unless a real blocker exists.
 - Be concise but technically precise.
-- Treat usability, discoverability, and documentation quality as part of implementation quality, not as optional polish.
+- Treat usability, discoverability, and documentation quality as part of implementation quality.
 
 Agents must always include:
 
-- the file path
-- the exact function, method, or module where a change should be made
-
-## Project Alignment
-
-- Follow the repository's architecture, naming conventions, formatting rules, and helper utilities.
-- Prefer existing abstractions and helpers before creating new ones.
-- Preserve intended behavior unless the task explicitly requires changing it.
-- Ensure changes integrate cleanly across the full system rather than patching a single location.
-- Maintain strong typing and avoid unsafe casts or weak fallbacks.
-- Favor solutions that improve public API clarity and ease of use when choosing between otherwise acceptable designs.
+- the file path;
+- the exact function, method, module, routine, or document section changed or recommended;
+- validation performed, or a clear statement that command validation was unavailable.
 
 ## Implementation Standards
 
 - Address root causes rather than surface symptoms.
 - Avoid speculative refactors unless they are required for correctness.
-- Avoid duplicated logic; extract or reuse shared functionality where appropriate.
-- Do not introduce silent failures, broad try/catch blocks, or success-shaped error handling.
+- Avoid duplicated logic.
+- Do not introduce silent failures or success-shaped error handling.
 - Surface errors clearly in a way consistent with existing patterns.
 - Add concise comments only where logic would otherwise be difficult to understand.
-- Treat unnecessary public API friction as a real defect, not only a documentation issue.
-
-## Redesign vs Cleanup
-
-- Prefer cleanup, consolidation, and documentation before proposing larger redesigns.
-
-Use redesign only when there is a real reason, such as:
+- Preserve intended behavior unless the task explicitly requires changing it.
 
 <!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:root-note -->
 ## UI Component Platform note

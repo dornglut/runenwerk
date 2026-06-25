@@ -1,42 +1,59 @@
 ---
 title: Workspace Routines
-description: Repeatable maintenance routines for Runenwerk documentation, refactors, and contributor workflows.
+description: Scriptless repeatable routines for Runenwerk repository work.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-08
+last_reviewed: 2026-06-25
+related_docs:
+  - ../start-here.md
+  - ../operating-model.md
+  - ../authority-model.md
+  - ../task-cards/README.md
 ---
 
 # Workspace Routines
 
-This folder contains bounded maintenance routines for humans and AI coding agents.
+Routines are the active process layer for Runenwerk work.
 
-Use routines when a task needs repeated inspection, patching, validation, and repair.
+They must be usable from GitHub connector, ChatGPT context tooling, Codex patching, manual repo browsing, or a local checkout. Commands belong only in optional local helper sections.
 
-## Available Routines
+## Active routines
 
-- [Architecture Governance Review Routine](./architecture-governance-review-routine.md)
-- [Code Refactor Routine](./code-refactor-routine.md)
-- [Commit Splitting Routine](./commit-splitting-routine.md)
-- [Crate Implementation Routine](./crate-implementation-routine.md)
-- [Documentation Refactor Routine](./docs-refactor-routine.md)
-- [Parallel Roadmap Batch Routine](./parallel-roadmap-batch-routine.md)
-- [Phase Completion Drift Check Routine](./phase-completion-drift-check-routine.md)
-- [Public API Review Routine](./public-api-review-routine.md)
+- [Investigation Routine](investigation-routine.md)
+- [Implementation Routine](implementation-routine.md)
+- [Architecture Governance Review Routine](architecture-governance-review-routine.md)
+- [Code Refactor Routine](code-refactor-routine.md)
+- [Documentation Refactor Routine](docs-refactor-routine.md)
+- [Roadmap Update Routine](roadmap-update-routine.md)
+- [Phase Completion Drift Check Routine](phase-completion-drift-check-routine.md)
+- [Pull Request Review Routine](pr-review-routine.md)
 
-## Routine Rules
+## Routine shape
+
+Every active routine should use this structure:
+
+```text
+Use when
+Authority files to read
+Working files to inspect
+What to decide before editing
+Patch rules
+Manual validation checklist
+Evidence to report
+Optional local helpers
+```
+
+## Rules
 
 - Routines are bounded.
-- Routines must have explicit stop conditions.
-- Routines must identify validation commands.
-- Routines must not use unbounded loops.
+- Routines must identify authority files.
+- Routines must include manual validation.
+- Routines must not require command execution.
 - Routines must preserve unrelated work.
-- Routines must report what was changed, skipped, blocked, or left for follow-up.
+- Routines must report what changed, what was skipped, what was blocked, and what remains risky.
 
-## Related Docs
+## Legacy specialized routines
 
-- [`../planning-and-implementation-workflow.md`](../planning-and-implementation-workflow.md)
-- [`../prompt-templates/README.md`](../prompt-templates/README.md)
-- [`../agents.md`](../agents.md)
-- [`../documentation-structure.md`](../documentation-structure.md)
+Some older specialized routine files remain for link compatibility, but active work should route through the list above unless a specialized page has been explicitly refreshed to this scriptless shape.
