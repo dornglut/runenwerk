@@ -1,8 +1,9 @@
 use ui_controls::{
-    ControlMountEligibility, ControlPackageValidationReason, ControlStoryMatrixDescriptor,
-    ControlStoryProofCategory, ControlStoryProofDiagnostic, ControlStoryProofEnvelope,
-    ControlStoryProofExpectedOutcome, ControlStoryProofProfile, ControlStoryProofRequirement,
-    ControlStoryProofSummary, ControlStoryProofVerdict, ControlStoryId, runenwerk_control_package,
+    ControlMountEligibility, ControlPackageValidationReason, ControlStoryId,
+    ControlStoryMatrixDescriptor, ControlStoryProofCategory, ControlStoryProofDiagnostic,
+    ControlStoryProofEnvelope, ControlStoryProofExpectedOutcome, ControlStoryProofProfile,
+    ControlStoryProofRequirement, ControlStoryProofSummary, ControlStoryProofVerdict,
+    runenwerk_control_package,
 };
 
 #[test]
@@ -127,7 +128,10 @@ fn control_story_proof_summary_reports_first_unsatisfied_requirement() {
     assert_eq!(summary.satisfied_requirements, 1);
     assert_eq!(summary.total_requirements, 2);
     assert_eq!(
-        summary.first_unsatisfied_requirement.as_ref().map(|requirement| &requirement.story_id),
+        summary
+            .first_unsatisfied_requirement
+            .as_ref()
+            .map(|requirement| &requirement.story_id),
         Some(&missing_story_id)
     );
 }
@@ -164,7 +168,7 @@ fn control_story_proof_envelope_stays_descriptor_only_for_mounting() {
 
     assert_eq!(envelope.summary.verdict, ControlStoryProofVerdict::NotEvaluated);
     assert!(matches!(
-        kind.mount_eligibility,
+        &kind.mount_eligibility,
         ControlMountEligibility::NotEligible { .. }
     ));
 }
