@@ -5,6 +5,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::package::ControlKindId;
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ControlDiagnosticId(String);
 
@@ -72,6 +74,14 @@ impl ControlDiagnosticDescriptor {
     pub fn new(diagnostic_id: ControlDiagnosticId, message_template: impl Into<String>) -> Self {
         Self { diagnostic_id, severity: ControlDiagnosticSeverity::Error, kind: ControlDiagnosticKind::ContractValidation, scope: ControlDiagnosticScope::Package, message_template: message_template.into() }
     }
+
+    pub fn contract(diagnostic_id: ControlDiagnosticId, control_kind_id: ControlKindId, message_template: impl Into<String>) -> Self {
+        Self::new(diagnostic_id, message_template)
+            .with_kind(ControlDiagnosticKind::ContractValidation)
+            .with_scope(ControlDiagnosticScope::ControlKind { control_kind_id: control_kind_id.as_str().to_owned() })
+            .with_severity(ControlDiagnosticSeverity::Error)
+    }
+
     pub fn with_severity(mut self, severity: ControlDiagnosticSeverity) -> Self { self.severity = severity; self }
     pub fn with_kind(mut self, kind: ControlDiagnosticKind) -> Self { self.kind = kind; self }
     pub fn with_scope(mut self, scope: ControlDiagnosticScope) -> Self { self.scope = scope; self }
