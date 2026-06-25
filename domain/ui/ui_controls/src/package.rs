@@ -16,7 +16,7 @@ pub use ids::*;
 pub use metadata::*;
 pub use validation::*;
 
-use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
+use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId, ControlDiagnosticKind, ControlDiagnosticScope, ControlDiagnosticSeverity};
 use crate::kernel::{ControlKernelDescriptor, ControlKernelId, ControlKernelSet};
 use crate::migration::{ControlDeprecationStatus, ControlMigrationHook, ControlMigrationId};
 use crate::schema::{ControlSchemaDescriptor, ControlSchemaRole};
@@ -143,4 +143,17 @@ impl ControlPackageDescriptor {
     pub fn with_mount_eligibility(mut self, value: ControlMountEligibility) -> Self { self.mount_eligibility = value; self }
     pub fn with_module(mut self, module: ControlModuleDescriptor) -> Self { let ControlModuleDescriptor { kind, schemas, kernels, fixtures, diagnostics, migrations, stories } = module; self.required_capabilities.extend(kind.required_capabilities.iter().cloned()); self.route_requirements.extend(kind.route_requirements.iter().cloned()); self.fixture_ids.extend(kind.fixture_ids.iter().cloned()); self.diagnostic_ids.extend(kind.diagnostic_ids.iter().cloned()); self.migration_ids.extend(kind.migration_ids.iter().cloned()); self.story_ids.extend(kind.story_ids.iter().cloned()); self.binding_requirements.extend(kind.binding_requirements.iter().cloned()); self.theme_token_requirements.extend(kind.theme_token_requirements.iter().cloned()); self.accessibility_requirements.extend(kind.accessibility_requirements.iter().cloned()); self.render_evidence_requirements.extend(kind.render_evidence_requirements.iter().cloned()); self.budget_evidence_requirements.extend(kind.budget_evidence_requirements.iter().cloned()); for kernel_id in kind.kernels.ids() { self.kernel_ids.push(kernel_id.clone()); } for schema in schemas { match schema.role { ControlSchemaRole::Properties => self.property_schemas.push(schema), ControlSchemaRole::State => self.state_schemas.push(schema), ControlSchemaRole::EventPayload => self.event_payload_schemas.push(schema) } } self.kernels.extend(kernels); self.fixtures.extend(fixtures); self.diagnostics.extend(diagnostics); self.migrations.extend(migrations); self.stories.extend(stories); self.control_kinds.push(kind); self }
     pub fn control_kind(&self, id: &ControlKindId) -> Option<&ControlKindDescriptor> { self.control_kinds.iter().find(|kind| &kind.control_kind_id == id) }
+}
+
+impl ControlDiagnosticDescriptor {
+    pub(crate) fn contract(
+        diagnostic_id: ControlDiagnosticId,
+        control_kind_id: ControlKindId,
+        message_template: impl Into<String>,
+    ) -> Self {
+        Self::new(diagnostic_id, message_template)
+            .with_kind(ControlDiagnosticKind::ContractValidation)
+            .with_scope(ControlDiagnosticScope::ControlKind { control_kind_id: control_kind_id.as_str().to_owned() })
+            .with_severity(ControlDiagnosticSeverity::Error)
+    }
 }
