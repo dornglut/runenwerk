@@ -138,6 +138,54 @@ Notes:
 Phase 2 does not implement runtime widget behavior, story runner behavior, Gallery previews, Designer UX, Workbench behavior, canvas surfaces, text editing, transitions, or runtime mount eligibility.
 ```
 
+### PT-UI-COMPONENT-PLATFORM-003-PLANNING
+
+ID: `PT-UI-COMPONENT-PLATFORM-003-PLANNING`
+
+Title: UI Component Platform Story Proof Envelope design intake
+
+State: active planning
+
+Owner: ui
+
+Dependency level: follows Phase 2 authoring kit and consumes existing `ui_story` V2 proof contracts
+
+Write scope:
+
+```text
+docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
+docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/roadmap.md
+docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/decision-register.md
+```
+
+Validation expectation:
+
+```text
+Manual planning consistency review.
+No Rust implementation in the planning pass.
+Implementation validation commands are defined in the design and deferred to the later implementation pass.
+```
+
+Evidence:
+
+```text
+Story Proof Envelope design updated with ownership split, proposed contract shape, proof categories, report-consumption rules, non-goals, boundary rules, acceptance criteria, test plan, and implementation gate.
+```
+
+Next action:
+
+```text
+Review and accept the Phase 3 design. After acceptance, run a bounded implementation pass on the same branch or a follow-up branch.
+```
+
+Notes:
+
+```text
+This planning entry does not authorize story runner behavior, Gallery execution, CLI execution, Designer UX, Workbench behavior, runtime widget behavior, runtime mount eligibility, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
+```
+
 ## Rules
 
 - Markdown must be enough to understand the current state.
