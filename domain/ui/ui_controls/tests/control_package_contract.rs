@@ -1,7 +1,7 @@
 use ui_controls::{
-    runenwerk_control_package, ControlBudgetEvidenceId, ControlKernelKind,
-    ControlMountEligibility, ControlPackageRegistry, ControlPackageRegistryError,
-    ControlPackageValidationReason, ControlRenderEvidenceId, ControlStoryId,
+    ControlBudgetEvidenceId, ControlKernelKind, ControlMountEligibility, ControlPackageRegistry,
+    ControlPackageRegistryError, ControlPackageValidationReason, ControlRenderEvidenceId,
+    ControlStoryId, runenwerk_control_package,
 };
 
 #[test]
@@ -9,11 +9,18 @@ fn control_package_rejects_missing_story_for_mount_eligibility() {
     let mut package = runenwerk_control_package();
     package.control_kinds[0].mount_eligibility = ControlMountEligibility::requires_evidence(
         [],
-        [ControlRenderEvidenceId::new("runenwerk.ui.controls.test.render")],
-        [ControlBudgetEvidenceId::new("runenwerk.ui.controls.test.budget")],
+        [ControlRenderEvidenceId::new(
+            "runenwerk.ui.controls.test.render",
+        )],
+        [ControlBudgetEvidenceId::new(
+            "runenwerk.ui.controls.test.budget",
+        )],
     );
 
-    assert_reason(package, ControlPackageValidationReason::MissingMountEvidence);
+    assert_reason(
+        package,
+        ControlPackageValidationReason::MissingMountEvidence,
+    );
 }
 
 #[test]
@@ -22,10 +29,15 @@ fn control_package_rejects_missing_render_evidence_for_mount_eligibility() {
     package.control_kinds[0].mount_eligibility = ControlMountEligibility::requires_evidence(
         [ControlStoryId::new("runenwerk.ui.controls.test.story")],
         [],
-        [ControlBudgetEvidenceId::new("runenwerk.ui.controls.test.budget")],
+        [ControlBudgetEvidenceId::new(
+            "runenwerk.ui.controls.test.budget",
+        )],
     );
 
-    assert_reason(package, ControlPackageValidationReason::RenderEvidenceMissing);
+    assert_reason(
+        package,
+        ControlPackageValidationReason::RenderEvidenceMissing,
+    );
 }
 
 #[test]
@@ -33,11 +45,16 @@ fn control_package_rejects_missing_budget_evidence_for_mount_eligibility() {
     let mut package = runenwerk_control_package();
     package.control_kinds[0].mount_eligibility = ControlMountEligibility::requires_evidence(
         [ControlStoryId::new("runenwerk.ui.controls.test.story")],
-        [ControlRenderEvidenceId::new("runenwerk.ui.controls.test.render")],
+        [ControlRenderEvidenceId::new(
+            "runenwerk.ui.controls.test.render",
+        )],
         [],
     );
 
-    assert_reason(package, ControlPackageValidationReason::BudgetEvidenceMissing);
+    assert_reason(
+        package,
+        ControlPackageValidationReason::BudgetEvidenceMissing,
+    );
 }
 
 #[test]
@@ -49,7 +66,10 @@ fn control_registry_rejects_invalid_package() {
         .with_package(package)
         .expect_err("invalid package should not register");
 
-    assert!(matches!(error, ControlPackageRegistryError::InvalidPackage { .. }));
+    assert!(matches!(
+        error,
+        ControlPackageRegistryError::InvalidPackage { .. }
+    ));
 }
 
 #[test]

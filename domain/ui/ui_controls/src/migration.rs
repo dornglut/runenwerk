@@ -61,19 +61,31 @@ pub struct ControlReplacementTarget {
 
 impl ControlReplacementTarget {
     pub fn package(package_id: ControlPackageId) -> Self {
-        Self { package_id, control_kind_id: None }
+        Self {
+            package_id,
+            control_kind_id: None,
+        }
     }
 
     pub fn kind(package_id: ControlPackageId, control_kind_id: ControlKindId) -> Self {
-        Self { package_id, control_kind_id: Some(control_kind_id) }
+        Self {
+            package_id,
+            control_kind_id: Some(control_kind_id),
+        }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlDeprecationStatus {
     Active,
-    Deprecated { reason: String, replacement: Option<ControlReplacementTarget> },
-    Removed { reason: String, replacement: Option<ControlReplacementTarget> },
+    Deprecated {
+        reason: String,
+        replacement: Option<ControlReplacementTarget>,
+    },
+    Removed {
+        reason: String,
+        replacement: Option<ControlReplacementTarget>,
+    },
 }
 
 impl Default for ControlDeprecationStatus {
@@ -95,9 +107,9 @@ impl ControlDeprecationStatus {
     pub fn replacement_control_kind_id(&self) -> Option<&ControlKindId> {
         match self {
             Self::Active => None,
-            Self::Deprecated { replacement, .. } | Self::Removed { replacement, .. } => {
-                replacement.as_ref().and_then(|target| target.control_kind_id.as_ref())
-            }
+            Self::Deprecated { replacement, .. } | Self::Removed { replacement, .. } => replacement
+                .as_ref()
+                .and_then(|target| target.control_kind_id.as_ref()),
         }
     }
 }

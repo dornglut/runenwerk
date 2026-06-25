@@ -1,5 +1,5 @@
 use ui_artifacts::UiControlPackageArtifact;
-use ui_controls::{runenwerk_control_package, ControlPackageRegistry};
+use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
 
 #[test]
 fn control_package_artifact_exports_registry_snapshot() {

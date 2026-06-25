@@ -72,20 +72,73 @@ pub(crate) fn control_module_contract(
     let property_schema = ControlSchemaDescriptor::properties(property_schema);
     let state_schema = ControlSchemaDescriptor::state(state_schema);
     let event_payload_schema = ControlSchemaDescriptor::event_payload(event_payload_schema);
-    let layout = ControlKernelDescriptor::new(ControlKernelId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.layout")), ControlKernelKind::Layout);
-    let interaction = ControlKernelDescriptor::new(ControlKernelId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.interaction")), ControlKernelKind::Interaction);
-    let visual = ControlKernelDescriptor::new(ControlKernelId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.visual")), ControlKernelKind::Visual);
-    let accessibility = ControlKernelDescriptor::new(ControlKernelId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.accessibility")), ControlKernelKind::Accessibility);
-    let inspection = ControlKernelDescriptor::new(ControlKernelId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.inspection")), ControlKernelKind::Inspection);
-    let kernels = ControlKernelSet::new(layout.kernel_id.clone(), interaction.kernel_id.clone(), visual.kernel_id.clone(), accessibility.kernel_id.clone(), inspection.kernel_id.clone());
-    let fixture_id = ControlFixtureId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.fixture.default"));
-    let diagnostic_id = ControlDiagnosticId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.diagnostic.contract"));
-    let migration = ControlMigrationHook::initial(ControlMigrationId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.migration.initial")), ControlPackageVersion::new(1));
-    let story_id = ControlStoryId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.story.contract"));
-    let render_evidence_id = ControlRenderEvidenceId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.evidence.render.contract"));
-    let budget_evidence_id = ControlBudgetEvidenceId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.evidence.budget.contract"));
-    let control_kind_id = ControlKindId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}"));
-    let route_requirement = ControlRouteRequirement::new(RouteId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.intent")), RouteSchemaVersion::new(1)).with_capability(capability.clone());
+    let layout = ControlKernelDescriptor::new(
+        ControlKernelId::new(format!(
+            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.layout"
+        )),
+        ControlKernelKind::Layout,
+    );
+    let interaction = ControlKernelDescriptor::new(
+        ControlKernelId::new(format!(
+            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.interaction"
+        )),
+        ControlKernelKind::Interaction,
+    );
+    let visual = ControlKernelDescriptor::new(
+        ControlKernelId::new(format!(
+            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.visual"
+        )),
+        ControlKernelKind::Visual,
+    );
+    let accessibility = ControlKernelDescriptor::new(
+        ControlKernelId::new(format!(
+            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.accessibility"
+        )),
+        ControlKernelKind::Accessibility,
+    );
+    let inspection = ControlKernelDescriptor::new(
+        ControlKernelId::new(format!(
+            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.inspection"
+        )),
+        ControlKernelKind::Inspection,
+    );
+    let kernels = ControlKernelSet::new(
+        layout.kernel_id.clone(),
+        interaction.kernel_id.clone(),
+        visual.kernel_id.clone(),
+        accessibility.kernel_id.clone(),
+        inspection.kernel_id.clone(),
+    );
+    let fixture_id = ControlFixtureId::new(format!(
+        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.fixture.default"
+    ));
+    let diagnostic_id = ControlDiagnosticId::new(format!(
+        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.diagnostic.contract"
+    ));
+    let migration = ControlMigrationHook::initial(
+        ControlMigrationId::new(format!(
+            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.migration.initial"
+        )),
+        ControlPackageVersion::new(1),
+    );
+    let story_id = ControlStoryId::new(format!(
+        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.story.contract"
+    ));
+    let render_evidence_id = ControlRenderEvidenceId::new(format!(
+        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.evidence.render.contract"
+    ));
+    let budget_evidence_id = ControlBudgetEvidenceId::new(format!(
+        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.evidence.budget.contract"
+    ));
+    let control_kind_id =
+        ControlKindId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}"));
+    let route_requirement = ControlRouteRequirement::new(
+        RouteId::new(format!(
+            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.intent"
+        )),
+        RouteSchemaVersion::new(1),
+    )
+    .with_capability(capability.clone());
     let kind = ControlKindDescriptor::new(control_kind_id.clone(), display_name, property_schema.schema_ref().clone(), state_schema.schema_ref().clone(), event_payload_schema.schema_ref().clone(), kernels)
         .with_description(format!("{display_name} reusable control descriptor with schemas, kernels, diagnostics, fixture, story, host-intent route metadata, and explicit non-mount eligibility until story proof is attached."))
         .with_category("base-control")
@@ -114,10 +167,20 @@ pub(crate) fn control_module_contract(
         .with_kernel(visual)
         .with_kernel(accessibility)
         .with_kernel(inspection)
-        .with_fixture(ControlFixtureDescriptor::new(fixture_id, format!("Default {display_name} descriptor fixture")))
-        .with_diagnostic(ControlDiagnosticDescriptor::contract(diagnostic_id, control_kind_id, format!("{display_name} control package contract violation")))
+        .with_fixture(ControlFixtureDescriptor::new(
+            fixture_id,
+            format!("Default {display_name} descriptor fixture"),
+        ))
+        .with_diagnostic(ControlDiagnosticDescriptor::contract(
+            diagnostic_id,
+            control_kind_id,
+            format!("{display_name} control package contract violation"),
+        ))
         .with_migration(migration)
-        .with_story(ControlStoryDescriptor::new(story_id, format!("{display_name} descriptor contract story placeholder")))
+        .with_story(ControlStoryDescriptor::new(
+            story_id,
+            format!("{display_name} descriptor contract story placeholder"),
+        ))
 }
 
 #[cfg(test)]
@@ -141,39 +204,118 @@ mod tests {
     }
 
     #[test]
-    fn control_package_rejects_missing_property_schema() { let mut package = runenwerk_control_package(); package.property_schemas.clear(); assert_has_reason(package, ControlPackageValidationReason::MissingSchema); }
+    fn control_package_rejects_missing_property_schema() {
+        let mut package = runenwerk_control_package();
+        package.property_schemas.clear();
+        assert_has_reason(package, ControlPackageValidationReason::MissingSchema);
+    }
     #[test]
-    fn control_package_rejects_missing_state_schema() { let mut package = runenwerk_control_package(); package.state_schemas.clear(); assert_has_reason(package, ControlPackageValidationReason::MissingSchema); }
+    fn control_package_rejects_missing_state_schema() {
+        let mut package = runenwerk_control_package();
+        package.state_schemas.clear();
+        assert_has_reason(package, ControlPackageValidationReason::MissingSchema);
+    }
     #[test]
-    fn control_package_rejects_missing_event_payload_schema() { let mut package = runenwerk_control_package(); package.event_payload_schemas.clear(); assert_has_reason(package, ControlPackageValidationReason::MissingSchema); }
+    fn control_package_rejects_missing_event_payload_schema() {
+        let mut package = runenwerk_control_package();
+        package.event_payload_schemas.clear();
+        assert_has_reason(package, ControlPackageValidationReason::MissingSchema);
+    }
     #[test]
-    fn control_package_rejects_missing_layout_kernel() { let mut package = runenwerk_control_package(); let missing = package.control_kinds[0].kernels.layout.clone(); package.kernels.retain(|kernel| kernel.kernel_id != missing); assert_has_reason(package, ControlPackageValidationReason::MissingKernel); }
+    fn control_package_rejects_missing_layout_kernel() {
+        let mut package = runenwerk_control_package();
+        let missing = package.control_kinds[0].kernels.layout.clone();
+        package.kernels.retain(|kernel| kernel.kernel_id != missing);
+        assert_has_reason(package, ControlPackageValidationReason::MissingKernel);
+    }
     #[test]
-    fn control_package_rejects_missing_interaction_kernel() { let mut package = runenwerk_control_package(); let missing = package.control_kinds[0].kernels.interaction.clone(); package.kernels.retain(|kernel| kernel.kernel_id != missing); assert_has_reason(package, ControlPackageValidationReason::MissingKernel); }
+    fn control_package_rejects_missing_interaction_kernel() {
+        let mut package = runenwerk_control_package();
+        let missing = package.control_kinds[0].kernels.interaction.clone();
+        package.kernels.retain(|kernel| kernel.kernel_id != missing);
+        assert_has_reason(package, ControlPackageValidationReason::MissingKernel);
+    }
     #[test]
-    fn control_package_rejects_missing_visual_kernel() { let mut package = runenwerk_control_package(); let missing = package.control_kinds[0].kernels.visual.clone(); package.kernels.retain(|kernel| kernel.kernel_id != missing); assert_has_reason(package, ControlPackageValidationReason::MissingKernel); }
+    fn control_package_rejects_missing_visual_kernel() {
+        let mut package = runenwerk_control_package();
+        let missing = package.control_kinds[0].kernels.visual.clone();
+        package.kernels.retain(|kernel| kernel.kernel_id != missing);
+        assert_has_reason(package, ControlPackageValidationReason::MissingKernel);
+    }
     #[test]
-    fn control_package_rejects_missing_accessibility_kernel() { let mut package = runenwerk_control_package(); let missing = package.control_kinds[0].kernels.accessibility.clone(); package.kernels.retain(|kernel| kernel.kernel_id != missing); assert_has_reason(package, ControlPackageValidationReason::MissingKernel); }
+    fn control_package_rejects_missing_accessibility_kernel() {
+        let mut package = runenwerk_control_package();
+        let missing = package.control_kinds[0].kernels.accessibility.clone();
+        package.kernels.retain(|kernel| kernel.kernel_id != missing);
+        assert_has_reason(package, ControlPackageValidationReason::MissingKernel);
+    }
     #[test]
-    fn control_package_rejects_missing_inspection_kernel() { let mut package = runenwerk_control_package(); let missing = package.control_kinds[0].kernels.inspection.clone(); package.kernels.retain(|kernel| kernel.kernel_id != missing); assert_has_reason(package, ControlPackageValidationReason::MissingKernel); }
+    fn control_package_rejects_missing_inspection_kernel() {
+        let mut package = runenwerk_control_package();
+        let missing = package.control_kinds[0].kernels.inspection.clone();
+        package.kernels.retain(|kernel| kernel.kernel_id != missing);
+        assert_has_reason(package, ControlPackageValidationReason::MissingKernel);
+    }
     #[test]
-    fn control_package_rejects_duplicate_schema_ref() { let mut package = runenwerk_control_package(); package.property_schemas.push(package.property_schemas[0].clone()); assert_has_reason(package, ControlPackageValidationReason::DuplicateSchemaRef); }
+    fn control_package_rejects_duplicate_schema_ref() {
+        let mut package = runenwerk_control_package();
+        package
+            .property_schemas
+            .push(package.property_schemas[0].clone());
+        assert_has_reason(package, ControlPackageValidationReason::DuplicateSchemaRef);
+    }
     #[test]
-    fn control_package_rejects_duplicate_kernel_id() { let mut package = runenwerk_control_package(); package.kernels.push(package.kernels[0].clone()); assert_has_reason(package, ControlPackageValidationReason::DuplicateKernelId); }
+    fn control_package_rejects_duplicate_kernel_id() {
+        let mut package = runenwerk_control_package();
+        package.kernels.push(package.kernels[0].clone());
+        assert_has_reason(package, ControlPackageValidationReason::DuplicateKernelId);
+    }
     #[test]
-    fn control_package_rejects_duplicate_fixture_id() { let mut package = runenwerk_control_package(); package.fixtures.push(package.fixtures[0].clone()); assert_has_reason(package, ControlPackageValidationReason::DuplicateFixtureId); }
+    fn control_package_rejects_duplicate_fixture_id() {
+        let mut package = runenwerk_control_package();
+        package.fixtures.push(package.fixtures[0].clone());
+        assert_has_reason(package, ControlPackageValidationReason::DuplicateFixtureId);
+    }
     #[test]
-    fn control_package_rejects_duplicate_diagnostic_id() { let mut package = runenwerk_control_package(); package.diagnostics.push(package.diagnostics[0].clone()); assert_has_reason(package, ControlPackageValidationReason::DuplicateDiagnosticId); }
+    fn control_package_rejects_duplicate_diagnostic_id() {
+        let mut package = runenwerk_control_package();
+        package.diagnostics.push(package.diagnostics[0].clone());
+        assert_has_reason(
+            package,
+            ControlPackageValidationReason::DuplicateDiagnosticId,
+        );
+    }
     #[test]
-    fn control_package_rejects_duplicate_migration_id() { let mut package = runenwerk_control_package(); package.migrations.push(package.migrations[0].clone()); assert_has_reason(package, ControlPackageValidationReason::DuplicateMigrationId); }
+    fn control_package_rejects_duplicate_migration_id() {
+        let mut package = runenwerk_control_package();
+        package.migrations.push(package.migrations[0].clone());
+        assert_has_reason(
+            package,
+            ControlPackageValidationReason::DuplicateMigrationId,
+        );
+    }
     #[test]
-    fn control_package_rejects_duplicate_story_id() { let mut package = runenwerk_control_package(); package.stories.push(package.stories[0].clone()); assert_has_reason(package, ControlPackageValidationReason::DuplicateStoryId); }
+    fn control_package_rejects_duplicate_story_id() {
+        let mut package = runenwerk_control_package();
+        package.stories.push(package.stories[0].clone());
+        assert_has_reason(package, ControlPackageValidationReason::DuplicateStoryId);
+    }
     #[test]
-    fn runenwerk_control_package_validates() { assert!(runenwerk_control_package().validate_contract().is_valid()); }
+    fn runenwerk_control_package_validates() {
+        assert!(runenwerk_control_package().validate_contract().is_valid());
+    }
 
-    fn assert_has_reason(package: ControlPackageDescriptor, reason: ControlPackageValidationReason) {
+    fn assert_has_reason(
+        package: ControlPackageDescriptor,
+        reason: ControlPackageValidationReason,
+    ) {
         let report = package.validate_contract();
         assert!(!report.is_valid(), "package unexpectedly valid");
-        assert!(report.has_reason(reason), "expected reason {:?}, got {:?}", reason, report.diagnostics);
+        assert!(
+            report.has_reason(reason),
+            "expected reason {:?}, got {:?}",
+            reason,
+            report.diagnostics
+        );
     }
 }
