@@ -5,7 +5,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::package::ControlPackageVersion;
+use crate::package::{ControlKindId, ControlPackageId, ControlPackageVersion};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ControlMigrationId(String);
@@ -47,6 +47,61 @@ pub enum ControlMigrationGraphPolicy {
     RemovesCapabilities,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlBreakingChangePolicy {
+    NonBreaking,
+    BreakingRequiresDiagnostic,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControlReplacementTarget {
+    pub package_id: ControlPackageId,
+    pub control_kind_id: Option<ControlKindId>,
+}
+
+impl ControlReplacementTarget {
+    pub fn package(package_id: ControlPackageId) -> Self {
+        Self { package_id, control_kind_id: None }
+    }
+
+    pub fn kind(package_id: ControlPackageId, control_kind_id: ControlKindId) -> Self {
+        Self { package_id, control_kind_id: Some(control_kind_id) }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlDeprecationStatus {
+    Active,
+    Deprecated { reason: String, replacement: Option<ControlReplacementTarget> },
+    Removed { reason: String, replacement: Option<ControlReplacementTarget> },
+}
+
+impl Default for ControlDeprecationStatus {
+    fn default() -> Self {
+        Self::Active
+    }
+}
+
+impl ControlDeprecationStatus {
+    pub fn replacement_package_id(&self) -> Option<&ControlPackageId> {
+        match self {
+            Self::Active => None,
+            Self::Deprecated { replacement, .. } | Self::Removed { replacement, .. } => {
+                replacement.as_ref().map(|target| &target.package_id)
+            }
+        }
+    }
+
+    pub fn replacement_control_kind_id(&self) -> Option<&ControlKindId> {
+        match self {
+            Self::Active => None,
+            Self::Deprecated { replacement, .. } | Self::Removed { replacement, .. } => {
+                replacement.as_ref().and_then(|target| target.control_kind_id.as_ref())
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlMigrationHook {
     pub migration_id: ControlMigrationId,
@@ -55,6 +110,9 @@ pub struct ControlMigrationHook {
     pub to_package_version: ControlPackageVersion,
     pub graph_policy: ControlMigrationGraphPolicy,
     pub preserves_source_maps: bool,
+    pub breaking_change_policy: ControlBreakingChangePolicy,
+    pub replacement: Option<ControlReplacementTarget>,
+    pub diagnostic_id: Option<String>,
 }
 
 impl ControlMigrationHook {
@@ -69,12 +127,50 @@ impl ControlMigrationHook {
             to_package_version,
             graph_policy: ControlMigrationGraphPolicy::PreservesGraph,
             preserves_source_maps: true,
+            breaking_change_policy: ControlBreakingChangePolicy::NonBreaking,
+            replacement: None,
+            diagnostic_id: None,
         }
     }
 
     pub fn with_graph_policy(mut self, graph_policy: ControlMigrationGraphPolicy) -> Self {
         self.graph_policy = graph_policy;
         self
+    }
+
+    pub fn with_breaking_change_policy(
+        mut self,
+        breaking_change_policy: ControlBreakingChangePolicy,
+        diagnostic_id: impl Into<String>,
+    ) -> Self {
+        self.breaking_change_policy = breaking_change_policy;
+        self.diagnostic_id = Some(diagnostic_id.into());
+        self
+    }
+
+    pub fn with_replacement_target(mut self, replacement: ControlReplacementTarget) -> Self {
+        self.replacement = Some(replacement);
+        self
+    }
+
+    pub fn validate_contract(&self, _package_id: &ControlPackageId) -> Result<(), String> {
+        if let Some(from_package_version) = self.from_package_version {
+            if self.to_package_version.value() <= from_package_version.value() {
+                return Err(format!(
+                    "control migration {} must move to a greater package version",
+                    self.migration_id.as_str()
+                ));
+            }
+        }
+        if self.breaking_change_policy == ControlBreakingChangePolicy::BreakingRequiresDiagnostic
+            && self.diagnostic_id.as_deref().map_or(true, str::is_empty)
+        {
+            return Err(format!(
+                "breaking control migration {} must name a diagnostic id",
+                self.migration_id.as_str()
+            ));
+        }
+        Ok(())
     }
 }
 
