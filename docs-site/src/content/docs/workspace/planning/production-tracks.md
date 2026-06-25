@@ -29,8 +29,8 @@ Milestones:
 
 ```text
 001 ControlPackage / ControlKernel contract — completed by user report
-002 Authoring Kit — active design/planning
-003 Story proof envelope consumption — future
+002 Authoring Kit — completed by user validation report
+003 Story proof envelope consumption — next design/planning
 004 Catalog / discovery / inspection — future
 005 Input / gesture / device — future
 006 State binding / host intent — future
@@ -57,7 +57,7 @@ Milestones:
 Design gates:
 
 ```text
-Phase 2 implementation requires the authoring-kit design to be accepted and Phase 1 to remain green.
+Phase 3 implementation requires a Story Proof Envelope design/planning record to be accepted first.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -65,20 +65,20 @@ Evidence gates:
 
 ```text
 Phase 1: local validation and branch/PR evidence.
-Phase 2: authoring API tests prove ordinary Phase 1 descriptors are produced and invalid output still fails closed through existing validation.
+Phase 2: user reported the authoring-kit validation gate green; authoring tests prove ordinary Phase 1 descriptors are produced and invalid output still fails closed through existing validation.
 Later phases: story proof, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 2 is in design/planning. No Rust implementation is authorized by planning alone.
+Phase 3 is not yet designed. No story proof or story runner implementation is authorized by Phase 2 completion.
 ```
 
 Next action:
 
 ```text
-Review and accept ui-component-platform-authoring-kit-design.md, then start a bounded implementation pass for the authoring kit.
+Open PT-UI-COMPONENT-PLATFORM-003 Story Proof Envelope design/planning.
 ```
 
 ## Track shape
