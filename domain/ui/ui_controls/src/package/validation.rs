@@ -5,7 +5,7 @@ use ui_schema::{UiSchema, UiSchemaRef, UiSchemaShape};
 
 use super::ids::{ControlKindId, ControlPackageId, ControlPackageVersion, ControlTargetProfileRef};
 use super::metadata::ControlMountEligibility;
-use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
+use crate::diagnostics::ControlDiagnosticId;
 use crate::kernel::{ControlKernelDescriptor, ControlKernelKind};
 use crate::package::{ControlKindDescriptor, ControlModuleDescriptor, ControlPackageDescriptor};
 use crate::schema::ControlSchemaDescriptor;
