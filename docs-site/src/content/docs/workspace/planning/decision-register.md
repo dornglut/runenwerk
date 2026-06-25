@@ -71,6 +71,54 @@ Follow-up:
 Review and accept the authoring-kit design. After acceptance, run a bounded implementation pass that adds only the authoring API and tests under ui_controls, preserving Phase 1 validation and avoiding Phase 3+ behavior.
 ```
 
+## Phase 3 story-proof-envelope planning decision
+
+Date: 2026-06-25
+
+Decision: Start `PT-UI-COMPONENT-PLATFORM` Phase 3 as a Story Proof Envelope design/planning intake before implementation.
+
+Context:
+
+```text
+Phase 2 is complete by user validation report and established ergonomic ControlPackage construction. The next component-platform slice must connect reusable control maturity to story proof without moving ui_story runner/report ownership into ui_controls.
+```
+
+Options considered:
+
+```text
+1. Implement control story proof structures immediately.
+2. Treat Phase 3 as design/planning first, then authorize a bounded implementation pass.
+3. Defer story proof until catalog/discovery.
+```
+
+Reason:
+
+```text
+Option 2 preserves the existing ui_story V2 authority and prevents a parallel control-specific proof model. It also keeps story runner behavior, Gallery execution, CLI execution, runtime mount eligibility, Designer UX, Workbench behavior, text, canvas, transitions, renderer semantics, and ECS semantics out of Phase 3 planning.
+```
+
+Affected planning files:
+
+```text
+docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
+docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/roadmap.md
+docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/decision-register.md
+```
+
+Evidence:
+
+```text
+AGENTS.md, start-here.md, roadmap-update-routine.md, authority-model.md, programming-principles.md, UI Component Platform roadmap, story-driven golden workflow design, ui_story V2 root exports, ui_story V2 report model, and ui_story evidence model were inspected before this planning update.
+```
+
+Follow-up:
+
+```text
+Review and accept the Story Proof Envelope design. After acceptance, run a bounded implementation pass that adds only control story-proof requirement and summary contracts, preserving ui_story runner/report ownership and avoiding Phase 4+ behavior.
+```
+
 ## Decision shape
 
 ```text
