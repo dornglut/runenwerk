@@ -17,7 +17,7 @@ ID: `PT-UI-COMPONENT-PLATFORM-003-PLANNING`
 
 Title: UI Component Platform Story Proof Envelope design intake
 
-State: ready for planning
+State: active planning
 
 Owner: ui
 
@@ -31,7 +31,8 @@ docs-site/src/content/docs/workspace/routines/implementation-routine.md
 docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/guidelines/programming-principles.md
-docs-site/src/content/docs/design/active/ui-component-platform-authoring-kit-design.md
+docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
+docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
 docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
 docs-site/src/content/docs/domain/ui/roadmap.md
 ```
@@ -39,7 +40,11 @@ docs-site/src/content/docs/domain/ui/roadmap.md
 Write scope:
 
 ```text
-Planning/design records only until the Story Proof Envelope design is accepted.
+docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
+docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/roadmap.md
+docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 
 Validation expectation:
@@ -52,19 +57,20 @@ Implementation validation is deferred until a later bounded implementation pass.
 Known blockers:
 
 ```text
-Phase 3 must not start implementation before its design and acceptance criteria are written and accepted.
+Phase 3 implementation must not start before this Story Proof Envelope design is reviewed and accepted.
 ```
 
 Next action:
 
 ```text
-Open the Phase 3 Story Proof Envelope design/planning intake. Do not implement story runner behavior in the planning pass.
+Review and accept the Phase 3 Story Proof Envelope design, then start a bounded implementation pass only after the design gate is accepted.
 ```
 
 Evidence:
 
 ```text
 Phase 2 authoring-kit implementation passed the local validation gate by user report on 2026-06-25.
+Phase 3 design authority exists in ui-component-platform-story-proof-envelope-design.md.
 ```
 
 ## Active-work rules
