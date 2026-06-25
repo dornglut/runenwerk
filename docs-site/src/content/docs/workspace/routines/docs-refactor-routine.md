@@ -1,9 +1,33 @@
 # Documentation Refactor Routine
 
+## Use when
+
 Use this routine for documentation cleanup.
 
-Read `AGENTS.md`, `AI_GUIDE.md`, `documentation-structure.md`, and `authority-model.md`.
+## Authority files to read
 
-Patch the owning document first. Keep root docs concise. Replace duplicates with pointers. Update links.
+Read `AGENTS.md`, `documentation-structure.md`, `authority-model.md`, and `programming-principles.md`.
 
-Report files changed, paths changed, link review, validation status, and remaining drift.
+## Working files to inspect
+
+Inspect affected docs, links, root summaries, indexes, planning records, reports, and archives.
+
+## What to decide before editing
+
+Classify each file by purpose and owner.
+
+## Patch rules
+
+Patch the owning document first. Keep root docs concise. Remove duplicate authority. Update links.
+
+## Manual validation checklist
+
+Confirm file purpose, links, root summary alignment, duplicate removal, and stale references.
+
+## Evidence to report
+
+Report files changed, link review, validation status, and remaining drift.
+
+## Optional local helpers
+
+Run docs validation when available.
