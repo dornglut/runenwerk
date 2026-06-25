@@ -1,37 +1,11 @@
----
-title: Task Cards
-status: active
-owner: workspace
-layer: workspace
-canonical: true
-last_reviewed: 2026-06-25
----
-
 # Task Cards
 
-Use this folder for short reusable task instructions.
+Task cards are short reusable task instructions. The linked routine owns process.
 
-The routine linked by a card owns the process.
+## Active cards
 
-## Available cards
-
-- [GitHub connector](github-connector-task.md)
-- [Codex](codex-task.md)
-- [Implementation](implementation-task.md)
-- [Architecture review](architecture-review-task.md)
-- [Docs cleanup](docs-cleanup-task.md)
-- [Roadmap update](roadmap-update-task.md)
-- [Phase closeout](phase-closeout-task.md)
-
-## Card shape
-
-```text
-Repository:
-Goal:
-Routine:
-Authority files:
-Scope:
-Patch rules:
-Manual validation:
-Final report:
-```
+- [GitHub Connector Task](github-connector-task.md)
+- [Codex Task](codex-task.md)
+- [Implementation Task](implementation-task.md)
+- [Docs Cleanup Task](docs-cleanup-task.md)
+- [Review Task](review-task.md)
