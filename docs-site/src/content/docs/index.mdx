@@ -1,29 +1,31 @@
 ---
 title: Runenwerk Docs
-description: Entry point for Runenwerk software development, architecture, workspace, domain, engine, net, app, and design documentation.
+description: Entry point for Runenwerk documentation.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-29
+last_reviewed: 2026-06-25
 ---
 
 # Runenwerk Docs
 
-Runenwerk documentation is organized by ownership area. Current-state architecture and usage pages should describe the repository as it exists now; proposals, migration plans, and ADRs should state their status explicitly.
+Runenwerk documentation is organized by ownership area. Current-state docs describe the repository as it exists now. ADRs, design docs, planning records, reports, and archives must state their purpose and status explicitly.
 
-## Start Here
+## Start here
 
+- [Workspace Start Here](workspace/start-here.md)
+- [Operating Model](workspace/operating-model.md)
+- [Authority Model](workspace/authority-model.md)
+- [Programming Principles](guidelines/programming-principles.md)
 - [Workspace Overview](workspace/overview.md)
-- [Workspace Architecture Boundaries](guidelines/architecture.md)
-- [Runenwerk Architecture Doctrine](guidelines/runenwerk-architecture.md)
-- [Domain Map](guidelines/domain-map.md)
+
+## Main areas
+
+- [Architecture Boundaries](guidelines/architecture.md)
+- [Architecture Doctrine](guidelines/runenwerk-architecture.md)
 - [Module Structure Guidelines](guidelines/module-structure-guidelines.md)
-- [Crate Documentation Status](workspace/crate-docs-status.md)
-- [Roadmap Index](workspace/roadmap-index.md)
-
-## Main Areas
-
+- [Code Patterns](guidelines/code-patterns.md)
 - [Software Development](software-development/README.md)
 - [Domain](domain/00-overview.md)
 - [Engine](engine/index.md)
@@ -32,18 +34,12 @@ Runenwerk documentation is organized by ownership area. Current-state architectu
 - [ADR Index](adr/README.md)
 - [Design Docs](design/README.md)
 
-## Local Validation
+## Optional local validation
 
-Run docs checks from the repository root:
+When a local checkout is available, docs checks can be run from the repository root:
 
 ```sh
 python3 tools/docs/validate_docs.py
 ```
 
-Run the docs site from `docs-site/`:
-
-```sh
-pnpm install
-pnpm build
-pnpm dev
-```
+Local commands are validation helpers, not documentation authority.
