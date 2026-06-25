@@ -1,101 +1,63 @@
 # Runenwerk
 
-Canonical documentation lives under `docs-site/src/content/docs`.
+Runenwerk is a long-term world, editor, simulation, and rendering platform organized around explicit domain ownership, stable contracts, and inspectable documentation.
 
-## First Clone Bootstrap
-
-Runenwerk uses Taskfile as the human command entrypoint. A clone cannot safely
-install tools automatically, so run the explicit bootstrap once after clone:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools/bootstrap/bootstrap.ps1
-```
-
-Then open a new shell and verify:
-
-```powershell
-task toolchain:doctor
-task roadmap:validate
-task roadmap:check
-task puml:validate
-```
-
-If the shell cannot find `task` or `uv` after bootstrap, activate the
-known tool paths in the current PowerShell session:
-
-```powershell
-. .\tools\bootstrap\activate.ps1
-```
-
-Details: `docs-site/src/content/docs/workspace/toolchain-bootstrap.md`.
-
-Start with:
-
-- `docs-site/src/content/docs/index.mdx`
-- `docs-site/src/content/docs/workspace/overview.md`
-- `docs-site/src/content/docs/workspace/toolchain-bootstrap.md`
-- `docs-site/src/content/docs/guidelines/architecture.md`
-- `CRATES.md`
-- `DOMAIN_MAP.md`
-
-## AI Context Export
-
-Use this to export repository source and documentation into a single line-numbered context file for AI review:
-
-```bash
-python3 tools/context/export_repo_context.py
-```
-
-Optional output path:
-
-```bash
-python3 tools/context/export_repo_context.py --output ./Runenwerk-content.txt
-```
-
-## AI Workflow Kickoff
-
-Use these one-line prompts when starting a new Codex thread from the repository
-root:
+Canonical documentation lives under:
 
 ```text
-Run task batch:kickoff -- --next and follow the generated workflow.
+docs-site/src/content/docs
 ```
+
+## Human start
+
+Start here for repository orientation, planning, implementation, review, and cleanup:
 
 ```text
-Run task roadmap:intake -- --idea "<design/change idea>" and prepare it for roadmap review.
+docs-site/src/content/docs/workspace/start-here.md
 ```
+
+For the docs-site landing page, use:
 
 ```text
-Run task ai:goal -- --track PT-SDF-OW and use the generated /goal coordinator prompt.
+docs-site/src/content/docs/index.mdx
 ```
 
-`batch:kickoff` creates the next approved-roadmap batch proposal from
-`planning_state=current_candidate` rows in
-`docs-site/src/content/docs/workspace/roadmap-items.yaml` and prints the exact
-approval, preparation, validation, worker prompt, scope-check, and closeout
-commands. It does not approve implementation unless `--approve` is explicitly
-passed.
+## AI agent start
 
-`roadmap:intake` creates a review proposal for a new design or change idea. It
-does not edit the canonical roadmap until an accepted proposal is applied with
-`task roadmap:apply-intake`.
+AI coding agents must start from:
 
-Lower-level prompt and checklist helpers are still available:
-
-```bash
-task ai:list
-task ai:goal -- --track "<PT-ID>"
-task ai:implementation -- --task "<task>" --scope "<scope>"
-task ai:closeout -- --task "<completed phase>" --roadmap "<roadmap/design>"
+```text
+AGENTS.md
 ```
 
-Details: `docs-site/src/content/docs/workspace/planning-and-implementation-workflow.md`.
+`AGENTS.md` is the only root AI entrypoint. It explains how to work through GitHub connector, context tooling, Codex-style patching, manual file inspection, or a local checkout without requiring command execution.
 
-Runenwerk does not configure remote CI. Run these validation shortcuts from the
-repository root before pushing, opening a PR, or closing out a batch:
+## Core references
 
-```bash
-task docs:validate
-task batch:validate -- --batch docs-site/src/content/docs/reports/batches/<batch-id>/batch.toml
-task ci:local
+- Architecture summary: `ARCHITECTURE.md`
+- Dependency direction: `DEPENDENCY_RULES.md`
+- Concept ownership map: `DOMAIN_MAP.md`
+- Crate inventory: `CRATES.md`
+- Validation guidance: `TESTING.md`
+- Terminology: `GLOSSARY.md`
+- Programming principles: `docs-site/src/content/docs/guidelines/programming-principles.md`
+
+## Optional local setup
+
+Local tools are optional helpers. They are useful for validation, but they are not required to understand the repository workflow.
+
+Toolchain bootstrap details live in:
+
+```text
+docs-site/src/content/docs/workspace/toolchain-bootstrap.md
 ```
+
+## Optional local validation
+
+When a local checkout is available, run the smallest relevant validation first. For docs-only changes, start with:
+
+```text
+python3 tools/docs/validate_docs.py
+```
+
+For code changes, use `TESTING.md` to choose focused validation before broad workspace checks.

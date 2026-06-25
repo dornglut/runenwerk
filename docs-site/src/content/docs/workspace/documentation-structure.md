@@ -1,6 +1,5 @@
 ---
 title: Documentation Structure
-description: Source-of-truth rules, document lifecycles, placement policy, naming rules, and maintenance expectations for Runenwerk documentation.
 status: active
 owner: workspace
 layer: workspace
@@ -10,11 +9,12 @@ related_docs:
   - ./start-here.md
   - ./operating-model.md
   - ./authority-model.md
+  - ../guidelines/programming-principles.md
 ---
 
 # Documentation Structure
 
-This document defines how Runenwerk documentation is organized and how to place new or changed docs.
+This document defines how Runenwerk documentation is organized and where docs belong.
 
 ## Core model
 
@@ -22,21 +22,17 @@ Runenwerk uses a two-level documentation model:
 
 ```text
 repository root Markdown files
-  short operational summaries for humans and AI agents working from the root
+  short entrypoints and summaries
 
 docs-site/src/content/docs
   canonical long-form documentation tree
 ```
-
-Root Markdown files are entrypoints and summaries. The docs-site tree is the canonical location for detailed documentation.
 
 When a root document and a docs-site document overlap, update the docs-site document first, then align the root summary.
 
 ## Scriptless workflow requirement
 
 Workflow documentation must be usable by reading files. Do not require a command, local checkout, generated prompt, rendered planning view, or full repository export to understand the next action.
-
-Local helpers may be documented in an `Optional local helpers` section only.
 
 The active workspace workflow starts at:
 
@@ -51,7 +47,6 @@ The following root files are intentionally kept at repository root:
 ```text
 README.md
 AGENTS.md
-AI_GUIDE.md
 ARCHITECTURE.md
 CRATES.md
 DEPENDENCY_RULES.md
@@ -60,32 +55,17 @@ GLOSSARY.md
 TESTING.md
 ```
 
-Root documents should be:
+Root documents should be concise, stable, operationally useful, and linked to canonical docs-site pages where detail exists.
 
-- concise;
-- stable;
-- operationally useful;
-- safe to read before making changes;
-- linked to canonical docs-site pages where detail exists.
-
-Root documents must not become:
-
-- full design documents;
-- detailed implementation roadmaps;
-- generated status views;
-- long historical records;
-- duplicated copies of docs-site pages;
-- dumping grounds for incomplete notes.
+Root documents must not become full design documents, detailed roadmaps, generated status views, long historical records, duplicated docs-site pages, or dumping grounds for incomplete notes.
 
 ## Canonical tree
-
-Recommended high-level structure:
 
 ```text
 docs-site/src/content/docs/
   workspace/
-  software-development/
   guidelines/
+  software-development/
   foundation/
   adr/
   design/
@@ -97,17 +77,15 @@ docs-site/src/content/docs/
   archive/
 ```
 
-## Workspace structure
-
-The active workspace workflow structure is:
+## Active workspace structure
 
 ```text
 workspace/
   start-here.md
   operating-model.md
   authority-model.md
+  ai-agent-boundaries.md
   documentation-structure.md
-  planning-and-implementation-workflow.md
 
   routines/
     README.md
@@ -125,10 +103,8 @@ workspace/
     github-connector-task.md
     codex-task.md
     implementation-task.md
-    architecture-review-task.md
     docs-cleanup-task.md
-    roadmap-update-task.md
-    phase-closeout-task.md
+    review-task.md
 
   planning/
     README.md
@@ -142,17 +118,19 @@ workspace/
 
 ## Folder responsibilities
 
-### `workspace/`
+- `workspace/`: repository process, structure, planning, status, and maintenance docs.
+- `workspace/routines/`: repeatable human/agent procedures.
+- `workspace/task-cards/`: short reusable task instructions that point to routines.
+- `workspace/planning/`: Markdown-first planning records.
+- `guidelines/`: stable doctrine, including programming principles, architecture, dependency, module, and validation rules.
+- `adr/`: durable decisions and rejected alternatives.
+- `design/`: target architecture and tradeoffs.
+- `reports/`: historical evidence, audits, migrations, closeouts, and benchmarks.
+- `archive/`: non-authoritative historical material.
 
-Repository-wide process, structure, planning, status, and maintenance documentation.
+## Routine shape
 
-Workspace docs must not contain crate-specific implementation detail unless the document is an index or status tracker.
-
-### `workspace/routines/`
-
-Repeatable human/agent procedures. Routines own process.
-
-Every active routine should use this shape:
+Every active routine should use this structure:
 
 ```text
 Use when
@@ -165,36 +143,6 @@ Evidence to report
 Optional local helpers
 ```
 
-### `workspace/task-cards/`
-
-Copy-pasteable task prompts. Task cards wrap routines. They do not own process.
-
-### `workspace/planning/`
-
-Markdown-first planning records. These files own active planning state from the scriptless workflow cutover onward.
-
-Legacy YAML and generated Markdown files may remain as optional mirrors or migration context, but they are not required for normal workflow comprehension.
-
-### `guidelines/`
-
-Stable repository doctrine such as dependency direction, architecture principles, module structure, validation policy, and contribution rules.
-
-### `adr/`
-
-Durable architecture decisions and rejected alternatives.
-
-### `design/`
-
-Active, accepted, implemented, deferred, superseded, or rejected design documents.
-
-### `reports/`
-
-Historical audits, closeouts, migrations, benchmarks, and evidence records. Reports may prove what happened; they do not authorize future work by themselves.
-
-### `archive/`
-
-Historical non-authoritative material that should not remain in active workflow navigation.
-
 ## Naming rules
 
 - Use kebab-case for docs-site Markdown files.
@@ -204,17 +152,16 @@ Historical non-authoritative material that should not remain in active workflow 
 - Prefer task-oriented names for workflow docs.
 - Prefer authority-oriented names for doctrine docs.
 
-## Moving or pruning docs
+## Pruning rules
 
-When moving, merging, or pruning docs:
+Use the programming principles when pruning docs:
 
-1. Classify each affected file by responsibility.
-2. Identify the owning canonical file.
-3. Move useful material into the owner.
-4. Replace stale active docs with a short redirect or archive note only when needed.
-5. Update internal links.
-6. Update root summaries last.
-7. Report old path to new path mapping.
+- KISS: keep navigation short.
+- DRY: keep one authority for each durable claim.
+- YAGNI: remove unused workflow surfaces.
+- Separation of Concerns: separate entrypoints, routines, planning, reports, and tooling.
+
+When moving, merging, or pruning docs, report old path to new path mapping.
 
 ## Authority conflicts
 

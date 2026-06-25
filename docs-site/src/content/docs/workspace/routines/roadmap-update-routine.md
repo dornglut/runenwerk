@@ -1,20 +1,42 @@
+---
+title: Roadmap Update Routine
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-06-25
+---
+
 # Roadmap Update Routine
+
+## Use when
 
 Use this routine for planning record changes.
 
-Read `docs-site/src/content/docs/workspace/planning/README.md`, `active-work.md`, `roadmap.md`, `deferred-work.md`, `completed-work.md`, `production-tracks.md`, `decision-register.md`, and `authority-model.md`.
+## Authority files to read
 
-Before editing, decide whether the change is active, deferred, completed, strategic, or historical.
+Read `planning/README.md`, `active-work.md`, `roadmap.md`, `deferred-work.md`, `completed-work.md`, `production-tracks.md`, `decision-register.md`, `authority-model.md`, and `programming-principles.md`.
 
-Patch Markdown planning records first. Treat legacy generated views and structured files as optional mirrors unless a narrow machine contract says otherwise.
+## Working files to inspect
 
-Manual validation:
+Inspect the planning files being changed and any owning roadmap, design, ADR, report, or closeout evidence.
 
-- planning state is internally consistent;
-- current focus is explicit;
-- blockers are concrete;
-- completed work has evidence;
-- deferred work has reactivation conditions;
-- stale mirrors are reported.
+## What to decide before editing
 
-Final report: planning files changed, state transitions, evidence, risks, next step.
+Decide whether the change is active, deferred, completed, strategic, or historical.
+
+## Patch rules
+
+Patch Markdown planning records first. Keep generated views and structured files as optional mirrors unless a narrow machine contract requires them.
+
+## Manual validation checklist
+
+Confirm planning consistency, current focus, concrete blockers, completion evidence, reactivation conditions, and stale mirrors.
+
+## Evidence to report
+
+Report planning files changed, state transitions, evidence, risks, and next step.
+
+## Optional local helpers
+
+Run planning validation helpers only when a local checkout is available.

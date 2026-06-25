@@ -1,11 +1,15 @@
 ---
 title: Authority Model
-description: Authority model for resolving Runenwerk documentation, planning, code, report, and tooling conflicts.
+description: Authority model for resolving Runenwerk code, docs, planning, report, generated-view, and tooling conflicts.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
 last_reviewed: 2026-06-25
+related_docs:
+  - ./start-here.md
+  - ./operating-model.md
+  - ../guidelines/programming-principles.md
 ---
 
 # Authority Model
@@ -19,9 +23,23 @@ Every repository artifact has one job.
 3. Workspace authority docs own repository process.
 4. Planning Markdown owns active, deferred, completed, and strategic planning state.
 5. Routines own repeatable work procedure.
-6. Task cards own reusable handoff wording.
+6. Task cards own reusable task wording.
 7. Reports and closeouts own historical evidence.
 8. Generated views and local helpers are convenience only unless a narrow machine contract explicitly says otherwise.
+
+## Programming-principle lens
+
+Use `docs-site/src/content/docs/guidelines/programming-principles.md` when authority conflicts are caused by over-complexity, duplication, speculation, blurred responsibility, premature optimization, or cross-boundary coupling.
+
+In practice:
+
+- KISS: prefer the simplest authority path that protects the invariant.
+- DRY: do not keep the same durable claim authoritative in two places.
+- YAGNI: do not preserve legacy workflow surfaces only because they might be useful someday.
+- SOLID: keep responsibilities and dependencies honest.
+- Separation of Concerns: separate entrypoints, authority docs, routines, planning, reports, and tooling.
+- Avoid Premature Optimization: do not add generated views or scripts before there is evidence they solve a real problem.
+- Law of Demeter: route through direct owners and explicit contracts.
 
 ## Planning files
 
@@ -37,7 +55,7 @@ docs-site/src/content/docs/workspace/planning/production-tracks.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 
-Legacy structured files and generated Markdown may remain as migration context or optional mirrors. They are not required to understand the active workflow.
+Legacy structured files and generated Markdown may remain as migration context or optional mirrors. They are not required to understand active workflow.
 
 ## Conflict rule
 
