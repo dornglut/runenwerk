@@ -5,6 +5,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::package::ControlKindId;
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ControlDiagnosticId(String);
 
@@ -32,10 +34,48 @@ pub enum ControlDiagnosticSeverity {
     Error,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlDiagnosticKind {
+    #[default]
+    ContractValidation,
+    MissingSchema,
+    MissingKernel,
+    MissingFixture,
+    MissingDiagnostic,
+    MissingMigration,
+    MissingStory,
+    MissingRoute,
+    MissingCapability,
+    MissingTargetProfile,
+    MissingMountEvidence,
+    DuplicateId,
+    InvalidMigration,
+    InvalidDeprecation,
+    UnsupportedTargetProfile,
+    BudgetViolation,
+    AccessibilityRequirementMissing,
+    RenderEvidenceMissing,
+    BindingRequirementMissing,
+    ThemeTokenRequirementMissing,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlDiagnosticScope {
+    #[default]
+    Package,
+    ControlKind {
+        control_kind_id: String,
+    },
+    Registry,
+    Artifact,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlDiagnosticDescriptor {
     pub diagnostic_id: ControlDiagnosticId,
     pub severity: ControlDiagnosticSeverity,
+    pub kind: ControlDiagnosticKind,
+    pub scope: ControlDiagnosticScope,
     pub message_template: String,
 }
 
@@ -44,13 +84,44 @@ impl ControlDiagnosticDescriptor {
         Self {
             diagnostic_id,
             severity: ControlDiagnosticSeverity::Error,
+            kind: ControlDiagnosticKind::ContractValidation,
+            scope: ControlDiagnosticScope::Package,
             message_template: message_template.into(),
         }
+    }
+
+    pub fn contract(
+        diagnostic_id: ControlDiagnosticId,
+        control_kind_id: ControlKindId,
+        message_template: impl Into<String>,
+    ) -> Self {
+        Self::new(diagnostic_id, message_template)
+            .with_kind(ControlDiagnosticKind::ContractValidation)
+            .with_scope(ControlDiagnosticScope::ControlKind {
+                control_kind_id: control_kind_id.as_str().to_owned(),
+            })
+            .with_severity(ControlDiagnosticSeverity::Error)
     }
 
     pub fn with_severity(mut self, severity: ControlDiagnosticSeverity) -> Self {
         self.severity = severity;
         self
+    }
+    pub fn with_kind(mut self, kind: ControlDiagnosticKind) -> Self {
+        self.kind = kind;
+        self
+    }
+    pub fn with_scope(mut self, scope: ControlDiagnosticScope) -> Self {
+        self.scope = scope;
+        self
+    }
+    pub fn validate_contract(&self) -> Result<(), ControlDiagnosticContractError> {
+        if self.message_template.trim().is_empty() {
+            return Err(ControlDiagnosticContractError::EmptyMessageTemplate {
+                diagnostic_id: self.diagnostic_id.as_str().to_owned(),
+            });
+        }
+        Ok(())
     }
 }
 
@@ -80,6 +151,7 @@ pub enum ControlDiagnosticContractError {
     EmptyId { kind: &'static str },
     UnnamespacedId { kind: &'static str, value: String },
     InvalidIdCharacter { kind: &'static str, value: String },
+    EmptyMessageTemplate { diagnostic_id: String },
 }
 
 impl fmt::Display for ControlDiagnosticContractError {
@@ -92,6 +164,10 @@ impl fmt::Display for ControlDiagnosticContractError {
             Self::InvalidIdCharacter { kind, value } => write!(
                 formatter,
                 "control {kind} id {value} contains an invalid character"
+            ),
+            Self::EmptyMessageTemplate { diagnostic_id } => write!(
+                formatter,
+                "control diagnostic {diagnostic_id} has empty message template"
             ),
         }
     }
