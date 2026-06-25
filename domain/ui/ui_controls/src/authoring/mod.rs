@@ -5,7 +5,9 @@ use ui_program::{RouteCapability, RouteId, RouteSchemaVersion};
 use ui_schema::UiSchema;
 
 use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
-use crate::kernel::{ControlKernelDescriptor, ControlKernelId, ControlKernelKind, ControlKernelSet};
+use crate::kernel::{
+    ControlKernelDescriptor, ControlKernelId, ControlKernelKind, ControlKernelSet,
+};
 use crate::migration::{ControlMigrationHook, ControlMigrationId};
 use crate::package::{
     ControlBudgetEvidenceId, ControlBudgetEvidenceRequirement, ControlCatalogMetadata,
@@ -217,7 +219,8 @@ impl ControlModuleAuthoringBuilder {
             spec.state_schema,
             spec.event_payload_schema,
         );
-        let kernels = ControlKernelAuthoring::new(&spec.package_namespace, &spec.kind_suffix).build();
+        let kernels =
+            ControlKernelAuthoring::new(&spec.package_namespace, &spec.kind_suffix).build();
         let evidence = ControlEvidenceAuthoring::new(&spec.package_namespace, &spec.kind_suffix);
         let control_kind_id = ControlKindId::new(base_id.clone());
         let route_requirement = ControlRouteRequirement::new(
@@ -287,7 +290,10 @@ impl ControlModuleAuthoringBuilder {
                 evidence.migration_id,
                 ControlPackageVersion::new(1),
             ))
-            .with_story(ControlStoryDescriptor::new(evidence.story_id, spec.story_description));
+            .with_story(ControlStoryDescriptor::new(
+                evidence.story_id,
+                spec.story_description,
+            ));
 
         for kernel in kernels.descriptors {
             module = module.with_kernel(kernel);
@@ -361,20 +367,18 @@ impl ControlPackageAuthoringBuilder {
     }
 
     pub fn with_authored_kind(mut self, spec: ControlKindAuthoringSpec) -> Self {
-        self.modules.push(ControlModuleAuthoringBuilder::new(spec).build());
+        self.modules
+            .push(ControlModuleAuthoringBuilder::new(spec).build());
         self
     }
 
     pub fn build(self) -> ControlPackageDescriptor {
         let package_id_string = self.package_id.as_str().to_owned();
-        let mut package = ControlPackageDescriptor::from_modules(
-            self.package_id,
-            self.version,
-            self.modules,
-        )
-        .with_display_name(self.display_name)
-        .with_description(self.description)
-        .with_category(self.category);
+        let mut package =
+            ControlPackageDescriptor::from_modules(self.package_id, self.version, self.modules)
+                .with_display_name(self.display_name)
+                .with_description(self.description)
+                .with_category(self.category);
 
         for tag in self.tags {
             package = package.with_tag(tag);
