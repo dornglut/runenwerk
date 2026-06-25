@@ -5,12 +5,12 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
+use super::descriptor::ControlPackageDescriptor;
 use super::ids::{ControlKindId, ControlStoryId};
 use super::validation::{
     ControlPackageValidationDiagnostic, ControlPackageValidationReason,
     ControlPackageValidationReport,
 };
-use super::ControlPackageDescriptor;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ControlStoryProofCategory {
@@ -290,7 +290,10 @@ impl ControlStoryProofSummary {
             verdict: ControlStoryProofVerdict::NotEvaluated,
             total_requirements: requirements.len(),
             satisfied_requirements: 0,
-            first_unsatisfied_requirement: requirements.iter().find(|requirement| requirement.required).cloned(),
+            first_unsatisfied_requirement: requirements
+                .iter()
+                .find(|requirement| requirement.required)
+                .cloned(),
             first_blocking_diagnostic: None,
         }
     }
