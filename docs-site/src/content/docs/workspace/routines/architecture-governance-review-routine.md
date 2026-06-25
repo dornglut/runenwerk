@@ -9,6 +9,7 @@ last_reviewed: 2026-06-25
 related_docs:
   - ../authority-model.md
   - ../start-here.md
+  - ../../guidelines/programming-principles.md
   - ../../guidelines/module-structure-guidelines.md
   - ../../adr/README.md
 ---
@@ -22,17 +23,17 @@ Use this routine before implementation when a change may affect ownership, depen
 ## Authority files to read
 
 - `AGENTS.md`
-- `AI_GUIDE.md`
 - `ARCHITECTURE.md`
 - `DEPENDENCY_RULES.md`
 - `DOMAIN_MAP.md`
 - `GLOSSARY.md`
 - `docs-site/src/content/docs/workspace/authority-model.md`
+- `docs-site/src/content/docs/guidelines/programming-principles.md`
 - owning design, ADR, guideline, roadmap, or domain doc
 
 ## Working files to inspect
 
-Inspect the affected crates, modules, tests, docs, examples, and public API entrypoints.
+Inspect affected crates, modules, tests, docs, examples, and public API entrypoints.
 
 ## What to decide before editing
 
@@ -43,14 +44,14 @@ Inspect the affected crates, modules, tests, docs, examples, and public API entr
 
 ## Patch rules
 
-Do not implement product code from this review unless the task explicitly includes implementation. Prefer a recommendation, design patch, ADR patch, or scoped implementation handoff.
+Do not implement product code from this review unless the task explicitly includes implementation. Prefer a recommendation, design patch, ADR patch, or scoped implementation path.
 
 ## Manual validation checklist
 
 - Domain owner named.
 - Dependency direction checked.
 - ADR/design need decided.
-- Migration shape named when applicable.
+- Seven programming principles applied.
 - Public API and docs impact considered.
 - Stop conditions named.
 
