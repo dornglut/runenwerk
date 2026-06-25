@@ -48,11 +48,28 @@ pub enum ControlKernelKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControlKernelCapability {
+    pub capability_id: String,
+    pub description: String,
+}
+
+impl ControlKernelCapability {
+    pub fn new(capability_id: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            capability_id: capability_id.into(),
+            description: description.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlKernelDescriptor {
     pub kernel_id: ControlKernelId,
     pub version: ControlKernelVersion,
     pub kind: ControlKernelKind,
     pub deterministic: bool,
+    #[serde(default)]
+    pub capabilities: Vec<ControlKernelCapability>,
 }
 
 impl ControlKernelDescriptor {
@@ -62,7 +79,20 @@ impl ControlKernelDescriptor {
             version: ControlKernelVersion::new(1),
             kind,
             deterministic: true,
+            capabilities: Vec::new(),
         }
+    }
+
+    pub fn with_capability(mut self, capability: ControlKernelCapability) -> Self {
+        self.capabilities.push(capability);
+        self
+    }
+
+    pub fn validate_contract(&self) -> Result<(), ControlKernelContractError> {
+        if self.version.value() == 0 {
+            return Err(ControlKernelContractError::ZeroVersion);
+        }
+        Ok(())
     }
 }
 
@@ -101,6 +131,52 @@ impl ControlKernelSet {
             &self.inspection,
         ]
     }
+
+    pub fn validate_required_roles(
+        &self,
+        descriptors: &[ControlKernelDescriptor],
+    ) -> Vec<ControlKernelRoleValidationError> {
+        let required = [
+            (&self.layout, ControlKernelKind::Layout),
+            (&self.interaction, ControlKernelKind::Interaction),
+            (&self.visual, ControlKernelKind::Visual),
+            (&self.accessibility, ControlKernelKind::Accessibility),
+            (&self.inspection, ControlKernelKind::Inspection),
+        ];
+        required
+            .into_iter()
+            .filter_map(|(kernel_id, expected_kind)| {
+                let descriptor = descriptors
+                    .iter()
+                    .find(|descriptor| descriptor.kernel_id == *kernel_id);
+                match descriptor {
+                    Some(descriptor) if descriptor.kind == expected_kind => None,
+                    Some(descriptor) => Some(ControlKernelRoleValidationError::WrongKernelKind {
+                        kernel_id: kernel_id.as_str().to_owned(),
+                        expected_kind,
+                        actual_kind: descriptor.kind,
+                    }),
+                    None => Some(ControlKernelRoleValidationError::MissingKernel {
+                        kernel_id: kernel_id.as_str().to_owned(),
+                        expected_kind,
+                    }),
+                }
+            })
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ControlKernelRoleValidationError {
+    MissingKernel {
+        kernel_id: String,
+        expected_kind: ControlKernelKind,
+    },
+    WrongKernelKind {
+        kernel_id: String,
+        expected_kind: ControlKernelKind,
+        actual_kind: ControlKernelKind,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,6 +184,7 @@ pub enum ControlKernelContractError {
     EmptyId { kind: &'static str },
     UnnamespacedId { kind: &'static str, value: String },
     InvalidIdCharacter { kind: &'static str, value: String },
+    ZeroVersion,
 }
 
 impl fmt::Display for ControlKernelContractError {
@@ -121,6 +198,7 @@ impl fmt::Display for ControlKernelContractError {
                 formatter,
                 "control {kind} id {value} contains an invalid character"
             ),
+            Self::ZeroVersion => write!(formatter, "control kernel version must be non-zero"),
         }
     }
 }
