@@ -2,5 +2,7 @@
 //! Purpose: Build renderer-facing UI frame data from retained tree state.
 
 pub mod build_ui_frame;
+pub mod evidence;
 
 pub use build_ui_frame::{InteractionVisualState, build_ui_frame};
+pub use evidence::*;
