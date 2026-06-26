@@ -13,88 +13,83 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-009`
+ID: `PT-UI-COMPONENT-PLATFORM-010-PLANNING`
 
-Title: UI Component Platform Layout / Container / Virtualization
+Title: UI Component Platform Render Surface / Output design intake
 
-State: implementation pending local validation
+State: active planning
 
-Owner: ui
+Owner: `ui_render_data` for renderer-facing output contracts; `ui_runtime` and `engine/src/plugins/render` are adjacent execution owners. `ui_controls` is bridge-only after owner contracts exist.
 
 Authority files:
 
 ```text
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
-docs-site/src/content/docs/workspace/routines/implementation-routine.md
+docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
+DOMAIN_MAP.md
+CRATES.md
+docs-site/src/content/docs/workspace/crate-inventory.md
+docs-site/src/content/docs/workspace/authority-model.md
+docs-site/src/content/docs/guidelines/programming-principles.md
 docs-site/src/content/docs/design/active/ui-component-platform-ownership-realignment-design.md
-docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
+docs-site/src/content/docs/design/active/ui-component-platform-render-surface-output-design.md
+docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md
+docs-site/src/content/docs/domain/ui/architecture.md
 docs-site/src/content/docs/domain/ui/roadmap.md
 ```
 
 Write scope:
 
 ```text
-domain/ui/ui_layout/src/contracts.rs
-domain/ui/ui_layout/src/lib.rs
-domain/ui/ui_layout/Cargo.toml
-domain/ui/ui_layout/tests/layout_contract.rs
-domain/ui/ui_controls/src/layout.rs
-domain/ui/ui_controls/src/lib.rs
-domain/ui/ui_controls/src/package.rs
-domain/ui/ui_controls/src/catalog/layout.rs
-domain/ui/ui_controls/src/catalog/mod.rs
-domain/ui/ui_controls/Cargo.toml
-domain/ui/ui_controls/tests/control_layout_contract.rs
-domain/ui/ui_controls/tests/control_layout_catalog_contract.rs
-docs-site/src/content/docs/design/active/ui-component-platform-ownership-realignment-design.md
-docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/completed-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
+docs-site/src/content/docs/design/active/ui-component-platform-render-surface-output-design.md
+docs-site/src/content/docs/design/active/README.md
 ```
 
 Validation expectation:
 
 ```text
-cargo fmt --all --check
-cargo check -p ui_layout
-cargo check -p ui_controls
-cargo test -p ui_layout layout
-cargo test -p ui_controls control_layout
-cargo test -p ui_controls control_accessibility
-cargo test -p ui_controls control_theme
-cargo test -p ui_controls control_state
-cargo test -p ui_controls control_input
-cargo test -p ui_controls control_catalog
-cargo test -p ui_controls control_package
-cargo test -p ui_controls control_registry
-cargo test -p ui_controls control_story_proof
-cargo test -p ui_controls control_authoring
-cargo test -p ui_artifacts control_package
-cargo test -p ui_program route
-git diff --check
+Manual validation through GitHub connector:
+- confirm PR #29 is merged into main;
+- confirm PR #30 is closed unmerged and superseded;
+- confirm Phase 9 owner-first files exist on main;
+- confirm 009A/009B/009C evidence is represented in planning;
+- confirm Phase 10 planning keeps generic render/output vocabulary out of ui_controls.
+
+Optional local validation when a checkout is available:
+- task docs:validate
+- task planning:validate
+- git diff --check
 ```
 
 Known blockers:
 
 ```text
-Connector command execution is unavailable. Phase 9 needs local validation before completion.
+Phase 10 is planning-only. No Rust implementation, renderer behavior, runtime behavior, or ui_controls render/output vocabulary should be added until the owner-first design is accepted.
 ```
 
 Next action:
 
 ```text
-Run the Phase 9 validation gate locally. If green, close Phase 9 and open Phase 10 Render Surface / Output planning.
+Review and accept the Phase 10 render surface / output design intake. Then split implementation into owner-first slices, starting with renderer-neutral output contracts in ui_render_data before any ui_controls bridge.
 ```
 
 Evidence:
 
 ```text
-009A ownership realignment was accepted by user direction on 2026-06-26.
-009B ui_layout layout foundation implementation exists on this branch.
-009C ui_controls control layout bridge implementation exists on this branch.
+Phase 9 completed through PR #29 on main.
+009A recorded the ownership realignment rule.
+009B added generic layout/container/scroll/content/identity/virtualization vocabulary in ui_layout.
+009C added the ui_controls control layout bridge over ui_layout.
+Catalog inspection exposes read-only layout summaries through Metadata-prefixed layout facts.
+Focused ui_layout and ui_controls layout tests exist.
+User reported the Phase 9 validation gate green on 2026-06-26.
 ```
 
 ## Active-work rules

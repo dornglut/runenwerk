@@ -127,19 +127,33 @@ Evidence: User reported Phase 8 validation green and merged on 2026-06-26.
 
 Next action: Keep as completed dependency; later migrate generic vocabulary to owner crates.
 
+### PT-UI-COMPONENT-PLATFORM-009
+
+ID: `PT-UI-COMPONENT-PLATFORM-009`
+
+Title: UI Component Platform Layout / Container / Virtualization
+
+State: completed by user validation report
+
+Owner: `ui_layout` for generic layout vocabulary; `ui_controls` for the control-facing bridge.
+
+Evidence: PR #29 merged the corrected owner-first Phase 9 work. 009A recorded the ownership realignment rule, 009B added generic layout/container/scroll/content/identity/virtualization vocabulary in `ui_layout`, 009C added the `ui_controls` control layout bridge over `ui_layout`, catalog inspection exposes read-only layout summaries, focused tests exist, and the user reported the validation gate green on 2026-06-26.
+
+Next action: Keep as completed dependency for Phase 10; do not use PR #30 or `feature/ui-component-platform-009-layout`.
+
 ### PT-UI-COMPONENT-PLATFORM-009A
 
 ID: `PT-UI-COMPONENT-PLATFORM-009A`
 
 Title: UI Component Platform Ownership Realignment
 
-State: accepted by user direction
+State: completed by user validation report
 
 Owner: ui
 
-Evidence: Ownership realignment design exists and user directed continuation through Phase 9.
+Evidence: Ownership realignment design exists and PR #29 merged the accepted owner-first correction.
 
-Next action: Keep as completed planning dependency for 009B and 009C.
+Next action: Keep as completed planning dependency for later owner-crate vocabulary migrations.
 
 ### PT-UI-COMPONENT-PLATFORM-009B
 
@@ -147,15 +161,15 @@ ID: `PT-UI-COMPONENT-PLATFORM-009B`
 
 Title: UI Component Platform Layout Foundation
 
-State: implementation pending local validation
+State: completed by user validation report
 
 Owner: ui_layout
 
 Dependency level: follows accepted 009A
 
-Evidence: Generic layout/container/scroll/content/identity/virtualization vocabulary exists in `ui_layout` on this branch.
+Evidence: Generic layout/container/scroll/content/identity/virtualization vocabulary exists in `ui_layout`, is exported publicly, and has focused layout contract tests.
 
-Next action: Run the Phase 9 validation gate locally.
+Next action: Keep as completed dependency for 009C and Phase 10.
 
 ### PT-UI-COMPONENT-PLATFORM-009C
 
@@ -163,15 +177,29 @@ ID: `PT-UI-COMPONENT-PLATFORM-009C`
 
 Title: UI Component Platform Control Layout Bridge
 
-State: implementation pending local validation
+State: completed by user validation report
 
 Owner: ui_controls
 
 Dependency level: follows 009B implementation
 
-Evidence: `ui_controls` layout bridge references `ui_layout` vocabulary and projects read-only catalog inspection facts on this branch.
+Evidence: `ui_controls` layout descriptors reference `ui_layout` vocabulary directly, expose read-only catalog inspection facts, and have focused control layout and catalog bridge tests.
 
-Next action: Run the Phase 9 validation gate locally.
+Next action: Keep as completed dependency; do not add generic layout vocabulary to `ui_controls`.
+
+### PT-UI-COMPONENT-PLATFORM-010-PLANNING
+
+ID: `PT-UI-COMPONENT-PLATFORM-010-PLANNING`
+
+Title: UI Component Platform Render Surface / Output design intake
+
+State: active planning
+
+Owner: `ui_render_data` for renderer-facing output contracts; `ui_runtime` and `engine/src/plugins/render` are adjacent execution owners. `ui_controls` is bridge-only after owner contracts exist.
+
+Evidence: Ownership investigation found renderer-facing `UiFrame`, surface, layer, and primitive contracts in `ui_render_data`; retained tree to frame output generation in `ui_runtime`; and backend render execution in `engine/src/plugins/render`.
+
+Next action: Accept the owner-first Phase 10 design before any Rust implementation.
 
 ## Rules
 

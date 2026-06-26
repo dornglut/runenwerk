@@ -103,6 +103,42 @@ Reason: Completed Phases 5-8 stayed declarative but duplicated some generic UI v
 
 Follow-up: Accept the realignment design, then implement layout foundation in ui_layout before adding the ui_controls bridge.
 
+## Phase 9 closeout decision
+
+Date: 2026-06-26
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-009` Layout / Container / Virtualization complete.
+
+Context: PR #29 merged the corrected owner-first Phase 9 work into `main`. PR #30 is closed unmerged and superseded.
+
+Options considered: Keep Phase 9 pending local validation; close Phase 9 based on user validation report; reopen the stale pre-realignment branch.
+
+Reason: User reported the Phase 9 validation gate green after the merged 009A/009B/009C work. The remote repository shows the owner-first implementation on `main`, and PR #30 explicitly records the stale branch as superseded.
+
+Affected planning files: `completed-work.md`, `roadmap.md`, `production-tracks.md`, `active-work.md`.
+
+Evidence: 009A ownership realignment design, 009B `ui_layout` layout foundation, 009C `ui_controls` layout bridge over `ui_layout`, read-only catalog inspection bridge, focused tests, and user validation report.
+
+Follow-up: Open Phase 10 Render Surface / Output planning. Do not revive PR #30 or `feature/ui-component-platform-009-layout`.
+
+## Phase 10 render surface / output planning decision
+
+Date: 2026-06-26
+
+Decision: Start `PT-UI-COMPONENT-PLATFORM-010-PLANNING` as an owner-first Render Surface / Output design intake before implementation.
+
+Context: Phase 10 needs reusable render/output evidence without repeating the Phase 9 ownership mistake.
+
+Options considered: Put generic render/output vocabulary in `ui_controls`; use `ui_render_data` as renderer-facing output owner with `ui_runtime` and engine render as adjacent execution owners; defer Phase 10 entirely.
+
+Reason: Repository authority and code inspection place renderer-facing `UiFrame`, surface, layer, primitive, product surface, and viewport embed contracts in `ui_render_data`; retained output generation in `ui_runtime`; and backend rendering execution in `engine/src/plugins/render`. `ui_controls` should only expose per-control render evidence requirements and summaries that reference owner contracts.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `ui-component-platform-render-surface-output-design.md`.
+
+Evidence: `DOMAIN_MAP.md`, crate inventory, UI architecture docs, `ui_render_data` primitive exports, `ui_runtime::build_ui_frame`, `ui_controls` existing render evidence requirement fields, and Phase 9 ownership realignment rule.
+
+Follow-up: Accept the Phase 10 design, then implement owner-first slices. No Rust implementation is authorized by this planning pass.
+
 ## Decision shape
 
 ```text
