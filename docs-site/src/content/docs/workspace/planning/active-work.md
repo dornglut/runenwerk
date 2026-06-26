@@ -13,21 +13,20 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-010-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-010B-010D`
 
-Title: UI Component Platform Render Surface / Output design intake
+Title: UI Component Platform Render Output Evidence Foundation / Control Bridge
 
-State: active planning
+State: implementation pending local validation
 
-Owner: `ui_render_data` for renderer-facing output contracts; `ui_runtime` and `engine/src/plugins/render` are adjacent execution owners. `ui_controls` is bridge-only after owner contracts exist.
+Owner: `ui_render_data` owns renderer-neutral output evidence contracts. `ui_controls` owns the bridge that references those contracts. `ui_runtime` and `engine/src/plugins/render` are not implementation owners in this slice.
 
 Authority files:
 
 ```text
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
-docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
-docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
+docs-site/src/content/docs/workspace/routines/implementation-routine.md
 DOMAIN_MAP.md
 CRATES.md
 docs-site/src/content/docs/workspace/crate-inventory.md
@@ -43,53 +42,52 @@ docs-site/src/content/docs/domain/ui/roadmap.md
 Write scope:
 
 ```text
+domain/ui/ui_render_data/Cargo.toml
+domain/ui/ui_render_data/src/lib.rs
+domain/ui/ui_render_data/src/output_evidence.rs
+domain/ui/ui_render_data/tests/render_output_evidence.rs
+domain/ui/ui_controls/Cargo.toml
+domain/ui/ui_controls/src/lib.rs
+domain/ui/ui_controls/src/package.rs
+domain/ui/ui_controls/src/render.rs
+domain/ui/ui_controls/src/catalog/mod.rs
+domain/ui/ui_controls/src/catalog/render.rs
+domain/ui/ui_controls/tests/control_render_contract.rs
+domain/ui/ui_controls/tests/control_render_catalog_contract.rs
 docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/completed-work.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
-docs-site/src/content/docs/design/active/ui-component-platform-render-surface-output-design.md
-docs-site/src/content/docs/design/active/README.md
 ```
 
 Validation expectation:
 
 ```text
-Manual validation through GitHub connector:
-- confirm PR #29 is merged into main;
-- confirm PR #30 is closed unmerged and superseded;
-- confirm Phase 9 owner-first files exist on main;
-- confirm 009A/009B/009C evidence is represented in planning;
-- confirm Phase 10 planning keeps generic render/output vocabulary out of ui_controls.
-
-Optional local validation when a checkout is available:
-- task docs:validate
-- task planning:validate
-- git diff --check
+cargo fmt --all --check
+cargo check -p ui_render_data
+cargo check -p ui_controls
+cargo test -p ui_render_data render_output
+cargo test -p ui_controls control_render
+cargo test -p ui_controls control_layout
+cargo test -p ui_controls control_catalog
+git diff --check
 ```
 
 Known blockers:
 
 ```text
-Phase 10 is planning-only. No Rust implementation, renderer behavior, runtime behavior, or ui_controls render/output vocabulary should be added until the owner-first design is accepted.
+Connector command execution is unavailable. This implementation slice needs local validation before completion.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 10 render surface / output design intake. Then split implementation into owner-first slices, starting with renderer-neutral output contracts in ui_render_data before any ui_controls bridge.
+Run focused local validation. If green, close 010B/010D as the renderer-neutral output evidence foundation and control bridge. Do not proceed to ui_runtime output evidence or backend proof until this slice is validated.
 ```
 
 Evidence:
 
 ```text
-Phase 9 completed through PR #29 on main.
-009A recorded the ownership realignment rule.
-009B added generic layout/container/scroll/content/identity/virtualization vocabulary in ui_layout.
-009C added the ui_controls control layout bridge over ui_layout.
-Catalog inspection exposes read-only layout summaries through Metadata-prefixed layout facts.
-Focused ui_layout and ui_controls layout tests exist.
-User reported the Phase 9 validation gate green on 2026-06-26.
+010B adds renderer-neutral primitive-family, expected-count, frame/surface summary, provenance, diagnostic, and output evidence contracts in ui_render_data.
+010D adds a ui_controls ControlRenderDescriptor and read-only catalog bridge that reference ui_render_data vocabulary directly.
+No backend renderer behavior, runtime output generation, mount eligibility change, or generic render/output vocabulary in ui_controls is introduced.
 ```
 
 ## Active-work rules
