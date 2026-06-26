@@ -13,11 +13,11 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-005`
+ID: `PT-UI-COMPONENT-PLATFORM-006-PLANNING`
 
-Title: UI Component Platform Input / Gesture / Device
+Title: UI Component Platform State Binding / Host Intent design intake
 
-State: implementation pending local validation
+State: active planning
 
 Owner: ui
 
@@ -26,65 +26,48 @@ Authority files:
 ```text
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
-docs-site/src/content/docs/workspace/routines/implementation-routine.md
+docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
 docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+docs-site/src/content/docs/design/active/ui-component-platform-state-binding-host-intent-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md
-docs-site/src/content/docs/design/active/ui-component-platform-catalog-discovery-inspection-design.md
+docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
 docs-site/src/content/docs/domain/ui/roadmap.md
 ```
 
 Write scope:
 
 ```text
-domain/ui/ui_controls/src/input.rs
-domain/ui/ui_controls/src/lib.rs
-domain/ui/ui_controls/src/package.rs
-domain/ui/ui_controls/src/catalog/mod.rs
-domain/ui/ui_controls/src/catalog/entry.rs
-domain/ui/ui_controls/src/catalog/index.rs
-domain/ui/ui_controls/src/catalog/inspection.rs
-domain/ui/ui_controls/src/catalog/query.rs
-domain/ui/ui_controls/tests/control_input_contract.rs
-domain/ui/ui_controls/tests/control_input_catalog_contract.rs
+docs-site/src/content/docs/design/active/ui-component-platform-state-binding-host-intent-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/roadmap.md
+docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/completed-work.md
+docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 
 Validation expectation:
 
 ```text
-cargo fmt --all --check
-cargo check -p ui_controls
-cargo test -p ui_controls control_input
-cargo test -p ui_controls control_catalog
-cargo test -p ui_controls control_package
-cargo test -p ui_controls control_registry
-cargo test -p ui_controls control_story_proof
-cargo test -p ui_controls control_authoring
-cargo test -p ui_artifacts control_package
-cargo test -p ui_program route
-git diff --check
+Manual planning consistency review first. Implementation validation is deferred until a later bounded implementation pass.
 ```
 
 Known blockers:
 
 ```text
-Connector-mode command execution is unavailable. Phase 5 cannot be marked complete until the validation gate is run locally and reported green.
+Phase 6 implementation must not start before the State Binding / Host Intent design is reviewed and accepted.
 ```
 
 Next action:
 
 ```text
-Run the Phase 5 validation gate locally. If it passes, run phase-completion drift check and mark Phase 5 complete.
+Review and accept the Phase 6 State Binding / Host Intent design, then start a bounded implementation pass only after the design gate is accepted.
 ```
 
 Evidence:
 
 ```text
-Phase 4 Catalog / Discovery / Inspection passed local validation by user report on 2026-06-26 after rebasing or merging latest main and rerunning the validation gate.
-Phase 5 design authority was accepted by user report on 2026-06-26.
-A bounded Phase 5 input/gesture/device declaration implementation exists on this branch.
-Catalog was split by stable responsibility during Phase 5 to keep the inspection bridge maintainable.
-Package façade now re-exports catalog and input declarations without duplicating the input module.
+Phase 5 Input / Gesture / Device passed local validation by user report on 2026-06-26 after the catalog split cleanup.
+Phase 6 design authority exists in ui-component-platform-state-binding-host-intent-design.md.
 ```
 
 ## Active-work rules
