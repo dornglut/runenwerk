@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::input::ControlInputCapabilitySummary;
 use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
 use crate::package::story_proof::ControlStoryProofSummary;
+use crate::state::ControlStateCapabilitySummary;
 
 use super::{
     ControlCatalogEntryDescriptor, ControlDiagnosticBadge, ControlStoryProofBadge,
@@ -202,6 +203,18 @@ impl ControlInspectionDescriptor {
         self
     }
 
+    pub fn with_state_summary(mut self, summary: &ControlStateCapabilitySummary) -> Self {
+        for fact in summary.inspection_facts() {
+            push_fact(
+                &mut self.facts,
+                ControlInspectionSection::State,
+                &fact.key,
+                &fact.value,
+            );
+        }
+        self
+    }
+
     pub fn fact(&self, section: ControlInspectionSection, key: &str) -> Option<&str> {
         self.facts
             .iter()
@@ -222,6 +235,7 @@ pub enum ControlInspectionSection {
     Stories,
     StoryProof,
     Input,
+    State,
     Diagnostics,
     MountEligibility,
 }
