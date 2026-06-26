@@ -139,6 +139,42 @@ Evidence: `DOMAIN_MAP.md`, crate inventory, UI architecture docs, `ui_render_dat
 
 Follow-up: Accept the Phase 10 design, then implement owner-first slices. No Rust implementation is authorized by this planning pass.
 
+## Phase 10 closeout decision
+
+Date: 2026-06-26
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-010` Render Surface / Output complete.
+
+Context: PR #34 merged the full owner-first Phase 10 implementation into `main`.
+
+Options considered: Keep P10 pending local validation; close P10 from PR #34 plus user validation report; split P10 into further render/runtime/backend subtasks.
+
+Reason: User reported the full P10 validation gate green after PR #34 merged. The merged implementation covers `ui_render_data`, `ui_controls`, `ui_runtime`, and engine render proof while preserving owner boundaries.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`.
+
+Evidence: PR #34, renderer-neutral output evidence, control render bridge, runtime output evidence generation, engine render submission proof, and user validation report.
+
+Follow-up: Open Phase 11 Base Control Packages design intake.
+
+## Phase 11 base control packages planning decision
+
+Date: 2026-06-26
+
+Decision: Start `PT-UI-COMPONENT-PLATFORM-011-PLANNING` as a Base Control Packages design intake before implementation.
+
+Context: The component platform now has descriptor, proof, catalog, layout, accessibility, and render/output evidence layers. The base control package needs hardening before Gallery, Workbench, or UI Designer should rely on it as reusable product-facing inventory.
+
+Options considered: Start full interaction immediately; harden base control packages first; skip to overlay/text/canvas phases.
+
+Reason: Full interaction needs credible base control descriptors to operate on. Phase 11 should make Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView package-quality without taking over Phase 12 interaction behavior.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `ui-component-platform-base-control-packages-design.md`.
+
+Evidence: Completed Phases 1-10 and the existing base control modules in `ui_controls`.
+
+Follow-up: Review the Phase 11 design, then implement package hardening. Full interaction remains Phase 12.
+
 ## Decision shape
 
 ```text
