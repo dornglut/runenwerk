@@ -13,9 +13,9 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-006-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-007-PLANNING`
 
-Title: UI Component Platform State Binding / Host Intent design intake
+Title: UI Component Platform Theme / State / Style design intake
 
 State: active planning
 
@@ -28,16 +28,15 @@ AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
 docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
 docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+docs-site/src/content/docs/design/active/ui-component-platform-theme-state-style-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-state-binding-host-intent-design.md
-docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md
-docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
 docs-site/src/content/docs/domain/ui/roadmap.md
 ```
 
 Write scope:
 
 ```text
-docs-site/src/content/docs/design/active/ui-component-platform-state-binding-host-intent-design.md
+docs-site/src/content/docs/design/active/ui-component-platform-theme-state-style-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
@@ -54,20 +53,20 @@ Manual planning consistency review first. Implementation validation is deferred 
 Known blockers:
 
 ```text
-Phase 6 implementation must not start before the State Binding / Host Intent design is reviewed and accepted.
+Phase 7 implementation must not start before the Theme / State / Style design is reviewed and accepted.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 6 State Binding / Host Intent design, then start a bounded implementation pass only after the design gate is accepted.
+Review and accept the Phase 7 Theme / State / Style design, then start a bounded implementation pass only after the design gate is accepted.
 ```
 
 Evidence:
 
 ```text
-Phase 5 Input / Gesture / Device passed local validation by user report on 2026-06-26 after the catalog split cleanup.
-Phase 6 design authority exists in ui-component-platform-state-binding-host-intent-design.md.
+Phase 6 State Binding / Host Intent passed local validation by user report on 2026-06-26.
+Phase 7 design authority exists in ui-component-platform-theme-state-style-design.md.
 ```
 
 ## Active-work rules
