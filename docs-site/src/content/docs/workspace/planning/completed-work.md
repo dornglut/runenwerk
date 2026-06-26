@@ -123,6 +123,22 @@ Known gaps: Phase 8 and later component-platform phases are still pending.
 
 Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-008 Accessibility / Focus / Inspection design and planning.
 
+## PT-UI-COMPONENT-PLATFORM-008
+
+ID: `PT-UI-COMPONENT-PLATFORM-008`
+
+Title: UI Component Platform Accessibility / Focus / Inspection
+
+Completed on: 2026-06-26 by user validation report
+
+Evidence: Phase 8 added reusable accessibility role, label, description, semantic hint, focus, keyboard activation, semantic state, value/range, diagnostic, catalog inspection projection, and focused tests.
+
+Validation: User reported the Phase 8 validation gate green and merged.
+
+Known gaps: Phase 9 and later component-platform phases are still pending.
+
+Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-009 Layout / Container / Virtualization design and planning.
+
 ## Entry shape
 
 ID:
