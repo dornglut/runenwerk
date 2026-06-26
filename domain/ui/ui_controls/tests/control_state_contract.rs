@@ -13,7 +13,11 @@ fn control_state_descriptor_records_state_buckets() {
     assert!(summary.required_buckets.contains(&"preview".to_owned()));
     assert!(summary.required_buckets.contains(&"committed".to_owned()));
     assert!(summary.required_buckets.contains(&"host-fed".to_owned()));
-    assert!(summary.required_buckets.contains(&"package-owned".to_owned()));
+    assert!(
+        summary
+            .required_buckets
+            .contains(&"package-owned".to_owned())
+    );
 }
 
 #[test]
@@ -58,13 +62,21 @@ fn control_state_lifecycle_validation_and_intents_are_declarative() {
             .validation_states
             .contains(&"pending-validation".to_owned())
     );
-    assert!(summary.host_intents.contains(&"label.commit.preview".to_owned()));
+    assert!(
+        summary
+            .host_intents
+            .contains(&"label.commit.preview".to_owned())
+    );
     assert!(
         summary
             .route_ids
             .contains(&"runenwerk.ui.controls.label.intent".to_owned())
     );
-    assert!(summary.required_capabilities.contains(&"runenwerk.ui.controls.read".to_owned()));
+    assert!(
+        summary
+            .required_capabilities
+            .contains(&"runenwerk.ui.controls.read".to_owned())
+    );
     assert!(summary.host_decisions.contains(&"blocked".to_owned()));
     assert!(!summary.mutates_host_state);
 }
@@ -73,27 +85,45 @@ fn control_state_lifecycle_validation_and_intents_are_declarative() {
 fn control_state_summary_exposes_read_only_inspection_facts() {
     let facts = label_state_descriptor().summary().inspection_facts();
 
-    assert!(facts
-        .iter()
-        .any(|fact| fact.key == "required_buckets" && fact.value.contains("host-fed")));
-    assert!(facts
-        .iter()
-        .any(|fact| fact.key == "binding_kinds" && fact.value.contains("write")));
-    assert!(facts
-        .iter()
-        .any(|fact| fact.key == "host_intents" && fact.value.contains("label.commit.preview")));
-    assert!(facts
-        .iter()
-        .any(|fact| fact.key == "mutates_host_state" && fact.value == "false"));
+    assert!(
+        facts
+            .iter()
+            .any(|fact| fact.key == "required_buckets" && fact.value.contains("host-fed"))
+    );
+    assert!(
+        facts
+            .iter()
+            .any(|fact| fact.key == "binding_kinds" && fact.value.contains("write"))
+    );
+    assert!(
+        facts
+            .iter()
+            .any(|fact| fact.key == "host_intents" && fact.value.contains("label.commit.preview"))
+    );
+    assert!(
+        facts
+            .iter()
+            .any(|fact| fact.key == "mutates_host_state" && fact.value == "false")
+    );
 }
 
 fn label_state_descriptor() -> ControlStateDescriptor {
     ControlStateDescriptor::new(ControlKindId::new(LABEL_CONTROL_KIND_ID))
-        .with_bucket(ControlStateBucketRequirement::new(ControlStateBucket::Transient))
-        .with_bucket(ControlStateBucketRequirement::new(ControlStateBucket::Preview))
-        .with_bucket(ControlStateBucketRequirement::new(ControlStateBucket::Committed))
-        .with_bucket(ControlStateBucketRequirement::new(ControlStateBucket::HostFed))
-        .with_bucket(ControlStateBucketRequirement::new(ControlStateBucket::PackageOwned))
+        .with_bucket(ControlStateBucketRequirement::new(
+            ControlStateBucket::Transient,
+        ))
+        .with_bucket(ControlStateBucketRequirement::new(
+            ControlStateBucket::Preview,
+        ))
+        .with_bucket(ControlStateBucketRequirement::new(
+            ControlStateBucket::Committed,
+        ))
+        .with_bucket(ControlStateBucketRequirement::new(
+            ControlStateBucket::HostFed,
+        ))
+        .with_bucket(ControlStateBucketRequirement::new(
+            ControlStateBucket::PackageOwned,
+        ))
         .with_binding(ControlStateBindingRequirement::new(
             "label.value.read",
             ControlStateBindingKind::Read,

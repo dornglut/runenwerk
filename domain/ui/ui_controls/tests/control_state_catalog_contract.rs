@@ -1,8 +1,8 @@
 use ui_controls::{
-    ControlHostIntentProposal, ControlInspectionDescriptor, ControlInspectionSection, ControlKindId,
-    ControlRouteCapabilityDecision, ControlStateBindingKind, ControlStateBindingRequirement,
-    ControlStateBucket, ControlStateBucketRequirement, ControlStateDescriptor, LABEL_CONTROL_KIND_ID,
-    runenwerk_control_package,
+    ControlHostIntentProposal, ControlInspectionDescriptor, ControlInspectionSection,
+    ControlKindId, ControlRouteCapabilityDecision, ControlStateBindingKind,
+    ControlStateBindingRequirement, ControlStateBucket, ControlStateBucketRequirement,
+    ControlStateDescriptor, LABEL_CONTROL_KIND_ID, runenwerk_control_package,
 };
 
 #[test]
@@ -13,8 +13,12 @@ fn control_state_summary_attaches_to_catalog_inspection_read_only() {
         .control_kind(&label_id)
         .expect("label control kind should exist");
     let summary = ControlStateDescriptor::new(label_id)
-        .with_bucket(ControlStateBucketRequirement::new(ControlStateBucket::HostFed))
-        .with_bucket(ControlStateBucketRequirement::new(ControlStateBucket::PackageOwned))
+        .with_bucket(ControlStateBucketRequirement::new(
+            ControlStateBucket::HostFed,
+        ))
+        .with_bucket(ControlStateBucketRequirement::new(
+            ControlStateBucket::PackageOwned,
+        ))
         .with_binding(ControlStateBindingRequirement::new(
             "label.value.write",
             ControlStateBindingKind::Write,
@@ -32,8 +36,8 @@ fn control_state_summary_attaches_to_catalog_inspection_read_only() {
             "route not available in this host",
         ))
         .summary();
-    let inspection = ControlInspectionDescriptor::from_control_kind(&package, kind)
-        .with_state_summary(&summary);
+    let inspection =
+        ControlInspectionDescriptor::from_control_kind(&package, kind).with_state_summary(&summary);
 
     assert!(
         inspection

@@ -399,7 +399,12 @@ impl ControlStateCapabilitySummary {
             .host_intents
             .iter()
             .map(|intent| intent.route_id.clone())
-            .chain(descriptor.route_decisions.iter().map(|decision| decision.route_id.clone()))
+            .chain(
+                descriptor
+                    .route_decisions
+                    .iter()
+                    .map(|decision| decision.route_id.clone()),
+            )
             .collect::<Vec<_>>();
         let mut required_capabilities = descriptor
             .host_intents
@@ -458,10 +463,16 @@ impl ControlStateCapabilitySummary {
             ControlStateInspectionFact::new("validation_states", self.validation_states.join(",")),
             ControlStateInspectionFact::new("host_intents", self.host_intents.join(",")),
             ControlStateInspectionFact::new("route_ids", self.route_ids.join(",")),
-            ControlStateInspectionFact::new("required_capabilities", self.required_capabilities.join(",")),
+            ControlStateInspectionFact::new(
+                "required_capabilities",
+                self.required_capabilities.join(","),
+            ),
             ControlStateInspectionFact::new("host_decisions", self.host_decisions.join(",")),
             ControlStateInspectionFact::new("blocked_reasons", self.blocked_reasons.join(",")),
-            ControlStateInspectionFact::new("mutates_host_state", bool_string(self.mutates_host_state)),
+            ControlStateInspectionFact::new(
+                "mutates_host_state",
+                bool_string(self.mutates_host_state),
+            ),
         ]
     }
 }
