@@ -1,0 +1,132 @@
+---
+title: UI Component Platform Base Control Packages Design
+status: active
+owner: ui_controls
+layer: domain
+canonical: true
+last_reviewed: 2026-06-26
+related_docs:
+  - ../../workspace/planning/active-work.md
+  - ../../workspace/planning/roadmap.md
+  - ./ui-component-platform-ownership-realignment-design.md
+  - ./ui-component-platform-render-surface-output-design.md
+---
+
+# UI Component Platform Base Control Packages Design
+
+## Status
+
+This is the Phase 11 planning design for `PT-UI-COMPONENT-PLATFORM-011`.
+
+Phase 11 starts after `PT-UI-COMPONENT-PLATFORM-010` Render Surface / Output is complete.
+
+## Purpose
+
+Make the base controls credible reusable package inventory before full interaction work starts.
+
+Target controls:
+
+```text
+Label
+Button
+InspectorField
+ColorPicker
+ActionPrompt
+ListView
+TreeView
+TableView
+```
+
+## Owner split
+
+`ui_controls` owns:
+
+- base control package descriptors;
+- per-control package metadata;
+- per-control story, layout, render, input, theme, state, and accessibility requirement summaries;
+- read-only catalog and inspection summaries for base controls.
+
+Owner crates still own their generic vocabulary:
+
+- `ui_layout` owns layout roles, container facts, constraints, scroll facts, content facts, identity facts, budgets, and virtualization vocabulary;
+- `ui_render_data` owns renderer-neutral frame, primitive, and output evidence vocabulary;
+- `ui_input` owns input, focus, device, keyboard, pointer, stylus, and routing vocabulary;
+- `ui_theme` owns theme tokens and visual vocabulary;
+- `ui_runtime` owns retained runtime orchestration and emitted frame output;
+- engine render owns backend submission and execution proof.
+
+## Non-goals
+
+Phase 11 does not implement full runtime interaction behavior.
+
+Phase 11 does not implement popup, overlay, or layering behavior.
+
+Phase 11 does not implement text editing.
+
+Phase 11 does not make controls runtime-mountable without accepted proof gates.
+
+Phase 11 does not move owner-crate vocabulary into `ui_controls`.
+
+## Required result
+
+Each base control should have a package-quality declaration that is inspectable without reading implementation code.
+
+For each target control, Phase 11 should verify or add:
+
+- stable control kind identity;
+- display name, description, category, and tags;
+- property, state, and event payload schemas;
+- kernel declarations;
+- story proof requirements;
+- layout requirements that reference `ui_layout` vocabulary;
+- render requirements that reference `ui_render_data` vocabulary;
+- input/state/theme/accessibility declarations already available from earlier phases;
+- catalog summaries and inspection facts;
+- explicit non-mount eligibility until later proof gates authorize mount.
+
+## Gallery readiness
+
+Phase 11 should make Gallery able to list and inspect the base controls as reusable inventory.
+
+The minimum Gallery-facing result is descriptor/catolog visibility, proof status, and static preview/evidence metadata where already supported by owner contracts.
+
+Full pointer/keyboard interaction in Gallery is Phase 12.
+
+## Acceptance criteria
+
+- Base control package validation remains green.
+- Every target control has complete descriptor metadata.
+- Every target control exposes story, layout, render, accessibility/focus, input, state, and theme summaries where applicable.
+- Catalog inspection can present a coherent per-control summary.
+- Runtime mount eligibility remains blocked unless an explicit accepted proof gate says otherwise.
+- No generic layout, render, input, theme, or runtime vocabulary is added to `ui_controls` when an owner crate already exists.
+
+## Validation envelope
+
+Expected validation:
+
+```text
+cargo fmt --all --check
+cargo check -p ui_controls
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_catalog
+cargo test -p ui_controls control_layout
+cargo test -p ui_controls control_render
+git diff --check
+```
+
+Additional tests may be added as the implementation touches more focused contracts.
+
+## Stop conditions
+
+Stop and redesign if Phase 11 requires any of the following:
+
+- backend renderer behavior in `ui_controls`;
+- runtime interaction behavior in the base control package;
+- text editing behavior inside generic base package hardening;
+- first-class mount eligibility without story/render/layout/accessibility evidence;
+- duplicated generic vocabulary that belongs to an owner crate.
+
+## Next step
+
+Review this design. If accepted, implement Phase 11 as base control package hardening before opening Phase 12 Generic Interaction.
