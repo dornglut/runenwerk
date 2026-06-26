@@ -113,22 +113,36 @@ Evidence: User reported Phase 7 validation green on 2026-06-26.
 
 Next action: Keep as completed dependency.
 
-### PT-UI-COMPONENT-PLATFORM-008-PLANNING
+### PT-UI-COMPONENT-PLATFORM-008
 
-ID: `PT-UI-COMPONENT-PLATFORM-008-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-008`
 
-Title: UI Component Platform Accessibility / Focus / Inspection design intake
+Title: UI Component Platform Accessibility / Focus / Inspection
+
+State: completed by user validation report
+
+Owner: ui
+
+Evidence: User reported Phase 8 validation green and merged on 2026-06-26.
+
+Next action: Keep as completed dependency.
+
+### PT-UI-COMPONENT-PLATFORM-009-PLANNING
+
+ID: `PT-UI-COMPONENT-PLATFORM-009-PLANNING`
+
+Title: UI Component Platform Layout / Container / Virtualization design intake
 
 State: active planning
 
 Owner: ui
 
-Dependency level: follows Phase 7 Theme / State / Style
+Dependency level: follows Phase 8 Accessibility / Focus / Inspection
 
 Write scope:
 
 ```text
-docs-site/src/content/docs/design/active/ui-component-platform-accessibility-focus-inspection-design.md
+docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
@@ -143,9 +157,9 @@ Manual planning consistency review.
 No Rust implementation in the planning pass.
 ```
 
-Evidence: Phase 8 was promoted after Phase 7 validation passed green by user report.
+Evidence: Phase 9 was promoted after Phase 8 validation passed green and was merged by user report.
 
-Next action: Review and accept the Phase 8 Accessibility / Focus / Inspection design before implementation.
+Next action: Review and accept the Phase 9 Layout / Container / Virtualization design before implementation.
 
 ## Rules
 
