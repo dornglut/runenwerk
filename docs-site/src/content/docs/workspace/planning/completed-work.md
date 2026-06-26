@@ -139,6 +139,22 @@ Known gaps: Phase 9 and later component-platform phases are still pending.
 
 Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-009 Layout / Container / Virtualization design and planning.
 
+## PT-UI-COMPONENT-PLATFORM-009
+
+ID: `PT-UI-COMPONENT-PLATFORM-009`
+
+Title: UI Component Platform Layout / Container / Virtualization
+
+Completed on: 2026-06-26 by user validation report
+
+Evidence: PR #29 merged the corrected Phase 9 owner-first work. 009A added the ownership realignment design and recorded that owning crates define reusable UI vocabulary while `ui_controls` defines per-control requirements and summaries. 009B added generic layout/container/scroll/content/identity/virtualization vocabulary in `ui_layout`. 009C added the `ui_controls` control layout bridge over `ui_layout`. The catalog bridge exposes read-only layout facts through prefixed metadata keys.
+
+Validation: User reported the Phase 9 validation gate green after `cargo fmt`, focused `ui_layout` and `ui_controls` checks/tests, related `ui_artifacts` and `ui_program` tests, and `git diff --check`.
+
+Known gaps: Phase 5-8 still need later owner-crate vocabulary migration where generic concepts were declared in `ui_controls`. The catalog layout bridge still uses `ControlInspectionSection::Metadata` with `layout.*` keys; this is accepted as non-blocking until a future explicit cleanup adds a first-class layout section.
+
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-010-PLANNING` Render Surface / Output design intake. Do not use PR #30 or `feature/ui-component-platform-009-layout`.
+
 ## Entry shape
 
 ID:
