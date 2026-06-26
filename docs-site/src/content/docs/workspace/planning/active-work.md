@@ -17,7 +17,7 @@ ID: `PT-UI-COMPONENT-PLATFORM-004-PLANNING`
 
 Title: UI Component Platform Catalog / Discovery / Inspection design intake
 
-State: ready for planning
+State: active planning
 
 Owner: ui
 
@@ -26,10 +26,10 @@ Authority files:
 ```text
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
-docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
 docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/guidelines/programming-principles.md
+docs-site/src/content/docs/design/active/ui-component-platform-catalog-discovery-inspection-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
 docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
 docs-site/src/content/docs/domain/ui/roadmap.md
@@ -45,25 +45,26 @@ Validation expectation:
 
 ```text
 Manual planning consistency review first.
-Implementation validation is deferred until a later bounded implementation pass.
+Implementation validation is deferred until a later bounded pass.
 ```
 
 Known blockers:
 
 ```text
-Phase 4 must not start implementation before its design and acceptance criteria are written and accepted.
+Phase 4 needs design review before code.
 ```
 
 Next action:
 
 ```text
-Open the Phase 4 Catalog / Discovery / Inspection design/planning intake. Do not implement catalog runtime UI, Gallery previews, Designer UX, or Workbench behavior in the planning pass.
+Review and accept the Phase 4 Catalog / Discovery / Inspection design.
 ```
 
 Evidence:
 
 ```text
 Phase 3 Story Proof Envelope passed the local validation gate by user report on 2026-06-26.
+Phase 4 design authority exists in ui-component-platform-catalog-discovery-inspection-design.md.
 ```
 
 ## Active-work rules
