@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::ids::ControlKindId;
+use crate::package::ids::ControlKindId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ControlInputMode {
@@ -303,7 +303,7 @@ impl ControlInputDescriptor {
         self.semantic_actions
             .sort_by(|left, right| left.action.cmp(&right.action));
         self.semantic_actions
-            .dedup_by(|left, right| left.action == right.action);
+            .dedup_by(|left, right| left.action.as_str() == right.action.as_str());
         self
     }
 
@@ -417,7 +417,10 @@ impl ControlInputCapabilitySummary {
                 "requires_text_entry",
                 bool_string(self.requires_text_entry),
             ),
-            ControlInputInspectionFact::new("has_runtime_behavior", bool_string(self.has_runtime_behavior)),
+            ControlInputInspectionFact::new(
+                "has_runtime_behavior",
+                bool_string(self.has_runtime_behavior),
+            ),
         ]
     }
 }
