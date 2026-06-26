@@ -66,6 +66,13 @@ def normalize_glob(pattern: str) -> str:
     return pattern.strip().removeprefix("./")
 
 
+def normalize_extension(extension: str) -> str:
+    value = extension.strip()
+    if not value:
+        raise SystemExit("empty extension is not allowed")
+    return value if value.startswith(".") else f".{value}"
+
+
 def path_matches(pattern: str, relative: Path) -> bool:
     path = relative.as_posix()
     normalized = normalize_glob(pattern)
@@ -107,7 +114,10 @@ def load_profile(profile_name: str, profiles_dir: Path) -> ContextProfile:
 
     include = tuple(normalize_glob(item) for item in raw.get("include", []))
     exclude = tuple(normalize_glob(item) for item in raw.get("exclude", []))
-    extensions = frozenset(raw.get("extensions", sorted(DEFAULT_EXTENSIONS)))
+    extensions = frozenset(
+        normalize_extension(item)
+        for item in raw.get("extensions", sorted(DEFAULT_EXTENSIONS))
+    )
     include_filenames = frozenset(
         raw.get("include_filenames", sorted(DEFAULT_INCLUDE_FILENAMES))
     )
@@ -125,19 +135,34 @@ def load_profile(profile_name: str, profiles_dir: Path) -> ContextProfile:
     )
 
 
+def with_overrides(
+    profile: ContextProfile,
+    extra_includes: tuple[str, ...],
+    extra_excludes: tuple[str, ...],
+    extra_extensions: tuple[str, ...],
+    extra_include_filenames: tuple[str, ...],
+) -> ContextProfile:
+    return ContextProfile(
+        name=profile.name,
+        description=profile.description,
+        include=profile.include + extra_includes,
+        exclude=profile.exclude + extra_excludes,
+        extensions=frozenset(set(profile.extensions) | set(extra_extensions)),
+        include_filenames=frozenset(
+            set(profile.include_filenames) | set(extra_include_filenames)
+        ),
+    )
+
+
 def list_profiles(profiles_dir: Path) -> list[str]:
     if not profiles_dir.exists():
         return []
     return sorted(path.stem for path in profiles_dir.glob("*.toml"))
 
 
-def iter_context_files(
-    root: Path,
-    profile: ContextProfile,
-    extra_excludes: tuple[str, ...],
-) -> list[Path]:
+def iter_context_files(root: Path, profile: ContextProfile) -> list[Path]:
     files: list[Path] = []
-    exclude_patterns = DEFAULT_EXCLUDE_GLOBS + profile.exclude + extra_excludes
+    exclude_patterns = DEFAULT_EXCLUDE_GLOBS + profile.exclude
 
     for path in root.rglob("*"):
         if not path.is_file():
@@ -205,6 +230,12 @@ def write_manifest(
     out.write("Exclude globs:\n")
     for pattern in DEFAULT_EXCLUDE_GLOBS + profile.exclude:
         out.write(f"  - {pattern}\n")
+    out.write("Extensions:\n")
+    for extension in sorted(profile.extensions):
+        out.write(f"  - {extension}\n")
+    out.write("Include filenames:\n")
+    for filename in sorted(profile.include_filenames):
+        out.write(f"  - {filename}\n")
     if warnings:
         out.write("Warnings:\n")
         for warning in warnings:
@@ -277,6 +308,12 @@ def parse_args() -> argparse.Namespace:
         help="List available context profiles and exit.",
     )
     parser.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        help="Additional include glob. Can be passed multiple times.",
+    )
+    parser.add_argument(
         "--exclude",
         action="append",
         default=[],
@@ -287,6 +324,18 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         help="Compatibility shortcut for excluding a directory name. Can be passed multiple times.",
+    )
+    parser.add_argument(
+        "--extension",
+        action="append",
+        default=[],
+        help="Additional file extension to include, such as json or .json. Can be passed multiple times.",
+    )
+    parser.add_argument(
+        "--include-filename",
+        action="append",
+        default=[],
+        help="Additional exact filename to include regardless of extension. Can be passed multiple times.",
     )
     parser.add_argument(
         "--max-files",
@@ -323,15 +372,22 @@ def main() -> None:
             print(profile_name)
         return
 
-    profile = load_profile(args.profile, profiles_dir)
-    output = Path(args.output) if args.output else root / f"{root.name}-content.txt"
+    base_profile = load_profile(args.profile, profiles_dir)
     extra_excludes = tuple(normalize_glob(pattern) for pattern in args.exclude) + tuple(
         pattern
         for directory in args.exclude_dir
         for pattern in (f"{directory}/**", f"**/{directory}/**")
     )
+    profile = with_overrides(
+        profile=base_profile,
+        extra_includes=tuple(normalize_glob(pattern) for pattern in args.include),
+        extra_excludes=extra_excludes,
+        extra_extensions=tuple(normalize_extension(extension) for extension in args.extension),
+        extra_include_filenames=tuple(args.include_filename),
+    )
+    output = Path(args.output) if args.output else root / f"{root.name}-content.txt"
 
-    files = iter_context_files(root=root, profile=profile, extra_excludes=extra_excludes)
+    files = iter_context_files(root=root, profile=profile)
     warnings = build_budget_warnings(
         root=root,
         files=files,
