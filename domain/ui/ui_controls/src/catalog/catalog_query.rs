@@ -78,19 +78,39 @@ impl ControlCatalogQuery {
     }
 
     pub fn matches(&self, entry: &ControlCatalogEntryDescriptor) -> bool {
-        self.package_id.as_deref().map_or(true, |value| entry.package_id == value)
-            && self.control_kind_id.as_deref().map_or(true, |value| entry.control_kind_id == value)
-            && self.category.as_deref().map_or(true, |value| entry.category == value)
-            && self.tag.as_deref().map_or(true, |value| entry.tags.iter().any(|tag| tag == value))
+        self.package_id
+            .as_deref()
+            .map_or(true, |value| entry.package_id == value)
+            && self
+                .control_kind_id
+                .as_deref()
+                .map_or(true, |value| entry.control_kind_id == value)
+            && self
+                .category
+                .as_deref()
+                .map_or(true, |value| entry.category == value)
+            && self
+                .tag
+                .as_deref()
+                .map_or(true, |value| entry.tags.iter().any(|tag| tag == value))
             && self.target_profile.as_deref().map_or(true, |value| {
                 entry.target_profiles.iter().any(|target| target == value)
             })
             && self.capability.as_deref().map_or(true, |value| {
-                entry.capabilities.iter().any(|capability| capability == value)
+                entry
+                    .capabilities
+                    .iter()
+                    .any(|capability| capability == value)
             })
-            && self.story_required.map_or(true, |value| entry.story_required == value)
-            && self.mount_eligible.map_or(true, |value| entry.mount_eligible == value)
-            && self.has_diagnostics.map_or(true, |value| entry.has_diagnostics == value)
+            && self
+                .story_required
+                .map_or(true, |value| entry.story_required == value)
+            && self
+                .mount_eligible
+                .map_or(true, |value| entry.mount_eligible == value)
+            && self
+                .has_diagnostics
+                .map_or(true, |value| entry.has_diagnostics == value)
     }
 }
 

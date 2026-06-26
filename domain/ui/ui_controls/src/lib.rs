@@ -3,6 +3,7 @@
 
 pub mod action_prompt;
 pub mod button;
+pub mod catalog;
 pub mod color_picker;
 pub mod diagnostics;
 pub mod input;
@@ -19,6 +20,7 @@ pub mod tree_view;
 
 pub use action_prompt::ACTION_PROMPT_CONTROL_KIND_ID;
 pub use button::BUTTON_CONTROL_KIND_ID;
+pub use catalog::*;
 pub use color_picker::COLOR_PICKER_CONTROL_KIND_ID;
 pub use diagnostics::*;
 pub use input::*;

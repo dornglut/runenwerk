@@ -55,7 +55,11 @@ impl ControlCatalogEntryDescriptor {
                 .target_profiles
                 .iter()
                 .map(|target| target.as_str().to_owned())
-                .chain(kind.target_profiles.iter().map(|target| target.as_str().to_owned()))
+                .chain(
+                    kind.target_profiles
+                        .iter()
+                        .map(|target| target.as_str().to_owned()),
+                )
                 .collect(),
         );
         let capabilities = sorted_unique(
@@ -63,9 +67,16 @@ impl ControlCatalogEntryDescriptor {
                 .required_capabilities
                 .iter()
                 .map(|capability| capability.as_str().to_owned())
-                .chain(kind.required_capabilities.iter().map(|capability| capability.as_str().to_owned()))
+                .chain(
+                    kind.required_capabilities
+                        .iter()
+                        .map(|capability| capability.as_str().to_owned()),
+                )
                 .chain(kind.route_requirements.iter().flat_map(|route| {
-                    route.capabilities.iter().map(|capability| capability.as_str().to_owned())
+                    route
+                        .capabilities
+                        .iter()
+                        .map(|capability| capability.as_str().to_owned())
                 }))
                 .collect(),
         );
@@ -90,8 +101,16 @@ impl ControlCatalogEntryDescriptor {
             tags,
             target_profiles,
             capabilities,
-            route_ids: kind.route_requirements.iter().map(|route| route.route_id.as_str().to_owned()).collect(),
-            fixture_ids: kind.fixture_ids.iter().map(|fixture_id| fixture_id.as_str().to_owned()).collect(),
+            route_ids: kind
+                .route_requirements
+                .iter()
+                .map(|route| route.route_id.as_str().to_owned())
+                .collect(),
+            fixture_ids: kind
+                .fixture_ids
+                .iter()
+                .map(|fixture_id| fixture_id.as_str().to_owned())
+                .collect(),
             story_required: !story_ids.is_empty(),
             story_ids,
             has_diagnostics: !diagnostic_ids.is_empty(),

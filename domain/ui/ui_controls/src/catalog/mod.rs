@@ -4,23 +4,24 @@
 use serde::{Deserialize, Serialize};
 
 use crate::migration::ControlDeprecationStatus;
+use crate::package::ControlPackageDescriptor;
 use crate::package::descriptor::ControlKindDescriptor;
 use crate::package::story_proof::{ControlStoryProofSummary, ControlStoryProofVerdict};
-use crate::package::ControlPackageDescriptor;
 
+mod catalog_entry;
 #[path = "catalog_entry.rs"]
 pub mod entry;
-#[path = "catalog_query.rs"]
-pub mod query;
 #[path = "catalog_index.rs"]
 pub mod index;
 #[path = "catalog_inspection.rs"]
 pub mod inspection;
+#[path = "catalog_query.rs"]
+pub mod query;
 
 pub use entry::*;
-pub use query::*;
 pub use index::*;
 pub use inspection::*;
+pub use query::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlCatalogDeprecationStatus {

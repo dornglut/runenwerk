@@ -1,7 +1,8 @@
 use ui_controls::{
     ControlGestureKind, ControlGestureRequirement, ControlInputDescriptor, ControlInputMode,
-    ControlInspectionDescriptor, ControlInspectionSection, ControlKindId, ControlPointerRequirement,
-    ControlTextInputRequirement, LABEL_CONTROL_KIND_ID, runenwerk_control_package,
+    ControlInspectionDescriptor, ControlInspectionSection, ControlKindId,
+    ControlPointerRequirement, ControlTextInputRequirement, LABEL_CONTROL_KIND_ID,
+    runenwerk_control_package,
 };
 
 #[test]
@@ -28,8 +29,8 @@ fn control_input_summary_attaches_to_catalog_inspection_read_only() {
             requires_composition: false,
         })
         .summary();
-    let inspection = ControlInspectionDescriptor::from_control_kind(&package, kind)
-        .with_input_summary(&summary);
+    let inspection =
+        ControlInspectionDescriptor::from_control_kind(&package, kind).with_input_summary(&summary);
 
     assert_eq!(
         inspection.fact(ControlInspectionSection::Input, "modes"),

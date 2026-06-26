@@ -13,7 +13,9 @@ pub struct ControlCatalogIndex {
 }
 
 impl ControlCatalogIndex {
-    pub fn from_packages<'a>(packages: impl IntoIterator<Item = &'a ControlPackageDescriptor>) -> Self {
+    pub fn from_packages<'a>(
+        packages: impl IntoIterator<Item = &'a ControlPackageDescriptor>,
+    ) -> Self {
         let mut entries = packages
             .into_iter()
             .flat_map(|package| {
