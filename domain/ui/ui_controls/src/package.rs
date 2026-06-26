@@ -6,6 +6,8 @@ pub mod authoring;
 pub mod descriptor;
 pub mod ids;
 pub mod metadata;
+#[path = "render.rs"]
+pub mod render;
 #[path = "story_proof/mod.rs"]
 pub mod story_proof;
 pub mod validation;
@@ -18,5 +20,6 @@ pub use authoring::*;
 pub use descriptor::*;
 pub use ids::*;
 pub use metadata::*;
+pub use render::*;
 pub use story_proof::*;
 pub use validation::*;
