@@ -73,7 +73,9 @@ fn control_story_proof_rejects_missing_minimum_category() {
         story_id.clone(),
         ControlStoryProofCategory::Normal,
     ))
-    .with_requirement(ControlStoryProofRequirement::expected_failure(story_id.clone()))
+    .with_requirement(ControlStoryProofRequirement::expected_failure(
+        story_id.clone(),
+    ))
     .with_requirement(ControlStoryProofRequirement::new(
         story_id.clone(),
         ControlStoryProofCategory::Accessibility,
@@ -166,7 +168,10 @@ fn control_story_proof_envelope_stays_descriptor_only_for_mounting() {
     let matrix = minimum_matrix(kind.control_kind_id.clone(), kind.story_ids[0].clone());
     let envelope = ControlStoryProofEnvelope::not_evaluated(matrix);
 
-    assert_eq!(envelope.summary.verdict, ControlStoryProofVerdict::NotEvaluated);
+    assert_eq!(
+        envelope.summary.verdict,
+        ControlStoryProofVerdict::NotEvaluated
+    );
     assert!(matches!(
         &kind.mount_eligibility,
         ControlMountEligibility::NotEligible { .. }
@@ -182,7 +187,9 @@ fn minimum_matrix(
             story_id.clone(),
             ControlStoryProofCategory::Normal,
         ))
-        .with_requirement(ControlStoryProofRequirement::expected_failure(story_id.clone()))
+        .with_requirement(ControlStoryProofRequirement::expected_failure(
+            story_id.clone(),
+        ))
         .with_requirement(ControlStoryProofRequirement::new(
             story_id.clone(),
             ControlStoryProofCategory::Accessibility,

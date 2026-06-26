@@ -218,11 +218,9 @@ impl ControlStoryMatrixDescriptor {
         }
 
         for required_category in self.profile.required_categories() {
-            if !self
-                .requirements
-                .iter()
-                .any(|requirement| requirement.required && requirement.category == *required_category)
-            {
+            if !self.requirements.iter().any(|requirement| {
+                requirement.required && requirement.category == *required_category
+            }) {
                 report.push(ControlPackageValidationDiagnostic::kind(
                     self.control_kind_id.clone(),
                     ControlPackageValidationReason::UnresolvedReference,
