@@ -13,11 +13,11 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-005-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-005`
 
-Title: UI Component Platform Input / Gesture / Device design intake
+Title: UI Component Platform Input / Gesture / Device
 
-State: active planning
+State: implementation pending local validation
 
 Owner: ui
 
@@ -26,7 +26,7 @@ Authority files:
 ```text
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
-docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
+docs-site/src/content/docs/workspace/routines/implementation-routine.md
 docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
 docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-catalog-discovery-inspection-design.md
@@ -36,31 +36,46 @@ docs-site/src/content/docs/domain/ui/roadmap.md
 Write scope:
 
 ```text
-Planning/design records only until the Phase 5 Input / Gesture / Device design is accepted.
+domain/ui/ui_controls/src/input.rs
+domain/ui/ui_controls/src/lib.rs
+domain/ui/ui_controls/tests/control_input_contract.rs
+docs-site/src/content/docs/workspace/planning/active-work.md
 ```
 
 Validation expectation:
 
 ```text
-Manual planning consistency review first. Implementation validation is deferred.
+cargo fmt --all --check
+cargo check -p ui_controls
+cargo test -p ui_controls control_input
+cargo test -p ui_controls control_catalog
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_story_proof
+cargo test -p ui_controls control_authoring
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+git diff --check
 ```
 
 Known blockers:
 
 ```text
-Phase 5 implementation needs accepted design scope first.
+Connector-mode command execution is unavailable. Phase 5 cannot be marked complete until the validation gate is run locally and reported green.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 5 Input / Gesture / Device design.
+Run the Phase 5 validation gate locally. If it passes, run phase-completion drift check and mark Phase 5 complete.
 ```
 
 Evidence:
 
 ```text
 Phase 4 Catalog / Discovery / Inspection passed local validation by user report on 2026-06-26 after rebasing or merging latest main and rerunning the validation gate.
+Phase 5 design authority was accepted by user report on 2026-06-26.
+A bounded Phase 5 input/gesture/device declaration implementation exists on this branch.
 ```
 
 ## Active-work rules
