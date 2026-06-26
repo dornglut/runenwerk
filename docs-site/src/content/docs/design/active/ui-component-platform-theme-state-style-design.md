@@ -1,91 +1,283 @@
 ---
-title: UI Component Platform Theme Token State Style Design
-description: Theme/token and state-style requirements for reusable controls and transition/effect primitives.
+title: UI Component Platform Theme State And Style Design
+description: Phase 7 design for reusable control theme tokens, visual state declarations, and style contracts without renderer or product ownership.
 status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-24
+last_reviewed: 2026-06-26
 related_designs:
   - ./runenwerk-ui-platform-capability-roadmap.md
   - ./runenwerk-ui-story-driven-golden-workflow-design.md
-  - ./editor-ui-runtime-v2-and-interaction-formation-design.md
+  - ./ui-component-platform-state-binding-host-intent-design.md
+  - ./ui-component-platform-input-gesture-device-design.md
+  - ./ui-component-platform-catalog-discovery-inspection-design.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
-  - ../../workspace/production-milestone-register.md
+  - ../../workspace/planning/active-work.md
+  - ../../workspace/planning/roadmap.md
+  - ../../workspace/planning/production-tracks.md
 ---
 
-# UI Component Platform Theme Token State Style Design
+# UI Component Platform Theme State And Style Design
 
 ## Status
 
-This is an active design for the docs-only activation branch `feature/ui-component-platform-000-activation-vocabulary-ergonomics`. It records scope, vocabulary, and acceptance criteria. It does not authorize product code by itself.
+This is the Phase 7 planning and acceptance design for `PT-UI-COMPONENT-PLATFORM-007`.
 
-## Canonical Vocabulary
+It follows Phase 1 `ControlPackage` / `ControlKernel` contracts, Phase 2 authoring ergonomics, Phase 3 story-proof envelopes, Phase 4 catalog/discovery/inspection, Phase 5 input/gesture/device declarations, and Phase 6 state binding / host intent declarations. It defines reusable control theme token requirements, visual state declarations, style role declarations, fallback diagnostics, and catalog/inspection summaries. It does not authorize renderer-owned styling semantics, product theme systems, animation tooling, runtime widget behavior, runtime mount eligibility, text editing implementation, canvas behavior, Gallery previews, Designer UX, Workbench behavior, renderer behavior, or ECS behavior.
 
-- `ControlPackage` - packaged reusable control family with schema, states, interactions, diagnostics, fixtures, stories, accessibility, tokens, render facts, and host routes.
-- `control kernel` - shared contract every control package follows.
-- `control authoring kit` - templates, naming conventions, checklists, and examples that make new controls easy to add correctly.
-- `component story matrix` - story-proven normal, edge, failure, accessibility, interaction, layout, text, mount, and render states for a package.
-- `story proof envelope` - `UiStoryRunReport`, evidence records, expected-failure matching, CLI/Gallery report projection, and mount eligibility.
-- `catalog/discovery/inspection contract` - searchable and filterable metadata used by Gallery, UI Designer, docs, and Workbench consumers.
-- `host intent proposal` - UI output that proposes host action without mutating app/editor/game truth.
-- `route/capability decision` - host-owned authorization result for a proposed route or action.
-- `state bucket` - named ownership class for transient, preview, committed, focus, hover, drag, animation, host-fed, or package-owned state.
-- `Surface2D` - generic 2D coordinate/navigation primitive.
-- `SpatialCanvas` - generic positioned-item surface built on `Surface2D`.
-- `NodeCanvas` - generic node/link surface built on `SpatialCanvas`.
-- `PortGraphCanvas` - editable port/socket graph specialization built on `NodeCanvas`.
-- `ProgressionTreeView` - reusable skill/tech/progression tree package built on `NodeCanvas`, without gameplay rule ownership.
-- `TrackSurface` - generic time/track surface; `Timeline` and `CurveEditor` specialize it.
+## Existing Authority
 
-## Non-Negotiable Rules
+`ui_controls` owns reusable control semantics and may declare theme token requirements, visual state names, style roles, fallback expectations, and missing-token diagnostics.
 
-- General kernels come before specializations.
-- Story proof comes before mount eligibility.
-- Control packages come before product-specific surfaces.
-- `Surface2D` must not collapse into Gallery or GraphCanvas.
-- `NodeCanvas` must not contain ports or graph-editor commands.
-- `PortGraphCanvas` must not own graph/domain truth.
-- `ProgressionTreeView` must not own gameplay/progression rules, point spending, persistence, or mutation.
-- `TrackSurface` must not inherit graph semantics.
-- Host/app/editor/game mutation remains outside `domain/ui` through explicit host intent or command paths.
-- UI Story owns proof orchestration only.
-- Gallery, Workbench, and UI Designer consume platform contracts; they do not own reusable control semantics.
-- Renderer output remains backend-neutral and must not become UI source truth.
+Renderer crates own backend-neutral render output and materialization. They consume style facts but do not define reusable control semantics.
+
+Apps, editor, game hosts, and product surfaces own concrete theme packs, brand decisions, product presentation policy, user customization, persistence, and final runtime application.
+
+Gallery, Workbench, UI Designer, docs, and agents consume theme/state/style declarations through catalog and inspection facts. They do not own reusable control semantics.
+
+## Problem
+
+Reusable controls can now declare packages, stories, catalog facts, input modes, state buckets, bindings, and host intent proposals. They still need a shared way to describe which visual states and theme/style tokens are required to present a control consistently.
+
+Without a shared declaration, later controls could hardcode colors, spacing, typography, radius, elevation, or visual-state behavior. That would duplicate style vocabulary and blur ownership between reusable control semantics, renderer output, and product theme policy.
 
 ## Decision
 
-Controls must be themeable and state-previewable through tokens, not hardcoded visuals.
+Add a reusable theme/state/style declaration layer for the UI Component Platform.
 
-## Feature List
+The component layer owns declarations. It may describe token requirements, visual states, style roles, fallback behavior, missing-token diagnostics, and inspection summaries. It must not own concrete product themes, renderer materialization, animation tooling, product styling policy, or runtime application.
 
-- semantic color, spacing, typography, radius, border tokens
-- shadow/elevation readiness
-- normal, hover, pressed, focused, selected, disabled, error, warning, and info states
-- token fallback diagnostics
-- missing token expected failures
-- theme preview stories
-
-## Ergonomics Gate
-
-A designer can inspect required tokens and preview all supported states without reading runtime code.
-
-## Out Of Scope
-
-- renderer-authored styling semantics
-- product animation tools
-
-## Validation
-
-Run the branch-level docs and production validation before implementation:
+Correct ownership split:
 
 ```text
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task docs:validate
-task production:validate
-cargo fmt --all --check
+ui_controls
+  owns required token names, token roles, visual state declarations,
+  fallback requirements, style diagnostics, and inspection summaries.
+
+renderer / output layers
+  own backend-neutral render output and materialization details.
+
+apps / editor / game hosts
+  own concrete theme packs, brand choices, user customization, persistence,
+  runtime application policy, and product presentation decisions.
+
+Gallery / Workbench / UI Designer / docs / agents
+  consume declarations; they do not own reusable control semantics.
 ```
+
+## Proposed Contract Shape
+
+The first implementation should prefer one focused module:
+
+```text
+domain/ui/ui_controls/src/theme.rs
+```
+
+Split later only when stable responsibilities require it.
+
+Candidate public concepts:
+
+```text
+ControlThemeTokenKind
+ControlThemeTokenRequirement
+ControlThemeTokenRole
+ControlVisualState
+ControlVisualStateRequirement
+ControlStyleRole
+ControlStyleRequirement
+ControlStyleFallback
+ControlStyleDiagnostic
+ControlThemeDescriptor
+ControlThemeCapabilitySummary
+ControlThemeInspectionFact
+```
+
+The final names may differ after inspecting nearby conventions, but the responsibilities should remain:
+
+- declare semantic color, spacing, typography, radius, border, opacity, and elevation token requirements;
+- declare normal, hover, pressed, focused, selected, disabled, error, warning, info, active, loading, and read-only visual states;
+- declare style roles such as container, label, icon, value, background, foreground, border, accent, focus-ring, and overlay;
+- declare fallback behavior without selecting concrete product values;
+- expose missing-token and fallback diagnostics as reusable facts;
+- expose summaries that catalog/inspection can consume;
+- avoid renderer materialization, product theme application, animation execution, and runtime style mutation.
+
+## Minimum Phase 7 Scope
+
+The first implementation pass should prove the contract with a small declaration model:
+
+```text
+ControlThemeDescriptor
+ControlThemeTokenRequirement
+ControlVisualStateRequirement
+ControlStyleRequirement
+ControlStyleFallback
+ControlThemeCapabilitySummary
+```
+
+Minimum token kinds:
+
+```text
+color
+spacing
+typography
+radius
+border
+opacity
+elevation
+```
+
+Minimum visual states:
+
+```text
+normal
+hover
+pressed
+focused
+selected
+disabled
+error
+warning
+info
+active
+loading
+read-only
+```
+
+Minimum style roles:
+
+```text
+container
+label
+icon
+value
+background
+foreground
+border
+accent
+focus-ring
+overlay
+```
+
+Minimum fallback facts:
+
+```text
+fallback-token
+missing-token-diagnostic
+expected-failure
+```
+
+## Non-Goals
+
+Do not implement:
+
+- renderer-owned styling semantics;
+- product theme systems;
+- concrete brand/theme values;
+- user customization persistence;
+- runtime style application;
+- animation tooling;
+- transition execution;
+- runtime widget behavior;
+- runtime mount eligibility;
+- text editing implementation;
+- canvas behavior;
+- Gallery previews;
+- Designer UX;
+- Workbench behavior;
+- Surface2D;
+- SpatialCanvas;
+- NodeCanvas;
+- PortGraphCanvas;
+- ProgressionTreeView;
+- TrackSurface;
+- Timeline;
+- renderer behavior;
+- ECS behavior.
+
+## Boundary Rules
+
+- Theme tokens are requirements, not concrete product values.
+- Visual states are reusable declaration names, not renderer state machines.
+- Style roles describe semantic placement, not backend materials.
+- Fallbacks are declared expectations, not product theme resolution logic.
+- Missing-token diagnostics are reusable facts, not final UI messages.
+- Catalog/inspection may expose theme/state/style declarations as read-only data.
+- Story proof may reference theme requirements, but Phase 7 does not run stories.
+- Runtime mount eligibility remains future-gated.
+
+## Acceptance Criteria
+
+Phase 7 is implementation-complete only when:
+
+- reusable theme/state/style declarations exist in `ui_controls`;
+- declarations distinguish token kinds, visual states, style roles, fallbacks, and diagnostics;
+- declarations can be summarized for catalog/inspection without renderer or product ownership;
+- focused tests prove token requirements, visual state declarations, style roles, fallback diagnostics, inspection summaries, and no runtime style behavior;
+- no renderer-owned styling semantics, product theme system, runtime style application, animation tooling, runtime widget behavior, runtime mount, canvas behavior, Gallery, Designer, Workbench, renderer, or ECS behavior is implemented.
+
+## Candidate Implementation Scope
+
+The first implementation pass may touch:
+
+```text
+domain/ui/ui_controls/src/theme.rs
+domain/ui/ui_controls/src/lib.rs
+domain/ui/ui_controls/src/package.rs
+domain/ui/ui_controls/src/catalog/inspection.rs
+domain/ui/ui_controls/tests/control_theme_contract.rs
+domain/ui/ui_controls/tests/control_theme_catalog_contract.rs
+```
+
+Use catalog inspection only to expose read-only theme/state/style summaries. Do not add renderer, app, editor, game, Gallery, Designer, or Workbench code in Phase 7.
+
+## Test Plan
+
+Required focused tests for the future implementation pass:
+
+```text
+cargo test -p ui_controls control_theme
+cargo test -p ui_controls control_state
+cargo test -p ui_controls control_input
+cargo test -p ui_controls control_catalog
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_story_proof
+cargo test -p ui_controls control_authoring
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+```
+
+Required static checks:
+
+```text
+cargo fmt --all --check
+cargo check -p ui_controls
+git diff --check
+```
+
+Recommended test cases:
+
+- theme descriptor records color, spacing, typography, radius, border, opacity, and elevation token requirements;
+- visual state declarations distinguish normal, hover, pressed, focused, selected, disabled, error, warning, info, active, loading, and read-only;
+- style roles distinguish container, label, icon, value, background, foreground, border, accent, focus-ring, and overlay;
+- fallback diagnostics expose fallback-token, missing-token-diagnostic, and expected-failure facts;
+- catalog/inspection summaries expose theme/state/style declarations read-only;
+- no declaration makes a control runtime-mount eligible.
+
+## Phase 7 Implementation Gate
+
+Before writing Rust code, confirm:
+
+- this design is accepted;
+- Phase 6 remains green on the branch base;
+- existing `ui_controls` package, catalog, input, state, story-proof, authoring, and validation contracts are still current;
+- planning records name Phase 7 implementation as active;
+- no new stop condition has been triggered.
+
+## Handoff
+
+Start implementation only after this design and planning state are accepted. The first implementation pass should add the smallest theme/state/style declaration contract and focused tests. Do not implement renderer materialization, product theme systems, runtime style application, animation tooling, canvas behavior, Gallery previews, Designer UX, Workbench behavior, renderer behavior, ECS behavior, or runtime mount eligibility in Phase 7.
