@@ -99,22 +99,36 @@ Evidence: User reported Phase 6 validation green on 2026-06-26.
 
 Next action: Keep as completed dependency.
 
-### PT-UI-COMPONENT-PLATFORM-007-PLANNING
+### PT-UI-COMPONENT-PLATFORM-007
 
-ID: `PT-UI-COMPONENT-PLATFORM-007-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-007`
 
-Title: UI Component Platform Theme / State / Style design intake
+Title: UI Component Platform Theme / State / Style
+
+State: completed by user validation report
+
+Owner: ui
+
+Evidence: User reported Phase 7 validation green on 2026-06-26.
+
+Next action: Keep as completed dependency.
+
+### PT-UI-COMPONENT-PLATFORM-008-PLANNING
+
+ID: `PT-UI-COMPONENT-PLATFORM-008-PLANNING`
+
+Title: UI Component Platform Accessibility / Focus / Inspection design intake
 
 State: active planning
 
 Owner: ui
 
-Dependency level: follows Phase 6 State Binding / Host Intent
+Dependency level: follows Phase 7 Theme / State / Style
 
 Write scope:
 
 ```text
-docs-site/src/content/docs/design/active/ui-component-platform-theme-state-style-design.md
+docs-site/src/content/docs/design/active/ui-component-platform-accessibility-focus-inspection-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
@@ -129,9 +143,9 @@ Manual planning consistency review.
 No Rust implementation in the planning pass.
 ```
 
-Evidence: Phase 7 was promoted after Phase 6 validation passed green by user report.
+Evidence: Phase 8 was promoted after Phase 7 validation passed green by user report.
 
-Next action: Review and accept the Phase 7 Theme / State / Style design before implementation.
+Next action: Review and accept the Phase 8 Accessibility / Focus / Inspection design before implementation.
 
 ## Rules
 
