@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-26
 ---
 
 # Active Work
@@ -13,9 +13,9 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-004-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-005-PLANNING`
 
-Title: UI Component Platform Catalog / Discovery / Inspection design intake
+Title: UI Component Platform Input / Gesture / Device design intake
 
 State: active planning
 
@@ -27,44 +27,40 @@ Authority files:
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
 docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
-docs-site/src/content/docs/workspace/authority-model.md
-docs-site/src/content/docs/guidelines/programming-principles.md
+docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-catalog-discovery-inspection-design.md
-docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
-docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
 docs-site/src/content/docs/domain/ui/roadmap.md
 ```
 
 Write scope:
 
 ```text
-Planning/design records only until the Catalog / Discovery / Inspection design is accepted.
+Planning/design records only until the Phase 5 Input / Gesture / Device design is accepted.
 ```
 
 Validation expectation:
 
 ```text
-Manual planning consistency review first.
-Implementation validation is deferred until a later bounded pass.
+Manual planning consistency review first. Implementation validation is deferred.
 ```
 
 Known blockers:
 
 ```text
-Phase 4 needs design review before code.
+Phase 5 implementation needs accepted design scope first.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 4 Catalog / Discovery / Inspection design.
+Review and accept the Phase 5 Input / Gesture / Device design.
 ```
 
 Evidence:
 
 ```text
-Phase 3 Story Proof Envelope passed the local validation gate by user report on 2026-06-26.
-Phase 4 design authority exists in ui-component-platform-catalog-discovery-inspection-design.md.
+Phase 4 Catalog / Discovery / Inspection passed local validation by user report on 2026-06-26 after rebasing or merging latest main and rerunning the validation gate.
 ```
 
 ## Active-work rules
