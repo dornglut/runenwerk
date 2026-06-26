@@ -7,10 +7,10 @@ use crate::input::ControlInputCapabilitySummary;
 use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
 use crate::package::story_proof::ControlStoryProofSummary;
 use crate::state::ControlStateCapabilitySummary;
+use crate::theme::ControlThemeCapabilitySummary;
 
 use super::{
-    ControlCatalogEntryDescriptor, ControlDiagnosticBadge, ControlStoryProofBadge,
-    diagnostic_badges,
+    diagnostic_badges, ControlCatalogEntryDescriptor, ControlDiagnosticBadge, ControlStoryProofBadge,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,42 +31,12 @@ impl ControlInspectionDescriptor {
     ) -> Self {
         let entry = ControlCatalogEntryDescriptor::from_control_kind(package, kind);
         let mut facts = Vec::new();
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Identity,
-            "package_id",
-            &entry.package_id,
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Identity,
-            "control_kind_id",
-            &entry.control_kind_id,
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Identity,
-            "display_name",
-            &entry.display_name,
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Metadata,
-            "category",
-            &entry.category,
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Metadata,
-            "tags",
-            &entry.tags.join(","),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Metadata,
-            "target_profiles",
-            &entry.target_profiles.join(","),
-        );
+        push_fact(&mut facts, ControlInspectionSection::Identity, "package_id", &entry.package_id);
+        push_fact(&mut facts, ControlInspectionSection::Identity, "control_kind_id", &entry.control_kind_id);
+        push_fact(&mut facts, ControlInspectionSection::Identity, "display_name", &entry.display_name);
+        push_fact(&mut facts, ControlInspectionSection::Metadata, "category", &entry.category);
+        push_fact(&mut facts, ControlInspectionSection::Metadata, "tags", &entry.tags.join(","));
+        push_fact(&mut facts, ControlInspectionSection::Metadata, "target_profiles", &entry.target_profiles.join(","));
         push_fact(
             &mut facts,
             ControlInspectionSection::Compatibility,
@@ -79,96 +49,26 @@ impl ControlInspectionDescriptor {
             "supports_runtime_mount",
             bool_string(entry.compatibility.supports_runtime_mount),
         );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Schemas,
-            "properties",
-            &schema_ref(&kind.property_schema),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Schemas,
-            "state",
-            &schema_ref(&kind.state_schema),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Schemas,
-            "event_payload",
-            &schema_ref(&kind.event_payload_schema),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Kernels,
-            "layout",
-            kind.kernels.layout.as_str(),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Kernels,
-            "interaction",
-            kind.kernels.interaction.as_str(),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Kernels,
-            "visual",
-            kind.kernels.visual.as_str(),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Kernels,
-            "accessibility",
-            kind.kernels.accessibility.as_str(),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Kernels,
-            "inspection",
-            kind.kernels.inspection.as_str(),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Routes,
-            "routes",
-            &entry.route_ids.join(","),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Routes,
-            "capabilities",
-            &entry.capabilities.join(","),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Fixtures,
-            "fixtures",
-            &entry.fixture_ids.join(","),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Stories,
-            "stories",
-            &entry.story_ids.join(","),
-        );
+        push_fact(&mut facts, ControlInspectionSection::Schemas, "properties", &schema_ref(&kind.property_schema));
+        push_fact(&mut facts, ControlInspectionSection::Schemas, "state", &schema_ref(&kind.state_schema));
+        push_fact(&mut facts, ControlInspectionSection::Schemas, "event_payload", &schema_ref(&kind.event_payload_schema));
+        push_fact(&mut facts, ControlInspectionSection::Kernels, "layout", kind.kernels.layout.as_str());
+        push_fact(&mut facts, ControlInspectionSection::Kernels, "interaction", kind.kernels.interaction.as_str());
+        push_fact(&mut facts, ControlInspectionSection::Kernels, "visual", kind.kernels.visual.as_str());
+        push_fact(&mut facts, ControlInspectionSection::Kernels, "accessibility", kind.kernels.accessibility.as_str());
+        push_fact(&mut facts, ControlInspectionSection::Kernels, "inspection", kind.kernels.inspection.as_str());
+        push_fact(&mut facts, ControlInspectionSection::Routes, "routes", &entry.route_ids.join(","));
+        push_fact(&mut facts, ControlInspectionSection::Routes, "capabilities", &entry.capabilities.join(","));
+        push_fact(&mut facts, ControlInspectionSection::Fixtures, "fixtures", &entry.fixture_ids.join(","));
+        push_fact(&mut facts, ControlInspectionSection::Stories, "stories", &entry.story_ids.join(","));
         push_fact(
             &mut facts,
             ControlInspectionSection::StoryProof,
             "story_required",
             bool_string(entry.story_required),
         );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Diagnostics,
-            "diagnostics",
-            &entry.diagnostic_ids.join(","),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::MountEligibility,
-            "eligible",
-            bool_string(entry.mount_eligible),
-        );
+        push_fact(&mut facts, ControlInspectionSection::Diagnostics, "diagnostics", &entry.diagnostic_ids.join(","));
+        push_fact(&mut facts, ControlInspectionSection::MountEligibility, "eligible", bool_string(entry.mount_eligible));
         push_fact(
             &mut facts,
             ControlInspectionSection::MountEligibility,
@@ -193,24 +93,21 @@ impl ControlInspectionDescriptor {
 
     pub fn with_input_summary(mut self, summary: &ControlInputCapabilitySummary) -> Self {
         for fact in summary.inspection_facts() {
-            push_fact(
-                &mut self.facts,
-                ControlInspectionSection::Input,
-                &fact.key,
-                &fact.value,
-            );
+            push_fact(&mut self.facts, ControlInspectionSection::Input, &fact.key, &fact.value);
         }
         self
     }
 
     pub fn with_state_summary(mut self, summary: &ControlStateCapabilitySummary) -> Self {
         for fact in summary.inspection_facts() {
-            push_fact(
-                &mut self.facts,
-                ControlInspectionSection::State,
-                &fact.key,
-                &fact.value,
-            );
+            push_fact(&mut self.facts, ControlInspectionSection::State, &fact.key, &fact.value);
+        }
+        self
+    }
+
+    pub fn with_theme_summary(mut self, summary: &ControlThemeCapabilitySummary) -> Self {
+        for fact in summary.inspection_facts() {
+            push_fact(&mut self.facts, ControlInspectionSection::Theme, &fact.key, &fact.value);
         }
         self
     }
@@ -236,6 +133,7 @@ pub enum ControlInspectionSection {
     StoryProof,
     Input,
     State,
+    Theme,
     Diagnostics,
     MountEligibility,
 }
