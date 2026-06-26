@@ -30,11 +30,17 @@ DEFAULT_INCLUDE_FILENAMES = {
 }
 DEFAULT_EXCLUDE_GLOBS = {
     ".git/**",
+    "**/.git/**",
     "target/**",
+    "**/target/**",
     "node_modules/**",
+    "**/node_modules/**",
     "dist/**",
+    "**/dist/**",
     "build/**",
+    "**/build/**",
     ".astro/**",
+    "**/.astro/**",
     "**/*-content.txt",
     "Cargo.lock",
 }
@@ -320,7 +326,9 @@ def main() -> None:
     profile = load_profile(args.profile, profiles_dir)
     output = Path(args.output) if args.output else root / f"{root.name}-content.txt"
     extra_excludes = tuple(normalize_glob(pattern) for pattern in args.exclude) + tuple(
-        f"{directory}/**" for directory in args.exclude_dir
+        pattern
+        for directory in args.exclude_dir
+        for pattern in (f"{directory}/**", f"**/{directory}/**")
     )
 
     files = iter_context_files(root=root, profile=profile, extra_excludes=extra_excludes)
