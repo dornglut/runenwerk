@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-26
 ---
 
 # Completed Work
@@ -130,6 +130,49 @@ Follow-up:
 
 ```text
 Proceed to PT-UI-COMPONENT-PLATFORM-004 Catalog / Discovery / Inspection design/planning. Do not implement catalog UI, Gallery previews, Designer UX, or Workbench behavior before Phase 4 design acceptance.
+```
+
+## PT-UI-COMPONENT-PLATFORM-004
+
+ID: `PT-UI-COMPONENT-PLATFORM-004`
+
+Title: UI Component Platform Catalog / Discovery / Inspection
+
+Completed on: 2026-06-26 by user validation report
+
+Evidence:
+
+```text
+Phase 4 added a bounded derived catalog, discovery, and inspection contract under domain/ui/ui_controls/src/catalog.rs, re-exported it through the existing package façade, and added focused catalog contract tests.
+The catalog layer derives read-only package/control facts, filters, inspection facts, diagnostic badges, compatibility summaries, and story-proof badges from existing descriptors without moving reusable control semantics into Gallery, Workbench, UI Designer, docs, agents, runtime, renderer, or ECS code.
+```
+
+Validation:
+
+```text
+User reported all required Phase 4 validation commands passed green after rebasing or merging latest main and rerunning the validation gate:
+cargo fmt --all --check
+cargo check -p ui_controls
+cargo test -p ui_controls control_catalog
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_story_proof
+cargo test -p ui_controls control_authoring
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+git diff --check
+```
+
+Known gaps:
+
+```text
+Phase 4 does not implement input/gesture/device contracts, catalog UI, Gallery previews, Designer UX, Workbench behavior, runtime widget behavior, runtime mount eligibility, story runner behavior, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
+```
+
+Follow-up:
+
+```text
+Proceed to PT-UI-COMPONENT-PLATFORM-005 Input / Gesture / Device design/planning. Do not implement input contracts or runtime input behavior before Phase 5 design acceptance.
 ```
 
 ## Entry shape
