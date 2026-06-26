@@ -1,94 +1,225 @@
 ---
 title: UI Component Platform Layout Container And Virtualization Design
-description: Reusable container, large-data, scroll, selection, and virtualization contracts for UI controls.
+description: Phase 9 owner-first design for layout, container, scroll, overflow, identity, and virtualization vocabulary.
 status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-24
+last_reviewed: 2026-06-26
 related_designs:
+  - ./ui-component-platform-ownership-realignment-design.md
   - ./runenwerk-ui-platform-capability-roadmap.md
-  - ./runenwerk-ui-story-driven-golden-workflow-design.md
-  - ./editor-ui-runtime-v2-and-interaction-formation-design.md
+  - ./ui-component-platform-accessibility-focus-inspection-design.md
+  - ./ui-component-platform-theme-state-style-design.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
-  - ../../workspace/production-milestone-register.md
+  - ../../workspace/planning/active-work.md
+  - ../../workspace/planning/roadmap.md
+  - ../../workspace/planning/production-tracks.md
 ---
 
 # UI Component Platform Layout Container And Virtualization Design
 
 ## Status
 
-This is an active design for the docs-only activation branch `feature/ui-component-platform-000-activation-vocabulary-ergonomics`. It records scope, vocabulary, and acceptance criteria. It does not authorize product code by itself.
+This design replaces the older activation-era Phase 9 wording.
 
-## Canonical Vocabulary
-
-- `ControlPackage` - packaged reusable control family with schema, states, interactions, diagnostics, fixtures, stories, accessibility, tokens, render facts, and host routes.
-- `control kernel` - shared contract every control package follows.
-- `control authoring kit` - templates, naming conventions, checklists, and examples that make new controls easy to add correctly.
-- `component story matrix` - story-proven normal, edge, failure, accessibility, interaction, layout, text, mount, and render states for a package.
-- `story proof envelope` - `UiStoryRunReport`, evidence records, expected-failure matching, CLI/Gallery report projection, and mount eligibility.
-- `catalog/discovery/inspection contract` - searchable and filterable metadata used by Gallery, UI Designer, docs, and Workbench consumers.
-- `host intent proposal` - UI output that proposes host action without mutating app/editor/game truth.
-- `route/capability decision` - host-owned authorization result for a proposed route or action.
-- `state bucket` - named ownership class for transient, preview, committed, focus, hover, drag, animation, host-fed, or package-owned state.
-- `Surface2D` - generic 2D coordinate/navigation primitive.
-- `SpatialCanvas` - generic positioned-item surface built on `Surface2D`.
-- `NodeCanvas` - generic node/link surface built on `SpatialCanvas`.
-- `PortGraphCanvas` - editable port/socket graph specialization built on `NodeCanvas`.
-- `ProgressionTreeView` - reusable skill/tech/progression tree package built on `NodeCanvas`, without gameplay rule ownership.
-- `TrackSurface` - generic time/track surface; `Timeline` and `CurveEditor` specialize it.
-
-## Non-Negotiable Rules
-
-- General kernels come before specializations.
-- Story proof comes before mount eligibility.
-- Control packages come before product-specific surfaces.
-- `Surface2D` must not collapse into Gallery or GraphCanvas.
-- `NodeCanvas` must not contain ports or graph-editor commands.
-- `PortGraphCanvas` must not own graph/domain truth.
-- `ProgressionTreeView` must not own gameplay/progression rules, point spending, persistence, or mutation.
-- `TrackSurface` must not inherit graph semantics.
-- Host/app/editor/game mutation remains outside `domain/ui` through explicit host intent or command paths.
-- UI Story owns proof orchestration only.
-- Gallery, Workbench, and UI Designer consume platform contracts; they do not own reusable control semantics.
-- Renderer output remains backend-neutral and must not become UI source truth.
+Phase 9 must be owner-first. Generic layout vocabulary belongs in `ui_layout`. `ui_controls` may only expose per-control layout requirements and catalog inspection summaries that reference `ui_layout` contracts.
 
 ## Decision
 
-Containers must support real data and large surfaces, not static demos only.
-
-## Feature List
-
-- panel, row, column, stack, split, scroll
-- list, table, tree
-- virtual list and virtual table
-- empty, loading, error, and overflow states
-- item and selection identity
-- sticky-header readiness
-- large-content budgets
-- scroll ownership
-- layout diagnostics
-
-## Ergonomics Gate
-
-Authors can define common data containers without hand-rolling empty/error/overflow/selection behavior each time.
-
-## Out Of Scope
-
-- product data ownership
-- app-specific table persistence
-
-## Validation
-
-Run the branch-level docs and production validation before implementation:
+Split Phase 9 into two implementation slices after the ownership realignment pass:
 
 ```text
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task docs:validate
-task production:validate
-cargo fmt --all --check
+PT-UI-COMPONENT-PLATFORM-009B Layout Foundation
+  Owner: ui_layout
+  Adds generic layout/container/scroll/virtualization vocabulary.
+
+PT-UI-COMPONENT-PLATFORM-009C Control Layout Bridge
+  Owner: ui_controls
+  Adds per-control layout requirements and catalog inspection summaries that reference ui_layout types.
 ```
+
+## Ownership
+
+```text
+ui_layout
+  owns layout roles, container kinds, size constraints, scroll facts,
+  overflow/content states, item identity requirements,
+  selection identity requirements, large-content budgets,
+  virtualization readiness, layout diagnostics, and reusable layout facts.
+
+ui_controls
+  owns ControlLayoutDescriptor, ControlLayoutRequirement,
+  ControlLayoutCapabilitySummary, and ControlLayoutInspectionFact as
+  per-control wrappers over ui_layout vocabulary.
+
+renderer / layout runtime / output layers
+  own measured geometry, layout execution, clipping, primitive output,
+  render data, and backend materialization.
+
+apps / editor / game hosts
+  own product data, persistence, runtime scroll state,
+  table settings, domain selection truth, and product behavior.
+```
+
+## Generic vocabulary owned by ui_layout
+
+Minimum layout roles:
+
+```text
+panel
+row
+column
+stack
+split
+scroll
+list
+table
+tree
+virtual-list
+virtual-table
+```
+
+Minimum container kinds:
+
+```text
+panel
+viewport
+section
+group
+collection
+split-pane
+scroll-region
+```
+
+Minimum size constraints:
+
+```text
+min-size
+max-size
+preferred-size
+fill-width
+fill-height
+intrinsic-size
+```
+
+Minimum scroll facts:
+
+```text
+scrollable
+scroll-owner
+scroll-axis-x
+scroll-axis-y
+scroll-position-host-owned
+```
+
+Minimum content states:
+
+```text
+empty
+loading
+error
+overflow
+ready
+```
+
+Minimum virtualization facts:
+
+```text
+virtualization-ready
+estimated-item-size
+stable-item-identity
+windowed-rendering
+overscan-budget
+```
+
+Minimum diagnostics:
+
+```text
+missing-item-identity
+missing-selection-identity
+missing-scroll-owner
+missing-large-content-budget
+expected-failure
+```
+
+## Control bridge owned by ui_controls
+
+`ui_controls` may add a bridge only after the `ui_layout` vocabulary exists.
+
+Candidate bridge concepts:
+
+```text
+ControlLayoutDescriptor
+ControlLayoutRequirement
+ControlLayoutCapabilitySummary
+ControlLayoutInspectionFact
+```
+
+The bridge records what a control requires. It must not define source-of-truth layout vocabulary.
+
+## Non-goals
+
+Do not implement:
+
+```text
+layout execution
+measured geometry
+primitive output
+renderer behavior
+product data ownership
+app-specific table persistence
+runtime scroll position ownership
+runtime selection mutation
+virtualization algorithm execution
+sticky-header layout execution
+runtime widget behavior
+runtime mount eligibility
+canvas behavior
+Gallery previews
+Designer UX
+Workbench behavior
+ECS behavior
+```
+
+## Acceptance criteria
+
+Phase 9 is implementation-complete only after both owner-first slices exist:
+
+```text
+009B:
+  ui_layout exposes generic layout/container/scroll/virtualization vocabulary and tests.
+
+009C:
+  ui_controls exposes per-control layout requirements that reference ui_layout types.
+  catalog/inspection exposes read-only summaries.
+  focused tests prove the bridge without runtime layout behavior.
+```
+
+## Validation gate
+
+```text
+cargo fmt --all --check
+cargo check -p ui_layout
+cargo check -p ui_controls
+cargo test -p ui_layout layout
+cargo test -p ui_controls control_layout
+cargo test -p ui_controls control_accessibility
+cargo test -p ui_controls control_theme
+cargo test -p ui_controls control_state
+cargo test -p ui_controls control_input
+cargo test -p ui_controls control_catalog
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_story_proof
+cargo test -p ui_controls control_authoring
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+git diff --check
+```
+
+## Handoff
+
+After this design is accepted, implement `009B Layout Foundation` first in `ui_layout`. Only after that should `009C Control Layout Bridge` add `ui_controls` declarations that reference the `ui_layout` vocabulary.
