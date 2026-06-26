@@ -81,7 +81,17 @@ Decision: Start Phase 7 as a Theme / State / Style design intake before implemen
 
 Reason: Theme, visual state, and style facts need reusable declarations before controls can share consistent presentation semantics without moving renderer or product styling ownership into ui_controls.
 
-Follow-up: Review and accept the Theme / State / Style design before code.
+Follow-up: Completed by user validation report.
+
+## Phase 8 accessibility planning decision
+
+Date: 2026-06-26
+
+Decision: Start Phase 8 as an Accessibility / Focus / Inspection design intake before implementation.
+
+Reason: Accessibility roles, focus semantics, keyboard navigation, and inspection metadata need reusable declarations before layout, render, base controls, or interaction phases consume them.
+
+Follow-up: Review and accept the Accessibility / Focus / Inspection design before code.
 
 ## Decision shape
 
