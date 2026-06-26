@@ -36,7 +36,7 @@ ID: `PT-UI-COMPONENT-PLATFORM-001`
 
 Title: UI Component Platform ControlPackage / ControlKernel contract
 
-State: completed by user report; merge/CI evidence may live with the PR or local validation transcript
+State: completed by user report
 
 Owner: ui
 
@@ -65,19 +65,19 @@ git diff --check
 Evidence:
 
 ```text
-User reported Phase 1 complete on 2026-06-25. Prior focused validation output was reviewed in conversation. The Phase 2 branch is intentionally based on the completed Phase 1 branch until Phase 1 reaches main.
+User reported Phase 1 complete on 2026-06-25. Prior focused validation output was reviewed in conversation.
 ```
 
 Next action:
 
 ```text
-Keep as Phase 2 dependency. Rebase Phase 2 onto main after Phase 1 lands.
+Keep as Phase 2 dependency.
 ```
 
 Notes:
 
 ```text
-Do not reopen Phase 1 for Phase 2 authoring concerns unless validation shows actual drift.
+Do not reopen Phase 1 for Phase 2+ concerns unless validation shows actual drift.
 ```
 
 ### PT-UI-COMPONENT-PLATFORM-002
@@ -99,11 +99,6 @@ domain/ui/ui_controls/src/authoring/mod.rs
 domain/ui/ui_controls/src/package.rs
 domain/ui/ui_controls/tests/control_authoring_contract.rs
 docs-site/src/content/docs/design/active/ui-component-platform-authoring-kit-design.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
-docs-site/src/content/docs/workspace/planning/completed-work.md
 ```
 
 Validation expectation:
@@ -129,13 +124,114 @@ User reported all Phase 2 validation commands green on 2026-06-25. The implement
 Next action:
 
 ```text
-Proceed to PT-UI-COMPONENT-PLATFORM-003 Story Proof Envelope design/planning. Do not implement story runner behavior before Phase 3 design acceptance.
+Keep as Phase 3 dependency.
 ```
 
 Notes:
 
 ```text
 Phase 2 does not implement runtime widget behavior, story runner behavior, Gallery previews, Designer UX, Workbench behavior, canvas surfaces, text editing, transitions, or runtime mount eligibility.
+```
+
+### PT-UI-COMPONENT-PLATFORM-003
+
+ID: `PT-UI-COMPONENT-PLATFORM-003`
+
+Title: UI Component Platform Story Proof Envelope
+
+State: completed by user validation report
+
+Owner: ui
+
+Dependency level: follows Phase 2 authoring kit and consumes existing `ui_story` V2 proof contracts
+
+Write scope:
+
+```text
+domain/ui/ui_controls/src/story_proof/mod.rs
+domain/ui/ui_controls/src/package.rs
+domain/ui/ui_controls/tests/control_story_proof_contract.rs
+docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
+```
+
+Validation expectation:
+
+```text
+cargo fmt --all --check
+cargo check -p ui_controls
+cargo test -p ui_controls control_story_proof
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_authoring
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+cargo test -p ui_story workflow
+git diff --check
+```
+
+Evidence:
+
+```text
+User reported all Phase 3 validation commands green on 2026-06-26. The implementation adds bounded story-proof requirements and summaries under ui_controls without executing stories or moving ui_story report/evidence ownership.
+```
+
+Next action:
+
+```text
+Proceed to PT-UI-COMPONENT-PLATFORM-004 Catalog / Discovery / Inspection design/planning.
+```
+
+Notes:
+
+```text
+Phase 3 does not implement catalog/discovery/inspection, story runner behavior, Gallery execution, CLI execution, runtime widget behavior, runtime mount eligibility, Designer UX, Workbench behavior, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
+```
+
+### PT-UI-COMPONENT-PLATFORM-004-PLANNING
+
+ID: `PT-UI-COMPONENT-PLATFORM-004-PLANNING`
+
+Title: UI Component Platform Catalog / Discovery / Inspection design intake
+
+State: ready for planning
+
+Owner: ui
+
+Dependency level: follows Phase 3 Story Proof Envelope
+
+Write scope:
+
+```text
+docs-site/src/content/docs/design/active/ui-component-platform-catalog-discovery-inspection-design.md
+docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/roadmap.md
+docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/decision-register.md
+```
+
+Validation expectation:
+
+```text
+Manual planning consistency review.
+No Rust implementation in the planning pass.
+```
+
+Evidence:
+
+```text
+Phase 4 was promoted after Phase 3 validation passed green by user report.
+```
+
+Next action:
+
+```text
+Write and review the Phase 4 Catalog / Discovery / Inspection design before implementation.
+```
+
+Notes:
+
+```text
+This planning entry does not authorize catalog UI, Gallery previews, Designer UX, Workbench behavior, runtime widget behavior, runtime mount eligibility, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
 ```
 
 ## Rules
