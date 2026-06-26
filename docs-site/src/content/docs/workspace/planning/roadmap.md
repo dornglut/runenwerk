@@ -133,33 +133,13 @@ ID: `PT-UI-COMPONENT-PLATFORM-009A`
 
 Title: UI Component Platform Ownership Realignment
 
-State: active planning
+State: accepted by user direction
 
 Owner: ui
 
-Dependency level: follows Phase 8 Accessibility / Focus / Inspection
+Evidence: Ownership realignment design exists and user directed continuation through Phase 9.
 
-Write scope:
-
-```text
-docs-site/src/content/docs/design/active/ui-component-platform-ownership-realignment-design.md
-docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
-```
-
-Validation expectation:
-
-```text
-Manual planning consistency review.
-No Rust migration in this pass.
-```
-
-Evidence: Manual ownership audit found the completed Phase 5-8 code stayed declarative but put some generic vocabulary in ui_controls instead of owner crates.
-
-Next action: Review and accept the ownership realignment and corrected Phase 9 design.
+Next action: Keep as completed planning dependency for 009B and 009C.
 
 ### PT-UI-COMPONENT-PLATFORM-009B
 
@@ -167,13 +147,15 @@ ID: `PT-UI-COMPONENT-PLATFORM-009B`
 
 Title: UI Component Platform Layout Foundation
 
-State: future
+State: implementation pending local validation
 
 Owner: ui_layout
 
 Dependency level: follows accepted 009A
 
-Next action: Add generic layout/container/scroll/virtualization vocabulary to ui_layout after 009A acceptance.
+Evidence: Generic layout/container/scroll/content/identity/virtualization vocabulary exists in `ui_layout` on this branch.
+
+Next action: Run the Phase 9 validation gate locally.
 
 ### PT-UI-COMPONENT-PLATFORM-009C
 
@@ -181,13 +163,15 @@ ID: `PT-UI-COMPONENT-PLATFORM-009C`
 
 Title: UI Component Platform Control Layout Bridge
 
-State: future
+State: implementation pending local validation
 
 Owner: ui_controls
 
-Dependency level: follows 009B
+Dependency level: follows 009B implementation
 
-Next action: Add control-facing layout requirements and catalog inspection summaries that reference ui_layout types.
+Evidence: `ui_controls` layout bridge references `ui_layout` vocabulary and projects read-only catalog inspection facts on this branch.
+
+Next action: Run the Phase 9 validation gate locally.
 
 ## Rules
 
