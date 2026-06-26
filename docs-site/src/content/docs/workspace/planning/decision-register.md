@@ -69,34 +69,19 @@ Date: 2026-06-26
 
 Decision: Start Phase 6 as a State Binding / Host Intent design intake before implementation.
 
-Context:
+Reason: Reusable controls may describe state buckets, binding requirements, and host intent proposals. Actual app/editor/game mutation, route authorization, persistence, and domain-specific rules remain host-owned.
 
-```text
-Phase 5 is complete by user validation report. The next component-platform slice needs reusable declarations for state ownership, binding shape, editable lifecycle, validation state, host intent proposals, and route/capability decisions without moving host-owned truth or product mutation into ui_controls.
-```
+Follow-up: Completed by user validation report.
 
-Reason:
+## Phase 7 theme planning decision
 
-```text
-Reusable controls may describe state buckets, binding requirements, and host intent proposals. Actual app/editor/game mutation, route authorization, persistence, and domain-specific rules remain host-owned.
-```
+Date: 2026-06-26
 
-Affected files:
+Decision: Start Phase 7 as a Theme / State / Style design intake before implementation.
 
-```text
-docs-site/src/content/docs/design/active/ui-component-platform-state-binding-host-intent-design.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/completed-work.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
-```
+Reason: Theme, visual state, and style facts need reusable declarations before controls can share consistent presentation semantics without moving renderer or product styling ownership into ui_controls.
 
-Follow-up:
-
-```text
-Review and accept the State Binding / Host Intent design before code.
-```
+Follow-up: Review and accept the Theme / State / Style design before code.
 
 ## Decision shape
 
