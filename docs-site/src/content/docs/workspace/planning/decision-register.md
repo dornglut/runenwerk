@@ -27,7 +27,7 @@ Follow-up: Copy detailed legacy rows into Markdown planning records as they are 
 
 Date: 2026-06-25
 
-Decision: Start `PT-UI-COMPONENT-PLATFORM` Phase 2 as an authoring-kit design/planning intake before implementation.
+Decision: Start Phase 2 as an authoring-kit design/planning intake before implementation.
 
 Reason: The authoring kit needed accepted owner, scope, non-goals, validation, and stop conditions before code.
 
@@ -37,7 +37,7 @@ Follow-up: Completed by user validation report.
 
 Date: 2026-06-25
 
-Decision: Start `PT-UI-COMPONENT-PLATFORM` Phase 3 as a Story Proof Envelope design/planning intake before implementation.
+Decision: Start Phase 3 as a Story Proof Envelope design/planning intake before implementation.
 
 Reason: Story proof had to consume existing `ui_story` V2 authority instead of creating a parallel control-specific proof model.
 
@@ -59,22 +59,32 @@ Date: 2026-06-26
 
 Decision: Start Phase 5 as an Input / Gesture / Device design intake before implementation.
 
+Reason: Input, gesture, and device facts had to remain declarative package facts while runtime input collection, routing, and mutation stayed outside the component platform.
+
+Follow-up: Completed by user validation report.
+
+## Phase 6 state planning decision
+
+Date: 2026-06-26
+
+Decision: Start Phase 6 as a State Binding / Host Intent design intake before implementation.
+
 Context:
 
 ```text
-Phase 4 is complete by user validation report. The next component-platform slice needs reusable control declarations for supported input modes, gesture requirements, and normalized device facts without moving raw device ownership or product input policy into ui_controls.
+Phase 5 is complete by user validation report. The next component-platform slice needs reusable declarations for state ownership, binding shape, editable lifecycle, validation state, host intent proposals, and route/capability decisions without moving host-owned truth or product mutation into ui_controls.
 ```
 
 Reason:
 
 ```text
-Input, gesture, and device facts should be declarative package facts. Runtime input collection, OS/window packets, app/editor/game routing, command mutation, drawing semantics, game input policy, and world input policy stay outside PT-UI-COMPONENT-PLATFORM.
+Reusable controls may describe state buckets, binding requirements, and host intent proposals. Actual app/editor/game mutation, route authorization, persistence, and domain-specific rules remain host-owned.
 ```
 
 Affected files:
 
 ```text
-docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md
+docs-site/src/content/docs/design/active/ui-component-platform-state-binding-host-intent-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
@@ -85,7 +95,7 @@ docs-site/src/content/docs/workspace/planning/decision-register.md
 Follow-up:
 
 ```text
-Review and accept the Input / Gesture / Device design before code.
+Review and accept the State Binding / Host Intent design before code.
 ```
 
 ## Decision shape
