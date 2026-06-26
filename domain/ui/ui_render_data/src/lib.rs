@@ -4,11 +4,13 @@
 pub mod batching;
 pub mod colors;
 pub mod frame;
+pub mod output_evidence;
 pub mod primitives;
 
 pub use batching::*;
 pub use colors::*;
 pub use frame::*;
+pub use output_evidence::*;
 pub use primitives::*;
 
 #[cfg(test)]
