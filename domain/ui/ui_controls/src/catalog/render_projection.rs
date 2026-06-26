@@ -2,7 +2,7 @@
 //! Crate: ui_controls
 //! Purpose: Read-only catalog projection for control render summaries.
 
-use crate::render::ControlRenderCapabilitySummary;
+use crate::package::render::ControlRenderCapabilitySummary;
 
 use super::{ControlInspectionDescriptor, ControlInspectionFact, ControlInspectionSection};
 
