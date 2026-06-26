@@ -25,19 +25,9 @@ State: completed by user report
 
 Owner: ui
 
-Dependency level: prerequisite for component platform work
+Evidence: User reported Phase 1 complete on 2026-06-25.
 
-Evidence:
-
-```text
-User reported Phase 1 complete on 2026-06-25.
-```
-
-Next action:
-
-```text
-Keep as completed dependency.
-```
+Next action: Keep as completed dependency.
 
 ### PT-UI-COMPONENT-PLATFORM-002
 
@@ -49,19 +39,9 @@ State: completed by user validation report
 
 Owner: ui
 
-Dependency level: follows Phase 1
+Evidence: User reported Phase 2 validation green on 2026-06-25.
 
-Evidence:
-
-```text
-User reported Phase 2 validation green on 2026-06-25.
-```
-
-Next action:
-
-```text
-Keep as completed dependency.
-```
+Next action: Keep as completed dependency.
 
 ### PT-UI-COMPONENT-PLATFORM-003
 
@@ -73,19 +53,9 @@ State: completed by user validation report
 
 Owner: ui
 
-Dependency level: follows Phase 2
+Evidence: User reported Phase 3 validation green on 2026-06-26.
 
-Evidence:
-
-```text
-User reported Phase 3 validation green on 2026-06-26.
-```
-
-Next action:
-
-```text
-Keep as completed dependency.
-```
+Next action: Keep as completed dependency.
 
 ### PT-UI-COMPONENT-PLATFORM-004
 
@@ -97,19 +67,9 @@ State: completed by user validation report
 
 Owner: ui
 
-Dependency level: follows Phase 3
+Evidence: User reported Phase 4 validation green on 2026-06-26.
 
-Evidence:
-
-```text
-User reported Phase 4 validation green on 2026-06-26.
-```
-
-Next action:
-
-```text
-Keep as completed dependency.
-```
+Next action: Keep as completed dependency.
 
 ### PT-UI-COMPONENT-PLATFORM-005
 
@@ -121,74 +81,40 @@ State: completed by user validation report
 
 Owner: ui
 
-Dependency level: follows Phase 4 Catalog / Discovery / Inspection
+Evidence: User reported Phase 5 validation green on 2026-06-26.
 
-Write scope:
+Next action: Keep as completed dependency.
 
-```text
-domain/ui/ui_controls/src/input.rs
-domain/ui/ui_controls/src/lib.rs
-domain/ui/ui_controls/src/package.rs
-domain/ui/ui_controls/src/catalog/mod.rs
-domain/ui/ui_controls/src/catalog/entry.rs
-domain/ui/ui_controls/src/catalog/index.rs
-domain/ui/ui_controls/src/catalog/inspection.rs
-domain/ui/ui_controls/src/catalog/query.rs
-domain/ui/ui_controls/tests/control_input_contract.rs
-domain/ui/ui_controls/tests/control_input_catalog_contract.rs
-docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md
-```
+### PT-UI-COMPONENT-PLATFORM-006
 
-Validation expectation:
+ID: `PT-UI-COMPONENT-PLATFORM-006`
 
-```text
-cargo fmt --all --check
-cargo check -p ui_controls
-cargo test -p ui_controls control_input
-cargo test -p ui_controls control_catalog
-cargo test -p ui_controls control_package
-cargo test -p ui_controls control_registry
-cargo test -p ui_controls control_story_proof
-cargo test -p ui_controls control_authoring
-cargo test -p ui_artifacts control_package
-cargo test -p ui_program route
-git diff --check
-```
+Title: UI Component Platform State Binding / Host Intent
 
-Evidence:
+State: completed by user validation report
 
-```text
-User reported Phase 5 validation green on 2026-06-26 after catalog split cleanup.
-```
+Owner: ui
 
-Next action:
+Evidence: User reported Phase 6 validation green on 2026-06-26.
 
-```text
-Proceed to PT-UI-COMPONENT-PLATFORM-006 State Binding / Host Intent design/planning.
-```
+Next action: Keep as completed dependency.
 
-Notes:
+### PT-UI-COMPONENT-PLATFORM-007-PLANNING
 
-```text
-Phase 5 remains declarative. It does not add product-owned behavior, renderer semantics, or ECS semantics.
-```
+ID: `PT-UI-COMPONENT-PLATFORM-007-PLANNING`
 
-### PT-UI-COMPONENT-PLATFORM-006-PLANNING
-
-ID: `PT-UI-COMPONENT-PLATFORM-006-PLANNING`
-
-Title: UI Component Platform State Binding / Host Intent design intake
+Title: UI Component Platform Theme / State / Style design intake
 
 State: active planning
 
 Owner: ui
 
-Dependency level: follows Phase 5 Input / Gesture / Device
+Dependency level: follows Phase 6 State Binding / Host Intent
 
 Write scope:
 
 ```text
-docs-site/src/content/docs/design/active/ui-component-platform-state-binding-host-intent-design.md
+docs-site/src/content/docs/design/active/ui-component-platform-theme-state-style-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
@@ -203,23 +129,9 @@ Manual planning consistency review.
 No Rust implementation in the planning pass.
 ```
 
-Evidence:
+Evidence: Phase 7 was promoted after Phase 6 validation passed green by user report.
 
-```text
-Phase 6 was promoted after Phase 5 validation passed green by user report.
-```
-
-Next action:
-
-```text
-Review and accept the Phase 6 State Binding / Host Intent design before implementation.
-```
-
-Notes:
-
-```text
-This planning entry does not authorize state binding code, host intent code, app/editor/game mutation, runtime widget behavior, runtime mount eligibility, text editing implementation, canvas surfaces, renderer behavior, or ECS behavior.
-```
+Next action: Review and accept the Phase 7 Theme / State / Style design before implementation.
 
 ## Rules
 
