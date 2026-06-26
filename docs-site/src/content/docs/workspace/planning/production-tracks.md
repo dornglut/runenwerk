@@ -30,8 +30,8 @@ Milestones:
 ```text
 001 ControlPackage / ControlKernel contract — completed by user report
 002 Authoring Kit — completed by user validation report
-003 Story proof envelope consumption — active design/planning
-004 Catalog / discovery / inspection — future
+003 Story proof envelope consumption — completed by user validation report
+004 Catalog / discovery / inspection — next design/planning
 005 Input / gesture / device — future
 006 State binding / host intent — future
 007 Theme / state / style — future
@@ -57,7 +57,7 @@ Milestones:
 Design gates:
 
 ```text
-Phase 3 implementation requires the Story Proof Envelope design to be accepted first.
+Phase 4 implementation requires a Catalog / Discovery / Inspection design to be accepted first.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -66,20 +66,20 @@ Evidence gates:
 ```text
 Phase 1: local validation and branch/PR evidence.
 Phase 2: user reported the authoring-kit validation gate green; authoring tests prove ordinary Phase 1 descriptors are produced and invalid output still fails closed through existing validation.
-Phase 3: future implementation must prove story proof requirements, expected-failure requirements, first-blocker summaries, and read-only artifact projection without executing stories inside ui_controls.
+Phase 3: user reported the story-proof validation gate green; story-proof tests prove requirements, expected-failure requirements, first-blocker summaries, and conservative mount eligibility without executing stories inside ui_controls.
 Later phases: catalog/discovery, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 3 is design/planning only until ui-component-platform-story-proof-envelope-design.md is reviewed and accepted.
+Phase 4 is not yet designed. No catalog implementation, Gallery preview behavior, Designer UX, or Workbench behavior is authorized.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 3 Story Proof Envelope design, then open a bounded implementation pass.
+Open PT-UI-COMPONENT-PLATFORM-004 Catalog / Discovery / Inspection design/planning.
 ```
 
 ## Track shape
