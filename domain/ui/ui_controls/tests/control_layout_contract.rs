@@ -11,9 +11,21 @@ fn control_layout_bridge_references_ui_layout_vocabulary() {
 
     assert!(summary.layout_roles.contains(&"panel".to_owned()));
     assert!(summary.layout_roles.contains(&"virtual-list".to_owned()));
-    assert!(summary.container_kinds.contains(&"scroll-region".to_owned()));
-    assert!(summary.size_constraints.contains(&"preferred-size".to_owned()));
-    assert!(summary.scroll_requirements.contains(&"scroll-owner".to_owned()));
+    assert!(
+        summary
+            .container_kinds
+            .contains(&"scroll-region".to_owned())
+    );
+    assert!(
+        summary
+            .size_constraints
+            .contains(&"preferred-size".to_owned())
+    );
+    assert!(
+        summary
+            .scroll_requirements
+            .contains(&"scroll-owner".to_owned())
+    );
     assert!(summary.content_states.contains(&"ready".to_owned()));
 }
 
@@ -22,19 +34,31 @@ fn control_layout_bridge_summarizes_identity_budget_and_virtualization() {
     let summary = label_layout_descriptor().summary();
 
     assert!(summary.item_identities.contains(&"row.id".to_owned()));
-    assert!(summary
-        .selection_identities
-        .contains(&"row.selection".to_owned()));
-    assert!(summary
-        .virtualization_requirements
-        .contains(&"windowed-rendering".to_owned()));
-    assert!(summary
-        .large_content_budgets
-        .contains(&"table.large-content".to_owned()));
-    assert!(summary.diagnostics.contains(&"missing-scroll-owner".to_owned()));
-    assert!(summary
-        .expected_failures
-        .contains(&"table.layout.expected".to_owned()));
+    assert!(
+        summary
+            .selection_identities
+            .contains(&"row.selection".to_owned())
+    );
+    assert!(
+        summary
+            .virtualization_requirements
+            .contains(&"windowed-rendering".to_owned())
+    );
+    assert!(
+        summary
+            .large_content_budgets
+            .contains(&"table.large-content".to_owned())
+    );
+    assert!(
+        summary
+            .diagnostics
+            .contains(&"missing-scroll-owner".to_owned())
+    );
+    assert!(
+        summary
+            .expected_failures
+            .contains(&"table.layout.expected".to_owned())
+    );
     assert!(!summary.has_runtime_layout_behavior);
 }
 
@@ -42,15 +66,19 @@ fn control_layout_bridge_summarizes_identity_budget_and_virtualization() {
 fn control_layout_bridge_exposes_read_only_inspection_facts() {
     let facts = label_layout_descriptor().summary().inspection_facts();
 
-    assert!(facts
-        .iter()
-        .any(|fact| fact.key == "layout_roles" && fact.value.contains("panel")));
+    assert!(
+        facts
+            .iter()
+            .any(|fact| fact.key == "layout_roles" && fact.value.contains("panel"))
+    );
     assert!(facts.iter().any(|fact| {
         fact.key == "virtualization_requirements" && fact.value.contains("stable-item-identity")
     }));
-    assert!(facts.iter().any(|fact| {
-        fact.key == "has_runtime_layout_behavior" && fact.value == "false"
-    }));
+    assert!(
+        facts
+            .iter()
+            .any(|fact| { fact.key == "has_runtime_layout_behavior" && fact.value == "false" })
+    );
 }
 
 fn label_layout_descriptor() -> ControlLayoutDescriptor {

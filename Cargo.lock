@@ -3804,6 +3804,7 @@ name = "ui_controls"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "ui_layout",
  "ui_program",
  "ui_schema",
 ]
@@ -3909,6 +3910,7 @@ dependencies = [
 name = "ui_layout"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "ui_math",
 ]
 

@@ -27,10 +27,16 @@ fn container_size_scroll_and_content_facts_are_named() {
     assert_eq!(UiContainerKind::ScrollRegion.as_str(), "scroll-region");
     assert_eq!(UiSizeConstraintKind::MinSize.as_str(), "min-size");
     assert_eq!(UiSizeConstraintKind::MaxSize.as_str(), "max-size");
-    assert_eq!(UiSizeConstraintKind::PreferredSize.as_str(), "preferred-size");
+    assert_eq!(
+        UiSizeConstraintKind::PreferredSize.as_str(),
+        "preferred-size"
+    );
     assert_eq!(UiSizeConstraintKind::FillWidth.as_str(), "fill-width");
     assert_eq!(UiSizeConstraintKind::FillHeight.as_str(), "fill-height");
-    assert_eq!(UiSizeConstraintKind::IntrinsicSize.as_str(), "intrinsic-size");
+    assert_eq!(
+        UiSizeConstraintKind::IntrinsicSize.as_str(),
+        "intrinsic-size"
+    );
     assert_eq!(UiScrollRequirement::Scrollable.as_str(), "scrollable");
     assert_eq!(UiScrollRequirement::ScrollOwner.as_str(), "scroll-owner");
     assert_eq!(UiScrollRequirement::AxisX.as_str(), "scroll-axis-x");
@@ -52,7 +58,10 @@ fn identity_budget_and_virtualization_are_metadata_only() {
         "item identity is required",
     );
 
-    assert_eq!(UiVirtualizationRequirement::Ready.as_str(), "virtualization-ready");
+    assert_eq!(
+        UiVirtualizationRequirement::Ready.as_str(),
+        "virtualization-ready"
+    );
     assert_eq!(
         UiVirtualizationRequirement::EstimatedItemSize.as_str(),
         "estimated-item-size"
@@ -65,7 +74,10 @@ fn identity_budget_and_virtualization_are_metadata_only() {
         UiVirtualizationRequirement::WindowedRendering.as_str(),
         "windowed-rendering"
     );
-    assert_eq!(UiVirtualizationRequirement::OverscanBudget.as_str(), "overscan-budget");
+    assert_eq!(
+        UiVirtualizationRequirement::OverscanBudget.as_str(),
+        "overscan-budget"
+    );
     assert_eq!(item.identity_id, "row.id");
     assert!(item.required);
     assert_eq!(selection.identity_id, "row.selection");
