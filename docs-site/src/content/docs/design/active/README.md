@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-19
+last_reviewed: 2026-06-26
 ---
 
 # Active Designs
@@ -81,6 +81,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Runenwerk Domain Workbench North Star](runenwerk-domain-workbench-north-star.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
+- [UI Component Platform Render Surface Output Design](ui-component-platform-render-surface-output-design.md)
 - [UI Program Architecture](ui-program-architecture.md)
 - [UI Program Architecture Owner Map](ui-program-architecture-owner-map.md)
 - [UI Program Contract Design](ui-program-contract-design.md)
