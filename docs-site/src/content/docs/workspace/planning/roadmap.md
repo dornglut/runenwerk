@@ -187,19 +187,33 @@ Evidence: `ui_controls` layout descriptors reference `ui_layout` vocabulary dire
 
 Next action: Keep as completed dependency; do not add generic layout vocabulary to `ui_controls`.
 
-### PT-UI-COMPONENT-PLATFORM-010-PLANNING
+### PT-UI-COMPONENT-PLATFORM-010
 
-ID: `PT-UI-COMPONENT-PLATFORM-010-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-010`
 
-Title: UI Component Platform Render Surface / Output design intake
+Title: UI Component Platform Render Surface / Output
+
+State: completed by user validation report
+
+Owner: `ui_render_data` for renderer-neutral output evidence contracts; `ui_controls` for the control-facing bridge; `ui_runtime` for emitted-frame evidence generation; engine render for submission proof without UI semantics.
+
+Evidence: PR #34 merged the full P10 owner-first implementation into `main`. It added renderer-neutral output evidence contracts, the `ui_controls` render bridge and catalog projection, runtime render-output evidence from emitted `UiFrame` output, and backend-side submission proof. User reported the full validation gate green on 2026-06-26.
+
+Next action: Keep as completed dependency for Phase 11 and Phase 12.
+
+### PT-UI-COMPONENT-PLATFORM-011-PLANNING
+
+ID: `PT-UI-COMPONENT-PLATFORM-011-PLANNING`
+
+Title: UI Component Platform Base Control Packages design intake
 
 State: active planning
 
-Owner: `ui_render_data` for renderer-facing output contracts; `ui_runtime` and `engine/src/plugins/render` are adjacent execution owners. `ui_controls` is bridge-only after owner contracts exist.
+Owner: `ui_controls` for base control package descriptors and summaries. Owner crates such as `ui_layout`, `ui_render_data`, `ui_input`, and accessibility/focus contracts remain the source of generic vocabulary.
 
-Evidence: Ownership investigation found renderer-facing `UiFrame`, surface, layer, and primitive contracts in `ui_render_data`; retained tree to frame output generation in `ui_runtime`; and backend render execution in `engine/src/plugins/render`.
+Evidence: P11 is opened after P10 closed. The base controls already exist as descriptor modules, but this phase must harden their package metadata, proof requirements, and catalog/Gallery-facing summaries before full interaction work.
 
-Next action: Accept the owner-first Phase 10 design before any Rust implementation.
+Next action: Review and accept the P11 design. Then implement base control package hardening without taking over full runtime interaction behavior; full interaction remains Phase 12.
 
 ## Rules
 
