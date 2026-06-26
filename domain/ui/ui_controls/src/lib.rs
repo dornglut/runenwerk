@@ -15,6 +15,7 @@ pub mod migration;
 pub mod package;
 pub mod registry;
 pub mod schema;
+pub mod state;
 pub mod table_view;
 pub mod tree_view;
 
@@ -32,6 +33,7 @@ pub use migration::*;
 pub use package::*;
 pub use registry::*;
 pub use schema::*;
+pub use state::*;
 pub use table_view::TABLE_VIEW_CONTROL_KIND_ID;
 pub use tree_view::TREE_VIEW_CONTROL_KIND_ID;
 
