@@ -8,7 +8,6 @@ use crate::package::ControlPackageDescriptor;
 use crate::package::descriptor::ControlKindDescriptor;
 use crate::package::story_proof::{ControlStoryProofSummary, ControlStoryProofVerdict};
 
-mod catalog_entry;
 #[path = "catalog_entry.rs"]
 pub mod entry;
 #[path = "catalog_index.rs"]
