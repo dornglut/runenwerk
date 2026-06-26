@@ -13,12 +13,14 @@ pub mod index;
 pub mod inspection;
 pub mod layout;
 pub mod query;
+pub mod render;
 
 pub use entry::*;
 pub use index::*;
 pub use inspection::*;
 pub use layout::*;
 pub use query::*;
+pub use render::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlCatalogDeprecationStatus {
