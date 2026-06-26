@@ -320,8 +320,10 @@ impl ControlThemeDescriptor {
 
     pub fn with_token(mut self, token: ControlThemeTokenRequirement) -> Self {
         self.token_requirements.push(token);
-        self.token_requirements.sort_by(|left, right| left.token_id.cmp(&right.token_id));
-        self.token_requirements.dedup_by(|left, right| left.token_id == right.token_id);
+        self.token_requirements
+            .sort_by(|left, right| left.token_id.cmp(&right.token_id));
+        self.token_requirements
+            .dedup_by(|left, right| left.token_id == right.token_id);
         self
     }
 
@@ -341,15 +343,19 @@ impl ControlThemeDescriptor {
 
     pub fn with_fallback(mut self, fallback: ControlStyleFallback) -> Self {
         self.fallbacks.push(fallback);
-        self.fallbacks.sort_by(|left, right| left.token_id.cmp(&right.token_id));
-        self.fallbacks.dedup_by(|left, right| left.token_id == right.token_id);
+        self.fallbacks
+            .sort_by(|left, right| left.token_id.cmp(&right.token_id));
+        self.fallbacks
+            .dedup_by(|left, right| left.token_id == right.token_id);
         self
     }
 
     pub fn with_diagnostic(mut self, diagnostic: ControlStyleDiagnostic) -> Self {
         self.diagnostics.push(diagnostic);
-        self.diagnostics.sort_by(|left, right| left.diagnostic_id.cmp(&right.diagnostic_id));
-        self.diagnostics.dedup_by(|left, right| left.diagnostic_id == right.diagnostic_id);
+        self.diagnostics
+            .sort_by(|left, right| left.diagnostic_id.cmp(&right.diagnostic_id));
+        self.diagnostics
+            .dedup_by(|left, right| left.diagnostic_id == right.diagnostic_id);
         self
     }
 
@@ -374,14 +380,61 @@ pub struct ControlThemeCapabilitySummary {
 
 impl ControlThemeCapabilitySummary {
     pub fn from_descriptor(descriptor: &ControlThemeDescriptor) -> Self {
-        let mut required_token_kinds = descriptor.token_requirements.iter().filter(|token| token.required).map(|token| token.kind.as_str().to_owned()).collect::<Vec<_>>();
-        let mut optional_token_kinds = descriptor.token_requirements.iter().filter(|token| !token.required).map(|token| token.kind.as_str().to_owned()).collect::<Vec<_>>();
-        let mut token_roles = descriptor.token_requirements.iter().map(|token| token.role.as_str().to_owned()).collect::<Vec<_>>();
-        let mut visual_states = descriptor.visual_states.iter().map(|state| state.state.as_str().to_owned()).collect::<Vec<_>>();
-        let mut style_roles = descriptor.style_requirements.iter().map(|style| style.role.as_str().to_owned()).collect::<Vec<_>>();
-        let mut fallback_tokens = descriptor.fallbacks.iter().map(|fallback| fallback.fallback_token_id.clone()).chain(descriptor.token_requirements.iter().filter_map(|token| token.fallback_token_id.clone())).collect::<Vec<_>>();
-        let mut diagnostics = descriptor.diagnostics.iter().map(|diagnostic| diagnostic.kind.as_str().to_owned()).chain(descriptor.fallbacks.iter().map(|fallback| fallback.diagnostic.as_str().to_owned())).collect::<Vec<_>>();
-        let mut expected_failures = descriptor.diagnostics.iter().filter(|diagnostic| diagnostic.kind == ControlStyleDiagnosticKind::ExpectedFailure).map(|diagnostic| diagnostic.diagnostic_id.clone()).collect::<Vec<_>>();
+        let mut required_token_kinds = descriptor
+            .token_requirements
+            .iter()
+            .filter(|token| token.required)
+            .map(|token| token.kind.as_str().to_owned())
+            .collect::<Vec<_>>();
+        let mut optional_token_kinds = descriptor
+            .token_requirements
+            .iter()
+            .filter(|token| !token.required)
+            .map(|token| token.kind.as_str().to_owned())
+            .collect::<Vec<_>>();
+        let mut token_roles = descriptor
+            .token_requirements
+            .iter()
+            .map(|token| token.role.as_str().to_owned())
+            .collect::<Vec<_>>();
+        let mut visual_states = descriptor
+            .visual_states
+            .iter()
+            .map(|state| state.state.as_str().to_owned())
+            .collect::<Vec<_>>();
+        let mut style_roles = descriptor
+            .style_requirements
+            .iter()
+            .map(|style| style.role.as_str().to_owned())
+            .collect::<Vec<_>>();
+        let mut fallback_tokens = descriptor
+            .fallbacks
+            .iter()
+            .map(|fallback| fallback.fallback_token_id.clone())
+            .chain(
+                descriptor
+                    .token_requirements
+                    .iter()
+                    .filter_map(|token| token.fallback_token_id.clone()),
+            )
+            .collect::<Vec<_>>();
+        let mut diagnostics = descriptor
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.kind.as_str().to_owned())
+            .chain(
+                descriptor
+                    .fallbacks
+                    .iter()
+                    .map(|fallback| fallback.diagnostic.as_str().to_owned()),
+            )
+            .collect::<Vec<_>>();
+        let mut expected_failures = descriptor
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.kind == ControlStyleDiagnosticKind::ExpectedFailure)
+            .map(|diagnostic| diagnostic.diagnostic_id.clone())
+            .collect::<Vec<_>>();
 
         sort_dedup(&mut required_token_kinds);
         sort_dedup(&mut optional_token_kinds);
@@ -408,15 +461,24 @@ impl ControlThemeCapabilitySummary {
 
     pub fn inspection_facts(&self) -> Vec<ControlThemeInspectionFact> {
         vec![
-            ControlThemeInspectionFact::new("required_token_kinds", self.required_token_kinds.join(",")),
-            ControlThemeInspectionFact::new("optional_token_kinds", self.optional_token_kinds.join(",")),
+            ControlThemeInspectionFact::new(
+                "required_token_kinds",
+                self.required_token_kinds.join(","),
+            ),
+            ControlThemeInspectionFact::new(
+                "optional_token_kinds",
+                self.optional_token_kinds.join(","),
+            ),
             ControlThemeInspectionFact::new("token_roles", self.token_roles.join(",")),
             ControlThemeInspectionFact::new("visual_states", self.visual_states.join(",")),
             ControlThemeInspectionFact::new("style_roles", self.style_roles.join(",")),
             ControlThemeInspectionFact::new("fallback_tokens", self.fallback_tokens.join(",")),
             ControlThemeInspectionFact::new("diagnostics", self.diagnostics.join(",")),
             ControlThemeInspectionFact::new("expected_failures", self.expected_failures.join(",")),
-            ControlThemeInspectionFact::new("has_runtime_style_behavior", bool_string(self.has_runtime_style_behavior)),
+            ControlThemeInspectionFact::new(
+                "has_runtime_style_behavior",
+                bool_string(self.has_runtime_style_behavior),
+            ),
         ]
     }
 }

@@ -24,7 +24,10 @@ fn control_accessibility_summary_attaches_to_catalog_inspection_read_only() {
         Some("label")
     );
     assert_eq!(
-        inspection.fact(ControlInspectionSection::Accessibility, "label_requirements"),
+        inspection.fact(
+            ControlInspectionSection::Accessibility,
+            "label_requirements"
+        ),
         Some("label.primary")
     );
     assert_eq!(
