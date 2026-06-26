@@ -13,9 +13,9 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-007-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-008-PLANNING`
 
-Title: UI Component Platform Theme / State / Style design intake
+Title: UI Component Platform Accessibility / Focus / Inspection design intake
 
 State: active planning
 
@@ -28,15 +28,15 @@ AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
 docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
 docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+docs-site/src/content/docs/design/active/ui-component-platform-accessibility-focus-inspection-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-theme-state-style-design.md
-docs-site/src/content/docs/design/active/ui-component-platform-state-binding-host-intent-design.md
 docs-site/src/content/docs/domain/ui/roadmap.md
 ```
 
 Write scope:
 
 ```text
-docs-site/src/content/docs/design/active/ui-component-platform-theme-state-style-design.md
+docs-site/src/content/docs/design/active/ui-component-platform-accessibility-focus-inspection-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
@@ -53,20 +53,20 @@ Manual planning consistency review first. Implementation validation is deferred 
 Known blockers:
 
 ```text
-Phase 7 implementation must not start before the Theme / State / Style design is reviewed and accepted.
+Phase 8 implementation must not start before the Accessibility / Focus / Inspection design is reviewed and accepted.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 7 Theme / State / Style design, then start a bounded implementation pass only after the design gate is accepted.
+Review and accept the Phase 8 Accessibility / Focus / Inspection design, then start a bounded implementation pass only after the design gate is accepted.
 ```
 
 Evidence:
 
 ```text
-Phase 6 State Binding / Host Intent passed local validation by user report on 2026-06-26.
-Phase 7 design authority exists in ui-component-platform-theme-state-style-design.md.
+Phase 7 Theme / State / Style passed local validation by user report on 2026-06-26.
+Phase 8 design authority exists in ui-component-platform-accessibility-focus-inspection-design.md.
 ```
 
 ## Active-work rules
