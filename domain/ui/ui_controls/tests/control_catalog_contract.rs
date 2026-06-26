@@ -1,8 +1,9 @@
 use ui_controls::{
-    ControlCatalogIndex, ControlCatalogQuery, ControlInspectionDescriptor, ControlInspectionSection,
-    ControlKindId, ControlMountEligibility, ControlStoryProofCategory, ControlStoryProofRequirement,
-    ControlStoryProofSummary, ControlStoryProofVerdict, LABEL_CONTROL_KIND_ID,
-    RUNENWERK_CONTROL_PACKAGE_ID, RUNENWERK_CONTROL_TARGET_EDITOR, runenwerk_control_package,
+    ControlCatalogIndex, ControlCatalogQuery, ControlInspectionDescriptor,
+    ControlInspectionSection, ControlKindId, ControlMountEligibility, ControlStoryProofCategory,
+    ControlStoryProofRequirement, ControlStoryProofSummary, ControlStoryProofVerdict,
+    LABEL_CONTROL_KIND_ID, RUNENWERK_CONTROL_PACKAGE_ID, RUNENWERK_CONTROL_TARGET_EDITOR,
+    runenwerk_control_package,
 };
 
 #[test]
@@ -21,12 +22,12 @@ fn control_catalog_filters_by_identity_metadata_target_and_capability() {
     let package = runenwerk_control_package();
     let index = ControlCatalogIndex::from_packages([&package]);
 
-    let by_package = index.query(
-        &ControlCatalogQuery::new().with_package_id(RUNENWERK_CONTROL_PACKAGE_ID),
-    );
+    let by_package =
+        index.query(&ControlCatalogQuery::new().with_package_id(RUNENWERK_CONTROL_PACKAGE_ID));
     assert_eq!(by_package.entries.len(), 8);
 
-    let by_kind = index.query(&ControlCatalogQuery::new().with_control_kind_id(LABEL_CONTROL_KIND_ID));
+    let by_kind =
+        index.query(&ControlCatalogQuery::new().with_control_kind_id(LABEL_CONTROL_KIND_ID));
     assert_eq!(by_kind.entries.len(), 1);
     assert_eq!(by_kind.entries[0].display_name, "Label");
 
@@ -37,14 +38,12 @@ fn control_catalog_filters_by_identity_metadata_target_and_capability() {
     assert_eq!(by_tag.entries.len(), 1);
     assert_eq!(by_tag.entries[0].control_kind_id, LABEL_CONTROL_KIND_ID);
 
-    let by_target = index.query(
-        &ControlCatalogQuery::new().with_target_profile(RUNENWERK_CONTROL_TARGET_EDITOR),
-    );
+    let by_target = index
+        .query(&ControlCatalogQuery::new().with_target_profile(RUNENWERK_CONTROL_TARGET_EDITOR));
     assert_eq!(by_target.entries.len(), 8);
 
-    let by_capability = index.query(
-        &ControlCatalogQuery::new().with_capability("runenwerk.ui.controls.read"),
-    );
+    let by_capability =
+        index.query(&ControlCatalogQuery::new().with_capability("runenwerk.ui.controls.read"));
     assert!(
         by_capability
             .entries

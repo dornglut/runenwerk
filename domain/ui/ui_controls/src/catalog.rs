@@ -14,14 +14,15 @@ pub struct ControlCatalogIndex {
 }
 
 impl ControlCatalogIndex {
-    pub fn from_packages<'a>(packages: impl IntoIterator<Item = &'a ControlPackageDescriptor>) -> Self {
+    pub fn from_packages<'a>(
+        packages: impl IntoIterator<Item = &'a ControlPackageDescriptor>,
+    ) -> Self {
         let mut entries = packages
             .into_iter()
             .flat_map(|package| {
-                package
-                    .control_kinds
-                    .iter()
-                    .map(move |kind| ControlCatalogEntryDescriptor::from_control_kind(package, kind))
+                package.control_kinds.iter().map(move |kind| {
+                    ControlCatalogEntryDescriptor::from_control_kind(package, kind)
+                })
             })
             .collect::<Vec<_>>();
         entries.sort_by(|left, right| {
@@ -96,7 +97,11 @@ impl ControlCatalogEntryDescriptor {
             .target_profiles
             .iter()
             .map(|target| target.as_str().to_owned())
-            .chain(kind.target_profiles.iter().map(|target| target.as_str().to_owned()))
+            .chain(
+                kind.target_profiles
+                    .iter()
+                    .map(|target| target.as_str().to_owned()),
+            )
             .collect::<Vec<_>>();
         target_profiles = sorted_unique(target_profiles);
 
@@ -104,12 +109,17 @@ impl ControlCatalogEntryDescriptor {
             .required_capabilities
             .iter()
             .map(|capability| capability.as_str().to_owned())
-            .chain(kind.required_capabilities.iter().map(|capability| capability.as_str().to_owned()))
             .chain(
-                kind.route_requirements
+                kind.required_capabilities
                     .iter()
-                    .flat_map(|route| route.capabilities.iter().map(|capability| capability.as_str().to_owned())),
+                    .map(|capability| capability.as_str().to_owned()),
             )
+            .chain(kind.route_requirements.iter().flat_map(|route| {
+                route
+                    .capabilities
+                    .iter()
+                    .map(|capability| capability.as_str().to_owned())
+            }))
             .collect::<Vec<_>>();
         capabilities = sorted_unique(capabilities);
 
@@ -264,10 +274,12 @@ impl ControlCatalogQuery {
             && self.target_profile.as_deref().map_or(true, |value| {
                 entry.target_profiles.iter().any(|target| target == value)
             })
-            && self
-                .capability
-                .as_deref()
-                .map_or(true, |value| entry.capabilities.iter().any(|capability| capability == value))
+            && self.capability.as_deref().map_or(true, |value| {
+                entry
+                    .capabilities
+                    .iter()
+                    .any(|capability| capability == value)
+            })
             && self
                 .story_required
                 .map_or(true, |value| entry.story_required == value)
@@ -318,11 +330,36 @@ impl ControlInspectionDescriptor {
     ) -> Self {
         let entry = ControlCatalogEntryDescriptor::from_control_kind(package, kind);
         let mut facts = Vec::new();
-        push_fact(&mut facts, ControlInspectionSection::Identity, "package_id", &entry.package_id);
-        push_fact(&mut facts, ControlInspectionSection::Identity, "control_kind_id", &entry.control_kind_id);
-        push_fact(&mut facts, ControlInspectionSection::Identity, "display_name", &entry.display_name);
-        push_fact(&mut facts, ControlInspectionSection::Metadata, "category", &entry.category);
-        push_fact(&mut facts, ControlInspectionSection::Metadata, "tags", &entry.tags.join(","));
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Identity,
+            "package_id",
+            &entry.package_id,
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Identity,
+            "control_kind_id",
+            &entry.control_kind_id,
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Identity,
+            "display_name",
+            &entry.display_name,
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Metadata,
+            "category",
+            &entry.category,
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Metadata,
+            "tags",
+            &entry.tags.join(","),
+        );
         push_fact(
             &mut facts,
             ControlInspectionSection::Metadata,
@@ -389,7 +426,12 @@ impl ControlInspectionDescriptor {
             "inspection",
             kind.kernels.inspection.as_str(),
         );
-        push_fact(&mut facts, ControlInspectionSection::Routes, "routes", &entry.route_ids.join(","));
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Routes,
+            "routes",
+            &entry.route_ids.join(","),
+        );
         push_fact(
             &mut facts,
             ControlInspectionSection::Routes,
