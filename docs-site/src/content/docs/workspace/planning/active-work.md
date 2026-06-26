@@ -39,11 +39,11 @@ Write scope:
 domain/ui/ui_controls/src/input.rs
 domain/ui/ui_controls/src/lib.rs
 domain/ui/ui_controls/src/package.rs
-domain/ui/ui_controls/src/catalog.rs
-domain/ui/ui_controls/src/catalog_entry.rs
-domain/ui/ui_controls/src/catalog_index.rs
-domain/ui/ui_controls/src/catalog_inspection.rs
-domain/ui/ui_controls/src/catalog_query.rs
+domain/ui/ui_controls/src/catalog/mod.rs
+domain/ui/ui_controls/src/catalog/entry.rs
+domain/ui/ui_controls/src/catalog/index.rs
+domain/ui/ui_controls/src/catalog/inspection.rs
+domain/ui/ui_controls/src/catalog/query.rs
 domain/ui/ui_controls/tests/control_input_contract.rs
 domain/ui/ui_controls/tests/control_input_catalog_contract.rs
 docs-site/src/content/docs/workspace/planning/active-work.md
