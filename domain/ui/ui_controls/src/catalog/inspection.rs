@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::accessibility::ControlAccessibilityCapabilitySummary;
 use crate::input::ControlInputCapabilitySummary;
 use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
 use crate::package::story_proof::ControlStoryProofSummary;
@@ -112,6 +113,21 @@ impl ControlInspectionDescriptor {
         self
     }
 
+    pub fn with_accessibility_summary(
+        mut self,
+        summary: &ControlAccessibilityCapabilitySummary,
+    ) -> Self {
+        for fact in summary.inspection_facts() {
+            push_fact(
+                &mut self.facts,
+                ControlInspectionSection::Accessibility,
+                &fact.key,
+                &fact.value,
+            );
+        }
+        self
+    }
+
     pub fn fact(&self, section: ControlInspectionSection, key: &str) -> Option<&str> {
         self.facts
             .iter()
@@ -134,6 +150,7 @@ pub enum ControlInspectionSection {
     Input,
     State,
     Theme,
+    Accessibility,
     Diagnostics,
     MountEligibility,
 }
