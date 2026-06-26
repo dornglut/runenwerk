@@ -17,6 +17,7 @@ pub mod registry;
 pub mod schema;
 pub mod state;
 pub mod table_view;
+pub mod theme;
 pub mod tree_view;
 
 pub use action_prompt::ACTION_PROMPT_CONTROL_KIND_ID;
@@ -35,6 +36,7 @@ pub use registry::*;
 pub use schema::*;
 pub use state::*;
 pub use table_view::TABLE_VIEW_CONTROL_KIND_ID;
+pub use theme::*;
 pub use tree_view::TREE_VIEW_CONTROL_KIND_ID;
 
 use ui_program::{RouteCapability, RouteId, RouteSchemaVersion};
