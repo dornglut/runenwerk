@@ -19,31 +19,13 @@ Title: UI Component Platform ControlPackage / ControlKernel contract
 
 Completed on: 2026-06-25 by user report
 
-Evidence:
+Evidence: Phase 1 established the first reusable control package contract.
 
-```text
-Phase 1 branch: feature/ui-component-platform-001-control-kernel
-Phase 1 established ControlPackage, ControlKind, ControlKernelSet, package validation, registry fail-closed behavior, and UiControlPackageArtifact export.
-The package module was split by responsibility into package/descriptor.rs, package/ids.rs, package/metadata.rs, and package/validation.rs, with package.rs as the façade.
-```
+Validation: User reported Phase 1 done.
 
-Validation:
+Known gaps: Later component-platform phases were still pending.
 
-```text
-User reported Phase 1 done. Prior focused validation output in conversation showed the relevant cargo check/test gate passing, with final hygiene handled before Phase 2 planning. Connector-mode planning did not rerun local commands.
-```
-
-Known gaps:
-
-```text
-Phase 1 does not implement authoring ergonomics, story proof envelope, catalog/discovery, runtime widget behavior, runtime mount eligibility, Gallery previews, Designer UX, Workbench behavior, text editing, canvas surfaces, or transitions.
-```
-
-Follow-up:
-
-```text
-Proceed to PT-UI-COMPONENT-PLATFORM-002 authoring-kit design/planning. Rebase the Phase 2 branch onto main after Phase 1 lands on main if needed.
-```
+Follow-up: Completed dependency for later UI Component Platform phases.
 
 ## PT-UI-COMPONENT-PLATFORM-002
 
@@ -53,40 +35,13 @@ Title: UI Component Platform Authoring Kit
 
 Completed on: 2026-06-25 by user validation report
 
-Evidence:
+Evidence: Phase 2 added bounded authoring helpers and focused tests.
 
-```text
-Phase 2 branch: feature/ui-component-platform-002-authoring-kit
-Phase 2 added a bounded ControlPackage authoring kit under domain/ui/ui_controls/src/authoring/mod.rs, re-exported it through the existing package façade, and added focused authoring contract tests.
-The authoring kit builds ordinary Phase 1 descriptors and does not bypass package validation, registry validation, artifact export ownership, or mount-eligibility evidence gates.
-```
+Validation: User reported the Phase 2 validation gate green.
 
-Validation:
+Known gaps: Later component-platform phases were still pending.
 
-```text
-User reported all required Phase 2 validation commands passed green:
-cargo fmt --all --check
-cargo check -p ui_controls
-cargo test -p ui_controls control_authoring
-cargo test -p ui_controls control_package
-cargo test -p ui_controls control_registry
-cargo test -p ui_controls control_kernel
-cargo test -p ui_artifacts control_package
-cargo test -p ui_program route
-git diff --check
-```
-
-Known gaps:
-
-```text
-Phase 2 does not implement story proof envelope, story runner behavior, catalog/discovery, runtime widget behavior, runtime mount eligibility, Gallery previews, Designer UX, Workbench behavior, text editing, canvas surfaces, transitions, or runtime-proof adoption.
-```
-
-Follow-up:
-
-```text
-Proceed to PT-UI-COMPONENT-PLATFORM-003 Story Proof Envelope design/planning. Do not implement story proof or story runner behavior before Phase 3 design acceptance.
-```
+Follow-up: Completed dependency for later UI Component Platform phases.
 
 ## PT-UI-COMPONENT-PLATFORM-003
 
@@ -96,41 +51,13 @@ Title: UI Component Platform Story Proof Envelope
 
 Completed on: 2026-06-26 by user validation report
 
-Evidence:
+Evidence: Phase 3 added story-proof requirements and summaries under ui_controls.
 
-```text
-Phase 3 branch: feature/ui-component-platform-003-story-proof-envelope
-Phase 3 added a bounded ControlPackage story-proof contract under domain/ui/ui_controls/src/story_proof/mod.rs, re-exported it through the existing package façade, and added focused story-proof contract tests.
-The story-proof layer models control story matrices, proof requirements, expected failures, proof summaries, and first blocking diagnostics without moving ui_story runner/report/evidence ownership into ui_controls.
-```
+Validation: User reported the Phase 3 validation gate green.
 
-Validation:
+Known gaps: Later component-platform phases were still pending.
 
-```text
-User reported all required Phase 3 validation commands passed green:
-cargo fmt --all --check
-cargo check -p ui_controls
-cargo test -p ui_controls control_story_proof
-cargo test -p ui_controls control_package
-cargo test -p ui_controls control_registry
-cargo test -p ui_controls control_authoring
-cargo test -p ui_artifacts control_package
-cargo test -p ui_program route
-cargo test -p ui_story workflow
-git diff --check
-```
-
-Known gaps:
-
-```text
-Phase 3 does not implement catalog/discovery/inspection, story runner behavior, Gallery execution, CLI execution, runtime widget behavior, runtime mount eligibility, Designer UX, Workbench behavior, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
-```
-
-Follow-up:
-
-```text
-Proceed to PT-UI-COMPONENT-PLATFORM-004 Catalog / Discovery / Inspection design/planning. Do not implement catalog UI, Gallery previews, Designer UX, or Workbench behavior before Phase 4 design acceptance.
-```
+Follow-up: Completed dependency for later UI Component Platform phases.
 
 ## PT-UI-COMPONENT-PLATFORM-004
 
@@ -140,44 +67,32 @@ Title: UI Component Platform Catalog / Discovery / Inspection
 
 Completed on: 2026-06-26 by user validation report
 
-Evidence:
+Evidence: Phase 4 added derived catalog, discovery, and inspection contracts under ui_controls.
 
-```text
-Phase 4 added a bounded derived catalog, discovery, and inspection contract under domain/ui/ui_controls/src/catalog.rs, re-exported it through the existing package façade, and added focused catalog contract tests.
-The catalog layer derives read-only package/control facts, filters, inspection facts, diagnostic badges, compatibility summaries, and story-proof badges from existing descriptors without moving reusable control semantics into Gallery, Workbench, UI Designer, docs, agents, runtime, renderer, or ECS code.
-```
+Validation: User reported the Phase 4 validation gate green.
 
-Validation:
+Known gaps: Later component-platform phases were still pending.
 
-```text
-User reported all required Phase 4 validation commands passed green after rebasing or merging latest main and rerunning the validation gate:
-cargo fmt --all --check
-cargo check -p ui_controls
-cargo test -p ui_controls control_catalog
-cargo test -p ui_controls control_package
-cargo test -p ui_controls control_registry
-cargo test -p ui_controls control_story_proof
-cargo test -p ui_controls control_authoring
-cargo test -p ui_artifacts control_package
-cargo test -p ui_program route
-git diff --check
-```
+Follow-up: Completed dependency for Phase 5.
 
-Known gaps:
+## PT-UI-COMPONENT-PLATFORM-005
 
-```text
-Phase 4 does not implement input/gesture/device contracts, catalog UI, Gallery previews, Designer UX, Workbench behavior, runtime widget behavior, runtime mount eligibility, story runner behavior, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
-```
+ID: `PT-UI-COMPONENT-PLATFORM-005`
 
-Follow-up:
+Title: UI Component Platform Input / Gesture / Device
 
-```text
-Proceed to PT-UI-COMPONENT-PLATFORM-005 Input / Gesture / Device design/planning. Do not implement input contracts or runtime input behavior before Phase 5 design acceptance.
-```
+Completed on: 2026-06-26 by user validation report
+
+Evidence: Phase 5 added reusable input, gesture, and device declarations, catalog inspection projection, and focused tests.
+
+Validation: User reported the Phase 5 validation gate green after the catalog split cleanup.
+
+Known gaps: Phase 6 and later component-platform phases are still pending.
+
+Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-006 State Binding / Host Intent design and planning.
 
 ## Entry shape
 
-```text
 ID:
 Title:
 Completed on:
@@ -185,7 +100,6 @@ Evidence:
 Validation:
 Known gaps:
 Follow-up:
-```
 
 ## Rules
 
