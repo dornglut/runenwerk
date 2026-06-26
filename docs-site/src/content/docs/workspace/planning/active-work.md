@@ -13,9 +13,9 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-009-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-009A`
 
-Title: UI Component Platform Layout / Container / Virtualization design intake
+Title: UI Component Platform Ownership Realignment
 
 State: active planning
 
@@ -27,46 +27,46 @@ Authority files:
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
 docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
-docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+docs-site/src/content/docs/design/active/ui-component-platform-ownership-realignment-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
-docs-site/src/content/docs/design/active/ui-component-platform-accessibility-focus-inspection-design.md
 docs-site/src/content/docs/domain/ui/roadmap.md
 ```
 
 Write scope:
 
 ```text
+docs-site/src/content/docs/design/active/ui-component-platform-ownership-realignment-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/completed-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 
 Validation expectation:
 
 ```text
-Manual planning consistency review first. Implementation validation is deferred until a later bounded implementation pass.
+Manual planning consistency review.
+No Rust migration in this pass.
 ```
 
 Known blockers:
 
 ```text
-Phase 9 implementation must not start before the Layout / Container / Virtualization design is reviewed and accepted.
+Phase 9 implementation must not start until the ownership realignment and owner-first layout design are accepted.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 9 Layout / Container / Virtualization design, then start a bounded implementation pass only after the design gate is accepted.
+Review and accept the ownership realignment and corrected Phase 9 design. Then implement 009B in ui_layout before adding the 009C ui_controls bridge.
 ```
 
 Evidence:
 
 ```text
 Phase 8 Accessibility / Focus / Inspection passed local validation and was merged by user report on 2026-06-26.
-Phase 9 design authority exists in ui-component-platform-layout-container-virtualization-design.md.
+A manual ownership audit found that phases 5-8 remained declarative but duplicated some generic vocabulary in ui_controls instead of anchoring it in owner crates.
 ```
 
 ## Active-work rules
