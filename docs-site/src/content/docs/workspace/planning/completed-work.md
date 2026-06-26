@@ -88,6 +88,50 @@ Follow-up:
 Proceed to PT-UI-COMPONENT-PLATFORM-003 Story Proof Envelope design/planning. Do not implement story proof or story runner behavior before Phase 3 design acceptance.
 ```
 
+## PT-UI-COMPONENT-PLATFORM-003
+
+ID: `PT-UI-COMPONENT-PLATFORM-003`
+
+Title: UI Component Platform Story Proof Envelope
+
+Completed on: 2026-06-26 by user validation report
+
+Evidence:
+
+```text
+Phase 3 branch: feature/ui-component-platform-003-story-proof-envelope
+Phase 3 added a bounded ControlPackage story-proof contract under domain/ui/ui_controls/src/story_proof/mod.rs, re-exported it through the existing package façade, and added focused story-proof contract tests.
+The story-proof layer models control story matrices, proof requirements, expected failures, proof summaries, and first blocking diagnostics without moving ui_story runner/report/evidence ownership into ui_controls.
+```
+
+Validation:
+
+```text
+User reported all required Phase 3 validation commands passed green:
+cargo fmt --all --check
+cargo check -p ui_controls
+cargo test -p ui_controls control_story_proof
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_authoring
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+cargo test -p ui_story workflow
+git diff --check
+```
+
+Known gaps:
+
+```text
+Phase 3 does not implement catalog/discovery/inspection, story runner behavior, Gallery execution, CLI execution, runtime widget behavior, runtime mount eligibility, Designer UX, Workbench behavior, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
+```
+
+Follow-up:
+
+```text
+Proceed to PT-UI-COMPONENT-PLATFORM-004 Catalog / Discovery / Inspection design/planning. Do not implement catalog UI, Gallery previews, Designer UX, or Workbench behavior before Phase 4 design acceptance.
+```
+
 ## Entry shape
 
 ```text
