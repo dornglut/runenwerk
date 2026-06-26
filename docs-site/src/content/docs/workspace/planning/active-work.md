@@ -13,11 +13,11 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-003-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-004-PLANNING`
 
-Title: UI Component Platform Story Proof Envelope design intake
+Title: UI Component Platform Catalog / Discovery / Inspection design intake
 
-State: active planning
+State: ready for planning
 
 Owner: ui
 
@@ -26,13 +26,11 @@ Authority files:
 ```text
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
-docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
-docs-site/src/content/docs/workspace/routines/implementation-routine.md
 docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/guidelines/programming-principles.md
 docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
-docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md
 docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md
 docs-site/src/content/docs/domain/ui/roadmap.md
 ```
@@ -40,11 +38,7 @@ docs-site/src/content/docs/domain/ui/roadmap.md
 Write scope:
 
 ```text
-docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
+Planning/design records only until the Catalog / Discovery / Inspection design is accepted.
 ```
 
 Validation expectation:
@@ -57,20 +51,19 @@ Implementation validation is deferred until a later bounded implementation pass.
 Known blockers:
 
 ```text
-Phase 3 implementation must not start before this Story Proof Envelope design is reviewed and accepted.
+Phase 4 must not start implementation before its design and acceptance criteria are written and accepted.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 3 Story Proof Envelope design, then start a bounded implementation pass only after the design gate is accepted.
+Open the Phase 4 Catalog / Discovery / Inspection design/planning intake. Do not implement catalog runtime UI, Gallery previews, Designer UX, or Workbench behavior in the planning pass.
 ```
 
 Evidence:
 
 ```text
-Phase 2 authoring-kit implementation passed the local validation gate by user report on 2026-06-25.
-Phase 3 design authority exists in ui-component-platform-story-proof-envelope-design.md.
+Phase 3 Story Proof Envelope passed the local validation gate by user report on 2026-06-26.
 ```
 
 ## Active-work rules
