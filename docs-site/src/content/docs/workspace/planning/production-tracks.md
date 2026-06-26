@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-26
 ---
 
 # Production Tracks
@@ -31,8 +31,8 @@ Milestones:
 001 ControlPackage / ControlKernel contract — completed by user report
 002 Authoring Kit — completed by user validation report
 003 Story proof envelope consumption — completed by user validation report
-004 Catalog / discovery / inspection — next design/planning
-005 Input / gesture / device — future
+004 Catalog / discovery / inspection — completed by user validation report
+005 Input / gesture / device — active design/planning
 006 State binding / host intent — future
 007 Theme / state / style — future
 008 Accessibility / focus / inspection — future
@@ -57,7 +57,7 @@ Milestones:
 Design gates:
 
 ```text
-Phase 4 implementation requires a Catalog / Discovery / Inspection design to be accepted first.
+Phase 5 implementation requires the Input / Gesture / Device design to be accepted first.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -67,19 +67,20 @@ Evidence gates:
 Phase 1: local validation and branch/PR evidence.
 Phase 2: user reported the authoring-kit validation gate green; authoring tests prove ordinary Phase 1 descriptors are produced and invalid output still fails closed through existing validation.
 Phase 3: user reported the story-proof validation gate green; story-proof tests prove requirements, expected-failure requirements, first-blocker summaries, and conservative mount eligibility without executing stories inside ui_controls.
-Later phases: catalog/discovery, diagnostics, docs evidence, and runtime-proof gates as appropriate.
+Phase 4: user reported the catalog validation gate green; catalog tests prove deterministic derived entries, filters, inspection facts, story-proof badge projection, and conservative mount eligibility without adding consumer UI behavior.
+Later phases: input/gesture/device, state binding, theme/style, accessibility, layout, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 4 is not yet designed. No catalog implementation, Gallery preview behavior, Designer UX, or Workbench behavior is authorized.
+Phase 5 is design/planning only until ui-component-platform-input-gesture-device-design.md is reviewed and accepted.
 ```
 
 Next action:
 
 ```text
-Open PT-UI-COMPONENT-PLATFORM-004 Catalog / Discovery / Inspection design/planning.
+Review and accept the Phase 5 Input / Gesture / Device design, then open a bounded implementation pass.
 ```
 
 ## Track shape
