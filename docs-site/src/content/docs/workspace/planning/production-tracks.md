@@ -32,8 +32,8 @@ Milestones:
 002 Authoring Kit — completed by user validation report
 003 Story proof envelope consumption — completed by user validation report
 004 Catalog / discovery / inspection — completed by user validation report
-005 Input / gesture / device — active design/planning
-006 State binding / host intent — future
+005 Input / gesture / device — completed by user validation report
+006 State binding / host intent — active design/planning
 007 Theme / state / style — future
 008 Accessibility / focus / inspection — future
 009 Layout / container / virtualization — future
@@ -57,7 +57,7 @@ Milestones:
 Design gates:
 
 ```text
-Phase 5 implementation requires the Input / Gesture / Device design to be accepted first.
+Phase 6 implementation requires the State Binding / Host Intent design to be accepted first.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -68,19 +68,20 @@ Phase 1: local validation and branch/PR evidence.
 Phase 2: user reported the authoring-kit validation gate green; authoring tests prove ordinary Phase 1 descriptors are produced and invalid output still fails closed through existing validation.
 Phase 3: user reported the story-proof validation gate green; story-proof tests prove requirements, expected-failure requirements, first-blocker summaries, and conservative mount eligibility without executing stories inside ui_controls.
 Phase 4: user reported the catalog validation gate green; catalog tests prove deterministic derived entries, filters, inspection facts, story-proof badge projection, and conservative mount eligibility without adding consumer UI behavior.
-Later phases: input/gesture/device, state binding, theme/style, accessibility, layout, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
+Phase 5: user reported the input validation gate green; input tests prove declarations for modes, gestures, normalized device facts, catalog inspection bridge, and conservative mount eligibility without runtime input behavior.
+Later phases: state binding, theme/style, accessibility, layout, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 5 is design/planning only until ui-component-platform-input-gesture-device-design.md is reviewed and accepted.
+Phase 6 is design/planning only until ui-component-platform-state-binding-host-intent-design.md is reviewed and accepted.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 5 Input / Gesture / Device design, then open a bounded implementation pass.
+Review and accept the Phase 6 State Binding / Host Intent design, then open a bounded implementation pass.
 ```
 
 ## Track shape
