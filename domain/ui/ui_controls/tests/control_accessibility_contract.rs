@@ -35,13 +35,29 @@ fn control_accessibility_focus_and_keyboard_are_declarative() {
     assert!(summary.focus_facts.contains(&"focus-order".to_owned()));
     assert!(summary.focus_facts.contains(&"focus-trap".to_owned()));
     assert!(summary.focus_facts.contains(&"focus-return".to_owned()));
-    assert!(summary.keyboard_activations.contains(&"activate".to_owned()));
+    assert!(
+        summary
+            .keyboard_activations
+            .contains(&"activate".to_owned())
+    );
     assert!(summary.keyboard_activations.contains(&"cancel".to_owned()));
     assert!(summary.keyboard_activations.contains(&"commit".to_owned()));
     assert!(summary.keyboard_activations.contains(&"expand".to_owned()));
-    assert!(summary.keyboard_activations.contains(&"collapse".to_owned()));
-    assert!(summary.keyboard_activations.contains(&"increment".to_owned()));
-    assert!(summary.keyboard_activations.contains(&"decrement".to_owned()));
+    assert!(
+        summary
+            .keyboard_activations
+            .contains(&"collapse".to_owned())
+    );
+    assert!(
+        summary
+            .keyboard_activations
+            .contains(&"increment".to_owned())
+    );
+    assert!(
+        summary
+            .keyboard_activations
+            .contains(&"decrement".to_owned())
+    );
     assert!(
         summary
             .keyboard_activations
@@ -82,22 +98,32 @@ fn control_accessibility_diagnostics_and_inspection_facts_are_read_only() {
 
     assert!(summary.diagnostics.contains(&"missing-role".to_owned()));
     assert!(summary.diagnostics.contains(&"missing-label".to_owned()));
-    assert!(summary
-        .diagnostics
-        .contains(&"missing-description".to_owned()));
-    assert!(summary
-        .diagnostics
-        .contains(&"missing-focus-order".to_owned()));
+    assert!(
+        summary
+            .diagnostics
+            .contains(&"missing-description".to_owned())
+    );
+    assert!(
+        summary
+            .diagnostics
+            .contains(&"missing-focus-order".to_owned())
+    );
     assert!(summary.diagnostics.contains(&"expected-failure".to_owned()));
-    assert!(summary
-        .expected_failures
-        .contains(&"label.accessibility.expected".to_owned()));
-    assert!(facts
-        .iter()
-        .any(|fact| fact.key == "roles" && fact.value.contains("label")));
-    assert!(facts.iter().any(|fact| {
-        fact.key == "has_runtime_focus_behavior" && fact.value == "false"
-    }));
+    assert!(
+        summary
+            .expected_failures
+            .contains(&"label.accessibility.expected".to_owned())
+    );
+    assert!(
+        facts
+            .iter()
+            .any(|fact| fact.key == "roles" && fact.value.contains("label"))
+    );
+    assert!(
+        facts
+            .iter()
+            .any(|fact| { fact.key == "has_runtime_focus_behavior" && fact.value == "false" })
+    );
 }
 
 fn label_accessibility_descriptor() -> ControlAccessibilityDescriptor {

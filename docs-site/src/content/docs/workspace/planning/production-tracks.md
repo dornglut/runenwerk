@@ -36,7 +36,9 @@ Milestones:
 006 State binding / host intent — completed by user validation report
 007 Theme / state / style — completed by user validation report
 008 Accessibility / focus / inspection — completed by user validation report
-009 Layout / container / virtualization — active design/planning
+009A Ownership realignment — accepted by user direction
+009B Layout foundation in ui_layout — implementation pending local validation
+009C Control layout bridge in ui_controls — implementation pending local validation
 010 Render surface / output — future
 011 Base control packages — future
 012 Generic interaction — future
@@ -57,7 +59,9 @@ Milestones:
 Design gates:
 
 ```text
-Phase 9 implementation requires the Layout / Container / Virtualization design to be accepted first.
+009A corrected the ownership split before Phase 9 implementation.
+009B owns generic layout vocabulary in ui_layout.
+009C owns the control-facing bridge in ui_controls and depends on 009B.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -72,19 +76,21 @@ Phase 5: user reported the input validation gate green.
 Phase 6: user reported the state/host-intent validation gate green.
 Phase 7: user reported the theme/state/style validation gate green.
 Phase 8: user reported the accessibility/focus/inspection validation gate green.
-Later phases: layout, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
+009A: accepted by user direction.
+009B/009C: require local validation before completion.
+Later phases: rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 9 is design/planning only until ui-component-platform-layout-container-virtualization-design.md is reviewed and accepted.
+Phase 9 needs local validation before completion.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 9 Layout / Container / Virtualization design, then open a bounded implementation pass on its branch.
+Run the Phase 9 validation gate locally. If green, close Phase 9 and open Phase 10 Render Surface / Output planning.
 ```
 
 ## Track shape

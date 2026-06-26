@@ -11,11 +11,13 @@ use crate::package::story_proof::{ControlStoryProofSummary, ControlStoryProofVer
 pub mod entry;
 pub mod index;
 pub mod inspection;
+pub mod layout;
 pub mod query;
 
 pub use entry::*;
 pub use index::*;
 pub use inspection::*;
+pub use layout::*;
 pub use query::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

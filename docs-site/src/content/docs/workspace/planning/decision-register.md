@@ -91,7 +91,17 @@ Decision: Start Phase 8 as an Accessibility / Focus / Inspection design intake b
 
 Reason: Accessibility roles, focus semantics, keyboard navigation, and inspection metadata need reusable declarations before layout, render, base controls, or interaction phases consume them.
 
-Follow-up: Review and accept the Accessibility / Focus / Inspection design before code.
+Follow-up: Completed by user validation report.
+
+## Phase 9A ownership realignment decision
+
+Date: 2026-06-26
+
+Decision: Insert an ownership realignment pass before Phase 9 implementation.
+
+Reason: Completed Phases 5-8 stayed declarative but duplicated some generic UI vocabulary in ui_controls instead of anchoring that vocabulary in owner crates.
+
+Follow-up: Accept the realignment design, then implement layout foundation in ui_layout before adding the ui_controls bridge.
 
 ## Decision shape
 

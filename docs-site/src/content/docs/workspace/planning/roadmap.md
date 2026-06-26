@@ -83,7 +83,7 @@ Owner: ui
 
 Evidence: User reported Phase 5 validation green on 2026-06-26.
 
-Next action: Keep as completed dependency.
+Next action: Keep as completed dependency; later migrate generic vocabulary to owner crates.
 
 ### PT-UI-COMPONENT-PLATFORM-006
 
@@ -97,7 +97,7 @@ Owner: ui
 
 Evidence: User reported Phase 6 validation green on 2026-06-26.
 
-Next action: Keep as completed dependency.
+Next action: Keep as completed dependency; later migrate generic vocabulary to owner crates.
 
 ### PT-UI-COMPONENT-PLATFORM-007
 
@@ -111,7 +111,7 @@ Owner: ui
 
 Evidence: User reported Phase 7 validation green on 2026-06-26.
 
-Next action: Keep as completed dependency.
+Next action: Keep as completed dependency; later migrate generic vocabulary to owner crates.
 
 ### PT-UI-COMPONENT-PLATFORM-008
 
@@ -125,41 +125,53 @@ Owner: ui
 
 Evidence: User reported Phase 8 validation green and merged on 2026-06-26.
 
-Next action: Keep as completed dependency.
+Next action: Keep as completed dependency; later migrate generic vocabulary to owner crates.
 
-### PT-UI-COMPONENT-PLATFORM-009-PLANNING
+### PT-UI-COMPONENT-PLATFORM-009A
 
-ID: `PT-UI-COMPONENT-PLATFORM-009-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-009A`
 
-Title: UI Component Platform Layout / Container / Virtualization design intake
+Title: UI Component Platform Ownership Realignment
 
-State: active planning
+State: accepted by user direction
 
 Owner: ui
 
-Dependency level: follows Phase 8 Accessibility / Focus / Inspection
+Evidence: Ownership realignment design exists and user directed continuation through Phase 9.
 
-Write scope:
+Next action: Keep as completed planning dependency for 009B and 009C.
 
-```text
-docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/completed-work.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
-```
+### PT-UI-COMPONENT-PLATFORM-009B
 
-Validation expectation:
+ID: `PT-UI-COMPONENT-PLATFORM-009B`
 
-```text
-Manual planning consistency review.
-No Rust implementation in the planning pass.
-```
+Title: UI Component Platform Layout Foundation
 
-Evidence: Phase 9 was promoted after Phase 8 validation passed green and was merged by user report.
+State: implementation pending local validation
 
-Next action: Review and accept the Phase 9 Layout / Container / Virtualization design before implementation.
+Owner: ui_layout
+
+Dependency level: follows accepted 009A
+
+Evidence: Generic layout/container/scroll/content/identity/virtualization vocabulary exists in `ui_layout` on this branch.
+
+Next action: Run the Phase 9 validation gate locally.
+
+### PT-UI-COMPONENT-PLATFORM-009C
+
+ID: `PT-UI-COMPONENT-PLATFORM-009C`
+
+Title: UI Component Platform Control Layout Bridge
+
+State: implementation pending local validation
+
+Owner: ui_controls
+
+Dependency level: follows 009B implementation
+
+Evidence: `ui_controls` layout bridge references `ui_layout` vocabulary and projects read-only catalog inspection facts on this branch.
+
+Next action: Run the Phase 9 validation gate locally.
 
 ## Rules
 
