@@ -386,7 +386,10 @@ impl ControlAccessibilityDescriptor {
         self
     }
 
-    pub fn with_description(mut self, description: ControlAccessibilityDescriptionRequirement) -> Self {
+    pub fn with_description(
+        mut self,
+        description: ControlAccessibilityDescriptionRequirement,
+    ) -> Self {
         self.description_requirements.push(description);
         self.description_requirements
             .sort_by(|left, right| left.description_id.cmp(&right.description_id));
