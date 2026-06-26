@@ -38,7 +38,13 @@ Write scope:
 ```text
 domain/ui/ui_controls/src/input.rs
 domain/ui/ui_controls/src/lib.rs
+domain/ui/ui_controls/src/catalog.rs
+domain/ui/ui_controls/src/catalog_entry.rs
+domain/ui/ui_controls/src/catalog_index.rs
+domain/ui/ui_controls/src/catalog_inspection.rs
+domain/ui/ui_controls/src/catalog_query.rs
 domain/ui/ui_controls/tests/control_input_contract.rs
+domain/ui/ui_controls/tests/control_input_catalog_contract.rs
 docs-site/src/content/docs/workspace/planning/active-work.md
 ```
 
@@ -76,6 +82,7 @@ Evidence:
 Phase 4 Catalog / Discovery / Inspection passed local validation by user report on 2026-06-26 after rebasing or merging latest main and rerunning the validation gate.
 Phase 5 design authority was accepted by user report on 2026-06-26.
 A bounded Phase 5 input/gesture/device declaration implementation exists on this branch.
+Catalog was split by stable responsibility during Phase 5 to keep the inspection bridge maintainable.
 ```
 
 ## Active-work rules
