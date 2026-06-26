@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-26
 ---
 
 # Roadmap
@@ -178,7 +178,7 @@ User reported all Phase 3 validation commands green on 2026-06-26. The implement
 Next action:
 
 ```text
-Proceed to PT-UI-COMPONENT-PLATFORM-004 Catalog / Discovery / Inspection design/planning.
+Keep as Phase 4 dependency.
 ```
 
 Notes:
@@ -187,13 +187,13 @@ Notes:
 Phase 3 does not implement catalog/discovery/inspection, story runner behavior, Gallery execution, CLI execution, runtime widget behavior, runtime mount eligibility, Designer UX, Workbench behavior, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
 ```
 
-### PT-UI-COMPONENT-PLATFORM-004-PLANNING
+### PT-UI-COMPONENT-PLATFORM-004
 
-ID: `PT-UI-COMPONENT-PLATFORM-004-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-004`
 
-Title: UI Component Platform Catalog / Discovery / Inspection design intake
+Title: UI Component Platform Catalog / Discovery / Inspection
 
-State: ready for planning
+State: completed by user validation report
 
 Owner: ui
 
@@ -202,10 +202,65 @@ Dependency level: follows Phase 3 Story Proof Envelope
 Write scope:
 
 ```text
+domain/ui/ui_controls/src/catalog.rs
+domain/ui/ui_controls/src/package.rs
+domain/ui/ui_controls/tests/control_catalog_contract.rs
 docs-site/src/content/docs/design/active/ui-component-platform-catalog-discovery-inspection-design.md
+```
+
+Validation expectation:
+
+```text
+cargo fmt --all --check
+cargo check -p ui_controls
+cargo test -p ui_controls control_catalog
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_story_proof
+cargo test -p ui_controls control_authoring
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+git diff --check
+```
+
+Evidence:
+
+```text
+User reported all Phase 4 validation commands green on 2026-06-26 after rebasing or merging latest main and rerunning the validation gate. The implementation adds derived catalog, discovery, and inspection contracts under ui_controls without adding Gallery, Designer, Workbench, runtime, renderer, ECS, or mount-eligibility behavior.
+```
+
+Next action:
+
+```text
+Proceed to PT-UI-COMPONENT-PLATFORM-005 Input / Gesture / Device design/planning.
+```
+
+Notes:
+
+```text
+Phase 4 does not implement catalog UI, Gallery previews, Designer UX, Workbench behavior, runtime widget behavior, runtime mount eligibility, story runner behavior, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
+```
+
+### PT-UI-COMPONENT-PLATFORM-005-PLANNING
+
+ID: `PT-UI-COMPONENT-PLATFORM-005-PLANNING`
+
+Title: UI Component Platform Input / Gesture / Device design intake
+
+State: active planning
+
+Owner: ui
+
+Dependency level: follows Phase 4 Catalog / Discovery / Inspection
+
+Write scope:
+
+```text
+docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/completed-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 
@@ -219,19 +274,19 @@ No Rust implementation in the planning pass.
 Evidence:
 
 ```text
-Phase 4 was promoted after Phase 3 validation passed green by user report.
+Phase 5 was promoted after Phase 4 validation passed green by user report.
 ```
 
 Next action:
 
 ```text
-Write and review the Phase 4 Catalog / Discovery / Inspection design before implementation.
+Review and accept the Phase 5 Input / Gesture / Device design before implementation.
 ```
 
 Notes:
 
 ```text
-This planning entry does not authorize catalog UI, Gallery previews, Designer UX, Workbench behavior, runtime widget behavior, runtime mount eligibility, text editing, canvas surfaces, transitions, renderer-owned UI semantics, or ECS-owned UI semantics.
+This planning entry does not authorize runtime widget behavior, app/editor/game mutation, raw device polling, OS input handling, game input policy, world input policy, drawing semantics, canvas document truth, Gallery previews, Designer UX, Workbench behavior, runtime mount eligibility, text editing implementation, Surface2D, SpatialCanvas, NodeCanvas, PortGraphCanvas, ProgressionTreeView, TrackSurface, Timeline, transitions, renderer behavior, or ECS behavior.
 ```
 
 ## Rules
