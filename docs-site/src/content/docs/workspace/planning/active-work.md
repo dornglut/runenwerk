@@ -49,6 +49,7 @@ docs-site/src/content/docs/workspace/planning/production-tracks.md
 docs-site/src/content/docs/workspace/planning/completed-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 docs-site/src/content/docs/design/active/ui-component-platform-render-surface-output-design.md
+docs-site/src/content/docs/design/active/README.md
 ```
 
 Validation expectation:
