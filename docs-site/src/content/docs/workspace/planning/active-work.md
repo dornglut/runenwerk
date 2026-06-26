@@ -38,6 +38,7 @@ Write scope:
 ```text
 domain/ui/ui_controls/src/input.rs
 domain/ui/ui_controls/src/lib.rs
+domain/ui/ui_controls/src/package.rs
 domain/ui/ui_controls/src/catalog.rs
 domain/ui/ui_controls/src/catalog_entry.rs
 domain/ui/ui_controls/src/catalog_index.rs
@@ -83,6 +84,7 @@ Phase 4 Catalog / Discovery / Inspection passed local validation by user report 
 Phase 5 design authority was accepted by user report on 2026-06-26.
 A bounded Phase 5 input/gesture/device declaration implementation exists on this branch.
 Catalog was split by stable responsibility during Phase 5 to keep the inspection bridge maintainable.
+Package façade now re-exports catalog and input declarations without duplicating the input module.
 ```
 
 ## Active-work rules
