@@ -36,9 +36,9 @@ Milestones:
 006 State binding / host intent — completed by user validation report
 007 Theme / state / style — completed by user validation report
 008 Accessibility / focus / inspection — completed by user validation report
-009A Ownership realignment — active design/planning
-009B Layout foundation in ui_layout — future
-009C Control layout bridge in ui_controls — future
+009A Ownership realignment — accepted by user direction
+009B Layout foundation in ui_layout — implementation pending local validation
+009C Control layout bridge in ui_controls — implementation pending local validation
 010 Render surface / output — future
 011 Base control packages — future
 012 Generic interaction — future
@@ -59,8 +59,9 @@ Milestones:
 Design gates:
 
 ```text
-009B implementation requires the ownership realignment and corrected layout design to be accepted first.
-009C implementation requires 009B ui_layout vocabulary to exist first.
+009A corrected the ownership split before Phase 9 implementation.
+009B owns generic layout vocabulary in ui_layout.
+009C owns the control-facing bridge in ui_controls and depends on 009B.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -75,20 +76,21 @@ Phase 5: user reported the input validation gate green.
 Phase 6: user reported the state/host-intent validation gate green.
 Phase 7: user reported the theme/state/style validation gate green.
 Phase 8: user reported the accessibility/focus/inspection validation gate green.
-009A: planning consistency review only; no Rust migration.
-Later phases: layout, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
+009A: accepted by user direction.
+009B/009C: require local validation before completion.
+Later phases: rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 9 implementation is blocked until 009A is accepted. Layout vocabulary must be added to ui_layout before ui_controls adds a control layout bridge.
+Phase 9 needs local validation before completion.
 ```
 
 Next action:
 
 ```text
-Review and accept the ownership realignment and owner-first Phase 9 design.
+Run the Phase 9 validation gate locally. If green, close Phase 9 and open Phase 10 Render Surface / Output planning.
 ```
 
 ## Track shape
