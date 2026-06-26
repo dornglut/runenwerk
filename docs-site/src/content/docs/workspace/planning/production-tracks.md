@@ -36,7 +36,9 @@ Milestones:
 006 State binding / host intent — completed by user validation report
 007 Theme / state / style — completed by user validation report
 008 Accessibility / focus / inspection — completed by user validation report
-009 Layout / container / virtualization — active design/planning
+009A Ownership realignment — active design/planning
+009B Layout foundation in ui_layout — future
+009C Control layout bridge in ui_controls — future
 010 Render surface / output — future
 011 Base control packages — future
 012 Generic interaction — future
@@ -57,7 +59,8 @@ Milestones:
 Design gates:
 
 ```text
-Phase 9 implementation requires the Layout / Container / Virtualization design to be accepted first.
+009B implementation requires the ownership realignment and corrected layout design to be accepted first.
+009C implementation requires 009B ui_layout vocabulary to exist first.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -72,19 +75,20 @@ Phase 5: user reported the input validation gate green.
 Phase 6: user reported the state/host-intent validation gate green.
 Phase 7: user reported the theme/state/style validation gate green.
 Phase 8: user reported the accessibility/focus/inspection validation gate green.
+009A: planning consistency review only; no Rust migration.
 Later phases: layout, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 9 is design/planning only until ui-component-platform-layout-container-virtualization-design.md is reviewed and accepted.
+Phase 9 implementation is blocked until 009A is accepted. Layout vocabulary must be added to ui_layout before ui_controls adds a control layout bridge.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 9 Layout / Container / Virtualization design, then open a bounded implementation pass on its branch.
+Review and accept the ownership realignment and owner-first Phase 9 design.
 ```
 
 ## Track shape
