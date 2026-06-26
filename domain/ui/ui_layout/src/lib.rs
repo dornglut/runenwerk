@@ -4,6 +4,7 @@
 pub mod alignment;
 pub mod arrange;
 pub mod constraints;
+pub mod contracts;
 pub mod measure;
 pub mod size_policy;
 pub mod split;
@@ -12,6 +13,7 @@ pub mod stack;
 pub use alignment::*;
 pub use arrange::*;
 pub use constraints::*;
+pub use contracts::*;
 pub use measure::*;
 pub use size_policy::*;
 pub use split::*;
