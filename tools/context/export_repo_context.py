@@ -28,7 +28,7 @@ DEFAULT_EXTENSIONS = {
 DEFAULT_INCLUDE_FILENAMES = {
     "Cargo.toml",
 }
-DEFAULT_EXCLUDE_GLOBS = {
+DEFAULT_EXCLUDE_GLOBS = (
     ".git/**",
     "**/.git/**",
     "target/**",
@@ -43,7 +43,7 @@ DEFAULT_EXCLUDE_GLOBS = {
     "**/.astro/**",
     "**/*-content.txt",
     "Cargo.lock",
-}
+)
 
 
 @dataclass(frozen=True)
@@ -79,7 +79,7 @@ def path_matches(pattern: str, relative: Path) -> bool:
     return False
 
 
-def matches_any(patterns: tuple[str, ...] | set[str], relative: Path) -> bool:
+def matches_any(patterns: tuple[str, ...], relative: Path) -> bool:
     return any(path_matches(pattern, relative) for pattern in patterns)
 
 
@@ -137,7 +137,7 @@ def iter_context_files(
     extra_excludes: tuple[str, ...],
 ) -> list[Path]:
     files: list[Path] = []
-    exclude_patterns = tuple(DEFAULT_EXCLUDE_GLOBS) + profile.exclude + extra_excludes
+    exclude_patterns = DEFAULT_EXCLUDE_GLOBS + profile.exclude + extra_excludes
 
     for path in root.rglob("*"):
         if not path.is_file():
@@ -203,7 +203,7 @@ def write_manifest(
     for pattern in profile.include:
         out.write(f"  - {pattern}\n")
     out.write("Exclude globs:\n")
-    for pattern in tuple(DEFAULT_EXCLUDE_GLOBS) + profile.exclude:
+    for pattern in DEFAULT_EXCLUDE_GLOBS + profile.exclude:
         out.write(f"  - {pattern}\n")
     if warnings:
         out.write("Warnings:\n")
