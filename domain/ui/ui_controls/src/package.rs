@@ -3,6 +3,8 @@
 
 #[path = "authoring/mod.rs"]
 pub mod authoring;
+#[path = "catalog.rs"]
+pub mod catalog;
 pub mod descriptor;
 pub mod ids;
 pub mod metadata;
@@ -11,6 +13,7 @@ pub mod story_proof;
 pub mod validation;
 
 pub use authoring::*;
+pub use catalog::*;
 pub use descriptor::*;
 pub use ids::*;
 pub use metadata::*;
