@@ -21,8 +21,9 @@ python3 tools/context/export_repo_context.py --list-profiles
 Use a profile:
 
 ```bash
-python3 tools/context/export_repo_context.py --profile ui-current
-python3 tools/context/export_repo_context.py --profile ui-component-platform --output ui-component-platform-context.txt
+python3 tools/context/export_repo_context.py --profile current-work
+python3 tools/context/export_repo_context.py --profile domain-work
+python3 tools/context/export_repo_context.py --profile implementation-work --include 'domain/ui/ui_controls/src/**'
 python3 tools/context/export_repo_context.py --profile full-audit --warn-only
 ```
 
@@ -38,17 +39,40 @@ tools/context/profiles/
 ai-core
   Small current authority context for most AI work.
 
+current-work
+  Current active work context across domains.
+
 workspace-planning
   Workspace planning, routines, and current roadmap context.
 
-ui-current
-  Current UI authority and active UI design context.
+domain-work
+  Domain-level authority and crate entrypoints across all domains.
 
-ui-component-platform
-  UI Component Platform implementation context.
+implementation-work
+  Generic implementation authority. Add exact crate or module paths with --include.
 
 full-audit
   Large full-repository audit context. Use only when historical or broad review is required.
+```
+
+## Task-specific overrides
+
+Profiles should stay generic. Add task-specific paths at the command line instead of creating hardcoded profiles for one feature area.
+
+```bash
+python3 tools/context/export_repo_context.py \
+  --profile implementation-work \
+  --include 'domain/ui/ui_controls/src/**' \
+  --include 'domain/ui/ui_controls/tests/**'
+```
+
+Other override options:
+
+```bash
+python3 tools/context/export_repo_context.py --profile current-work --include 'apps/**'
+python3 tools/context/export_repo_context.py --profile domain-work --exclude 'domain/experimental/**'
+python3 tools/context/export_repo_context.py --profile implementation-work --extension json
+python3 tools/context/export_repo_context.py --profile implementation-work --include-filename AGENTS.md
 ```
 
 ## Budgets
@@ -56,7 +80,7 @@ full-audit
 Budget options prevent accidentally creating a huge context file:
 
 ```bash
-python3 tools/context/export_repo_context.py --profile ui-current --max-files 120 --max-bytes 1500000
+python3 tools/context/export_repo_context.py --profile current-work --max-files 120 --max-bytes 1500000
 ```
 
 By default, a budget breach fails the export. To write anyway:
@@ -77,13 +101,17 @@ included file count
 total source bytes
 include globs
 exclude globs
+extensions
+include filenames
 warnings
 ```
 
-This makes it clear whether a new AI thread is seeing a small authority context, a current UI context, or a full audit dump.
+This makes it clear whether a new AI thread is seeing a small authority context, current work context, implementation context, or full audit dump.
 
 ## Rule
 
 Use the smallest profile that can answer the task.
 
 Do not use `full-audit` as the default. It is intentionally large and may include historical docs that are not current authority.
+
+Do not add feature-specific profiles for every roadmap item. Use `--include` and `--exclude` for task-specific scope.
