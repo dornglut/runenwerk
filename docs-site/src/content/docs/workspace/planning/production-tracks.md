@@ -37,8 +37,8 @@ Milestones:
 007 Theme / state / style — completed by user validation report
 008 Accessibility / focus / inspection — completed by user validation report
 009 Layout / container / virtualization — completed by user validation report through 009A/009B/009C
-010 Render surface / output — active planning
-011 Base control packages — future
+010 Render surface / output — completed by user validation report through PR #34
+011 Base control packages — active planning
 012 Generic interaction — future
 013 Overlay / popup / layering — future
 014 Minimum text editing — future
@@ -60,7 +60,8 @@ Design gates:
 009A corrected the owner-first rule before Phase 9 implementation.
 009B proved generic layout vocabulary belongs in ui_layout.
 009C proved ui_controls should bridge owner-crate vocabulary through per-control descriptors and read-only summaries.
-010 must investigate and preserve render/output ownership before implementation: ui_render_data owns renderer-facing output contracts, ui_runtime owns retained output generation, engine render owns backend execution, and ui_controls remains bridge-only.
+010 proved render/output ownership across ui_render_data, ui_controls, ui_runtime, and engine render.
+011 must harden base control packages while keeping full interaction behavior for Phase 12.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -76,20 +77,21 @@ Phase 6: user reported the state/host-intent validation gate green.
 Phase 7: user reported the theme/state/style validation gate green.
 Phase 8: user reported the accessibility/focus/inspection validation gate green.
 Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundation, 009C ui_controls layout bridge, read-only catalog inspection bridge, and focused tests; user reported the validation gate green.
-Phase 10: planning active; no Rust implementation or renderer/runtime behavior is authorized until owner-first design is accepted.
-Later phases: rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
+Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
+Phase 11: active planning for base control package hardening.
+Later phases: interaction, overlays, text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 10 is planning-only. The owner-first render surface / output design must be accepted before implementation.
+Phase 11 design must define what makes the base control package credible before implementation. Full interaction behavior remains Phase 12.
 ```
 
 Next action:
 
 ```text
-Review Phase 10 planning and then split implementation into owner-first slices. Do not add generic render/output vocabulary to ui_controls.
+Review Phase 11 base control package design. Then implement package hardening for Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView.
 ```
 
 ## Track shape
