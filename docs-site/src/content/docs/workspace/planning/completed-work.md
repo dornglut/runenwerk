@@ -91,6 +91,22 @@ Known gaps: Phase 6 and later component-platform phases are still pending.
 
 Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-006 State Binding / Host Intent design and planning.
 
+## PT-UI-COMPONENT-PLATFORM-006
+
+ID: `PT-UI-COMPONENT-PLATFORM-006`
+
+Title: UI Component Platform State Binding / Host Intent
+
+Completed on: 2026-06-26 by user validation report
+
+Evidence: Phase 6 added reusable state binding, edit lifecycle, validation-state, host-intent proposal, route/capability decision declarations, catalog inspection projection, and focused tests.
+
+Validation: User reported the Phase 6 validation gate green.
+
+Known gaps: Phase 7 and later component-platform phases are still pending.
+
+Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-007 Theme / State / Style design and planning.
+
 ## Entry shape
 
 ID:
