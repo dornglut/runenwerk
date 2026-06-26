@@ -1,6 +1,6 @@
 use ui_controls::{
     ControlCatalogIndex, ControlCatalogQuery, ControlInspectionDescriptor, ControlInspectionSection,
-    ControlMountEligibility, ControlStoryProofCategory, ControlStoryProofRequirement,
+    ControlKindId, ControlMountEligibility, ControlStoryProofCategory, ControlStoryProofRequirement,
     ControlStoryProofSummary, ControlStoryProofVerdict, LABEL_CONTROL_KIND_ID,
     RUNENWERK_CONTROL_PACKAGE_ID, RUNENWERK_CONTROL_TARGET_EDITOR, runenwerk_control_package,
 };
@@ -90,8 +90,9 @@ fn control_catalog_filters_story_diagnostics_and_mount_state() {
 #[test]
 fn control_catalog_inspection_exposes_package_control_facts() {
     let package = runenwerk_control_package();
+    let label_id = ControlKindId::new(LABEL_CONTROL_KIND_ID);
     let kind = package
-        .control_kind(&LABEL_CONTROL_KIND_ID.into())
+        .control_kind(&label_id)
         .expect("label control kind should exist");
     let inspection = ControlInspectionDescriptor::from_control_kind(&package, kind);
 
@@ -136,8 +137,9 @@ fn control_catalog_inspection_exposes_package_control_facts() {
 #[test]
 fn control_catalog_story_proof_badge_preserves_summary_status() {
     let package = runenwerk_control_package();
+    let label_id = ControlKindId::new(LABEL_CONTROL_KIND_ID);
     let kind = package
-        .control_kind(&LABEL_CONTROL_KIND_ID.into())
+        .control_kind(&label_id)
         .expect("label control kind should exist");
     let story_id = kind.story_ids[0].clone();
     let requirement = ControlStoryProofRequirement::new(
@@ -162,8 +164,9 @@ fn control_catalog_story_proof_badge_preserves_summary_status() {
 #[test]
 fn control_catalog_inspection_does_not_upgrade_runtime_mount_eligibility() {
     let package = runenwerk_control_package();
+    let label_id = ControlKindId::new(LABEL_CONTROL_KIND_ID);
     let kind = package
-        .control_kind(&LABEL_CONTROL_KIND_ID.into())
+        .control_kind(&label_id)
         .expect("label control kind should exist");
     let index = ControlCatalogIndex::from_packages([&package]);
     let entry = index
