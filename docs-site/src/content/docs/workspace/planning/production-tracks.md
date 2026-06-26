@@ -34,8 +34,8 @@ Milestones:
 004 Catalog / discovery / inspection — completed by user validation report
 005 Input / gesture / device — completed by user validation report
 006 State binding / host intent — completed by user validation report
-007 Theme / state / style — active design/planning
-008 Accessibility / focus / inspection — future
+007 Theme / state / style — completed by user validation report
+008 Accessibility / focus / inspection — active design/planning
 009 Layout / container / virtualization — future
 010 Render surface / output — future
 011 Base control packages — future
@@ -57,7 +57,7 @@ Milestones:
 Design gates:
 
 ```text
-Phase 7 implementation requires the Theme / State / Style design to be accepted first.
+Phase 8 implementation requires the Accessibility / Focus / Inspection design to be accepted first.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -70,19 +70,20 @@ Phase 3: user reported the story-proof validation gate green.
 Phase 4: user reported the catalog validation gate green.
 Phase 5: user reported the input validation gate green.
 Phase 6: user reported the state/host-intent validation gate green.
-Later phases: theme/style, accessibility, layout, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
+Phase 7: user reported the theme/state/style validation gate green.
+Later phases: accessibility, layout, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 7 is design/planning only until ui-component-platform-theme-state-style-design.md is reviewed and accepted.
+Phase 8 is design/planning only until ui-component-platform-accessibility-focus-inspection-design.md is reviewed and accepted.
 ```
 
 Next action:
 
 ```text
-Review and accept the Phase 7 Theme / State / Style design, then open a bounded implementation pass on its branch.
+Review and accept the Phase 8 Accessibility / Focus / Inspection design, then open a bounded implementation pass on its branch.
 ```
 
 ## Track shape
