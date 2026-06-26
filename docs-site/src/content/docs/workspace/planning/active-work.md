@@ -13,11 +13,11 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-009A`
+ID: `PT-UI-COMPONENT-PLATFORM-009`
 
-Title: UI Component Platform Ownership Realignment
+Title: UI Component Platform Layout / Container / Virtualization
 
-State: active planning
+State: implementation pending local validation
 
 Owner: ui
 
@@ -26,7 +26,7 @@ Authority files:
 ```text
 AGENTS.md
 docs-site/src/content/docs/workspace/start-here.md
-docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
+docs-site/src/content/docs/workspace/routines/implementation-routine.md
 docs-site/src/content/docs/design/active/ui-component-platform-ownership-realignment-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
 docs-site/src/content/docs/domain/ui/roadmap.md
@@ -35,6 +35,18 @@ docs-site/src/content/docs/domain/ui/roadmap.md
 Write scope:
 
 ```text
+domain/ui/ui_layout/src/contracts.rs
+domain/ui/ui_layout/src/lib.rs
+domain/ui/ui_layout/Cargo.toml
+domain/ui/ui_layout/tests/layout_contract.rs
+domain/ui/ui_controls/src/layout.rs
+domain/ui/ui_controls/src/lib.rs
+domain/ui/ui_controls/src/package.rs
+domain/ui/ui_controls/src/catalog/layout.rs
+domain/ui/ui_controls/src/catalog/mod.rs
+domain/ui/ui_controls/Cargo.toml
+domain/ui/ui_controls/tests/control_layout_contract.rs
+domain/ui/ui_controls/tests/control_layout_catalog_contract.rs
 docs-site/src/content/docs/design/active/ui-component-platform-ownership-realignment-design.md
 docs-site/src/content/docs/design/active/ui-component-platform-layout-container-virtualization-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
@@ -46,27 +58,43 @@ docs-site/src/content/docs/workspace/planning/decision-register.md
 Validation expectation:
 
 ```text
-Manual planning consistency review.
-No Rust migration in this pass.
+cargo fmt --all --check
+cargo check -p ui_layout
+cargo check -p ui_controls
+cargo test -p ui_layout layout
+cargo test -p ui_controls control_layout
+cargo test -p ui_controls control_accessibility
+cargo test -p ui_controls control_theme
+cargo test -p ui_controls control_state
+cargo test -p ui_controls control_input
+cargo test -p ui_controls control_catalog
+cargo test -p ui_controls control_package
+cargo test -p ui_controls control_registry
+cargo test -p ui_controls control_story_proof
+cargo test -p ui_controls control_authoring
+cargo test -p ui_artifacts control_package
+cargo test -p ui_program route
+git diff --check
 ```
 
 Known blockers:
 
 ```text
-Phase 9 implementation must not start until the ownership realignment and owner-first layout design are accepted.
+Connector command execution is unavailable. Phase 9 needs local validation before completion.
 ```
 
 Next action:
 
 ```text
-Review and accept the ownership realignment and corrected Phase 9 design. Then implement 009B in ui_layout before adding the 009C ui_controls bridge.
+Run the Phase 9 validation gate locally. If green, close Phase 9 and open Phase 10 Render Surface / Output planning.
 ```
 
 Evidence:
 
 ```text
-Phase 8 Accessibility / Focus / Inspection passed local validation and was merged by user report on 2026-06-26.
-A manual ownership audit found that phases 5-8 remained declarative but duplicated some generic vocabulary in ui_controls instead of anchoring it in owner crates.
+009A ownership realignment was accepted by user direction on 2026-06-26.
+009B ui_layout layout foundation implementation exists on this branch.
+009C ui_controls control layout bridge implementation exists on this branch.
 ```
 
 ## Active-work rules
