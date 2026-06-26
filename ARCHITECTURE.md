@@ -40,7 +40,19 @@ Use `docs-site/src/content/docs/guidelines/programming-principles.md` as the eng
 
 Foundation crates provide reusable vocabulary and low-level contracts that are not specific to editor, runtime, renderer, application behavior, or AI workflow.
 
-Foundation must not own LLM clients, prompt logic, app policy, editor policy, runtime orchestration, or backend integrations.
+Current foundation crates:
+
+```text
+foundation/id             typed identity primitives and allocators
+foundation/id_macros      attribute macro support for typed ID wrappers
+foundation/diagnostics    structured diagnostic reporting vocabulary
+foundation/ratification   shared ratification report vocabulary
+foundation/schema         portable schema identity, value, shape, constraint, and descriptor vocabulary
+foundation/commands       portable command contract vocabulary
+foundation/resource_ref   portable external resource references
+```
+
+Foundation must not own LLM clients, prompt logic, app policy, editor policy, runtime orchestration, backend integrations, or domain-specific invariants.
 
 ## Domain crates
 
