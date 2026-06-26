@@ -1,6 +1,7 @@
 //! File: domain/ui/ui_controls/src/lib.rs
 //! Crate: ui_controls
 
+pub mod accessibility;
 pub mod action_prompt;
 pub mod button;
 pub mod catalog;
@@ -20,6 +21,7 @@ pub mod table_view;
 pub mod theme;
 pub mod tree_view;
 
+pub use accessibility::*;
 pub use action_prompt::ACTION_PROMPT_CONTROL_KIND_ID;
 pub use button::BUTTON_CONTROL_KIND_ID;
 pub use catalog::*;
