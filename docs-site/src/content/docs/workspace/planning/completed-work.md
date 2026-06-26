@@ -153,7 +153,23 @@ Validation: User reported the Phase 9 validation gate green after `cargo fmt`, f
 
 Known gaps: Phase 5-8 still need later owner-crate vocabulary migration where generic concepts were declared in `ui_controls`. The catalog layout bridge still uses `ControlInspectionSection::Metadata` with `layout.*` keys; this is accepted as non-blocking until a future explicit cleanup adds a first-class layout section.
 
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-010-PLANNING` Render Surface / Output design intake. Do not use PR #30 or `feature/ui-component-platform-009-layout`.
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-010` Render Surface / Output.
+
+## PT-UI-COMPONENT-PLATFORM-010
+
+ID: `PT-UI-COMPONENT-PLATFORM-010`
+
+Title: UI Component Platform Render Surface / Output
+
+Completed on: 2026-06-26 by user validation report
+
+Evidence: PR #34 merged the full owner-first Phase 10 implementation into `main`. It added renderer-neutral output evidence contracts in `ui_render_data`, the `ui_controls` render bridge and catalog projection, `ui_runtime` evidence generation from emitted `UiFrame` output, and engine render submission proof that consumes evidence without owning UI semantics.
+
+Validation: User reported the full P10 validation gate green after focused checks/tests for `ui_render_data`, `ui_controls`, `ui_runtime`, `engine`, formatting, and `git diff --check`.
+
+Known gaps: Full runtime interaction behavior remains Phase 12. Base controls still need Phase 11 hardening before Gallery/Workbench/UI Designer should rely on them as package-quality reusable controls.
+
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-011-PLANNING` Base Control Packages design intake.
 
 ## Entry shape
 
