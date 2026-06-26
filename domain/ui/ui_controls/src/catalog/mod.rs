@@ -4,9 +4,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::migration::ControlDeprecationStatus;
+use crate::package::ControlPackageDescriptor;
 use crate::package::descriptor::ControlKindDescriptor;
 use crate::package::story_proof::{ControlStoryProofSummary, ControlStoryProofVerdict};
-use crate::package::ControlPackageDescriptor;
 
 pub mod entry;
 pub mod index;

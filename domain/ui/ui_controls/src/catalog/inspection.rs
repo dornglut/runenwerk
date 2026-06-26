@@ -8,7 +8,8 @@ use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor
 use crate::package::story_proof::ControlStoryProofSummary;
 
 use super::{
-    diagnostic_badges, ControlCatalogEntryDescriptor, ControlDiagnosticBadge, ControlStoryProofBadge,
+    ControlCatalogEntryDescriptor, ControlDiagnosticBadge, ControlStoryProofBadge,
+    diagnostic_badges,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
