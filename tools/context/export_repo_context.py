@@ -65,6 +65,8 @@ def path_matches(pattern: str, relative: Path) -> bool:
     normalized = normalize_glob(pattern)
     if fnmatch.fnmatchcase(path, normalized):
         return True
+    if normalized.startswith("**/") and fnmatch.fnmatchcase(path, normalized[3:]):
+        return True
     if normalized.endswith("/**"):
         prefix = normalized[:-3]
         return path == prefix or path.startswith(f"{prefix}/")
