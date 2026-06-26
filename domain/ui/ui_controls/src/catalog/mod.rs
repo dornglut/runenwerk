@@ -1,20 +1,16 @@
-//! File: domain/ui/ui_controls/src/catalog.rs
+//! File: domain/ui/ui_controls/src/catalog/mod.rs
 //! Crate: ui_controls
 
 use serde::{Deserialize, Serialize};
 
 use crate::migration::ControlDeprecationStatus;
-use crate::package::ControlPackageDescriptor;
 use crate::package::descriptor::ControlKindDescriptor;
 use crate::package::story_proof::{ControlStoryProofSummary, ControlStoryProofVerdict};
+use crate::package::ControlPackageDescriptor;
 
-#[path = "catalog_entry.rs"]
 pub mod entry;
-#[path = "catalog_index.rs"]
 pub mod index;
-#[path = "catalog_inspection.rs"]
 pub mod inspection;
-#[path = "catalog_query.rs"]
 pub mod query;
 
 pub use entry::*;
