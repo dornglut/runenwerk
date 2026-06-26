@@ -7,13 +7,31 @@ use ui_render_data::{UiExpectedPrimitiveCount, UiPrimitiveFamily};
 fn control_render_bridge_references_ui_render_data_vocabulary() {
     let summary = label_render_descriptor().summary();
 
-    assert!(summary.required_primitive_families.contains(&"rect".to_owned()));
-    assert!(summary.required_primitive_families.contains(&"glyph-run".to_owned()));
-    assert!(summary.expected_primitive_counts.contains(&"rect:1..".to_owned()));
-    assert!(summary.expected_primitive_counts.contains(&"glyph-run:1".to_owned()));
-    assert!(summary.render_evidence_ids.contains(
-        &"runenwerk.ui.controls.label.evidence.render.contract".to_owned()
-    ));
+    assert!(
+        summary
+            .required_primitive_families
+            .contains(&"rect".to_owned())
+    );
+    assert!(
+        summary
+            .required_primitive_families
+            .contains(&"glyph-run".to_owned())
+    );
+    assert!(
+        summary
+            .expected_primitive_counts
+            .contains(&"rect:1..".to_owned())
+    );
+    assert!(
+        summary
+            .expected_primitive_counts
+            .contains(&"glyph-run:1".to_owned())
+    );
+    assert!(
+        summary
+            .render_evidence_ids
+            .contains(&"runenwerk.ui.controls.label.evidence.render.contract".to_owned())
+    );
     assert!(!summary.has_backend_render_behavior);
 }
 
@@ -33,9 +51,11 @@ fn control_render_bridge_exposes_read_only_inspection_facts() {
                 .value
                 .contains("runenwerk.ui.controls.label.evidence.render.contract")
     }));
-    assert!(facts.iter().any(|fact| {
-        fact.key == "has_backend_render_behavior" && fact.value == "false"
-    }));
+    assert!(
+        facts
+            .iter()
+            .any(|fact| { fact.key == "has_backend_render_behavior" && fact.value == "false" })
+    );
 }
 
 fn label_render_descriptor() -> ControlRenderDescriptor {

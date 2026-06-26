@@ -109,12 +109,9 @@ impl UiExpectedPrimitiveCount {
             Some(max_count) if max_count == self.min_count => {
                 format!("{}:{}", self.family.as_str(), self.min_count)
             }
-            Some(max_count) => format!(
-                "{}:{}..{}",
-                self.family.as_str(),
-                self.min_count,
-                max_count
-            ),
+            Some(max_count) => {
+                format!("{}:{}..{}", self.family.as_str(), self.min_count, max_count)
+            }
             None => format!("{}:{}..", self.family.as_str(), self.min_count),
         }
     }

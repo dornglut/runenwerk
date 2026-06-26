@@ -1,10 +1,10 @@
+use ui_math::{UiRect, UiSize};
 use ui_render_data::{
     BorderPrimitive, RectPrimitive, UiDrawKey, UiExpectedPrimitiveCount, UiFrame,
     UiFrameOutputSummary, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiPrimitiveFamily,
     UiRenderOutputDiagnosticKind, UiRenderOutputEvidence, UiRenderOutputProvenance, UiSortKey,
     UiSurface, UiSurfaceId,
 };
-use ui_math::{UiRect, UiSize};
 
 #[test]
 fn frame_output_summary_counts_primitive_families_without_backend_state() {
@@ -18,7 +18,10 @@ fn frame_output_summary_counts_primitive_families_without_backend_state() {
     assert_eq!(summary.count_for_family(UiPrimitiveFamily::Border), 1);
     assert_eq!(summary.count_for_family(UiPrimitiveFamily::GlyphRun), 0);
     assert_eq!(summary.surfaces[0].surface_id, 7);
-    assert_eq!(summary.surfaces[0].count_for_family(UiPrimitiveFamily::Rect), 2);
+    assert_eq!(
+        summary.surfaces[0].count_for_family(UiPrimitiveFamily::Rect),
+        2
+    );
 }
 
 #[test]
@@ -35,7 +38,12 @@ fn render_output_evidence_reports_missing_expected_primitives() {
     );
 
     assert!(!evidence.is_valid());
-    assert_eq!(evidence.frame_summary.count_for_family(UiPrimitiveFamily::Rect), 2);
+    assert_eq!(
+        evidence
+            .frame_summary
+            .count_for_family(UiPrimitiveFamily::Rect),
+        2
+    );
     assert!(evidence.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == UiRenderOutputDiagnosticKind::MissingPrimitiveCount
             && diagnostic.message.contains("glyph-run")

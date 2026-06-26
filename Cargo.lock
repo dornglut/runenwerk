@@ -3806,6 +3806,7 @@ dependencies = [
  "serde",
  "ui_layout",
  "ui_program",
+ "ui_render_data",
  "ui_schema",
 ]
 
@@ -3941,6 +3942,7 @@ dependencies = [
 name = "ui_render_data"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "ui_math",
  "ui_text",
 ]
