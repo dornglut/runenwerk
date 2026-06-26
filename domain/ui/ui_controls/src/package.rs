@@ -13,6 +13,7 @@ pub mod validation;
 pub use crate::catalog::*;
 pub use crate::input::*;
 pub use crate::layout::*;
+pub use crate::render::*;
 pub use crate::theme::*;
 pub use authoring::*;
 pub use descriptor::*;
