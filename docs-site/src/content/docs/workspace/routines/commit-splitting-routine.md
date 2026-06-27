@@ -1,3 +1,15 @@
+---
+title: Commit Splitting Routine
+description: Optional local-checkout routine for grouping mixed working-tree changes.
+status: active
+owner: workspace
+layer: workspace
+canonical: false
+last_reviewed: 2026-06-27
+related_docs:
+  - ../workflow-lifecycle.md
+---
+
 # Commit Splitting Routine
 
 This is an optional local-checkout routine.
