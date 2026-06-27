@@ -1,3 +1,16 @@
+---
+title: Pull Request Review Routine
+description: Scriptless routine for reviewing proposed repository patches.
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-06-27
+related_docs:
+  - ../workflow-lifecycle.md
+  - ../authority-model.md
+---
+
 # Pull Request Review Routine
 
 ## Use when

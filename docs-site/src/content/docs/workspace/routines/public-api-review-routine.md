@@ -1,3 +1,15 @@
+---
+title: Public API Review Routine
+description: Specialized routine for reviewing public crate and module usability.
+status: active
+owner: workspace
+layer: workspace
+canonical: false
+last_reviewed: 2026-06-27
+related_docs:
+  - ./pr-review-routine.md
+---
+
 # Public API Review Routine
 
 Use this routine to review whether a public crate or module is easy to discover, use, and compose correctly.

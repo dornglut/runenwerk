@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-14
+last_reviewed: 2026-06-27
 related:
   - ./architecture-governance-review.md
   - ./design-implementation-triage.md
@@ -16,18 +16,16 @@ related:
   - ./repo-execution-priority-checklist.md
   - ./roadmap-index.md
   - ./diagrams/value-weighted-dependency-roadmap.puml
+  - ./routines/architecture-governance-review-routine.md
 ---
 
 # Roadmap Planning Methods
 
 ## Purpose
 
-This page defines the workspace planning model used to compare roadmap work
-without flattening architecture gates into a single priority number.
+This page defines the workspace planning model used to compare roadmap work without flattening architecture gates into a single priority number.
 
-The long-term rule is: topology first, gate second, score third. A score can
-rank comparable work, but it must not override an owning roadmap, a dependency
-level, or a blocker gate.
+The long-term rule is: topology first, gate second, score third. A score can rank comparable work, but it must not override an owning roadmap, a dependency level, or a blocker gate.
 
 ## Canonical Stack
 
@@ -49,14 +47,11 @@ level, or a blocker gate.
 | Strangler Fig migration | Replacing old paths while old and new paths coexist under guards. | Greenfield features with no existing path to retire. |
 | Team Topologies labels | Clarifying ownership mode and collaboration shape for roadmap work. | Inventing a human org chart inside repository docs. |
 
-MoSCoW can be meeting shorthand, but it is not the canonical roadmap model for
-this repository. It hides dependency order, effort, confidence, and blocker
-state, which are the main planning risks here.
+MoSCoW can be meeting shorthand, but it is not the canonical roadmap model for this repository. It hides dependency order, effort, confidence, and blocker state, which are the main planning risks here.
 
 ## Architecture-Adjusted WSJF
 
-Use architecture-adjusted WSJF as the primary score in the workspace decision
-register:
+Use architecture-adjusted WSJF as the primary score in the workspace decision register:
 
 ```text
 A-WSJF = ((V + TC + RR/OE + DU) * C) / E
@@ -88,17 +83,11 @@ Use RICE only when reach is meaningful:
 RICE = (Reach * Impact * Confidence) / Effort
 ```
 
-For this repository, most architecture substrate work should keep `RICE` as
-`N/A`. A RICE score becomes appropriate when the roadmap item has a concrete
-user path, target workflow, or adoption population. Good candidates include
-editor UX flows, drawing workflows, tablet input, and multi-window presentation
-after their product target is clear.
+For this repository, most architecture substrate work should keep `RICE` as `N/A`. A RICE score becomes appropriate when the roadmap item has a concrete user path, target workflow, or adoption population. Good candidates include editor UX flows, drawing workflows, tablet input, and multi-window presentation after their product target is clear.
 
 ## Discovery And Risk Tools
 
-Use an Opportunity Solution Tree before committing product-facing work whose
-problem statement is still weak. The tree should connect one outcome to
-opportunities, candidate solutions, and assumption tests.
+Use an Opportunity Solution Tree before committing product-facing work whose problem statement is still weak. The tree should connect one outcome to opportunities, candidate solutions, and assumption tests.
 
 Use Kano for user-facing experience classification:
 
@@ -109,16 +98,13 @@ Use Kano for user-facing experience classification:
 | Exciter | Delightful if present, acceptable if absent. |
 | Neutral | Not a user-facing differentiator now. |
 
-Use RAID notes when a score is hard to trust. A high-value item with weak
-confidence should usually produce an evidence task before implementation.
+Use RAID notes when a score is hard to trust. A high-value item with weak confidence should usually produce an evidence task before implementation.
 
 ## Architecture Governance Methods
 
-Use the architecture governance review when a roadmap item changes ownership,
-dependency direction, or migration policy:
+Use the architecture governance review when a roadmap item changes ownership, dependency direction, or migration policy:
 
 - [architecture-governance-review.md](./architecture-governance-review.md)
-- [prompt-templates/architecture-governance-review.md](./prompt-templates/architecture-governance-review.md)
 - [routines/architecture-governance-review-routine.md](./routines/architecture-governance-review-routine.md)
 
 The critical adoption choice is selective use:
@@ -141,8 +127,7 @@ When choosing the next item:
 2. Remove `B5` items unless policy has changed.
 3. Pick the highest dependency level that is unblocked.
 4. Compare items inside that level by lane and A-WSJF.
-5. If scores conflict with engineering judgment, update the evidence and the
-   decision register instead of silently ignoring the score.
+5. If scores conflict with engineering judgment, update the evidence and the decision register instead of silently ignoring the score.
 
 External references:
 
