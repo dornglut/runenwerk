@@ -5,10 +5,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-27
 related_docs:
   - ../authority-model.md
   - ../start-here.md
+  - ../workflow-lifecycle.md
   - ../../guidelines/programming-principles.md
   - ../../guidelines/module-structure-guidelines.md
   - ../../adr/README.md
@@ -28,6 +29,7 @@ Use this routine before implementation when a change may affect ownership, depen
 - `DOMAIN_MAP.md`
 - `GLOSSARY.md`
 - `docs-site/src/content/docs/workspace/authority-model.md`
+- `docs-site/src/content/docs/workspace/workflow-lifecycle.md`
 - `docs-site/src/content/docs/guidelines/programming-principles.md`
 - owning design, ADR, guideline, roadmap, or domain doc
 
@@ -41,6 +43,22 @@ Inspect affected crates, modules, tests, docs, examples, and public API entrypoi
 - Whether an ADR or design update is needed.
 - Whether the change is implementation, prototype, documentation, defer, or reject.
 - Which invariants and dependency directions must hold.
+- Whether architecture acceptance is enough or whether implementation authorization is also needed.
+
+## State transitions produced
+
+This routine may produce:
+
+```text
+idea -> investigating
+investigating -> proposed-design
+proposed-design -> accepted-direction
+proposed-design -> deferred
+proposed-design -> rejected
+accepted-direction -> superseded
+```
+
+It must not produce `active-implementation` unless a separate implementation scope is explicitly requested and planning authority already authorizes it.
 
 ## Patch rules
 
@@ -51,13 +69,18 @@ Do not implement product code from this review unless the task explicitly includ
 - Domain owner named.
 - Dependency direction checked.
 - ADR/design need decided.
+- Lifecycle state and intended transition named.
 - Seven programming principles applied.
 - Public API and docs impact considered.
 - Stop conditions named.
 
+## Stop conditions
+
+Stop and redesign if the review would require broad shared extraction without a proving domain, implementation without active scope, root docs as long-form authority, generated views as default authority, or cross-domain ownership drift.
+
 ## Evidence to report
 
-Report recommendation, scope, owner, dependency direction, ADR/design need, validation, stop conditions, and next action.
+Report recommendation, scope, owner, dependency direction, ADR/design need, lifecycle transition, validation, stop conditions, and next action.
 
 ## Optional local helpers
 
