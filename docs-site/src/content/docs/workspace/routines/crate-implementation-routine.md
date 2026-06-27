@@ -1,3 +1,15 @@
+---
+title: Crate Implementation Routine
+description: Specialized crate-level implementation reminders that delegate to the main implementation routine.
+status: active
+owner: workspace
+layer: workspace
+canonical: false
+last_reviewed: 2026-06-27
+related_docs:
+  - ./implementation-routine.md
+---
+
 # Crate Implementation Routine
 
 This specialized routine now delegates to:
