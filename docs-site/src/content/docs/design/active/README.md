@@ -105,6 +105,8 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
 - [Runenwerk Capability Workbench Target Architecture](runenwerk-capability-workbench-target-architecture.md)
 - [Runenwerk Domain Workbench North Star](runenwerk-domain-workbench-north-star.md)
+- [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
+- [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [UI Program Architecture](ui-program-architecture.md)
