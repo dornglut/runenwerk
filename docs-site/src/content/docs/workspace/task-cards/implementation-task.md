@@ -1,3 +1,15 @@
+---
+title: Implementation Task
+description: Reusable task card for bounded implementation work.
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-06-27
+related_docs:
+  - ../routines/implementation-routine.md
+---
+
 # Implementation Task
 
 Use this card for bounded implementation work.
