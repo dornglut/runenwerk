@@ -59,7 +59,7 @@ Architecture acceptance does not authorize implementation. Active implementation
 - Completed work links evidence and remains a short index.
 - Production tracks name strategic order, track type, gates, activation condition, and current blocker.
 - Decision register explains priority changes and records state transitions where relevant.
-- Closeout detail goes under `../reports/closeouts/` when it would bloat planning records.
+- Closeout detail goes under `../../reports/closeouts/` when it would bloat planning records.
 
 ## Common entry fields
 
