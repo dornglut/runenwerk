@@ -1,3 +1,15 @@
+---
+title: Parallel Roadmap Batch Routine
+description: Specialized planning routine for explicitly approved independent roadmap batches.
+status: active
+owner: workspace
+layer: workspace
+canonical: false
+last_reviewed: 2026-06-27
+related_docs:
+  - ./roadmap-update-routine.md
+---
+
 # Parallel Roadmap Batch Routine
 
 This specialized batch routine is no longer the default planning workflow.
