@@ -4,7 +4,9 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-26
+last_reviewed: 2026-06-27
+related_docs:
+  - ../workflow-lifecycle.md
 ---
 
 # Active Work
@@ -18,6 +20,8 @@ ID: `PT-UI-COMPONENT-PLATFORM-011-PLANNING`
 Title: UI Component Platform Base Control Packages design intake
 
 State: active planning
+
+Lifecycle state: `active-planning`
 
 Owner: `ui_controls` owns base control package descriptors and per-control summaries. `ui_layout`, `ui_render_data`, `ui_input`, `ui_theme`, and accessibility/focus contracts remain owner crates that base controls reference. Full runtime interaction behavior is planned for Phase 12, not Phase 11.
 
@@ -38,6 +42,8 @@ Evidence: Phase 10 is complete through PR #34 merged into `main`, and the user r
 - Do not promote deferred work without recording the reason.
 - Do not mark work completed without evidence.
 - If legacy generated views disagree, report them as stale mirrors.
+- Use `../workflow-lifecycle.md` before changing active work state.
+- Architecture acceptance does not authorize implementation. Use `active-implementation` only when exact scope, owner, validation, evidence expectation, and stop conditions are known.
 
 ## Update shape
 
@@ -45,6 +51,7 @@ Evidence: Phase 10 is complete through PR #34 merged into `main`, and the user r
 ID:
 Title:
 State:
+Lifecycle state:
 Owner:
 Authority files:
 Write scope:
