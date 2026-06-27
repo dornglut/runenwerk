@@ -4,9 +4,10 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-27
 related_docs:
   - ../start-here.md
+  - ../workflow-lifecycle.md
   - ../../guidelines/programming-principles.md
 ---
 
@@ -23,6 +24,7 @@ Use this routine for bounded implementation work after the owner, intent, and ac
 - `DEPENDENCY_RULES.md`
 - `DOMAIN_MAP.md`
 - `TESTING.md`
+- `docs-site/src/content/docs/workspace/workflow-lifecycle.md`
 - `docs-site/src/content/docs/guidelines/programming-principles.md`
 - the owning design, ADR, planning record, issue, or crate/domain docs
 
@@ -34,10 +36,18 @@ Inspect the target crate or document, nearby modules, public exports, tests, exa
 
 - owning domain, crate, and subsystem;
 - exact scope and non-goals;
+- lifecycle state is `active-implementation` or explicitly authorized equivalent;
 - invariant or behavior being changed;
 - public API and docs impact;
 - validation expectation;
+- stop conditions;
 - whether a design or ADR update is required.
+
+## State transitions produced
+
+This routine may move work from active implementation to review.
+
+It must not create active implementation from accepted direction alone. Use the roadmap update routine when planning state must change first.
 
 ## Patch rules
 
@@ -52,15 +62,20 @@ Inspect the target crate or document, nearby modules, public exports, tests, exa
 
 - Authority files inspected.
 - Working files inspected by path.
+- Lifecycle state and implementation authorization checked.
 - Seven programming principles applied as a review lens.
 - Dependency direction checked.
 - Public API impact checked.
 - Tests or local commands to run named.
 - Command validation status stated honestly.
 
+## Stop conditions
+
+Stop and redesign if the requested implementation is only backed by accepted direction, has no exact owner/scope, violates dependency direction, needs architecture decision first, or requires validation that cannot be reported honestly.
+
 ## Evidence to report
 
-Report changed files, exact functions/modules/sections, behavior impact, authority files inspected, validation, remaining risks, and next step.
+Report changed files, exact functions/modules/sections, behavior impact, lifecycle state, authority files inspected, validation, remaining risks, and next step.
 
 ## Optional local helpers
 

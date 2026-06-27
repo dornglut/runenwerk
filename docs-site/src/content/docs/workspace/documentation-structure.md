@@ -4,11 +4,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-27
 related_docs:
   - ./start-here.md
   - ./operating-model.md
   - ./authority-model.md
+  - ./workflow-lifecycle.md
   - ../guidelines/programming-principles.md
 ---
 
@@ -38,6 +39,12 @@ The active workspace workflow starts at:
 
 ```text
 docs-site/src/content/docs/workspace/start-here.md
+```
+
+The lifecycle model for moving work between idea, investigation, design, decision, planning, implementation, review, completion, deferral, supersession, and archive states is:
+
+```text
+docs-site/src/content/docs/workspace/workflow-lifecycle.md
 ```
 
 ## Root documents
@@ -86,6 +93,7 @@ workspace/
   authority-model.md
   ai-agent-boundaries.md
   documentation-structure.md
+  workflow-lifecycle.md
 
   routines/
     README.md
@@ -116,17 +124,58 @@ workspace/
     decision-register.md
 ```
 
+## Reports structure
+
+```text
+reports/
+  closeouts/
+    README.md
+```
+
+Reports own historical evidence, audits, migrations, closeouts, and benchmarks. Planning files may link to reports, but planning files should not become report archives.
+
 ## Folder responsibilities
 
-- `workspace/`: repository process, structure, planning, status, and maintenance docs.
+- `workspace/`: repository process, lifecycle, structure, planning, status, and maintenance docs.
 - `workspace/routines/`: repeatable human/agent procedures.
 - `workspace/task-cards/`: short reusable task instructions that point to routines.
 - `workspace/planning/`: Markdown-first planning records.
 - `guidelines/`: stable doctrine, including programming principles, architecture, dependency, module, and validation rules.
 - `adr/`: durable decisions and rejected alternatives.
 - `design/`: target architecture and tradeoffs.
+- `domain/`: domain-specific current-state and target documentation.
 - `reports/`: historical evidence, audits, migrations, closeouts, and benchmarks.
+- `reports/closeouts/`: detailed completion evidence for completed phases or slices.
 - `archive/`: non-authoritative historical material.
+
+## Document-type rules
+
+Use [`workflow-lifecycle.md`](workflow-lifecycle.md) for state transitions and promotion rules.
+
+In short:
+
+```text
+Guideline
+  stable doctrine and engineering rules
+
+Design
+  target architecture, vocabulary, owner boundaries, tradeoffs, non-goals
+
+Roadmap / production track
+  strategic sequence and current planning state
+
+Active work
+  one current focus
+
+Completed work
+  short completion index
+
+Closeout report
+  detailed historical evidence
+
+Generated file
+  mirror, evidence, or narrow contract only
+```
 
 ## Routine shape
 
@@ -137,8 +186,10 @@ Use when
 Authority files to read
 Working files to inspect
 What to decide before editing
+State transitions produced
 Patch rules
 Manual validation checklist
+Stop conditions
 Evidence to report
 Optional local helpers
 ```
@@ -159,7 +210,7 @@ Use the programming principles when pruning docs:
 - KISS: keep navigation short.
 - DRY: keep one authority for each durable claim.
 - YAGNI: remove unused workflow surfaces.
-- Separation of Concerns: separate entrypoints, routines, planning, reports, and tooling.
+- Separation of Concerns: separate entrypoints, lifecycle, routines, planning, reports, and tooling.
 
 When moving, merging, or pruning docs, report old path to new path mapping.
 

@@ -4,12 +4,17 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-26
+last_reviewed: 2026-06-27
+related_docs:
+  - ../workflow-lifecycle.md
+  - ../../reports/closeouts/README.md
 ---
 
 # Completed Work
 
 Use this file for completed planning work.
+
+This file is a short completion index. Detailed evidence belongs in `../../reports/closeouts/` when a completion record would become too large.
 
 ## PT-UI-COMPONENT-PLATFORM-001
 
@@ -174,11 +179,21 @@ Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-011-PLANNING` Base Control Packa
 ## Entry shape
 
 ID:
+
 Title:
+
+Lifecycle state: `completed`
+
 Completed on:
+
 Evidence:
+
 Validation:
+
 Known gaps:
+
+Closeout report:
+
 Follow-up:
 
 ## Rules
@@ -187,3 +202,5 @@ Follow-up:
 - Validation must be reported as run, unavailable, or intentionally skipped with reason.
 - Known gaps must stay visible.
 - Historical closeouts and reports may contain detail; this file should remain an index.
+- Use `../workflow-lifecycle.md` before moving work to completed.
+- Put detailed evidence under `../../reports/closeouts/` when the completion entry would become a report archive.

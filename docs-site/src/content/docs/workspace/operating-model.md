@@ -5,11 +5,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-27
 related_docs:
   - ./start-here.md
   - ./authority-model.md
   - ./documentation-structure.md
+  - ./workflow-lifecycle.md
   - ./routines/README.md
   - ./task-cards/README.md
 ---
@@ -36,6 +37,18 @@ Every workflow must be completable by reading and editing repository files.
 
 Scripts, Taskfile tasks, renderers, validators, prompt generators, and shell commands are optional evidence helpers. They are not the default workflow, not the planning authority, and not required to understand the next action.
 
+## Lifecycle principle
+
+Every non-trivial task should identify its lifecycle state before editing.
+
+Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when work moves between investigation, proposed design, accepted direction, production track, active planning, active implementation, review, completion, deferral, or supersession.
+
+The key rule is:
+
+```text
+Architecture acceptance is not implementation authorization.
+```
+
 ## Default workflow
 
 ```text
@@ -43,11 +56,12 @@ Scripts, Taskfile tasks, renderers, validators, prompt generators, and shell com
 2. Select the matching routine.
 3. Read the routine's authority files.
 4. Inspect the exact working files.
-5. Decide the smallest coherent patch.
-6. Apply the patch file-by-file.
-7. Run manual validation from the routine.
-8. Report command validation as run, skipped, or unavailable.
-9. List changed files, exact sections/modules, risks, and next steps.
+5. Classify the lifecycle state and intended state transition.
+6. Decide the smallest coherent patch.
+7. Apply the patch file-by-file.
+8. Run manual validation from the routine.
+9. Report command validation as run, skipped, or unavailable.
+10. List changed files, exact sections/modules, risks, and next steps.
 ```
 
 ## Authority rules
@@ -90,7 +104,9 @@ These commands do not replace manual authority review. If command output and aut
 
 ## Generated files
 
-Generated or machine-readable files can be useful mirrors. They must not be required for normal workflow comprehension.
+Generated or machine-readable files can be useful mirrors, evidence, or narrow contracts.
+
+They must not be required for normal workflow comprehension unless an accepted design explicitly classifies a generated file as a contract for a narrow validation scope.
 
 If a generated view is stale or cannot be regenerated, continue from the Markdown planning record and report the generated-view gap.
 

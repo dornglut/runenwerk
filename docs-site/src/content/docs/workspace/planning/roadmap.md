@@ -4,7 +4,9 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-26
+last_reviewed: 2026-06-27
+related_docs:
+  - ../workflow-lifecycle.md
 ---
 
 # Roadmap
@@ -209,6 +211,8 @@ Title: UI Component Platform Base Control Packages design intake
 
 State: active planning
 
+Lifecycle state: `active-planning`
+
 Owner: `ui_controls` for base control package descriptors and summaries. Owner crates such as `ui_layout`, `ui_render_data`, `ui_input`, and accessibility/focus contracts remain the source of generic vocabulary.
 
 Evidence: P11 is opened after P10 closed. The base controls already exist as descriptor modules, but this phase must harden their package metadata, proof requirements, and catalog/Gallery-facing summaries before full interaction work.
@@ -222,3 +226,21 @@ Next action: Review and accept the P11 design. Then implement base control packa
 - Completed work belongs in `completed-work.md`.
 - Deferred work belongs in `deferred-work.md`.
 - Strategic track order belongs in `production-tracks.md`.
+- Use `../workflow-lifecycle.md` before changing lifecycle state.
+- Accepted direction does not authorize implementation. Roadmap entries that enter implementation must have exact owner, scope, validation envelope, evidence expectation, and stop conditions.
+
+## Entry shape
+
+```text
+ID:
+Title:
+State:
+Lifecycle state:
+Owner:
+Authority:
+Evidence:
+Known gaps:
+Next action:
+```
+
+Existing entries may be migrated as they are touched.

@@ -5,11 +5,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-27
 related_docs:
   - ./operating-model.md
   - ./authority-model.md
   - ./documentation-structure.md
+  - ./workflow-lifecycle.md
   - ./routines/README.md
   - ./task-cards/README.md
   - ./planning/README.md
@@ -40,6 +41,29 @@ The workflow must work from GitHub connector, ChatGPT context tooling, Codex-sty
 | Phase closeout | [`routines/phase-completion-drift-check-routine.md`](routines/phase-completion-drift-check-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
 | Pull request review | [`routines/pr-review-routine.md`](routines/pr-review-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
 
+## Lifecycle rule
+
+For non-trivial work, classify the current lifecycle state before editing:
+
+```text
+idea
+investigating
+proposed-design
+accepted-direction
+track-candidate
+production-track
+active-planning
+active-implementation
+review
+completed
+deferred
+rejected
+superseded
+archived
+```
+
+Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when a task crosses from design to decision, planning, implementation, or closeout.
+
 ## Read first
 
 For code changes:
@@ -58,6 +82,7 @@ For documentation changes:
 AGENTS.md
 docs-site/src/content/docs/workspace/documentation-structure.md
 docs-site/src/content/docs/workspace/authority-model.md
+docs-site/src/content/docs/workspace/workflow-lifecycle.md
 ```
 
 For planning changes:
@@ -67,6 +92,7 @@ docs-site/src/content/docs/workspace/planning/README.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/authority-model.md
+docs-site/src/content/docs/workspace/workflow-lifecycle.md
 ```
 
 For all significant changes, use:

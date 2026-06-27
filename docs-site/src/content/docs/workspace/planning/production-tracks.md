@@ -4,7 +4,9 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-26
+last_reviewed: 2026-06-27
+related_docs:
+  - ../workflow-lifecycle.md
 ---
 
 # Production Tracks
@@ -17,7 +19,11 @@ Track ID: `PT-UI-COMPONENT-PLATFORM`
 
 Title: UI Component Platform
 
+Track type: product / architecture proof
+
 State: active
+
+Lifecycle state: `production-track`
 
 Goal:
 
@@ -88,6 +94,12 @@ Current blocker:
 Phase 11 design must define what makes the base control package credible before implementation. Full interaction behavior remains Phase 12.
 ```
 
+Activation condition:
+
+```text
+Each future milestone activates only through an accepted planning/design update and active-work transition.
+```
+
 Next action:
 
 ```text
@@ -99,12 +111,16 @@ Review Phase 11 base control package design. Then implement package hardening fo
 ```text
 Track ID:
 Title:
+Track type:
 State:
+Lifecycle state:
 Goal:
+Authority:
 Milestones:
 Design gates:
 Evidence gates:
 Current blocker:
+Activation condition:
 Next action:
 ```
 
@@ -114,3 +130,5 @@ Next action:
 - Production tracks do not authorize code without an owned implementation scope.
 - Strategic order must be readable without generated views.
 - Legacy structured track files may remain as optional mirrors.
+- Use `../workflow-lifecycle.md` before promoting a track to active planning or active implementation.
+- Do not create a production track for every accepted design. Use a production track only for strategic multi-phase work.
