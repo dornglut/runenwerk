@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-26
+last_reviewed: 2026-06-27
 ---
 
 # Active Designs
@@ -71,7 +71,33 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Runenwerk Draw Tool Session Slice 2 Session Control](runenwerk-draw-tool-session-slice-2-session-control.md)
 - [Runenwerk Draw Tool Session Slice 3 Intent Input Path](runenwerk-draw-tool-session-slice-3-intent-input-path.md)
 
+### UI Component Platform
+
+- [UI Component Platform Accessibility / Focus / Inspection Design](ui-component-platform-accessibility-focus-inspection-design.md)
+- [UI Component Platform Authoring Kit Design](ui-component-platform-authoring-kit-design.md)
+- [UI Component Platform Base Control Packages Design](ui-component-platform-base-control-packages-design.md)
+- [UI Component Platform Budget Evidence Design](ui-component-platform-budget-evidence-design.md)
+- [UI Component Platform Catalog / Discovery / Inspection Design](ui-component-platform-catalog-discovery-inspection-design.md)
+- [UI Component Platform Control Kernel Design](ui-component-platform-control-kernel-design.md)
+- [UI Component Platform Generic Text Design](ui-component-platform-generic-text-design.md)
+- [UI Component Platform Input / Gesture / Device Design](ui-component-platform-input-gesture-device-design.md)
+- [UI Component Platform Layout / Container / Virtualization Design](ui-component-platform-layout-container-virtualization-design.md)
+- [UI Component Platform Node Canvas Design](ui-component-platform-node-canvas-design.md)
+- [UI Component Platform Overlay / Popup / Layering Design](ui-component-platform-overlay-popup-layering-design.md)
+- [UI Component Platform Ownership Realignment Design](ui-component-platform-ownership-realignment-design.md)
+- [UI Component Platform Port Graph Canvas Design](ui-component-platform-port-graph-canvas-design.md)
+- [UI Component Platform Progression Tree View Design](ui-component-platform-progression-tree-view-design.md)
+- [UI Component Platform Render Surface Output Design](ui-component-platform-render-surface-output-design.md)
+- [UI Component Platform Spatial Canvas Design](ui-component-platform-spatial-canvas-design.md)
+- [UI Component Platform State Binding / Host Intent Design](ui-component-platform-state-binding-host-intent-design.md)
+- [UI Component Platform Story Proof Envelope Design](ui-component-platform-story-proof-envelope-design.md)
+- [UI Component Platform Surface2D Design](ui-component-platform-surface2d-design.md)
+- [UI Component Platform Theme / State / Style Design](ui-component-platform-theme-state-style-design.md)
+- [UI Component Platform Track Surface Design](ui-component-platform-track-surface-design.md)
+- [UI Component Platform Transitions / Effects Design](ui-component-platform-transitions-effects-design.md)
+
 ### Workspace / Cross-Domain
+
 - [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
 - [Field Visualizer Product Workflow Design](field-visualizer-product-workflow-design.md)
@@ -81,8 +107,6 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Runenwerk Domain Workbench North Star](runenwerk-domain-workbench-north-star.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
-- [UI Component Platform Base Control Packages Design](ui-component-platform-base-control-packages-design.md)
-- [UI Component Platform Render Surface Output Design](ui-component-platform-render-surface-output-design.md)
 - [UI Program Architecture](ui-program-architecture.md)
 - [UI Program Architecture Owner Map](ui-program-architecture-owner-map.md)
 - [UI Program Contract Design](ui-program-contract-design.md)
