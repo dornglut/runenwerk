@@ -1,3 +1,13 @@
+---
+title: Runenwerk Workspace
+description: Short orientation map for workspace documentation.
+status: active
+owner: workspace
+layer: workspace
+canonical: true
+last_reviewed: 2026-06-27
+---
+
 # Runenwerk Workspace
 
 This page is a short orientation map.
