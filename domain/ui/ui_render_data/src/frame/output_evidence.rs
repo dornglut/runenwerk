@@ -74,11 +74,19 @@ pub struct UiExpectedPrimitiveCount {
 
 impl UiExpectedPrimitiveCount {
     pub const fn at_least(family: UiPrimitiveFamily, min_count: u32) -> Self {
-        Self { family, min_count, max_count: None }
+        Self {
+            family,
+            min_count,
+            max_count: None,
+        }
     }
 
     pub const fn exactly(family: UiPrimitiveFamily, count: u32) -> Self {
-        Self { family, min_count: count, max_count: Some(count) }
+        Self {
+            family,
+            min_count: count,
+            max_count: Some(count),
+        }
     }
 
     pub const fn with_max(mut self, max_count: u32) -> Self {
@@ -92,8 +100,12 @@ impl UiExpectedPrimitiveCount {
 
     pub fn label(&self) -> String {
         match self.max_count {
-            Some(max_count) if max_count == self.min_count => format!("{}:{}", self.family.as_str(), self.min_count),
-            Some(max_count) => format!("{}:{}..{}", self.family.as_str(), self.min_count, max_count),
+            Some(max_count) if max_count == self.min_count => {
+                format!("{}:{}", self.family.as_str(), self.min_count)
+            }
+            Some(max_count) => {
+                format!("{}:{}..{}", self.family.as_str(), self.min_count, max_count)
+            }
             None => format!("{}:{}..", self.family.as_str(), self.min_count),
         }
     }
@@ -114,19 +126,28 @@ impl UiSurfaceOutputSummary {
         for layer in &surface.layers {
             for primitive in &layer.primitives {
                 primitive_count += 1;
-                *counts.entry(UiPrimitiveFamily::from_primitive(primitive)).or_insert(0) += 1;
+                *counts
+                    .entry(UiPrimitiveFamily::from_primitive(primitive))
+                    .or_insert(0) += 1;
             }
         }
         Self {
             surface_id: surface.id.0,
             layer_count: surface.layers.len() as u32,
             primitive_count,
-            primitive_families: counts.into_iter().map(|(family, count)| UiPrimitiveFamilyCount::new(family, count)).collect(),
+            primitive_families: counts
+                .into_iter()
+                .map(|(family, count)| UiPrimitiveFamilyCount::new(family, count))
+                .collect(),
         }
     }
 
     pub fn count_for_family(&self, family: UiPrimitiveFamily) -> u32 {
-        self.primitive_families.iter().find(|entry| entry.family == family).map(|entry| entry.count).unwrap_or(0)
+        self.primitive_families
+            .iter()
+            .find(|entry| entry.family == family)
+            .map(|entry| entry.count)
+            .unwrap_or(0)
     }
 }
 
@@ -141,7 +162,11 @@ pub struct UiFrameOutputSummary {
 
 impl UiFrameOutputSummary {
     pub fn from_frame(frame: &UiFrame) -> Self {
-        let surfaces = frame.surfaces.iter().map(UiSurfaceOutputSummary::from_surface).collect::<Vec<_>>();
+        let surfaces = frame
+            .surfaces
+            .iter()
+            .map(UiSurfaceOutputSummary::from_surface)
+            .collect::<Vec<_>>();
         let mut counts = BTreeMap::<UiPrimitiveFamily, u32>::new();
         let mut layer_count = 0u32;
         let mut primitive_count = 0u32;
@@ -156,13 +181,20 @@ impl UiFrameOutputSummary {
             surface_count: surfaces.len() as u32,
             layer_count,
             primitive_count,
-            primitive_families: counts.into_iter().map(|(family, count)| UiPrimitiveFamilyCount::new(family, count)).collect(),
+            primitive_families: counts
+                .into_iter()
+                .map(|(family, count)| UiPrimitiveFamilyCount::new(family, count))
+                .collect(),
             surfaces,
         }
     }
 
     pub fn count_for_family(&self, family: UiPrimitiveFamily) -> u32 {
-        self.primitive_families.iter().find(|entry| entry.family == family).map(|entry| entry.count).unwrap_or(0)
+        self.primitive_families
+            .iter()
+            .find(|entry| entry.family == family)
+            .map(|entry| entry.count)
+            .unwrap_or(0)
     }
 }
 
@@ -174,7 +206,10 @@ pub struct UiRenderOutputProvenance {
 
 impl UiRenderOutputProvenance {
     pub fn new(producer_id: impl Into<String>, source_id: impl Into<String>) -> Self {
-        Self { producer_id: producer_id.into(), source_id: source_id.into() }
+        Self {
+            producer_id: producer_id.into(),
+            source_id: source_id.into(),
+        }
     }
 }
 
@@ -205,8 +240,16 @@ pub struct UiRenderOutputDiagnostic {
 }
 
 impl UiRenderOutputDiagnostic {
-    pub fn new(diagnostic_id: impl Into<String>, kind: UiRenderOutputDiagnosticKind, message: impl Into<String>) -> Self {
-        Self { diagnostic_id: diagnostic_id.into(), kind, message: message.into() }
+    pub fn new(
+        diagnostic_id: impl Into<String>,
+        kind: UiRenderOutputDiagnosticKind,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            diagnostic_id: diagnostic_id.into(),
+            kind,
+            message: message.into(),
+        }
     }
 }
 
@@ -231,7 +274,13 @@ impl UiRenderOutputEvidence {
         let frame_summary = UiFrameOutputSummary::from_frame(frame);
         let expected_primitive_counts = expected_primitive_counts.into_iter().collect::<Vec<_>>();
         let diagnostics = diagnostics_for_summary(&frame_summary, &expected_primitive_counts);
-        Self { evidence_id: evidence_id.into(), provenance, frame_summary, expected_primitive_counts, diagnostics }
+        Self {
+            evidence_id: evidence_id.into(),
+            provenance,
+            frame_summary,
+            expected_primitive_counts,
+            diagnostics,
+        }
     }
 
     pub fn is_valid(&self) -> bool {
@@ -239,10 +288,17 @@ impl UiRenderOutputEvidence {
     }
 }
 
-fn diagnostics_for_summary(summary: &UiFrameOutputSummary, expected_counts: &[UiExpectedPrimitiveCount]) -> Vec<UiRenderOutputDiagnostic> {
+fn diagnostics_for_summary(
+    summary: &UiFrameOutputSummary,
+    expected_counts: &[UiExpectedPrimitiveCount],
+) -> Vec<UiRenderOutputDiagnostic> {
     let mut diagnostics = Vec::new();
     if summary.primitive_count == 0 {
-        diagnostics.push(UiRenderOutputDiagnostic::new("ui.render.output.empty", UiRenderOutputDiagnosticKind::EmptyOutput, "render output emitted no primitives"));
+        diagnostics.push(UiRenderOutputDiagnostic::new(
+            "ui.render.output.empty",
+            UiRenderOutputDiagnosticKind::EmptyOutput,
+            "render output emitted no primitives",
+        ));
     }
     for expected in expected_counts {
         let actual_count = summary.count_for_family(expected.family);
@@ -250,14 +306,28 @@ fn diagnostics_for_summary(summary: &UiFrameOutputSummary, expected_counts: &[Ui
             diagnostics.push(UiRenderOutputDiagnostic::new(
                 format!("ui.render.output.{}.missing", expected.family.as_str()),
                 UiRenderOutputDiagnosticKind::MissingPrimitiveCount,
-                format!("expected at least {} {} primitives, found {}", expected.min_count, expected.family.as_str(), actual_count),
+                format!(
+                    "expected at least {} {} primitives, found {}",
+                    expected.min_count,
+                    expected.family.as_str(),
+                    actual_count
+                ),
             ));
-        } else if expected.max_count.map(|max| actual_count > max).unwrap_or(false) {
+        } else if expected
+            .max_count
+            .map(|max| actual_count > max)
+            .unwrap_or(false)
+        {
             let max_count = expected.max_count.expect("max checked above");
             diagnostics.push(UiRenderOutputDiagnostic::new(
                 format!("ui.render.output.{}.excess", expected.family.as_str()),
                 UiRenderOutputDiagnosticKind::ExcessPrimitiveCount,
-                format!("expected at most {} {} primitives, found {}", max_count, expected.family.as_str(), actual_count),
+                format!(
+                    "expected at most {} {} primitives, found {}",
+                    max_count,
+                    expected.family.as_str(),
+                    actual_count
+                ),
             ));
         }
     }

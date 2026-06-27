@@ -34,7 +34,12 @@ fn render_output_evidence_reports_missing_expected_primitives() {
     );
 
     assert!(!evidence.is_valid());
-    assert_eq!(evidence.frame_summary.count_for_family(UiPrimitiveFamily::Rect), 2);
+    assert_eq!(
+        evidence
+            .frame_summary
+            .count_for_family(UiPrimitiveFamily::Rect),
+        2
+    );
     assert!(evidence.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == UiRenderOutputDiagnosticKind::MissingPrimitiveCount
             && diagnostic.message.contains("glyph-run")

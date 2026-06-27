@@ -57,7 +57,10 @@ mod tests {
             "runenwerk.engine.render.ui.evidence.rect",
             UiRenderOutputProvenance::new("ui_runtime.build_ui_frame", "engine.proof"),
             &frame,
-            [UiExpectedPrimitiveCount::exactly(UiPrimitiveFamily::Rect, 1)],
+            [UiExpectedPrimitiveCount::exactly(
+                UiPrimitiveFamily::Rect,
+                1,
+            )],
         );
         let submission = UiFrameSubmission::new(UiFrameProducerId::try_from_raw(7).unwrap())
             .with_route(UiFrameRoute::Screen)
@@ -66,7 +69,10 @@ mod tests {
         let proof = UiFrameSubmissionRenderOutputProof::from_submission(&submission, &evidence);
 
         assert!(proof.is_valid(), "{:?}", proof);
-        assert_eq!(proof.producer_id, UiFrameProducerId::try_from_raw(7).unwrap());
+        assert_eq!(
+            proof.producer_id,
+            UiFrameProducerId::try_from_raw(7).unwrap()
+        );
         assert_eq!(proof.submitted_primitive_count, 1);
         assert_eq!(proof.evidenced_primitive_count, 1);
     }

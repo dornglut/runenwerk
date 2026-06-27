@@ -1,9 +1,9 @@
 use ui_math::{UiRect, UiSize};
 use ui_render_data::UiPrimitiveFamily;
 use ui_runtime::{
-    ComputedLayout, ComputedLayoutMap, InteractionVisualState, PanelNode,
-    UiRuntimeOutputEvidenceSource, UiNode, UiNodeKind, UiTree, WidgetId,
-    build_ui_frame_with_render_output_evidence, expected_panel_output,
+    ComputedLayout, ComputedLayoutMap, InteractionVisualState, PanelNode, UiNode, UiNodeKind,
+    UiRuntimeOutputEvidenceSource, UiTree, WidgetId, build_ui_frame_with_render_output_evidence,
+    expected_panel_output,
 };
 use ui_text::{FontAtlasSource, FontId, MsdfFontAtlas};
 use ui_theme::ThemeTokens;
@@ -36,7 +36,11 @@ fn runtime_output_evidence_is_derived_from_built_ui_frame() {
         expected_panel_output(),
     );
 
-    assert!(output.evidence.is_valid(), "{:?}", output.evidence.diagnostics);
+    assert!(
+        output.evidence.is_valid(),
+        "{:?}",
+        output.evidence.diagnostics
+    );
     assert_eq!(output.frame.surfaces.len(), 1);
     assert_eq!(
         output
