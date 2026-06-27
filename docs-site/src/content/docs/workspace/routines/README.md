@@ -5,11 +5,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-06-27
 related_docs:
   - ../start-here.md
   - ../operating-model.md
   - ../authority-model.md
+  - ../workflow-lifecycle.md
   - ../task-cards/README.md
 ---
 
@@ -39,17 +40,22 @@ Use when
 Authority files to read
 Working files to inspect
 What to decide before editing
+State transitions produced
 Patch rules
 Manual validation checklist
+Stop conditions
 Evidence to report
 Optional local helpers
 ```
+
+Existing routines may be normalized as they are touched.
 
 ## Rules
 
 - Routines are bounded.
 - Routines must identify authority files.
 - Routines must include manual validation.
+- Routines must name lifecycle state when work changes planning or authority.
 - Routines must not require command execution.
 - Routines must preserve unrelated work.
 - Routines must report what changed, what was skipped, what was blocked, and what remains risky.
