@@ -4,12 +4,14 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-26
+last_reviewed: 2026-06-27
+related_docs:
+  - ../workflow-lifecycle.md
 ---
 
 # Decision Register
 
-Use this file to explain planning priority changes.
+Use this file to explain planning priority changes and lifecycle state transitions.
 
 ## Initial cutover decision
 
@@ -175,15 +177,25 @@ Evidence: Completed Phases 1-10 and the existing base control modules in `ui_con
 
 Follow-up: Review the Phase 11 design, then implement package hardening. Full interaction remains Phase 12.
 
+## Lifecycle rule
+
+Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.
+
 ## Decision shape
 
 ```text
 Date:
 Decision:
+State transition:
 Context:
 Options considered:
 Reason:
 Affected planning files:
 Evidence:
 Follow-up:
+Reactivation condition:
+Supersedes:
+Superseded by:
 ```
+
+Existing entries may be migrated as they are touched.
