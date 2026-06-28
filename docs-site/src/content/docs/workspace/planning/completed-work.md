@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-28
 related_docs:
   - ../workflow-lifecycle.md
   - ../../reports/closeouts/README.md
@@ -175,6 +175,26 @@ Validation: User reported the full P10 validation gate green after focused check
 Known gaps: Full runtime interaction behavior remains Phase 12. Base controls still need Phase 11 hardening before Gallery/Workbench/UI Designer should rely on them as package-quality reusable controls.
 
 Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-011-PLANNING` Base Control Packages design intake.
+
+## PT-UI-COMPONENT-PLATFORM-011
+
+ID: `PT-UI-COMPONENT-PLATFORM-011`
+
+Title: UI Component Platform Base Control Packages
+
+Lifecycle state: `completed`
+
+Completed on: 2026-06-28 through merged PR #37 and user validation report
+
+Evidence: PR #37 merged the Phase 11 base-control hardening into `main`. The implementation kept the proof UI-local in `domain/ui/ui_controls`, covered Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView, and used `BaseControlsPlugin`, `UiControls`, `ControlContribution`, `ControlDef` builder, control presets, field groups, theme groups, `ControlCompiler`, `ControlCatalog`, and `ControlInspection`.
+
+Validation: PR #37 reported `cargo fmt --all --check`, `cargo check -p ui_controls`, focused `ui_controls` package/catalog/layout/render/base_control tests, full `cargo test -p ui_controls`, `python3 tools/docs/validate_docs.py`, and `git diff --check` green locally.
+
+Known gaps: Full runtime interaction remains Phase 12. Overlays, popups, dropdowns, tooltips, and layering remain Phase 13. Text editing remains later. No shared plugin framework extraction, no `foundation/meta`, and no generic plugin primitives were authorized or introduced.
+
+Closeout report: `../../reports/closeouts/pt-ui-component-platform-011-base-control-packages-closeout.md`
+
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-012-PLANNING` Generic Interaction design intake.
 
 ## Entry shape
 

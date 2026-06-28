@@ -4,10 +4,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-28
 related_docs:
   - ../start-here.md
   - ../workflow-lifecycle.md
+  - ./phase-completion-drift-check-routine.md
   - ../../guidelines/programming-principles.md
 ---
 
@@ -28,9 +29,13 @@ Use this routine for bounded implementation work after the owner, intent, and ac
 - `docs-site/src/content/docs/guidelines/programming-principles.md`
 - the owning design, ADR, planning record, issue, or crate/domain docs
 
+For phase or production-track implementation, also read the current `active-work.md`, `roadmap.md`, `production-tracks.md`, and any prior closeout report consumed by the work.
+
 ## Working files to inspect
 
 Inspect the target crate or document, nearby modules, public exports, tests, examples, and docs that define expected behavior.
+
+For phase completion work, inspect the files that will be used as completion evidence and the planning records that will need closeout updates after merge or acceptance.
 
 ## What to decide before editing
 
@@ -41,13 +46,16 @@ Inspect the target crate or document, nearby modules, public exports, tests, exa
 - public API and docs impact;
 - validation expectation;
 - stop conditions;
-- whether a design or ADR update is required.
+- whether a design or ADR update is required;
+- whether the patch is expected to complete the current active phase.
 
 ## State transitions produced
 
 This routine may move work from active implementation to review.
 
 It must not create active implementation from accepted direction alone. Use the roadmap update routine when planning state must change first.
+
+When the implementation patch is merged or otherwise accepted and it completes an active phase, complete the phase completion drift check before starting the next implementation slice.
 
 ## Patch rules
 
@@ -57,6 +65,7 @@ It must not create active implementation from accepted direction alone. Use the 
 - Keep dependency direction legal.
 - Use explicit contracts across boundaries.
 - Update docs when public behavior, ownership, or usage changes.
+- If the patch is intended to complete an active phase, either include the closeout/planning updates or explicitly name the follow-up closeout patch required before the next implementation starts.
 
 ## Manual validation checklist
 
@@ -68,14 +77,17 @@ It must not create active implementation from accepted direction alone. Use the 
 - Public API impact checked.
 - Tests or local commands to run named.
 - Command validation status stated honestly.
+- Phase completion or closeout impact stated when the patch may finish a phase.
 
 ## Stop conditions
 
 Stop and redesign if the requested implementation is only backed by accepted direction, has no exact owner/scope, violates dependency direction, needs architecture decision first, or requires validation that cannot be reported honestly.
 
+Stop and do closeout/planning work instead if the next requested implementation depends on a previous phase that is merged in code but not truthfully closed in planning records.
+
 ## Evidence to report
 
-Report changed files, exact functions/modules/sections, behavior impact, lifecycle state, authority files inspected, validation, remaining risks, and next step.
+Report changed files, exact functions/modules/sections, behavior impact, lifecycle state, authority files inspected, validation, remaining risks, phase closeout impact, and next step.
 
 ## Optional local helpers
 

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-28
 related_docs:
   - ./start-here.md
   - ./operating-model.md
@@ -13,6 +13,8 @@ related_docs:
   - ./documentation-structure.md
   - ./planning/README.md
   - ./routines/architecture-governance-review-routine.md
+  - ./routines/implementation-routine.md
+  - ./routines/pr-review-routine.md
   - ./routines/roadmap-update-routine.md
   - ./routines/phase-completion-drift-check-routine.md
   - ../guidelines/programming-principles.md
@@ -153,11 +155,37 @@ Output: active-work entry.
 
 Promote only when exact implementation scope, owner files/crates, validation envelope, and stop conditions are known.
 
-### Active implementation to completed
+### Active implementation or review to completed
 
 Promote only when delivered scope, validation status, evidence, known gaps, and follow-up are recorded.
 
 Detailed evidence belongs in a closeout report when the completion record would become too large.
+
+## Phase cutover invariant
+
+When a PR, patch, or user validation report completes the current active phase, the next implementation phase must not start until completion truth is recorded.
+
+Required completion truth:
+
+```text
+delivered scope
+validation status
+evidence
+known gaps
+follow-up
+lifecycle transition
+active-work update
+roadmap update
+production-track update when applicable
+completed-work entry
+decision-register entry for lifecycle changes
+closeout report when evidence is too large for completed-work.md
+owning design status update when the design changes from planning/design to completed reference
+```
+
+The next phase may enter `active-planning` in the same patch only after the completed phase is truthful. That planning entry must state that implementation is not authorized until exact owner files, scope, validation envelope, evidence expectation, and stop conditions are accepted.
+
+If completion evidence is incomplete, keep the current phase in `review` or run the phase completion drift check routine. Do not hide drift by starting the next implementation slice.
 
 ## Design and roadmap placement
 
