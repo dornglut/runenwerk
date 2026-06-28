@@ -1,0 +1,109 @@
+//! File: domain/ui/ui_controls/src/base_control/compiler.rs
+//! Crate: ui_controls
+
+use crate::{
+    ControlAccessibilityDescriptor, ControlCatalogIndex, ControlCatalogMetadata,
+    ControlInputDescriptor, ControlModuleDescriptor, ControlPackageAuthoringBuilder,
+    ControlPackageVersion, ControlRenderDescriptor, ControlStateDescriptor,
+    ControlTargetProfileRef, ControlThemeDescriptor, RUNENWERK_CONTROL_PACKAGE_ID,
+    RUNENWERK_CONTROL_TARGET_EDITOR,
+};
+
+use super::lowering::{accessibility, input, inspection, layout, module, render, state, theme};
+use super::{
+    CompiledControl, CompiledControlPackage, ControlContribution, ControlInspection, UiControls,
+};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ControlCompiler;
+
+impl ControlCompiler {
+    pub const fn new() -> Self {
+        Self
+    }
+
+    pub fn compile(&self, controls: &UiControls) -> CompiledControlPackage {
+        let lowered = controls
+            .contributions()
+            .iter()
+            .map(|contribution| self.lower_contribution(contribution))
+            .collect::<Vec<_>>();
+
+        let mut package_builder =
+            ControlPackageAuthoringBuilder::new(RUNENWERK_CONTROL_PACKAGE_ID, ControlPackageVersion::new(1))
+                .with_display_name("Runenwerk base UI controls")
+                .with_description("Reusable descriptor package for Runenwerk base controls. Runtime mount eligibility remains disabled until story, render, and budget evidence are attached.")
+                .with_category("base-controls")
+                .with_tag("control-package")
+                .with_target_profile(ControlTargetProfileRef::new(RUNENWERK_CONTROL_TARGET_EDITOR))
+                .with_catalog_metadata(ControlCatalogMetadata::new(RUNENWERK_CONTROL_PACKAGE_ID, "Base Controls"));
+
+        for control in &lowered {
+            package_builder = package_builder.with_module(control.module.clone());
+        }
+
+        let package = package_builder.build();
+        let catalog = ControlCatalogIndex::from_packages([&package]);
+        let controls = lowered
+            .into_iter()
+            .map(|control| {
+                let inspection = inspection::lower_inspection(&package, &control);
+                CompiledControl {
+                    contribution: control.contribution,
+                    module: control.module,
+                    layout: control.layout,
+                    render: control.render,
+                    input: control.input,
+                    state: control.state,
+                    theme: control.theme,
+                    accessibility: control.accessibility,
+                    inspection,
+                }
+            })
+            .collect::<Vec<_>>();
+        let inspection = ControlInspection {
+            controls: controls
+                .iter()
+                .map(|control| control.inspection.clone())
+                .collect(),
+        };
+
+        CompiledControlPackage {
+            package,
+            controls,
+            catalog,
+            inspection,
+        }
+    }
+
+    pub fn compile_module(&self, contribution: &ControlContribution) -> ControlModuleDescriptor {
+        module::lower_module(contribution.def())
+    }
+
+    fn lower_contribution(&self, contribution: &ControlContribution) -> LoweredControl {
+        let module = module::lower_module(contribution.def());
+        let kind_id = module.kind.control_kind_id.clone();
+        LoweredControl {
+            contribution: contribution.clone(),
+            module,
+            layout: layout::lower_layout(contribution.def(), kind_id.clone()),
+            render: render::lower_render(contribution.def(), kind_id.clone()),
+            input: input::lower_input(contribution.def(), kind_id.clone()),
+            state: state::lower_state(contribution.def(), kind_id.clone()),
+            theme: theme::lower_theme(contribution.def(), kind_id.clone()),
+            accessibility: accessibility::lower_accessibility(contribution.def(), kind_id),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LoweredControl {
+    pub(crate) contribution: ControlContribution,
+    pub(crate) module: ControlModuleDescriptor,
+    pub(crate) layout: crate::ControlLayoutDescriptor,
+    pub(crate) render: ControlRenderDescriptor,
+    pub(crate) input: ControlInputDescriptor,
+    pub(crate) state: ControlStateDescriptor,
+    pub(crate) theme: ControlThemeDescriptor,
+    pub(crate) accessibility: ControlAccessibilityDescriptor,
+}

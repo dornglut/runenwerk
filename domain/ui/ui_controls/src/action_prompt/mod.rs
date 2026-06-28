@@ -2,34 +2,43 @@
 //! Crate: ui_controls
 
 use ui_program::RouteCapability;
-use ui_schema::{UiSchema, UiSchemaShape};
+use ui_schema::UiSchemaShape;
 
-use crate::{ControlModuleDescriptor, RUNENWERK_CONTROL_PACKAGE_ID};
+use crate::{
+    ControlCompiler, ControlContribution, ControlDef, ControlField, ControlFieldGroup,
+    ControlModuleDescriptor, ControlPreset, ControlStyleRole, ControlThemeGroup,
+    ControlVisualState,
+};
 
 pub const ACTION_PROMPT_CONTROL_KIND_ID: &str = "runenwerk.ui.controls.action-prompt";
 
-pub fn control_module() -> ControlModuleDescriptor {
-    crate::control_module_contract(
+pub fn control_contribution() -> ControlContribution {
+    ControlDef::builder(
         "action-prompt",
         "ActionPrompt",
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.action-prompt.properties"),
-            1,
-        )
-        .with_required_field("title", UiSchemaShape::String)
-        .with_required_field("primary_route", UiSchemaShape::RouteRef),
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.action-prompt.state"),
-            1,
-        )
-        .with_optional_field("open", UiSchemaShape::Bool)
-        .with_optional_field("focused_action", UiSchemaShape::String),
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.action-prompt.event"),
-            1,
-        )
-        .with_required_field("route", UiSchemaShape::RouteRef)
-        .with_required_field("accepted", UiSchemaShape::Bool),
+        ControlPreset::ActionPrompt,
         RouteCapability::new("runenwerk.ui.controls.prompt.answer"),
     )
+    .with_field_group(ControlFieldGroup::properties([
+        ControlField::required("title", UiSchemaShape::String),
+        ControlField::required("primary_route", UiSchemaShape::RouteRef),
+    ]))
+    .with_field_group(ControlFieldGroup::state([
+        ControlField::optional("open", UiSchemaShape::Bool),
+        ControlField::optional("focused_action", UiSchemaShape::String),
+    ]))
+    .with_field_group(ControlFieldGroup::event_payload([
+        ControlField::required("route", UiSchemaShape::RouteRef),
+        ControlField::required("accepted", UiSchemaShape::Bool),
+    ]))
+    .with_theme_group(
+        ControlThemeGroup::surface("action-prompt")
+            .with_style(ControlStyleRole::Container, "surface")
+            .with_optional_visual_state(ControlVisualState::Focused),
+    )
+    .build_contribution()
+}
+
+pub fn control_module() -> ControlModuleDescriptor {
+    ControlCompiler::new().compile_module(&control_contribution())
 }

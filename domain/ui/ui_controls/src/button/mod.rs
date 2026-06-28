@@ -2,22 +2,26 @@
 //! Crate: ui_controls
 
 use ui_program::RouteCapability;
-use ui_schema::{UiSchema, UiSchemaShape};
+use ui_schema::UiSchemaShape;
 
-use crate::{ControlModuleDescriptor, RUNENWERK_CONTROL_PACKAGE_ID};
+use crate::{
+    ControlCompiler, ControlContribution, ControlDef, ControlField, ControlFieldGroup,
+    ControlModuleDescriptor, ControlPreset, ControlStyleRole, ControlThemeGroup,
+    ControlThemeTokenKind, ControlThemeTokenRole, ControlVisualState,
+};
 
 pub const BUTTON_CONTROL_KIND_ID: &str = "runenwerk.ui.controls.button";
 
-pub fn control_module() -> ControlModuleDescriptor {
-    crate::control_module_contract(
+pub fn control_contribution() -> ControlContribution {
+    ControlDef::builder(
         "button",
         "Button",
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.button.properties"),
-            1,
-        )
-        .with_required_field("label", UiSchemaShape::String)
-        .with_optional_field(
+        ControlPreset::Button,
+        RouteCapability::new("runenwerk.ui.controls.activate"),
+    )
+    .with_field_group(ControlFieldGroup::properties([
+        ControlField::required("label", UiSchemaShape::String),
+        ControlField::optional(
             "variant",
             UiSchemaShape::string_enum([
                 "toolbar",
@@ -28,30 +32,47 @@ pub fn control_module() -> ControlModuleDescriptor {
                 "inspector",
                 "icon",
             ]),
-        )
-        .with_optional_field(
+        ),
+        ControlField::optional(
             "tone",
             UiSchemaShape::string_enum(["neutral", "accent", "success", "warning", "danger"]),
-        )
-        .with_optional_field(
+        ),
+        ControlField::optional(
             "density",
             UiSchemaShape::string_enum(["compact", "normal", "spacious"]),
-        )
-        .with_optional_field("size", UiSchemaShape::string_enum(["xs", "sm", "md", "lg"]))
-        .with_optional_field("leading_icon", UiSchemaShape::String)
-        .with_optional_field("trailing_icon", UiSchemaShape::String)
-        .with_optional_field("show_label", UiSchemaShape::Bool)
-        .with_optional_field("tooltip", UiSchemaShape::String)
-        .with_optional_field("disabled", UiSchemaShape::Bool),
-        UiSchema::object(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.button.state"), 1)
-            .with_optional_field("selected", UiSchemaShape::Bool)
-            .with_optional_field("pressed", UiSchemaShape::Bool)
-            .with_optional_field("focused", UiSchemaShape::Bool),
-        UiSchema::object(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.button.event"), 1)
-            .with_required_field("route", UiSchemaShape::RouteRef)
-            .with_required_field("activated", UiSchemaShape::Bool),
-        RouteCapability::new("runenwerk.ui.controls.activate"),
+        ),
+        ControlField::optional("size", UiSchemaShape::string_enum(["xs", "sm", "md", "lg"])),
+        ControlField::optional("leading_icon", UiSchemaShape::String),
+        ControlField::optional("trailing_icon", UiSchemaShape::String),
+        ControlField::optional("show_label", UiSchemaShape::Bool),
+        ControlField::optional("disabled", UiSchemaShape::Bool),
+    ]))
+    .with_field_group(ControlFieldGroup::state([
+        ControlField::optional("selected", UiSchemaShape::Bool),
+        ControlField::optional("pressed", UiSchemaShape::Bool),
+        ControlField::optional("focused", UiSchemaShape::Bool),
+    ]))
+    .with_field_group(ControlFieldGroup::event_payload([
+        ControlField::required("route", UiSchemaShape::RouteRef),
+        ControlField::required("activated", UiSchemaShape::Bool),
+    ]))
+    .with_theme_group(
+        ControlThemeGroup::surface("button")
+            .with_token(
+                "focus-ring",
+                ControlThemeTokenKind::Color,
+                ControlThemeTokenRole::FocusRing,
+            )
+            .with_style(ControlStyleRole::FocusRing, "focus-ring")
+            .with_optional_visual_state(ControlVisualState::Hover)
+            .with_optional_visual_state(ControlVisualState::Pressed)
+            .with_optional_visual_state(ControlVisualState::Focused),
     )
+    .build_contribution()
+}
+
+pub fn control_module() -> ControlModuleDescriptor {
+    ControlCompiler::new().compile_module(&control_contribution())
 }
 
 #[cfg(test)]

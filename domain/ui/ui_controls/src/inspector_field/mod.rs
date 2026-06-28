@@ -2,34 +2,50 @@
 //! Crate: ui_controls
 
 use ui_program::RouteCapability;
-use ui_schema::{UiSchema, UiSchemaShape};
+use ui_schema::UiSchemaShape;
 
-use crate::{ControlModuleDescriptor, RUNENWERK_CONTROL_PACKAGE_ID};
+use crate::{
+    ControlCompiler, ControlContribution, ControlDef, ControlField, ControlFieldGroup,
+    ControlModuleDescriptor, ControlPreset, ControlStyleRole, ControlThemeGroup,
+    ControlThemeTokenKind, ControlThemeTokenRole, ControlVisualState,
+};
 
 pub const INSPECTOR_FIELD_CONTROL_KIND_ID: &str = "runenwerk.ui.controls.inspector-field";
 
-pub fn control_module() -> ControlModuleDescriptor {
-    crate::control_module_contract(
+pub fn control_contribution() -> ControlContribution {
+    ControlDef::builder(
         "inspector-field",
         "InspectorField",
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.inspector-field.properties"),
-            1,
-        )
-        .with_required_field("label", UiSchemaShape::String)
-        .with_required_field("binding", UiSchemaShape::StableIdRef),
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.inspector-field.state"),
-            1,
-        )
-        .with_optional_field("preview_value", UiSchemaShape::Object)
-        .with_optional_field("dirty", UiSchemaShape::Bool),
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.inspector-field.event"),
-            1,
-        )
-        .with_required_field("route", UiSchemaShape::RouteRef)
-        .with_required_field("value", UiSchemaShape::Object),
+        ControlPreset::InspectorField,
         RouteCapability::new("runenwerk.ui.controls.inspect"),
     )
+    .with_field_group(ControlFieldGroup::properties([
+        ControlField::required("label", UiSchemaShape::String),
+        ControlField::required("binding", UiSchemaShape::StableIdRef),
+    ]))
+    .with_field_group(ControlFieldGroup::state([
+        ControlField::optional("preview_value", UiSchemaShape::Object),
+        ControlField::optional("dirty", UiSchemaShape::Bool),
+    ]))
+    .with_field_group(ControlFieldGroup::event_payload([
+        ControlField::required("route", UiSchemaShape::RouteRef),
+        ControlField::required("value", UiSchemaShape::Object),
+    ]))
+    .with_theme_group(
+        ControlThemeGroup::surface("inspector-field")
+            .with_token(
+                "value",
+                ControlThemeTokenKind::Color,
+                ControlThemeTokenRole::Text,
+            )
+            .with_style(ControlStyleRole::Value, "value")
+            .with_optional_visual_state(ControlVisualState::Focused)
+            .with_optional_visual_state(ControlVisualState::Error)
+            .with_optional_visual_state(ControlVisualState::ReadOnly),
+    )
+    .build_contribution()
+}
+
+pub fn control_module() -> ControlModuleDescriptor {
+    ControlCompiler::new().compile_module(&control_contribution())
 }

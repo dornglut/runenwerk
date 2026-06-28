@@ -2,34 +2,45 @@
 //! Crate: ui_controls
 
 use ui_program::RouteCapability;
-use ui_schema::{UiSchema, UiSchemaShape};
+use ui_schema::UiSchemaShape;
 
-use crate::{ControlModuleDescriptor, RUNENWERK_CONTROL_PACKAGE_ID};
+use crate::{
+    ControlCompiler, ControlContribution, ControlDef, ControlField, ControlFieldGroup,
+    ControlModuleDescriptor, ControlPreset, ControlStyleRole, ControlThemeGroup,
+    ControlVisualState,
+};
 
 pub const TABLE_VIEW_CONTROL_KIND_ID: &str = "runenwerk.ui.controls.table-view";
 
-pub fn control_module() -> ControlModuleDescriptor {
-    crate::control_module_contract(
+pub fn control_contribution() -> ControlContribution {
+    ControlDef::builder(
         "table-view",
         "TableView",
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.table-view.properties"),
-            1,
-        )
-        .with_required_field("columns", UiSchemaShape::list(UiSchemaShape::Object))
-        .with_required_field("rows", UiSchemaShape::list(UiSchemaShape::Object)),
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.table-view.state"),
-            1,
-        )
-        .with_optional_field("sort_column", UiSchemaShape::String)
-        .with_optional_field("selected_row", UiSchemaShape::UnsignedInteger),
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.table-view.event"),
-            1,
-        )
-        .with_required_field("route", UiSchemaShape::RouteRef)
-        .with_required_field("row", UiSchemaShape::UnsignedInteger),
+        ControlPreset::TableView,
         RouteCapability::new("runenwerk.ui.controls.table.select"),
     )
+    .with_field_group(ControlFieldGroup::properties([
+        ControlField::required("columns", UiSchemaShape::list(UiSchemaShape::Object)),
+        ControlField::required("rows", UiSchemaShape::list(UiSchemaShape::Object)),
+    ]))
+    .with_field_group(ControlFieldGroup::state([
+        ControlField::optional("sort_column", UiSchemaShape::String),
+        ControlField::optional("selected_row", UiSchemaShape::UnsignedInteger),
+    ]))
+    .with_field_group(ControlFieldGroup::event_payload([
+        ControlField::required("route", UiSchemaShape::RouteRef),
+        ControlField::required("row", UiSchemaShape::UnsignedInteger),
+    ]))
+    .with_theme_group(
+        ControlThemeGroup::surface("table-view")
+            .with_style(ControlStyleRole::Background, "surface")
+            .with_optional_visual_state(ControlVisualState::Focused)
+            .with_optional_visual_state(ControlVisualState::Selected)
+            .with_optional_visual_state(ControlVisualState::Loading),
+    )
+    .build_contribution()
+}
+
+pub fn control_module() -> ControlModuleDescriptor {
+    ControlCompiler::new().compile_module(&control_contribution())
 }
