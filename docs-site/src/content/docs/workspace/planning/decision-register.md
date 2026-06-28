@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-28
 related_docs:
   - ../workflow-lifecycle.md
 ---
@@ -176,6 +176,46 @@ Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`,
 Evidence: Completed Phases 1-10 and the existing base control modules in `ui_controls`.
 
 Follow-up: Review the Phase 11 design, then implement package hardening. Full interaction remains Phase 12.
+
+## Phase 11 closeout decision
+
+Date: 2026-06-28
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-011` Base Control Packages complete.
+
+State transition: `review -> completed`
+
+Context: PR #37 merged the Phase 11 implementation into `main` after the base-control refactor changed the old explicit inventory into a UI-local contribution, preset, and lowering proof.
+
+Options considered: Leave Phase 11 in review until another local validation pass; close Phase 11 based on merged PR #37 plus reported green validation; reopen Phase 11 for shared plugin-framework extraction.
+
+Reason: PR #37 is merged and records the intended Phase 11 scope. The implementation stayed in `domain/ui/ui_controls`, covered the eight target base controls, and did not introduce shared plugin infrastructure, `foundation/meta`, generic plugin primitives, or full runtime interaction.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, `ui-component-platform-base-control-packages-design.md`, and the Phase 11 closeout report.
+
+Evidence: PR #37, `BaseControlsPlugin`, `UiControls`, `ControlContribution`, `ControlDef`, control presets, field groups, theme groups, `ControlCompiler`, `ControlCatalog`, `ControlInspection`, per-control `control_contribution()` modules, and reported green Phase 11 validation.
+
+Follow-up: Open `PT-UI-COMPONENT-PLATFORM-012-PLANNING` as Generic Interaction design intake. Preserve Phase 12 as planning only until owner boundaries and validation gates are accepted.
+
+## Phase 12 generic interaction planning decision
+
+Date: 2026-06-28
+
+Decision: Start `PT-UI-COMPONENT-PLATFORM-012-PLANNING` as a Generic Interaction design intake before implementation.
+
+State transition: `production-track -> active-planning`
+
+Context: Phase 11 provides descriptor-backed, catalog-visible, package-quality base controls. Reusable interaction behavior is still out of scope and must be designed without moving host policy or product state changes into `ui_controls`.
+
+Options considered: Treat the Phase 5 input design as sufficient; treat the editor Interaction V2 design as sufficient; create a component-platform-specific Phase 12 design intake that references both but owns the cross-crate boundary for reusable controls.
+
+Reason: The Phase 5 input design covers declarative input/gesture/device facts, and the editor Interaction V2 design covers retained editor/runtime interaction formation. Phase 12 needs an explicit component-platform design that connects `ui_controls`, `ui_input`, `ui_runtime`, and host/app/editor/game ownership for reusable controls.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, and `ui-component-platform-generic-interaction-design.md`.
+
+Evidence: Phase 11 closeout, Phase 5 input/gesture/device design, editor Interaction V2 design, and the current UI Component Platform production track.
+
+Follow-up: Review the Phase 12 design intake. Do not authorize implementation until the later PR has exact owner files, non-goals, validation gate, evidence expectation, and stop conditions.
 
 ## Lifecycle rule
 
