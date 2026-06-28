@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-28
 related_docs:
   - ../workflow-lifecycle.md
 ---
@@ -203,21 +203,21 @@ Evidence: PR #34 merged the full P10 owner-first implementation into `main`. It 
 
 Next action: Keep as completed dependency for Phase 11 and Phase 12.
 
-### PT-UI-COMPONENT-PLATFORM-011-PLANNING
+### PT-UI-COMPONENT-PLATFORM-011
 
-ID: `PT-UI-COMPONENT-PLATFORM-011-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-011`
 
-Title: UI Component Platform Base Control Packages design intake
+Title: UI Component Platform Base Control Packages
 
-State: active planning
+State: review; local validation green
 
-Lifecycle state: `active-planning`
+Lifecycle state: `review`
 
-Owner: `ui_controls` for base control package descriptors and summaries. Owner crates such as `ui_layout`, `ui_render_data`, `ui_input`, and accessibility/focus contracts remain the source of generic vocabulary.
+Owner: `ui_controls` for base control package descriptors, UI-local contribution declarations, preset/lowering code, catalog projection, and read-only inspection facts. Owner crates such as `ui_layout`, `ui_render_data`, `ui_input`, `ui_theme`, and accessibility/focus contracts remain the source of generic vocabulary.
 
-Evidence: P11 is opened after P10 closed. The base controls already exist as descriptor modules, but this phase must harden their package metadata, proof requirements, and catalog/Gallery-facing summaries before full interaction work.
+Evidence: Phase 11 now has a local implementation patch that reworks base controls through `BaseControlsPlugin`, `UiControls`, `ControlContribution`, `ControlDef`, control presets, field groups, theme groups, `ControlCompiler`, catalog projection, and inspection projection. Local validation passed on 2026-06-28 for the Phase 11 cargo/docs/diff gate.
 
-Next action: Review and accept the P11 design. Then implement base control package hardening without taking over full runtime interaction behavior; full interaction remains Phase 12.
+Next action: Review and merge the Phase 11 implementation patch, then record completion only after the accepted patch remains green. Do not begin `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction until P11 is completed.
 
 ## Rules
 

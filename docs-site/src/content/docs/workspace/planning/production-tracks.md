@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-28
 related_docs:
   - ../workflow-lifecycle.md
 ---
@@ -44,7 +44,7 @@ Milestones:
 008 Accessibility / focus / inspection — completed by user validation report
 009 Layout / container / virtualization — completed by user validation report through 009A/009B/009C
 010 Render surface / output — completed by user validation report through PR #34
-011 Base control packages — active planning
+011 Base control packages — review; local validation green
 012 Generic interaction — future
 013 Overlay / popup / layering — future
 014 Minimum text editing — future
@@ -67,7 +67,7 @@ Design gates:
 009B proved generic layout vocabulary belongs in ui_layout.
 009C proved ui_controls should bridge owner-crate vocabulary through per-control descriptors and read-only summaries.
 010 proved render/output ownership across ui_render_data, ui_controls, ui_runtime, and engine render.
-011 must harden base control packages while keeping full interaction behavior for Phase 12.
+011 hardens base control packages while keeping full interaction behavior for Phase 12.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -84,14 +84,14 @@ Phase 7: user reported the theme/state/style validation gate green.
 Phase 8: user reported the accessibility/focus/inspection validation gate green.
 Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundation, 009C ui_controls layout bridge, read-only catalog inspection bridge, and focused tests; user reported the validation gate green.
 Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
-Phase 11: active planning for base control package hardening.
+Phase 11: implementation patch locally validated; code review and merge remain pending before completion.
 Later phases: interaction, overlays, text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 11 design must define what makes the base control package credible before implementation. Full interaction behavior remains Phase 12.
+Phase 11 review and merge remain pending. Full interaction behavior remains Phase 12, and Phase 12 must not start until Phase 11 is completed.
 ```
 
 Activation condition:
@@ -103,7 +103,7 @@ Each future milestone activates only through an accepted planning/design update 
 Next action:
 
 ```text
-Review Phase 11 base control package design. Then implement package hardening for Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView.
+Review and merge the Phase 11 implementation patch for Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView, then record completion only after the accepted patch remains green.
 ```
 
 ## Track shape

@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-28
 related_docs:
   - ../workflow-lifecycle.md
 ---
@@ -15,25 +15,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-011-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-011`
 
-Title: UI Component Platform Base Control Packages design intake
+Title: UI Component Platform Base Control Packages implementation
 
-State: active planning
+State: review; local validation green
 
-Lifecycle state: `active-planning`
+Lifecycle state: `review`
 
-Owner: `ui_controls` owns base control package descriptors and per-control summaries. `ui_layout`, `ui_render_data`, `ui_input`, `ui_theme`, and accessibility/focus contracts remain owner crates that base controls reference. Full runtime interaction behavior is planned for Phase 12, not Phase 11.
+Owner: `ui_controls` owns base control package descriptors, UI-local contribution declarations, preset/lowering code, catalog projection, and read-only inspection facts. `ui_layout`, `ui_render_data`, `ui_input`, `ui_theme`, and accessibility/focus contracts remain owner crates that base controls reference. Full runtime interaction behavior remains Phase 12 scope.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md`, `DOMAIN_MAP.md`, `CRATES.md`, crate inventory, authority model, programming principles, Phase 9 ownership realignment design, Phase 10 render surface/output design, and the Phase 11 base control packages design.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `docs-site/src/content/docs/workspace/routines/code-refactor-routine.md`, `DOMAIN_MAP.md`, `CRATES.md`, `DEPENDENCY_RULES.md`, `TESTING.md`, crate inventory, authority model, programming principles, Phase 9 ownership realignment design, Phase 10 render surface/output design, typed app-composition/plugin framework direction, and the Phase 11 base control packages design.
 
-Validation expectation: this is a planning closeout/opening patch. Validate with docs/planning validation and `git diff --check` when a checkout is available.
+Write scope: rework Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView as UI-local control contributions lowered through `BaseControlsPlugin`, `UiControls`, `ControlContribution`, `ControlDef`, control presets, field groups, theme groups, `ControlCompiler`, `ControlCatalog`, and `ControlInspection`. Do not implement pointer/keyboard runtime behavior, hover/pressed/selected runtime state machines, overlays, text editing, runtime mount eligibility, authored-file rendering, backend renderer behavior, or app/editor/game-specific reusable-control behavior.
 
-Known blockers: No code blocker. Phase 11 implementation should not start until the base control package acceptance criteria are reviewed.
+Validation expectation: local checkout validation has run green for the Phase 11 gate. Keep Phase 11 in review until the implementation patch is accepted or merged.
 
-Next action: Review and accept the Phase 11 base control packages design. Then implement base control package hardening for Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView without adding full interaction runtime behavior.
+Known blockers: Code review and merge are pending. Phase 11 completion has not been recorded in completed work.
 
-Evidence: Phase 10 is complete through PR #34 merged into `main`, and the user reported the full P10 validation gate green on 2026-06-26.
+Next action: Review and merge the Phase 11 implementation patch, then record completion only after the accepted patch remains green. Do not start Phase 12 until Phase 11 is completed.
+
+Evidence: Phase 10 is complete through PR #34 merged into `main`, and the user reported the full P10 validation gate green on 2026-06-26. On 2026-06-28, the Phase 11 implementation patch locally passed `cargo fmt --all --check`, `cargo check -p ui_controls`, focused `ui_controls` package/catalog/layout/render/base_control tests, docs validation, and `git diff --check`.
 
 ## Active-work rules
 

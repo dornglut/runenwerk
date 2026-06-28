@@ -3,6 +3,7 @@
 
 pub mod accessibility;
 pub mod action_prompt;
+pub mod base_control;
 pub mod button;
 pub mod catalog;
 pub mod color_picker;
@@ -24,15 +25,14 @@ pub mod tree_view;
 
 pub use accessibility::*;
 pub use action_prompt::ACTION_PROMPT_CONTROL_KIND_ID;
+pub use base_control::*;
 pub use button::BUTTON_CONTROL_KIND_ID;
 pub use catalog::*;
 pub use color_picker::COLOR_PICKER_CONTROL_KIND_ID;
 pub use diagnostics::*;
-pub use input::*;
 pub use inspector_field::INSPECTOR_FIELD_CONTROL_KIND_ID;
 pub use kernel::*;
 pub use label::LABEL_CONTROL_KIND_ID;
-pub use layout::*;
 pub use list_view::LIST_VIEW_CONTROL_KIND_ID;
 pub use migration::*;
 pub use package::*;
@@ -40,159 +40,13 @@ pub use registry::*;
 pub use schema::*;
 pub use state::*;
 pub use table_view::TABLE_VIEW_CONTROL_KIND_ID;
-pub use theme::*;
 pub use tree_view::TREE_VIEW_CONTROL_KIND_ID;
-
-use ui_program::{RouteCapability, RouteId, RouteSchemaVersion};
-use ui_schema::UiSchema;
 
 pub const RUNENWERK_CONTROL_PACKAGE_ID: &str = "runenwerk.ui.controls";
 pub const RUNENWERK_CONTROL_TARGET_EDITOR: &str = "runenwerk.ui.target.editor";
 
 pub fn runenwerk_control_package() -> ControlPackageDescriptor {
-    ControlPackageDescriptor::from_modules(
-        ControlPackageId::new(RUNENWERK_CONTROL_PACKAGE_ID),
-        ControlPackageVersion::new(1),
-        [
-            label::control_module(),
-            button::control_module(),
-            inspector_field::control_module(),
-            color_picker::control_module(),
-            action_prompt::control_module(),
-            list_view::control_module(),
-            tree_view::control_module(),
-            table_view::control_module(),
-        ],
-    )
-    .with_display_name("Runenwerk base UI controls")
-    .with_description("Reusable descriptor package for Runenwerk base controls. Runtime mount eligibility remains disabled until story, render, and budget evidence are attached.")
-    .with_category("base-controls")
-    .with_tag("control-package")
-    .with_tag("descriptor-only")
-    .with_target_profile(ControlTargetProfileRef::new(RUNENWERK_CONTROL_TARGET_EDITOR))
-    .with_catalog_metadata(ControlCatalogMetadata::new(RUNENWERK_CONTROL_PACKAGE_ID, "Base Controls"))
-}
-
-pub(crate) fn control_module_contract(
-    kind_suffix: &str,
-    display_name: &str,
-    property_schema: UiSchema,
-    state_schema: UiSchema,
-    event_payload_schema: UiSchema,
-    capability: RouteCapability,
-) -> ControlModuleDescriptor {
-    let property_schema = ControlSchemaDescriptor::properties(property_schema);
-    let state_schema = ControlSchemaDescriptor::state(state_schema);
-    let event_payload_schema = ControlSchemaDescriptor::event_payload(event_payload_schema);
-    let layout = ControlKernelDescriptor::new(
-        ControlKernelId::new(format!(
-            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.layout"
-        )),
-        ControlKernelKind::Layout,
-    );
-    let interaction = ControlKernelDescriptor::new(
-        ControlKernelId::new(format!(
-            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.interaction"
-        )),
-        ControlKernelKind::Interaction,
-    );
-    let visual = ControlKernelDescriptor::new(
-        ControlKernelId::new(format!(
-            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.visual"
-        )),
-        ControlKernelKind::Visual,
-    );
-    let accessibility = ControlKernelDescriptor::new(
-        ControlKernelId::new(format!(
-            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.accessibility"
-        )),
-        ControlKernelKind::Accessibility,
-    );
-    let inspection = ControlKernelDescriptor::new(
-        ControlKernelId::new(format!(
-            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.inspection"
-        )),
-        ControlKernelKind::Inspection,
-    );
-    let kernels = ControlKernelSet::new(
-        layout.kernel_id.clone(),
-        interaction.kernel_id.clone(),
-        visual.kernel_id.clone(),
-        accessibility.kernel_id.clone(),
-        inspection.kernel_id.clone(),
-    );
-    let fixture_id = ControlFixtureId::new(format!(
-        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.fixture.default"
-    ));
-    let diagnostic_id = ControlDiagnosticId::new(format!(
-        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.diagnostic.contract"
-    ));
-    let migration = ControlMigrationHook::initial(
-        ControlMigrationId::new(format!(
-            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.migration.initial"
-        )),
-        ControlPackageVersion::new(1),
-    );
-    let story_id = ControlStoryId::new(format!(
-        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.story.contract"
-    ));
-    let render_evidence_id = ControlRenderEvidenceId::new(format!(
-        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.evidence.render.contract"
-    ));
-    let budget_evidence_id = ControlBudgetEvidenceId::new(format!(
-        "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.evidence.budget.contract"
-    ));
-    let control_kind_id =
-        ControlKindId::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}"));
-    let route_requirement = ControlRouteRequirement::new(
-        RouteId::new(format!(
-            "{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.intent"
-        )),
-        RouteSchemaVersion::new(1),
-    )
-    .with_capability(capability.clone());
-    let kind = ControlKindDescriptor::new(control_kind_id.clone(), display_name, property_schema.schema_ref().clone(), state_schema.schema_ref().clone(), event_payload_schema.schema_ref().clone(), kernels)
-        .with_description(format!("{display_name} reusable control descriptor with schemas, kernels, diagnostics, fixture, story, host-intent route metadata, and explicit non-mount eligibility until story proof is attached."))
-        .with_category("base-control")
-        .with_tag(kind_suffix)
-        .with_tag("descriptor-only")
-        .with_target_profile(ControlTargetProfileRef::new(RUNENWERK_CONTROL_TARGET_EDITOR))
-        .with_required_capability(capability)
-        .with_route_requirement(route_requirement)
-        .with_fixture(fixture_id.clone())
-        .with_diagnostic(diagnostic_id.clone())
-        .with_migration(migration.migration_id.clone())
-        .with_story(story_id.clone())
-        .with_mount_eligibility(ControlMountEligibility::not_eligible("runtime mount eligibility requires future story, render, and budget evidence"))
-        .with_binding_requirement(ControlRequirement::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.binding.contract"), "Binding behavior must be declared through host-owned state and route contracts."))
-        .with_theme_token_requirement(ControlRequirement::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.theme.contract"), "Visual states must use theme/token metadata rather than renderer-owned semantics."))
-        .with_accessibility_requirement(ControlRequirement::new(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.{kind_suffix}.accessibility.contract"), "Accessibility role, label, focus, and inspection facts must be explicit before mount eligibility."))
-        .with_render_evidence_requirement(ControlRenderEvidenceRequirement::new(render_evidence_id, "Renderer-neutral primitive evidence required before runtime mount eligibility."))
-        .with_budget_evidence_requirement(ControlBudgetEvidenceRequirement::new(budget_evidence_id, "Layout, interaction, text, and render budget evidence required before runtime mount eligibility."));
-
-    ControlModuleDescriptor::new(kind)
-        .with_schema(property_schema)
-        .with_schema(state_schema)
-        .with_schema(event_payload_schema)
-        .with_kernel(layout)
-        .with_kernel(interaction)
-        .with_kernel(visual)
-        .with_kernel(accessibility)
-        .with_kernel(inspection)
-        .with_fixture(ControlFixtureDescriptor::new(
-            fixture_id,
-            format!("Default {display_name} descriptor fixture"),
-        ))
-        .with_diagnostic(ControlDiagnosticDescriptor::contract(
-            diagnostic_id,
-            control_kind_id,
-            format!("{display_name} control package contract violation"),
-        ))
-        .with_migration(migration)
-        .with_story(ControlStoryDescriptor::new(
-            story_id,
-            format!("{display_name} descriptor contract story placeholder"),
-        ))
+    BaseControlsPlugin::new().package()
 }
 
 #[cfg(test)]

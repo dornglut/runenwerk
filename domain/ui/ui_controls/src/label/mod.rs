@@ -2,27 +2,38 @@
 //! Crate: ui_controls
 
 use ui_program::RouteCapability;
-use ui_schema::{UiSchema, UiSchemaShape};
+use ui_schema::UiSchemaShape;
 
-use crate::{ControlModuleDescriptor, RUNENWERK_CONTROL_PACKAGE_ID};
+use crate::{
+    ControlCompiler, ControlContribution, ControlDef, ControlField, ControlFieldGroup,
+    ControlModuleDescriptor, ControlPreset, ControlThemeGroup,
+};
 
 pub const LABEL_CONTROL_KIND_ID: &str = "runenwerk.ui.controls.label";
 
-pub fn control_module() -> ControlModuleDescriptor {
-    crate::control_module_contract(
+pub fn control_contribution() -> ControlContribution {
+    ControlDef::builder(
         "label",
         "Label",
-        UiSchema::object(
-            format!("{RUNENWERK_CONTROL_PACKAGE_ID}.label.properties"),
-            1,
-        )
-        .with_required_field("text", UiSchemaShape::String)
-        .with_optional_field("style_slot", UiSchemaShape::String),
-        UiSchema::object(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.label.state"), 1)
-            .with_optional_field("measured_width", UiSchemaShape::Number)
-            .with_optional_field("measured_height", UiSchemaShape::Number),
-        UiSchema::object(format!("{RUNENWERK_CONTROL_PACKAGE_ID}.label.event"), 1)
-            .with_optional_field("route", UiSchemaShape::RouteRef),
+        ControlPreset::Label,
         RouteCapability::new("runenwerk.ui.controls.read"),
     )
+    .with_field_group(ControlFieldGroup::properties([
+        ControlField::required("text", UiSchemaShape::String),
+        ControlField::optional("style_slot", UiSchemaShape::String),
+    ]))
+    .with_field_group(ControlFieldGroup::state([
+        ControlField::optional("measured_width", UiSchemaShape::Number),
+        ControlField::optional("measured_height", UiSchemaShape::Number),
+    ]))
+    .with_field_group(ControlFieldGroup::event_payload([ControlField::optional(
+        "route",
+        UiSchemaShape::RouteRef,
+    )]))
+    .with_theme_group(ControlThemeGroup::base("label"))
+    .build_contribution()
+}
+
+pub fn control_module() -> ControlModuleDescriptor {
+    ControlCompiler::new().compile_module(&control_contribution())
 }
