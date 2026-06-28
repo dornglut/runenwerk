@@ -1,6 +1,6 @@
 ---
 title: UI Component Platform Generic Interaction Design
-description: Phase 12 planning intake for reusable generic interaction semantics across ui_controls, ui_input, ui_runtime, and host-owned policy.
+description: Phase 12 planning intake for reusable generic interaction semantics across ui_controls, ui_input, ui_runtime, host-owned policy, and later text-editing readiness.
 status: active
 owner: ui
 layer: domain
@@ -29,6 +29,8 @@ Phase 12 is intended to define and then enable implementation of generic reusabl
 
 Phase 12 should define generic reusable interaction semantics for descriptor-backed controls without moving host policy, product behavior, OS input collection, game/world input policy, or app/editor/game state changes into `ui_controls`.
 
+Phase 12 should make later text-editing controls possible by proving focus, keyboard, text-intent, and interaction-state seams. It should not implement a full editable text control yet.
+
 An additional Phase 12 design document is required. The existing Phase 5 input/gesture/device design covers declarative input capability facts. The existing editor Interaction V2 design covers editor-retained runtime interaction formation. Neither document by itself owns the component-platform boundary between reusable control declarations, normalized input substrate facts, runtime interaction formation, and host-owned product behavior.
 
 ## Problem
@@ -37,6 +39,8 @@ The UI track now has descriptor-backed, catalog-visible, package-quality base co
 
 Phase 12 must define how reusable controls declare interaction needs and how runtime layers produce interaction facts without making `ui_controls` collect input, execute host commands, mutate app/editor/game state, or own product policy.
 
+Text editing is a downstream consumer of the same interaction substrate, but it is larger than the first reusable interaction proof. It adds caret geometry, selection, text input composition, clipboard, undo/redo, validation, scrolling, and text layout requirements that should not be forced into the first interaction implementation.
+
 ## Goals
 
 - Define reusable control interaction declarations.
@@ -44,6 +48,7 @@ Phase 12 must define how reusable controls declare interaction needs and how run
 - Define control-level interaction requirements as descriptor/catalog/inspection facts.
 - Define the seam between normalized input facts and runtime interaction formation.
 - Define how runtime interaction facts/events are produced for reusable controls.
+- Define focus, keyboard, and text-intent seams that later editable text controls can consume.
 - Keep app/editor/game command handling and product state changes outside reusable controls.
 - Keep the implementation path narrow enough for one later PR.
 
@@ -52,7 +57,7 @@ Phase 12 must define how reusable controls declare interaction needs and how run
 Phase 12 does not implement:
 
 - overlay, popup, dropdown, tooltip, or layering behavior;
-- text editing;
+- full text editing behavior, including caret geometry, selection, IME/composition, clipboard, undo/redo, validation, scrolling, or text layout;
 - app/editor/game-specific command behavior;
 - product state changes;
 - backend renderer behavior;
@@ -74,7 +79,7 @@ Phase 12 does not implement:
 - descriptor/catalog/inspection facts for interaction support;
 - control kernel hooks only as declarations/contracts, not host behavior.
 
-`ui_controls` must not own OS input collection, runtime hit testing, routing policy, command handling, app/editor/game state changes, backend rendering, overlay/layer policy, or text editing behavior.
+`ui_controls` must not own OS input collection, runtime hit testing, routing policy, command handling, app/editor/game state changes, backend rendering, overlay/layer policy, or full text editing behavior.
 
 ### `ui_input` / input substrate
 
@@ -82,10 +87,10 @@ Phase 12 does not implement:
 
 - normalized input packet vocabulary;
 - device and gesture facts;
-- pointer, key, and focus facts as reusable input data;
+- pointer, key, focus, and text-intent facts as reusable input data;
 - runtime input sample formation.
 
-It must not own reusable control semantics, app/editor/game command handling, or product behavior.
+It must not own reusable control semantics, app/editor/game command handling, product behavior, or full text editing behavior.
 
 ### `ui_runtime`
 
@@ -96,7 +101,7 @@ It must not own reusable control semantics, app/editor/game command handling, or
 - producing interaction facts/events for reusable controls;
 - runtime frame/session evidence for interaction behavior.
 
-It must not own static control package truth, app/editor/game command behavior, or product state changes.
+It must not own static control package truth, app/editor/game command behavior, product state changes, or full text editing behavior.
 
 ### Hosts, apps, editor, and game layers
 
@@ -110,6 +115,35 @@ Hosts, apps, editor, and game layers own:
 - product-specific behavior.
 
 They may consume reusable interaction facts and choose product behavior, but they must not redefine reusable control interaction semantics.
+
+## Text editing boundary
+
+Text editing should be designed as a later consumer of Phase 12, not as part of the first Phase 12 implementation proof.
+
+Phase 12 should provide the reusable substrate that text editing will need:
+
+- focus ownership facts;
+- keyboard input facts;
+- text-intent input facts;
+- enabled, hovered, pressed, active, focused, and disabled interaction states;
+- runtime interaction events tied to concrete emitted or mounted UI structure;
+- descriptor/catalog/inspection visibility for interaction support.
+
+A later text-editing phase should add the specialized editor contract:
+
+- editable text control declarations;
+- caret geometry and movement;
+- selection ranges;
+- text insertion/deletion transactions;
+- IME/composition;
+- clipboard behavior;
+- undo/redo integration;
+- single-line and multi-line behavior;
+- password/secret masking behavior;
+- validation and commit/cancel semantics;
+- scrolling and text layout integration.
+
+This keeps Phase 12 useful for Button, ActionPrompt, ListView, TreeView, TableView, and later editable controls without collapsing the first generic interaction proof into a full text editor.
 
 ## Target architecture
 
@@ -182,15 +216,17 @@ Phase 12 is implementation-ready only when the design and planning records answe
 - how base controls remain package-quality without Phase 11 rewrites;
 - how runtime mount eligibility remains controlled by explicit proof gates;
 - how app/editor/game command behavior stays outside reusable controls;
-- how Phase 13 overlays/layering and later text editing remain blocked.
+- how focus, keyboard, and text-intent seams remain compatible with a later text-editing phase;
+- how Phase 13 overlays/layering and later full text editing remain blocked.
 
 Phase 12 implementation is complete only when:
 
 - reusable interaction declarations exist and are catalog/inspection-visible;
 - normalized input facts are resolved through the proper input/runtime owners;
+- focus, keyboard, and text-intent facts are represented at the correct substrate boundary;
 - runtime interaction facts/events can be formed for reusable controls;
 - no host-specific command behavior or product state change is introduced in `ui_controls`;
-- no overlay/layering/text-editing behavior is introduced;
+- no overlay/layering/full-text-editing behavior is introduced;
 - focused tests prove the owner boundary.
 
 ## Validation gate
@@ -230,7 +266,7 @@ Stop and redesign if Phase 12 requires:
 - product state changes in reusable control code;
 - backend renderer behavior;
 - overlay, popup, dropdown, tooltip, or layering behavior;
-- text editing behavior;
+- full text editing behavior;
 - broad shared plugin framework extraction;
 - `foundation/meta`;
 - generic input framework extraction beyond owner-local needs;
@@ -241,6 +277,6 @@ Stop and redesign if Phase 12 requires:
 
 Phase 11 is complete and provides the descriptor-backed base-control package inventory that Phase 12 can reason about.
 
-Phase 12 is the active planning focus. It should prepare one narrow implementation PR for generic reusable interaction behavior, but this planning patch must not implement runtime interaction.
+Phase 12 is the active planning focus. It should prepare one narrow implementation PR for generic reusable interaction behavior, including focus, keyboard, and text-intent seams for later editable controls, but this planning patch must not implement runtime interaction.
 
-Phase 13 remains overlay/popup/layering. Text editing remains later.
+Phase 13 remains overlay/popup/layering. Full text editing remains later, but it must consume the interaction substrate shaped by Phase 12 rather than bypassing it.
