@@ -5,7 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
-world_streaming_core = { package = "world_streaming", path = "../../../../spatial_streaming/crates/world_streaming" }
+chunking = { path = "../chunking" }
+spatial = { path = "../spatial" }
 
 [dev-dependencies]
 chunking = { path = "../chunking" }

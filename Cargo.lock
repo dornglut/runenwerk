@@ -382,17 +382,9 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chunking"
-version = "0.1.0"
-dependencies = [
- "spatial 0.1.0",
-]
-
-[[package]]
-name = "chunking"
 version = "0.1.1"
 dependencies = [
- "chunking 0.1.0",
- "spatial 0.1.1",
+ "spatial",
 ]
 
 [[package]]
@@ -842,7 +834,7 @@ dependencies = [
  "glam 0.32.1",
  "graph",
  "schema",
- "spatial 0.1.1",
+ "spatial",
  "world_ops",
  "world_sdf",
 ]
@@ -938,7 +930,7 @@ dependencies = [
  "scheduler",
  "serde",
  "serde_json",
- "spatial 0.1.1",
+ "spatial",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -1368,9 +1360,9 @@ dependencies = [
 name = "godot_chunking_addon"
 version = "0.1.0"
 dependencies = [
- "chunking 0.1.1",
+ "chunking",
  "godot",
- "spatial 0.1.1",
+ "spatial",
 ]
 
 [[package]]
@@ -2432,7 +2424,7 @@ dependencies = [
  "graph",
  "product",
  "ratification",
- "spatial 0.1.1",
+ "spatial",
  "world_ops",
  "world_sdf",
 ]
@@ -2806,7 +2798,7 @@ dependencies = [
  "rustls",
  "scene",
  "serde",
- "spatial 0.1.1",
+ "spatial",
  "tempfile",
  "texture",
  "tokio",
@@ -3262,31 +3254,18 @@ dependencies = [
 
 [[package]]
 name = "spatial"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
+ "geometry",
  "serde",
 ]
 
 [[package]]
-name = "spatial"
-version = "0.1.1"
-dependencies = [
- "spatial 0.1.0",
-]
-
-[[package]]
-name = "spatial_index"
-version = "0.1.0"
-dependencies = [
- "spatial 0.1.0",
-]
-
-[[package]]
 name = "spatial_index"
 version = "0.1.1"
 dependencies = [
- "spatial 0.1.1",
- "spatial_index 0.1.0",
+ "geometry",
+ "spatial",
 ]
 
 [[package]]
@@ -4927,7 +4906,7 @@ name = "world_ops"
 version = "0.1.0"
 dependencies = [
  "serde",
- "spatial 0.1.1",
+ "spatial",
 ]
 
 [[package]]
@@ -4938,25 +4917,16 @@ dependencies = [
  "product",
  "ratification",
  "serde",
- "spatial 0.1.1",
+ "spatial",
  "world_ops",
-]
-
-[[package]]
-name = "world_streaming"
-version = "0.1.0"
-dependencies = [
- "chunking 0.1.0",
- "spatial 0.1.0",
 ]
 
 [[package]]
 name = "world_streaming"
 version = "0.1.1"
 dependencies = [
- "chunking 0.1.1",
- "spatial 0.1.1",
- "world_streaming 0.1.0",
+ "chunking",
+ "spatial",
 ]
 
 [[package]]

@@ -396,6 +396,7 @@ impl RunenwerkDrawApp {
                 self.apply_tool_intent(outcome.intent);
                 handled
             }
+            UiInputEvent::Semantic(_) => false,
             UiInputEvent::Text(_) => false,
         }
     }

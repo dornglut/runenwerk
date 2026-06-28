@@ -119,6 +119,10 @@ impl Aabb3 {
         }
     }
 
+    pub fn from_arrays(min: [f32; 3], max: [f32; 3]) -> Self {
+        Self::from_corners(Vec3::from_array(min), Vec3::from_array(max))
+    }
+
     pub fn from_center_extents(center: Vec3, extents: Vec3) -> Self {
         Self {
             min: center - extents,

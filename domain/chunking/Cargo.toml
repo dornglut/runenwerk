@@ -5,5 +5,4 @@ edition = "2024"
 publish = false
 
 [dependencies]
-chunking_core = { package = "chunking", path = "../../../../spatial_streaming/crates/chunking" }
 spatial = { path = "../spatial" }

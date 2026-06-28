@@ -5,5 +5,5 @@ edition = "2024"
 publish = false
 
 [dependencies]
+geometry = { path = "../geometry" }
 spatial = { path = "../spatial" }
-spatial_index_core = { package = "spatial_index", path = "../../../../spatial_streaming/crates/spatial_index" }

@@ -5,4 +5,5 @@ edition = "2024"
 publish = false
 
 [dependencies]
-spatial_core = { package = "spatial", path = "../../../../spatial_streaming/crates/spatial" }
+geometry = { path = "../geometry" }
+serde = { version = "1.0.228", features = ["derive"] }
