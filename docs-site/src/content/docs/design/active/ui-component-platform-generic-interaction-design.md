@@ -1,6 +1,6 @@
 ---
 title: UI Component Platform Generic Interaction Design
-description: Phase 12 planning intake for reusable generic interaction semantics across ui_controls, ui_input, ui_runtime, host-owned policy, and later text-editing readiness.
+description: Phase 12 planning intake for reusable generic interaction semantics across ui_controls, ui_input, ui_runtime, host-owned policy, gallery proof, and later text-editing readiness.
 status: active
 owner: ui
 layer: domain
@@ -23,13 +23,15 @@ This is the Phase 12 planning design intake for `PT-UI-COMPONENT-PLATFORM-012-PL
 
 Lifecycle state: `active-planning`.
 
-Phase 12 is intended to define and then enable implementation of generic reusable interaction behavior for descriptor-backed controls. This planning patch does not implement that behavior yet. It defines the owner boundaries, acceptance criteria, validation gate, stop conditions, and later implementation envelope that must be accepted before code changes begin.
+Phase 12 is intended to define and then enable implementation of generic reusable interaction behavior for descriptor-backed controls. This planning patch does not implement that behavior yet. It defines the owner boundaries, proof contract, acceptance criteria, validation gate, stop conditions, and later implementation envelope that must be accepted before code changes begin.
 
 ## Decision summary
 
 Phase 12 should define generic reusable interaction semantics for descriptor-backed controls without moving host policy, product behavior, OS input collection, game/world input policy, or app/editor/game state changes into `ui_controls`.
 
 Phase 12 should make later text-editing controls possible by proving focus, keyboard, text-intent, and interaction-state seams. It should not implement a full editable text control yet.
+
+Phase 12 must have a runtime-visible proof. The phase should not close with type definitions only. The implementation proof should replay deterministic input against mounted base controls, visibly show interaction state changes in a gallery/story scenario, and emit an auditable interaction report.
 
 An additional Phase 12 design document is required. The existing Phase 5 input/gesture/device design covers declarative input capability facts. The existing editor Interaction V2 design covers editor-retained runtime interaction formation. Neither document by itself owns the component-platform boundary between reusable control declarations, normalized input substrate facts, runtime interaction formation, and host-owned product behavior.
 
@@ -41,6 +43,8 @@ Phase 12 must define how reusable controls declare interaction needs and how run
 
 Text editing is a downstream consumer of the same interaction substrate, but it is larger than the first reusable interaction proof. It adds caret geometry, selection, text input composition, clipboard, undo/redo, validation, scrolling, and text layout requirements that should not be forced into the first interaction implementation.
 
+The runtime proof also needs a no-bypass rule. A gallery demo that hard-codes hover, pressed, focus, or activation state outside the descriptor/catalog/runtime path would not prove the component platform boundary.
+
 ## Goals
 
 - Define reusable control interaction declarations.
@@ -49,6 +53,8 @@ Text editing is a downstream consumer of the same interaction substrate, but it 
 - Define the seam between normalized input facts and runtime interaction formation.
 - Define how runtime interaction facts/events are produced for reusable controls.
 - Define focus, keyboard, and text-intent seams that later editable text controls can consume.
+- Define a deterministic gallery/story interaction proof.
+- Define an auditable `InteractionFormationReport`-style evidence shape.
 - Keep app/editor/game command handling and product state changes outside reusable controls.
 - Keep the implementation path narrow enough for one later PR.
 
@@ -161,6 +167,259 @@ Normalized input packets and device facts in ui_input
 
 The control package says what interaction support a control requires. The input substrate says what input data exists. The runtime says what happened against a concrete emitted or mounted UI structure. The host decides what product behavior follows.
 
+## Phase 12 proof contract
+
+Phase 12 must prove reusable interaction through a deterministic mounted UI scenario, not through type definitions alone.
+
+The proof should provide:
+
+- a gallery/story scenario that mounts descriptor-backed base controls;
+- a deterministic replay script of normalized input packets;
+- visible state changes for reusable control states;
+- an inspector or report panel that shows declarations, resolved targets, state transitions, facts, events, semantic outcomes, and suppressed input;
+- tests that compare the replay result against expected interaction evidence;
+- boundary assertions that host commands, product mutations, overlay behavior, and full text-editing transactions did not run.
+
+The minimum proof pipeline is:
+
+```text
+ControlContribution / ControlDef
+  -> catalog-visible interaction declarations
+  -> mounted story/runtime UI structure
+  -> deterministic input replay
+  -> runtime target/focus resolution
+  -> reusable interaction state transitions
+  -> runtime facts/events/outcomes
+  -> gallery-visible state/report
+  -> host-owned behavior remains untouched
+```
+
+A proof that bypasses the catalog, descriptor, or runtime interaction path is invalid.
+
+## Runtime-visible gallery result
+
+The gallery/story result should show three layers at once:
+
+```text
+main view:
+  mounted base controls with visible state markers
+
+inspector view:
+  selected control descriptor
+  declared interaction requirements
+  current interaction state set
+
+report/event view:
+  replay steps
+  target resolution
+  state transitions
+  runtime interaction facts
+  runtime interaction events
+  semantic outcomes
+  suppressed or ignored input
+  boundary assertions
+```
+
+The gallery must not execute product commands. A Button activation may emit an activation outcome, but it must not invoke app/editor/game behavior as part of the reusable control proof.
+
+## Base-control interaction matrix
+
+Phase 12 should assign each Phase 11 base control a proof role.
+
+| Control | Interaction role | Proof expectation |
+| --- | --- | --- |
+| Label | inert/read-only display | Pointer and keyboard input do not produce activation, mutation, or focus behavior unless explicitly declared later. |
+| Button | hover, press, focus, keyboard activation | Pointer click and Enter/Space produce reusable activation outcome without host command execution. |
+| ActionPrompt | focus and action intent | Keyboard activation produces action intent without executing product behavior. |
+| InspectorField | focus and text-intent probe | Focus and text-intent facts are visible; no caret, selection, text buffer mutation, clipboard, or undo/redo behavior is introduced. |
+| ColorPicker | focus and activation intent only | Interaction can request open/change behavior, but actual picker overlays, popups, and value mutation remain out of scope. |
+| ListView | focused/active item intent | Keyboard navigation produces active-item interaction facts or outcomes, not product selection mutation. |
+| TreeView | focused node and expand/collapse intent | Expand/collapse intent can be emitted; product tree data mutation remains host-owned. |
+| TableView | focused row/cell and active item intent | Row/cell navigation facts are visible; product data selection and edits remain host-owned. |
+| Disabled control fixture | suppressed interaction | Input against disabled controls emits ignored or suppressed interaction evidence. |
+
+## Interaction state semantics
+
+The first implementation pass should define a small canonical state set before adding control-specific behavior.
+
+Required candidate states:
+
+```text
+enabled
+disabled
+read_only
+hovered
+pressed
+active
+focused
+focus_visible
+captured
+suppressed
+```
+
+Required precedence and interpretation rules:
+
+- `disabled` suppresses activation and mutable interaction outcomes.
+- `read_only` may still allow focus, inspection, and copy-like future behavior, but not mutation.
+- `focused` does not imply `active`.
+- `active` does not imply product mutation.
+- `focus_visible` is a keyboard/navigation-visible focus state, not merely any focus.
+- `pressed` requires pointer ownership, capture, or an equivalent runtime rule.
+- `suppressed` means input was understood and intentionally ignored because of the control or runtime state.
+
+## Facts, events, outcomes, and commands
+
+Phase 12 should keep these concepts distinct:
+
+```text
+InteractionFact:
+  current or sampled runtime truth, such as ButtonA is hovered.
+
+InteractionEvent:
+  an edge or change produced by input resolution, such as ButtonA pointer_press began.
+
+InteractionOutcome:
+  reusable semantic intent a host may consume, such as activation_requested.
+
+HostCommand:
+  app/editor/game behavior, such as delete entity, open panel, mutate world, or edit product data.
+```
+
+Phase 12 may produce facts, events, and outcomes. Phase 12 must not execute host commands from `ui_controls`.
+
+## Deterministic replay scenario
+
+The implementation proof should include a deterministic replay scenario equivalent to:
+
+```text
+1. move pointer to Button
+2. press primary pointer button
+3. release primary pointer button
+4. tab focus to ActionPrompt
+5. press Enter or Space
+6. move active item in ListView
+7. move focus or active node in TreeView
+8. move focus or active row/cell in TableView
+9. send keyboard/text-intent facts to InspectorField text-intent probe
+10. click or keyboard-activate a disabled control fixture
+11. send input outside all controls
+```
+
+The expected report should include:
+
+```text
+hovered: Button
+pressed: Button
+activation_requested: Button
+focused: ActionPrompt
+activation_requested: ActionPrompt
+active_item_intent: ListView
+node_intent: TreeView
+cell_or_row_intent: TableView
+text_intent_seen: InspectorField
+suppressed: DisabledControl
+no_target: OutsideInput
+host_commands_executed: 0
+product_mutations: 0
+overlay_events: 0
+text_edit_transactions: 0
+```
+
+## Focus and keyboard scope
+
+Phase 12 needs a minimal reusable focus and keyboard scope.
+
+It should cover:
+
+- focused control identity;
+- focus traversal order for the proof fixture;
+- keyboard activation target;
+- focus loss or no-target behavior;
+- disabled-control skip or suppression behavior;
+- `focus_visible` state for keyboard-driven focus;
+- arrow-key navigation intent for list, tree, and table controls.
+
+It should not cover full accessibility, OS/window input collection, app/editor/game command routing, or text editing.
+
+## Pointer capture and cancellation scope
+
+Button-like controls need explicit pointer-state rules.
+
+The first implementation proof should cover:
+
+- press inside and release inside produces activation outcome;
+- press inside and release outside cancels or suppresses activation;
+- pointer cancel clears pressed/captured state;
+- disabled-while-pressed cancels or suppresses activation;
+- input outside all controls produces no target or ignored evidence.
+
+## Text-intent probe
+
+Phase 12 should include a text-intent probe, not an editable text control.
+
+The proof should show:
+
+- InspectorField or a dedicated fixture receives focus;
+- keyboard facts and text-intent facts are represented at the input/runtime seam;
+- the report shows `text_intent_seen` or equivalent evidence.
+
+The proof must not add:
+
+- caret geometry;
+- selection ranges;
+- text insertion/deletion transactions;
+- IME/composition behavior;
+- clipboard behavior;
+- undo/redo integration;
+- mutable text buffer ownership;
+- text layout or scrolling integration.
+
+## Negative proof scenarios
+
+The implementation proof should include negative cases, not only happy paths.
+
+Required negative scenarios:
+
+- clicking a disabled control produces suppressed evidence;
+- keyboard activation without focus is ignored or has no target;
+- pointer leaves or cancels a pressed control without producing activation;
+- input outside all controls produces no target evidence;
+- text intent against a non-text control is ignored or suppressed;
+- activation outcomes do not execute host commands;
+- list/tree/table navigation does not mutate product data;
+- overlay, popup, dropdown, tooltip, and layering behavior remain absent;
+- full text editing remains absent.
+
+## Interaction formation report
+
+The proof should produce an auditable report shape. The implementation may refine names, but it should preserve these responsibilities:
+
+```text
+InteractionFormationReport
+  replay_id
+  mounted_story_id
+  control_descriptors
+  input_steps
+  target_resolution
+  focus_resolution
+  state_transitions
+  runtime_facts
+  runtime_events
+  semantic_outcomes
+  suppressed_events
+  no_target_events
+  boundary_assertions
+```
+
+Boundary assertions should include:
+
+```text
+host_commands_executed: 0
+product_mutations: 0
+overlay_events: 0
+text_edit_transactions: 0
+```
+
 ## Candidate vocabulary
 
 The implementation pass may refine names, but the responsibilities should remain stable:
@@ -176,6 +435,9 @@ ControlInteractionSupportSummary
 ControlInteractionInspectionFact
 RuntimeInteractionFact
 RuntimeControlInteractionEvent
+InteractionReplayScript
+InteractionReplayStep
+InteractionReplayReport
 InteractionFormationReport
 ```
 
@@ -200,6 +462,8 @@ docs-site/src/content/docs/workspace/planning/
 docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md
 ```
 
+If the repository already has a story/gallery crate or fixture path for mounted UI proofs, the implementation PR may add the minimum fixture/test files needed there. That addition must be justified as proof plumbing, not as a new product UI or generic framework.
+
 The implementation PR must not rewrite Phase 11 base controls. Additive interaction declarations may be attached through the existing contribution/lowering path only if they preserve the Phase 11 ownership model.
 
 The implementation PR must not touch app/editor/game command paths except for optional tests or guards that prove product behavior remains outside reusable control semantics.
@@ -210,6 +474,8 @@ Phase 12 is implementation-ready only when the design and planning records answe
 
 - exact owner files and crates;
 - exact public concepts to add or extend;
+- exact gallery/story proof fixture path;
+- exact deterministic replay/report proof path;
 - how `ui_controls` declarations reference or summarize `ui_input` facts without owning input substrate behavior;
 - how `ui_runtime` produces interaction facts/events without owning host product behavior;
 - how descriptor/catalog/inspection output exposes interaction support read-only;
@@ -225,9 +491,11 @@ Phase 12 implementation is complete only when:
 - normalized input facts are resolved through the proper input/runtime owners;
 - focus, keyboard, and text-intent facts are represented at the correct substrate boundary;
 - runtime interaction facts/events can be formed for reusable controls;
+- the gallery/story proof visibly shows hover, press, focus, active, disabled/suppressed, and text-intent-probe behavior;
+- the deterministic replay report records target resolution, state transitions, facts, events, outcomes, suppressed/no-target evidence, and boundary assertions;
 - no host-specific command behavior or product state change is introduced in `ui_controls`;
 - no overlay/layering/full-text-editing behavior is introduced;
-- focused tests prove the owner boundary.
+- focused tests prove the owner boundary and no-bypass rule.
 
 ## Validation gate
 
@@ -273,10 +541,34 @@ Stop and redesign if Phase 12 requires:
 - Phase 11 base-control rewrites;
 - Phase 13 work.
 
+Also stop and redesign if the proof requires:
+
+- demo-only interaction state that bypasses descriptors, catalog facts, or runtime formation;
+- direct activation-to-host-command execution;
+- list, tree, or table navigation that mutates product data;
+- text-intent proof that requires caret, selection, text buffer, clipboard, undo/redo, or text layout ownership;
+- overlay/layer ordering or popup behavior;
+- broad story/gallery framework extraction.
+
+## Closeout requirements
+
+A later Phase 12 implementation closeout must record:
+
+- final implemented public vocabulary;
+- final owner files and crates touched;
+- gallery/story proof path;
+- deterministic replay/report proof path;
+- base-control interaction matrix coverage;
+- negative proof coverage;
+- boundary assertion results;
+- validation commands and results;
+- any intentionally deferred overlay, popup, text-editing, accessibility, or product-command behavior;
+- follow-up planning target for Phase 13 and later text editing.
+
 ## Relationship to current work
 
 Phase 11 is complete and provides the descriptor-backed base-control package inventory that Phase 12 can reason about.
 
-Phase 12 is the active planning focus. It should prepare one narrow implementation PR for generic reusable interaction behavior, including focus, keyboard, and text-intent seams for later editable controls, but this planning patch must not implement runtime interaction.
+Phase 12 is the active planning focus. It should prepare one narrow implementation PR for generic reusable interaction behavior, including focus, keyboard, and text-intent seams for later editable controls, plus a deterministic gallery/story proof and auditable interaction report. This planning patch must not implement runtime interaction.
 
 Phase 13 remains overlay/popup/layering. Full text editing remains later, but it must consume the interaction substrate shaped by Phase 12 rather than bypassing it.
