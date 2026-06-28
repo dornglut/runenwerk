@@ -7,6 +7,7 @@ canonical: true
 last_reviewed: 2026-06-28
 related_docs:
   - ../workflow-lifecycle.md
+  - ../../design/active/ui-component-platform-generic-interaction-design.md
 ---
 
 # Roadmap
@@ -139,7 +140,7 @@ State: completed by user validation report
 
 Owner: `ui_layout` for generic layout vocabulary; `ui_controls` for the control-facing bridge.
 
-Evidence: PR #29 merged the corrected owner-first Phase 9 work. 009A recorded the ownership realignment rule, 009B added generic layout/container/scroll/content/identity/virtualization vocabulary in `ui_layout`, 009C added the `ui_controls` control layout bridge over `ui_layout`, catalog inspection exposes read-only layout summaries, focused tests exist, and the user reported the validation gate green on 2026-06-26.
+Evidence: PR #29 merged the corrected Phase 9 work and the user reported the validation gate green.
 
 Next action: Keep as completed dependency for Phase 10; do not use PR #30 or `feature/ui-component-platform-009-layout`.
 
@@ -169,7 +170,7 @@ Owner: ui_layout
 
 Dependency level: follows accepted 009A
 
-Evidence: Generic layout/container/scroll/content/identity/virtualization vocabulary exists in `ui_layout`, is exported publicly, and has focused layout contract tests.
+Evidence: Generic layout vocabulary exists in `ui_layout`, is exported publicly, and has focused layout contract tests.
 
 Next action: Keep as completed dependency for 009C and Phase 10.
 
@@ -199,7 +200,7 @@ State: completed by user validation report
 
 Owner: `ui_render_data` for renderer-neutral output evidence contracts; `ui_controls` for the control-facing bridge; `ui_runtime` for emitted-frame evidence generation; engine render for submission proof without UI semantics.
 
-Evidence: PR #34 merged the full P10 owner-first implementation into `main`. It added renderer-neutral output evidence contracts, the `ui_controls` render bridge and catalog projection, runtime render-output evidence from emitted `UiFrame` output, and backend-side submission proof. User reported the full validation gate green on 2026-06-26.
+Evidence: PR #34 merged the full P10 owner-first implementation into `main`. User reported the full validation gate green on 2026-06-26.
 
 Next action: Keep as completed dependency for Phase 11 and Phase 12.
 
@@ -209,15 +210,37 @@ ID: `PT-UI-COMPONENT-PLATFORM-011`
 
 Title: UI Component Platform Base Control Packages
 
-State: review; local validation green
+State: completed through PR #37 and user validation report
 
-Lifecycle state: `review`
+Lifecycle state: `completed`
 
 Owner: `ui_controls` for base control package descriptors, UI-local contribution declarations, preset/lowering code, catalog projection, and read-only inspection facts. Owner crates such as `ui_layout`, `ui_render_data`, `ui_input`, `ui_theme`, and accessibility/focus contracts remain the source of generic vocabulary.
 
-Evidence: Phase 11 now has a local implementation patch that reworks base controls through `BaseControlsPlugin`, `UiControls`, `ControlContribution`, `ControlDef`, control presets, field groups, theme groups, `ControlCompiler`, catalog projection, and inspection projection. Local validation passed on 2026-06-28 for the Phase 11 cargo/docs/diff gate.
+Evidence: PR #37 merged Phase 11 into `main` on 2026-06-28. The proof covers Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView through `BaseControlsPlugin`, `UiControls`, `ControlContribution`, `ControlDef`, control presets, field groups, theme groups, `ControlCompiler`, catalog projection, and inspection projection. Reported local validation passed for the Phase 11 cargo/docs/diff gate.
 
-Next action: Review and merge the Phase 11 implementation patch, then record completion only after the accepted patch remains green. Do not begin `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction until P11 is completed.
+Known gaps: Full runtime interaction remains Phase 12. Overlays/popups/layering remain Phase 13. Text editing remains later. No shared plugin framework extraction, no `foundation/meta`, and no generic plugin primitives are authorized.
+
+Next action: Keep Phase 11 as completed dependency and proceed to `PT-UI-COMPONENT-PLATFORM-012-PLANNING`.
+
+### PT-UI-COMPONENT-PLATFORM-012-PLANNING
+
+ID: `PT-UI-COMPONENT-PLATFORM-012-PLANNING`
+
+Title: UI Component Platform Generic Interaction design intake
+
+State: active planning
+
+Lifecycle state: `active-planning`
+
+Owner: `ui_controls` for reusable control interaction declarations and descriptor/catalog/inspection facts; `ui_input` for normalized input packets, device/gesture facts, pointer/key/focus data, and runtime input sample formation; `ui_runtime` for resolving normalized input facts against runtime UI structure and producing reusable interaction facts/events; hosts/apps/editor/game for OS/window input collection, routing policy, command handling, product state changes, game/world input policy, and product-specific behavior.
+
+Authority: `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-input-gesture-device-design.md`, `editor-ui-runtime-v2-and-interaction-formation-design.md`, the Phase 11 closeout report, and the UI Component Platform production track.
+
+Evidence: Phase 11 completed descriptor-backed, catalog-visible, package-quality base controls. Phase 5 already defined reusable input/gesture/device declarations, and Interaction V2 already records editor/runtime interaction-formation direction, but Phase 12 needs a component-platform-specific owner-boundary design before implementation.
+
+Known gaps: No runtime interaction implementation is authorized yet. Overlay/popup/layering, text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and Phase 13 work remain out of scope.
+
+Next action: Review and accept the Phase 12 Generic Interaction design intake, then open a narrow implementation PR only after exact owner files, validation gate, and stop conditions are confirmed.
 
 ## Rules
 
