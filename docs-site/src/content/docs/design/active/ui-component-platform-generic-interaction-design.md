@@ -23,7 +23,7 @@ This is the Phase 12 planning design intake for `PT-UI-COMPONENT-PLATFORM-012-PL
 
 Lifecycle state: `active-planning`.
 
-This document does not authorize implementation. It defines the owner boundaries, acceptance criteria, validation gate, stop conditions, and later implementation envelope that must be accepted before code changes begin.
+Phase 12 is intended to define and then enable implementation of generic reusable interaction behavior for descriptor-backed controls. This planning patch does not implement that behavior yet. It defines the owner boundaries, acceptance criteria, validation gate, stop conditions, and later implementation envelope that must be accepted before code changes begin.
 
 ## Decision summary
 
@@ -33,7 +33,7 @@ An additional Phase 12 design document is required. The existing Phase 5 input/g
 
 ## Problem
 
-The UI track now has descriptor-backed, catalog-visible, package-quality base controls. Full reusable interaction behavior is still out of scope.
+The UI track now has descriptor-backed, catalog-visible, package-quality base controls. Generic reusable interaction behavior is the purpose of Phase 12, but it has not been defined or implemented yet.
 
 Phase 12 must define how reusable controls declare interaction needs and how runtime layers produce interaction facts without making `ui_controls` collect input, execute host commands, mutate app/editor/game state, or own product policy.
 
@@ -241,6 +241,6 @@ Stop and redesign if Phase 12 requires:
 
 Phase 11 is complete and provides the descriptor-backed base-control package inventory that Phase 12 can reason about.
 
-Phase 12 is the active planning focus. It should prepare one narrow implementation PR, but it must not implement runtime interaction in the planning patch.
+Phase 12 is the active planning focus. It should prepare one narrow implementation PR for generic reusable interaction behavior, but this planning patch must not implement runtime interaction.
 
 Phase 13 remains overlay/popup/layering. Text editing remains later.
