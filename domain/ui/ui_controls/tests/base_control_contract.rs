@@ -25,13 +25,13 @@ fn base_control_plugin_contributes_target_controls_to_ui_controls_extension() {
         controls
             .contributions()
             .iter()
-            .all(|contribution| !contribution.def.field_groups.is_empty())
+            .all(|contribution| !contribution.def().field_groups().is_empty())
     );
     assert!(
         controls
             .contributions()
             .iter()
-            .all(|contribution| !contribution.def.theme_groups.is_empty())
+            .all(|contribution| !contribution.def().theme_groups().is_empty())
     );
 }
 
@@ -62,8 +62,8 @@ fn base_control_definitions_declare_schema_fields_and_presets() {
 
     for contribution in controls.contributions() {
         let roles = contribution
-            .def
-            .field_groups
+            .def()
+            .field_groups()
             .iter()
             .map(|group| group.role)
             .collect::<BTreeSet<_>>();
