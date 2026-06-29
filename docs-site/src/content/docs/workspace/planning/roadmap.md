@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-design.md
+  - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
 ---
 
 # Roadmap
@@ -239,9 +240,9 @@ Authority: `ui-component-platform-generic-interaction-design.md`, `ui-component-
 
 Evidence: PR #43 on branch `codex/phase-12-generic-interaction` implements package-backed `ControlInteractionDescriptor` records, catalog/inspection interaction summaries, normalized pointer/keyboard/focus/semantic/text-intent facts, descriptor-driven mounted replay/report, the renderer-neutral visible proof model in `ui_runtime` through `InteractionVisualProof`, `InteractionVisualMainView`, `InteractionInspectorView`, `InteractionReportView`, `InteractionVisibleState`, and `InteractionProofFrame`, and static mount proof through `InteractionProofRenderFrame`/`UiFrame`/`UiStaticMountReport::from_frame`. The proof covers Button hover/pressed/focus-visible/activation/disabled suppression, List/Tree/Table intent markers, InspectorField text-intent probe behavior, read-only text-intent probe behavior, no-target/disabled/focus-negative cases, deterministic frame primitive ordering, and zero host-command/product-mutation/overlay/text-edit boundary assertions.
 
-Known gaps: Product-facing gallery/story pages do not yet expose the Phase 12 proof as live executable interaction UI; the accepted Phase 12 proof is the renderer-neutral static mount frame path. Phase 12A is the accepted direction for the stronger Tier 5 executable interaction story standard. Phase 13 overlay/popup/layering, later full text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and generic plugin primitives remain out of scope.
+Known gaps: Product-facing gallery/story pages do not yet expose the Phase 12 proof as live executable interaction UI; the accepted Phase 12 proof is the renderer-neutral static mount frame path. Phase 12A is active implementation for the stronger Tier 5 executable interaction story standard. Phase 13 overlay/popup/layering, later full text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and generic plugin primitives remain out of scope.
 
-Next action: Keep Phase 12 as a completed lower-tier dependency. Review/merge PR #43, and finish `PT-UI-COMPONENT-PLATFORM-012A-PLANNING` implementation-scope inspection before claiming live reusable interaction proof or starting Phase 13 implementation.
+Next action: Keep Phase 12 as a completed lower-tier dependency. Review/merge PR #43, and complete `PT-UI-COMPONENT-PLATFORM-012A` before claiming live reusable interaction proof or starting Phase 13 implementation.
 
 ### PT-UI-COMPONENT-PLATFORM-012A
 
@@ -249,19 +250,19 @@ ID: `PT-UI-COMPONENT-PLATFORM-012A`
 
 Title: UI Component Platform Executable Interaction Story
 
-State: accepted direction / active planning
+State: implementation scope accepted / active implementation
 
-Lifecycle state: `active-planning`
+Lifecycle state: `active-implementation`
 
-Owner: `ui_story` for executable story identity/evidence envelope authority, `ui_runtime` for interaction story session execution mechanics and replay/live application, `ui_input` for normalized input facts, `ui_controls` for reusable interaction descriptors and read-only declarations, `ui_static_mount` for static frame validation, and the existing gallery/proof host layer for live input collection and visible proof presentation.
+Owner: `ui_story` for workflow profile/evidence envelope authority, `ui_runtime` for interaction story session execution mechanics and replay/live application, `ui_input` for normalized input facts and minimal conversion helpers, `ui_controls` for reusable interaction descriptors and read-only declarations, `ui_static_mount` for static frame validation, and `runenwerk_editor` for the narrow proof-host adapter from `UiInputEvent` to runtime session evidence.
 
-Authority: `ui-component-platform-executable-interaction-story-design.md`, `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-story-proof-envelope-design.md`, `ui-component-platform-input-gesture-device-design.md`, `editor-ui-runtime-v2-and-interaction-formation-design.md`, and the UI Component Platform production track.
+Authority: `ui-component-platform-executable-interaction-story-design.md`, `ui-component-platform-executable-interaction-story-implementation-scope.md`, `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-story-proof-envelope-design.md`, `ui-component-platform-input-gesture-device-design.md`, `editor-ui-runtime-v2-and-interaction-formation-design.md`, and the UI Component Platform production track.
 
-Evidence: Design intake added and accepted by user review on 2026-06-29. It defines Tier 5 as one executable story with replay mode, live gallery/proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions.
+Evidence: Design accepted by user review on 2026-06-29. Implementation scope added on 2026-06-29. It names exact owner files/crates, runtime session API scope, host adapter location, validation envelope, evidence artifacts, manual live validation expectation, and stop conditions.
 
-Known gaps: Implementation is not authorized yet. Active work must name exact owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation steps, and stop conditions before code.
+Known gaps: Implementation evidence does not exist yet. Product-facing editor window/gallery display is not guaranteed by this first slice unless it can be achieved without editor shell surface registry changes. If shell surface registry changes are required, stop and record a scope revision first.
 
-Next action: Inspect the actual `ui_story`, `ui_runtime`, `ui_input`, `ui_static_mount`, and gallery/proof-host files to create an exact implementation scope. Do not start overlay/popup/layering, text editing, or product-command adoption until this Tier 5 proof standard has implementation evidence.
+Next action: Implement the scoped Tier 5 executable generic interaction story. Do not start overlay/popup/layering, text editing, product-command adoption, shared plugin framework extraction, generic plugin primitives, or `foundation/meta`.
 
 ## Rules
 
