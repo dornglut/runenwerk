@@ -9,7 +9,9 @@ use crate::{
     RUNENWERK_CONTROL_TARGET_EDITOR,
 };
 
-use super::lowering::{accessibility, input, inspection, layout, module, render, state, theme};
+use super::lowering::{
+    accessibility, input, inspection, interaction, layout, module, render, state, theme,
+};
 use super::{
     CompiledControl, CompiledControlPackage, ControlContribution, ControlInspection, UiControls,
 };
@@ -54,6 +56,7 @@ impl ControlCompiler {
                     layout: control.layout,
                     render: control.render,
                     input: control.input,
+                    interaction: control.interaction,
                     state: control.state,
                     theme: control.theme,
                     accessibility: control.accessibility,
@@ -89,6 +92,7 @@ impl ControlCompiler {
             layout: layout::lower_layout(contribution.def(), kind_id.clone()),
             render: render::lower_render(contribution.def(), kind_id.clone()),
             input: input::lower_input(contribution.def(), kind_id.clone()),
+            interaction: interaction::lower_interaction(contribution.def(), kind_id.clone()),
             state: state::lower_state(contribution.def(), kind_id.clone()),
             theme: theme::lower_theme(contribution.def(), kind_id.clone()),
             accessibility: accessibility::lower_accessibility(contribution.def(), kind_id),
@@ -103,6 +107,7 @@ pub(crate) struct LoweredControl {
     pub(crate) layout: crate::ControlLayoutDescriptor,
     pub(crate) render: ControlRenderDescriptor,
     pub(crate) input: ControlInputDescriptor,
+    pub(crate) interaction: crate::ControlInteractionDescriptor,
     pub(crate) state: ControlStateDescriptor,
     pub(crate) theme: ControlThemeDescriptor,
     pub(crate) accessibility: ControlAccessibilityDescriptor,

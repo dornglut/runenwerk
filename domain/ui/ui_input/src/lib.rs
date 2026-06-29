@@ -1,4 +1,5 @@
 pub mod event;
+pub mod facts;
 pub mod focus;
 pub mod keyboard;
 pub mod pointer;
@@ -7,6 +8,7 @@ pub mod semantic;
 pub mod shortcut;
 
 pub use event::*;
+pub use facts::*;
 pub use focus::*;
 pub use keyboard::*;
 pub use pointer::*;

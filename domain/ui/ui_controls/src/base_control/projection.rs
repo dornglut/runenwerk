@@ -3,8 +3,8 @@
 
 use crate::{
     ControlAccessibilityDescriptor, ControlInputDescriptor, ControlInspectionDescriptor,
-    ControlModuleDescriptor, ControlPackageDescriptor, ControlRenderDescriptor,
-    ControlStateDescriptor, ControlThemeDescriptor,
+    ControlInteractionDescriptor, ControlModuleDescriptor, ControlPackageDescriptor,
+    ControlRenderDescriptor, ControlStateDescriptor, ControlThemeDescriptor,
 };
 
 use super::{ControlCatalog, ControlContribution};
@@ -24,6 +24,7 @@ pub struct CompiledControl {
     pub layout: crate::ControlLayoutDescriptor,
     pub render: ControlRenderDescriptor,
     pub input: ControlInputDescriptor,
+    pub interaction: ControlInteractionDescriptor,
     pub state: ControlStateDescriptor,
     pub theme: ControlThemeDescriptor,
     pub accessibility: ControlAccessibilityDescriptor,

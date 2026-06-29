@@ -3948,6 +3948,7 @@ dependencies = [
 name = "ui_runtime"
 version = "0.1.0"
 dependencies = [
+ "ui_controls",
  "ui_graph_editor",
  "ui_input",
  "ui_layout",

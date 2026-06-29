@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::interaction::ControlInteractionSupportSummary;
 use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
 use crate::package::metadata::ControlMountEligibility;
 
@@ -35,6 +36,18 @@ pub struct ControlCatalogEntryDescriptor {
     pub mount_explanation: String,
     pub compatibility: ControlCompatibilitySummary,
     pub deprecation: ControlCatalogDeprecationStatus,
+    #[serde(default)]
+    pub interaction_states: Vec<String>,
+    #[serde(default)]
+    pub interaction_triggers: Vec<String>,
+    #[serde(default)]
+    pub interaction_outcomes: Vec<String>,
+    #[serde(default)]
+    pub interaction_has_runtime_behavior: bool,
+    #[serde(default)]
+    pub interaction_executes_host_commands: bool,
+    #[serde(default)]
+    pub interaction_mutates_product_state: bool,
 }
 
 impl ControlCatalogEntryDescriptor {
@@ -119,7 +132,23 @@ impl ControlCatalogEntryDescriptor {
             mount_explanation,
             compatibility: ControlCompatibilitySummary::from_control_kind(kind),
             deprecation: ControlCatalogDeprecationStatus::from_status(&kind.deprecation),
+            interaction_states: Vec::new(),
+            interaction_triggers: Vec::new(),
+            interaction_outcomes: Vec::new(),
+            interaction_has_runtime_behavior: false,
+            interaction_executes_host_commands: false,
+            interaction_mutates_product_state: false,
         }
+    }
+
+    pub fn with_interaction_summary(mut self, summary: &ControlInteractionSupportSummary) -> Self {
+        self.interaction_states = summary.states.clone();
+        self.interaction_triggers = summary.triggers.clone();
+        self.interaction_outcomes = summary.outcomes.clone();
+        self.interaction_has_runtime_behavior = summary.has_runtime_behavior;
+        self.interaction_executes_host_commands = summary.executes_host_commands;
+        self.interaction_mutates_product_state = summary.mutates_product_state;
+        self
     }
 }
 
