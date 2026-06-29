@@ -8,6 +8,7 @@ last_reviewed: 2026-06-29
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
+  - ../../design/active/ui-component-platform-executable-interaction-story-design.md
 ---
 
 # Roadmap
@@ -142,7 +143,7 @@ Owner: `ui_layout` for generic layout vocabulary; `ui_controls` for the control-
 
 Evidence: PR #29 merged the corrected Phase 9 work and the user reported the validation gate green.
 
-Next action: Keep as completed dependency for Phase 10; do not use PR #30 or `feature/ui-component-platform-009-layout`.
+Next action: Keep as completed dependency; do not use PR #30 or `feature/ui-component-platform-009-layout`.
 
 ### PT-UI-COMPONENT-PLATFORM-009A
 
@@ -238,9 +239,29 @@ Authority: `ui-component-platform-generic-interaction-design.md`, `ui-component-
 
 Evidence: PR #43 on branch `codex/phase-12-generic-interaction` implements package-backed `ControlInteractionDescriptor` records, catalog/inspection interaction summaries, normalized pointer/keyboard/focus/semantic/text-intent facts, descriptor-driven mounted replay/report, the renderer-neutral visible proof model in `ui_runtime` through `InteractionVisualProof`, `InteractionVisualMainView`, `InteractionInspectorView`, `InteractionReportView`, `InteractionVisibleState`, and `InteractionProofFrame`, and static mount proof through `InteractionProofRenderFrame`/`UiFrame`/`UiStaticMountReport::from_frame`. The proof covers Button hover/pressed/focus-visible/activation/disabled suppression, List/Tree/Table intent markers, InspectorField text-intent probe behavior, read-only text-intent probe behavior, no-target/disabled/focus-negative cases, deterministic frame primitive ordering, and zero host-command/product-mutation/overlay/text-edit boundary assertions.
 
-Known gaps: Product-facing gallery/story pages do not yet expose the Phase 12 proof as interactive product UI; the accepted Phase 12 proof is the renderer-neutral static mount frame path. Phase 13 overlay/popup/layering, later full text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and generic plugin primitives remain out of scope.
+Known gaps: Product-facing gallery/story pages do not yet expose the Phase 12 proof as live executable interaction UI; the accepted Phase 12 proof is the renderer-neutral static mount frame path. Phase 12A is the planning focus for the stronger Tier 5 executable interaction story standard. Phase 13 overlay/popup/layering, later full text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and generic plugin primitives remain out of scope.
 
-Next action: Keep Phase 12 as a completed dependency. Review/merge PR #43, then open a separate planning focus before any Phase 13 overlay/layering or text-editing implementation begins.
+Next action: Keep Phase 12 as a completed lower-tier dependency. Review/merge PR #43, and resolve `PT-UI-COMPONENT-PLATFORM-012A-PLANNING` before claiming live reusable interaction proof or starting Phase 13 implementation.
+
+### PT-UI-COMPONENT-PLATFORM-012A
+
+ID: `PT-UI-COMPONENT-PLATFORM-012A`
+
+Title: UI Component Platform Executable Interaction Story
+
+State: design intake / active planning
+
+Lifecycle state: `active-planning`
+
+Owner: `ui_story` for executable story identity/evidence envelope authority, `ui_runtime` for interaction story session execution mechanics and replay/live application, `ui_input` for normalized input facts, `ui_controls` for reusable interaction descriptors and read-only declarations, `ui_static_mount` for static frame validation, and the existing gallery/proof host layer for live input collection and visible proof presentation.
+
+Authority: `ui-component-platform-executable-interaction-story-design.md`, `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-story-proof-envelope-design.md`, `ui-component-platform-input-gesture-device-design.md`, `editor-ui-runtime-v2-and-interaction-formation-design.md`, and the UI Component Platform production track.
+
+Evidence: Design intake added on 2026-06-29. It defines Tier 5 as one executable story with replay mode, live gallery/proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions.
+
+Known gaps: No implementation is authorized yet. The design must be accepted or revised, and active work must name exact owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation steps, and stop conditions before code.
+
+Next action: Review and accept, revise, or reject the design intake. Do not start overlay/popup/layering, text editing, or product-command adoption until this Tier 5 proof standard is resolved.
 
 ## Rules
 
