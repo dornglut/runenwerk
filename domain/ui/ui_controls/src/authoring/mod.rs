@@ -5,6 +5,7 @@ use ui_program::{RouteCapability, RouteId, RouteSchemaVersion};
 use ui_schema::UiSchema;
 
 use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
+use crate::interaction::ControlInteractionDescriptor;
 use crate::kernel::{
     ControlKernelDescriptor, ControlKernelId, ControlKernelKind, ControlKernelSet,
 };
@@ -314,6 +315,7 @@ pub struct ControlPackageAuthoringBuilder {
     target_profiles: Vec<ControlTargetProfileRef>,
     catalog_metadata: Option<ControlCatalogMetadata>,
     modules: Vec<ControlModuleDescriptor>,
+    interaction_descriptors: Vec<ControlInteractionDescriptor>,
 }
 
 impl ControlPackageAuthoringBuilder {
@@ -328,6 +330,7 @@ impl ControlPackageAuthoringBuilder {
             target_profiles: Vec::new(),
             catalog_metadata: None,
             modules: Vec::new(),
+            interaction_descriptors: Vec::new(),
         }
     }
 
@@ -366,6 +369,11 @@ impl ControlPackageAuthoringBuilder {
         self
     }
 
+    pub fn with_interaction_descriptor(mut self, descriptor: ControlInteractionDescriptor) -> Self {
+        self.interaction_descriptors.push(descriptor);
+        self
+    }
+
     pub fn with_authored_kind(mut self, spec: ControlKindAuthoringSpec) -> Self {
         self.modules
             .push(ControlModuleAuthoringBuilder::new(spec).build());
@@ -385,6 +393,9 @@ impl ControlPackageAuthoringBuilder {
         }
         for target_profile in self.target_profiles {
             package = package.with_target_profile(target_profile);
+        }
+        for descriptor in self.interaction_descriptors {
+            package = package.with_interaction_descriptor(descriptor);
         }
 
         let catalog_metadata = self

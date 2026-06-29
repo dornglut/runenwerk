@@ -1,6 +1,6 @@
 ---
 title: UI Component Platform Generic Interaction Design
-description: Phase 12 planning intake for reusable generic interaction semantics across ui_controls, ui_input, ui_runtime, host-owned policy, gallery proof, and later text-editing readiness.
+description: Completed Phase 12 reference for reusable generic interaction semantics across ui_controls, ui_input, ui_runtime, host-owned policy, visible proof, and later text-editing readiness.
 status: active
 owner: ui
 layer: domain
@@ -19,11 +19,11 @@ related_docs:
 
 ## Status
 
-This is the Phase 12 design for `PT-UI-COMPONENT-PLATFORM-012`.
+This is the completed Phase 12 design for `PT-UI-COMPONENT-PLATFORM-012`.
 
-Lifecycle state: `review`.
+Lifecycle state: `completed`.
 
-PR #43 is the draft implementation PR for generic reusable interaction behavior for descriptor-backed controls. The design continues to define the owner boundaries, proof contract, acceptance criteria, validation gate, stop conditions, and implementation envelope for that PR.
+PR #43 is the implementation PR for generic reusable interaction behavior for descriptor-backed controls. The design remains the owner-boundary reference for package-backed declarations, normalized input replay, renderer-neutral visible proof, negative proof cases, and no-bypass assertions.
 
 ## Decision summary
 
@@ -33,11 +33,11 @@ Phase 12 should make later text-editing controls possible by proving focus, keyb
 
 Phase 12 must have a runtime-visible proof. The phase should not close with type definitions only. The implementation proof should replay deterministic input against mounted base controls, visibly show interaction state changes in a gallery/story scenario, and emit an auditable interaction report.
 
-An additional Phase 12 design document is required. The existing Phase 5 input/gesture/device design covers declarative input capability facts. The existing editor Interaction V2 design covers editor-retained runtime interaction formation. Neither document by itself owns the component-platform boundary between reusable control declarations, normalized input substrate facts, runtime interaction formation, and host-owned product behavior.
+This Phase 12 design owns the component-platform boundary between reusable control declarations, normalized input substrate facts, runtime interaction formation, and host-owned product behavior. The existing Phase 5 input/gesture/device design covers declarative input capability facts, and the existing editor Interaction V2 design covers editor-retained runtime interaction formation.
 
 ## Problem
 
-The UI track now has descriptor-backed, catalog-visible, package-quality base controls. Generic reusable interaction behavior is the purpose of Phase 12, but it has not been defined or implemented yet.
+The UI track now has descriptor-backed, catalog-visible, package-quality base controls. Generic reusable interaction behavior is the purpose of Phase 12, and PR #43 records the first completed reusable interaction implementation path.
 
 Phase 12 must define how reusable controls declare interaction needs and how runtime layers produce interaction facts without making `ui_controls` collect input, execute host commands, mutate app/editor/game state, or own product policy.
 
@@ -222,7 +222,9 @@ report/event view:
 
 The gallery must not execute product commands. A Button activation may emit an activation outcome, but it must not invoke app/editor/game behavior as part of the reusable control proof.
 
-PR #43 does not add a real gallery/story fixture path. For this PR, deterministic mounted replay/report evidence is the accepted temporary visible proof because no existing gallery fixture path has been identified for generic reusable interaction. If PR #43 completes Phase 12, closeout must record this as a known gap or add the real gallery/story fixture before completion.
+PR #43 adds a renderer-neutral visible proof path in `domain/ui/ui_runtime/src/input/generic_interaction.rs` through `InteractionVisualProof`, `InteractionVisualMainView`, `InteractionVisualControl`, `InteractionVisualMarker`, `InteractionInspectorView`, `InteractionReportView`, `InteractionVisibleState`, and `InteractionProofFrame`.
+
+That proof path is formed from compiled base-control package descriptors plus deterministic replay reports. It exposes a main view, inspector view, and report/event view without creating a product UI, overlay layer, popup, or broad gallery framework. Existing gallery/static-mount infrastructure can render the proof model later, but Phase 12 completion does not depend on a replay-only substitute.
 
 ## Base-control interaction matrix
 
@@ -445,30 +447,35 @@ InteractionFormationReport
 
 Do not introduce a universal interaction framework or shared plugin primitive during Phase 12.
 
-## Later implementation write scope
+## Implemented write scope
 
-A later implementation PR may touch only the minimum owner files needed to prove the contract:
+PR #43 touched the minimum owner files needed to prove the contract:
 
 ```text
 domain/ui/ui_controls/src/interaction.rs
-domain/ui/ui_controls/src/package.rs
-domain/ui/ui_controls/src/catalog.rs
+domain/ui/ui_controls/src/package/descriptor.rs
+domain/ui/ui_controls/src/package/validation.rs
+domain/ui/ui_controls/src/authoring/mod.rs
 domain/ui/ui_controls/src/base_control/compiler.rs
-domain/ui/ui_controls/src/base_control/lowering/
-domain/ui/ui_input/src/
-domain/ui/ui_runtime/src/
-domain/ui/ui_controls/tests/
-domain/ui/ui_input/tests/
-domain/ui/ui_runtime/tests/
+domain/ui/ui_controls/src/base_control/lowering/interaction.rs
+domain/ui/ui_controls/src/base_control/lowering/inspection.rs
+domain/ui/ui_controls/src/catalog/entry.rs
+domain/ui/ui_controls/src/lib.rs
+domain/ui/ui_controls/tests/control_interaction_contract.rs
+domain/ui/ui_controls/tests/control_interaction_catalog_contract.rs
+domain/ui/ui_input/src/facts.rs
+domain/ui/ui_runtime/src/input/generic_interaction.rs
+domain/ui/ui_runtime/tests/interaction_replay_report.rs
 docs-site/src/content/docs/workspace/planning/
 docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md
+docs-site/src/content/docs/reports/closeouts/pt-ui-component-platform-012-generic-interaction-closeout.md
 ```
 
-If the repository already has a story/gallery crate or fixture path for mounted UI proofs, the implementation PR may add the minimum fixture/test files needed there. That addition must be justified as proof plumbing, not as a new product UI or generic framework.
+The visible proof path is renderer-neutral in `ui_runtime` and does not add a product UI or generic gallery/story framework.
 
-The implementation PR must not rewrite Phase 11 base controls. Additive interaction declarations may be attached through the existing contribution/lowering path only if they preserve the Phase 11 ownership model.
+The implementation PR did not rewrite Phase 11 base controls. Additive interaction declarations attach through the existing contribution/lowering path and preserve the Phase 11 ownership model.
 
-The implementation PR must not touch app/editor/game command paths except for optional tests or guards that prove product behavior remains outside reusable control semantics.
+The implementation PR did not touch app/editor/game command paths.
 
 ## Acceptance criteria
 
@@ -520,6 +527,7 @@ cargo test -p ui_controls control_catalog
 cargo test -p ui_controls base_control
 cargo test -p ui_input input
 cargo test -p ui_runtime interaction
+cargo test -p ui_runtime --test interaction_replay_report
 python3 tools/docs/validate_docs.py
 git diff --check
 ```
@@ -571,6 +579,6 @@ A later Phase 12 implementation closeout must record:
 
 Phase 11 is complete and provides the descriptor-backed base-control package inventory that Phase 12 can reason about.
 
-Phase 12 is the active planning focus. It should prepare one narrow implementation PR for generic reusable interaction behavior, including focus, keyboard, and text-intent seams for later editable controls, plus a deterministic gallery/story proof and auditable interaction report. This planning patch must not implement runtime interaction.
+Phase 12 is complete in PR #43 with package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven runtime replay/report, renderer-neutral visible proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions.
 
 Phase 13 remains overlay/popup/layering. Full text editing remains later, but it must consume the interaction substrate shaped by Phase 12 rather than bypassing it.

@@ -59,8 +59,14 @@ fn activatable(kind_id: ControlKindId) -> ControlInteractionDescriptor {
         .with_requirement(ControlInteractionRequirement::new(
             ControlInteractionTrigger::PointerHover,
         ))
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerPress,
+        ))
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerRelease,
+        ))
         .with_requirement(
-            ControlInteractionRequirement::new(ControlInteractionTrigger::PointerPress)
+            ControlInteractionRequirement::new(ControlInteractionTrigger::PointerActivate)
                 .with_outcome(ControlInteractionOutcome::ActivationRequested),
         )
         .with_requirement(
@@ -78,8 +84,14 @@ fn action_prompt(kind_id: ControlKindId) -> ControlInteractionDescriptor {
         .with_requirement(ControlInteractionRequirement::new(
             ControlInteractionTrigger::PointerHover,
         ))
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerPress,
+        ))
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerRelease,
+        ))
         .with_requirement(
-            ControlInteractionRequirement::new(ControlInteractionTrigger::PointerPress)
+            ControlInteractionRequirement::new(ControlInteractionTrigger::PointerActivate)
                 .with_outcome(ControlInteractionOutcome::ActionIntent),
         )
         .with_requirement(
@@ -91,6 +103,9 @@ fn action_prompt(kind_id: ControlKindId) -> ControlInteractionDescriptor {
             ControlInteractionRequirement::new(ControlInteractionTrigger::SemanticAction)
                 .with_outcome(ControlInteractionOutcome::ActionIntent),
         )
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerCancel,
+        ))
 }
 
 fn focusable(kind_id: ControlKindId) -> ControlInteractionDescriptor {

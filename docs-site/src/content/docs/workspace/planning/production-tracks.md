@@ -46,7 +46,7 @@ Milestones:
 009 Layout / container / virtualization — completed by user validation report through 009A/009B/009C
 010 Render surface / output — completed by user validation report through PR #34
 011 Base control packages — completed through PR #37 and user validation report
-012 Generic interaction — draft PR in review
+012 Generic interaction — completed in PR #43 implementation evidence
 013 Overlay / popup / layering — future
 014 Minimum text editing — future
 015 Generic text — future
@@ -69,7 +69,7 @@ Design gates:
 009C proved ui_controls should bridge owner-crate vocabulary through per-control descriptors and read-only summaries.
 010 proved render/output ownership across ui_render_data, ui_controls, ui_runtime, and engine render.
 011 proved UI-local contribution/preset/lowering authoring for package-quality base controls while keeping full interaction behavior for Phase 12.
-012 must define generic reusable interaction semantics, deterministic gallery/story proof, replay/report evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
+012 completed generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -87,14 +87,14 @@ Phase 8: user reported the accessibility/focus/inspection validation gate green.
 Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundation, 009C ui_controls layout bridge, read-only catalog inspection bridge, and focused tests; user reported the validation gate green.
 Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
 Phase 11: PR #37 merged the UI-local base-control contribution/preset/lowering proof; user reported the validation gate green.
-Phase 12: draft PR #43 is in review; implementation must satisfy accepted generic interaction design, exact owner files, validation gate, stop conditions, deterministic mounted proof, replay/report evidence, negative proof cases, and no-bypass assertions.
+Phase 12: PR #43 implements package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions. Validation passed for the Phase 12 implementation gate recorded in the closeout report.
 Later phases: overlays, text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 12 implementation is authorized only through draft PR #43. The PR must remain draft until review fixes are complete and validation is rerun. No real gallery/story fixture path exists in the PR yet; deterministic mounted replay/report evidence is the accepted temporary visible proof for review.
+No current blocker for Phase 12. Existing gallery/static mount infrastructure does not yet render the Phase 12 proof model as a product-facing gallery page, but PR #43 provides the renderer-neutral visible proof path required for completion. Phase 13 overlays/layering and later full text editing remain future work.
 ```
 
 Activation condition:
@@ -106,7 +106,7 @@ Each future milestone activates only through an accepted planning/design update 
 Next action:
 
 ```text
-Fix and review PR #43. Do not implement overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, or foundation/meta as part of Phase 12. Require the implementation to prove descriptor-backed interaction through compiled mounted base controls, deterministic input replay, an auditable interaction report, and boundary assertions that reusable controls do not own host behavior.
+Review/merge PR #43. Do not implement overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of Phase 12. Open a separate active-work entry before Phase 13 or text-editing implementation begins.
 ```
 
 ## Track shape

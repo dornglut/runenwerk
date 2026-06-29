@@ -228,19 +228,19 @@ ID: `PT-UI-COMPONENT-PLATFORM-012`
 
 Title: UI Component Platform Generic Interaction
 
-State: draft PR in review
+State: completed in PR #43 implementation evidence
 
-Lifecycle state: `review`
+Lifecycle state: `completed`
 
 Owner: `ui_controls` for reusable control interaction declarations and descriptor/catalog/inspection facts; `ui_input` for normalized input packets, device/gesture facts, pointer/key/focus data, and runtime input sample formation; `ui_runtime` for resolving normalized input facts against runtime UI structure and producing reusable interaction facts/events; hosts/apps/editor/game for OS/window input collection, routing policy, command handling, product state changes, game/world input policy, and product-specific behavior.
 
 Authority: `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-input-gesture-device-design.md`, `editor-ui-runtime-v2-and-interaction-formation-design.md`, the Phase 11 closeout report, and the UI Component Platform production track.
 
-Evidence: Phase 11 completed descriptor-backed, catalog-visible, package-quality base controls. Phase 5 already defined reusable input/gesture/device declarations, and Interaction V2 already records editor/runtime interaction-formation direction. PR #43 is the draft Phase 12 implementation PR and must remain draft until review fixes and validation are complete.
+Evidence: PR #43 on branch `codex/phase-12-generic-interaction` implements package-backed `ControlInteractionDescriptor` records, catalog/inspection interaction summaries, normalized pointer/keyboard/focus/semantic/text-intent facts, descriptor-driven mounted replay/report, and the renderer-neutral visible proof model in `ui_runtime` through `InteractionVisualProof`, `InteractionVisualMainView`, `InteractionInspectorView`, `InteractionReportView`, `InteractionVisibleState`, and `InteractionProofFrame`. The proof covers Button hover/pressed/focus-visible/activation/disabled suppression, List/Tree/Table intent markers, InspectorField text-intent probe behavior, read-only text-intent probe behavior, no-target/disabled/focus-negative cases, and zero host-command/product-mutation/overlay/text-edit boundary assertions.
 
-Known gaps: PR #43 does not provide a real gallery/story fixture path; deterministic mounted replay/report evidence is the accepted temporary visible proof for review. Overlay/popup/layering, text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and Phase 13 work remain out of scope.
+Known gaps: Existing gallery/static mount infrastructure does not yet render the Phase 12 proof model as a product-facing gallery page. PR #43 provides the renderer-neutral visible proof model and tests; Phase 13 overlay/popup/layering, later full text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and generic plugin primitives remain out of scope.
 
-Next action: Fix and review PR #43. Do not mark Phase 12 completed until delivered scope, validation status, known gaps, and follow-up are recorded.
+Next action: Keep Phase 12 as a completed dependency. Review/merge PR #43, then open a separate planning focus before any Phase 13 overlay/layering or text-editing implementation begins.
 
 ## Rules
 

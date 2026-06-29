@@ -16,27 +16,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-012`
+No current focus is active after `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction closeout.
 
-Title: UI Component Platform Generic Interaction implementation
+Most recent completed focus: `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction.
 
-State: review
+State: completed in PR #43 implementation evidence.
 
-Lifecycle state: `review`
+Lifecycle state: `completed`
 
-Owner: `ui_controls` may own reusable control interaction declarations, semantic interaction states needed by reusable controls, control-level interaction requirements, descriptor/catalog/inspection facts for interaction support, and control kernel hooks only as declarations/contracts. `ui_input` owns normalized input packet vocabulary, device/gesture facts, pointer/key/focus/text-intent facts as reusable input data, and runtime input sample formation. `ui_runtime` owns runtime interaction formation over emitted or mounted UI, normalized input resolution against runtime UI structure, interaction facts/events for reusable controls, deterministic replay/report evidence, and runtime frame/session evidence. Hosts, apps, editor, and game layers own OS/window input collection, routing policy, command execution, app/editor/game mutation, game/world input policy, and product-specific behavior.
+Owner: Phase 12 completed across `ui_controls` for package-backed reusable interaction declarations and catalog/inspection projection, `ui_input` for normalized pointer/keyboard/focus/semantic/text-intent facts, and `ui_runtime` for descriptor-driven mounted replay, formation reports, renderer-neutral visible proof, and no-bypass boundary assertions.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md`, `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`, and the Phase 11 closeout report.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md`, `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`, and the Phase 11 closeout report.
 
-Write scope: PR #43 implements the narrow Phase 12 generic reusable interaction envelope across `ui_controls`, `ui_input`, and `ui_runtime`. It may add reusable interaction declarations, catalog/inspection projection, normalized input facts, deterministic mounted replay/report evidence, negative proof cases, and no-bypass assertions. Preserve the focus, keyboard, and text-intent seams needed by later editable text controls. Do not change product code, do not add overlays/popups/layering, do not add full text editing behavior, do not add app/editor/game-specific mutation, do not extract a shared plugin framework, and do not introduce `foundation/meta`.
+Write scope: Phase 12 implementation is closed. Do not add overlay/popup/layering, full text editing behavior, app/editor/game command mutation, shared plugin framework extraction, generic plugin primitives, or `foundation/meta` as part of Phase 12.
 
-Validation expectation: PR #43 must run the Phase 12 implementation gate from the generic interaction design: `cargo fmt --all --check`, `cargo check -p ui_controls`, `cargo check -p ui_input`, `cargo check -p ui_runtime`, focused `ui_controls`, `ui_input`, and `ui_runtime` tests, `python3 tools/docs/validate_docs.py`, and `git diff --check`.
+Validation expectation: Completed Phase 12 evidence used the implementation gate recorded in the closeout report: `cargo fmt --all --check`, `cargo check -p ui_controls`, `cargo check -p ui_input`, `cargo check -p ui_runtime`, focused `ui_controls`, `ui_input`, and `ui_runtime` tests, `python3 tools/docs/validate_docs.py`, and `git diff --check`.
 
-Known blockers: PR #43 remains draft until review fixes are complete and validation is rerun. No real gallery/story fixture path exists yet in this PR; the deterministic mounted replay/report proof is the accepted temporary visible proof for review, and the absence of a gallery fixture must be recorded in closeout if the phase completes from this PR.
+Known blockers: None for Phase 12. PR #43 remains draft until repository review/merge handling is complete, but the implementation evidence and closeout record the intended completed Phase 12 scope. Phase 13 overlays/layering and later full text editing remain deferred.
 
-Next action: Fix and review PR #43. The PR must prove descriptor-backed reusable interaction through compiled base-control descriptors, deterministic input replay, auditable interaction reports, and boundary assertions that host commands, product mutations, overlays, and full text editing did not run. Keep overlays/popups/layering in Phase 13. Keep full text editing in a later phase, but require it to consume the focus, keyboard, text-intent, and runtime interaction substrate shaped by Phase 12.
+Next action: Review/merge PR #43 or explicitly open the next planning focus. Do not start Phase 13 implementation without a new active-work entry and accepted owner/scope/validation envelope.
 
-Evidence: Phase 11 completed through merged PR #37 on 2026-06-28. PR #43 opened as a draft Phase 12 implementation PR on branch `codex/phase-12-generic-interaction`.
+Evidence: PR #43 on branch `codex/phase-12-generic-interaction` implements package-backed interaction descriptors, package/catalog/inspection interaction visibility, normalized input facts, descriptor-driven replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, positive and negative interaction scenarios, read-only text-intent probe behavior, and zero host-command/product-mutation/overlay/text-edit boundary assertions.
 
 ## Active-work rules
 

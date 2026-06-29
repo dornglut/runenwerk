@@ -41,7 +41,9 @@ impl ControlCompiler {
                 .with_catalog_metadata(ControlCatalogMetadata::new(RUNENWERK_CONTROL_PACKAGE_ID, "Base Controls"));
 
         for control in &lowered {
-            package_builder = package_builder.with_module(control.module.clone());
+            package_builder = package_builder
+                .with_module(control.module.clone())
+                .with_interaction_descriptor(control.interaction.clone());
         }
 
         let package = package_builder.build();
@@ -49,13 +51,17 @@ impl ControlCompiler {
             .into_iter()
             .map(|control| {
                 let inspection = inspection::lower_inspection(&package, &control);
+                let interaction = package
+                    .interaction_descriptor(&control.module.kind.control_kind_id)
+                    .cloned()
+                    .expect("compiled base controls must carry package interaction descriptors");
                 CompiledControl {
                     contribution: control.contribution,
                     module: control.module,
                     layout: control.layout,
                     render: control.render,
                     input: control.input,
-                    interaction: control.interaction,
+                    interaction,
                     state: control.state,
                     theme: control.theme,
                     accessibility: control.accessibility,
@@ -63,29 +69,7 @@ impl ControlCompiler {
                 }
             })
             .collect::<Vec<_>>();
-        let mut catalog_entries = package
-            .control_kinds
-            .iter()
-            .map(|kind| {
-                let entry = crate::ControlCatalogEntryDescriptor::from_control_kind(&package, kind);
-                if let Some(control) = controls
-                    .iter()
-                    .find(|control| control.module.kind.control_kind_id == kind.control_kind_id)
-                {
-                    entry.with_interaction_summary(&control.interaction.summary())
-                } else {
-                    entry
-                }
-            })
-            .collect::<Vec<_>>();
-        catalog_entries.sort_by(|left, right| {
-            left.package_id
-                .cmp(&right.package_id)
-                .then_with(|| left.control_kind_id.cmp(&right.control_kind_id))
-        });
-        let catalog = ControlCatalogIndex {
-            entries: catalog_entries,
-        };
+        let catalog = ControlCatalogIndex::from_packages([&package]);
         let inspection = ControlInspection {
             controls: controls
                 .iter()

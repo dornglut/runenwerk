@@ -217,6 +217,26 @@ Evidence: Phase 11 closeout, Phase 5 input/gesture/device design, editor Interac
 
 Follow-up: Review the Phase 12 design intake. Do not authorize implementation until the later PR has exact owner files, non-goals, validation gate, evidence expectation, and stop conditions.
 
+## Phase 12 generic interaction closeout decision
+
+Date: 2026-06-29
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction complete.
+
+State transition: `review -> completed`
+
+Context: PR #43 on branch `codex/phase-12-generic-interaction` implemented package-backed reusable interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven replay/report, renderer-neutral visible proof, and boundary assertions without app/editor/game command behavior or product mutation.
+
+Options considered: Keep Phase 12 in review until a product-facing gallery page renders the proof; complete Phase 12 using the renderer-neutral `InteractionVisualProof`/`InteractionProofFrame` path plus deterministic replay/report tests; reopen Phase 12 to add overlay/layering or text editing.
+
+Reason: The accepted design requires visible proof, descriptor-backed replay, no-bypass evidence, and explicit deferral of overlays/layering and full text editing. PR #43 now provides a renderer-neutral main/inspector/report proof model formed from compiled base-control package descriptors, and the validation gate passed locally. Requiring a product-facing gallery page would expand Phase 12 into unrelated gallery/framework work.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, `ui-component-platform-generic-interaction-design.md`, and the Phase 12 closeout report.
+
+Evidence: `ControlPackageDescriptor::interaction_descriptors`, `ControlPackageAuthoringBuilder::with_interaction_descriptor`, `ControlCatalogIndex::from_packages`, base-control interaction lowering, `NormalizedInputFact`, `MountedInteractionFixture`, `InteractionFormationReport`, `InteractionVisualProof`, `InteractionProofFrame`, `interaction_replay_report` tests, and the green Phase 12 validation gate.
+
+Follow-up: Review/merge PR #43. Keep Phase 13 overlays/layering and later full text editing deferred until separate active planning records authorize them.
+
 ## Lifecycle rule
 
 Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.

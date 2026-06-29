@@ -43,11 +43,17 @@ pub struct ControlCatalogEntryDescriptor {
     #[serde(default)]
     pub interaction_outcomes: Vec<String>,
     #[serde(default)]
-    pub interaction_has_runtime_behavior: bool,
+    pub interaction_requires_focus: bool,
     #[serde(default)]
-    pub interaction_executes_host_commands: bool,
+    pub interaction_text_intent_probe: bool,
     #[serde(default)]
-    pub interaction_mutates_product_state: bool,
+    pub runtime_interaction_supported: bool,
+    #[serde(default)]
+    pub control_owned_runtime_behavior: bool,
+    #[serde(default)]
+    pub executes_host_commands: bool,
+    #[serde(default)]
+    pub mutates_product_state: bool,
 }
 
 impl ControlCatalogEntryDescriptor {
@@ -105,7 +111,7 @@ impl ControlCatalogEntryDescriptor {
             .collect::<Vec<_>>();
         let (mount_eligible, mount_explanation) = mount_status(kind);
 
-        Self {
+        let mut entry = Self {
             package_id: package.package_id.as_str().to_owned(),
             control_kind_id: kind.control_kind_id.as_str().to_owned(),
             display_name: kind.display_name.to_owned(),
@@ -135,19 +141,29 @@ impl ControlCatalogEntryDescriptor {
             interaction_states: Vec::new(),
             interaction_triggers: Vec::new(),
             interaction_outcomes: Vec::new(),
-            interaction_has_runtime_behavior: false,
-            interaction_executes_host_commands: false,
-            interaction_mutates_product_state: false,
+            interaction_requires_focus: false,
+            interaction_text_intent_probe: false,
+            runtime_interaction_supported: false,
+            control_owned_runtime_behavior: false,
+            executes_host_commands: false,
+            mutates_product_state: false,
+        };
+        if let Some(descriptor) = package.interaction_descriptor(&kind.control_kind_id) {
+            entry = entry.with_interaction_summary(&descriptor.summary());
         }
+        entry
     }
 
     pub fn with_interaction_summary(mut self, summary: &ControlInteractionSupportSummary) -> Self {
         self.interaction_states = summary.states.clone();
         self.interaction_triggers = summary.triggers.clone();
         self.interaction_outcomes = summary.outcomes.clone();
-        self.interaction_has_runtime_behavior = summary.has_runtime_behavior;
-        self.interaction_executes_host_commands = summary.executes_host_commands;
-        self.interaction_mutates_product_state = summary.mutates_product_state;
+        self.interaction_requires_focus = summary.requires_focus;
+        self.interaction_text_intent_probe = summary.text_intent_probe;
+        self.runtime_interaction_supported = summary.runtime_interaction_supported;
+        self.control_owned_runtime_behavior = summary.control_owned_runtime_behavior;
+        self.executes_host_commands = summary.executes_host_commands;
+        self.mutates_product_state = summary.mutates_product_state;
         self
     }
 }

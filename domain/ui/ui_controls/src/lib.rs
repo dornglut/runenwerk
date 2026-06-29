@@ -69,6 +69,7 @@ mod tests {
         assert_eq!(package.diagnostics.len(), 8);
         assert_eq!(package.migrations.len(), 8);
         assert_eq!(package.stories.len(), 8);
+        assert_eq!(package.interaction_descriptors.len(), 8);
     }
 
     #[test]
@@ -167,6 +168,17 @@ mod tests {
         let mut package = runenwerk_control_package();
         package.stories.push(package.stories[0].clone());
         assert_has_reason(package, ControlPackageValidationReason::DuplicateStoryId);
+    }
+    #[test]
+    fn control_package_rejects_duplicate_interaction_descriptor() {
+        let mut package = runenwerk_control_package();
+        package
+            .interaction_descriptors
+            .push(package.interaction_descriptors[0].clone());
+        assert_has_reason(
+            package,
+            ControlPackageValidationReason::DuplicateInteractionDescriptor,
+        );
     }
     #[test]
     fn runenwerk_control_package_validates() {

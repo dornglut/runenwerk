@@ -6,6 +6,11 @@ use crate::{
     PointerDelta, PointerEventKind, PointerPacket, PointerPosition, SemanticActionEvent,
 };
 
+/// Normalized input fact delivered to runtime interaction formation.
+///
+/// Facts carry device, keyboard, focus, semantic, and text-intent data without
+/// executing reusable control behavior or product commands. `ui_runtime`
+/// resolves these facts against mounted structure and descriptor declarations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NormalizedInputFact {
     Pointer(PointerInputFact),
@@ -27,6 +32,7 @@ impl NormalizedInputFact {
     }
 }
 
+/// Stable discriminator for normalized input fact families.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum NormalizedInputFactKind {
     Pointer,
@@ -48,6 +54,10 @@ impl NormalizedInputFactKind {
     }
 }
 
+/// Pointer fact formed from mouse, touch, stylus, or equivalent pointer input.
+///
+/// This is normalized input data only. Pointer capture, activation, and
+/// suppression semantics are formed later by `ui_runtime` against descriptors.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PointerInputFact {
     pub kind: PointerEventKind,
@@ -83,6 +93,7 @@ impl PointerInputFact {
     }
 }
 
+/// Keyboard key fact with stable key, state, and modifier data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyboardInputFact {
     pub key: Key,
@@ -100,6 +111,7 @@ impl KeyboardInputFact {
     }
 }
 
+/// Focus fact for explicit focus changes or traversal requests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FocusInputFact {
     pub change: FocusChange,
@@ -133,6 +145,7 @@ impl FocusInputFact {
     }
 }
 
+/// Semantic action fact for renderer/input sources that already resolved intent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SemanticInputFact {
     pub event: SemanticActionEvent,
@@ -144,6 +157,12 @@ impl SemanticInputFact {
     }
 }
 
+/// Text-intent input fact used by Phase 12 as a read-only probe.
+///
+/// A text intent represents input at the runtime seam, not text editing. Phase
+/// 12 replay may observe the fact and emit probe evidence, but it must not
+/// mutate a text buffer, create selections, own caret layout, or start edit
+/// transactions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextIntentFact {
     pub kind: TextIntentKind,
@@ -159,6 +178,7 @@ impl TextIntentFact {
     }
 }
 
+/// Minimal text-intent kinds required before full text editing exists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TextIntentKind {
     InsertText,
@@ -166,6 +186,7 @@ pub enum TextIntentKind {
     Cancel,
 }
 
+/// Deterministic sample of normalized input facts for runtime replay.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NormalizedInputSample {
     pub sample_id: String,

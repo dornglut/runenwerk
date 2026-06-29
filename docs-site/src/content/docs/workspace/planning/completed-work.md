@@ -196,6 +196,26 @@ Closeout report: `../../reports/closeouts/pt-ui-component-platform-011-base-cont
 
 Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-012-PLANNING` Generic Interaction design intake.
 
+## PT-UI-COMPONENT-PLATFORM-012
+
+ID: `PT-UI-COMPONENT-PLATFORM-012`
+
+Title: UI Component Platform Generic Interaction
+
+Lifecycle state: `completed`
+
+Completed on: 2026-06-29 through PR #43 implementation evidence and local validation
+
+Evidence: PR #43 on branch `codex/phase-12-generic-interaction` implements package-backed reusable interaction descriptors, package/catalog/inspection interaction visibility, normalized pointer/keyboard/focus/semantic/text-intent facts, descriptor-driven mounted replay/report, renderer-neutral visible proof through `InteractionVisualProof` and `InteractionProofFrame`, positive and negative interaction scenarios, read-only text-intent probe behavior, and no-bypass assertions.
+
+Validation: PR #43 reported `cargo fmt --all --check`, `cargo check -p ui_controls`, `cargo check -p ui_input`, `cargo check -p ui_runtime`, focused `ui_controls` interaction/catalog/base-control tests, focused `ui_input` tests, focused `ui_runtime` interaction tests including `--test interaction_replay_report`, `python3 tools/docs/validate_docs.py`, and `git diff --check` green locally.
+
+Known gaps: Existing gallery/static mount infrastructure does not yet render the Phase 12 proof model as a product-facing gallery page. Phase 13 overlay/popup/layering, later full text editing, app/editor/game command behavior, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and generic plugin primitives remain deferred.
+
+Closeout report: `../../reports/closeouts/pt-ui-component-platform-012-generic-interaction-closeout.md`
+
+Follow-up: Review/merge PR #43. Open a separate active-work entry before any Phase 13 overlay/layering or text-editing implementation.
+
 ## Entry shape
 
 ID:

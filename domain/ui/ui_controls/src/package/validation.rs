@@ -145,10 +145,12 @@ pub enum ControlPackageValidationReason {
     DuplicateDiagnosticId,
     DuplicateMigrationId,
     DuplicateStoryId,
+    DuplicateInteractionDescriptor,
     DuplicateRouteRequirement,
     InvalidDeprecation,
     InvalidMigrationVersion,
     InvalidMountEligibility,
+    UnresolvedInteractionDescriptor,
     UnsupportedTargetProfile,
     UnresolvedReference,
     RenderEvidenceMissing,
@@ -177,10 +179,12 @@ impl ControlPackageValidationReason {
             Self::DuplicateDiagnosticId => "duplicate_diagnostic_id",
             Self::DuplicateMigrationId => "duplicate_migration_id",
             Self::DuplicateStoryId => "duplicate_story_id",
+            Self::DuplicateInteractionDescriptor => "duplicate_interaction_descriptor",
             Self::DuplicateRouteRequirement => "duplicate_route_requirement",
             Self::InvalidDeprecation => "invalid_deprecation",
             Self::InvalidMigrationVersion => "invalid_migration_version",
             Self::InvalidMountEligibility => "invalid_mount_eligibility",
+            Self::UnresolvedInteractionDescriptor => "unresolved_interaction_descriptor",
             Self::UnsupportedTargetProfile => "unsupported_target_profile",
             Self::UnresolvedReference => "unresolved_reference",
             Self::RenderEvidenceMissing => "render_evidence_missing",
@@ -387,6 +391,11 @@ impl ControlPackageDescriptor {
             .iter()
             .map(|evidence| evidence.evidence_id.as_str().to_owned())
             .collect::<BTreeSet<_>>();
+        let control_kind_ids = self
+            .control_kinds
+            .iter()
+            .map(|kind| kind.control_kind_id.as_str().to_owned())
+            .collect::<BTreeSet<_>>();
         for kind in &self.control_kinds {
             report.extend(kind.validate_contract());
             validate_kind_refs(
@@ -419,6 +428,19 @@ impl ControlPackageDescriptor {
                     self.package_id.clone(),
                     ControlPackageValidationReason::MissingDiagnostic,
                     "diagnostic message template must not be empty",
+                ));
+            }
+        }
+        for descriptor in &self.interaction_descriptors {
+            if !control_kind_ids.contains(descriptor.control_kind_id.as_str()) {
+                report.push(ControlPackageValidationDiagnostic::kind(
+                    descriptor.control_kind_id.clone(),
+                    ControlPackageValidationReason::UnresolvedInteractionDescriptor,
+                    format!(
+                        "interaction descriptor {} does not reference a control kind in package {}",
+                        descriptor.control_kind_id.as_str(),
+                        self.package_id.as_str()
+                    ),
                 ));
             }
         }
@@ -519,6 +541,16 @@ fn validate_duplicates(
             .iter()
             .map(|story| story.story_id.as_str().to_owned()),
         ControlPackageValidationReason::DuplicateStoryId,
+    );
+    push_duplicate_package_values(
+        report,
+        &package.package_id,
+        "interaction_descriptor",
+        package
+            .interaction_descriptors
+            .iter()
+            .map(|descriptor| descriptor.control_kind_id.as_str().to_owned()),
+        ControlPackageValidationReason::DuplicateInteractionDescriptor,
     );
 }
 

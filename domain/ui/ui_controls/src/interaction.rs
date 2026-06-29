@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::package::ids::ControlKindId;
 
+/// Canonical reusable interaction states that a control package may expose.
+///
+/// These states are descriptor vocabulary only. Runtime code may report that a
+/// mounted control entered one of these states, but declaring the state never
+/// grants host command execution, product mutation, overlay behavior, or text
+/// editing authority to `ui_controls`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ControlInteractionState {
     Enabled,
@@ -36,6 +42,7 @@ impl ControlInteractionState {
     }
 }
 
+/// A stable, deduplicated set of reusable interaction states for a control.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlInteractionStateSet {
     #[serde(default)]
@@ -55,10 +62,18 @@ impl ControlInteractionStateSet {
     }
 }
 
+/// Reusable input/runtime triggers that a control descriptor can require.
+///
+/// Pointer activation is split across press, release, activate, and cancel so
+/// runtime replay can prove press visual state separately from semantic
+/// activation. Button-like controls should emit activation on `PointerActivate`,
+/// normally after a release inside a previously pressed target.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ControlInteractionTrigger {
     PointerHover,
     PointerPress,
+    PointerRelease,
+    PointerActivate,
     PointerCancel,
     Focus,
     KeyboardActivate,
@@ -72,6 +87,8 @@ impl ControlInteractionTrigger {
         match self {
             Self::PointerHover => "pointer-hover",
             Self::PointerPress => "pointer-press",
+            Self::PointerRelease => "pointer-release",
+            Self::PointerActivate => "pointer-activate",
             Self::PointerCancel => "pointer-cancel",
             Self::Focus => "focus",
             Self::KeyboardActivate => "keyboard-activate",
@@ -82,6 +99,10 @@ impl ControlInteractionTrigger {
     }
 }
 
+/// Reusable semantic outcomes that hosts may consume after runtime formation.
+///
+/// Outcomes remain intents. They do not execute app, editor, game, overlay, or
+/// text-editing behavior inside reusable control declarations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ControlInteractionOutcome {
     ActivationRequested,
@@ -109,6 +130,7 @@ impl ControlInteractionOutcome {
     }
 }
 
+/// A single trigger declaration and the reusable outcomes it may produce.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlInteractionRequirement {
     pub trigger: ControlInteractionTrigger,
@@ -143,6 +165,12 @@ impl ControlInteractionRequirement {
     }
 }
 
+/// Package-owned interaction declaration for one control kind.
+///
+/// This descriptor is the authoritative reusable interaction contract that the
+/// catalog, inspection projection, and runtime replay fixture consume. Compiled
+/// controls may keep a copy for convenience, but the package descriptor is the
+/// durable public path.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlInteractionDescriptor {
     pub control_kind_id: ControlKindId,
@@ -160,6 +188,7 @@ impl ControlInteractionDescriptor {
             states: ControlInteractionStateSet::new([
                 ControlInteractionState::Enabled,
                 ControlInteractionState::Disabled,
+                ControlInteractionState::ReadOnly,
                 ControlInteractionState::Hovered,
                 ControlInteractionState::Pressed,
                 ControlInteractionState::Active,
@@ -200,6 +229,7 @@ impl ControlInteractionDescriptor {
     }
 }
 
+/// Read-only catalog/inspection projection for a control interaction descriptor.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlInteractionSupportSummary {
     pub control_kind_id: ControlKindId,
@@ -208,7 +238,8 @@ pub struct ControlInteractionSupportSummary {
     pub outcomes: Vec<String>,
     pub requires_focus: bool,
     pub text_intent_probe: bool,
-    pub has_runtime_behavior: bool,
+    pub runtime_interaction_supported: bool,
+    pub control_owned_runtime_behavior: bool,
     pub executes_host_commands: bool,
     pub mutates_product_state: bool,
 }
@@ -247,7 +278,8 @@ impl ControlInteractionSupportSummary {
                 .iter()
                 .any(|requirement| requirement.requires_focus),
             text_intent_probe: descriptor.text_intent_probe,
-            has_runtime_behavior: false,
+            runtime_interaction_supported: !descriptor.requirements.is_empty(),
+            control_owned_runtime_behavior: false,
             executes_host_commands: false,
             mutates_product_state: false,
         }
@@ -267,8 +299,12 @@ impl ControlInteractionSupportSummary {
                 bool_string(self.text_intent_probe),
             ),
             ControlInteractionInspectionFact::new(
-                "has_runtime_behavior",
-                bool_string(self.has_runtime_behavior),
+                "runtime_interaction_supported",
+                bool_string(self.runtime_interaction_supported),
+            ),
+            ControlInteractionInspectionFact::new(
+                "control_owned_runtime_behavior",
+                bool_string(self.control_owned_runtime_behavior),
             ),
             ControlInteractionInspectionFact::new(
                 "executes_host_commands",
@@ -282,6 +318,7 @@ impl ControlInteractionSupportSummary {
     }
 }
 
+/// One read-only interaction fact projected into control inspection output.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlInteractionInspectionFact {
     pub key: String,

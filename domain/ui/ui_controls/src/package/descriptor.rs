@@ -16,6 +16,7 @@ use super::metadata::{
     ControlStoryDescriptor, ControlTag,
 };
 use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
+use crate::interaction::ControlInteractionDescriptor;
 use crate::kernel::{ControlKernelDescriptor, ControlKernelId, ControlKernelSet};
 use crate::migration::{ControlDeprecationStatus, ControlMigrationHook, ControlMigrationId};
 use crate::schema::{ControlSchemaDescriptor, ControlSchemaRole};
@@ -284,6 +285,8 @@ pub struct ControlPackageDescriptor {
     #[serde(default)]
     pub stories: Vec<ControlStoryDescriptor>,
     #[serde(default)]
+    pub interaction_descriptors: Vec<ControlInteractionDescriptor>,
+    #[serde(default)]
     pub mount_eligibility: ControlMountEligibility,
     #[serde(default)]
     pub binding_requirements: Vec<ControlRequirement>,
@@ -327,6 +330,7 @@ impl ControlPackageDescriptor {
             migration_ids: Vec::new(),
             story_ids: Vec::new(),
             stories: Vec::new(),
+            interaction_descriptors: Vec::new(),
             mount_eligibility: ControlMountEligibility::default(),
             binding_requirements: Vec::new(),
             theme_token_requirements: Vec::new(),
@@ -423,9 +427,24 @@ impl ControlPackageDescriptor {
         self.control_kinds.push(kind);
         self
     }
+
+    pub fn with_interaction_descriptor(mut self, descriptor: ControlInteractionDescriptor) -> Self {
+        self.interaction_descriptors.push(descriptor);
+        self
+    }
+
     pub fn control_kind(&self, id: &ControlKindId) -> Option<&ControlKindDescriptor> {
         self.control_kinds
             .iter()
             .find(|kind| &kind.control_kind_id == id)
+    }
+
+    pub fn interaction_descriptor(
+        &self,
+        control_kind_id: &ControlKindId,
+    ) -> Option<&ControlInteractionDescriptor> {
+        self.interaction_descriptors
+            .iter()
+            .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
     }
 }
