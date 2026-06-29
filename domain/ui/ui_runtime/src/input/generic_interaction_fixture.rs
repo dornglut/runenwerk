@@ -18,12 +18,17 @@ use ui_input::{
 use ui_math::{UiPoint, UiRect};
 
 use crate::{
-    InteractionProofFrame, InteractionReplayScript, InteractionReplayStep, InteractionVisualProof,
+    InteractionProofFrame, InteractionReplayScript, InteractionReplayStep,
+    InteractionStoryExecutionMode, InteractionStorySession, InteractionVisualProof,
     MountedInteractionFixture, MountedInteractionPlacement, WidgetId, replay_interactions,
 };
 
 /// Stable proof id for the Phase 12 generic interaction visual proof.
 pub const PHASE12_GENERIC_INTERACTION_PROOF_ID: &str = "phase12.generic_interaction";
+
+/// Stable executable story id for the Phase 12A generic interaction proof-host core.
+pub const PHASE12_EXECUTABLE_GENERIC_INTERACTION_STORY_ID: &str =
+    "phase12a.executable_generic_interaction";
 
 /// Builds the canonical Phase 12 mounted interaction fixture.
 ///
@@ -230,6 +235,23 @@ pub fn phase12_generic_interaction_proof_frame(
     );
 
     InteractionProofFrame::new(proof)
+}
+
+/// Builds the canonical Phase 12A executable interaction story session.
+///
+/// The returned session is empty. Callers can drive it with the canonical replay
+/// script or live-shaped normalized input samples. Both paths reuse the same
+/// descriptor-backed replay formation path.
+pub fn phase12_executable_generic_interaction_story_session(
+    compiled: &CompiledControlPackage,
+    mode: InteractionStoryExecutionMode,
+) -> InteractionStorySession {
+    InteractionStorySession::new(
+        PHASE12_EXECUTABLE_GENERIC_INTERACTION_STORY_ID,
+        phase12_generic_interaction_fixture(compiled),
+        mode,
+        WidgetId(1),
+    )
 }
 
 fn pointer_step(id: &str, kind: PointerEventKind, x: f32, y: f32) -> InteractionReplayStep {
