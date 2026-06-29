@@ -23,10 +23,7 @@ pub(crate) fn lower_interaction(
                     .with_outcome(ControlInteractionOutcome::InspectionRequested),
             ),
         ControlPreset::Button => activatable(kind_id),
-        ControlPreset::ActionPrompt => activatable(kind_id).with_requirement(
-            ControlInteractionRequirement::new(ControlInteractionTrigger::SemanticAction)
-                .with_outcome(ControlInteractionOutcome::ActionIntent),
-        ),
+        ControlPreset::ActionPrompt => action_prompt(kind_id),
         ControlPreset::InspectorField => focusable(kind_id)
             .with_text_intent_probe(true)
             .with_requirement(
@@ -74,6 +71,26 @@ fn activatable(kind_id: ControlKindId) -> ControlInteractionDescriptor {
         .with_requirement(ControlInteractionRequirement::new(
             ControlInteractionTrigger::PointerCancel,
         ))
+}
+
+fn action_prompt(kind_id: ControlKindId) -> ControlInteractionDescriptor {
+    focusable(kind_id)
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerHover,
+        ))
+        .with_requirement(
+            ControlInteractionRequirement::new(ControlInteractionTrigger::PointerPress)
+                .with_outcome(ControlInteractionOutcome::ActionIntent),
+        )
+        .with_requirement(
+            ControlInteractionRequirement::new(ControlInteractionTrigger::KeyboardActivate)
+                .requiring_focus()
+                .with_outcome(ControlInteractionOutcome::ActionIntent),
+        )
+        .with_requirement(
+            ControlInteractionRequirement::new(ControlInteractionTrigger::SemanticAction)
+                .with_outcome(ControlInteractionOutcome::ActionIntent),
+        )
 }
 
 fn focusable(kind_id: ControlKindId) -> ControlInteractionDescriptor {

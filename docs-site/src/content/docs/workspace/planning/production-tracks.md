@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-06-29
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
@@ -46,7 +46,7 @@ Milestones:
 009 Layout / container / virtualization — completed by user validation report through 009A/009B/009C
 010 Render surface / output — completed by user validation report through PR #34
 011 Base control packages — completed through PR #37 and user validation report
-012 Generic interaction — active planning
+012 Generic interaction — draft PR in review
 013 Overlay / popup / layering — future
 014 Minimum text editing — future
 015 Generic text — future
@@ -87,14 +87,14 @@ Phase 8: user reported the accessibility/focus/inspection validation gate green.
 Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundation, 009C ui_controls layout bridge, read-only catalog inspection bridge, and focused tests; user reported the validation gate green.
 Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
 Phase 11: PR #37 merged the UI-local base-control contribution/preset/lowering proof; user reported the validation gate green.
-Phase 12: active planning only; implementation requires accepted generic interaction design, exact owner files, validation gate, stop conditions, deterministic mounted gallery/story proof, replay/report evidence, negative proof cases, and no-bypass assertions.
+Phase 12: draft PR #43 is in review; implementation must satisfy accepted generic interaction design, exact owner files, validation gate, stop conditions, deterministic mounted proof, replay/report evidence, negative proof cases, and no-bypass assertions.
 Later phases: overlays, text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 12 is not implementation-authorized. The generic interaction design intake must settle owner boundaries across ui_controls, ui_input, ui_runtime, and host/app/editor/game layers, plus the deterministic gallery/story proof and replay/report evidence path, before code starts.
+Phase 12 implementation is authorized only through draft PR #43. The PR must remain draft until review fixes are complete and validation is rerun. No real gallery/story fixture path exists in the PR yet; deterministic mounted replay/report evidence is the accepted temporary visible proof for review.
 ```
 
 Activation condition:
@@ -106,7 +106,7 @@ Each future milestone activates only through an accepted planning/design update 
 Next action:
 
 ```text
-Review the Phase 12 Generic Interaction design intake. Do not implement overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, or foundation/meta as part of Phase 12 planning. Require the later implementation to prove descriptor-backed interaction through mounted base controls, deterministic input replay, gallery-visible state, an auditable interaction report, and boundary assertions that reusable controls do not own host behavior.
+Fix and review PR #43. Do not implement overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, or foundation/meta as part of Phase 12. Require the implementation to prove descriptor-backed interaction through compiled mounted base controls, deterministic input replay, an auditable interaction report, and boundary assertions that reusable controls do not own host behavior.
 ```
 
 ## Track shape

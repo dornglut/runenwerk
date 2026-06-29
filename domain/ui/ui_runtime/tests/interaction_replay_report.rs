@@ -1,6 +1,5 @@
 use ui_controls::{
-    BUTTON_CONTROL_KIND_ID, ControlInteractionDescriptor, ControlInteractionOutcome,
-    ControlInteractionRequirement, ControlInteractionTrigger, ControlKindId,
+    ACTION_PROMPT_CONTROL_KIND_ID, BUTTON_CONTROL_KIND_ID, BaseControlsPlugin,
     INSPECTOR_FIELD_CONTROL_KIND_ID, LIST_VIEW_CONTROL_KIND_ID, TABLE_VIEW_CONTROL_KIND_ID,
     TREE_VIEW_CONTROL_KIND_ID,
 };
@@ -10,8 +9,8 @@ use ui_input::{
 };
 use ui_math::{UiPoint, UiRect};
 use ui_runtime::{
-    InteractionReplayScript, InteractionReplayStep, MountedInteractionControl,
-    MountedInteractionFixture, WidgetId, replay_interactions,
+    InteractionReplayScript, InteractionReplayStep, MountedInteractionFixture,
+    MountedInteractionPlacement, WidgetId, replay_interactions,
 };
 
 #[test]
@@ -62,6 +61,12 @@ fn mounted_interaction_replay_reports_facts_events_outcomes_and_boundaries() {
             .iter()
             .any(|outcome| outcome.outcome == "activation-requested"
                 && outcome.target == WidgetId(1))
+    );
+    assert!(
+        report
+            .semantic_outcomes
+            .iter()
+            .any(|outcome| outcome.outcome == "action-intent" && outcome.target == WidgetId(2))
     );
     assert!(
         report
@@ -150,91 +155,55 @@ fn text_intent_against_non_text_probe_is_suppressed_without_text_editing() {
 }
 
 fn phase12_fixture() -> MountedInteractionFixture {
-    MountedInteractionFixture::new("phase12.generic-interaction.fixture")
-        .with_control(MountedInteractionControl::new(
-            WidgetId(1),
-            "Button",
-            UiRect::new(0.0, 0.0, 80.0, 24.0),
-            activatable(BUTTON_CONTROL_KIND_ID),
-        ))
-        .with_control(MountedInteractionControl::new(
-            WidgetId(2),
-            "Action",
-            UiRect::new(0.0, 28.0, 80.0, 24.0),
-            activatable("runenwerk.ui.control.action_prompt"),
-        ))
-        .with_control(MountedInteractionControl::new(
-            WidgetId(3),
-            "Inspector",
-            UiRect::new(0.0, 56.0, 80.0, 24.0),
-            text_probe(INSPECTOR_FIELD_CONTROL_KIND_ID),
-        ))
-        .with_control(MountedInteractionControl::new(
-            WidgetId(4),
-            "List",
-            UiRect::new(0.0, 84.0, 80.0, 24.0),
-            navigable(
+    let compiled = BaseControlsPlugin::new().compile();
+    MountedInteractionFixture::from_compiled_controls(
+        "phase12.generic-interaction.fixture",
+        &compiled,
+        [
+            MountedInteractionPlacement::new(
+                WidgetId(1),
+                BUTTON_CONTROL_KIND_ID,
+                "Button",
+                UiRect::new(0.0, 0.0, 80.0, 24.0),
+            ),
+            MountedInteractionPlacement::new(
+                WidgetId(2),
+                ACTION_PROMPT_CONTROL_KIND_ID,
+                "Action",
+                UiRect::new(0.0, 28.0, 80.0, 24.0),
+            ),
+            MountedInteractionPlacement::new(
+                WidgetId(3),
+                INSPECTOR_FIELD_CONTROL_KIND_ID,
+                "Inspector",
+                UiRect::new(0.0, 56.0, 80.0, 24.0),
+            ),
+            MountedInteractionPlacement::new(
+                WidgetId(4),
                 LIST_VIEW_CONTROL_KIND_ID,
-                ControlInteractionOutcome::ActiveItemIntent,
+                "List",
+                UiRect::new(0.0, 84.0, 80.0, 24.0),
             ),
-        ))
-        .with_control(MountedInteractionControl::new(
-            WidgetId(5),
-            "Tree",
-            UiRect::new(84.0, 84.0, 80.0, 24.0),
-            navigable(
+            MountedInteractionPlacement::new(
+                WidgetId(5),
                 TREE_VIEW_CONTROL_KIND_ID,
-                ControlInteractionOutcome::NodeIntent,
+                "Tree",
+                UiRect::new(84.0, 84.0, 80.0, 24.0),
             ),
-        ))
-        .with_control(MountedInteractionControl::new(
-            WidgetId(6),
-            "Table",
-            UiRect::new(168.0, 84.0, 80.0, 24.0),
-            navigable(
+            MountedInteractionPlacement::new(
+                WidgetId(6),
                 TABLE_VIEW_CONTROL_KIND_ID,
-                ControlInteractionOutcome::CellOrRowIntent,
+                "Table",
+                UiRect::new(168.0, 84.0, 80.0, 24.0),
             ),
-        ))
-        .with_control(
-            MountedInteractionControl::new(
+            MountedInteractionPlacement::new(
                 WidgetId(7),
+                BUTTON_CONTROL_KIND_ID,
                 "Disabled",
                 UiRect::new(0.0, 120.0, 80.0, 24.0),
-                activatable(BUTTON_CONTROL_KIND_ID),
             )
             .disabled(),
-        )
-}
-
-fn activatable(kind_id: &str) -> ControlInteractionDescriptor {
-    ControlInteractionDescriptor::new(ControlKindId::new(kind_id))
-        .with_requirement(
-            ControlInteractionRequirement::new(ControlInteractionTrigger::PointerPress)
-                .with_outcome(ControlInteractionOutcome::ActivationRequested),
-        )
-        .with_requirement(
-            ControlInteractionRequirement::new(ControlInteractionTrigger::KeyboardActivate)
-                .requiring_focus()
-                .with_outcome(ControlInteractionOutcome::ActivationRequested),
-        )
-}
-
-fn text_probe(kind_id: &str) -> ControlInteractionDescriptor {
-    ControlInteractionDescriptor::new(ControlKindId::new(kind_id))
-        .with_text_intent_probe(true)
-        .with_requirement(
-            ControlInteractionRequirement::new(ControlInteractionTrigger::TextIntent)
-                .requiring_focus()
-                .with_outcome(ControlInteractionOutcome::TextIntentSeen),
-        )
-}
-
-fn navigable(kind_id: &str, outcome: ControlInteractionOutcome) -> ControlInteractionDescriptor {
-    ControlInteractionDescriptor::new(ControlKindId::new(kind_id)).with_requirement(
-        ControlInteractionRequirement::new(ControlInteractionTrigger::KeyboardNavigate)
-            .requiring_focus()
-            .with_outcome(outcome),
+        ],
     )
 }
 

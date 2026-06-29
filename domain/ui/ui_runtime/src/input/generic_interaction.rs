@@ -1,7 +1,10 @@
 //! File: domain/ui/ui_runtime/src/input/generic_interaction.rs
 //! Crate: ui_runtime
 
-use ui_controls::{ControlInteractionDescriptor, ControlInteractionOutcome};
+use ui_controls::{
+    CompiledControlPackage, ControlInteractionDescriptor, ControlInteractionOutcome,
+    ControlInteractionRequirement, ControlInteractionTrigger,
+};
 use ui_input::{
     FocusDirection, Key, KeyState, NormalizedInputFact, NormalizedInputSample, PointerEventKind,
 };
@@ -28,6 +31,40 @@ impl MountedInteractionFixture {
         self
     }
 
+    pub fn from_compiled_controls(
+        mounted_story_id: impl Into<String>,
+        compiled: &CompiledControlPackage,
+        placements: impl IntoIterator<Item = MountedInteractionPlacement>,
+    ) -> Self {
+        let mut fixture = Self::new(mounted_story_id);
+        for placement in placements {
+            let descriptor = compiled
+                .controls
+                .iter()
+                .find(|control| {
+                    control.module.kind.control_kind_id.as_str() == placement.control_kind_id
+                })
+                .map(|control| control.interaction.clone())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "missing compiled interaction descriptor for {}",
+                        placement.control_kind_id
+                    )
+                });
+            let mut control = MountedInteractionControl::new(
+                placement.widget_id,
+                placement.label,
+                placement.bounds,
+                descriptor,
+            );
+            control.enabled = placement.enabled;
+            control.focusable = placement.focusable;
+            control.read_only = placement.read_only;
+            fixture = fixture.with_control(control);
+        }
+        fixture
+    }
+
     fn target_at(&self, point: UiPoint) -> Option<&MountedInteractionControl> {
         self.controls
             .iter()
@@ -35,15 +72,61 @@ impl MountedInteractionFixture {
     }
 
     fn focusable(&self) -> impl Iterator<Item = &MountedInteractionControl> {
-        self.controls
-            .iter()
-            .filter(|control| control.enabled && control.focusable)
+        self.controls.iter().filter(|control| {
+            control.enabled
+                && control.focusable
+                && control
+                    .descriptor
+                    .requirements
+                    .iter()
+                    .any(|requirement| requirement.trigger == ControlInteractionTrigger::Focus)
+        })
     }
 
     fn control(&self, widget_id: WidgetId) -> Option<&MountedInteractionControl> {
         self.controls
             .iter()
             .find(|control| control.widget_id == widget_id)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MountedInteractionPlacement {
+    pub widget_id: WidgetId,
+    pub control_kind_id: String,
+    pub label: String,
+    pub bounds: UiRect,
+    pub enabled: bool,
+    pub focusable: bool,
+    pub read_only: bool,
+}
+
+impl MountedInteractionPlacement {
+    pub fn new(
+        widget_id: WidgetId,
+        control_kind_id: impl Into<String>,
+        label: impl Into<String>,
+        bounds: UiRect,
+    ) -> Self {
+        Self {
+            widget_id,
+            control_kind_id: control_kind_id.into(),
+            label: label.into(),
+            bounds,
+            enabled: true,
+            focusable: true,
+            read_only: false,
+        }
+    }
+
+    pub fn disabled(mut self) -> Self {
+        self.enabled = false;
+        self
+    }
+
+    pub fn inert(mut self) -> Self {
+        self.focusable = false;
+        self
     }
 }
 
@@ -145,6 +228,8 @@ pub struct InteractionFormationReport {
 pub struct RuntimeControlDescriptorFact {
     pub widget_id: WidgetId,
     pub control_kind_id: String,
+    pub interaction_states: Vec<String>,
+    pub interaction_triggers: Vec<String>,
     pub interaction_outcomes: Vec<String>,
 }
 
@@ -242,6 +327,8 @@ pub fn replay_interactions(
             .map(|control| RuntimeControlDescriptorFact {
                 widget_id: control.widget_id,
                 control_kind_id: control.control_kind_id.clone(),
+                interaction_states: control.descriptor.summary().states,
+                interaction_triggers: control.descriptor.summary().triggers,
                 interaction_outcomes: control.descriptor.summary().outcomes,
             })
             .collect(),
@@ -290,37 +377,60 @@ fn apply_fact(
                 });
                 return;
             };
+            let trigger = pointer_trigger(pointer.kind);
             if !control.enabled {
-                suppress(report, step, control, "control.disabled");
+                suppress_disabled_for_trigger(report, step, control, trigger);
                 return;
             }
             match pointer.kind {
                 PointerEventKind::Move | PointerEventKind::Enter => {
+                    let Some(requirement) = requirement_for(control, trigger) else {
+                        suppress_if_declared(report, step, control, "trigger.not_declared");
+                        return;
+                    };
                     state.hovered = Some(control.widget_id);
                     transition(report, step, control.widget_id, "hovered", true);
-                    event(report, step, control.widget_id, "pointer_hover");
+                    event(report, step, control.widget_id, trigger.as_str());
+                    emit_declared_outcomes(report, step, control, requirement);
                 }
                 PointerEventKind::Down => {
+                    if requirement_for(control, ControlInteractionTrigger::PointerPress).is_none() {
+                        suppress_if_declared(report, step, control, "trigger.not_declared");
+                        return;
+                    }
                     state.pressed = Some(control.widget_id);
-                    state.focused = Some(control.widget_id);
-                    state.focus_visible = false;
+                    if requirement_for(control, ControlInteractionTrigger::Focus).is_some() {
+                        state.focused = Some(control.widget_id);
+                        state.focus_visible = false;
+                        transition(report, step, control.widget_id, "focused", true);
+                    }
                     transition(report, step, control.widget_id, "pressed", true);
-                    transition(report, step, control.widget_id, "focused", true);
-                    event(report, step, control.widget_id, "pointer_press");
+                    event(
+                        report,
+                        step,
+                        control.widget_id,
+                        ControlInteractionTrigger::PointerPress.as_str(),
+                    );
                 }
                 PointerEventKind::Up => {
                     let pressed = state.pressed.take();
                     transition(report, step, control.widget_id, "pressed", false);
                     event(report, step, control.widget_id, "pointer_release");
                     if pressed == Some(control.widget_id) {
-                        outcome(
+                        if let Some(requirement) =
+                            requirement_for(control, ControlInteractionTrigger::PointerPress)
+                        {
+                            emit_declared_outcomes(report, step, control, requirement);
+                        } else {
+                            suppress_if_declared(report, step, control, "trigger.not_declared");
+                        }
+                    } else {
+                        suppress_if_declared(
                             report,
                             step,
-                            control.widget_id,
-                            ControlInteractionOutcome::ActivationRequested,
+                            control,
+                            "pointer.release_without_capture",
                         );
-                    } else {
-                        suppress(report, step, control, "pointer.release_without_capture");
                     }
                 }
                 PointerEventKind::Leave => {
@@ -355,9 +465,13 @@ fn apply_fact(
                 focus_visible: state.focus_visible,
             });
             if let Some(target) = state.focused {
-                transition(report, step, target, "focused", true);
-                if state.focus_visible {
-                    transition(report, step, target, "focus-visible", true);
+                if let Some(control) = fixture.control(target)
+                    && requirement_for(control, ControlInteractionTrigger::Focus).is_some()
+                {
+                    transition(report, step, target, "focused", true);
+                    if state.focus_visible {
+                        transition(report, step, target, "focus-visible", true);
+                    }
                 }
             }
         }
@@ -369,35 +483,34 @@ fn apply_fact(
                 });
                 return;
             };
+            let trigger = match (&keyboard.key, keyboard.state) {
+                (Key::Enter | Key::Space, KeyState::Pressed) => {
+                    Some(ControlInteractionTrigger::KeyboardActivate)
+                }
+                (Key::Up | Key::Down | Key::Left | Key::Right, KeyState::Pressed) => {
+                    Some(ControlInteractionTrigger::KeyboardNavigate)
+                }
+                _ => None,
+            };
+            let Some(trigger) = trigger else {
+                return;
+            };
             if !target.enabled {
-                suppress(report, step, target, "control.disabled");
+                suppress_disabled_for_trigger(report, step, target, trigger);
                 return;
             }
             event(report, step, target.widget_id, "keyboard_fact");
-            match (&keyboard.key, keyboard.state) {
-                (Key::Enter | Key::Space, KeyState::Pressed) => outcome(
-                    report,
-                    step,
-                    target.widget_id,
-                    ControlInteractionOutcome::ActivationRequested,
-                ),
-                (Key::Up | Key::Down | Key::Left | Key::Right, KeyState::Pressed) => {
-                    let summary = target.descriptor.summary();
-                    let mapped = if summary.outcomes.iter().any(|value| value == "node-intent") {
-                        ControlInteractionOutcome::NodeIntent
-                    } else if summary
-                        .outcomes
-                        .iter()
-                        .any(|value| value == "cell-or-row-intent")
-                    {
-                        ControlInteractionOutcome::CellOrRowIntent
-                    } else {
-                        ControlInteractionOutcome::ActiveItemIntent
-                    };
-                    outcome(report, step, target.widget_id, mapped);
-                    transition(report, step, target.widget_id, "active", true);
-                }
-                _ => {}
+            let Some(requirement) = requirement_for(target, trigger) else {
+                suppress_if_declared(report, step, target, "trigger.not_declared");
+                return;
+            };
+            if requirement.requires_focus && state.focused != Some(target.widget_id) {
+                suppress_if_declared(report, step, target, "focus.required");
+                return;
+            }
+            emit_declared_outcomes(report, step, target, requirement);
+            if trigger == ControlInteractionTrigger::KeyboardNavigate {
+                transition(report, step, target.widget_id, "active", true);
             }
         }
         NormalizedInputFact::Semantic(semantic) => {
@@ -409,17 +522,27 @@ fn apply_fact(
                 return;
             };
             if !target.enabled {
-                suppress(report, step, target, "control.disabled");
+                suppress_disabled_for_trigger(
+                    report,
+                    step,
+                    target,
+                    ControlInteractionTrigger::SemanticAction,
+                );
                 return;
             }
             event(report, step, target.widget_id, "semantic_fact");
+            let Some(requirement) =
+                requirement_for(target, ControlInteractionTrigger::SemanticAction)
+            else {
+                suppress_if_declared(report, step, target, "trigger.not_declared");
+                return;
+            };
+            if requirement.requires_focus && state.focused != Some(target.widget_id) {
+                suppress_if_declared(report, step, target, "focus.required");
+                return;
+            }
             if matches!(semantic.event.action, ui_input::UiSemanticAction::Activate) {
-                outcome(
-                    report,
-                    step,
-                    target.widget_id,
-                    ControlInteractionOutcome::ActivationRequested,
-                );
+                emit_declared_outcomes(report, step, target, requirement);
             }
         }
         NormalizedInputFact::TextIntent(_) => {
@@ -430,18 +553,78 @@ fn apply_fact(
                 });
                 return;
             };
-            if target.descriptor.text_intent_probe {
-                event(report, step, target.widget_id, "text_intent_fact");
-                outcome(
+            if !target.enabled {
+                suppress_disabled_for_trigger(
                     report,
                     step,
-                    target.widget_id,
-                    ControlInteractionOutcome::TextIntentSeen,
+                    target,
+                    ControlInteractionTrigger::TextIntent,
                 );
-            } else {
-                suppress(report, step, target, "text_intent.not_declared");
+                return;
             }
+            if !target.descriptor.text_intent_probe {
+                suppress_if_declared(report, step, target, "text_intent.not_declared");
+                return;
+            }
+            let Some(requirement) = requirement_for(target, ControlInteractionTrigger::TextIntent)
+            else {
+                suppress_if_declared(report, step, target, "trigger.not_declared");
+                return;
+            };
+            if requirement.requires_focus && state.focused != Some(target.widget_id) {
+                suppress_if_declared(report, step, target, "focus.required");
+                return;
+            }
+            event(report, step, target.widget_id, "text_intent_fact");
+            emit_declared_outcomes(report, step, target, requirement);
         }
+    }
+}
+
+fn pointer_trigger(kind: PointerEventKind) -> ControlInteractionTrigger {
+    match kind {
+        PointerEventKind::Move | PointerEventKind::Enter | PointerEventKind::Leave => {
+            ControlInteractionTrigger::PointerHover
+        }
+        PointerEventKind::Down | PointerEventKind::Up => ControlInteractionTrigger::PointerPress,
+        PointerEventKind::Scroll => ControlInteractionTrigger::PointerHover,
+    }
+}
+
+fn requirement_for(
+    control: &MountedInteractionControl,
+    trigger: ControlInteractionTrigger,
+) -> Option<&ControlInteractionRequirement> {
+    control
+        .descriptor
+        .requirements
+        .iter()
+        .find(|requirement| requirement.trigger == trigger)
+}
+
+fn emit_declared_outcomes(
+    report: &mut InteractionFormationReport,
+    step: &InteractionReplayStep,
+    control: &MountedInteractionControl,
+    requirement: &ControlInteractionRequirement,
+) {
+    for declared_outcome in &requirement.outcomes {
+        outcome(report, step, control.widget_id, *declared_outcome);
+    }
+}
+
+fn suppress_disabled_for_trigger(
+    report: &mut InteractionFormationReport,
+    step: &InteractionReplayStep,
+    control: &MountedInteractionControl,
+    trigger: ControlInteractionTrigger,
+) {
+    let Some(requirement) = requirement_for(control, trigger) else {
+        suppress_if_declared(report, step, control, "trigger.not_declared");
+        return;
+    };
+    if requirement.suppresses_when_disabled {
+        suppress_if_declared(report, step, control, "control.disabled");
     }
 }
 
@@ -537,7 +720,7 @@ fn outcome(
     });
 }
 
-fn suppress(
+fn suppress_if_declared(
     report: &mut InteractionFormationReport,
     step: &InteractionReplayStep,
     control: &MountedInteractionControl,

@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-06-29
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
@@ -222,25 +222,25 @@ Known gaps: Full runtime interaction remains Phase 12. Overlays/popups/layering 
 
 Next action: Keep Phase 11 as completed dependency and proceed to `PT-UI-COMPONENT-PLATFORM-012-PLANNING`.
 
-### PT-UI-COMPONENT-PLATFORM-012-PLANNING
+### PT-UI-COMPONENT-PLATFORM-012
 
-ID: `PT-UI-COMPONENT-PLATFORM-012-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-012`
 
-Title: UI Component Platform Generic Interaction design intake
+Title: UI Component Platform Generic Interaction
 
-State: active planning
+State: draft PR in review
 
-Lifecycle state: `active-planning`
+Lifecycle state: `review`
 
 Owner: `ui_controls` for reusable control interaction declarations and descriptor/catalog/inspection facts; `ui_input` for normalized input packets, device/gesture facts, pointer/key/focus data, and runtime input sample formation; `ui_runtime` for resolving normalized input facts against runtime UI structure and producing reusable interaction facts/events; hosts/apps/editor/game for OS/window input collection, routing policy, command handling, product state changes, game/world input policy, and product-specific behavior.
 
 Authority: `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-input-gesture-device-design.md`, `editor-ui-runtime-v2-and-interaction-formation-design.md`, the Phase 11 closeout report, and the UI Component Platform production track.
 
-Evidence: Phase 11 completed descriptor-backed, catalog-visible, package-quality base controls. Phase 5 already defined reusable input/gesture/device declarations, and Interaction V2 already records editor/runtime interaction-formation direction, but Phase 12 needs a component-platform-specific owner-boundary design before implementation.
+Evidence: Phase 11 completed descriptor-backed, catalog-visible, package-quality base controls. Phase 5 already defined reusable input/gesture/device declarations, and Interaction V2 already records editor/runtime interaction-formation direction. PR #43 is the draft Phase 12 implementation PR and must remain draft until review fixes and validation are complete.
 
-Known gaps: No runtime interaction implementation is authorized yet. Overlay/popup/layering, text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and Phase 13 work remain out of scope.
+Known gaps: PR #43 does not provide a real gallery/story fixture path; deterministic mounted replay/report evidence is the accepted temporary visible proof for review. Overlay/popup/layering, text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and Phase 13 work remain out of scope.
 
-Next action: Review and accept the Phase 12 Generic Interaction design intake, then open a narrow implementation PR only after exact owner files, validation gate, and stop conditions are confirmed.
+Next action: Fix and review PR #43. Do not mark Phase 12 completed until delivered scope, validation status, known gaps, and follow-up are recorded.
 
 ## Rules
 

@@ -45,7 +45,6 @@ impl ControlCompiler {
         }
 
         let package = package_builder.build();
-        let catalog = ControlCatalogIndex::from_packages([&package]);
         let controls = lowered
             .into_iter()
             .map(|control| {
@@ -64,6 +63,29 @@ impl ControlCompiler {
                 }
             })
             .collect::<Vec<_>>();
+        let mut catalog_entries = package
+            .control_kinds
+            .iter()
+            .map(|kind| {
+                let entry = crate::ControlCatalogEntryDescriptor::from_control_kind(&package, kind);
+                if let Some(control) = controls
+                    .iter()
+                    .find(|control| control.module.kind.control_kind_id == kind.control_kind_id)
+                {
+                    entry.with_interaction_summary(&control.interaction.summary())
+                } else {
+                    entry
+                }
+            })
+            .collect::<Vec<_>>();
+        catalog_entries.sort_by(|left, right| {
+            left.package_id
+                .cmp(&right.package_id)
+                .then_with(|| left.control_kind_id.cmp(&right.control_kind_id))
+        });
+        let catalog = ControlCatalogIndex {
+            entries: catalog_entries,
+        };
         let inspection = ControlInspection {
             controls: controls
                 .iter()

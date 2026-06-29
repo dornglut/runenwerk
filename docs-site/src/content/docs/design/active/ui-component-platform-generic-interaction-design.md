@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-06-29
 related_docs:
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
@@ -19,11 +19,11 @@ related_docs:
 
 ## Status
 
-This is the Phase 12 planning design intake for `PT-UI-COMPONENT-PLATFORM-012-PLANNING`.
+This is the Phase 12 design for `PT-UI-COMPONENT-PLATFORM-012`.
 
-Lifecycle state: `active-planning`.
+Lifecycle state: `review`.
 
-Phase 12 is intended to define and then enable implementation of generic reusable interaction behavior for descriptor-backed controls. This planning patch does not implement that behavior yet. It defines the owner boundaries, proof contract, acceptance criteria, validation gate, stop conditions, and later implementation envelope that must be accepted before code changes begin.
+PR #43 is the draft implementation PR for generic reusable interaction behavior for descriptor-backed controls. The design continues to define the owner boundaries, proof contract, acceptance criteria, validation gate, stop conditions, and implementation envelope for that PR.
 
 ## Decision summary
 
@@ -221,6 +221,8 @@ report/event view:
 ```
 
 The gallery must not execute product commands. A Button activation may emit an activation outcome, but it must not invoke app/editor/game behavior as part of the reusable control proof.
+
+PR #43 does not add a real gallery/story fixture path. For this PR, deterministic mounted replay/report evidence is the accepted temporary visible proof because no existing gallery fixture path has been identified for generic reusable interaction. If PR #43 completes Phase 12, closeout must record this as a known gap or add the real gallery/story fixture before completion.
 
 ## Base-control interaction matrix
 
