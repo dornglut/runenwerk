@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-design.md
+  - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
 ---
 
 # Production Tracks
@@ -48,7 +49,7 @@ Milestones:
 010 Render surface / output — completed by user validation report through PR #34
 011 Base control packages — completed through PR #37 and user validation report
 012 Generic interaction — completed in PR #43 implementation evidence as contract/replay/static proof
-012A Executable interaction story — accepted direction / active planning
+012A Executable interaction story — active implementation
 013 Overlay / popup / layering — future
 014 Minimum text editing — future
 015 Generic text — future
@@ -72,7 +73,7 @@ Design gates:
 010 proved render/output ownership across ui_render_data, ui_controls, ui_runtime, and engine render.
 011 proved UI-local contribution/preset/lowering authoring for package-quality base controls while keeping full interaction behavior for Phase 12.
 012 completed generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, static mount frame evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
-012A accepted the Tier 5 gate: reusable interaction work should become executable through one story that supports deterministic replay and live gallery/proof-host input with semantic replay/live parity.
+012A accepted the Tier 5 gate and now has exact implementation scope: reusable interaction work should become executable through one story that supports deterministic replay and live proof-host input with semantic replay/live parity.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -91,14 +92,14 @@ Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundat
 Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
 Phase 11: PR #37 merged the UI-local base-control contribution/preset/lowering proof; user reported the validation gate green.
 Phase 12: PR #43 implements package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions. Validation passed for the Phase 12 implementation gate recorded in the closeout report.
-Phase 12A: accepted direction requires an Executable UI Interaction Story with replay mode, live gallery/proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions. Implementation evidence does not exist yet.
+Phase 12A: active implementation scope requires an Executable UI Interaction Story with replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions. Implementation evidence does not exist yet.
 Later phases: overlays, text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 12A implementation scope is the current planning blocker before live reusable interaction proof can be claimed. PR #43 provides the lower-tier contract/replay/static frame proof, and the Tier 5 direction is accepted, but active implementation still needs exact owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation, and stop conditions.
+Phase 12A implementation evidence is the current blocker before live reusable interaction proof can be claimed. PR #43 provides the lower-tier contract/replay/static frame proof, the Tier 5 direction is accepted, and exact implementation scope is recorded. The next blocker is delivery and validation of that scope.
 ```
 
 Activation condition:
@@ -110,7 +111,7 @@ Each future milestone activates only through an accepted planning/design update 
 Next action:
 
 ```text
-Inspect the actual `ui_story`, `ui_runtime`, `ui_input`, `ui_static_mount`, and gallery/proof-host files and create an exact implementation scope for `PT-UI-COMPONENT-PLATFORM-012A`. Do not implement overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of Phase 12A.
+Implement the scoped `PT-UI-COMPONENT-PLATFORM-012A` files. Do not implement overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of Phase 12A.
 ```
 
 ## Track shape
