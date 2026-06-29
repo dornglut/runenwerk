@@ -1,6 +1,6 @@
 ---
 title: UI Component Platform Executable Interaction Story Implementation Scope
-description: Exact active-implementation scope for the Tier 5 executable generic interaction story slice.
+description: Exact active-implementation scope for the Tier 5 executable generic interaction story proof-host core slice.
 status: active
 owner: ui
 layer: domain
@@ -24,13 +24,13 @@ Lifecycle state: `active-implementation`.
 
 Planning ID: `PT-UI-COMPONENT-PLATFORM-012A`.
 
-This is the exact implementation scope for the first Tier 5 executable generic interaction story slice. It authorizes implementation inside the files and crates named below only.
+This is the exact implementation scope for the first Tier 5 executable generic interaction story **proof-host core** slice. It authorizes implementation inside the files and crates named below only.
 
 Architecture acceptance remains separate from implementation evidence. This scope does not mark Phase 12A complete.
 
 ## Target outcome
 
-Implement a minimal but real Tier 5 proof for generic reusable interaction:
+Implement a minimal but real Tier 5 proof-host core for generic reusable interaction:
 
 ```text
 one executable generic interaction story
@@ -45,15 +45,22 @@ one executable generic interaction story
 
 The implementation must not create product behavior. It may create a proof host that can be driven live by input events and can return current proof/frame/report state.
 
+This slice proves the executable interaction proof-host core. It does **not** require product-facing editor window, gallery page, UI Designer surface, or workspace panel exposure. Product-facing visual exposure is a later adoption slice unless it can be achieved inside this scope without touching editor shell surface registries.
+
 ## Exact owner files and crates
 
 ### `domain/ui/ui_story`
 
-Authorized files:
+Authorized write files:
 
 ```text
 domain/ui/ui_story/src/workflow/builtin.rs
 domain/ui/ui_story/src/workflow/mod.rs
+```
+
+Read/verify-only files:
+
+```text
 domain/ui/ui_story/src/lib.rs
 ```
 
@@ -69,10 +76,11 @@ Forbidden work:
 - Do not make `ui_story` depend on `ui_runtime`, `ui_controls`, `ui_static_mount`, `runenwerk_editor`, or product/app crates.
 - Do not execute filesystems, compilers, renderers, live hosts, static mounts, or editor behavior from `ui_story`.
 - Do not reintroduce the old flat-stage API that the root `ui_story` test forbids.
+- Do not edit `domain/ui/ui_story/src/lib.rs` unless implementation proves the workflow profile cannot be exported through the existing `workflow::*` path; if that happens, record the reason in the PR body.
 
 Rationale:
 
-`ui_story` currently exports V2 proof-envelope modules and tests that the old flat-stage API is not reintroduced. It is the correct owner for workflow profile identity, not runtime execution.
+`ui_story` currently exports V2 proof-envelope modules and tests that the old flat-stage API is not reintroduced. It already exports `workflow::*`, so the implementation should normally stay inside `workflow/builtin.rs` and `workflow/mod.rs`. It is the correct owner for workflow profile identity, not runtime execution.
 
 ### `domain/ui/ui_runtime`
 
@@ -179,14 +187,15 @@ Authorized files:
 ```text
 apps/runenwerk_editor/Cargo.toml
 apps/runenwerk_editor/src/editor_features/mod.rs
-apps/runenwerk_editor/src/editor_features/executable_interaction_story_proof.rs
-apps/runenwerk_editor/tests/phase12_executable_interaction_story_proof_host.rs
+apps/runenwerk_editor/src/editor_features/phase12a_interaction_proof_host.rs
+apps/runenwerk_editor/tests/phase12a_interaction_proof_host.rs
 ```
 
 Allowed work:
 
 - Add `ui_runtime.workspace = true` to `apps/runenwerk_editor/Cargo.toml` only if the proof-host module requires it.
 - Add a proof-host module under `editor_features` that adapts existing `UiInputEvent` values to normalized samples and feeds an `InteractionStorySession`.
+- Keep the module proof-only. The name must make the Phase 12A/proof-host purpose explicit.
 - The proof host may expose current `InteractionVisualProof`, `InteractionProofRenderFrame`, and static mount status for tests and future UI display.
 - The proof host may be driven by real pointer/keyboard/text input events in tests without mutating editor state.
 
@@ -200,7 +209,7 @@ Forbidden work:
 
 Rationale:
 
-`runenwerk_editor` already depends on `ui_input`, `ui_story`, `ui_static_mount`, and other UI crates, and exposes shell input entrypoints. There is no dedicated `ui_gallery` crate/module on this branch, so the first live proof host should be a narrow editor proof-host feature, not a broad gallery framework.
+`runenwerk_editor` already depends on `ui_input`, `ui_story`, `ui_static_mount`, and other UI crates, and exposes shell input entrypoints. There is no dedicated `ui_gallery` crate/module on this branch, so the first live proof host should be a narrow editor proof-host feature, not a broad gallery framework. The module is proof-host infrastructure, not product/editor behavior.
 
 ## Required public API shape
 
@@ -239,6 +248,24 @@ return current proof/frame/report
 return boundary counters
 return static mount report from current frame
 ```
+
+## Implementation order
+
+Implement in this order:
+
+```text
+1. ui_runtime shared apply path
+2. InteractionStorySession replay/live API
+3. replay/live semantic parity report
+4. canonical Phase 12A expected-evidence helper
+5. ui_runtime executable story tests
+6. ui_story executable interaction workflow profile
+7. ui_static_mount executable story static mount test
+8. runenwerk_editor proof-host adapter
+9. docs/closeout update recording whether display is proof-host-core only or product-facing
+```
+
+Do not start with the editor proof host. The runtime shared path must be the behavior owner before any host adapter exists.
 
 ## Story workflow profile
 
@@ -364,7 +391,7 @@ cargo test -p ui_story executable_interaction_workflow
 cargo test -p ui_runtime executable_interaction_story
 cargo test -p ui_runtime --test interaction_replay_report
 cargo test -p ui_static_mount phase12_executable_interaction_story
-cargo test -p runenwerk_editor phase12_executable_interaction_story_proof_host
+cargo test -p runenwerk_editor phase12a_interaction_proof_host
 ```
 
 The tests must prove:
@@ -398,7 +425,7 @@ cargo test -p ui_runtime interaction
 cargo test -p ui_runtime executable_interaction_story
 cargo test -p ui_runtime --test interaction_replay_report
 cargo test -p ui_static_mount phase12_executable_interaction_story
-cargo test -p runenwerk_editor phase12_executable_interaction_story_proof_host
+cargo test -p runenwerk_editor phase12a_interaction_proof_host
 python3 tools/docs/validate_docs.py
 git diff --check
 ```
@@ -407,10 +434,10 @@ If exact test names differ after implementation, the PR body and closeout must r
 
 ## Manual validation expectation
 
-Minimum manual proof-host validation:
+Minimum proof-host-core validation:
 
 ```text
-create/open the Phase 12A proof host
+create/open the Phase 12A proof host core
 apply pointer move over Button
 verify current proof/frame shows hovered evidence
 apply pointer down on Button
@@ -435,6 +462,27 @@ verify static mount report passes from current frame
 
 If the proof host is not visually exposed in an editor window in this slice, record that explicitly. The slice is still acceptable only if the proof host processes live-shaped `UiInputEvent`/`NormalizedInputSample` input through the same runtime path and produces current proof/frame/report evidence. Product-facing gallery/window exposure remains a later adoption task unless implemented within this scope without touching shell registries.
 
+## Product-facing display policy
+
+This slice has two acceptable display outcomes:
+
+```text
+Accepted outcome A:
+  proof-host core only
+  live-shaped UiInputEvent / NormalizedInputSample input
+  current proof/frame/report evidence
+  no editor shell surface changes
+
+Accepted outcome B:
+  proof-host core plus diagnostic product-facing surface
+  no product commands
+  no product mutation
+  no overlay/text editing
+  no broad shell registry expansion
+```
+
+Outcome A is sufficient for this implementation scope. Outcome B is allowed only if it remains diagnostic/proof-only and stays inside the authorized files. If product-facing surface registration or shell/workspace registry edits are required, stop and revise scope.
+
 ## Stop conditions
 
 Stop and record a scope revision if implementation requires:
@@ -442,6 +490,7 @@ Stop and record a scope revision if implementation requires:
 - adding a parallel story runner outside `ui_story`;
 - moving story execution into `ui_controls`;
 - making `ui_story` depend on runtime/product crates;
+- editing `domain/ui/ui_story/src/lib.rs` for anything other than a justified export necessity;
 - duplicating interaction semantics in the editor proof host;
 - live proof-host state changes that do not pass through `NormalizedInputSample` and `InteractionStorySession`;
 - product/editor/game command execution;
@@ -467,4 +516,4 @@ Implementation is complete only when:
 - static mount validation passes from the current story frame;
 - the editor proof host can be driven by `UiInputEvent`/normalized samples;
 - boundary counters remain zero;
-- docs and closeout record any remaining gap between proof-host evidence and product-facing gallery/window display.
+- docs and closeout record whether the delivered result is proof-host core only or also product-facing gallery/window display.
