@@ -257,6 +257,26 @@ Evidence: PR #43 lower-tier interaction assets, Phase 3 story-proof ownership bo
 
 Follow-up: Review and accept, revise, or reject the Tier 5 design. Do not authorize code until owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation, and stop conditions are accepted.
 
+## Phase 12A executable interaction story acceptance decision
+
+Date: 2026-06-29
+
+Decision: Accept `ui-component-platform-executable-interaction-story-design.md` as the Tier 5 executable interaction story direction.
+
+State transition: `proposed-design -> accepted-direction`
+
+Context: User reviewed and accepted the Tier 5 design intake. The design records owner boundaries, vocabulary, non-goals, tradeoffs, acceptance criteria, implementation gate, stop conditions, and relationship to current work.
+
+Options considered: Revise the design before acceptance; accept the Tier 5 direction and keep implementation blocked until exact scope is inspected; start implementation immediately.
+
+Reason: The design provides the required long-term standard without authorizing speculative implementation. It keeps the lower-tier Phase 12 static/replay proof as reusable evidence, but requires a future executable story with replay/live semantic parity before live reusable interaction proof can be claimed.
+
+Affected planning files: `ui-component-platform-executable-interaction-story-design.md`, `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: User acceptance on 2026-06-29, the accepted design document, PR #43 lower-tier interaction assets, and the updated active-work planning entry.
+
+Follow-up: Inspect actual `ui_story`, `ui_runtime`, `ui_input`, `ui_static_mount`, and gallery/proof-host files. Then create the exact active-implementation scope with owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation, and stop conditions.
+
 ## Lifecycle rule
 
 Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.
