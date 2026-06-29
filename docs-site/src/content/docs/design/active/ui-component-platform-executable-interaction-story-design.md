@@ -1,6 +1,6 @@
 ---
 title: UI Component Platform Executable Interaction Story Design
-description: Proposed Tier 5 proof design for replay/live parity, live gallery proof hosts, static frame evidence, and no-bypass reusable UI interaction validation.
+description: Accepted Tier 5 proof design for replay/live parity, live gallery proof hosts, static frame evidence, and no-bypass reusable UI interaction validation.
 status: active
 owner: ui
 layer: domain
@@ -21,11 +21,13 @@ related_docs:
 
 ## Status
 
-Lifecycle state: `proposed-design`.
+Lifecycle state: `accepted-direction`.
 
 Planning ID: `PT-UI-COMPONENT-PLATFORM-012A-PLANNING`.
 
-This is a design intake for the Tier 5 proof standard for reusable UI interaction work. It does not authorize implementation. Active implementation requires exact owner files, scope, validation envelope, evidence expectation, and stop conditions in `active-work.md`.
+Accepted by user review on 2026-06-29.
+
+This is the accepted direction for the Tier 5 proof standard for reusable UI interaction work. It does not authorize implementation. Active implementation requires exact owner files, scope, validation envelope, evidence expectation, and stop conditions in `active-work.md`.
 
 This design intentionally follows the existing workflow rule that architecture acceptance is not implementation authorization.
 
@@ -531,7 +533,7 @@ Rejected. Product behavior belongs to later product/editor/app adoption, not reu
 
 ## Acceptance criteria
 
-Phase 12A design is accepted only when it records:
+Phase 12A design is accepted because it records:
 
 - owner boundaries for `ui_controls`, `ui_input`, `ui_runtime`, `ui_story`, gallery/proof host, `ui_static_mount`, and product layers;
 - proof tier vocabulary and default policy;
@@ -556,7 +558,7 @@ Phase 12A implementation is complete only when:
 
 ## Implementation gate
 
-Implementation is not authorized by this design intake.
+Implementation is not authorized by this accepted direction.
 
 Before implementation, active-work must name:
 
@@ -608,6 +610,6 @@ Stop and redesign if implementation requires:
 
 `PT-UI-COMPONENT-PLATFORM-012` remains the lower-tier generic interaction implementation reference: package-backed descriptors, catalog/inspection projection, normalized input facts, deterministic replay/report, renderer-neutral visible proof, and static `UiFrame` mount evidence.
 
-`PT-UI-COMPONENT-PLATFORM-012A` is the proposed follow-up planning focus that upgrades reusable interaction acceptance to Tier 5 before overlay/layering, text editing, or product adoption can claim live reusable interaction behavior.
+`PT-UI-COMPONENT-PLATFORM-012A` is the accepted follow-up planning focus that upgrades reusable interaction acceptance to Tier 5 before overlay/layering, text editing, or product adoption can claim live reusable interaction behavior.
 
 Phase 13 overlays/layering and later text editing remain future work. They should consume the executable interaction story standard rather than bypass it.
