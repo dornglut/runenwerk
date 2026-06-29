@@ -222,9 +222,9 @@ report/event view:
 
 The gallery must not execute product commands. A Button activation may emit an activation outcome, but it must not invoke app/editor/game behavior as part of the reusable control proof.
 
-PR #43 adds a renderer-neutral visible proof path in `domain/ui/ui_runtime/src/input/generic_interaction.rs` through `InteractionVisualProof`, `InteractionVisualMainView`, `InteractionVisualControl`, `InteractionVisualMarker`, `InteractionInspectorView`, `InteractionReportView`, `InteractionVisibleState`, and `InteractionProofFrame`.
+PR #43 adds a renderer-neutral visible proof path in `domain/ui/ui_runtime/src/input/generic_interaction.rs`, `domain/ui/ui_runtime/src/input/generic_interaction_fixture.rs`, and `domain/ui/ui_runtime/src/input/generic_interaction_visual_frame.rs` through `InteractionVisualProof`, `InteractionVisualMainView`, `InteractionVisualControl`, `InteractionVisualMarker`, `InteractionInspectorView`, `InteractionReportView`, `InteractionVisibleState`, `InteractionProofFrame`, `InteractionProofRenderFrame`, and `InteractionProofRenderSummary`.
 
-That proof path is formed from compiled base-control package descriptors plus deterministic replay reports. It exposes a main view, inspector view, and report/event view without creating a product UI, overlay layer, popup, or broad gallery framework. Existing gallery/static-mount infrastructure can render the proof model later, but Phase 12 completion does not depend on a replay-only substitute.
+That proof path is formed from compiled base-control package descriptors plus deterministic replay reports. It exposes a semantic main view, inspector view, and report/event view, then projects that proof through `interaction_visual_proof_to_frame` into a deterministic `UiFrame`. `UiStaticMountReport::from_frame` validates that frame in `domain/ui/ui_static_mount/tests/phase12_generic_interaction_static_mount.rs` without creating a product UI, overlay layer, popup, or broad gallery framework. A later product-facing gallery page may consume the same frame, while PR #43 records the Phase 12 static mount evidence.
 
 ## Base-control interaction matrix
 
@@ -465,13 +465,19 @@ domain/ui/ui_controls/tests/control_interaction_contract.rs
 domain/ui/ui_controls/tests/control_interaction_catalog_contract.rs
 domain/ui/ui_input/src/facts.rs
 domain/ui/ui_runtime/src/input/generic_interaction.rs
+domain/ui/ui_runtime/src/input/generic_interaction_fixture.rs
+domain/ui/ui_runtime/src/input/generic_interaction_visual_frame.rs
+domain/ui/ui_runtime/src/input/mod.rs
 domain/ui/ui_runtime/tests/interaction_replay_report.rs
+domain/ui/ui_static_mount/src/lib.rs
+domain/ui/ui_static_mount/Cargo.toml
+domain/ui/ui_static_mount/tests/phase12_generic_interaction_static_mount.rs
 docs-site/src/content/docs/workspace/planning/
 docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-component-platform-012-generic-interaction-closeout.md
 ```
 
-The visible proof path is renderer-neutral in `ui_runtime` and does not add a product UI or generic gallery/story framework.
+The visible proof path is renderer-neutral in `ui_runtime`, converts to `UiFrame`, and is validated by existing `ui_static_mount` infrastructure. It does not add a product UI or generic gallery/story framework.
 
 The implementation PR did not rewrite Phase 11 base controls. Additive interaction declarations attach through the existing contribution/lowering path and preserve the Phase 11 ownership model.
 
@@ -483,7 +489,7 @@ Phase 12 is implementation-ready only when the design and planning records answe
 
 - exact owner files and crates;
 - exact public concepts to add or extend;
-- exact gallery/story proof fixture path;
+- exact static/gallery proof fixture path;
 - exact deterministic replay/report proof path;
 - how `ui_controls` declarations reference or summarize `ui_input` facts without owning input substrate behavior;
 - how `ui_runtime` produces interaction facts/events without owning host product behavior;
@@ -500,7 +506,7 @@ Phase 12 implementation is complete only when:
 - normalized input facts are resolved through the proper input/runtime owners;
 - focus, keyboard, and text-intent facts are represented at the correct substrate boundary;
 - runtime interaction facts/events can be formed for reusable controls;
-- the gallery/story proof visibly shows hover, press, focus, active, disabled/suppressed, and text-intent-probe behavior;
+- the static/gallery proof visibly shows hover, press, focus, active, disabled/suppressed, and text-intent-probe behavior;
 - the deterministic replay report records target resolution, state transitions, facts, events, outcomes, suppressed/no-target evidence, and boundary assertions;
 - no host-specific command behavior or product state change is introduced in `ui_controls`;
 - no overlay/layering/full-text-editing behavior is introduced;
@@ -579,6 +585,6 @@ A later Phase 12 implementation closeout must record:
 
 Phase 11 is complete and provides the descriptor-backed base-control package inventory that Phase 12 can reason about.
 
-Phase 12 is complete in PR #43 with package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven runtime replay/report, renderer-neutral visible proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions.
+Phase 12 is complete in PR #43 with package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven runtime replay/report, renderer-neutral visible proof, `InteractionVisualProof` to `UiFrame` static mount evidence, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions.
 
 Phase 13 remains overlay/popup/layering. Full text editing remains later, but it must consume the interaction substrate shaped by Phase 12 rather than bypassing it.

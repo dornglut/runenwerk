@@ -1,17 +1,14 @@
-use ui_controls::{
-    ACTION_PROMPT_CONTROL_KIND_ID, BUTTON_CONTROL_KIND_ID, BaseControlsPlugin,
-    INSPECTOR_FIELD_CONTROL_KIND_ID, LABEL_CONTROL_KIND_ID, LIST_VIEW_CONTROL_KIND_ID,
-    TABLE_VIEW_CONTROL_KIND_ID, TREE_VIEW_CONTROL_KIND_ID,
-};
+use ui_controls::{BUTTON_CONTROL_KIND_ID, BaseControlsPlugin};
 use ui_input::{
     FocusDirection, FocusInputFact, FocusTargetId, Key, KeyState, KeyboardInputFact,
     NormalizedInputFact, NormalizedInputSample, PointerButton, PointerEventKind, PointerInputFact,
     TextIntentFact,
 };
-use ui_math::{UiPoint, UiRect};
+use ui_math::UiPoint;
 use ui_runtime::{
     InteractionReplayScript, InteractionReplayStep, InteractionVisibleState,
-    InteractionVisualProof, MountedInteractionFixture, MountedInteractionPlacement, WidgetId,
+    InteractionVisualProof, MountedInteractionFixture, WidgetId,
+    phase12_generic_interaction_fixture, phase12_generic_interaction_positive_script,
     replay_interactions,
 };
 
@@ -111,8 +108,14 @@ fn visual_proof_exposes_main_inspector_and_report_views() {
     assert!(
         proof
             .inspector_view
-            .current_reusable_interaction_state_set
+            .observed_reusable_interaction_states
             .contains(&InteractionVisibleState::FocusVisible)
+    );
+    assert!(
+        !proof
+            .inspector_view
+            .current_reusable_interaction_state_set
+            .contains(&InteractionVisibleState::Pressed)
     );
 
     assert_marker(&proof, WidgetId(1), InteractionVisibleState::Hovered);
@@ -367,121 +370,12 @@ fn text_intent_against_non_text_probe_is_suppressed_without_text_editing() {
 }
 
 fn phase12_positive_script() -> InteractionReplayScript {
-    InteractionReplayScript::new("phase12.replay")
-        .with_step(focus_target_step("focus_button", WidgetId(1)))
-        .with_step(pointer_step(
-            "move_button",
-            PointerEventKind::Move,
-            12.0,
-            12.0,
-        ))
-        .with_step(pointer_step(
-            "press_button",
-            PointerEventKind::Down,
-            12.0,
-            12.0,
-        ))
-        .with_step(pointer_step(
-            "release_button",
-            PointerEventKind::Up,
-            12.0,
-            12.0,
-        ))
-        .with_step(focus_next_step("focus_action"))
-        .with_step(key_step("activate_action", Key::Enter))
-        .with_step(focus_next_step("focus_inspector"))
-        .with_step(text_intent_step("text_probe"))
-        .with_step(focus_next_step("focus_list"))
-        .with_step(key_step("list_down", Key::Down))
-        .with_step(focus_next_step("focus_tree"))
-        .with_step(key_step("tree_right", Key::Right))
-        .with_step(focus_next_step("focus_table"))
-        .with_step(key_step("table_down", Key::Down))
-        .with_step(pointer_step(
-            "disabled_button",
-            PointerEventKind::Down,
-            12.0,
-            132.0,
-        ))
-        .with_step(pointer_step(
-            "outside",
-            PointerEventKind::Down,
-            260.0,
-            260.0,
-        ))
+    phase12_generic_interaction_positive_script()
 }
 
 fn phase12_fixture() -> MountedInteractionFixture {
     let compiled = BaseControlsPlugin::new().compile();
-    MountedInteractionFixture::from_compiled_controls(
-        "phase12.generic-interaction.fixture",
-        &compiled,
-        [
-            MountedInteractionPlacement::new(
-                WidgetId(1),
-                BUTTON_CONTROL_KIND_ID,
-                "Button",
-                UiRect::new(0.0, 0.0, 80.0, 24.0),
-            ),
-            MountedInteractionPlacement::new(
-                WidgetId(2),
-                ACTION_PROMPT_CONTROL_KIND_ID,
-                "Action",
-                UiRect::new(0.0, 28.0, 80.0, 24.0),
-            ),
-            MountedInteractionPlacement::new(
-                WidgetId(3),
-                INSPECTOR_FIELD_CONTROL_KIND_ID,
-                "Inspector",
-                UiRect::new(0.0, 56.0, 80.0, 24.0),
-            ),
-            MountedInteractionPlacement::new(
-                WidgetId(4),
-                LIST_VIEW_CONTROL_KIND_ID,
-                "List",
-                UiRect::new(0.0, 84.0, 80.0, 24.0),
-            ),
-            MountedInteractionPlacement::new(
-                WidgetId(5),
-                TREE_VIEW_CONTROL_KIND_ID,
-                "Tree",
-                UiRect::new(84.0, 84.0, 80.0, 24.0),
-            ),
-            MountedInteractionPlacement::new(
-                WidgetId(6),
-                TABLE_VIEW_CONTROL_KIND_ID,
-                "Table",
-                UiRect::new(168.0, 84.0, 80.0, 24.0),
-            ),
-            MountedInteractionPlacement::new(
-                WidgetId(7),
-                BUTTON_CONTROL_KIND_ID,
-                "Disabled",
-                UiRect::new(0.0, 120.0, 80.0, 24.0),
-            )
-            .disabled(),
-            MountedInteractionPlacement::new(
-                WidgetId(8),
-                INSPECTOR_FIELD_CONTROL_KIND_ID,
-                "Read-only Inspector",
-                UiRect::new(84.0, 120.0, 120.0, 24.0),
-            )
-            .read_only(),
-            MountedInteractionPlacement::new(
-                WidgetId(9),
-                LABEL_CONTROL_KIND_ID,
-                "Label",
-                UiRect::new(0.0, 148.0, 80.0, 24.0),
-            ),
-            MountedInteractionPlacement::new(
-                WidgetId(10),
-                BUTTON_CONTROL_KIND_ID,
-                "Inert Button",
-                UiRect::new(84.0, 148.0, 120.0, 24.0),
-            )
-            .inert(),
-        ],
-    )
+    phase12_generic_interaction_fixture(&compiled)
 }
 
 fn pointer_step(id: &str, kind: PointerEventKind, x: f32, y: f32) -> InteractionReplayStep {
@@ -571,7 +465,7 @@ fn assert_marker(
     assert!(
         control.has_marker(state),
         "{:?} missing {:?}",
-        control.markers,
+        control.observed_markers,
         state
     );
 }

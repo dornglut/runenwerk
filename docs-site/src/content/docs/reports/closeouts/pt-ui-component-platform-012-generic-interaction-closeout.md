@@ -21,7 +21,7 @@ Title: UI Component Platform Generic Interaction
 
 Completed on: 2026-06-29 through PR #43 implementation evidence and local validation
 
-Owner: `ui_controls`, `ui_input`, and `ui_runtime`
+Owner: `ui_controls`, `ui_input`, `ui_runtime`, and `ui_static_mount`
 
 ## Scope promised
 
@@ -64,6 +64,11 @@ ui_input:
 
 ui_runtime:
   MountedInteractionFixture
+  PHASE12_GENERIC_INTERACTION_PROOF_ID
+  phase12_generic_interaction_fixture
+  phase12_generic_interaction_positive_script
+  phase12_generic_interaction_negative_scripts
+  phase12_generic_interaction_proof_frame
   InteractionReplayScript and InteractionReplayStep
   InteractionFormationReport
   RuntimeInteractionFact
@@ -80,6 +85,12 @@ ui_runtime:
   InteractionReportView
   InteractionVisibleState
   InteractionProofFrame
+  InteractionProofRenderFrame
+  InteractionProofRenderSummary
+  interaction_visual_proof_to_frame
+
+ui_static_mount:
+  UiStaticMountReport::from_frame
 ```
 
 ## Owner files touched
@@ -97,6 +108,11 @@ domain/ui/ui_controls/src/base_control/lowering/inspection.rs
 domain/ui/ui_controls/src/catalog/entry.rs
 domain/ui/ui_input/src/facts.rs
 domain/ui/ui_runtime/src/input/generic_interaction.rs
+domain/ui/ui_runtime/src/input/generic_interaction_fixture.rs
+domain/ui/ui_runtime/src/input/generic_interaction_visual_frame.rs
+domain/ui/ui_runtime/src/input/mod.rs
+domain/ui/ui_static_mount/src/lib.rs
+domain/ui/ui_static_mount/Cargo.toml
 ```
 
 Primary tests:
@@ -106,6 +122,7 @@ domain/ui/ui_controls/tests/control_interaction_contract.rs
 domain/ui/ui_controls/tests/control_interaction_catalog_contract.rs
 domain/ui/ui_controls/src/lib.rs
 domain/ui/ui_runtime/tests/interaction_replay_report.rs
+domain/ui/ui_static_mount/tests/phase12_generic_interaction_static_mount.rs
 ```
 
 Primary planning and design files:
@@ -191,10 +208,13 @@ Text intent is observed as a probe. Read-only text intent records receipt and pr
 
 ## Visible proof path
 
-The visible proof path is renderer-neutral and lives in:
+The semantic visible proof path is renderer-neutral and lives in:
 
 ```text
 domain/ui/ui_runtime/src/input/generic_interaction.rs
+domain/ui/ui_runtime/src/input/generic_interaction_fixture.rs
+domain/ui/ui_runtime/src/input/generic_interaction_visual_frame.rs
+domain/ui/ui_static_mount/src/lib.rs
 ```
 
 Public proof vocabulary:
@@ -208,6 +228,9 @@ InteractionInspectorView
 InteractionReportView
 InteractionVisibleState
 InteractionProofFrame
+InteractionProofRenderFrame
+InteractionProofRenderSummary
+UiStaticMountReport::from_frame
 ```
 
 The proof exposes:
@@ -217,14 +240,19 @@ main view:
   mounted base controls and visible markers
 
 inspector view:
-  selected widget, control kind id, declared requirements, current reusable state set
+  selected widget, control kind id, declared requirements, observed reusable states,
+  current reusable state set
 
 report/event view:
   replay steps, target/focus resolution, state transitions, runtime facts/events,
   semantic outcomes, suppressed/no-target events, and boundary assertions
 ```
 
-Existing gallery/static mount infrastructure does not yet render this proof model as a product-facing gallery page. That is a remaining integration gap, not a replay-only substitute. Phase 12 closes with a renderer-neutral visible proof model that can be rendered later without adding product UI or broad story/gallery framework behavior.
+`InteractionVisualProof` is the semantic visible proof model. `interaction_visual_proof_to_frame` converts it to `InteractionProofRenderFrame`, whose `UiFrame` contains deterministic main, inspector, and report regions with rectangle, border, and glyph primitives. `UiStaticMountReport::from_frame` validates that renderer-neutral frame through the existing static mount proof infrastructure.
+
+`domain/ui/ui_static_mount/tests/phase12_generic_interaction_static_mount.rs` is the accepted static render/mount proof path for PR #43. It builds compiled base controls, forms the canonical Phase 12 proof frame, converts it to `UiFrame`, validates static mount evidence, checks main/inspector/report sections, checks required visible interaction markers, and asserts deterministic primitive order.
+
+No product-facing gallery page is added in Phase 12. A later product-facing gallery/story page may consume the same proof frame, but that is future integration rather than a Phase 12 blocking gap.
 
 ## Positive proof scenarios
 
@@ -290,12 +318,14 @@ cargo fmt --all --check
 cargo check -p ui_controls
 cargo check -p ui_input
 cargo check -p ui_runtime
+cargo check -p ui_static_mount
 cargo test -p ui_controls control_interaction
 cargo test -p ui_controls control_catalog
 cargo test -p ui_controls base_control
 cargo test -p ui_input input
 cargo test -p ui_runtime interaction
 cargo test -p ui_runtime --test interaction_replay_report
+cargo test -p ui_static_mount phase12_generic_interaction
 python3 tools/docs/validate_docs.py
 git diff --check
 ```
@@ -311,11 +341,14 @@ cargo test -p ui_runtime interaction
 
 cargo test -p ui_runtime --test interaction_replay_report
   runs the full Phase 12 replay/report/visible-proof/negative-case suite.
+
+cargo test -p ui_static_mount phase12_generic_interaction
+  runs the Phase 12 InteractionVisualProof -> UiFrame -> UiStaticMountReport integration proof.
 ```
 
 ## Known remaining gaps
 
-- Existing gallery/static mount infrastructure does not yet render the Phase 12 proof model as a product-facing gallery page.
+- Product-facing gallery/story pages do not yet expose the Phase 12 proof as interactive product UI; the accepted Phase 12 proof is the renderer-neutral static mount frame path.
 - Backend renderer behavior remains out of Phase 12.
 - App/editor/game command handling remains host-owned and out of Phase 12.
 - Product state mutation remains host-owned and out of Phase 12.

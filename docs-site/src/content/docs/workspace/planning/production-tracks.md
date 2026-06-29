@@ -69,7 +69,7 @@ Design gates:
 009C proved ui_controls should bridge owner-crate vocabulary through per-control descriptors and read-only summaries.
 010 proved render/output ownership across ui_render_data, ui_controls, ui_runtime, and engine render.
 011 proved UI-local contribution/preset/lowering authoring for package-quality base controls while keeping full interaction behavior for Phase 12.
-012 completed generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
+012 completed generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, static mount frame evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -87,14 +87,14 @@ Phase 8: user reported the accessibility/focus/inspection validation gate green.
 Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundation, 009C ui_controls layout bridge, read-only catalog inspection bridge, and focused tests; user reported the validation gate green.
 Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
 Phase 11: PR #37 merged the UI-local base-control contribution/preset/lowering proof; user reported the validation gate green.
-Phase 12: PR #43 implements package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions. Validation passed for the Phase 12 implementation gate recorded in the closeout report.
+Phase 12: PR #43 implements package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions. Validation passed for the Phase 12 implementation gate recorded in the closeout report.
 Later phases: overlays, text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-No current blocker for Phase 12. Existing gallery/static mount infrastructure does not yet render the Phase 12 proof model as a product-facing gallery page, but PR #43 provides the renderer-neutral visible proof path required for completion. Phase 13 overlays/layering and later full text editing remain future work.
+No current blocker for Phase 12. PR #43 provides the renderer-neutral static mount frame proof required for completion. A product-facing gallery/story page may consume the same proof later, but Phase 13 overlays/layering and later full text editing remain future work.
 ```
 
 Activation condition:
