@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-29
 ---
 
 # Active Designs
@@ -67,8 +67,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Runenwerk Draw Paper Response Phase 6A](runenwerk-draw-paper-response-phase-6a.md)
 - [Runenwerk Draw Stroke Fidelity Phase 0/1](runenwerk-draw-stroke-fidelity-phase-0-1.md)
 - [Runenwerk Draw Stroke Fidelity Phase 1 Preview Final Parity](runenwerk-draw-stroke-fidelity-phase-1-preview-final-parity.md)
-- [Runenwerk Draw Tool Session Architecture Slice](runenwerk-draw-tool-session-architecture-slice.md)
-- [Runenwerk Draw Tool Session Slice 2 Session Control](runenwerk-draw-tool-session-slice-2-session-control.md)
+- [Runenwerk Draw Tool Session Architecture Slice](runenwerk-draw-tool-session-slice-2-session-control.md)
 - [Runenwerk Draw Tool Session Slice 3 Intent Input Path](runenwerk-draw-tool-session-slice-3-intent-input-path.md)
 
 ### UI Component Platform
@@ -79,6 +78,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [UI Component Platform Budget Evidence Design](ui-component-platform-budget-evidence-design.md)
 - [UI Component Platform Catalog / Discovery / Inspection Design](ui-component-platform-catalog-discovery-inspection-design.md)
 - [UI Component Platform Control Kernel Design](ui-component-platform-control-kernel-design.md)
+- [UI Component Platform Executable Interaction Story Design](ui-component-platform-executable-interaction-story-design.md)
 - [UI Component Platform Generic Interaction Design](ui-component-platform-generic-interaction-design.md)
 - [UI Component Platform Generic Text Design](ui-component-platform-generic-text-design.md)
 - [UI Component Platform Input / Gesture / Device Design](ui-component-platform-input-gesture-device-design.md)
