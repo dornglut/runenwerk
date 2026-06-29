@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-06-29
 related_docs:
   - ../workflow-lifecycle.md
 ---
@@ -111,7 +111,7 @@ Date: 2026-06-26
 
 Decision: Mark `PT-UI-COMPONENT-PLATFORM-009` Layout / Container / Virtualization complete.
 
-Context: PR #29 merged the corrected owner-first Phase 9 work into `main`. PR #30 is closed unmerged and superseded.
+Context: PR #29 merged the corrected Phase 9 work into `main`. PR #30 is closed unmerged and superseded.
 
 Options considered: Keep Phase 9 pending local validation; close Phase 9 based on user validation report; reopen the stale pre-realignment branch.
 
@@ -237,6 +237,26 @@ Evidence: `ControlPackageDescriptor::interaction_descriptors`, `ControlPackageAu
 
 Follow-up: Review/merge PR #43. Keep Phase 13 overlays/layering and later full text editing deferred until separate active planning records authorize them.
 
+## Phase 12A executable interaction story planning decision
+
+Date: 2026-06-29
+
+Decision: Start `PT-UI-COMPONENT-PLATFORM-012A-PLANNING` as an Executable Interaction Story design intake before implementation.
+
+State transition: `production-track -> active-planning`
+
+Context: Phase 12 provides contract, replay, report, renderer-neutral visible proof, and static frame mount evidence. That lower-tier evidence is useful, but it does not yet prove live gallery/proof-host interaction where actual pointer/key/focus/text-intent input updates reusable interaction state through the same normalized input and runtime formation path.
+
+Options considered: Keep static proof as the final interaction standard; add an ad-hoc live Button demo; define a Tier 5 executable story standard with deterministic replay, live proof-host execution, semantic replay/live parity, static frame evidence, and no-bypass assertions.
+
+Reason: Static proof alone is too weak for future reusable interaction claims, and a live demo alone can bypass descriptors, catalog facts, normalized input, and runtime interaction formation. The stronger long-term standard is one executable story that can run in replay mode and live mode, with both modes differing only by input source after normalization.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `design/active/README.md`, and `ui-component-platform-executable-interaction-story-design.md`.
+
+Evidence: PR #43 lower-tier interaction assets, Phase 3 story-proof ownership boundary, the Phase 12 design and closeout, and the new executable interaction story design intake.
+
+Follow-up: Review and accept, revise, or reject the Tier 5 design. Do not authorize code until owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation, and stop conditions are accepted.
+
 ## Lifecycle rule
 
 Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.
@@ -257,5 +277,3 @@ Reactivation condition:
 Supersedes:
 Superseded by:
 ```
-
-Existing entries may be migrated as they are touched.
