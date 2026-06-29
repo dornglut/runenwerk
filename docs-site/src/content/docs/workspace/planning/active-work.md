@@ -21,7 +21,7 @@ ID: `PT-UI-COMPONENT-PLATFORM-012A-PLANNING`
 
 Title: UI Component Platform Executable Interaction Story
 
-State: design intake / active planning
+State: accepted direction / implementation planning
 
 Lifecycle state: `active-planning`
 
@@ -29,15 +29,15 @@ Owner: Planning spans `ui_story` for executable story identity/evidence envelope
 
 Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/documentation-structure.md`, `docs-site/src/content/docs/workspace/authority-model.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/planning/README.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, and `docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md`.
 
-Write scope: Documentation/planning intake only. Do not implement runtime sessions, gallery live hosts, host input adapters, product behavior, overlays, text editing, shared plugin framework extraction, generic plugin primitives, or `foundation/meta` as part of this planning patch.
+Write scope: Documentation/planning only until exact implementation scope is accepted. Do not implement runtime sessions, gallery live hosts, host input adapters, product behavior, overlays, text editing, shared plugin framework extraction, generic plugin primitives, or `foundation/meta` until the active-work entry is promoted to `active-implementation` with exact owner files/crates, validation envelope, evidence expectation, and stop conditions.
 
-Validation expectation: This planning patch should be readable from Markdown and should validate with `python3 tools/docs/validate_docs.py` and `git diff --check` when a local checkout is available. Command execution is not required to understand or review the intake.
+Validation expectation: This planning patch should be readable from Markdown and should validate with `python3 tools/docs/validate_docs.py` and `git diff --check` when a local checkout is available. Command execution is not required to understand or review the accepted direction.
 
-Known blockers: The current Phase 12 proof is contract/replay/static visual evidence. It is not yet Tier 5 because there is no executable story that can be both replayed deterministically and driven live through a gallery/proof host with semantic replay/live parity.
+Known blockers: The Tier 5 design is accepted, but implementation is not scoped. Exact owner files/crates, host adapter location, runtime session API scope, focused test names, evidence artifacts, and manual live validation steps still need inspection before implementation can start.
 
-Next action: Review and accept, revise, or reject the executable interaction story design. Do not start implementation until active work names exact owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation steps, and stop conditions.
+Next action: Inspect the actual `ui_story`, `ui_runtime`, `ui_input`, `ui_static_mount`, and gallery/proof-host files to create an exact implementation scope for `PT-UI-COMPONENT-PLATFORM-012A`. Do not write code until that implementation scope is recorded and accepted.
 
-Evidence: PR #43 already provides the lower-tier assets this design should reuse: package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven replay/report, `InteractionVisualProof`, `InteractionProofRenderFrame`, and `UiStaticMountReport::from_frame`. The new design intake defines the stronger Tier 5 target: replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and no-bypass boundary assertions.
+Evidence: User accepted `ui-component-platform-executable-interaction-story-design.md` on 2026-06-29. PR #43 already provides the lower-tier assets this design should reuse: package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven replay/report, `InteractionVisualProof`, `InteractionProofRenderFrame`, and `UiStaticMountReport::from_frame`. The accepted Tier 5 direction requires replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and no-bypass boundary assertions.
 
 ## Active-work rules
 
