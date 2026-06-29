@@ -277,6 +277,26 @@ Evidence: User acceptance on 2026-06-29, the accepted design document, PR #43 lo
 
 Follow-up: Inspect actual `ui_story`, `ui_runtime`, `ui_input`, `ui_static_mount`, and gallery/proof-host files. Then create the exact active-implementation scope with owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation, and stop conditions.
 
+## Phase 12A executable interaction story implementation-scope decision
+
+Date: 2026-06-29
+
+Decision: Promote `PT-UI-COMPONENT-PLATFORM-012A` to active implementation using `ui-component-platform-executable-interaction-story-implementation-scope.md`.
+
+State transition: `active-planning -> active-implementation`
+
+Context: The accepted Tier 5 direction has now been inspected against the available owner crates. `ui_story` has a V2 proof-envelope workflow model, `ui_runtime` has descriptor-backed replay/proof assets, `ui_input` has normalized input facts and high-level input events, `ui_static_mount` has direct `UiFrame` validation, and `runenwerk_editor` has shell input seams but no dedicated `ui_gallery` crate or module on this branch.
+
+Options considered: Keep implementation blocked until a product-facing gallery module exists; implement broad editor shell/product gallery integration now; implement the narrow Tier 5 proof-host slice with exact files, shared replay/live runtime path, semantic parity, static mount evidence, and stop conditions.
+
+Reason: The narrow proof-host slice is the correct next step. It proves executable interaction without overreaching into product-facing shell surfaces, overlays, text editing, command dispatch, generic plugin infrastructure, or `foundation/meta`. Product-facing editor/window/gallery exposure can follow after this proof-host evidence exists.
+
+Affected planning files: `ui-component-platform-executable-interaction-story-implementation-scope.md`, `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: Inspection of `ui_story` V2 workflow files, `ui_runtime` generic interaction fixture/replay/proof files, `ui_input` fact/event files, `ui_static_mount::UiStaticMountReport::from_frame`, `runenwerk_editor` dependencies and shell input seams, and the implementation scope document.
+
+Follow-up: Implement only the scoped files. Stop and record a scope revision if implementation requires editor shell surface registry changes, product command execution, product mutation, overlays, full text editing, a parallel story runner, a generic plugin framework, `foundation/meta`, or generic plugin primitives.
+
 ## Lifecycle rule
 
 Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.
