@@ -8,6 +8,7 @@ last_reviewed: 2026-06-29
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
+  - ../../design/active/ui-component-platform-executable-interaction-story-design.md
 ---
 
 # Active Work
@@ -16,27 +17,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-No current focus is active after `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction closeout.
+ID: `PT-UI-COMPONENT-PLATFORM-012A-PLANNING`
 
-Most recent completed focus: `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction.
+Title: UI Component Platform Executable Interaction Story
 
-State: completed in PR #43 implementation evidence.
+State: design intake / active planning
 
-Lifecycle state: `completed`
+Lifecycle state: `active-planning`
 
-Owner: Phase 12 completed across `ui_controls` for package-backed reusable interaction declarations and catalog/inspection projection, `ui_input` for normalized pointer/keyboard/focus/semantic/text-intent facts, `ui_runtime` for descriptor-driven mounted replay, formation reports, renderer-neutral visible proof, and proof-frame projection, and `ui_static_mount` for static `UiFrame` mount validation.
+Owner: Planning spans `ui_story` for executable story identity/evidence envelope authority, `ui_runtime` for interaction story session execution mechanics and replay/live application, `ui_input` for normalized pointer/keyboard/focus/text-intent samples, `ui_controls` for reusable interaction descriptors and read-only catalog/inspection declarations, `ui_static_mount` for static `UiFrame` validation, and the existing gallery/proof host layer for live input collection and proof presentation. Product/editor/app layers remain later consumers only.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md`, `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`, and the Phase 11 closeout report.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/documentation-structure.md`, `docs-site/src/content/docs/workspace/authority-model.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/planning/README.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, and `docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md`.
 
-Write scope: Phase 12 implementation is closed. Do not add overlay/popup/layering, full text editing behavior, app/editor/game command mutation, shared plugin framework extraction, generic plugin primitives, or `foundation/meta` as part of Phase 12.
+Write scope: Documentation/planning intake only. Do not implement runtime sessions, gallery live hosts, host input adapters, product behavior, overlays, text editing, shared plugin framework extraction, generic plugin primitives, or `foundation/meta` as part of this planning patch.
 
-Validation expectation: Completed Phase 12 evidence used the implementation gate recorded in the closeout report: `cargo fmt --all --check`, `cargo check -p ui_controls`, `cargo check -p ui_input`, `cargo check -p ui_runtime`, `cargo check -p ui_static_mount`, focused `ui_controls`, `ui_input`, `ui_runtime`, and `ui_static_mount` tests, `python3 tools/docs/validate_docs.py`, and `git diff --check`.
+Validation expectation: This planning patch should be readable from Markdown and should validate with `python3 tools/docs/validate_docs.py` and `git diff --check` when a local checkout is available. Command execution is not required to understand or review the intake.
 
-Known blockers: None for Phase 12. PR #43 remains draft until repository review/merge handling is complete, but the implementation evidence and closeout record the intended completed Phase 12 scope. Phase 13 overlays/layering and later full text editing remain deferred.
+Known blockers: The current Phase 12 proof is contract/replay/static visual evidence. It is not yet Tier 5 because there is no executable story that can be both replayed deterministically and driven live through a gallery/proof host with semantic replay/live parity.
 
-Next action: Review/merge PR #43 or explicitly open the next planning focus. Do not start Phase 13 implementation without a new active-work entry and accepted owner/scope/validation envelope.
+Next action: Review and accept, revise, or reject the executable interaction story design. Do not start implementation until active work names exact owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation steps, and stop conditions.
 
-Evidence: PR #43 on branch `codex/phase-12-generic-interaction` implements package-backed interaction descriptors, package/catalog/inspection interaction visibility, normalized input facts, descriptor-driven replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, positive and negative interaction scenarios, read-only text-intent probe behavior, and zero host-command/product-mutation/overlay/text-edit boundary assertions.
+Evidence: PR #43 already provides the lower-tier assets this design should reuse: package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven replay/report, `InteractionVisualProof`, `InteractionProofRenderFrame`, and `UiStaticMountReport::from_frame`. The new design intake defines the stronger Tier 5 target: replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and no-bypass boundary assertions.
 
 ## Active-work rules
 
