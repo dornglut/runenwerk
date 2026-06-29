@@ -51,6 +51,7 @@ pub fn save_editor_composition_layout(
         .context("snapshot linked editor composition bundle")?;
     repository
         .activate(&candidate, expected_generation.as_ref())
+        .map_err(describe_composition_persistence_rejection)
         .context("activate editor composition generation")
 }
 
@@ -104,6 +105,27 @@ fn editor_compatibility_requirement() -> Result<CompositionCompatibilityRequirem
     })
 }
 
+fn describe_composition_persistence_rejection(
+    rejection: ui_composition::CompositionPersistenceRejection,
+) -> anyhow::Error {
+    let diagnostics = rejection
+        .diagnostics()
+        .iter()
+        .map(|diagnostic| {
+            format!(
+                "{:?} {:?} {:?}: {} {:?}",
+                diagnostic.code(),
+                diagnostic.stage(),
+                diagnostic.subject(),
+                diagnostic.message(),
+                diagnostic.context()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    anyhow!("composition persistence rejected: {diagnostics}")
+}
+
 #[cfg(test)]
 pub fn write_workspace_layout(path: &Path, workspace: &editor_shell::WorkspaceState) -> Result<()> {
     let runtime =
@@ -113,6 +135,7 @@ pub fn write_workspace_layout(path: &Path, workspace: &editor_shell::WorkspaceSt
 }
 
 #[cfg(test)]
+// Legacy/test compatibility reader: reverse composition-to-workspace loading is unsupported.
 pub fn read_workspace_layout_legacy_no_registry(
     _path: &Path,
 ) -> Result<editor_shell::WorkspaceState> {

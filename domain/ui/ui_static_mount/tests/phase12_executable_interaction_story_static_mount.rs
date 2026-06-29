@@ -2,7 +2,8 @@ use ui_controls::BaseControlsPlugin;
 use ui_runtime::{
     InteractionStoryExecutionMode, interaction_visual_proof_to_frame,
     phase12_executable_generic_interaction_expected_evidence,
-    phase12_executable_generic_interaction_story_session, phase12_generic_interaction_positive_script,
+    phase12_executable_generic_interaction_story_session,
+    phase12_generic_interaction_positive_script,
 };
 use ui_static_mount::UiStaticMountReport;
 

@@ -1,9 +1,9 @@
 use ui_controls::BaseControlsPlugin;
 use ui_runtime::{
-    InteractionStoryExecutionMode, InteractionVisibleState,
+    InteractionStoryExecutionMode, InteractionVisibleState, WidgetId,
     phase12_executable_generic_interaction_expected_evidence,
-    phase12_executable_generic_interaction_story_session, phase12_generic_interaction_positive_script,
-    WidgetId,
+    phase12_executable_generic_interaction_story_session,
+    phase12_generic_interaction_positive_script,
 };
 
 #[test]

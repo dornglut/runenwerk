@@ -1,7 +1,8 @@
 use ui_controls::{
     BUTTON_CONTROL_KIND_ID, ControlKernelId, ControlKernelKind, ControlKernelSet,
     ControlKindDescriptor, ControlKindId, ControlPackageDescriptor, ControlPackageId,
-    ControlPackageRegistry, ControlPackageVersion, runenwerk_control_package,
+    ControlPackageRegistry, ControlPackageRegistrySnapshot, ControlPackageVersion,
+    runenwerk_control_package,
 };
 use ui_program::UiSchemaRef;
 use ui_program_lowering::UiProgramFormationControlCatalog;
@@ -71,12 +72,8 @@ fn catalog_derivation_reports_control_kind_without_activation_capability() {
     );
     package.control_kinds.push(kind);
 
-    let registry = ControlPackageRegistry::new()
-        .with_package(package)
-        .expect("fixture package should register");
-
     let report = UiProgramFormationControlCatalog::derive_from_control_package_registry_snapshot(
-        &registry.snapshot(),
+        &snapshot_from_package(package),
     );
 
     assert!(!report.passed());
@@ -188,12 +185,8 @@ fn catalog_derivation_rejects_referenced_kernel_kind_mismatch() {
 }
 
 fn assert_catalog_rejects_button_kind(package: ControlPackageDescriptor, diagnostic_code: &str) {
-    let registry = ControlPackageRegistry::new()
-        .with_package(package)
-        .expect("mutated runenwerk controls package should register");
-
     let report = UiProgramFormationControlCatalog::derive_from_control_package_registry_snapshot(
-        &registry.snapshot(),
+        &snapshot_from_package(package),
     );
 
     assert!(!report.passed());
@@ -216,4 +209,25 @@ fn button_kind(package: &ControlPackageDescriptor) -> &ControlKindDescriptor {
     package
         .control_kind(&ControlKindId::new(BUTTON_CONTROL_KIND_ID))
         .expect("runenwerk package should contain button control kind")
+}
+
+fn snapshot_from_package(package: ControlPackageDescriptor) -> ControlPackageRegistrySnapshot {
+    ControlPackageRegistrySnapshot {
+        packages: vec![package.clone()],
+        control_kinds: package.control_kinds.clone(),
+        schemas: package
+            .property_schemas
+            .iter()
+            .chain(package.state_schemas.iter())
+            .chain(package.event_payload_schemas.iter())
+            .cloned()
+            .collect(),
+        kernels: package.kernels.clone(),
+        fixtures: package.fixtures.clone(),
+        diagnostics: package.diagnostics.clone(),
+        migrations: package.migrations.clone(),
+        stories: package.stories.clone(),
+        route_requirements: package.route_requirements.clone(),
+        target_profiles: package.target_profiles.clone(),
+    }
 }

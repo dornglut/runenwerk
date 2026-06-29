@@ -11,9 +11,10 @@ use ui_input::NormalizedInputSample;
 
 use crate::{
     InteractionBoundaryAssertions, InteractionFormationReport, InteractionProofRenderFrame,
-    InteractionReplayScript, InteractionReplayStep, InteractionVisibleState, InteractionVisualProof,
-    MountedInteractionFixture, RuntimeInteractionOutcome, RuntimeNoTargetInteraction,
-    RuntimeSuppressedInteraction, WidgetId, interaction_visual_proof_to_frame, replay_interactions,
+    InteractionReplayScript, InteractionReplayStep, InteractionVisibleState,
+    InteractionVisualProof, MountedInteractionFixture, RuntimeInteractionOutcome,
+    RuntimeNoTargetInteraction, RuntimeSuppressedInteraction, WidgetId,
+    interaction_visual_proof_to_frame, replay_interactions,
 };
 
 /// Execution mode for an executable interaction story session.
@@ -533,7 +534,8 @@ impl InteractionStoryEvidenceResult {
 }
 
 /// Expected evidence for the canonical Phase 12A executable interaction story.
-pub fn phase12_executable_generic_interaction_expected_evidence() -> InteractionStoryExpectedEvidence {
+pub fn phase12_executable_generic_interaction_expected_evidence() -> InteractionStoryExpectedEvidence
+{
     InteractionStoryExpectedEvidence {
         required_markers: vec![
             ExpectedInteractionMarker::new(WidgetId(1), InteractionVisibleState::Hovered),
@@ -582,13 +584,19 @@ pub fn phase12_executable_generic_interaction_expected_evidence() -> Interaction
     }
 }
 
-fn has_outcome(outcomes: &[RuntimeInteractionOutcome], expected: &ExpectedInteractionOutcome) -> bool {
+fn has_outcome(
+    outcomes: &[RuntimeInteractionOutcome],
+    expected: &ExpectedInteractionOutcome,
+) -> bool {
     outcomes
         .iter()
         .any(|outcome| outcome.target == expected.widget_id && outcome.outcome == expected.outcome)
 }
 
-fn has_suppression(suppressed: &[RuntimeSuppressedInteraction], expected: &ExpectedSuppression) -> bool {
+fn has_suppression(
+    suppressed: &[RuntimeSuppressedInteraction],
+    expected: &ExpectedSuppression,
+) -> bool {
     suppressed
         .iter()
         .any(|event| event.target == expected.widget_id && event.reason == expected.reason)
@@ -599,7 +607,8 @@ fn has_no_target(no_targets: &[RuntimeNoTargetInteraction], reason: &str) -> boo
 }
 
 fn proof_markers(proof: &InteractionVisualProof) -> Vec<(WidgetId, Vec<InteractionVisibleState>)> {
-    proof.main_view
+    proof
+        .main_view
         .controls
         .iter()
         .map(|control| {
@@ -615,8 +624,11 @@ fn proof_markers(proof: &InteractionVisualProof) -> Vec<(WidgetId, Vec<Interacti
         .collect()
 }
 
-fn proof_current_states(proof: &InteractionVisualProof) -> Vec<(WidgetId, Vec<InteractionVisibleState>)> {
-    proof.main_view
+fn proof_current_states(
+    proof: &InteractionVisualProof,
+) -> Vec<(WidgetId, Vec<InteractionVisibleState>)> {
+    proof
+        .main_view
         .controls
         .iter()
         .map(|control| (control.widget_id, control.current_states.clone()))

@@ -167,7 +167,10 @@ fn executable_interaction_proof_graph() -> UiStoryWorkflowGraph {
             UiStoryWorkflowNode::required(NODE_INTERACTION_REPLAY, "Interaction replay"),
             UiStoryWorkflowNode::required(NODE_LIVE_INTERACTION_PROOF, "Live interaction proof"),
             UiStoryWorkflowNode::required(NODE_REPLAY_LIVE_PARITY, "Replay live parity"),
-            UiStoryWorkflowNode::required(NODE_INTERACTION_STATIC_MOUNT, "Interaction static mount"),
+            UiStoryWorkflowNode::required(
+                NODE_INTERACTION_STATIC_MOUNT,
+                "Interaction static mount",
+            ),
             UiStoryWorkflowNode::required(NODE_PREVIEW_FRAME, "Preview frame"),
         ],
         [
@@ -177,12 +180,30 @@ fn executable_interaction_proof_graph() -> UiStoryWorkflowGraph {
             UiStoryWorkflowEdge::requires_completed(NODE_PROGRAM_FORMATION, NODE_COMPILER),
             UiStoryWorkflowEdge::requires_completed(NODE_COMPILER, NODE_RUNTIME_VIEW),
             UiStoryWorkflowEdge::requires_completed(NODE_RUNTIME_VIEW, NODE_INTERACTION_STORY),
-            UiStoryWorkflowEdge::requires_completed(NODE_INTERACTION_STORY, NODE_INTERACTION_REPLAY),
-            UiStoryWorkflowEdge::requires_completed(NODE_INTERACTION_STORY, NODE_LIVE_INTERACTION_PROOF),
-            UiStoryWorkflowEdge::requires_completed(NODE_INTERACTION_REPLAY, NODE_REPLAY_LIVE_PARITY),
-            UiStoryWorkflowEdge::requires_completed(NODE_LIVE_INTERACTION_PROOF, NODE_REPLAY_LIVE_PARITY),
-            UiStoryWorkflowEdge::requires_completed(NODE_REPLAY_LIVE_PARITY, NODE_INTERACTION_STATIC_MOUNT),
-            UiStoryWorkflowEdge::requires_completed(NODE_INTERACTION_STATIC_MOUNT, NODE_PREVIEW_FRAME),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_INTERACTION_STORY,
+                NODE_INTERACTION_REPLAY,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_INTERACTION_STORY,
+                NODE_LIVE_INTERACTION_PROOF,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_INTERACTION_REPLAY,
+                NODE_REPLAY_LIVE_PARITY,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_LIVE_INTERACTION_PROOF,
+                NODE_REPLAY_LIVE_PARITY,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_REPLAY_LIVE_PARITY,
+                NODE_INTERACTION_STATIC_MOUNT,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_INTERACTION_STATIC_MOUNT,
+                NODE_PREVIEW_FRAME,
+            ),
         ],
         UiStoryWorkflowNodeId::new(NODE_PREVIEW_FRAME),
     )

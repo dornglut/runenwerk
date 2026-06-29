@@ -1,5 +1,5 @@
 use std::ffi::OsString;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
@@ -67,7 +67,11 @@ impl CompositionFileOperations for NativeCompositionFileOperations {
     }
 
     fn sync_file(&self, path: &Path) -> io::Result<()> {
-        File::open(path)?.sync_all()
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)?
+            .sync_all()
     }
 
     fn read_to_string(&self, path: &Path) -> io::Result<String> {
@@ -109,6 +113,12 @@ impl CompositionFileOperations for NativeCompositionFileOperations {
     }
 
     fn sync_dir(&self, path: &Path) -> io::Result<()> {
+        #[cfg(windows)]
+        {
+            let _ = path;
+            return Ok(());
+        }
+        #[cfg(not(windows))]
         File::open(path)?.sync_all()
     }
 
