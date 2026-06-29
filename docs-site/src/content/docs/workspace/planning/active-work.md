@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-design.md
+  - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
 ---
 
 # Active Work
@@ -17,27 +18,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-012A-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-012A`
 
 Title: UI Component Platform Executable Interaction Story
 
-State: accepted direction / implementation planning
+State: implementation scope accepted / active implementation
 
-Lifecycle state: `active-planning`
+Lifecycle state: `active-implementation`
 
-Owner: Planning spans `ui_story` for executable story identity/evidence envelope authority, `ui_runtime` for interaction story session execution mechanics and replay/live application, `ui_input` for normalized pointer/keyboard/focus/text-intent samples, `ui_controls` for reusable interaction descriptors and read-only catalog/inspection declarations, `ui_static_mount` for static `UiFrame` validation, and the existing gallery/proof host layer for live input collection and proof presentation. Product/editor/app layers remain later consumers only.
+Owner: `ui_story` owns the executable interaction workflow profile and proof-envelope nodes only. `ui_runtime` owns interaction story session execution mechanics, replay/live application, reports, visual proof, parity reports, and proof-frame projection. `ui_input` owns normalized input facts and any minimal event-to-sample helpers. `ui_static_mount` owns static `UiFrame` validation. `runenwerk_editor` owns the narrow proof-host adapter from `UiInputEvent` to runtime session evidence. `ui_controls` remains the owner of reusable interaction descriptors and catalog/inspection declarations. Product/editor/app mutation, overlay behavior, and full text editing remain out of scope.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/documentation-structure.md`, `docs-site/src/content/docs/workspace/authority-model.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/planning/README.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, and `docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md`.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/documentation-structure.md`, `docs-site/src/content/docs/workspace/authority-model.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/planning/README.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-implementation-scope.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, and `docs-site/src/content/docs/design/active/ui-component-platform-story-proof-envelope-design.md`.
 
-Write scope: Documentation/planning only until exact implementation scope is accepted. Do not implement runtime sessions, gallery live hosts, host input adapters, product behavior, overlays, text editing, shared plugin framework extraction, generic plugin primitives, or `foundation/meta` until the active-work entry is promoted to `active-implementation` with exact owner files/crates, validation envelope, evidence expectation, and stop conditions.
+Write scope: Implement only the files named in `ui-component-platform-executable-interaction-story-implementation-scope.md`: `domain/ui/ui_story/src/workflow/builtin.rs`, `domain/ui/ui_story/src/workflow/mod.rs`, `domain/ui/ui_story/src/lib.rs`, `domain/ui/ui_runtime/Cargo.toml`, `domain/ui/ui_runtime/src/input/generic_interaction.rs`, `domain/ui/ui_runtime/src/input/generic_interaction_fixture.rs`, `domain/ui/ui_runtime/src/input/generic_interaction_visual_frame.rs`, `domain/ui/ui_runtime/src/input/interaction_story_session.rs`, `domain/ui/ui_runtime/src/input/mod.rs`, `domain/ui/ui_runtime/tests/interaction_replay_report.rs`, `domain/ui/ui_runtime/tests/executable_interaction_story.rs`, `domain/ui/ui_input/src/facts.rs`, `domain/ui/ui_input/src/event.rs`, `domain/ui/ui_input/src/lib.rs`, `domain/ui/ui_input/tests/input_normalized_facts.rs`, `domain/ui/ui_static_mount/src/lib.rs`, `domain/ui/ui_static_mount/tests/phase12_generic_interaction_static_mount.rs`, `domain/ui/ui_static_mount/tests/phase12_executable_interaction_story_static_mount.rs`, `apps/runenwerk_editor/Cargo.toml`, `apps/runenwerk_editor/src/editor_features/mod.rs`, `apps/runenwerk_editor/src/editor_features/executable_interaction_story_proof.rs`, and `apps/runenwerk_editor/tests/phase12_executable_interaction_story_proof_host.rs`.
 
-Validation expectation: This planning patch should be readable from Markdown and should validate with `python3 tools/docs/validate_docs.py` and `git diff --check` when a local checkout is available. Command execution is not required to understand or review the accepted direction.
+Validation expectation: Run and record focused validation from the implementation scope: `cargo fmt --all --check`, `cargo check -p ui_story`, `cargo check -p ui_controls`, `cargo check -p ui_input`, `cargo check -p ui_runtime`, `cargo check -p ui_static_mount`, `cargo check -p runenwerk_editor`, `cargo test -p ui_story executable_interaction_workflow`, `cargo test -p ui_controls control_interaction`, `cargo test -p ui_input input`, `cargo test -p ui_runtime interaction`, `cargo test -p ui_runtime executable_interaction_story`, `cargo test -p ui_runtime --test interaction_replay_report`, `cargo test -p ui_static_mount phase12_executable_interaction_story`, `cargo test -p runenwerk_editor phase12_executable_interaction_story_proof_host`, `python3 tools/docs/validate_docs.py`, and `git diff --check`. If exact test names differ, record the actual mapping in the PR body and closeout.
 
-Known blockers: The Tier 5 design is accepted, but implementation is not scoped. Exact owner files/crates, host adapter location, runtime session API scope, focused test names, evidence artifacts, and manual live validation steps still need inspection before implementation can start.
+Known blockers: None for starting the scoped implementation. Product-facing editor window/gallery exposure is not guaranteed by this slice unless it can be added without editor shell surface registry changes. If shell surface registry changes become necessary, stop and record a scope revision first.
 
-Next action: Inspect the actual `ui_story`, `ui_runtime`, `ui_input`, `ui_static_mount`, and gallery/proof-host files to create an exact implementation scope for `PT-UI-COMPONENT-PLATFORM-012A`. Do not write code until that implementation scope is recorded and accepted.
+Next action: Implement the scoped Tier 5 executable generic interaction story. Start with the shared runtime session path so batch replay and live apply use the same internal fact application code after `NormalizedInputSample`. Then add the `ui_story` workflow profile, static mount coverage, and narrow editor proof-host adapter.
 
-Evidence: User accepted `ui-component-platform-executable-interaction-story-design.md` on 2026-06-29. PR #43 already provides the lower-tier assets this design should reuse: package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven replay/report, `InteractionVisualProof`, `InteractionProofRenderFrame`, and `UiStaticMountReport::from_frame`. The accepted Tier 5 direction requires replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and no-bypass boundary assertions.
+Evidence: User accepted the Tier 5 design on 2026-06-29. The implementation scope records exact owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual validation expectation, and stop conditions. PR #43 already provides the lower-tier assets this implementation must reuse: package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven replay/report, `InteractionVisualProof`, `InteractionProofRenderFrame`, and `UiStaticMountReport::from_frame`.
 
 ## Active-work rules
 
