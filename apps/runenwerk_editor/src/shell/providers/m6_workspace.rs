@@ -1,3 +1,5 @@
+use crate::shell::tool_suites::UI_LAB_INTERACTION_STORY_SURFACE_KEY;
+
 use super::*;
 
 pub(super) struct M6WorkspaceProvider;
@@ -16,15 +18,23 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
     }
 
     fn support_mode(&self, request: &SurfaceProviderRequest) -> SurfaceProviderSupportMode {
-        stable_keys_support(request, DIAGNOSTICS_SURFACE_KEYS)
+        if request.matches_stable_key(UI_LAB_INTERACTION_STORY_SURFACE_KEY) {
+            SurfaceProviderSupportMode::StableKey
+        } else {
+            stable_keys_support(request, DIAGNOSTICS_SURFACE_KEYS)
+        }
     }
 
     fn build_frame(
         &self,
         context: &SurfaceProviderBuildContext<'_>,
         request: &SurfaceProviderRequest,
-        _session: &SurfaceSessionState,
+        session: &SurfaceSessionState,
     ) -> Result<ProviderSurfaceFrame, SurfaceProviderDiagnostic> {
+        if request.matches_stable_key(UI_LAB_INTERACTION_STORY_SURFACE_KEY) {
+            return Ok(ui_lab_interaction_story_frame(context, request, session));
+        }
+
         let surface_kind = tool_surface_kind_for_stable_key(request.stable_key());
         let mut lines = vec![
             "M6 route is fail-closed until the owning domain contract ratifies the document"
@@ -86,6 +96,108 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
         _action: SurfaceLocalAction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
         Ok(None)
+    }
+}
+
+fn ui_lab_interaction_story_frame(
+    _context: &SurfaceProviderBuildContext<'_>,
+    request: &SurfaceProviderRequest,
+    session: &SurfaceSessionState,
+) -> ProviderSurfaceFrame {
+    let proof_host = session.phase12_interaction_proof_host();
+    let proof = proof_host.current_proof();
+    let report = proof_host.run_report();
+    let static_mount = proof_host.static_mount_report();
+    let parity = proof_host.replay_live_parity_report();
+    let boundary = proof_host.boundary_assertions();
+
+    let mut lines = vec![
+        "UI Lab visible executable interaction story".to_string(),
+        "source: Phase12aInteractionProofHost -> InteractionStorySession".to_string(),
+        format!("story: {}", proof_host.story_id()),
+        format!("mode: {}", report.mode.as_str()),
+        format!("input samples: {}", report.input_log.len()),
+        format!(
+            "static mount: {}",
+            if static_mount.passed() { "passed" } else { "failed" }
+        ),
+        format!(
+            "replay/live parity: {}",
+            if parity.passed() { "passed" } else { "failed" }
+        ),
+        format!("no-bypass: {}", boundary.no_bypass_evidence()),
+        format!(
+            "boundary counters: host_commands={} product_mutations={} overlays={} text_edits={}",
+            boundary.host_commands_executed,
+            boundary.product_mutations,
+            boundary.overlay_events,
+            boundary.text_edit_transactions
+        ),
+        format!(
+            "report rows: targets={} focus={} transitions={} facts={} events={} outcomes={} suppressed={} no_target={}",
+            report.formation_report.target_resolution.len(),
+            report.formation_report.focus_resolution.len(),
+            report.formation_report.state_transitions.len(),
+            report.formation_report.runtime_facts.len(),
+            report.formation_report.runtime_events.len(),
+            report.formation_report.semantic_outcomes.len(),
+            report.formation_report.suppressed_events.len(),
+            report.formation_report.no_target_events.len()
+        ),
+        "mounted controls:".to_string(),
+    ];
+
+    for control in &proof.main_view.controls {
+        lines.push(format!(
+            "- {:?} {} [{}] markers=[{}] current=[{}]",
+            control.widget_id,
+            control.label,
+            control.control_kind_id,
+            marker_labels(control),
+            state_labels(&control.current_states)
+        ));
+    }
+
+    if !proof.report_view.rows.is_empty() {
+        lines.push("report evidence:".to_string());
+        for row in &proof.report_view.rows {
+            lines.push(format!("- {}: {}", row.kind, row.message));
+        }
+    }
+
+    let (root, routes) = build_self_authoring_control_panel(
+        _context.theme,
+        request.tool_surface_instance_id,
+        lines,
+        Vec::new(),
+    );
+
+    ProviderSurfaceFrame {
+        title: "Interaction Story Lab".to_string(),
+        artifact: SurfacePresentationArtifact::provider(root),
+        routes,
+    }
+}
+
+fn marker_labels(control: &ui_runtime::InteractionVisualControl) -> String {
+    let labels = control
+        .observed_markers
+        .iter()
+        .map(|marker| marker.label.as_str())
+        .collect::<Vec<_>>();
+    if labels.is_empty() {
+        "none".to_string()
+    } else {
+        labels.join(", ")
+    }
+}
+
+fn state_labels(states: &[ui_runtime::InteractionVisibleState]) -> String {
+    let labels = states.iter().map(|state| state.as_str()).collect::<Vec<_>>();
+    if labels.is_empty() {
+        "none".to_string()
+    } else {
+        labels.join(", ")
     }
 }
 
