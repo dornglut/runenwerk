@@ -1,4 +1,4 @@
-use runenwerk_editor::editor_features::Phase12aInteractionProofHost;
+use runenwerk_editor::editor_features::BaseControlsInteractionProofHost;
 use ui_input::{
     FocusInputFact, FocusTargetId, Key, KeyState, KeyboardEvent, Modifiers, PointerButton,
     PointerDelta, PointerEvent, PointerEventKind, TextInputEvent, UiInputEvent,
@@ -7,8 +7,8 @@ use ui_math::UiPoint;
 use ui_runtime::{InteractionVisibleState, WidgetId};
 
 #[test]
-fn phase12a_interaction_proof_host_processes_events() {
-    let mut host = Phase12aInteractionProofHost::new();
+fn base_controls_interaction_proof_host_processes_events() {
+    let mut host = BaseControlsInteractionProofHost::new();
 
     host.apply_focus("focus_button", FocusInputFact::target(FocusTargetId(1)));
     host.apply_input_event(
