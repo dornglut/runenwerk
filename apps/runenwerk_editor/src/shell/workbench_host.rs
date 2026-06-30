@@ -649,9 +649,13 @@ impl From<WorkspaceProfileRegistryBackedBuildError> for RunenwerkWorkbenchHostEr
 mod tests {
     use std::collections::BTreeSet;
 
+    use editor_core::DocumentKind;
     use editor_shell::{
-        ProviderFamilyId, ProviderFamilyProviderAssignment, SurfaceDocumentContext,
-        SurfaceProviderId, SurfaceProviderRequest, ToolSurfaceRoute,
+        CommandCapabilityKey, MATERIAL_WORKSPACE_PROFILE_ID, ProviderFamilyId,
+        ProviderFamilyProviderAssignment, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
+        SurfaceDocumentContext, SurfaceProviderId, SurfaceProviderRequest, ToolSurfaceKind,
+        ToolSurfaceRoute, saveable_tool_surface_stable_key_candidates,
+        tool_surface_kind_for_stable_key,
     };
     use ui_theme::ThemeTokens;
 
@@ -680,6 +684,155 @@ mod tests {
     }
 
     #[test]
+    fn full_editor_workbench_exposes_validated_typed_profiles() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let profile_refs = host
+            .profiles()
+            .iter()
+            .map(|profile| profile.profile_ref.as_str())
+            .collect::<BTreeSet<_>>();
+
+        assert!(profile_refs.contains("runenwerk.workspace.scene"));
+        assert!(profile_refs.contains("runenwerk.workspace.materials"));
+        assert!(profile_refs.contains("runenwerk.workspace.runtime_debug"));
+        for profile in host.profiles() {
+            for surface_ref in &profile.default_surfaces {
+                assert!(
+                    host.tool_surface_registry()
+                        .get(surface_ref.key())
+                        .is_some(),
+                    "{} profile should reference registered surface {}",
+                    profile.profile_ref,
+                    surface_ref
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn material_lab_workbench_exposes_material_typed_profile_only() {
+        let host = RunenwerkWorkbenchHost::material_lab().expect("host should build");
+        let profiles = host.profiles();
+
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(
+            profiles[0].profile_ref.as_str(),
+            "runenwerk.workspace.materials"
+        );
+        assert_eq!(
+            profiles[0]
+                .default_surfaces
+                .iter()
+                .map(|surface| surface.key().as_str())
+                .collect::<BTreeSet<_>>(),
+            [
+                "runenwerk.assets.browser",
+                "runenwerk.diagnostics.diagnostics",
+                "runenwerk.editor.console",
+                "runenwerk.material_lab.graph_canvas",
+                "runenwerk.material_lab.inspector",
+                "runenwerk.material_lab.preview",
+                "runenwerk.texture.viewer_2d",
+            ]
+            .into_iter()
+            .collect::<BTreeSet<_>>()
+        );
+    }
+
+    #[test]
+    fn explicit_workbench_presets_are_composition_data() {
+        let full_editor = RunenwerkWorkbenchHost::full_editor().expect("host should build");
+        let material_lab = RunenwerkWorkbenchHost::material_lab().expect("host should build");
+        let ui_designer = RunenwerkWorkbenchHost::ui_designer().expect("host should build");
+        let headless_validation =
+            RunenwerkWorkbenchHost::headless_validation().expect("host should build");
+        let constrained = RunenwerkWorkbenchHost::constrained().expect("host should build");
+
+        assert_eq!(
+            full_editor.composition(),
+            RunenwerkWorkbenchComposition::FullEditor
+        );
+        assert_eq!(
+            material_lab.composition(),
+            RunenwerkWorkbenchComposition::MaterialLab
+        );
+        assert_eq!(
+            ui_designer.composition(),
+            RunenwerkWorkbenchComposition::UiDesigner
+        );
+        assert_eq!(
+            headless_validation.composition(),
+            RunenwerkWorkbenchComposition::HeadlessValidation
+        );
+        assert_eq!(
+            constrained.composition(),
+            RunenwerkWorkbenchComposition::Constrained
+        );
+        assert_eq!(
+            suite_ids(&headless_validation),
+            vec![
+                "runenwerk.editor",
+                "runenwerk.assets",
+                "runenwerk.diagnostics",
+            ]
+        );
+        assert_eq!(
+            provider_family_ids(&headless_validation),
+            [
+                "runenwerk.assets",
+                "runenwerk.diagnostics",
+                "runenwerk.editor"
+            ]
+            .into_iter()
+            .collect::<BTreeSet<_>>()
+        );
+        assert_eq!(headless_validation.profiles().len(), 1);
+        assert_eq!(
+            headless_validation.default_workspace_profile_id(),
+            RUNTIME_DEBUG_WORKSPACE_PROFILE_ID
+        );
+        assert_eq!(
+            suite_ids(&ui_designer),
+            vec!["runenwerk.editor", "runenwerk.editor_design"]
+        );
+        assert_eq!(
+            provider_family_ids(&ui_designer),
+            ["runenwerk.editor", "runenwerk.editor_design"]
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+        );
+        assert_eq!(ui_designer.profiles().len(), 1);
+        assert_eq!(
+            ui_designer.default_workspace_profile_id(),
+            editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID
+        );
+        assert_eq!(suite_ids(&constrained), suite_ids(&full_editor));
+        assert_eq!(constrained.profiles().len(), full_editor.profiles().len());
+        assert_eq!(
+            constrained.provider_bundle().assignments().len(),
+            full_editor.provider_bundle().assignments().len()
+        );
+
+        let mutation_capability =
+            CommandCapabilityKey::new("runenwerk.surface.session_mutation").unwrap();
+        assert!(
+            full_editor
+                .host_capability_policy()
+                .allows_command(&mutation_capability)
+        );
+        assert!(
+            !constrained
+                .host_capability_policy()
+                .allows_command(&mutation_capability)
+        );
+        assert!(
+            !headless_validation
+                .host_capability_policy()
+                .allows_command(&mutation_capability)
+        );
+    }
+
+    #[test]
     fn workbench_host_exposes_tool_surface_registry() {
         let host = RunenwerkWorkbenchHost::new().expect("host should build");
         let key =
@@ -692,6 +845,65 @@ mod tests {
         assert_eq!(surface.label, "Material Graph");
         assert_eq!(surface.route, ToolSurfaceRoute::ProviderOwnedGraphCanvas);
         assert_eq!(surface.provider_family.as_str(), "runenwerk.material_lab");
+    }
+
+    #[test]
+    fn material_lab_surfaces_are_registered_in_workbench_host() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let expected = [
+            (
+                "runenwerk.material_lab.graph_canvas",
+                "Material Graph",
+                ToolSurfaceRoute::ProviderOwnedGraphCanvas,
+            ),
+            (
+                "runenwerk.material_lab.inspector",
+                "Material Inspector",
+                ToolSurfaceRoute::ProviderOwnedLocal,
+            ),
+            (
+                "runenwerk.material_lab.preview",
+                "Material Preview",
+                ToolSurfaceRoute::ProviderOwnedLocal,
+            ),
+        ];
+
+        for (stable_key, label, route) in expected {
+            let key = editor_shell::ToolSurfaceStableKey::new(stable_key).unwrap();
+            let surface = host
+                .tool_surface_registry()
+                .get(&key)
+                .expect("Material Lab surface should be registered");
+
+            assert_eq!(surface.label, label);
+            assert_eq!(surface.route, route);
+            assert_eq!(surface.provider_family.as_str(), "runenwerk.material_lab");
+        }
+    }
+
+    #[test]
+    fn workbench_host_tool_suite_registry_covers_all_saveable_tool_surfaces() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+
+        for candidate in saveable_tool_surface_stable_key_candidates() {
+            if !provider_backed_candidate_kind(candidate.kind) {
+                continue;
+            }
+            let key = editor_shell::ToolSurfaceStableKey::new(candidate.stable_key).unwrap();
+            assert!(
+                host.tool_surface_registry().get(&key).is_some(),
+                "missing registered stable key for {:?}: {}",
+                candidate.kind,
+                candidate.stable_key
+            );
+        }
+
+        let fallback_key =
+            editor_shell::ToolSurfaceStableKey::new("runenwerk.diagnostics.placeholder").unwrap();
+        assert!(
+            host.tool_surface_registry().get(&fallback_key).is_some(),
+            "placeholder fallback key should be registered"
+        );
     }
 
     #[test]
@@ -713,6 +925,24 @@ mod tests {
             for provider_family in &suite.provider_families {
                 assert!(provider_families.insert(provider_family.id.as_str()));
             }
+        }
+    }
+
+    #[test]
+    fn legacy_reverse_mapping_matches_registered_stable_keys() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+
+        for candidate in saveable_tool_surface_stable_key_candidates() {
+            if !provider_backed_candidate_kind(candidate.kind) {
+                continue;
+            }
+            let key = editor_shell::ToolSurfaceStableKey::new(candidate.stable_key).unwrap();
+            assert!(
+                host.tool_surface_registry().get(&key).is_some(),
+                "candidate should be registered: {}",
+                candidate.stable_key
+            );
+            assert_eq!(tool_surface_kind_for_stable_key(&key), Some(candidate.kind));
         }
     }
 
@@ -778,6 +1008,51 @@ mod tests {
                 surface_provider_id(12),
                 surface_provider_id(13),
                 surface_provider_id(14),
+            ]
+        );
+    }
+
+    #[test]
+    fn placeholder_future_suite_families_do_not_claim_unimplemented_providers() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+
+        for family in [
+            "runenwerk.graph",
+            "runenwerk.gameplay",
+            "runenwerk.particle",
+            "runenwerk.physics",
+            "runenwerk.animation",
+            "runenwerk.simulation",
+        ] {
+            let family = ProviderFamilyId::new(family).unwrap();
+            assert_eq!(
+                host.provider_family_provider_map()
+                    .providers_for(&family)
+                    .count(),
+                0,
+                "{} should remain metadata-only until it has an installed provider-backed suite",
+                family.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn provider_family_map_preserves_provider_order() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let field_family = ProviderFamilyId::new("runenwerk.field_world").unwrap();
+
+        let providers = host
+            .provider_family_provider_map()
+            .providers_for(&field_family)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            providers,
+            vec![
+                surface_provider_id(9),
+                surface_provider_id(10),
+                surface_provider_id(17),
+                surface_provider_id(18),
             ]
         );
     }
@@ -860,10 +1135,10 @@ mod tests {
         SurfaceProviderRequest {
             mounted_unit_id: ui_composition::MountedUnitId::try_from_raw(50).unwrap(),
             unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
-            workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
+            workspace_profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
                 document_id: editor_core::DocumentId(6),
-                document_kind: editor_core::DocumentKind::MaterialGraph,
+                document_kind: DocumentKind::MaterialGraph,
             },
             panel_instance_id: PanelInstanceId::try_from_raw(50).unwrap(),
             tab_stack_id: TabStackId::try_from_raw(50).unwrap(),
@@ -902,5 +1177,39 @@ mod tests {
             Ok(id) => id,
             Err(_) => panic!("surface provider ids must be non-zero"),
         }
+    }
+
+    fn provider_backed_candidate_kind(kind: ToolSurfaceKind) -> bool {
+        !matches!(
+            kind,
+            ToolSurfaceKind::GraphCanvas
+                | ToolSurfaceKind::GameplayGraphCanvas
+                | ToolSurfaceKind::GameplayCompilerDiagnostics
+                | ToolSurfaceKind::ParticleGraphCanvas
+                | ToolSurfaceKind::ParticlePreview
+                | ToolSurfaceKind::PhysicsAuthoring
+                | ToolSurfaceKind::PhysicsDebug
+                | ToolSurfaceKind::Timeline
+                | ToolSurfaceKind::CurveEditor
+                | ToolSurfaceKind::AnimationGraphCanvas
+                | ToolSurfaceKind::SimulationPreview
+                | ToolSurfaceKind::SimulationDiagnostics
+        )
+    }
+
+    fn suite_ids(host: &RunenwerkWorkbenchHost) -> Vec<&str> {
+        host.tool_suite_registry()
+            .suites()
+            .iter()
+            .map(|suite| suite.suite_id.as_str())
+            .collect()
+    }
+
+    fn provider_family_ids(host: &RunenwerkWorkbenchHost) -> BTreeSet<&str> {
+        host.provider_bundle()
+            .assignments()
+            .iter()
+            .map(|assignment| assignment.provider_family_id.as_str())
+            .collect()
     }
 }

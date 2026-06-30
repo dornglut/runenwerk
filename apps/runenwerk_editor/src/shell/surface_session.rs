@@ -7,7 +7,6 @@ use editor_viewport::ViewportId;
 use ui_composition::MountedUnitId;
 use ui_math::UiPoint;
 
-use crate::editor_features::Phase12aInteractionProofHost;
 use crate::editor_features::viewport::ViewportInteractionState;
 use crate::editor_panels::EntityTablePanelUiState;
 use crate::editor_runtime::inspector_state::EditorInspectorUiState;
@@ -23,7 +22,6 @@ pub struct SurfaceSessionState {
     pub entity_table_ui_state: EntityTablePanelUiState,
     pub inspector_ui_state: EditorInspectorUiState,
     pub viewport_interaction_state: ViewportInteractionState,
-    pub phase12_interaction_proof_host: Phase12aInteractionProofHost,
     pub viewport_details_visible: bool,
     pub viewport_statistics_visible: bool,
     pub viewport_options_menu_open: bool,
@@ -47,7 +45,6 @@ impl Default for SurfaceSessionState {
             entity_table_ui_state: EntityTablePanelUiState::new(),
             inspector_ui_state: EditorInspectorUiState::new(),
             viewport_interaction_state: ViewportInteractionState::new(),
-            phase12_interaction_proof_host: Phase12aInteractionProofHost::new(),
             viewport_details_visible: false,
             viewport_statistics_visible: false,
             viewport_options_menu_open: false,
@@ -55,16 +52,6 @@ impl Default for SurfaceSessionState {
             viewport_tool_radial_session: None,
             console_follow_enabled: true,
         }
-    }
-}
-
-impl SurfaceSessionState {
-    pub fn phase12_interaction_proof_host(&self) -> &Phase12aInteractionProofHost {
-        &self.phase12_interaction_proof_host
-    }
-
-    pub fn phase12_interaction_proof_host_mut(&mut self) -> &mut Phase12aInteractionProofHost {
-        &mut self.phase12_interaction_proof_host
     }
 }
 

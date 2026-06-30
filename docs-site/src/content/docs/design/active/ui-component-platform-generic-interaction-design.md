@@ -19,11 +19,11 @@ related_docs:
 
 ## Status
 
-This is the completed Phase 12 design for `PT-UI-COMPONENT-PLATFORM-012`.
+This is the accepted Phase 12 design for `PT-UI-COMPONENT-PLATFORM-012`.
 
-Lifecycle state: `completed`.
+Lifecycle state: `review`.
 
-PR #43 is the implementation PR for generic reusable interaction behavior for descriptor-backed controls. The design remains the owner-boundary reference for package-backed declarations, normalized input replay, renderer-neutral visible proof, negative proof cases, and no-bypass assertions.
+PR #43 is the implementation PR for generic reusable interaction behavior for descriptor-backed controls. Its implementation evidence remains pending cleanup, validation, review, and merge. The design remains the owner-boundary reference for package-backed declarations, normalized input replay, renderer-neutral visible proof, negative proof cases, and no-bypass assertions.
 
 ## Decision summary
 
@@ -37,7 +37,7 @@ This Phase 12 design owns the component-platform boundary between reusable contr
 
 ## Problem
 
-The UI track now has descriptor-backed, catalog-visible, package-quality base controls. Generic reusable interaction behavior is the purpose of Phase 12, and PR #43 records the first completed reusable interaction implementation path.
+The UI track now has descriptor-backed, catalog-visible, package-quality base controls. Generic reusable interaction behavior is the purpose of Phase 12, and PR #43 records the first reusable interaction implementation evidence path pending cleanup, validation, review, and merge.
 
 Phase 12 must define how reusable controls declare interaction needs and how runtime layers produce interaction facts without making `ui_controls` collect input, execute host commands, mutate app/editor/game state, or own product policy.
 
@@ -585,6 +585,6 @@ A later Phase 12 implementation closeout must record:
 
 Phase 11 is complete and provides the descriptor-backed base-control package inventory that Phase 12 can reason about.
 
-Phase 12 is complete in PR #43 with package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven runtime replay/report, renderer-neutral visible proof, `InteractionVisualProof` to `UiFrame` static mount evidence, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions.
+Phase 12 has PR #43 implementation evidence for package-backed interaction descriptors, catalog/inspection projection, normalized input facts, descriptor-driven runtime replay/report, renderer-neutral visible proof, `InteractionVisualProof` to `UiFrame` static mount evidence, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions. Completion remains pending PR #43 cleanup, validation, review, and merge.
 
 Phase 13 remains overlay/popup/layering. Full text editing remains later, but it must consume the interaction substrate shaped by Phase 12 rather than bypassing it.

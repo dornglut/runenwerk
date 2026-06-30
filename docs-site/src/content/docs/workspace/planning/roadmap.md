@@ -230,7 +230,7 @@ ID: `PT-UI-COMPONENT-PLATFORM-012`
 
 Title: UI Component Platform Generic Interaction
 
-State: review / pending merge of PR #43
+State: review / pending cleanup, validation, and merge of PR #43
 
 Lifecycle state: `review`
 
@@ -260,7 +260,7 @@ Authority: `ui-component-platform-executable-interaction-story-design.md`, `ui-c
 
 Evidence: Design accepted by user review on 2026-06-29. Implementation scope added on 2026-06-29. PR #43 contains implementation evidence for an executable generic interaction story, deterministic replay, live proof-host event application through the same runtime session path, semantic replay/live parity, static frame validation, and no-bypass counters. This evidence remains pending cleanup, validation, and merge.
 
-Known gaps: Product-facing editor window/gallery display is not part of PR #43 and must not be claimed from the Phase 12A proof-host evidence. UI Gallery exposure belongs to separate future `PT-UI-GALLERY-001`. The deleted 012B/UI Lab proof-surface path is not valid evidence.
+Known gaps: Product-facing editor window/gallery display is not part of PR #43 and must not be claimed from the Phase 12A proof-host evidence. UI Gallery exposure belongs to separate future `PT-UI-GALLERY-001`. The deleted 012B/UI Lab surface path is not valid evidence.
 
 Next action: Finish PR #43 cleanup and validation, then merge before marking Phase 12A complete. Do not start overlay/popup/layering, text editing, product-command adoption, UI Gallery exposure, shared plugin framework extraction, generic plugin primitives, or `foundation/meta`.
 
