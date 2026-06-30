@@ -1,4 +1,4 @@
-//! Static render-frame adapter for Phase 12 generic interaction proof.
+//! Static render-frame adapter for generic interaction visual proof.
 //!
 //! `InteractionVisualProof` is semantic visible proof data. This module turns
 //! that proof into a deterministic renderer-neutral `UiFrame` that existing
@@ -19,7 +19,13 @@ use crate::{
     InteractionVisualControl, InteractionVisualProof,
 };
 
-/// Renderer-neutral frame generated from a Phase 12 interaction visual proof.
+const INTERACTION_PROOF_SURFACE_ID: UiSurfaceId = UiSurfaceId(1);
+const INTERACTION_PROOF_RECT_DRAW_KEY: u64 = 1;
+const INTERACTION_PROOF_BORDER_DRAW_KEY: u64 = 2;
+const INTERACTION_PROOF_GLYPH_DRAW_KEY: u64 = 3;
+const INTERACTION_PROOF_FONT_ID: FontId = FontId(1);
+
+/// Renderer-neutral frame generated from an interaction visual proof.
 ///
 /// The frame is proof evidence, not product UI. It turns reusable interaction
 /// markers into stable rectangles, borders, and text labels so static mount,
@@ -36,7 +42,7 @@ pub struct InteractionProofRenderFrame {
     pub summary: InteractionProofRenderSummary,
 }
 
-/// Stable summary of the rendered Phase 12 proof frame.
+/// Stable summary of the rendered interaction proof frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InteractionProofRenderSummary {
     /// Number of controls represented in the main proof region.
@@ -55,7 +61,7 @@ pub struct InteractionProofRenderSummary {
     pub has_main_inspector_and_report: bool,
 }
 
-/// Builds a renderer-neutral static frame for a Phase 12 interaction proof.
+/// Builds a renderer-neutral static frame for an interaction visual proof.
 ///
 /// This function does not execute commands, mutate product state, open overlays,
 /// or perform text editing. It only projects already-formed proof evidence into
@@ -113,7 +119,7 @@ pub fn interaction_visual_proof_to_frame(
     render_inspector(proof, &mut primitives, &mut order, inspector_rect);
     render_report_rows(&mut primitives, &mut order, report_rect, &report_rows);
 
-    let mut surface = UiSurface::new(UiSurfaceId(12), surface_size);
+    let mut surface = UiSurface::new(INTERACTION_PROOF_SURFACE_ID, surface_size);
     surface.push_layer(UiLayer::with_primitives(UiLayerId(0), primitives));
     let frame = UiFrame::with_surfaces(vec![surface]);
 
@@ -381,7 +387,14 @@ fn push_section(primitives: &mut Vec<UiPrimitive>, order: &mut u32, rect: UiRect
 
 fn push_rect(primitives: &mut Vec<UiPrimitive>, order: &mut u32, rect: UiRect, paint: UiPaint) {
     primitives.push(
-        RectPrimitive::new(rect, 3.0, paint, UiDrawKey::new(12, None), sort_key(order)).into(),
+        RectPrimitive::new(
+            rect,
+            3.0,
+            paint,
+            UiDrawKey::new(INTERACTION_PROOF_RECT_DRAW_KEY, None),
+            sort_key(order),
+        )
+        .into(),
     );
 }
 
@@ -398,7 +411,7 @@ fn push_border(
             3.0,
             width,
             paint,
-            UiDrawKey::new(13, None),
+            UiDrawKey::new(INTERACTION_PROOF_BORDER_DRAW_KEY, None),
             sort_key(order),
         )
         .into(),
@@ -418,7 +431,7 @@ fn push_glyph(
             run,
             Some(UiRect::new(origin.x, origin.y - 12.0, max_width, 16.0)),
             UiPaint::WHITE,
-            UiDrawKey::new(14, None),
+            UiDrawKey::new(INTERACTION_PROOF_GLYPH_DRAW_KEY, None),
             sort_key(order),
         )
         .into(),
@@ -443,7 +456,7 @@ fn proof_glyph_run(text: &str, origin: UiPoint) -> GlyphRun {
         })
         .collect::<Vec<_>>();
     GlyphRun {
-        font_id: FontId(12),
+        font_id: INTERACTION_PROOF_FONT_ID,
         font_size: 12.0,
         size: UiSize::new(text.chars().count() as f32 * advance, 14.0),
         glyphs,
