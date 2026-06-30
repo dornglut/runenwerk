@@ -4,12 +4,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-29
+last_reviewed: 2026-06-30
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
+  - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
 ---
 
 # Roadmap
@@ -230,19 +231,19 @@ ID: `PT-UI-COMPONENT-PLATFORM-012`
 
 Title: UI Component Platform Generic Interaction
 
-State: review / pending cleanup, validation, and merge of PR #43
+State: completed through merged PR #43 and user validation report
 
-Lifecycle state: `review`
+Lifecycle state: `completed`
 
 Owner: `ui_controls` for reusable control interaction declarations and descriptor/catalog/inspection facts; `ui_input` for normalized input packets, device/gesture facts, pointer/key/focus data, and runtime input sample formation; `ui_runtime` for resolving normalized input facts against runtime UI structure, producing reusable interaction facts/events, and projecting semantic proof to `UiFrame`; `ui_static_mount` for renderer-neutral static mount validation; hosts/apps/editor/game for OS/window input collection, routing policy, command handling, product state changes, game/world input policy, and product-specific behavior.
 
 Authority: `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-input-gesture-device-design.md`, `editor-ui-runtime-v2-and-interaction-formation-design.md`, the Phase 11 closeout report, and the UI Component Platform production track.
 
-Evidence: PR #43 on branch `codex/phase-12-generic-interaction` contains implementation evidence for package-backed `ControlInteractionDescriptor` records, catalog/inspection interaction summaries, normalized pointer/keyboard/focus/semantic/text-intent facts, descriptor-driven mounted replay/report, the renderer-neutral visible proof model in `ui_runtime` through `InteractionVisualProof`, `InteractionVisualMainView`, `InteractionInspectorView`, `InteractionReportView`, `InteractionVisibleState`, and `InteractionProofFrame`, and static mount proof through `InteractionProofRenderFrame`/`UiFrame`/`UiStaticMountReport::from_frame`. The proof covers Button hover/pressed/focus-visible/activation/disabled suppression, List/Tree/Table intent markers, InspectorField text-intent probe behavior, read-only text-intent probe behavior, no-target/disabled/focus-negative cases, deterministic frame primitive ordering, and zero host-command/product-mutation/overlay/text-edit boundary assertions. This evidence remains pending cleanup, validation, and merge.
+Evidence: PR #43 merged into `main` on 2026-06-30 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. User start condition reports PR #43 was validated and merged. The merged implementation provides package-backed `ControlInteractionDescriptor` records, catalog/inspection interaction summaries, normalized pointer/keyboard/focus/semantic/text-intent facts, descriptor-driven mounted replay/report, the renderer-neutral visible proof model in `ui_runtime` through `InteractionVisualProof`, `InteractionVisualMainView`, `InteractionInspectorView`, `InteractionReportView`, `InteractionVisibleState`, and `InteractionProofFrame`, and static mount proof through `InteractionProofRenderFrame`/`UiFrame`/`UiStaticMountReport::from_frame`. The proof covers Button hover/pressed/focus-visible/activation/disabled suppression, List/Tree/Table intent markers, InspectorField text-intent probe behavior, read-only text-intent probe behavior, no-target/disabled/focus-negative cases, deterministic frame primitive ordering, and zero host-command/product-mutation/overlay/text-edit boundary assertions.
 
-Known gaps: Product-facing gallery/story pages do not yet expose the Phase 12 proof as live executable interaction UI; that belongs to separate future `PT-UI-GALLERY-001`. The accepted Phase 12 proof is the renderer-neutral static mount frame path. Phase 12A evidence is also pending in PR #43. Phase 13 overlay/popup/layering, later full text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and generic plugin primitives remain out of scope.
+Known gaps: Product-facing UI Gallery exposure is separate future work under `PT-UI-GALLERY-001`. Phase 13 overlay/popup/layering, later full text editing, app/editor/game command handling, backend renderer behavior, broad shared plugin framework extraction, `foundation/meta`, and generic plugin primitives remain out of scope.
 
-Next action: Finish PR #43 cleanup and validation, then merge before marking Phase 12 complete.
+Next action: Keep Phase 12 as completed dependency. Start `PT-UI-COMPONENT-PLATFORM-013` as overlay/popup/layering design intake only.
 
 ### PT-UI-COMPONENT-PLATFORM-012A
 
@@ -250,19 +251,39 @@ ID: `PT-UI-COMPONENT-PLATFORM-012A`
 
 Title: UI Component Platform Executable Interaction Story
 
-State: review / pending cleanup, validation, and merge of PR #43
+State: completed through merged PR #43 and user validation report
 
-Lifecycle state: `review`
+Lifecycle state: `completed`
 
 Owner: `ui_story` for workflow profile/evidence envelope authority, `ui_runtime` for interaction story session execution mechanics and replay/live application, `ui_input` for normalized input facts and minimal conversion helpers, `ui_controls` for reusable interaction descriptors and read-only declarations, `ui_static_mount` for static frame validation, and `runenwerk_editor` for the narrow proof-host adapter from `UiInputEvent` to runtime session evidence.
 
 Authority: `ui-component-platform-executable-interaction-story-design.md`, `ui-component-platform-executable-interaction-story-implementation-scope.md`, `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-story-proof-envelope-design.md`, `ui-component-platform-input-gesture-device-design.md`, `editor-ui-runtime-v2-and-interaction-formation-design.md`, and the UI Component Platform production track.
 
-Evidence: Design accepted by user review on 2026-06-29. Implementation scope added on 2026-06-29. PR #43 contains implementation evidence for an executable generic interaction story, deterministic replay, live proof-host event application through the same runtime session path, semantic replay/live parity, static frame validation, and no-bypass counters. This evidence remains pending cleanup, validation, and merge.
+Evidence: PR #43 merged into `main` on 2026-06-30 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. User start condition reports PR #43 was validated and merged. The merged implementation provides an executable generic interaction story, deterministic replay, live proof-host event application through the same runtime session path, semantic replay/live parity, static frame validation, and no-bypass counters. The durable proof-host evidence uses base-controls names, including `BaseControlsInteractionProofHost`, and does not claim product-facing Gallery exposure.
 
-Known gaps: Product-facing editor window/gallery display is not part of PR #43 and must not be claimed from the Phase 12A proof-host evidence. UI Gallery exposure belongs to separate future `PT-UI-GALLERY-001`. The deleted 012B/UI Lab surface path is not valid evidence.
+Known gaps: Product-facing editor window/gallery display is not part of PR #43 and remains separate future work under `PT-UI-GALLERY-001`. UI Lab / 012B surface work was removed from the PR scope and is not valid evidence for UI Gallery exposure.
 
-Next action: Finish PR #43 cleanup and validation, then merge before marking Phase 12A complete. Do not start overlay/popup/layering, text editing, product-command adoption, UI Gallery exposure, shared plugin framework extraction, generic plugin primitives, or `foundation/meta`.
+Next action: Keep Phase 12A as completed dependency. Do not start product-facing UI Gallery exposure, text editing, product-command adoption, shared plugin framework extraction, generic plugin primitives, or `foundation/meta` from this milestone.
+
+### PT-UI-COMPONENT-PLATFORM-013
+
+ID: `PT-UI-COMPONENT-PLATFORM-013`
+
+Title: Overlay / Popup / Layering substrate design intake
+
+State: active planning / design intake
+
+Lifecycle state: `active-planning`
+
+Owner: `ui_controls` may declare reusable overlay/open intent requirements only. `ui_input` owns normalized input facts only. `ui_runtime` may own runtime overlay intent formation, layer/focus/dismissal evidence, deterministic replay/report proof, and renderer-neutral proof data. `ui_static_mount` owns static frame validation. `runenwerk_editor` may contain only narrow proof/test adapters if a later accepted implementation scope requires one. Product/editor/game command execution and mutation remain app/domain owned.
+
+Authority: `ui-component-platform-overlay-popup-layering-design.md`, completed Phase 12/12A docs, `editor-ui-runtime-v2-and-interaction-formation-design.md`, `editor-self-authoring-and-final-ui-design.md`, and the UI Component Platform production track.
+
+Evidence: This entry starts from merged PR #43 evidence and the existing overlay design document. No Rust implementation evidence exists for Phase 13 yet.
+
+Known gaps: The active design must define overlay declarations, overlay kind distinctions, anchor identity and placement, viewport clamping, layer ordering, focus containment/return, outside-click dismissal, Escape dismissal, pointer capture, keyboard navigation, disabled/suppressed open behavior, inspection metadata, static/story proof shape, replay/report evidence, no-bypass assertions, validation gate, and stop conditions before implementation.
+
+Next action: Review and accept, revise, or reject `ui-component-platform-overlay-popup-layering-design.md`. Implementation remains blocked until a separate implementation-scope section names exact owner crates/files, proof scenarios, negative scenarios, evidence contracts, validation commands, no-bypass assertions, and stop conditions.
 
 ## Rules
 
