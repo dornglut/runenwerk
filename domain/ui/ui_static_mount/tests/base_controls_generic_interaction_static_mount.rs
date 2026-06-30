@@ -37,15 +37,47 @@ fn base_controls_generic_interaction_visual_proof_static_mounts() {
     assert_marker(&proof_frame, WidgetId(1), InteractionVisibleState::Hovered);
     assert_marker(&proof_frame, WidgetId(1), InteractionVisibleState::Pressed);
     assert_marker(&proof_frame, WidgetId(1), InteractionVisibleState::Focused);
-    assert_marker(&proof_frame, WidgetId(1), InteractionVisibleState::FocusVisible);
-    assert_marker(&proof_frame, WidgetId(1), InteractionVisibleState::ActivationRequested);
+    assert_marker(
+        &proof_frame,
+        WidgetId(1),
+        InteractionVisibleState::FocusVisible,
+    );
+    assert_marker(
+        &proof_frame,
+        WidgetId(1),
+        InteractionVisibleState::ActivationRequested,
+    );
     assert_marker(&proof_frame, WidgetId(7), InteractionVisibleState::Disabled);
-    assert_marker(&proof_frame, WidgetId(7), InteractionVisibleState::Suppressed);
-    assert_marker(&proof_frame, WidgetId(4), InteractionVisibleState::ListActiveItemIntent);
-    assert_marker(&proof_frame, WidgetId(5), InteractionVisibleState::TreeNodeIntent);
-    assert_marker(&proof_frame, WidgetId(6), InteractionVisibleState::TableCellOrRowIntent);
-    assert_marker(&proof_frame, WidgetId(3), InteractionVisibleState::TextIntentProbe);
-    assert_marker(&proof_frame, WidgetId(8), InteractionVisibleState::ReadOnlyTextIntentProbe);
+    assert_marker(
+        &proof_frame,
+        WidgetId(7),
+        InteractionVisibleState::Suppressed,
+    );
+    assert_marker(
+        &proof_frame,
+        WidgetId(4),
+        InteractionVisibleState::ListActiveItemIntent,
+    );
+    assert_marker(
+        &proof_frame,
+        WidgetId(5),
+        InteractionVisibleState::TreeNodeIntent,
+    );
+    assert_marker(
+        &proof_frame,
+        WidgetId(6),
+        InteractionVisibleState::TableCellOrRowIntent,
+    );
+    assert_marker(
+        &proof_frame,
+        WidgetId(3),
+        InteractionVisibleState::TextIntentProbe,
+    );
+    assert_marker(
+        &proof_frame,
+        WidgetId(8),
+        InteractionVisibleState::ReadOnlyTextIntentProbe,
+    );
 
     let button = proof_frame
         .proof
