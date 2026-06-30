@@ -20,7 +20,7 @@ use ui_runtime::{
 use ui_static_mount::UiStaticMountReport;
 
 /// Narrow editor-side proof host for the Phase 12A executable interaction story.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Phase12aInteractionProofHost {
     session: InteractionStorySession,
 }
