@@ -7,7 +7,7 @@ use ui_math::UiPoint;
 
 #[test]
 fn normalized_input_sample_records_pointer_keyboard_focus_semantic_and_text_intent_facts() {
-    let sample = NormalizedInputSample::new("phase12.sample")
+    let sample = NormalizedInputSample::new("runenwerk.ui.input.normalized.sample")
         .with_fact(NormalizedInputFact::Pointer(
             PointerInputFact::new(PointerEventKind::Down, UiPoint::new(10.0, 12.0))
                 .with_button(PointerButton::Primary)
