@@ -119,7 +119,11 @@ fn ui_lab_interaction_story_frame(
         format!("input samples: {}", report.input_log.len()),
         format!(
             "static mount: {}",
-            if static_mount.passed() { "passed" } else { "failed" }
+            if static_mount.passed() {
+                "passed"
+            } else {
+                "failed"
+            }
         ),
         format!(
             "replay/live parity: {}",
@@ -209,7 +213,10 @@ fn marker_labels(control: &ui_runtime::InteractionVisualControl) -> String {
 }
 
 fn state_labels(states: &[ui_runtime::InteractionVisibleState]) -> String {
-    let labels = states.iter().map(|state| state.as_str()).collect::<Vec<_>>();
+    let labels = states
+        .iter()
+        .map(|state| state.as_str())
+        .collect::<Vec<_>>();
     if labels.is_empty() {
         "none".to_string()
     } else {

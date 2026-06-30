@@ -197,15 +197,15 @@ impl SurfaceSessionStore {
     }
 
     pub fn active_viewport_drag_mounted_unit(&self) -> Option<MountedUnitId> {
-        let mut active = self
-            .sessions_by_mounted_unit
-            .iter()
-            .filter_map(|(mounted_unit_id, session)| {
-                session
-                    .viewport_interaction_state
-                    .drag_in_progress()
-                    .then_some(*mounted_unit_id)
-            });
+        let mut active =
+            self.sessions_by_mounted_unit
+                .iter()
+                .filter_map(|(mounted_unit_id, session)| {
+                    session
+                        .viewport_interaction_state
+                        .drag_in_progress()
+                        .then_some(*mounted_unit_id)
+                });
         let first = active.next()?;
         active.next().is_none().then_some(first)
     }
@@ -328,7 +328,9 @@ fn retains_live_session_key_str(key: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use editor_shell::{WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState};
+    use editor_shell::{
+        WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
+    };
 
     #[test]
     fn prune_for_workspace_removes_unmounted_surface_sessions() {

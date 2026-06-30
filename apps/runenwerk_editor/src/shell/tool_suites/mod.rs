@@ -54,8 +54,7 @@ pub(crate) const DIAGNOSTICS_SURFACE_KEYS: &[&str] = &[
 ];
 pub(crate) const TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY: &str =
     "runenwerk.diagnostics.tool_suite_registry_inspector";
-pub(crate) const UI_LAB_INTERACTION_STORY_SURFACE_KEY: &str =
-    "runenwerk.ui_lab.interaction_story";
+pub(crate) const UI_LAB_INTERACTION_STORY_SURFACE_KEY: &str = "runenwerk.ui_lab.interaction_story";
 pub(crate) const MATERIAL_GRAPH_CANVAS_SURFACE_KEY: &str = "runenwerk.material_lab.graph_canvas";
 pub(crate) const MATERIAL_INSPECTOR_SURFACE_KEY: &str = "runenwerk.material_lab.inspector";
 pub(crate) const MATERIAL_PREVIEW_SURFACE_KEY: &str = "runenwerk.material_lab.preview";
