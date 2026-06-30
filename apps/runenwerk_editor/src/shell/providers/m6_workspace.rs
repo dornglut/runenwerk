@@ -100,7 +100,7 @@ impl EditorSurfaceProvider for M6WorkspaceProvider {
 }
 
 fn ui_lab_interaction_story_frame(
-    _context: &SurfaceProviderBuildContext<'_>,
+    context: &SurfaceProviderBuildContext<'_>,
     request: &SurfaceProviderRequest,
     session: &SurfaceSessionState,
 ) -> ProviderSurfaceFrame {
@@ -158,15 +158,31 @@ fn ui_lab_interaction_story_frame(
         ));
     }
 
-    if !proof.report_view.rows.is_empty() {
-        lines.push("report evidence:".to_string());
-        for row in &proof.report_view.rows {
-            lines.push(format!("- {}: {}", row.kind, row.message));
-        }
+    lines.push(format!(
+        "report evidence: replay_steps={} target_rows={} focus_rows={} transition_rows={} fact_rows={} event_rows={} outcome_rows={} suppressed_rows={} no_target_rows={}",
+        proof.report_view.replay_steps.len(),
+        proof.report_view.target_resolution.len(),
+        proof.report_view.focus_resolution.len(),
+        proof.report_view.state_transitions.len(),
+        proof.report_view.runtime_facts.len(),
+        proof.report_view.runtime_events.len(),
+        proof.report_view.semantic_outcomes.len(),
+        proof.report_view.suppressed_events.len(),
+        proof.report_view.no_target_events.len()
+    ));
+
+    for row in proof.report_view.semantic_outcomes.iter().take(8) {
+        lines.push(format!("- outcome: {row}"));
+    }
+    for row in proof.report_view.suppressed_events.iter().take(8) {
+        lines.push(format!("- suppressed: {row}"));
+    }
+    for row in proof.report_view.no_target_events.iter().take(8) {
+        lines.push(format!("- no-target: {row}"));
     }
 
     let (root, routes) = build_self_authoring_control_panel(
-        _context.theme,
+        context.theme,
         request.tool_surface_instance_id,
         lines,
         Vec::new(),
