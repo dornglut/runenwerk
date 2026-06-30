@@ -342,7 +342,6 @@ fn ui_designer_workbench_tool_suites() -> Vec<EditorToolSuite> {
     vec![
         tool_suites::core_tool_suite::editor_core_tool_suite(),
         tool_suites::editor_design_tool_suite::editor_design_tool_suite(),
-        tool_suites::ui_lab_tool_suite::ui_lab_tool_suite(),
     ]
 }
 
