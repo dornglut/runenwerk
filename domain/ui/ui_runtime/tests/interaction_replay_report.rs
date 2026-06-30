@@ -8,7 +8,7 @@ use ui_math::UiPoint;
 use ui_runtime::{
     InteractionReplayScript, InteractionReplayStep, InteractionVisibleState,
     InteractionVisualProof, MountedInteractionFixture, WidgetId,
-    phase12_generic_interaction_fixture, phase12_generic_interaction_positive_script,
+    base_controls_generic_interaction_fixture, base_controls_generic_interaction_positive_script,
     replay_interactions,
 };
 
@@ -370,12 +370,12 @@ fn text_intent_against_non_text_probe_is_suppressed_without_text_editing() {
 }
 
 fn phase12_positive_script() -> InteractionReplayScript {
-    phase12_generic_interaction_positive_script()
+    base_controls_generic_interaction_positive_script()
 }
 
 fn phase12_fixture() -> MountedInteractionFixture {
     let compiled = BaseControlsPlugin::new().compile();
-    phase12_generic_interaction_fixture(&compiled)
+    base_controls_generic_interaction_fixture(&compiled)
 }
 
 fn pointer_step(id: &str, kind: PointerEventKind, x: f32, y: f32) -> InteractionReplayStep {
