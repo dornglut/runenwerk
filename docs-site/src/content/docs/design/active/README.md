@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-29
+last_reviewed: 2026-06-30
 ---
 
 # Active Designs
@@ -81,6 +81,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [UI Component Platform Control Kernel Design](ui-component-platform-control-kernel-design.md)
 - [UI Component Platform Executable Interaction Story Design](ui-component-platform-executable-interaction-story-design.md)
 - [UI Component Platform Executable Interaction Story Implementation Scope](ui-component-platform-executable-interaction-story-implementation-scope.md)
+- [UI Component Platform Gallery Visible Interaction Story Implementation Scope](ui-component-platform-gallery-visible-interaction-story-implementation-scope.md)
 - [UI Component Platform Generic Interaction Design](ui-component-platform-generic-interaction-design.md)
 - [UI Component Platform Generic Text Design](ui-component-platform-generic-text-design.md)
 - [UI Component Platform Input / Gesture / Device Design](ui-component-platform-input-gesture-device-design.md)
@@ -118,7 +119,3 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [UI Program Proof Slice Plan](ui-program-proof-slice-plan.md)
 - [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)
 - [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
-- [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md)
-- [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
-- [Viewport Camera And Projection Contract Platform](viewport-camera-and-projection-contract-platform-design.md)
-- [Viewport Expression Upgrade Design](workspace-viewport-expression-upgrade-design.md)
