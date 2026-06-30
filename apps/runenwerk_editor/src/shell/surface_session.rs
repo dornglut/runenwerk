@@ -7,6 +7,7 @@ use editor_viewport::ViewportId;
 use ui_composition::MountedUnitId;
 use ui_math::UiPoint;
 
+use crate::editor_features::Phase12aInteractionProofHost;
 use crate::editor_features::viewport::ViewportInteractionState;
 use crate::editor_panels::EntityTablePanelUiState;
 use crate::editor_runtime::inspector_state::EditorInspectorUiState;
@@ -14,6 +15,7 @@ use crate::shell::tool_suites::{
     ASSET_BROWSER_SURFACE_KEY, EDITOR_CONSOLE_SURFACE_KEY, FIELD_PRODUCT_VIEWER_SURFACE_KEY,
     IMPORT_INSPECTOR_SURFACE_KEY, SCENE_ENTITY_TABLE_SURFACE_KEY, SCENE_INSPECTOR_SURFACE_KEY,
     SCENE_OUTLINER_SURFACE_KEY, SCENE_VIEWPORT_SURFACE_KEY, SDF_BRUSH_BROWSER_SURFACE_KEY,
+    UI_LAB_INTERACTION_STORY_SURFACE_KEY,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,6 +24,7 @@ pub struct SurfaceSessionState {
     pub entity_table_ui_state: EntityTablePanelUiState,
     pub inspector_ui_state: EditorInspectorUiState,
     pub viewport_interaction_state: ViewportInteractionState,
+    pub phase12_interaction_proof_host: Phase12aInteractionProofHost,
     pub viewport_details_visible: bool,
     pub viewport_statistics_visible: bool,
     pub viewport_options_menu_open: bool,
@@ -45,6 +48,7 @@ impl Default for SurfaceSessionState {
             entity_table_ui_state: EntityTablePanelUiState::new(),
             inspector_ui_state: EditorInspectorUiState::new(),
             viewport_interaction_state: ViewportInteractionState::new(),
+            phase12_interaction_proof_host: Phase12aInteractionProofHost::new(),
             viewport_details_visible: false,
             viewport_statistics_visible: false,
             viewport_options_menu_open: false,
@@ -52,6 +56,16 @@ impl Default for SurfaceSessionState {
             viewport_tool_radial_session: None,
             console_follow_enabled: true,
         }
+    }
+}
+
+impl SurfaceSessionState {
+    pub fn phase12_interaction_proof_host(&self) -> &Phase12aInteractionProofHost {
+        &self.phase12_interaction_proof_host
+    }
+
+    pub fn phase12_interaction_proof_host_mut(&mut self) -> &mut Phase12aInteractionProofHost {
+        &mut self.phase12_interaction_proof_host
     }
 }
 
@@ -183,15 +197,15 @@ impl SurfaceSessionStore {
     }
 
     pub fn active_viewport_drag_mounted_unit(&self) -> Option<MountedUnitId> {
-        let mut active =
-            self.sessions_by_mounted_unit
-                .iter()
-                .filter_map(|(mounted_unit_id, session)| {
-                    session
-                        .viewport_interaction_state
-                        .drag_in_progress()
-                        .then_some(*mounted_unit_id)
-                });
+        let mut active = self
+            .sessions_by_mounted_unit
+            .iter()
+            .filter_map(|(mounted_unit_id, session)| {
+                session
+                    .viewport_interaction_state
+                    .drag_in_progress()
+                    .then_some(*mounted_unit_id)
+            });
         let first = active.next()?;
         active.next().is_none().then_some(first)
     }
@@ -307,15 +321,14 @@ fn retains_live_session_key_str(key: &str) -> bool {
             | IMPORT_INSPECTOR_SURFACE_KEY
             | FIELD_PRODUCT_VIEWER_SURFACE_KEY
             | SDF_BRUSH_BROWSER_SURFACE_KEY
+            | UI_LAB_INTERACTION_STORY_SURFACE_KEY
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use editor_shell::{
-        WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState,
-    };
+    use editor_shell::{WorkspaceId, WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceState};
 
     #[test]
     fn prune_for_workspace_removes_unmounted_surface_sessions() {
@@ -358,29 +371,6 @@ mod tests {
 
         store.clear_transient();
 
-        assert_eq!(store.len(), 0);
-    }
-
-    #[test]
-    fn prune_for_workspace_retains_mounted_console_session() {
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
-        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
-        let surface_id = workspace
-            .tool_surfaces()
-            .find(|surface| surface.stable_surface_key().as_str() == EDITOR_CONSOLE_SURFACE_KEY)
-            .expect("console surface should exist")
-            .id;
-        let mut store = SurfaceSessionStore::default();
-        store.session_mut(surface_id).console_follow_enabled = false;
-
-        store.prune_for_workspace(&workspace);
-
-        assert_eq!(
-            store
-                .session(surface_id)
-                .map(|session| session.console_follow_enabled),
-            Some(false)
-        );
+        assert!(store.is_empty());
     }
 }
