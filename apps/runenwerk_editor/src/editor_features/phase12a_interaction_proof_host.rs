@@ -11,26 +11,26 @@ use ui_input::{
     PointerInputFact, SemanticInputFact, TextIntentFact, UiInputEvent,
 };
 use ui_runtime::{
-    InteractionBoundaryAssertions, InteractionFormationReport, InteractionProofRenderFrame,
-    InteractionReplayLiveParityReport, InteractionStoryExecutionMode, InteractionStoryRunReport,
-    InteractionStorySession, InteractionStoryStepEvidence, InteractionVisualProof,
-    PHASE12_EXECUTABLE_GENERIC_INTERACTION_STORY_ID,
-    phase12_executable_generic_interaction_story_session,
+    BASE_CONTROLS_EXECUTABLE_INTERACTION_STORY_ID, InteractionBoundaryAssertions,
+    InteractionFormationReport, InteractionProofRenderFrame, InteractionReplayLiveParityReport,
+    InteractionStoryExecutionMode, InteractionStoryRunReport, InteractionStorySession,
+    InteractionStoryStepEvidence, InteractionVisualProof,
+    base_controls_executable_interaction_story_session,
 };
 use ui_static_mount::UiStaticMountReport;
 
-/// Narrow editor-side proof host for the Phase 12A executable interaction story.
+/// Narrow editor-side proof host for the base-controls executable interaction story.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Phase12aInteractionProofHost {
     session: InteractionStorySession,
 }
 
 impl Phase12aInteractionProofHost {
-    /// Builds the canonical Phase 12A proof host from base-control descriptors.
+    /// Builds the canonical proof host from base-control descriptors.
     pub fn new() -> Self {
         let compiled = BaseControlsPlugin::new().compile();
         Self {
-            session: phase12_executable_generic_interaction_story_session(
+            session: base_controls_executable_interaction_story_session(
                 &compiled,
                 InteractionStoryExecutionMode::Live,
             ),
@@ -100,7 +100,7 @@ impl Phase12aInteractionProofHost {
 
     /// Stable proof-host story id.
     pub const fn story_id(&self) -> &'static str {
-        PHASE12_EXECUTABLE_GENERIC_INTERACTION_STORY_ID
+        BASE_CONTROLS_EXECUTABLE_INTERACTION_STORY_ID
     }
 }
 
