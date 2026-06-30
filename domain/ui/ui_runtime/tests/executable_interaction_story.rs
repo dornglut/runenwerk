@@ -7,7 +7,7 @@ use ui_runtime::{
 };
 
 #[test]
-fn phase12_executable_interaction_story_replay_produces_expected_evidence() {
+fn base_controls_executable_interaction_story_replay_produces_expected_evidence() {
     let compiled = BaseControlsPlugin::new().compile();
     let script = base_controls_generic_interaction_positive_script();
     let expected = base_controls_executable_interaction_expected_evidence();
@@ -31,7 +31,7 @@ fn phase12_executable_interaction_story_replay_produces_expected_evidence() {
 }
 
 #[test]
-fn phase12_executable_interaction_story_live_log_replays_with_semantic_parity() {
+fn base_controls_executable_interaction_story_live_log_replays_with_semantic_parity() {
     let compiled = BaseControlsPlugin::new().compile();
     let script = base_controls_generic_interaction_positive_script();
     let expected = base_controls_executable_interaction_expected_evidence();
