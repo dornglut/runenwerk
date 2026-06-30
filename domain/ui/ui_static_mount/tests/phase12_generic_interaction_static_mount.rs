@@ -15,7 +15,10 @@ fn phase12_generic_interaction_visual_proof_static_mounts() {
     let mount_report = UiStaticMountReport::from_frame(rendered.frame.clone());
 
     assert!(mount_report.passed(), "{:?}", mount_report.diagnostics());
-    assert_eq!(rendered.proof_id, BASE_CONTROLS_GENERIC_INTERACTION_PROOF_ID);
+    assert_eq!(
+        rendered.proof_id,
+        BASE_CONTROLS_GENERIC_INTERACTION_PROOF_ID
+    );
     assert!(rendered.summary.has_main_inspector_and_report);
     assert!(rendered.summary.main_control_count >= 8);
     assert!(rendered.summary.marker_count >= 8);

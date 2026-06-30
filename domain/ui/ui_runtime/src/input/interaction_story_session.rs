@@ -534,7 +534,8 @@ impl InteractionStoryEvidenceResult {
 }
 
 /// Expected evidence for the canonical base-controls executable interaction story.
-pub fn base_controls_executable_interaction_expected_evidence() -> InteractionStoryExpectedEvidence {
+pub fn base_controls_executable_interaction_expected_evidence() -> InteractionStoryExpectedEvidence
+{
     InteractionStoryExpectedEvidence {
         required_markers: vec![
             ExpectedInteractionMarker::new(WidgetId(1), InteractionVisibleState::Hovered),

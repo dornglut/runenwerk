@@ -49,7 +49,10 @@ fn phase12_executable_interaction_story_live_log_replays_with_semantic_parity() 
 
     let parity = live.replay_live_parity_report();
     assert!(parity.passed());
-    assert_eq!(parity.live_report.input_log, parity.replayed_live_log_report.input_log);
+    assert_eq!(
+        parity.live_report.input_log,
+        parity.replayed_live_log_report.input_log
+    );
     assert!(parity.equivalent_target_resolution);
     assert!(parity.equivalent_focus_resolution);
     assert!(parity.equivalent_state_transitions);

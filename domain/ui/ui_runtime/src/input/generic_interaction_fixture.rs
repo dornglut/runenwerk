@@ -169,32 +169,36 @@ pub fn base_controls_generic_interaction_positive_script() -> InteractionReplayS
 /// and text-intent boundary behavior without product mutation or text editing.
 pub fn base_controls_generic_interaction_negative_scripts() -> Vec<InteractionReplayScript> {
     vec![
-        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.release_outside")
-            .with_step(pointer_step(
-                "press_button",
-                PointerEventKind::Down,
-                12.0,
-                12.0,
-            ))
-            .with_step(pointer_step(
-                "leave_button",
-                PointerEventKind::Leave,
-                120.0,
-                12.0,
-            ))
-            .with_step(pointer_step(
-                "release_outside",
-                PointerEventKind::Up,
-                260.0,
-                260.0,
-            )),
-        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.focus_validation")
-            .with_step(focus_target_step("focus_button", WidgetId(1)))
-            .with_step(focus_target_step("focus_missing", WidgetId(404)))
-            .with_step(focus_target_step("focus_disabled", WidgetId(7)))
-            .with_step(focus_target_step("focus_label_without_focus", WidgetId(9)))
-            .with_step(focus_target_step("focus_inert", WidgetId(10)))
-            .with_step(focus_next_step("focus_traversal")),
+        InteractionReplayScript::new(
+            "runenwerk.ui.controls.base.generic_interaction.release_outside",
+        )
+        .with_step(pointer_step(
+            "press_button",
+            PointerEventKind::Down,
+            12.0,
+            12.0,
+        ))
+        .with_step(pointer_step(
+            "leave_button",
+            PointerEventKind::Leave,
+            120.0,
+            12.0,
+        ))
+        .with_step(pointer_step(
+            "release_outside",
+            PointerEventKind::Up,
+            260.0,
+            260.0,
+        )),
+        InteractionReplayScript::new(
+            "runenwerk.ui.controls.base.generic_interaction.focus_validation",
+        )
+        .with_step(focus_target_step("focus_button", WidgetId(1)))
+        .with_step(focus_target_step("focus_missing", WidgetId(404)))
+        .with_step(focus_target_step("focus_disabled", WidgetId(7)))
+        .with_step(focus_target_step("focus_label_without_focus", WidgetId(9)))
+        .with_step(focus_target_step("focus_inert", WidgetId(10)))
+        .with_step(focus_next_step("focus_traversal")),
         InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.negative")
             .with_step(key_step("keyboard_without_focus", Key::Enter))
             .with_step(pointer_step(
@@ -209,12 +213,16 @@ pub fn base_controls_generic_interaction_negative_scripts() -> Vec<InteractionRe
                 260.0,
                 260.0,
             )),
-        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.text_negative")
-            .with_step(focus_target_step("focus_action", WidgetId(2)))
-            .with_step(text_intent_step("text_against_action")),
-        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.read_only_text")
-            .with_step(focus_target_step("focus_read_only_inspector", WidgetId(8)))
-            .with_step(text_intent_step("text_read_only_probe")),
+        InteractionReplayScript::new(
+            "runenwerk.ui.controls.base.generic_interaction.text_negative",
+        )
+        .with_step(focus_target_step("focus_action", WidgetId(2)))
+        .with_step(text_intent_step("text_against_action")),
+        InteractionReplayScript::new(
+            "runenwerk.ui.controls.base.generic_interaction.read_only_text",
+        )
+        .with_step(focus_target_step("focus_read_only_inspector", WidgetId(8)))
+        .with_step(text_intent_step("text_read_only_probe")),
     ]
 }
 
