@@ -1,6 +1,3 @@
-//! File: domain/ui/ui_runtime/src/input/mod.rs
-//! Purpose: Runtime-facing input dispatch contracts.
-
 pub mod dispatch;
 pub mod generic_interaction;
 pub mod generic_interaction_fixture;
@@ -17,8 +14,6 @@ pub use generic_interaction_fixture::*;
 pub use generic_interaction_visual_frame::*;
 pub use hit_test::hit_test_widget;
 pub use interaction_result::{UiInteraction, UiInteractionResults};
-#[doc(hidden)]
-pub use interaction_story_session::base_controls_executable_interaction_expected_evidence as phase12_executable_generic_interaction_expected_evidence;
 pub use interaction_story_session::*;
 pub use outcome::{UiInputOutcome, UiInvalidation};
 pub use pointer::dispatch_pointer_event;
