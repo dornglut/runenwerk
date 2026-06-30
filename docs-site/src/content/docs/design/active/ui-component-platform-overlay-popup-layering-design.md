@@ -1,6 +1,6 @@
 ---
 title: UI Component Platform Overlay / Popup / Layering Design
-description: Proposed owner-first design for reusable overlay, popup, dropdown, tooltip, modal-like, anchor, placement, focus, dismissal, layer, proof, and no-bypass semantics.
+description: Proposed owner-first design for reusable overlay, popup, dropdown, tooltip, focus-containing, anchor, placement, focus, dismissal, stack, proof, and no-bypass semantics.
 status: active
 owner: ui
 layer: domain
@@ -27,7 +27,7 @@ Lifecycle state: `proposed-design`.
 
 Planning ID: `PT-UI-COMPONENT-PLATFORM-013`.
 
-This document is the Phase 13 design intake for reusable overlay, popup, dropdown, tooltip, modal-like, and layering semantics.
+This document is the Phase 13 design intake for reusable overlay, popup, dropdown, tooltip, focus-containing overlay, and layering semantics.
 
 It does not authorize Rust implementation. Before implementation, the implementation-scope section below must be accepted and then reflected in `active-work.md` as active implementation.
 
@@ -35,14 +35,14 @@ Phase labels may appear in planning, history, and reports. Public APIs, stable i
 
 ## Decision summary
 
-Reusable controls may declare overlay/open intent requirements. Runtime may form overlay intent, layer, focus, placement, dismissal, replay, report, and static proof evidence. Generic UI must not execute product commands, mutate product/editor/game state, create app-specific modal behavior, own authored UI editing, or become a plugin framework.
+Reusable controls may declare overlay/open intent requirements. Runtime may form overlay intent, stack entries, layer assignments, placement, focus, dismissal, replay, report, and static proof evidence. Generic UI must not execute product commands, mutate product/editor/game state, create app-specific modal lifecycle behavior, own authored UI editing, or become a plugin framework.
 
 The reusable overlay proof path is:
 
 ```text
 ui_controls overlay/open declarations
   -> ui_input normalized input facts
-  -> ui_runtime overlay intent, layer, placement, focus, and dismissal evidence
+  -> ui_runtime overlay intent, stack, layer, placement, focus, and dismissal evidence
   -> OverlayLayeringVisualProof
   -> OverlayLayeringProofRenderFrame / UiFrame
   -> ui_static_mount validation
@@ -50,11 +50,23 @@ ui_controls overlay/open declarations
 
 This phase consumes Phase 12/12A generic interaction and executable story mechanics. It also extracts durable overlay lessons from Interaction V2 popup-stack work: stable anchors, layer order, outside dismissal, Escape dismissal, focus return, scroll/input ownership, and viewport-fallback rejection. It must not copy editor shell command behavior into generic UI.
 
+## Design principles
+
+- **Owner-first substrate:** controls declare reusable requirements; runtime resolves behavior; products consume results.
+- **Ergonomic default path:** simple controls should need a small declaration, not a hand-built overlay runtime program.
+- **Progressive explicitness:** defaults are allowed for common popup/dropdown/tooltip cases, but proof reports must show the resolved explicit policy.
+- **Renderer-neutral evidence:** placement, layer, focus, and dismissal must be testable without a backend renderer.
+- **Deterministic replay:** overlay behavior must be reproducible from declarations and normalized input facts.
+- **No hidden product behavior:** command execution, state mutation, persistence, and app-modal lifecycle stay outside generic UI.
+- **Extensible by addition:** new overlay kinds, placement strategies, or dismissal reasons should add typed variants and report fields without replacing existing evidence contracts.
+
 ## Goals
 
 - Define reusable overlay declarations without turning product/editor/game behavior into generic UI behavior.
-- Distinguish popup, dropdown, menu, tooltip, modal-like, picker, and diagnostic overlay semantics.
+- Distinguish popup, dropdown, menu, tooltip, focus-containing overlay, picker, and diagnostic overlay semantics.
+- Define ergonomic defaults for common overlay use while preserving explicit report evidence.
 - Define stable anchor identity, preferred placement, collision policy, viewport clamping, and placement evidence.
+- Define overlay session/stack semantics for nested overlays and topmost dismissal.
 - Define layer ordering without hard-coding app/editor/game z behavior.
 - Define focus containment, focus return, outside pointer dismissal, Escape dismissal, pointer capture interaction, and keyboard navigation evidence.
 - Define disabled/suppressed overlay-open behavior.
@@ -71,7 +83,7 @@ This phase does not implement or authorize:
 - authored UI editing;
 - product/editor/game command execution;
 - product/editor/game state mutation;
-- app-specific modal behavior;
+- app-specific modal lifecycle behavior;
 - full text editing;
 - caret, selection, text buffer, IME, clipboard, or undo-redo behavior;
 - dynamic external plugin framework;
@@ -102,7 +114,8 @@ ControlOverlaySupportSummary
 Allowed responsibilities:
 
 - declare that a Button, ActionPrompt, ColorPicker, Select-like future control, or menu-like control can request an overlay;
-- declare overlay kind, trigger, placement preference, dismissal policy, focus policy, and inspection summary;
+- declare overlay kind, trigger, placement preference, dismissal policy, focus policy, keyboard policy, and inspection summary;
+- provide ergonomic descriptor builders for common cases such as `popup_on_press`, `menu_on_press`, `dropdown_on_press`, `tooltip_on_hover`, and `tooltip_on_focus`;
 - expose read-only catalog/inspection metadata derived from descriptors.
 
 Forbidden responsibilities:
@@ -127,10 +140,12 @@ PointerInputFact
 KeyboardInputFact
 FocusInputFact
 SemanticInputFact
+ScrollInputFact
+ViewportInputFact
 NormalizedInputSample
 ```
 
-Future-compatible input fields may include pointer id, device kind, scroll delta, pressure, modifiers, click count, and logical timestamp, but this phase must only add what the overlay proof needs.
+Future-compatible input fields may include pointer id, device kind, scroll delta, pressure, modifiers, click count, viewport size, and logical timestamp, but this phase must only add what the overlay proof needs.
 
 Forbidden responsibilities:
 
@@ -149,6 +164,9 @@ May own renderer-neutral overlay intent formation and proof evidence:
 ```text
 OverlayAnchorId
 OverlayRequestId
+OverlaySessionId
+OverlayStackId
+OverlayStackEntryId
 OverlayLayerId
 OverlayDeclaration
 OverlayOpenIntent
@@ -171,7 +189,8 @@ OverlayLayeringProofRenderFrame
 Allowed responsibilities:
 
 - resolve overlay open intent from reusable declarations and normalized input facts;
-- record anchor, requested placement, resolved placement, layer assignment, clamp/collision result, focus behavior, dismissal behavior, and keyboard navigation evidence;
+- maintain renderer-neutral overlay session and stack state for proof/replay;
+- record anchor, requested placement, resolved placement, layer assignment, clamp/collision result, focus behavior, dismissal behavior, pointer capture behavior, and keyboard navigation evidence;
 - maintain proof/session state needed for deterministic replay and story proof;
 - project renderer-neutral proof into `UiFrame` render data;
 - record no-bypass counters.
@@ -180,7 +199,7 @@ Forbidden responsibilities:
 
 - product/editor/game command execution;
 - product/editor/game mutation;
-- app-specific modal behavior;
+- app-specific modal lifecycle behavior;
 - authored UI editing;
 - full text editing;
 - backend renderer behavior;
@@ -223,7 +242,7 @@ Forbidden responsibilities:
 
 ### Product/editor/game layers
 
-Own command execution, state mutation, route authorization, persistence, app-specific modal behavior, authored UI editing, and product policy.
+Own command execution, state mutation, route authorization, persistence, app-specific modal lifecycle behavior, authored UI editing, and product policy.
 
 They consume generic overlay intents and evidence. They do not define reusable overlay semantics.
 
@@ -239,6 +258,21 @@ Overlay open intent
 Overlay request
   The renderer-neutral request record containing request id, source control id, anchor id, kind, trigger, placement preference, layer preference, dismissal policy, focus policy, and disabled/suppressed status.
 
+Overlay session
+  Runtime-owned proof session for overlay behavior during a story/replay/live-log run. It owns stack entries and evidence rows, not product state.
+
+Overlay stack
+  Ordered runtime-owned list of currently open overlay stack entries. It determines topmost dismissal, parent/child relationships, and deterministic report ordering.
+
+Overlay stack entry
+  Runtime-owned open overlay record containing stack entry id, request id, parent request id, anchor id, layer class, placement resolution, focus policy, dismissal policy, opened step, optional closed step, and hit regions.
+
+Overlay scope
+  A logical grouping for overlays that should interact for dismissal and focus purposes. A menu and submenu are in one scope; unrelated diagnostic overlays may be in another scope.
+
+Overlay hit region
+  Renderer-neutral region used for outside-pointer and inside-overlay classification. It is not backend hit testing.
+
 Anchor identity
   Stable identity for the element or region an overlay is positioned against. It must survive replay and report comparison without relying on transient retained widget ids.
 
@@ -249,19 +283,19 @@ Placement resolution
   Runtime evidence for chosen side/alignment, clamp, flip, shift, size limit, and viewport constraint results.
 
 Layer assignment
-  Runtime evidence for overlay ordering relative to ordinary content, tooltips, menus, modal-like surfaces, diagnostic overlays, and persistent status/chrome overlays.
+  Runtime evidence for overlay ordering relative to ordinary content, tooltips, menus, focus-containing surfaces, diagnostic overlays, and persistent status/chrome overlays.
 
 Dismissal policy
-  Reusable policy for outside pointer, Escape, focus loss, selection, explicit close, none, or host-owned dismissal.
+  Reusable policy for outside pointer, Escape, focus loss, selection intent, explicit close, none, or host-owned dismissal.
 
 Dismissal evidence
   Runtime report row proving why an overlay remained open or closed.
 
 Focus policy
-  Reusable focus behavior: none, focus overlay, contain focus, restore focus on close, or modal-like containment.
+  Reusable focus behavior: none, focus overlay, contain focus, restore focus on close, or focus-containing overlay containment.
 
 No-bypass assertion
-  Runtime counter proving overlay proof did not execute host commands, mutate product state, perform text edits, create app-specific modal behavior, or bypass normalized input.
+  Runtime counter proving overlay proof did not execute host commands, mutate product state, perform text edits, create app-specific modal lifecycle behavior, or bypass normalized input.
 ```
 
 ## Overlay kind distinction
@@ -273,10 +307,75 @@ No-bypass assertion
 | `Menu` | Anchored command-choice surface. | menu scope, roving/linear keyboard navigation, submenu-ready anchor evidence, Escape/outside dismissal | executing menu commands |
 | `Tooltip` | Non-command informational overlay from hover/focus trigger. | hover/focus trigger evidence, delayed/open intent seam, non-focus-stealing policy | app-specific help content source or mutation |
 | `PickerPopup` | Anchored picker-like popup for future controls such as color pickers. | open intent, anchor, placement, focus policy, dismissal policy | value mutation, color management, app command |
-| `ModalLike` | Focus-containing overlay-like proof substrate. | layer/focus containment evidence, Escape policy, focus return | app-specific modal lifecycle, blocking product workflow |
+| `FocusContainingOverlay` | Focus-containing overlay proof substrate. | layer/focus containment evidence, Escape policy, focus return | app-specific modal lifecycle, blocking product workflow |
 | `DiagnosticOverlay` | Renderer-neutral proof/report overlay. | layer classification and non-dismissable/persistent policy | developer-tool product surface behavior |
 
-`ModalLike` is intentionally named as a substrate concept. It must not become app-specific modal behavior in this phase.
+`FocusContainingOverlay` replaces ambiguous modal-like language for public/domain vocabulary. Planning text may still refer to modal-like behavior when discussing non-goals, but public APIs and proof ids should use focus-containing vocabulary.
+
+## Ergonomic declaration model
+
+Common declarations should have compact defaults so each control does not need to construct a full overlay policy by hand.
+
+Preferred ergonomic builders:
+
+```text
+popup_on_press(anchor, content_role)
+menu_on_press(anchor, menu_scope)
+dropdown_on_press(anchor, option_scope)
+tooltip_on_hover(anchor, tooltip_role)
+tooltip_on_focus(anchor, tooltip_role)
+picker_popup_on_press(anchor, picker_role)
+focus_containing_overlay_on_press(anchor, focus_scope)
+```
+
+Each builder expands into explicit reportable defaults:
+
+```text
+kind
+trigger
+placement_preference
+collision_policy
+layer_preference
+dismissal_policy
+focus_policy
+keyboard_navigation_policy
+suppression_policy
+inspection_summary
+```
+
+Rules:
+
+- builders may reduce authoring boilerplate, but they must not hide runtime evidence;
+- default policies must be deterministic and documented in reports;
+- advanced callers may construct explicit descriptors directly;
+- descriptor builders stay in `ui_controls`; runtime resolution stays in `ui_runtime`;
+- product command bindings are never accepted by these builders.
+
+## Flexibility and extension model
+
+The substrate must be extensible without creating a generic plugin framework.
+
+Allowed extension seams:
+
+```text
+Overlay kind variants
+Placement strategy variants
+Collision policy variants
+Dismissal reason variants
+Focus policy variants
+Keyboard navigation policy variants
+Inspection metadata fields
+Report evidence rows
+Static proof fixture scenarios
+```
+
+Extension rules:
+
+- add typed variants and explicit evidence fields instead of untyped stringly behavior;
+- prefer additive fields with deterministic defaults over replacing existing contracts;
+- keep extension seams inside existing owners unless a design update justifies a new owner;
+- do not add dynamic loading, registry plugins, external scripting, or `foundation/meta`;
+- every new extension point must name its owner, proof evidence, validation path, and stop condition.
 
 ## Placement model
 
@@ -309,10 +408,35 @@ shifted: bool
 resized: bool
 hidden_or_suppressed: bool
 viewport_rect
+scroll_offset
 collision_notes
 ```
 
 The proof must be deterministic. Fallback order and clamp behavior must not depend on unordered maps or backend renderer side effects.
+
+## Viewport, scroll, and anchor invalidation
+
+Overlay placement must treat viewport and scroll changes as normalized facts, not backend renderer side effects.
+
+Required evidence:
+
+```text
+viewport_rect
+scroll_offset_before
+scroll_offset_after
+anchor_rect_before
+anchor_rect_after
+placement_recomputed: bool
+placement_suppressed: bool
+anchor_still_valid: bool
+```
+
+Rules:
+
+- scroll that moves an anchor must recompute or suppress placement according to declared policy;
+- viewport resize must recompute placement deterministically;
+- anchor removal while an overlay is open must record suppression or dismissal evidence;
+- reports must distinguish hidden due to collision policy from dismissed by user input.
 
 ## Layer ordering model
 
@@ -325,7 +449,7 @@ AnchoredPopup
 Menu
 Submenu
 Tooltip
-ModalLike
+FocusContainingOverlay
 DiagnosticOverlay
 ```
 
@@ -334,9 +458,43 @@ Rules:
 - ordinary controls render below overlays;
 - menu/submenu chains preserve parent-before-child evidence;
 - tooltip overlays do not steal focus unless explicitly declared later;
-- modal-like layers may contain focus in proof, but app-specific modal lifecycle remains host-owned;
+- focus-containing layers may contain focus in proof, but app-specific modal lifecycle remains host-owned;
 - persistent chrome/status overlays can share placement mechanics but must be distinguishable from dismissible overlay stack entries;
-- layer ids must be stable within proof and replay, not global application ids.
+- layer ids must be stable within proof and replay, not global application ids;
+- apps/renderers may map these layer classes to backend z/order buckets, but they may not redefine generic overlay ordering evidence.
+
+## Overlay session and stack model
+
+`ui_runtime` owns the renderer-neutral overlay stack for proof/replay. The stack is not product state and is not a backend rendering stack.
+
+`OverlayStackEntry` should record:
+
+```text
+stack_entry_id
+request_id
+parent_request_id
+scope_id
+anchor_id
+kind
+layer_class
+opened_at_step
+closed_at_step
+placement_resolution
+focus_policy
+dismissal_policy
+hit_regions
+is_topmost_dismissible
+```
+
+Stack rules:
+
+- Escape dismisses only the topmost dismissible overlay in the active scope unless policy explicitly says otherwise;
+- outside pointer dismisses the topmost eligible overlay chain according to scope policy;
+- inside-overlay pointer facts do not count as outside dismissal;
+- submenu entries must preserve parent request evidence;
+- tooltip entries may coexist with popup/menu entries only if their scope and focus policy allow it;
+- diagnostic overlays may be persistent and non-dismissable;
+- stack report order must be deterministic.
 
 ## Focus and dismissal model
 
@@ -361,6 +519,8 @@ Dismissal evidence must record:
 ```text
 request_id
 active_layer_id
+stack_entry_id
+scope_id
 reason
 input_sample_id
 focus_before
@@ -436,8 +596,11 @@ overlay.keyboard_navigation
 Observed runtime metadata:
 
 ```text
+overlay.session_id
+overlay.stack_entry_id
 overlay.request_id
 overlay.anchor_id
+overlay.scope_id
 overlay.placement_resolution
 overlay.layer_assignment
 overlay.focus_evidence
@@ -460,17 +623,21 @@ BaseControlsOverlayLayeringFixture
     ColorPicker requests PickerPopup
     Dropdown-like fixture requests Dropdown
     Tooltip anchor opens Tooltip from hover/focus evidence
+    Focus-containing fixture opens FocusContainingOverlay
     Disabled anchor suppresses open
     Outside target records outside dismissal
   overlay declarations:
     popup declaration
     dropdown declaration
     menu declaration
+    submenu declaration
     tooltip declaration
     picker popup declaration
-    modal-like declaration
+    focus-containing declaration
   scripts:
     positive overlay open/dismiss scripts
+    stack/nesting scripts
+    viewport/scroll/anchor invalidation scripts
     negative/suppression scripts
   proof:
     OverlayLayeringVisualProof
@@ -482,13 +649,13 @@ The static frame must expose three regions:
 
 ```text
 main view
-  mounted anchor controls, overlay surfaces, layer markers, placement markers
+  mounted anchor controls, overlay surfaces, stack markers, layer markers, placement markers
 
 inspector view
-  selected anchor/declaration, request id, anchor id, placement, layer, focus, dismissal, keyboard, suppression facts
+  selected anchor/declaration, session id, stack entry id, request id, anchor id, scope id, placement, layer, focus, dismissal, keyboard, suppression facts
 
 report view
-  replay steps, input samples, overlay requests, placement resolutions, layer assignments, focus transitions, dismissal rows, no-bypass counters
+  replay steps, input samples, overlay requests, stack entries, placement resolutions, layer assignments, focus transitions, dismissal rows, suppression rows, no-bypass counters
 ```
 
 Story proof must support deterministic replay and recorded live-log replay using the Phase 12A executable interaction standard. Replay/live modes may differ only by input source after normalization.
@@ -503,10 +670,16 @@ Required positive scenarios:
 - Tooltip-like request records hover trigger evidence.
 - Tooltip-like request records focus trigger evidence.
 - Picker-like request records open intent, anchor, placement, focus policy, and dismissal policy without value mutation.
-- Escape dismissal records dismissal evidence and focus return.
+- Focus-containing overlay records containment and focus return without creating app-specific modal lifecycle behavior.
+- Menu opens submenu with parent/child stack evidence.
+- Escape dismissal closes only the topmost dismissible overlay in the active scope.
 - Outside pointer dismissal records dismissal evidence and focus return.
+- Outside pointer inside the active overlay does not dismiss.
 - Pointer capture blocks accidental outside dismissal during the opening pointer sequence.
 - Keyboard navigation through menu/dropdown content records focus/navigation evidence without command execution.
+- Tooltip can coexist with an open popup/menu only when scope/focus policy permits it.
+- Scroll and viewport resize recompute or suppress placement deterministically.
+- Anchor removal while overlay is open records dismissal or suppression evidence.
 - Static proof frame exposes main, inspector, and report evidence.
 
 ## Negative proof scenarios
@@ -522,7 +695,7 @@ Required negative scenarios:
 - Outside pointer with no open overlay records no dismissal.
 - Outside pointer inside the active overlay does not dismiss.
 - Tooltip request does not steal focus.
-- Modal-like proof does not execute app-specific modal behavior.
+- Focus-containing overlay proof does not execute app-specific modal lifecycle behavior.
 - Overlay request never executes host commands.
 - Overlay request never mutates product/editor/game state.
 - Overlay request never performs text editing.
@@ -550,9 +723,14 @@ overlay_suppressed
 overlay_dismissed_by_escape
 overlay_dismissed_by_outside_pointer
 overlay_dismissed_by_focus_policy
+overlay_stack_entries_opened
+overlay_stack_entries_closed
 placement_clamped
 placement_flipped
 placement_shifted
+placement_recomputed_after_scroll
+placement_recomputed_after_viewport_resize
+anchor_invalidation_suppressed
 focus_returned
 ```
 
@@ -574,7 +752,11 @@ ControlOverlaySupportSummary
 
 OverlayAnchorId
 OverlayRequestId
+OverlaySessionId
+OverlayStackId
+OverlayStackEntryId
 OverlayLayerId
+OverlayScopeId
 OverlayDeclaration
 OverlayOpenIntent
 OverlayPlacementRequest
@@ -596,6 +778,8 @@ BASE_CONTROLS_OVERLAY_LAYERING_PROOF_ID
 BASE_CONTROLS_EXECUTABLE_OVERLAY_LAYERING_STORY_ID
 base_controls_overlay_layering_fixture
 base_controls_overlay_layering_positive_script
+base_controls_overlay_layering_stack_scripts
+base_controls_overlay_layering_viewport_scripts
 base_controls_overlay_layering_negative_scripts
 base_controls_overlay_layering_proof_frame
 base_controls_executable_overlay_layering_story_session
@@ -617,14 +801,20 @@ anchor.dropdown.fixture
 anchor.tooltip.hover
 anchor.tooltip.focus
 anchor.color-picker.picker-popup
+anchor.focus-containing.fixture
 layer.popup.primary
 layer.menu.primary
+layer.submenu.primary
 layer.tooltip.primary
-layer.modal-like.primary
+layer.focus-containing.primary
 step.open-popup.button
-step.dismiss.escape
+step.open-submenu.menu
+step.dismiss.escape.topmost
 step.dismiss.outside-pointer
 step.suppress.disabled-anchor
+step.recompute.scroll
+step.recompute.viewport-resize
+step.invalidate.anchor-removed
 ```
 
 Implementation may choose typed wrappers, but report strings must remain readable and durable.
@@ -658,7 +848,7 @@ Phase 13 must consume those mechanics. It must not create a parallel replay syst
 
 ## Relationship to later UI Designer / authored UI framework work
 
-Later UI Designer and authored UI framework work may author overlay declarations, menu templates, tooltip content, modal-like flows, and app-specific command bindings. That later work must consume this reusable overlay substrate instead of redefining layer/focus/dismissal semantics.
+Later UI Designer and authored UI framework work may author overlay declarations, menu templates, tooltip content, focus-containing flows, and app-specific command bindings. That later work must consume this reusable overlay substrate instead of redefining layer/focus/dismissal semantics.
 
 This phase does not create UI Designer product surfaces, authored UI editing, command binding editors, or Gallery exposure. It only designs the reusable substrate and proof envelope they should later consume.
 
@@ -668,7 +858,7 @@ Rust implementation is blocked until this section is accepted and copied into ac
 
 ### Exact owner crates and files
 
-Allowed implementation files:
+Expected implementation files after design inspection:
 
 ```text
 domain/ui/ui_controls/src/overlay.rs
@@ -708,7 +898,7 @@ apps/runenwerk_editor/src/editor_features/base_controls_overlay_layering_proof_h
 apps/runenwerk_editor/tests/base_controls_overlay_layering_proof_host.rs
 ```
 
-Any required file outside this list is a stop condition unless the implementation scope is revised before code.
+Any required file outside this expected list is a stop condition unless the implementation scope is amended before code changes. A scope amendment must explain the new owner boundary, evidence path, validation command, and why the existing file list is insufficient.
 
 ### Exact non-goals
 
@@ -719,7 +909,7 @@ Implementation must not add:
 - authored UI editing;
 - product/editor/game command execution;
 - product/editor/game mutation;
-- app-specific modal behavior;
+- app-specific modal lifecycle behavior;
 - full text editing;
 - caret/selection/text buffer/IME/clipboard/undo-redo work;
 - dynamic external plugin framework;
@@ -764,10 +954,17 @@ Implementation must prove:
 - Tooltip hover trigger evidence;
 - Tooltip focus trigger evidence;
 - Picker popup open intent without value mutation;
-- Escape dismissal with focus return;
+- focus-containing overlay containment and return without app-specific modal lifecycle behavior;
+- menu-to-submenu parent/child stack evidence;
+- Escape dismisses topmost eligible overlay only;
 - outside pointer dismissal with focus return;
+- outside pointer inside active overlay does not dismiss;
 - pointer capture interaction during opening sequence;
 - keyboard navigation through overlay content;
+- tooltip coexistence with popup/menu according to scope policy;
+- scroll-driven placement recomputation or suppression;
+- viewport-resize placement recomputation or suppression;
+- anchor removal invalidation evidence;
 - static frame main/inspector/report evidence;
 - replay/report evidence;
 - executable replay/live parity if live proof-host mode is included.
@@ -782,7 +979,7 @@ Implementation must prove:
 - outside pointer inside overlay does not dismiss;
 - Escape without open overlay does not dismiss;
 - tooltip does not steal focus;
-- modal-like proof does not execute app-specific modal behavior;
+- focus-containing overlay does not execute app-specific modal lifecycle behavior;
 - overlay request does not execute host commands;
 - overlay request does not mutate product/editor/game state;
 - overlay request does not perform text editing;
@@ -797,6 +994,9 @@ input_sample_id
 source_control_id
 anchor_id
 request_id
+session_id
+stack_entry_id
+scope_id
 overlay_kind
 trigger
 open_intent
@@ -836,7 +1036,7 @@ Stop and redesign if implementation requires:
 - command execution in generic UI;
 - product/editor/game mutation in generic UI;
 - app-specific modal lifecycle in generic UI;
-- overlay behavior in `ui_controls` beyond declarations;
+- overlay behavior in `ui_controls` beyond declarations/builders;
 - input semantics in `ui_input` beyond facts;
 - story registry/discovery moved into `ui_runtime`;
 - editor shell surface registration or Workbench provider redesign;
@@ -853,10 +1053,14 @@ Stop and redesign if implementation requires:
 This design is accepted when it records:
 
 - owner crates/modules;
-- allowed files;
-- forbidden files;
+- expected implementation files and amendment rule;
+- forbidden files and product surfaces;
 - public API vocabulary;
 - stable ids;
+- ergonomic declaration defaults;
+- flexibility/extension seams;
+- overlay session and stack lifecycle;
+- viewport/scroll/anchor invalidation behavior;
 - proof fixture shape;
 - positive scenarios;
 - negative scenarios;
