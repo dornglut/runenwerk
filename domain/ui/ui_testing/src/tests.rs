@@ -7,7 +7,7 @@ fn architecture_fixtures_compile_evaluate_assert_and_reproduce() {
     let report = fixture.headless.compile_report();
     let run = fixture.run();
 
-    assert!(report.passed());
+    assert!(report.passed(), "{report:#?}");
     assert_eq!(fixture.fixture_id, "minimal-label");
     assert_eq!(run.artifact.manifest.program_id, "fixture.headless");
     assert_eq!(run.artifact.tables.visual.rows.len(), 1);

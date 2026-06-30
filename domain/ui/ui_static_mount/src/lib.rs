@@ -15,6 +15,11 @@ pub struct UiStaticMountReport {
 }
 
 impl UiStaticMountReport {
+    /// Builds static mount evidence from a headless render-data report.
+    ///
+    /// This path first requires the headless report to pass, then validates the
+    /// renderer-neutral `UiFrame` through the same frame validator used by
+    /// direct proof adapters.
     pub fn from_render_data_report(report: &UiHeadlessRenderDataReport) -> Self {
         if !report.passed() {
             return Self {
@@ -36,7 +41,17 @@ impl UiStaticMountReport {
             };
         };
 
-        let summary = StaticMountSummary::from_frame(frame);
+        Self::from_frame(frame.clone())
+    }
+
+    /// Builds static mount evidence directly from a renderer-neutral frame.
+    ///
+    /// This is for proof adapters that already produce `UiFrame` and do not
+    /// need to go through headless render-data generation. The validation still
+    /// requires a surface, primitives, background/rect evidence, border/outline
+    /// evidence, and stable draw order.
+    pub fn from_frame(frame: UiFrame) -> Self {
+        let summary = StaticMountSummary::from_frame(&frame);
         let mut diagnostics = Vec::new();
         if summary.surface_count == 0 {
             diagnostics.push(UiStaticMountDiagnostic::error(
@@ -72,10 +87,7 @@ impl UiStaticMountReport {
         let mounted_frame = diagnostics
             .iter()
             .all(|diagnostic| diagnostic.severity != UiStaticMountDiagnosticSeverity::Error)
-            .then(|| MountedStaticUiFrame {
-                frame: frame.clone(),
-                summary,
-            });
+            .then(|| MountedStaticUiFrame { frame, summary });
 
         Self {
             mounted_frame,

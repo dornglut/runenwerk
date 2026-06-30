@@ -3,14 +3,15 @@
 use ui_program::{
     AccessibilityNode, AccessibilityNodeId, AccessibilityRole, BindingEdge, BindingEdgeId,
     BindingEndpoint, BindingEndpointId, ControlGraphNode, ControlKernelRef, ControlKindRef,
-    ControlNodeId, ControlPackageRef, InspectionEntry, InspectionEntryId, InteractionHandler,
-    InteractionHandlerId, InteractionTrigger, LayoutConstraintId, LayoutGraphNode, RouteCapability,
-    RouteId, StatePersistence, StateRequirement, StateRequirementId, StateRequirementLifecycle,
-    StyleRule, StyleRuleId, StyleSlotId, UiProgram, UiProgramId, UiProgramSource,
-    UiProgramSourceId, UiProgramSourceMapAttachment, UiProgramSourceMapEntry, UiProgramSourceSpan,
-    UiProgramTargetId, UiProgramVersion, VisualOperator, VisualOperatorId,
+    ControlNodeId, ControlPackageRef, ControlPropertySnapshot, ControlPropertySnapshotId,
+    InspectionEntry, InspectionEntryId, InteractionHandler, InteractionHandlerId,
+    InteractionTrigger, LayoutConstraintId, LayoutGraphNode, RouteCapability, RouteId,
+    StatePersistence, StateRequirement, StateRequirementId, StateRequirementLifecycle, StyleRule,
+    StyleRuleId, StyleSlotId, UiProgram, UiProgramId, UiProgramSource, UiProgramSourceId,
+    UiProgramSourceMapAttachment, UiProgramSourceMapEntry, UiProgramSourceSpan, UiProgramTargetId,
+    UiProgramVersion, VisualOperator, VisualOperatorId,
 };
-use ui_schema::UiSchemaRef;
+use ui_schema::{UiSchemaRef, UiSchemaValue};
 
 pub(crate) fn headless_program(preview_capability: RouteCapability) -> UiProgram {
     let control_id = ControlNodeId::new("control.fixture.title");
@@ -48,6 +49,15 @@ pub(crate) fn headless_program(preview_capability: RouteCapability) -> UiProgram
         )
         .with_state_requirement(state_id.clone())
         .with_capability(preview_capability.clone())
+        .with_source_map(source_map()),
+    );
+    program.graphs.properties.add_snapshot(
+        ControlPropertySnapshot::new(
+            ControlPropertySnapshotId::new("properties.fixture.title"),
+            control_id.clone(),
+            title_schema.clone(),
+            UiSchemaValue::object([("label", UiSchemaValue::string("Inspector"))]),
+        )
         .with_source_map(source_map()),
     );
     program.graphs.layout.constraints.push(

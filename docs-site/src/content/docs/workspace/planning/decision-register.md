@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-06-29
 related_docs:
   - ../workflow-lifecycle.md
 ---
@@ -111,7 +111,7 @@ Date: 2026-06-26
 
 Decision: Mark `PT-UI-COMPONENT-PLATFORM-009` Layout / Container / Virtualization complete.
 
-Context: PR #29 merged the corrected owner-first Phase 9 work into `main`. PR #30 is closed unmerged and superseded.
+Context: PR #29 merged the corrected Phase 9 work into `main`. PR #30 is closed unmerged and superseded.
 
 Options considered: Keep Phase 9 pending local validation; close Phase 9 based on user validation report; reopen the stale pre-realignment branch.
 
@@ -217,6 +217,108 @@ Evidence: Phase 11 closeout, Phase 5 input/gesture/device design, editor Interac
 
 Follow-up: Review the Phase 12 design intake. Do not authorize implementation until the later PR has exact owner files, non-goals, validation gate, evidence expectation, and stop conditions.
 
+## Phase 12 generic interaction review evidence decision
+
+Date: 2026-06-29
+
+Decision: Keep `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction in review while PR #43 cleanup, validation, and merge are pending.
+
+State transition: `active-implementation -> review`
+
+Context: PR #43 on branch `codex/phase-12-generic-interaction` implemented package-backed reusable interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven replay/report, renderer-neutral visible proof, and boundary assertions without app/editor/game command behavior or product mutation.
+
+Options considered: Keep Phase 12 in review until PR #43 is cleaned up, validated, and merged; complete Phase 12 using the renderer-neutral `InteractionVisualProof`/`InteractionProofFrame` path plus deterministic replay/report tests before merge; reopen Phase 12 to add overlay/layering or text editing.
+
+Reason: The accepted design requires visible proof, descriptor-backed replay, no-bypass evidence, and explicit deferral of overlays/layering and full text editing. PR #43 provides a renderer-neutral main/inspector/report proof model formed from compiled base-control package descriptors, but completion cannot be claimed before the branch is cleaned up, validated, reviewed, and merged. Requiring a product-facing gallery page would expand Phase 12 into unrelated gallery/framework work.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, and `ui-component-platform-generic-interaction-design.md`.
+
+Evidence: `ControlPackageDescriptor::interaction_descriptors`, `ControlPackageAuthoringBuilder::with_interaction_descriptor`, `ControlCatalogIndex::from_packages`, base-control interaction lowering, `NormalizedInputFact`, `MountedInteractionFixture`, `InteractionFormationReport`, `InteractionVisualProof`, `InteractionProofFrame`, and `interaction_replay_report` tests on PR #43.
+
+Follow-up: Finish PR #43 cleanup and validation, then review/merge PR #43 before marking Phase 12 complete. Keep Phase 13 overlays/layering and later full text editing deferred until separate active planning records authorize them.
+
+## Phase 12A executable interaction story planning decision
+
+Date: 2026-06-29
+
+Decision: Start `PT-UI-COMPONENT-PLATFORM-012A-PLANNING` as an Executable Interaction Story design intake before implementation.
+
+State transition: `production-track -> active-planning`
+
+Context: Phase 12 provides contract, replay, report, renderer-neutral visible proof, and static frame mount evidence. That lower-tier evidence is useful, but it does not yet prove live gallery/proof-host interaction where actual pointer/key/focus/text-intent input updates reusable interaction state through the same normalized input and runtime formation path.
+
+Options considered: Keep static proof as the final interaction standard; add an ad-hoc live Button demo; define a Tier 5 executable story standard with deterministic replay, live proof-host execution, semantic replay/live parity, static frame evidence, and no-bypass assertions.
+
+Reason: Static proof alone is too weak for future reusable interaction claims, and a live demo alone can bypass descriptors, catalog facts, normalized input, and runtime interaction formation. The stronger long-term standard is one executable story that can run in replay mode and live mode, with both modes differing only by input source after normalization.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `design/active/README.md`, and `ui-component-platform-executable-interaction-story-design.md`.
+
+Evidence: PR #43 lower-tier interaction assets, Phase 3 story-proof ownership boundary, the Phase 12 design and review evidence, and the new executable interaction story design intake.
+
+Follow-up: Review and accept, revise, or reject the Tier 5 design. Do not authorize code until owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation, and stop conditions are accepted.
+
+## Phase 12A executable interaction story acceptance decision
+
+Date: 2026-06-29
+
+Decision: Accept `ui-component-platform-executable-interaction-story-design.md` as the Tier 5 executable interaction story direction.
+
+State transition: `proposed-design -> accepted-direction`
+
+Context: User reviewed and accepted the Tier 5 design intake. The design records owner boundaries, vocabulary, non-goals, tradeoffs, acceptance criteria, implementation gate, stop conditions, and relationship to current work.
+
+Options considered: Revise the design before acceptance; accept the Tier 5 direction and keep implementation blocked until exact scope is inspected; start implementation immediately.
+
+Reason: The design provides the required long-term standard without authorizing speculative implementation. It keeps the lower-tier Phase 12 static/replay proof as reusable evidence, but requires a future executable story with replay/live semantic parity before live reusable interaction proof can be claimed.
+
+Affected planning files: `ui-component-platform-executable-interaction-story-design.md`, `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: User acceptance on 2026-06-29, the accepted design document, PR #43 lower-tier interaction assets, and the updated active-work planning entry.
+
+Follow-up: Inspect actual `ui_story`, `ui_runtime`, `ui_input`, `ui_static_mount`, and gallery/proof-host files. Then create the exact active-implementation scope with owner files/crates, host adapter location, runtime session API scope, validation envelope, evidence artifacts, manual live validation, and stop conditions.
+
+## Phase 12A executable interaction story implementation-scope decision
+
+Date: 2026-06-29
+
+Decision: Promote `PT-UI-COMPONENT-PLATFORM-012A` to active implementation using `ui-component-platform-executable-interaction-story-implementation-scope.md`.
+
+State transition: `active-planning -> active-implementation`
+
+Context: The accepted Tier 5 direction has now been inspected against the available owner crates. `ui_story` has a V2 proof-envelope workflow model, `ui_runtime` has descriptor-backed replay/proof assets, `ui_input` has normalized input facts and high-level input events, `ui_static_mount` has direct `UiFrame` validation, and `runenwerk_editor` has shell input seams but no dedicated `ui_gallery` crate or module on this branch.
+
+Options considered: Keep implementation blocked until a product-facing gallery module exists; implement broad editor shell/product gallery integration now; implement the narrow Tier 5 proof-host slice with exact files, shared replay/live runtime path, semantic parity, static mount evidence, and stop conditions.
+
+Reason: The narrow proof-host slice is the correct next step. It proves executable interaction without overreaching into product-facing shell surfaces, overlays, text editing, command dispatch, generic plugin infrastructure, or `foundation/meta`. Product-facing editor/window/gallery exposure can follow after this proof-host evidence exists.
+
+Affected planning files: `ui-component-platform-executable-interaction-story-implementation-scope.md`, `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: Inspection of `ui_story` V2 workflow files, `ui_runtime` generic interaction fixture/replay/proof files, `ui_input` fact/event files, `ui_static_mount::UiStaticMountReport::from_frame`, `runenwerk_editor` dependencies and shell input seams, and the implementation scope document.
+
+Follow-up: Implement only the scoped files. Stop and record a scope revision if implementation requires editor shell surface registry changes, product command execution, product mutation, overlays, full text editing, a parallel story runner, a generic plugin framework, `foundation/meta`, or generic plugin primitives.
+
+## Phase 12 / 12A review correction and UI Gallery split decision
+
+Date: 2026-06-30
+
+Decision: Correct PR #43 planning truth: `PT-UI-COMPONENT-PLATFORM-012` and `PT-UI-COMPONENT-PLATFORM-012A` are in review and pending cleanup, validation, and merge. Remove `PT-UI-COMPONENT-PLATFORM-012B` from active planning and split UI Gallery product exposure into separate future `PT-UI-GALLERY-001`.
+
+State transition: `completed` / `active-implementation` -> `review`
+
+Context: PR #43 contains useful Phase 12 lower-tier generic interaction evidence and Phase 12A executable interaction story evidence, but the branch also introduced flawed 012B/UI Lab proof-surface work that reused provider id `11`, created invalid Workbench provider assignment behavior, and overstated UI Gallery/product exposure. Completion language was premature because PR #43 has not merged.
+
+Options considered: Repair the flawed UI Lab surface attempt inside PR #43; keep 012B active and add more provider-registry work; remove 012B from PR #43, keep 012/012A in review, and plan UI Gallery separately.
+
+Reason: The long-term boundary keeps reusable interaction semantics and executable story proof in owner crates and narrow proof-host evidence. UI Gallery exposure is product/platform adoption work, not required to validate PR #43's reusable interaction proof. Keeping the flawed 012B surface would blur provider identity, Workbench composition, and gallery claims.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, and the PR #43 body.
+
+Evidence: User cleanup instruction on 2026-06-30, restored workbench coverage, duplicate provider assignment failure from the 012B UI Lab surface path, and the accepted executable interaction story design's stop conditions around product-facing gallery and shell-surface expansion.
+
+Follow-up: Update PR #43 body to remove 012B/UI Lab surface claims, validate the focused Phase 12/12A gate, and merge only after the branch contains no 012B work or planning claims.
+
+Reactivation condition: Create `PT-UI-GALLERY-001` only through a separate active planning entry with owner, scope, validation envelope, evidence expectation, and stop conditions.
+
 ## Lifecycle rule
 
 Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.
@@ -237,5 +339,3 @@ Reactivation condition:
 Supersedes:
 Superseded by:
 ```
-
-Existing entries may be migrated as they are touched.

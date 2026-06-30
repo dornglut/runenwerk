@@ -118,7 +118,8 @@ fn composition_unavailable_content_fallback_order_requires_explicit_hide_authori
 #[test]
 fn composition_persistence_has_no_active_legacy_writer_or_reverse_loader() {
     let persistence = include_str!("../src/persistence/workspace_layout.rs");
-    let active = persistence
+    let normalized = persistence.replace("\r\n", "\n");
+    let active = normalized
         .split("#[cfg(test)]\npub fn write_workspace_layout")
         .next()
         .expect("active persistence source should precede test adapters");

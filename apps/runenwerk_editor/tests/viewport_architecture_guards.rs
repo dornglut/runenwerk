@@ -11,6 +11,7 @@ use editor_viewport::{
     ExpressionSourceRealityClass, ViewportId, ViewportPresentationState,
     ViewportSurfacePresentationSlot,
 };
+use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::{
     EditorPickingHit, EditorPickingTarget, RenderFlowRegistryResource, UiFrameProducerId,
     UiFrameSubmissionRegistryResource,
@@ -364,8 +365,8 @@ fn shell_frame_uses_viewport_embed_primitive_instead_of_raw_image_path() {
         .resource::<UiFrameSubmissionRegistryResource>()
         .expect("ui submission registry should exist");
     let submission = submissions
-        .get(&EDITOR_SHELL_UI_PRODUCER_ID)
-        .expect("editor shell submission should exist");
+        .get_for_surface(&EDITOR_SHELL_UI_PRODUCER_ID, RenderSurfaceId::primary())
+        .expect("editor shell primary surface submission should exist");
     let has_embed = submission
         .frame
         .surfaces
@@ -611,12 +612,12 @@ fn production_input_bridge_routes_viewport_interaction_by_tool_surface_session()
         "viewport input route must carry ToolSurfaceInstanceId",
     );
     assert!(
-        input_bridge.contains("dispatch_viewport_interaction_for_surface"),
-        "viewport input must dispatch interaction commands to a targeted surface session",
+        input_bridge.contains("dispatch_viewport_interaction_for_mounted_unit"),
+        "viewport input must dispatch interaction commands to a mounted-unit targeted surface session",
     );
     assert!(
-        input_bridge.contains("active_viewport_drag_surface"),
-        "viewport drag continuation must resolve captured surface session state",
+        input_bridge.contains("active_viewport_drag_mounted_unit"),
+        "viewport drag continuation must resolve captured mounted-unit session state",
     );
     assert!(
         input_bridge.contains("viewport_scene_binding_for_widget"),
@@ -1148,8 +1149,8 @@ fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_
         "workspace layout definitions should produce a non-theme live activation contract",
     );
     assert!(
-        resources.contains("form_workspace_state_from_definition")
-            && resources.contains("replace_workspace_state"),
+        resources.contains("form_workspace_state_from_definition_with_registry")
+            && resources.contains("install_composition_runtime"),
         "app runtime should apply authored workspace layouts through editor_shell formation",
     );
     assert!(
@@ -1212,8 +1213,8 @@ fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_
         catalogs.contains("command_for_route_target")
             && catalogs.contains("available_tool_surface_keys")
             && compatibility.contains("known_tool_surface_keys_in_authored_order")
-            && compatibility.contains("panel_registry_covers_workspace")
-            && compatibility.contains("tool_surface_registry_covers_workspace"),
+            && compatibility.contains("panel_registry_covers_composition")
+            && compatibility.contains("tool_surface_registry_covers_panel_defaults"),
         "active command and tool-surface catalogs should expose app-owned routing/future-creation seams",
     );
 }
@@ -1552,10 +1553,10 @@ fn production_workspace_layout_readers_are_registry_aware() {
         read_workspace_source("apps/runenwerk_editor/src/persistence/workspace_layout.rs");
 
     assert!(
-        dispatch.contains("read_workspace_layout_with_metadata_and_registry")
+        dispatch.contains("load_editor_composition_layout")
             && !dispatch.contains("read_workspace_layout_legacy_no_registry")
             && !dispatch.contains("read_workspace_layout_with_metadata_legacy_no_registry"),
-        "production shell workspace load paths must use registry-aware V5 readers",
+        "production shell workspace load paths must use composition layout readers",
     );
     assert!(
         persistence.contains("read_workspace_layout_legacy_no_registry")

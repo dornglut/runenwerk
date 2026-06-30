@@ -2815,6 +2815,7 @@ dependencies = [
  "ui_program_lowering",
  "ui_render_data",
  "ui_render_primitives",
+ "ui_runtime",
  "ui_runtime_view",
  "ui_static_mount",
  "ui_story",
@@ -3948,6 +3949,7 @@ dependencies = [
 name = "ui_runtime"
 version = "0.1.0"
 dependencies = [
+ "ui_controls",
  "ui_graph_editor",
  "ui_input",
  "ui_layout",
@@ -4004,6 +4006,7 @@ dependencies = [
  "ui_program_lowering",
  "ui_render_data",
  "ui_render_primitives",
+ "ui_runtime",
  "ui_runtime_view",
  "ui_text",
  "ui_theme",

@@ -11,6 +11,8 @@ use editor_shell::{
     WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError, WorkspaceSplitAxis,
     WorkspaceState, import_legacy_workspace, project_editor_composition,
 };
+#[cfg(test)]
+use editor_shell::{WorkspaceMutation, reduce_workspace};
 use engine::plugins::render::backend::RenderSurfaceId;
 use engine::runtime::NativeWindowId;
 use std::collections::BTreeMap;
@@ -124,6 +126,8 @@ pub struct RunenwerkEditorShellState {
     self_authoring: SelfAuthoringWorkspaceState,
     active_editor_definitions: ActiveEditorDefinitionCatalogs,
     interaction_by_target: BTreeMap<PresentationTargetId, TargetInteractionState>,
+    #[cfg(test)]
+    legacy_workspace_snapshot: WorkspaceState,
 }
 
 fn reconcile_composition_target_bindings(
@@ -388,6 +392,8 @@ impl RunenwerkEditorShellState {
                 .expect("checked-in self-authoring fixtures should load"),
             active_editor_definitions,
             interaction_by_target,
+            #[cfg(test)]
+            legacy_workspace_snapshot: workspace_state,
         })
     }
 
@@ -505,6 +511,30 @@ impl RunenwerkEditorShellState {
 
     pub fn workspace_id(&self) -> WorkspaceId {
         self.workspace_id
+    }
+
+    #[cfg(test)]
+    pub(crate) fn workspace_state(&self) -> &WorkspaceState {
+        &self.legacy_workspace_snapshot
+    }
+
+    #[cfg(test)]
+    pub(crate) fn replace_workspace_state(&mut self, workspace: WorkspaceState) {
+        let runtime = import_legacy_workspace(self.active_workspace_profile_id, &workspace)
+            .expect("test workspace replacement should import as editor composition");
+        self.install_composition_runtime(runtime)
+            .expect("test workspace replacement should project as editor composition");
+        self.legacy_workspace_snapshot = workspace;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn apply_workspace_mutation(
+        &mut self,
+        op: WorkspaceMutation,
+    ) -> Result<(), editor_shell::WorkspaceStateError> {
+        let workspace = reduce_workspace(&self.legacy_workspace_snapshot, op)?;
+        self.replace_workspace_state(workspace);
+        Ok(())
     }
 
     pub fn composition_runtime(&self) -> &EditorCompositionRuntime {
@@ -943,6 +973,10 @@ impl RunenwerkEditorShellState {
         self.composition_identity_allocator =
             EditorCompositionIdentityAllocator::from_runtime(&self.composition_runtime);
         self.composition_projection = composition_projection;
+        #[cfg(test)]
+        {
+            self.legacy_workspace_snapshot = workspace_state;
+        }
         self.active_workspace_profile_id = profile.id;
         if !self.open_workspace_profile_ids.contains(&profile.id) {
             self.open_workspace_profile_ids.push(profile.id);

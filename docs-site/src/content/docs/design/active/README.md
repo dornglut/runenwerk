@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-06-30
 ---
 
 # Active Designs
@@ -79,6 +79,9 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [UI Component Platform Budget Evidence Design](ui-component-platform-budget-evidence-design.md)
 - [UI Component Platform Catalog / Discovery / Inspection Design](ui-component-platform-catalog-discovery-inspection-design.md)
 - [UI Component Platform Control Kernel Design](ui-component-platform-control-kernel-design.md)
+- [UI Component Platform Executable Interaction Story Design](ui-component-platform-executable-interaction-story-design.md)
+- [UI Component Platform Executable Interaction Story Implementation Scope](ui-component-platform-executable-interaction-story-implementation-scope.md)
+- [UI Component Platform Generic Interaction Design](ui-component-platform-generic-interaction-design.md)
 - [UI Component Platform Generic Text Design](ui-component-platform-generic-text-design.md)
 - [UI Component Platform Input / Gesture / Device Design](ui-component-platform-input-gesture-device-design.md)
 - [UI Component Platform Layout / Container / Virtualization Design](ui-component-platform-layout-container-virtualization-design.md)

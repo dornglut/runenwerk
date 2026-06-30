@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-06-30
 related_docs:
   - ../workflow-lifecycle.md
   - ../../reports/closeouts/README.md
@@ -194,7 +194,7 @@ Known gaps: Full runtime interaction remains Phase 12. Overlays, popups, dropdow
 
 Closeout report: `../../reports/closeouts/pt-ui-component-platform-011-base-control-packages-closeout.md`
 
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-012-PLANNING` Generic Interaction design intake.
+Follow-up: Phase 12 is in review through PR #43. Do not add it to completed work until cleanup, validation, and merge are complete.
 
 ## Entry shape
 

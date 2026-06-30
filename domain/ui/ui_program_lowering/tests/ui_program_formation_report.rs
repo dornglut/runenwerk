@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use ui_controls::{
     ControlKernelId, ControlKernelSet, ControlKindDescriptor, ControlKindId,
-    ControlPackageDescriptor, ControlPackageId, ControlPackageRegistry, ControlPackageVersion,
-    runenwerk_control_package,
+    ControlPackageDescriptor, ControlPackageId, ControlPackageRegistry,
+    ControlPackageRegistrySnapshot, ControlPackageVersion, runenwerk_control_package,
 };
 use ui_definition::{
     AuthoredControlAccessibilityDefinition, AuthoredControlKindId, UiNodeDefinition,
@@ -35,9 +35,7 @@ fn formation_report_from_registry_snapshot_passes_for_runenwerk_controls() {
 fn formation_report_from_registry_snapshot_includes_catalog_derivation_diagnostics() {
     let control_kind_id = "fixture.ui.controls.no-capability";
 
-    let registry = ControlPackageRegistry::new()
-        .with_package(no_capability_package(control_kind_id))
-        .expect("fixture package should register");
+    let snapshot = snapshot_from_package(no_capability_package(control_kind_id));
 
     let node = UiNodeDefinition::Control {
         id: "fixture_no_capability".into(),
@@ -56,7 +54,7 @@ fn formation_report_from_registry_snapshot_includes_catalog_derivation_diagnosti
         "fixture.ui.no_capability",
         "fixture.ui.no_capability",
         &node,
-        &registry.snapshot(),
+        &snapshot,
     );
 
     assert!(!report.passed());
@@ -92,6 +90,27 @@ fn no_capability_package(control_kind_id: &str) -> ControlPackageDescriptor {
     );
     package.control_kinds.push(kind);
     package
+}
+
+fn snapshot_from_package(package: ControlPackageDescriptor) -> ControlPackageRegistrySnapshot {
+    ControlPackageRegistrySnapshot {
+        packages: vec![package.clone()],
+        control_kinds: package.control_kinds.clone(),
+        schemas: package
+            .property_schemas
+            .iter()
+            .chain(package.state_schemas.iter())
+            .chain(package.event_payload_schemas.iter())
+            .cloned()
+            .collect(),
+        kernels: package.kernels.clone(),
+        fixtures: package.fixtures.clone(),
+        diagnostics: package.diagnostics.clone(),
+        migrations: package.migrations.clone(),
+        stories: package.stories.clone(),
+        route_requirements: package.route_requirements.clone(),
+        target_profiles: package.target_profiles.clone(),
+    }
 }
 
 fn load_node(relative_repo_path: &str) -> UiNodeDefinition {

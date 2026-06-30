@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::accessibility::ControlAccessibilityCapabilitySummary;
 use crate::input::ControlInputCapabilitySummary;
+use crate::interaction::ControlInteractionSupportSummary;
 use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
 use crate::package::story_proof::ControlStoryProofSummary;
 use crate::state::ControlStateCapabilitySummary;
@@ -205,6 +206,18 @@ impl ControlInspectionDescriptor {
         self
     }
 
+    pub fn with_interaction_summary(mut self, summary: &ControlInteractionSupportSummary) -> Self {
+        for fact in summary.inspection_facts() {
+            push_fact(
+                &mut self.facts,
+                ControlInspectionSection::Interaction,
+                &fact.key,
+                &fact.value,
+            );
+        }
+        self
+    }
+
     pub fn with_state_summary(mut self, summary: &ControlStateCapabilitySummary) -> Self {
         for fact in summary.inspection_facts() {
             push_fact(
@@ -264,6 +277,7 @@ pub enum ControlInspectionSection {
     Stories,
     StoryProof,
     Input,
+    Interaction,
     State,
     Theme,
     Accessibility,

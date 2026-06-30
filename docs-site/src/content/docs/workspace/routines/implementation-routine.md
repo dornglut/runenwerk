@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-06-30
 related_docs:
   - ../start-here.md
   - ../workflow-lifecycle.md
@@ -44,6 +44,7 @@ For phase completion work, inspect the files that will be used as completion evi
 - lifecycle state is `active-implementation` or explicitly authorized equivalent;
 - invariant or behavior being changed;
 - public API and docs impact;
+- durable vocabulary versus temporary proof, migration, or test-fixture names;
 - validation expectation;
 - stop conditions;
 - whether a design or ADR update is required;
@@ -65,6 +66,7 @@ When the implementation patch is merged or otherwise accepted and it completes a
 - Keep dependency direction legal.
 - Use explicit contracts across boundaries.
 - Update docs when public behavior, ownership, or usage changes.
+- Give durable public APIs, stable ids, reusable fixture helpers, and platform vocabulary domain-shaped names. Keep phase and PR labels in planning, tests, reports, or migration notes unless an accepted design explicitly says otherwise.
 - If the patch is intended to complete an active phase, either include the closeout/planning updates or explicitly name the follow-up closeout patch required before the next implementation starts.
 
 ## Manual validation checklist
@@ -75,6 +77,7 @@ When the implementation patch is merged or otherwise accepted and it completes a
 - Seven programming principles applied as a review lens.
 - Dependency direction checked.
 - Public API impact checked.
+- Durable naming checked for public exports, stable ids, fixtures, and docs.
 - Tests or local commands to run named.
 - Command validation status stated honestly.
 - Phase completion or closeout impact stated when the patch may finish a phase.
@@ -82,6 +85,8 @@ When the implementation patch is merged or otherwise accepted and it completes a
 ## Stop conditions
 
 Stop and redesign if the requested implementation is only backed by accepted direction, has no exact owner/scope, violates dependency direction, needs architecture decision first, or requires validation that cannot be reported honestly.
+
+Stop and redesign if a temporary proof, migration helper, or test fixture starts becoming a durable public API, stable id, reusable platform vocabulary, or product-facing surface without an accepted owner-first design.
 
 Stop and do closeout/planning work instead if the next requested implementation depends on a previous phase that is merged in code but not truthfully closed in planning records.
 

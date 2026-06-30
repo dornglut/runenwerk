@@ -9,7 +9,9 @@ use crate::{
     RUNENWERK_CONTROL_TARGET_EDITOR,
 };
 
-use super::lowering::{accessibility, input, inspection, layout, module, render, state, theme};
+use super::lowering::{
+    accessibility, input, inspection, interaction, layout, module, render, state, theme,
+};
 use super::{
     CompiledControl, CompiledControlPackage, ControlContribution, ControlInspection, UiControls,
 };
@@ -39,21 +41,27 @@ impl ControlCompiler {
                 .with_catalog_metadata(ControlCatalogMetadata::new(RUNENWERK_CONTROL_PACKAGE_ID, "Base Controls"));
 
         for control in &lowered {
-            package_builder = package_builder.with_module(control.module.clone());
+            package_builder = package_builder
+                .with_module(control.module.clone())
+                .with_interaction_descriptor(control.interaction.clone());
         }
 
         let package = package_builder.build();
-        let catalog = ControlCatalogIndex::from_packages([&package]);
         let controls = lowered
             .into_iter()
             .map(|control| {
                 let inspection = inspection::lower_inspection(&package, &control);
+                let interaction = package
+                    .interaction_descriptor(&control.module.kind.control_kind_id)
+                    .cloned()
+                    .expect("compiled base controls must carry package interaction descriptors");
                 CompiledControl {
                     contribution: control.contribution,
                     module: control.module,
                     layout: control.layout,
                     render: control.render,
                     input: control.input,
+                    interaction,
                     state: control.state,
                     theme: control.theme,
                     accessibility: control.accessibility,
@@ -61,6 +69,7 @@ impl ControlCompiler {
                 }
             })
             .collect::<Vec<_>>();
+        let catalog = ControlCatalogIndex::from_packages([&package]);
         let inspection = ControlInspection {
             controls: controls
                 .iter()
@@ -89,6 +98,7 @@ impl ControlCompiler {
             layout: layout::lower_layout(contribution.def(), kind_id.clone()),
             render: render::lower_render(contribution.def(), kind_id.clone()),
             input: input::lower_input(contribution.def(), kind_id.clone()),
+            interaction: interaction::lower_interaction(contribution.def(), kind_id.clone()),
             state: state::lower_state(contribution.def(), kind_id.clone()),
             theme: theme::lower_theme(contribution.def(), kind_id.clone()),
             accessibility: accessibility::lower_accessibility(contribution.def(), kind_id),
@@ -103,6 +113,7 @@ pub(crate) struct LoweredControl {
     pub(crate) layout: crate::ControlLayoutDescriptor,
     pub(crate) render: ControlRenderDescriptor,
     pub(crate) input: ControlInputDescriptor,
+    pub(crate) interaction: crate::ControlInteractionDescriptor,
     pub(crate) state: ControlStateDescriptor,
     pub(crate) theme: ControlThemeDescriptor,
     pub(crate) accessibility: ControlAccessibilityDescriptor,

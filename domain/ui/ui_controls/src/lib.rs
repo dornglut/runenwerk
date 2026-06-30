@@ -10,6 +10,7 @@ pub mod color_picker;
 pub mod diagnostics;
 pub mod input;
 pub mod inspector_field;
+pub mod interaction;
 pub mod kernel;
 pub mod label;
 pub mod layout;
@@ -31,6 +32,7 @@ pub use catalog::*;
 pub use color_picker::COLOR_PICKER_CONTROL_KIND_ID;
 pub use diagnostics::*;
 pub use inspector_field::INSPECTOR_FIELD_CONTROL_KIND_ID;
+pub use interaction::*;
 pub use kernel::*;
 pub use label::LABEL_CONTROL_KIND_ID;
 pub use list_view::LIST_VIEW_CONTROL_KIND_ID;
@@ -67,6 +69,7 @@ mod tests {
         assert_eq!(package.diagnostics.len(), 8);
         assert_eq!(package.migrations.len(), 8);
         assert_eq!(package.stories.len(), 8);
+        assert_eq!(package.interaction_descriptors.len(), 8);
     }
 
     #[test]
@@ -165,6 +168,17 @@ mod tests {
         let mut package = runenwerk_control_package();
         package.stories.push(package.stories[0].clone());
         assert_has_reason(package, ControlPackageValidationReason::DuplicateStoryId);
+    }
+    #[test]
+    fn control_package_rejects_duplicate_interaction_descriptor() {
+        let mut package = runenwerk_control_package();
+        package
+            .interaction_descriptors
+            .push(package.interaction_descriptors[0].clone());
+        assert_has_reason(
+            package,
+            ControlPackageValidationReason::DuplicateInteractionDescriptor,
+        );
     }
     #[test]
     fn runenwerk_control_package_validates() {

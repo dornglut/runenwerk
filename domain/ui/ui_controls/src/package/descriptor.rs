@@ -16,6 +16,7 @@ use super::metadata::{
     ControlStoryDescriptor, ControlTag,
 };
 use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
+use crate::interaction::ControlInteractionDescriptor;
 use crate::kernel::{ControlKernelDescriptor, ControlKernelId, ControlKernelSet};
 use crate::migration::{ControlDeprecationStatus, ControlMigrationHook, ControlMigrationId};
 use crate::schema::{ControlSchemaDescriptor, ControlSchemaRole};
@@ -283,6 +284,13 @@ pub struct ControlPackageDescriptor {
     pub story_ids: Vec<ControlStoryId>,
     #[serde(default)]
     pub stories: Vec<ControlStoryDescriptor>,
+    /// Package-owned reusable interaction descriptors.
+    ///
+    /// These declarations are catalog/runtime input for generic interaction
+    /// formation. They do not execute host commands, mutate product state,
+    /// create overlays, or own text editing.
+    #[serde(default)]
+    pub interaction_descriptors: Vec<ControlInteractionDescriptor>,
     #[serde(default)]
     pub mount_eligibility: ControlMountEligibility,
     #[serde(default)]
@@ -327,6 +335,7 @@ impl ControlPackageDescriptor {
             migration_ids: Vec::new(),
             story_ids: Vec::new(),
             stories: Vec::new(),
+            interaction_descriptors: Vec::new(),
             mount_eligibility: ControlMountEligibility::default(),
             binding_requirements: Vec::new(),
             theme_token_requirements: Vec::new(),
@@ -423,9 +432,27 @@ impl ControlPackageDescriptor {
         self.control_kinds.push(kind);
         self
     }
+
+    /// Adds a package-owned reusable interaction descriptor.
+    pub fn with_interaction_descriptor(mut self, descriptor: ControlInteractionDescriptor) -> Self {
+        self.interaction_descriptors.push(descriptor);
+        self
+    }
+
+    /// Finds a control kind descriptor by id.
     pub fn control_kind(&self, id: &ControlKindId) -> Option<&ControlKindDescriptor> {
         self.control_kinds
             .iter()
             .find(|kind| &kind.control_kind_id == id)
+    }
+
+    /// Finds a package-owned reusable interaction descriptor by control kind id.
+    pub fn interaction_descriptor(
+        &self,
+        control_kind_id: &ControlKindId,
+    ) -> Option<&ControlInteractionDescriptor> {
+        self.interaction_descriptors
+            .iter()
+            .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
     }
 }

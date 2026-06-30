@@ -1,5 +1,5 @@
 use editor_shell::{ComputedLayoutMap, UiNode, UiNodeKind, viewport_embed_slot_for};
-use editor_viewport::ViewportSurfacePresentationSlot;
+use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::WindowState;
 use engine::plugins::render::{
     EditorPickingTarget, UiFontAtlasResource, UiFrameProducerId, UiFrameRoute, UiFrameSubmission,
@@ -156,10 +156,10 @@ pub fn submit_editor_frame_system(
             .map(|expression| (entry.binding.render_surface_id, expression.into_ui_frame()))
         })
         .collect::<Vec<_>>();
-    let rendered_viewport_bounds = primary_viewport_bounds_from_frame(&frame);
+    let rendered_viewport_embeds = primary_viewport_embeds_from_frame(&frame);
     let viewport_bounds = active_viewport_id
         .and_then(|viewport_id| viewport_bounds_from_frame(&frame, viewport_id.0))
-        .or_else(|| rendered_viewport_bounds.first().copied())
+        .or_else(|| rendered_viewport_embeds.first().map(|(_, bounds)| *bounds))
         .or_else(|| {
             viewport_bounds(
                 shell_state.last_tree(),
@@ -181,6 +181,7 @@ pub fn submit_editor_frame_system(
         app,
         &mut viewport_render_states,
         &tool_surface_bindings,
+        &rendered_viewport_embeds,
         shell_scale,
         viewport_debug_stage(),
         root_background_opaque_enabled(),
@@ -307,6 +308,7 @@ fn sync_viewport_render_states_from_bindings(
     app: &crate::editor_app::RunenwerkEditorApp,
     viewport_render_states: &mut ViewportRenderStateResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    fallback_embeds: &[(ViewportId, UiRect)],
     shell_scale: f32,
     default_debug_stage: EditorViewportDebugStage,
     default_root_background_opaque: bool,
@@ -336,6 +338,31 @@ fn sync_viewport_render_states_from_bindings(
             viewport_id: binding.viewport_id,
             tool_surface_id: Some(binding.tool_surface_id),
             bounds: binding.bounds,
+            render_state,
+        });
+    }
+    for (viewport_id, bounds) in fallback_embeds {
+        if viewport_ids.contains(viewport_id) {
+            continue;
+        }
+        let mut render_state = viewport_render_states
+            .state_for(*viewport_id)
+            .map(|previous| previous.render_state.clone())
+            .unwrap_or_else(|| {
+                let mut state = EditorViewportRenderState::default();
+                state.set_debug_stage(default_debug_stage);
+                state.set_root_background_opaque(default_root_background_opaque);
+                state
+            });
+        render_state.set_viewport_bounds((bounds.x, bounds.y, bounds.width, bounds.height));
+        render_state.set_effective_shell_scale(shell_scale);
+        populate_viewport_render_state(app, &mut render_state, *bounds);
+        render_state.update_visibility_diagnostics(viewport_is_valid(*bounds), true);
+        viewport_ids.insert(*viewport_id);
+        viewport_render_states.upsert_state(ViewportRenderStateEntry {
+            viewport_id: *viewport_id,
+            tool_surface_id: None,
+            bounds: *bounds,
             render_state,
         });
     }
@@ -430,7 +457,7 @@ fn viewport_bounds_from_frame(frame: &UiFrame, viewport_id: u64) -> Option<UiRec
         })
 }
 
-fn primary_viewport_bounds_from_frame(frame: &UiFrame) -> Vec<UiRect> {
+fn primary_viewport_embeds_from_frame(frame: &UiFrame) -> Vec<(ViewportId, UiRect)> {
     frame
         .surfaces
         .iter()
@@ -441,7 +468,7 @@ fn primary_viewport_bounds_from_frame(frame: &UiFrame) -> Vec<UiRect> {
                 return None;
             };
             (embed.slot == viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary))
-                .then_some(embed.rect)
+                .then_some((ViewportId(embed.viewport_id), embed.rect))
         })
         .collect()
 }
@@ -710,14 +737,14 @@ mod tests {
     }
 
     #[test]
-    fn primary_viewport_bounds_from_frame_collects_split_viewport_embeds() {
+    fn primary_viewport_embeds_from_frame_collects_split_viewport_embeds() {
         let first = UiRect::new(10.0, 20.0, 300.0, 200.0);
         let second = UiRect::new(330.0, 20.0, 300.0, 200.0);
         let mut layer = UiLayer::new(UiLayerId(0));
         for (order, rect) in [first, second].into_iter().enumerate() {
             layer.push(UiPrimitive::ViewportSurfaceEmbed(
                 ViewportSurfaceEmbedPrimitive::new(
-                    1,
+                    2 + order as u64,
                     viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
                     rect,
                     UiRect::new(0.0, 0.0, 1.0, 1.0),
@@ -744,8 +771,8 @@ mod tests {
         )]);
 
         assert_eq!(
-            primary_viewport_bounds_from_frame(&frame),
-            vec![first, second]
+            primary_viewport_embeds_from_frame(&frame),
+            vec![(ViewportId(2), first), (ViewportId(3), second)]
         );
     }
 
@@ -769,6 +796,7 @@ mod tests {
             &app,
             &mut render_states,
             &bindings,
+            &[],
             1.0,
             EditorViewportDebugStage::Scene,
             false,
@@ -791,6 +819,7 @@ mod tests {
             &app,
             &mut render_states,
             &bindings,
+            &[],
             1.0,
             EditorViewportDebugStage::Scene,
             false,

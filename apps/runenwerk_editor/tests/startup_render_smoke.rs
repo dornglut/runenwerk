@@ -1,5 +1,6 @@
 use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
+use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::{
     CompiledPassExecutionPlan, RenderFlowRegistryResource, UiFrameProducerId,
     UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
@@ -127,9 +128,10 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
     );
 
     let submission = submissions
-        .get(&EDITOR_SHELL_UI_PRODUCER_ID)
-        .expect("editor shell submission should exist");
-    let scene_overlay_submission = submissions.get(&SCENE_OVERLAY_UI_PRODUCER_ID);
+        .get_for_surface(&EDITOR_SHELL_UI_PRODUCER_ID, RenderSurfaceId::primary())
+        .expect("editor shell primary surface submission should exist");
+    let scene_overlay_submission =
+        submissions.get_for_surface(&SCENE_OVERLAY_UI_PRODUCER_ID, RenderSurfaceId::primary());
 
     assert!(
         !submission.frame.is_empty(),
@@ -179,7 +181,25 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
             viewport_embed.viewport_id,
             viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary),
         )
-        .expect("viewport primary surface binding should exist");
+        .unwrap_or_else(|| {
+            let available_bindings = viewport_bindings
+                .registry()
+                .iter()
+                .map(|((viewport_id, slot), binding)| {
+                    let ViewportSurfaceBindingSource::DynamicTexture {
+                        namespace,
+                        target_id,
+                    } = &binding.source;
+                    format!("{viewport_id}:{}={namespace}/{target_id}", slot.raw())
+                })
+                .collect::<Vec<_>>();
+            panic!(
+                "viewport primary surface binding should exist for viewport {} slot {}; available bindings: {:?}",
+                viewport_embed.viewport_id,
+                viewport_embed_slot_for(ViewportSurfacePresentationSlot::Primary).raw(),
+                available_bindings
+            );
+        });
     let ViewportSurfaceBindingSource::DynamicTexture {
         namespace,
         target_id,
@@ -204,7 +224,20 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         viewport_render_jobs
             .job_for(editor_viewport::ViewportId(viewport_embed.viewport_id))
             .is_some(),
-        "embedded viewport should have a prepared render job",
+        "embedded viewport should have a prepared render job; jobs={:?} targets={:?}",
+        viewport_render_jobs.viewport_ids().collect::<Vec<_>>(),
+        viewport_product_targets
+            .records()
+            .map(|record| {
+                format!(
+                    "{}:{:?}:{:?}:{}",
+                    record.key.viewport_id.0,
+                    record.key.presentation_slot,
+                    record.key.product_id,
+                    record.target_id
+                )
+            })
+            .collect::<Vec<_>>(),
     );
     let viewport_state = &viewport_render_states
         .state_for(editor_viewport::ViewportId(viewport_embed.viewport_id))
@@ -293,8 +326,8 @@ fn primary_viewport_embeds(app: &engine::App) -> Vec<ViewportSurfaceEmbedPrimiti
         .resource::<UiFrameSubmissionRegistryResource>()
         .expect("ui submission registry should exist");
     let submission = submissions
-        .get(&EDITOR_SHELL_UI_PRODUCER_ID)
-        .expect("editor shell submission should exist");
+        .get_for_surface(&EDITOR_SHELL_UI_PRODUCER_ID, RenderSurfaceId::primary())
+        .expect("editor shell primary surface submission should exist");
     submission
         .frame
         .surfaces

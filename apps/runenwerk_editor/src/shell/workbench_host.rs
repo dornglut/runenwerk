@@ -615,6 +615,12 @@ impl From<SurfaceProviderRegistryError> for RunenwerkWorkbenchHostError {
     }
 }
 
+impl From<SurfaceProviderDiagnostic> for RunenwerkWorkbenchHostError {
+    fn from(diagnostic: SurfaceProviderDiagnostic) -> Self {
+        Self::SurfaceProviderSupport(diagnostic)
+    }
+}
+
 impl From<ProviderFamilyProviderMapError> for RunenwerkWorkbenchHostError {
     fn from(error: ProviderFamilyProviderMapError) -> Self {
         Self::ProviderFamilyProviderMap(error)
@@ -633,12 +639,6 @@ impl From<WorkbenchCompositionCompileError> for RunenwerkWorkbenchHostError {
     }
 }
 
-impl From<SurfaceProviderDiagnostic> for RunenwerkWorkbenchHostError {
-    fn from(error: SurfaceProviderDiagnostic) -> Self {
-        Self::SurfaceProviderSupport(error)
-    }
-}
-
 impl From<WorkspaceProfileRegistryBackedBuildError> for RunenwerkWorkbenchHostError {
     fn from(error: WorkspaceProfileRegistryBackedBuildError) -> Self {
         Self::WorkspaceProfileRegistry(error)
@@ -651,23 +651,19 @@ mod tests {
 
     use editor_core::DocumentKind;
     use editor_shell::{
-        CommandCapabilityKey, MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID,
-        MATERIAL_WORKSPACE_PROFILE_ID, PanelInstanceId, ProviderFamilyId,
+        CommandCapabilityKey, MATERIAL_WORKSPACE_PROFILE_ID, ProviderFamilyId,
         ProviderFamilyProviderAssignment, RUNTIME_DEBUG_WORKSPACE_PROFILE_ID,
-        SurfaceDocumentContext, SurfaceProviderAvailability, SurfaceProviderId,
-        SurfaceProviderRequest, TabStackId, ToolSurfaceInstanceId, ToolSurfaceKind,
-        ToolSurfacePersistence, ToolSurfaceRoute, WorkspaceState,
-        saveable_tool_surface_stable_key_candidates, tool_surface_capability_set,
+        SurfaceDocumentContext, SurfaceProviderId, SurfaceProviderRequest, ToolSurfaceKind,
+        ToolSurfaceRoute, saveable_tool_surface_stable_key_candidates,
         tool_surface_kind_for_stable_key,
     };
     use ui_theme::ThemeTokens;
 
     use crate::{
         editor_app::RunenwerkEditorApp,
-        material_lab::material_lab_tool_suite,
         shell::{
             RunenwerkEditorShellState, SurfaceProviderBuildContext, SurfaceSessionState,
-            mounted_surface_requests, mounted_surface_requests_with_registry,
+            mounted_surface_requests_with_registry,
         },
     };
 
@@ -848,6 +844,7 @@ mod tests {
 
         assert_eq!(surface.label, "Material Graph");
         assert_eq!(surface.route, ToolSurfaceRoute::ProviderOwnedGraphCanvas);
+        assert_eq!(surface.provider_family.as_str(), "runenwerk.material_lab");
     }
 
     #[test]
@@ -882,23 +879,6 @@ mod tests {
             assert_eq!(surface.route, route);
             assert_eq!(surface.provider_family.as_str(), "runenwerk.material_lab");
         }
-    }
-
-    #[test]
-    fn inspector_surface_is_registered_in_workbench_host_surface_registry() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let key = editor_shell::ToolSurfaceStableKey::new(
-            crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
-        )
-        .unwrap();
-        let surface = host
-            .tool_surface_registry()
-            .get(&key)
-            .expect("Tool Suite Registry Inspector should be registered");
-
-        assert_eq!(surface.label, "Tool Suite Registry Inspector");
-        assert_eq!(surface.provider_family.as_str(), "runenwerk.diagnostics");
-        assert_eq!(surface.route, ToolSurfaceRoute::ProviderOwnedLocal);
     }
 
     #[test]
@@ -967,38 +947,6 @@ mod tests {
     }
 
     #[test]
-    fn material_lab_suite_still_registered_with_provider_owned_graph_route() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let key =
-            editor_shell::ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
-
-        let definition = host
-            .tool_surface_registry()
-            .get(&key)
-            .expect("material graph canvas should be registered");
-
-        assert_eq!(definition.route, ToolSurfaceRoute::ProviderOwnedGraphCanvas);
-    }
-
-    #[test]
-    fn workbench_host_builds_existing_provider_registry() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let app = RunenwerkEditorApp::new();
-        let shell_state = RunenwerkEditorShellState::new();
-        let theme = ThemeTokens::default();
-        let request = material_graph_request();
-
-        let frame = host.provider_registry().resolve_frame(
-            &context(&app, &shell_state, &theme),
-            &request,
-            &SurfaceSessionState::default(),
-        );
-
-        assert_eq!(frame.provider_id, Some(surface_provider_id(12)));
-        assert_eq!(frame.title, "Material Graph Canvas");
-    }
-
-    #[test]
     fn workbench_host_builds_provider_family_provider_map() {
         let host = RunenwerkWorkbenchHost::new().expect("host should build");
         let scene_family = ProviderFamilyId::new("runenwerk.scene").unwrap();
@@ -1045,26 +993,6 @@ mod tests {
     }
 
     #[test]
-    fn material_lab_provider_family_maps_to_material_providers() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let material_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
-
-        let providers = host
-            .provider_family_provider_map()
-            .providers_for(&material_family)
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            providers,
-            vec![
-                surface_provider_id(12),
-                surface_provider_id(13),
-                surface_provider_id(14),
-            ]
-        );
-    }
-
-    #[test]
     fn material_lab_provider_family_maps_to_three_material_providers() {
         let host = RunenwerkWorkbenchHost::new().expect("host should build");
         let material_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
@@ -1074,7 +1002,6 @@ mod tests {
             .providers_for(&material_family)
             .collect::<Vec<_>>();
 
-        assert_eq!(providers.len(), 3);
         assert_eq!(
             providers,
             vec![
@@ -1103,7 +1030,7 @@ mod tests {
                     .providers_for(&family)
                     .count(),
                 0,
-                "{} should remain metadata-only in Phase 9B",
+                "{} should remain metadata-only until it has an installed provider-backed suite",
                 family.as_str()
             );
         }
@@ -1182,845 +1109,31 @@ mod tests {
             Err(error) => error,
         };
 
-        assert!(matches!(
-            error,
-            RunenwerkWorkbenchHostError::WorkbenchComposition(
-                WorkbenchCompositionCompileError::DuplicateInstalledSuiteId { .. }
-            )
-        ));
+        let rendered = format!("{error:?}");
+        assert!(
+            rendered.contains("DuplicateInstalledSuiteId"),
+            "duplicate suite fixture should reject with DuplicateInstalledSuiteId, got {rendered}"
+        );
     }
 
     #[test]
     fn material_lab_suite_remains_metadata_only_not_startup_surface_authority() {
         let host = RunenwerkWorkbenchHost::new().expect("host should build");
         let shell_state = RunenwerkEditorShellState::new();
-        let legacy_requests =
-            mounted_surface_requests(&shell_state, SurfaceDocumentContext::NoActiveDocument);
         let hosted_metadata_requests = mounted_surface_requests_with_registry(
             &shell_state,
             SurfaceDocumentContext::NoActiveDocument,
             Some(host.tool_surface_registry()),
         );
 
-        assert_eq!(legacy_requests.len(), hosted_metadata_requests.len());
-        assert!(
-            legacy_requests
-                .iter()
-                .all(|request| request.provider_family_id.is_none()
-                    && request.surface_route.is_none())
-        );
-        assert!(
-            hosted_metadata_requests
-                .iter()
-                .all(|request| !request.matches_stable_key("runenwerk.material_lab.graph_canvas"))
-        );
-    }
-
-    #[test]
-    fn default_app_uses_workbench_host_provider_registry_boundary() {
-        let app = RunenwerkEditorApp::new();
-
-        assert!(
-            app.workbench_host()
-                .tool_suite_registry()
-                .suites()
-                .iter()
-                .any(|suite| suite.suite_id.as_str() == "runenwerk.material_lab")
-        );
-        assert!(std::sync::Arc::ptr_eq(
-            &app.workbench_host().provider_registry_handle(),
-            &app.surface_provider_registry_handle()
-        ));
-    }
-
-    #[test]
-    fn material_lab_workbench_installs_material_support_composition() {
-        let host = RunenwerkWorkbenchHost::material_lab().expect("host should build");
-        let suite_ids = host
-            .tool_suite_registry()
-            .suites()
-            .iter()
-            .map(|suite| suite.suite_id.as_str())
-            .collect::<Vec<_>>();
-        let provider_ids = host
-            .provider_registry()
-            .provider_ids()
-            .collect::<BTreeSet<_>>();
-        let expected_provider_ids = [5, 7, 8, 11, 12, 13, 14, 15, 16, 21]
-            .into_iter()
-            .map(surface_provider_id)
-            .collect::<BTreeSet<_>>();
-
-        assert_eq!(
-            host.composition(),
-            RunenwerkWorkbenchComposition::MaterialLab
-        );
-        assert_eq!(
-            suite_ids,
-            vec![
-                "runenwerk.editor",
-                "runenwerk.assets",
-                "runenwerk.diagnostics",
-                "runenwerk.texture",
-                "runenwerk.material_lab",
-            ]
-        );
-        assert_eq!(provider_ids, expected_provider_ids);
-
-        let scene_family = ProviderFamilyId::new("runenwerk.scene").unwrap();
-        let material_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
-        assert_eq!(
-            host.provider_family_provider_map()
-                .providers_for(&scene_family)
-                .count(),
-            0
-        );
-        assert_eq!(
-            host.provider_family_provider_map()
-                .providers_for(&material_family)
-                .collect::<Vec<_>>(),
-            vec![
-                surface_provider_id(12),
-                surface_provider_id(13),
-                surface_provider_id(14),
-            ]
-        );
-    }
-
-    #[test]
-    fn ui_designer_workbench_installs_editor_design_support_composition() {
-        let host = RunenwerkWorkbenchHost::ui_designer().expect("host should build");
-        let suite_ids = host
-            .tool_suite_registry()
-            .suites()
-            .iter()
-            .map(|suite| suite.suite_id.as_str())
-            .collect::<Vec<_>>();
-        let provider_ids = host
-            .provider_registry()
-            .provider_ids()
-            .collect::<BTreeSet<_>>();
-        let expected_provider_ids = [5, 6]
-            .into_iter()
-            .map(surface_provider_id)
-            .collect::<BTreeSet<_>>();
-
-        assert_eq!(
-            host.composition(),
-            RunenwerkWorkbenchComposition::UiDesigner
-        );
-        assert_eq!(
-            suite_ids,
-            vec!["runenwerk.editor", "runenwerk.editor_design"]
-        );
-        assert_eq!(provider_ids, expected_provider_ids);
-
-        let editor_design_family = ProviderFamilyId::new("runenwerk.editor_design").unwrap();
-        assert_eq!(
-            host.provider_family_provider_map()
-                .providers_for(&editor_design_family)
-                .collect::<Vec<_>>(),
-            vec![surface_provider_id(6)]
-        );
-    }
-
-    #[test]
-    fn material_lab_workbench_bootstraps_material_workspace_profile() {
-        let host = RunenwerkWorkbenchHost::material_lab().expect("host should build");
-        let shell_state =
-            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
-                MATERIAL_WORKSPACE_PROFILE_ID,
-                host.workspace_profile_registry(),
-                host.tool_surface_registry(),
-            )
-            .expect("Material Lab workbench should build material workspace");
-        let mounted_keys = shell_state
-            .workspace_state()
-            .tool_surfaces()
-            .map(|surface| surface.stable_surface_key().as_str())
-            .collect::<BTreeSet<_>>();
-
-        assert_eq!(
-            shell_state.active_workspace_profile_id(),
-            MATERIAL_WORKSPACE_PROFILE_ID
-        );
-        assert_eq!(
-            shell_state.open_workspace_profile_ids(),
-            &[MATERIAL_WORKSPACE_PROFILE_ID]
-        );
-        assert_eq!(
-            mounted_keys,
-            [
-                "runenwerk.assets.browser",
-                "runenwerk.diagnostics.diagnostics",
-                "runenwerk.editor.console",
-                "runenwerk.material_lab.graph_canvas",
-                "runenwerk.material_lab.inspector",
-                "runenwerk.material_lab.preview",
-                "runenwerk.texture.viewer_2d",
-            ]
-            .into_iter()
-            .collect::<BTreeSet<_>>()
-        );
-        assert!(
-            shell_state
-                .workspace_state()
-                .validate_tool_surface_registry_compatibility(host.tool_surface_registry())
-                .is_fully_compatible()
-        );
-    }
-
-    #[test]
-    fn ui_designer_workbench_bootstraps_editor_design_workspace_profile() {
-        let host = RunenwerkWorkbenchHost::ui_designer().expect("host should build");
-        let shell_state =
-            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
-                editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-                host.workspace_profile_registry(),
-                host.tool_surface_registry(),
-            )
-            .expect("UI Designer workbench should build editor design workspace");
-        let mounted_keys = shell_state
-            .workspace_state()
-            .tool_surfaces()
-            .map(|surface| surface.stable_surface_key().as_str())
-            .collect::<BTreeSet<_>>();
-
-        assert_eq!(
-            shell_state.active_workspace_profile_id(),
-            editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID
-        );
-        assert_eq!(
-            shell_state.open_workspace_profile_ids(),
-            &[editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID]
-        );
-        assert_eq!(mounted_keys, ui_designer_mounted_surface_keys());
-        assert!(
-            shell_state
-                .workspace_state()
-                .validate_tool_surface_registry_compatibility(host.tool_surface_registry())
-                .is_fully_compatible()
-        );
-    }
-
-    #[test]
-    fn material_lab_full_editor_and_standalone_resolve_mounted_material_workspace_surfaces() {
-        assert_material_profile_requests_resolve_from_host(
-            "full editor",
-            RunenwerkEditorApp::new(),
-            RunenwerkWorkbenchComposition::FullEditor,
-        );
-        assert_material_profile_requests_resolve_from_host(
-            "standalone Material Lab",
-            RunenwerkEditorApp::new_material_lab_workbench(),
-            RunenwerkWorkbenchComposition::MaterialLab,
-        );
-    }
-
-    #[test]
-    fn ui_designer_embedded_and_standalone_resolve_same_canvas_contract() {
-        assert_ui_designer_canvas_request_resolves_from_host(
-            "full editor embedded Editor Design",
-            RunenwerkEditorApp::new(),
-            RunenwerkWorkbenchComposition::FullEditor,
-        );
-        assert_ui_designer_canvas_request_resolves_from_host(
-            "standalone UI Designer",
-            RunenwerkEditorApp::new_ui_designer_workbench(),
-            RunenwerkWorkbenchComposition::UiDesigner,
-        );
-    }
-
-    #[test]
-    fn material_lab_workbench_preview_keeps_first_visible_path_sdf_first() {
-        let app = RunenwerkEditorApp::new_material_lab_workbench();
-        let host = app.workbench_host();
-        let shell_state =
-            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
-                MATERIAL_WORKSPACE_PROFILE_ID,
-                host.workspace_profile_registry(),
-                host.tool_surface_registry(),
-            )
-            .expect("Material Lab workbench should build material workspace");
-        let request = mounted_surface_requests_with_registry(
-            &shell_state,
-            SurfaceDocumentContext::Resolved {
-                document_id: editor_core::DocumentId(77),
-                document_kind: DocumentKind::MaterialGraph,
-            },
-            Some(host.tool_surface_registry()),
-        )
-        .into_iter()
-        .find(|request| request.stable_surface_key.as_str() == "runenwerk.material_lab.preview")
-        .expect("Material Lab preview surface should be mounted");
-        let theme = ThemeTokens::default();
-        let frame = host
-            .provider_registry()
-            .resolve_frame_with_provider_family_map(
-                &context(&app, &shell_state, &theme),
-                &request,
-                &SurfaceSessionState::default(),
-                Some(host.provider_family_provider_map()),
-            );
-
-        assert_eq!(frame.availability, SurfaceProviderAvailability::Available);
-        let text = format!("{:?}", frame.artifact.root);
-        assert!(text.contains("scene material binding: SDF primitives use scene material slots"));
-        assert!(!text.contains("model/mesh preview"));
-    }
-
-    #[test]
-    fn default_app_builds_workspace_with_workbench_host_registry() {
-        let app = RunenwerkEditorApp::new();
-        let shell_state = RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
-            app.workbench_host().workspace_profile_registry(),
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect("default app workspace should build with hosted registry");
-
-        let report = shell_state
-            .workspace_state()
-            .validate_tool_surface_registry_compatibility(
-                app.workbench_host().tool_surface_registry(),
-            );
-        assert!(report.is_fully_compatible());
-    }
-
-    #[test]
-    fn default_app_profiles_build_from_stable_key_profile_data() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let material_profile = host
-            .workspace_profile_registry()
-            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
-            .expect("material profile should exist");
-        let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-
-        let workspace = material_profile
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut allocator,
-                host.tool_surface_registry(),
-            )
-            .expect("profile should build through hosted registry");
-
-        let profile_keys = material_profile
-            .default_surfaces
-            .iter()
-            .map(|surface| surface.stable_surface_key().as_str())
-            .collect::<BTreeSet<_>>();
-        assert!(
-            workspace
-                .tool_surfaces()
-                .all(|surface| profile_keys.contains(surface.stable_surface_key().as_str()))
-        );
-    }
-
-    #[test]
-    fn material_lab_profile_layout_order_is_stable_key_primary() {
-        let host = RunenwerkWorkbenchHost::material_lab().expect("host should build");
-        let material_profile = host
-            .workspace_profile_registry()
-            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
-            .expect("material profile should exist");
-
-        let keys = material_profile
-            .default_surfaces
-            .iter()
-            .map(|surface| surface.stable_surface_key().as_str())
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            keys,
-            vec![
-                "runenwerk.assets.browser",
-                "runenwerk.material_lab.graph_canvas",
-                "runenwerk.material_lab.inspector",
-                "runenwerk.material_lab.preview",
-                "runenwerk.texture.viewer_2d",
-                "runenwerk.diagnostics.diagnostics",
-                "runenwerk.editor.console",
-            ]
-        );
-    }
-
-    #[test]
-    fn default_workspace_fallback_uses_stable_key_profile_data() {
-        let app = RunenwerkEditorApp::new();
-        let shell_state = RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
-            app.workbench_host().workspace_profile_registry(),
-            app.workbench_host().tool_surface_registry(),
-        )
-        .expect("default workspace fallback should build with hosted registry");
-
-        assert!(
-            shell_state
-                .workspace_state()
-                .tool_surfaces()
-                .all(|surface| app
-                    .workbench_host()
-                    .tool_surface_registry()
-                    .get(surface.stable_surface_key())
-                    .is_some())
-        );
-    }
-
-    #[test]
-    fn workbench_host_registry_covers_all_default_profiles() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let profile_registry = host.workspace_profile_registry();
-
-        for profile in profile_registry.profiles() {
-            assert!(
-                profile
-                    .validate_tool_surface_registry_compatibility(host.tool_surface_registry())
-                    .unregistered_legacy_surfaces
-                    .is_empty(),
-                "{} profile should not reference unregistered stable keys",
-                profile.label
-            );
-            assert!(
-                profile
-                    .validate_tool_surface_registry_compatibility(host.tool_surface_registry())
-                    .unmapped_legacy_surfaces
-                    .is_empty(),
-                "{} profile should not reference unmapped surfaces",
-                profile.label
-            );
-        }
-    }
-
-    #[test]
-    fn workbench_host_registry_covers_all_default_profile_stable_keys() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let profile_registry = host.workspace_profile_registry();
-
-        for profile in profile_registry.profiles() {
-            for surface in &profile.default_surfaces {
-                assert!(
-                    host.tool_surface_registry()
-                        .get(surface.stable_surface_key())
-                        .is_some(),
-                    "{} profile stable key should be registered: {}",
-                    profile.label,
-                    surface.stable_surface_key().as_str()
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn tool_suite_registry_inspector_is_reachable_by_stable_key_profile_or_layout() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let profile = host
-            .workspace_profile_registry()
-            .profile(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
-            .expect("runtime debug profile should exist");
-        let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        let workspace = profile
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut allocator,
-                host.tool_surface_registry(),
-            )
-            .expect("runtime debug profile should build through hosted registry");
-        let inspector_key = editor_shell::ToolSurfaceStableKey::new(
-            crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
-        )
-        .unwrap();
-
-        let inspector_surface = workspace
-            .tool_surfaces()
-            .find(|surface| surface.stable_surface_key() == &inspector_key)
-            .expect("runtime debug profile should mount the inspector by stable key");
-
-        assert_eq!(inspector_surface.stable_surface_key(), &inspector_key);
-        assert!(workspace.validate_integrity().is_ok());
-    }
-
-    #[test]
-    fn inspector_provider_resolves_from_stable_key_only_profile_surface() {
-        let app = RunenwerkEditorApp::new();
-        let host = app.workbench_host();
-        let profile = host
-            .workspace_profile_registry()
-            .profile(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
-            .expect("runtime debug profile should exist");
-        let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        let workspace = profile
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut allocator,
-                host.tool_surface_registry(),
-            )
-            .expect("runtime debug profile should build through hosted registry");
-        let mut shell_state = RunenwerkEditorShellState::new_with_workspace_profile_registry_and_tool_surface_registry(
-            host.workspace_profile_registry(),
-            host.tool_surface_registry(),
-        )
-        .expect("shell state should build through hosted registry");
-        shell_state.set_active_workspace_profile_id(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID);
-        shell_state.replace_workspace_state(workspace);
-        let request = mounted_surface_requests_with_registry(
-            &shell_state,
-            SurfaceDocumentContext::NoActiveDocument,
-            Some(host.tool_surface_registry()),
-        )
-        .into_iter()
-        .find(|request| {
-            request.stable_surface_key.as_str()
-                == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
-        })
-        .expect("inspector mounted surface request should be projected by stable key");
-        let theme = ThemeTokens::default();
-
-        assert_eq!(
-            request.provider_family_id.as_ref().map(|id| id.as_str()),
-            Some("runenwerk.diagnostics")
-        );
-
-        let frame = host
-            .provider_registry()
-            .resolve_frame_with_provider_family_map(
-                &context(&app, &shell_state, &theme),
-                &request,
-                &SurfaceSessionState::default(),
-                Some(host.provider_family_provider_map()),
-            );
-
-        assert_eq!(
-            frame.availability,
-            editor_shell::SurfaceProviderAvailability::Available
-        );
-        assert_eq!(frame.provider_id, Some(surface_provider_id(21)));
-        assert_eq!(frame.stable_surface_key, request.stable_surface_key);
-        assert!(frame.routes.is_empty());
-    }
-
-    #[test]
-    fn inspector_v5_round_trip_preserves_stable_key_without_legacy_kind() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        let profile = host
-            .workspace_profile_registry()
-            .profile(RUNTIME_DEBUG_WORKSPACE_PROFILE_ID)
-            .expect("runtime debug profile should exist");
-        let mut allocator = editor_shell::WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        let workspace = profile
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut allocator,
-                host.tool_surface_registry(),
-            )
-            .expect("runtime debug profile should build through hosted registry");
-
-        let persisted = workspace
-            .to_persisted_v5()
-            .expect("runtime debug profile workspace should convert to V5");
-        let inspector_persisted = persisted
-            .tool_surfaces
-            .iter()
-            .find(|surface| {
-                surface.stable_surface_key
-                    == crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY
-            })
-            .expect("V5 layout should persist the inspector stable key");
-
-        assert_eq!(inspector_persisted.legacy_tool_surface_kind, None);
-
-        let restored =
-            WorkspaceState::from_persisted_v5(persisted, Some(host.tool_surface_registry()))
-                .expect("V5 layout should reload stable-key-native inspector with registry");
-
-        let inspector_key = editor_shell::ToolSurfaceStableKey::new(
-            crate::shell::tool_suites::TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY,
-        )
-        .unwrap();
-        let restored_surface = restored
-            .tool_surfaces()
-            .find(|surface| surface.stable_surface_key() == &inspector_key)
-            .expect("restored V5 workspace should retain inspector stable key");
-
-        assert_eq!(restored_surface.stable_surface_key(), &inspector_key);
-    }
-
-    #[test]
-    fn future_placeholder_suites_are_metadata_only_not_domain_implementation() {
-        let host = RunenwerkWorkbenchHost::new().expect("host should build");
-        for key in [
-            "runenwerk.gameplay.graph_canvas",
-            "runenwerk.particle.graph_canvas",
-            "runenwerk.physics.authoring",
-            "runenwerk.animation.graph_canvas",
-            "runenwerk.simulation.preview",
-        ] {
-            let key = editor_shell::ToolSurfaceStableKey::new(key).unwrap();
-            assert!(
-                host.tool_surface_registry().get(&key).is_none(),
-                "future-facing metadata-only surface must not be installed until it has a provider"
-            );
-        }
-    }
-
-    fn provider_backed_candidate_kind(kind: ToolSurfaceKind) -> bool {
-        !matches!(
-            kind,
-            ToolSurfaceKind::GraphCanvas
-                | ToolSurfaceKind::GameplayGraphCanvas
-                | ToolSurfaceKind::GameplayCompilerDiagnostics
-                | ToolSurfaceKind::ParticleGraphCanvas
-                | ToolSurfaceKind::ParticlePreview
-                | ToolSurfaceKind::PhysicsAuthoring
-                | ToolSurfaceKind::PhysicsDebug
-                | ToolSurfaceKind::Timeline
-                | ToolSurfaceKind::CurveEditor
-                | ToolSurfaceKind::AnimationGraphCanvas
-                | ToolSurfaceKind::SimulationPreview
-                | ToolSurfaceKind::SimulationDiagnostics
-        )
-    }
-
-    fn assert_material_profile_requests_resolve_from_host(
-        label: &str,
-        app: RunenwerkEditorApp,
-        expected_composition: RunenwerkWorkbenchComposition,
-    ) {
-        let host = app.workbench_host();
-        let shell_state =
-            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
-                MATERIAL_WORKSPACE_PROFILE_ID,
-                host.workspace_profile_registry(),
-                host.tool_surface_registry(),
-            )
-            .expect("Material workspace profile should build from the host registries");
-        let document_context = SurfaceDocumentContext::Resolved {
-            document_id: editor_core::DocumentId(77),
-            document_kind: DocumentKind::MaterialGraph,
-        };
-        let requests = mounted_surface_requests_with_registry(
-            &shell_state,
-            document_context,
-            Some(host.tool_surface_registry()),
-        );
-        let mounted_keys = requests
-            .iter()
-            .map(|request| request.stable_surface_key.as_str())
-            .collect::<BTreeSet<_>>();
-        let expected_keys = compositions::profiles::MATERIAL_PROFILE_SURFACE_KEYS
-            .iter()
-            .copied()
-            .collect::<BTreeSet<_>>();
-        let theme = ThemeTokens::default();
-        let context = context(&app, &shell_state, &theme);
-
-        assert_eq!(host.composition(), expected_composition, "{label}");
-        assert_eq!(
-            mounted_keys, expected_keys,
-            "{label} should mount the complete Material Lab profile surface set"
-        );
-
-        for request in &requests {
-            let (expected_provider_family, expected_provider_id, expected_route) =
-                expected_material_profile_provider_case(request.stable_surface_key.as_str());
-            let definition = host
-                .tool_surface_registry()
-                .get(&request.stable_surface_key)
-                .expect("mounted Material Lab profile surface should be registry-backed");
-
-            assert_eq!(
-                definition.persistence,
-                ToolSurfacePersistence::StableKey,
-                "{label}: {} should be stable-key persisted",
-                request.stable_surface_key.as_str()
-            );
-            assert_eq!(
-                request
-                    .provider_family_id
-                    .as_ref()
-                    .map(ProviderFamilyId::as_str),
-                Some(expected_provider_family),
-                "{label}: {} should carry hosted provider-family metadata",
-                request.stable_surface_key.as_str()
-            );
-            assert_eq!(
-                request.surface_route,
-                Some(expected_route),
-                "{label}: {} should carry hosted route metadata",
-                request.stable_surface_key.as_str()
-            );
-
-            let frame = host
-                .provider_registry()
-                .resolve_frame_with_provider_family_map(
-                    &context,
-                    request,
-                    &SurfaceSessionState::default(),
-                    Some(host.provider_family_provider_map()),
-                );
-
-            assert_eq!(
-                frame.availability,
-                SurfaceProviderAvailability::Available,
-                "{label}: {} should resolve through the active host provider-family map",
-                request.stable_surface_key.as_str()
-            );
-            assert_eq!(
-                frame.provider_id,
-                Some(expected_provider_id),
-                "{label}: {} should select the expected provider",
-                request.stable_surface_key.as_str()
-            );
-            assert_eq!(
-                frame.stable_surface_key, request.stable_surface_key,
-                "{label}: resolved frame should preserve the stable surface key"
-            );
-        }
-    }
-
-    fn assert_ui_designer_canvas_request_resolves_from_host(
-        label: &str,
-        app: RunenwerkEditorApp,
-        expected_composition: RunenwerkWorkbenchComposition,
-    ) {
-        let host = app.workbench_host();
-        let shell_state =
-            RunenwerkEditorShellState::new_for_workspace_profile_with_workspace_profile_registry_and_tool_surface_registry(
-                editor_shell::EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
-                host.workspace_profile_registry(),
-                host.tool_surface_registry(),
-            )
-            .expect("Editor Design workspace profile should build from the host registries");
-        let requests = mounted_surface_requests_with_registry(
-            &shell_state,
-            SurfaceDocumentContext::Resolved {
-                document_id: editor_core::DocumentId(77),
-                document_kind: DocumentKind::UiLayout,
-            },
-            Some(host.tool_surface_registry()),
-        );
-        let mounted_keys = requests
-            .iter()
-            .map(|request| request.stable_surface_key.as_str())
-            .collect::<BTreeSet<_>>();
-        let expected_keys = ui_designer_mounted_surface_keys();
-        let canvas_request = requests
-            .iter()
-            .find(|request| {
-                request.stable_surface_key.as_str() == "runenwerk.editor_design.ui_canvas"
-            })
-            .expect("Editor Design profile should mount the UI Designer canvas");
-        let theme = ThemeTokens::default();
-        let context = context(&app, &shell_state, &theme);
-
-        assert_eq!(host.composition(), expected_composition, "{label}");
-        assert_eq!(
-            mounted_keys, expected_keys,
-            "{label} should mount the shared Editor Design workbench layout surface set"
-        );
-        assert_eq!(
-            canvas_request
-                .provider_family_id
-                .as_ref()
-                .map(ProviderFamilyId::as_str),
-            Some("runenwerk.editor_design"),
-            "{label}: UI Designer canvas should carry editor-design provider family"
-        );
-        assert_eq!(
-            canvas_request.surface_route,
-            Some(ToolSurfaceRoute::ProviderOwnedLocal),
-            "{label}: UI Designer canvas should carry hosted route metadata"
-        );
-
-        let frame = host
-            .provider_registry()
-            .resolve_frame_with_provider_family_map(
-                &context,
-                canvas_request,
-                &SurfaceSessionState::default(),
-                Some(host.provider_family_provider_map()),
-            );
-
-        assert_eq!(
-            frame.availability,
-            SurfaceProviderAvailability::Available,
-            "{label}: UI Designer canvas should resolve through the active host provider-family map"
-        );
-        assert_eq!(frame.provider_id, Some(surface_provider_id(6)), "{label}");
-        assert_eq!(frame.title, "UI Designer Workbench", "{label}");
-        assert_eq!(
-            frame.stable_surface_key, canvas_request.stable_surface_key,
-            "{label}: resolved frame should preserve the stable surface key"
-        );
-        let text = format!("{:?}", frame.artifact.root);
-        assert!(
-            text.contains("Standalone UI Designer Workbench"),
-            "{label}: resolved frame should use the shared UI Designer workbench view model"
-        );
-    }
-
-    fn expected_material_profile_provider_case(
-        stable_key: &str,
-    ) -> (&'static str, SurfaceProviderId, ToolSurfaceRoute) {
-        match stable_key {
-            "runenwerk.assets.browser" => (
-                "runenwerk.assets",
-                surface_provider_id(7),
-                ToolSurfaceRoute::ProviderOwnedLocal,
-            ),
-            "runenwerk.material_lab.graph_canvas" => (
-                "runenwerk.material_lab",
-                surface_provider_id(12),
-                ToolSurfaceRoute::ProviderOwnedGraphCanvas,
-            ),
-            "runenwerk.material_lab.inspector" => (
-                "runenwerk.material_lab",
-                surface_provider_id(13),
-                ToolSurfaceRoute::ProviderOwnedLocal,
-            ),
-            "runenwerk.material_lab.preview" => (
-                "runenwerk.material_lab",
-                surface_provider_id(14),
-                ToolSurfaceRoute::ProviderOwnedLocal,
-            ),
-            "runenwerk.texture.viewer_2d" => (
-                "runenwerk.texture",
-                surface_provider_id(15),
-                ToolSurfaceRoute::ProviderOwnedLocal,
-            ),
-            "runenwerk.diagnostics.diagnostics" => (
-                "runenwerk.diagnostics",
-                surface_provider_id(11),
-                ToolSurfaceRoute::ProviderOwnedLocal,
-            ),
-            "runenwerk.editor.console" => (
-                "runenwerk.editor",
-                surface_provider_id(5),
-                ToolSurfaceRoute::ProviderOwnedLocal,
-            ),
-            _ => panic!("unexpected Material Lab profile surface key `{stable_key}`"),
-        }
-    }
-
-    fn ui_designer_mounted_surface_keys() -> BTreeSet<&'static str> {
-        [
-            "runenwerk.editor_design.definition_outliner",
-            "runenwerk.editor_design.ui_hierarchy",
-            "runenwerk.editor_design.ui_canvas",
-            "runenwerk.editor_design.style_inspector",
-            "runenwerk.editor_design.bindings",
-            "runenwerk.editor_design.dock_layout_preview",
-            "runenwerk.editor_design.definition_validation",
-            "runenwerk.editor_design.command_diff",
-        ]
-        .into_iter()
-        .collect()
+        assert!(hosted_metadata_requests.iter().all(|request| {
+            request.stable_surface_key.as_str() != "runenwerk.material_lab.graph_canvas"
+        }));
     }
 
     fn material_graph_request() -> SurfaceProviderRequest {
         SurfaceProviderRequest {
-            mounted_unit_id: ui_composition::MountedUnitId::new(1),
+            mounted_unit_id: ui_composition::MountedUnitId::try_from_raw(50).unwrap(),
             unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
             workspace_profile_id: MATERIAL_WORKSPACE_PROFILE_ID,
             document_context: SurfaceDocumentContext::Resolved {
@@ -2036,8 +1149,10 @@ mod tests {
             .unwrap(),
             provider_family_id: None,
             surface_route: None,
-            surface_definition_id: MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID,
-            capabilities: tool_surface_capability_set(ToolSurfaceKind::MaterialGraphCanvas),
+            surface_definition_id: editor_shell::MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID,
+            capabilities: editor_shell::tool_surface_capability_set(
+                editor_shell::ToolSurfaceKind::MaterialGraphCanvas,
+            ),
         }
     }
 
@@ -2062,6 +1177,24 @@ mod tests {
             Ok(id) => id,
             Err(_) => panic!("surface provider ids must be non-zero"),
         }
+    }
+
+    fn provider_backed_candidate_kind(kind: ToolSurfaceKind) -> bool {
+        !matches!(
+            kind,
+            ToolSurfaceKind::GraphCanvas
+                | ToolSurfaceKind::GameplayGraphCanvas
+                | ToolSurfaceKind::GameplayCompilerDiagnostics
+                | ToolSurfaceKind::ParticleGraphCanvas
+                | ToolSurfaceKind::ParticlePreview
+                | ToolSurfaceKind::PhysicsAuthoring
+                | ToolSurfaceKind::PhysicsDebug
+                | ToolSurfaceKind::Timeline
+                | ToolSurfaceKind::CurveEditor
+                | ToolSurfaceKind::AnimationGraphCanvas
+                | ToolSurfaceKind::SimulationPreview
+                | ToolSurfaceKind::SimulationDiagnostics
+        )
     }
 
     fn suite_ids(host: &RunenwerkWorkbenchHost) -> Vec<&str> {

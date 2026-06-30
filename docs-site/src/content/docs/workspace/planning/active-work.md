@@ -4,10 +4,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-06-30
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
+  - ../../design/active/ui-component-platform-executable-interaction-story-design.md
+  - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
 ---
 
 # Active Work
@@ -16,27 +18,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-012-PLANNING`
+ID: `PT-UI-COMPONENT-PLATFORM-012A`
 
-Title: UI Component Platform Generic Interaction design intake
+Title: UI Component Platform Executable Interaction Story Cleanup / Validation
 
-State: active planning
+State: review / pending cleanup, validation, and merge
 
-Lifecycle state: `active-planning`
+Lifecycle state: `review`
 
-Owner: `ui_controls` may own reusable control interaction declarations, semantic interaction states needed by reusable controls, control-level interaction requirements, descriptor/catalog/inspection facts for interaction support, and control kernel hooks only as declarations/contracts. `ui_input` owns normalized input packet vocabulary, device/gesture facts, pointer/key/focus/text-intent facts as reusable input data, and runtime input sample formation. `ui_runtime` owns runtime interaction formation over emitted or mounted UI, normalized input resolution against runtime UI structure, interaction facts/events for reusable controls, deterministic replay/report evidence, and runtime frame/session evidence. Hosts, apps, editor, and game layers own OS/window input collection, routing policy, command execution, app/editor/game mutation, game/world input policy, and product-specific behavior.
+Owner: `ui_story` remains the workflow profile and evidence-envelope authority. `ui_runtime` owns interaction story session execution, replay/live application, semantic parity reporting, and visible proof formation. `ui_input` owns normalized input facts and conversion helpers. `ui_controls` owns reusable interaction descriptors and read-only declarations. `ui_static_mount` owns static frame validation. `runenwerk_editor` owns only the narrow base-controls proof-host adapter and must not claim UI Gallery product exposure in PR #43.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-input-gesture-device-design.md`, `docs-site/src/content/docs/design/active/editor-ui-runtime-v2-and-interaction-formation-design.md`, and the Phase 11 closeout report.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/documentation-structure.md`, `docs-site/src/content/docs/workspace/authority-model.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/planning/README.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-implementation-scope.md`, and `docs-site/src/content/docs/workspace/planning/decision-register.md`.
 
-Write scope: planning and design intake only. Define owner boundaries, acceptance criteria, validation gate, stop conditions, the exact later implementation PR envelope for generic reusable interaction, the runtime-visible gallery/story proof, deterministic input replay, report/evidence shape, negative proof scenarios, no-bypass rule, and closeout requirements. Preserve the focus, keyboard, and text-intent seams needed by later editable text controls. Do not change product code, do not implement interaction runtime behavior, do not add overlays/popups/layering, do not add full text editing behavior, do not add app/editor/game-specific mutation, do not extract a shared plugin framework, and do not introduce `foundation/meta`.
+Write scope: Cleanup and validation for PR #43 only. Remove flawed 012B/UI Lab surface work and legacy compatibility shims. Keep current evidence scoped to reusable interaction descriptors, base-controls replay/report evidence, executable interaction story proof-host mechanics, semantic replay/live parity, static mount validation, and no-bypass assertions. UI Gallery product exposure is separate future work under `PT-UI-GALLERY-001`.
 
-Validation expectation: for this planning patch, run `python3 tools/docs/validate_docs.py` and `git diff --check` when a local checkout is available. For the later implementation PR, use the validation gate recorded in the Phase 12 design intake.
+Validation expectation: Run and record `cargo fmt --all --check`, `cargo check -p runenwerk_editor`, `cargo test -p runenwerk_editor base_controls_interaction_proof_host`, `cargo check -p ui_controls`, `cargo check -p ui_input`, `cargo check -p ui_runtime`, `cargo check -p ui_static_mount`, `cargo test -p ui_controls control_interaction`, `cargo test -p ui_input input`, `cargo test -p ui_runtime executable_interaction_story`, `cargo test -p ui_runtime --test interaction_replay_report`, `cargo test -p ui_static_mount base_controls`, `python tools/docs/validate_docs.py`, and `git diff --check`.
 
-Known blockers: Phase 12 is not implementation-authorized. The Phase 12 design intake must be reviewed and accepted before Rust write scope is opened. Existing Phase 5 input declarations and editor Interaction V2 runtime design are inputs, but they are not sufficient by themselves because Phase 12 must define component-platform reusable interaction boundaries across `ui_controls`, `ui_input`, `ui_runtime`, hosts, deterministic gallery/story proof, and replay/report evidence.
+Known blockers: PR #43 is not merged. Phase 12 and Phase 12A have implementation evidence on the PR branch, but remain in review until cleanup, validation, and merge complete. The deleted 012B/UI Lab proof-surface path must not be used as evidence. UI Gallery exposure requires a separate future plan.
 
-Next action: Review the Phase 12 Generic Interaction design intake and decide whether to authorize a narrow implementation PR. The later implementation must prove descriptor-backed reusable interaction through mounted base controls, deterministic input replay, gallery-visible state changes, auditable interaction reports, and boundary assertions that host commands, product mutations, overlays, and full text editing did not run. Keep overlays/popups/layering in Phase 13. Keep full text editing in a later phase, but require it to consume the focus, keyboard, text-intent, and runtime interaction substrate shaped by Phase 12.
+Next action: Finish PR #43 cleanup, update the PR body to remove 012B/UI Lab proof-surface claims and legacy/compatibility language, validate the focused gate, and merge only after the review state is accurate.
 
-Evidence: Phase 11 completed through merged PR #37 on 2026-06-28. The merged base-control proof covers Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView through `BaseControlsPlugin`, `UiControls`, `ControlContribution`, `ControlDef`, control presets, field groups, theme groups, `ControlCompiler`, `ControlCatalog`, and `ControlInspection`. Reported validation was green for the Phase 11 cargo/docs/diff gate.
+Evidence: PR #43 contains Phase 12 lower-tier generic interaction evidence and Phase 12A executable interaction story evidence. User correction on 2026-06-30 split UI Gallery exposure out of PR #43 and required planning truth to mark 012/012A as review/pending merge rather than completed.
 
 ## Active-work rules
 

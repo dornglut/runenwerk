@@ -10,8 +10,12 @@ pub(crate) fn lower_inspection(
     package: &ControlPackageDescriptor,
     control: &LoweredControl,
 ) -> ControlInspectionDescriptor {
+    let interaction = package
+        .interaction_descriptor(&control.module.kind.control_kind_id)
+        .unwrap_or(&control.interaction);
     ControlInspectionDescriptor::from_control_kind(package, &control.module.kind)
         .with_input_summary(&control.input.summary())
+        .with_interaction_summary(&interaction.summary())
         .with_state_summary(&control.state.summary())
         .with_theme_summary(&control.theme.summary())
         .with_accessibility_summary(&control.accessibility.summary())

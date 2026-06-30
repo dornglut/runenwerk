@@ -23,10 +23,11 @@ use crate::runtime::resources::EditorHostResource;
 use crate::runtime::viewport::{
     EDITOR_VIEWPORT_RENDER_PRODUCT_PRODUCER_ID, MAIN_VIEWPORT_ID,
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
-    ViewportPresentationStateResource, ViewportProductRegistryResource,
-    ViewportRenderStateResource, ViewportSurfaceHandle, ViewportSurfaceSetResource,
-    ViewportSurfaceSlot, build_surface_binding_registry, ensure_editor_main_surface_set,
-    expression_dimensions_for_bounds, initial_presentation_state, initial_product_descriptors,
+    ViewportInstanceRegistryResource, ViewportPresentationStateResource,
+    ViewportProductRegistryResource, ViewportRenderStateResource, ViewportSurfaceHandle,
+    ViewportSurfaceSetResource, ViewportSurfaceSlot, build_surface_binding_registry,
+    ensure_editor_main_surface_set, expression_dimensions_for_bounds, initial_presentation_state,
+    initial_product_descriptors,
 };
 
 pub const VIEWPORT_DYNAMIC_TARGET_NAMESPACE: &str = "runenwerk.editor.viewport";
@@ -258,6 +259,7 @@ pub fn sync_viewport_product_targets_system(
 #[allow(clippy::too_many_arguments)]
 pub fn sync_viewport_presentation_products_system(
     host: Res<EditorHostResource>,
+    viewport_instances: Res<ViewportInstanceRegistryResource>,
     viewport_render_states: Res<ViewportRenderStateResource>,
     mut viewport_surface_sets: ResMut<ViewportSurfaceSetResource>,
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
@@ -265,8 +267,11 @@ pub fn sync_viewport_presentation_products_system(
     mut viewport_presentations: ResMut<ViewportPresentationStateResource>,
     mut viewport_observations: ResMut<ViewportArtifactObservationResource>,
 ) {
-    let canonical_viewport_ids =
-        canonical_viewport_ids_for_sync(&viewport_surface_sets, &tool_surface_bindings);
+    let canonical_viewport_ids = canonical_viewport_ids_for_sync(
+        &viewport_instances,
+        &viewport_surface_sets,
+        &tool_surface_bindings,
+    );
     for viewport_id in &canonical_viewport_ids {
         ensure_editor_main_surface_set(&mut viewport_surface_sets, *viewport_id);
     }
@@ -376,13 +381,19 @@ pub(crate) fn viewport_product_surface_manifest(
 }
 
 fn canonical_viewport_ids_for_sync(
+    viewport_instances: &ViewportInstanceRegistryResource,
     viewport_surface_sets: &ViewportSurfaceSetResource,
     tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
 ) -> Vec<ViewportId> {
-    let mut viewport_ids = tool_surface_bindings
-        .bindings()
-        .map(|binding| binding.viewport_id)
+    let mut viewport_ids = viewport_instances
+        .records()
+        .map(|record| record.viewport_id)
         .collect::<std::collections::BTreeSet<_>>();
+    viewport_ids.extend(
+        tool_surface_bindings
+            .bindings()
+            .map(|binding| binding.viewport_id),
+    );
     if viewport_ids.is_empty() {
         viewport_ids.extend(viewport_surface_sets.viewport_ids());
     }
@@ -1092,7 +1103,11 @@ mod tests {
         ));
 
         assert_eq!(
-            canonical_viewport_ids_for_sync(&surface_sets, &bindings),
+            canonical_viewport_ids_for_sync(
+                &ViewportInstanceRegistryResource::default(),
+                &surface_sets,
+                &bindings
+            ),
             vec![first, second],
         );
     }

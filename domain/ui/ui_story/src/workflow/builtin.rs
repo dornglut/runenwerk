@@ -9,6 +9,8 @@ use super::{
 pub const WORKFLOW_SOURCE_LOAD_ONLY: &str = "ui_story.workflow.source_load_only";
 pub const WORKFLOW_COMPILER_ONLY: &str = "ui_story.workflow.compiler_only";
 pub const WORKFLOW_STATIC_PREVIEW: &str = "ui_story.workflow.static_preview";
+pub const WORKFLOW_EXECUTABLE_INTERACTION_PROOF: &str =
+    "ui_story.workflow.executable_interaction_proof";
 
 pub const NODE_MANIFEST: &str = "manifest";
 pub const NODE_SOURCE_LOAD: &str = "source_load";
@@ -20,12 +22,18 @@ pub const NODE_RENDER_PRIMITIVES: &str = "render_primitives";
 pub const NODE_RENDER_DATA: &str = "render_data";
 pub const NODE_STATIC_MOUNT: &str = "static_mount";
 pub const NODE_PREVIEW_FRAME: &str = "preview_frame";
+pub const NODE_INTERACTION_STORY: &str = "interaction_story";
+pub const NODE_INTERACTION_REPLAY: &str = "interaction_replay";
+pub const NODE_LIVE_INTERACTION_PROOF: &str = "live_interaction_proof";
+pub const NODE_REPLAY_LIVE_PARITY: &str = "replay_live_parity";
+pub const NODE_INTERACTION_STATIC_MOUNT: &str = "interaction_static_mount";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum UiStoryBuiltinWorkflowProfile {
     SourceLoadOnly,
     CompilerOnly,
     StaticPreview,
+    ExecutableInteractionProof,
 }
 
 impl UiStoryBuiltinWorkflowProfile {
@@ -38,6 +46,9 @@ impl UiStoryBuiltinWorkflowProfile {
             Self::SourceLoadOnly => UiStoryWorkflowProfileId::new(WORKFLOW_SOURCE_LOAD_ONLY),
             Self::CompilerOnly => UiStoryWorkflowProfileId::new(WORKFLOW_COMPILER_ONLY),
             Self::StaticPreview => UiStoryWorkflowProfileId::new(WORKFLOW_STATIC_PREVIEW),
+            Self::ExecutableInteractionProof => {
+                UiStoryWorkflowProfileId::new(WORKFLOW_EXECUTABLE_INTERACTION_PROOF)
+            }
         }
     }
 
@@ -51,6 +62,7 @@ impl UiStoryBuiltinWorkflowProfile {
             Self::SourceLoadOnly => source_load_only_graph(),
             Self::CompilerOnly => compiler_only_graph(),
             Self::StaticPreview => static_preview_graph(),
+            Self::ExecutableInteractionProof => executable_interaction_proof_graph(),
         }
     }
 }
@@ -68,6 +80,7 @@ impl Iterator for UiStoryBuiltinWorkflowProfiles {
             0 => UiStoryBuiltinWorkflowProfile::SourceLoadOnly,
             1 => UiStoryBuiltinWorkflowProfile::CompilerOnly,
             2 => UiStoryBuiltinWorkflowProfile::StaticPreview,
+            3 => UiStoryBuiltinWorkflowProfile::ExecutableInteractionProof,
             _ => return None,
         };
         self.index += 1;
@@ -140,6 +153,62 @@ fn static_preview_graph() -> UiStoryWorkflowGraph {
     )
 }
 
+fn executable_interaction_proof_graph() -> UiStoryWorkflowGraph {
+    UiStoryWorkflowGraph::new(
+        UiStoryWorkflowProfileId::new(WORKFLOW_EXECUTABLE_INTERACTION_PROOF),
+        [
+            manifest_node(),
+            UiStoryWorkflowNode::required(NODE_SOURCE_LOAD, "Source load"),
+            UiStoryWorkflowNode::required(NODE_SOURCE_PARSE, "Source parse"),
+            UiStoryWorkflowNode::required(NODE_PROGRAM_FORMATION, "Program formation"),
+            UiStoryWorkflowNode::required(NODE_COMPILER, "Compiler"),
+            UiStoryWorkflowNode::required(NODE_RUNTIME_VIEW, "Runtime view"),
+            UiStoryWorkflowNode::required(NODE_INTERACTION_STORY, "Interaction story"),
+            UiStoryWorkflowNode::required(NODE_INTERACTION_REPLAY, "Interaction replay"),
+            UiStoryWorkflowNode::required(NODE_LIVE_INTERACTION_PROOF, "Live interaction proof"),
+            UiStoryWorkflowNode::required(NODE_REPLAY_LIVE_PARITY, "Replay live parity"),
+            UiStoryWorkflowNode::required(
+                NODE_INTERACTION_STATIC_MOUNT,
+                "Interaction static mount",
+            ),
+            UiStoryWorkflowNode::required(NODE_PREVIEW_FRAME, "Preview frame"),
+        ],
+        [
+            UiStoryWorkflowEdge::requires_completed(NODE_MANIFEST, NODE_SOURCE_LOAD),
+            UiStoryWorkflowEdge::requires_completed(NODE_SOURCE_LOAD, NODE_SOURCE_PARSE),
+            UiStoryWorkflowEdge::requires_completed(NODE_SOURCE_PARSE, NODE_PROGRAM_FORMATION),
+            UiStoryWorkflowEdge::requires_completed(NODE_PROGRAM_FORMATION, NODE_COMPILER),
+            UiStoryWorkflowEdge::requires_completed(NODE_COMPILER, NODE_RUNTIME_VIEW),
+            UiStoryWorkflowEdge::requires_completed(NODE_RUNTIME_VIEW, NODE_INTERACTION_STORY),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_INTERACTION_STORY,
+                NODE_INTERACTION_REPLAY,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_INTERACTION_STORY,
+                NODE_LIVE_INTERACTION_PROOF,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_INTERACTION_REPLAY,
+                NODE_REPLAY_LIVE_PARITY,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_LIVE_INTERACTION_PROOF,
+                NODE_REPLAY_LIVE_PARITY,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_REPLAY_LIVE_PARITY,
+                NODE_INTERACTION_STATIC_MOUNT,
+            ),
+            UiStoryWorkflowEdge::requires_completed(
+                NODE_INTERACTION_STATIC_MOUNT,
+                NODE_PREVIEW_FRAME,
+            ),
+        ],
+        UiStoryWorkflowNodeId::new(NODE_PREVIEW_FRAME),
+    )
+}
+
 fn manifest_node() -> UiStoryWorkflowNode {
     UiStoryWorkflowNode::derived(NODE_MANIFEST, "Manifest")
 }
@@ -181,6 +250,12 @@ mod tests {
                 .as_str(),
             WORKFLOW_STATIC_PREVIEW
         );
+        assert_eq!(
+            UiStoryBuiltinWorkflowProfile::ExecutableInteractionProof
+                .profile_id()
+                .as_str(),
+            WORKFLOW_EXECUTABLE_INTERACTION_PROOF
+        );
     }
 
     #[test]
@@ -211,6 +286,35 @@ mod tests {
     }
 
     #[test]
+    fn executable_interaction_proof_order_is_stable() {
+        let graph = UiStoryBuiltinWorkflowProfile::ExecutableInteractionProof.graph();
+        let order = graph
+            .topological_nodes()
+            .expect("executable interaction proof should be valid");
+
+        assert_eq!(
+            order
+                .iter()
+                .map(|node| node.node_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                NODE_MANIFEST,
+                NODE_SOURCE_LOAD,
+                NODE_SOURCE_PARSE,
+                NODE_PROGRAM_FORMATION,
+                NODE_COMPILER,
+                NODE_RUNTIME_VIEW,
+                NODE_INTERACTION_STORY,
+                NODE_INTERACTION_REPLAY,
+                NODE_LIVE_INTERACTION_PROOF,
+                NODE_REPLAY_LIVE_PARITY,
+                NODE_INTERACTION_STATIC_MOUNT,
+                NODE_PREVIEW_FRAME,
+            ]
+        );
+    }
+
+    #[test]
     fn builtin_iterator_lists_all_profiles_in_stable_order() {
         let ids = UiStoryBuiltinWorkflowProfile::all()
             .map(UiStoryBuiltinWorkflowProfile::profile_id)
@@ -223,6 +327,7 @@ mod tests {
                 WORKFLOW_SOURCE_LOAD_ONLY,
                 WORKFLOW_COMPILER_ONLY,
                 WORKFLOW_STATIC_PREVIEW,
+                WORKFLOW_EXECUTABLE_INTERACTION_PROOF,
             ]
         );
     }
