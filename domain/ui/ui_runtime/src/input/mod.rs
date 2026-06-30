@@ -18,5 +18,7 @@ pub use generic_interaction_visual_frame::*;
 pub use hit_test::hit_test_widget;
 pub use interaction_result::{UiInteraction, UiInteractionResults};
 pub use interaction_story_session::*;
+#[doc(hidden)]
+pub use interaction_story_session::base_controls_executable_interaction_expected_evidence as phase12_executable_generic_interaction_expected_evidence;
 pub use outcome::{UiInputOutcome, UiInvalidation};
 pub use pointer::dispatch_pointer_event;
