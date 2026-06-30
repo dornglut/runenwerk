@@ -48,8 +48,8 @@ Milestones:
 009 Layout / container / virtualization — completed by user validation report through 009A/009B/009C
 010 Render surface / output — completed by user validation report through PR #34
 011 Base control packages — completed through PR #37 and user validation report
-012 Generic interaction — completed in PR #43 implementation evidence as contract/replay/static proof
-012A Executable interaction story — active implementation
+012 Generic interaction — review / pending PR #43 cleanup, validation, and merge
+012A Executable interaction story — review / pending PR #43 cleanup, validation, and merge
 013 Overlay / popup / layering — future
 014 Minimum text editing — future
 015 Generic text — future
@@ -72,8 +72,8 @@ Design gates:
 009C proved ui_controls should bridge owner-crate vocabulary through per-control descriptors and read-only summaries.
 010 proved render/output ownership across ui_render_data, ui_controls, ui_runtime, and engine render.
 011 proved UI-local contribution/preset/lowering authoring for package-quality base controls while keeping full interaction behavior for Phase 12.
-012 completed generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, static mount frame evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
-012A accepted the Tier 5 gate and now has exact implementation scope: reusable interaction work should become executable through one story that supports deterministic replay and live proof-host input with semantic replay/live parity.
+012 has PR #43 implementation evidence for generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, static mount frame evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries. It remains pending cleanup, validation, and merge.
+012A accepted the Tier 5 gate and PR #43 contains implementation evidence for one executable story that supports deterministic replay, live proof-host input, semantic replay/live parity, static frame validation, and no-bypass counters. It remains pending cleanup, validation, and merge.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -91,15 +91,15 @@ Phase 8: user reported the accessibility/focus/inspection validation gate green.
 Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundation, 009C ui_controls layout bridge, read-only catalog inspection bridge, and focused tests; user reported the validation gate green.
 Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
 Phase 11: PR #37 merged the UI-local base-control contribution/preset/lowering proof; user reported the validation gate green.
-Phase 12: PR #43 implements package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions. Validation passed for the Phase 12 implementation gate recorded in the closeout report.
-Phase 12A: active implementation scope requires an Executable UI Interaction Story with replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions. Implementation evidence does not exist yet.
+Phase 12: PR #43 contains implementation evidence for package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions. The evidence is pending cleanup, validation, and merge before completion can be claimed.
+Phase 12A: PR #43 contains implementation evidence for an Executable UI Interaction Story with replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions. The evidence is pending cleanup, validation, and merge before completion can be claimed.
 Later phases: overlays, text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 12A implementation evidence is the current blocker before live reusable interaction proof can be claimed. PR #43 provides the lower-tier contract/replay/static frame proof, the Tier 5 direction is accepted, and exact implementation scope is recorded. The next blocker is delivery and validation of that scope.
+PR #43 cleanup, validation, and merge is the current blocker before Phase 12 or Phase 12A completion can be claimed. PR #43 provides lower-tier contract/replay/static frame proof for Phase 12 and Tier 5 executable interaction story evidence for Phase 12A, but that evidence remains in review. UI Gallery exposure is separate future work under `PT-UI-GALLERY-001`.
 ```
 
 Activation condition:
@@ -111,7 +111,7 @@ Each future milestone activates only through an accepted planning/design update 
 Next action:
 
 ```text
-Implement the scoped `PT-UI-COMPONENT-PLATFORM-012A` files. Do not implement overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of Phase 12A.
+Finish PR #43 cleanup and validation, update PR language to remove 012B/UI Lab proof-surface claims, and merge only after review is accurate. Do not implement UI Gallery exposure, overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of PR #43.
 ```
 
 ## Track shape

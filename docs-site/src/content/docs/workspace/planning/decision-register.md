@@ -297,6 +297,28 @@ Evidence: Inspection of `ui_story` V2 workflow files, `ui_runtime` generic inter
 
 Follow-up: Implement only the scoped files. Stop and record a scope revision if implementation requires editor shell surface registry changes, product command execution, product mutation, overlays, full text editing, a parallel story runner, a generic plugin framework, `foundation/meta`, or generic plugin primitives.
 
+## Phase 12 / 12A review correction and UI Gallery split decision
+
+Date: 2026-06-30
+
+Decision: Correct PR #43 planning truth: `PT-UI-COMPONENT-PLATFORM-012` and `PT-UI-COMPONENT-PLATFORM-012A` are in review and pending cleanup, validation, and merge. Remove `PT-UI-COMPONENT-PLATFORM-012B` from active planning and split UI Gallery product exposure into separate future `PT-UI-GALLERY-001`.
+
+State transition: `completed` / `active-implementation` -> `review`
+
+Context: PR #43 contains useful Phase 12 lower-tier generic interaction evidence and Phase 12A executable interaction story evidence, but the branch also introduced flawed 012B/UI Lab proof-surface work that reused provider id `11`, created invalid Workbench provider assignment behavior, and overstated UI Gallery/product exposure. Completion language was premature because PR #43 has not merged.
+
+Options considered: Repair the UI Lab proof surface inside PR #43; keep 012B active and add more provider-registry work; remove 012B from PR #43, keep 012/012A in review, and plan UI Gallery separately.
+
+Reason: The long-term boundary keeps reusable interaction semantics and executable story proof in owner crates and narrow proof-host evidence. UI Gallery exposure is product/platform adoption work, not required to validate PR #43's reusable interaction proof. Keeping the flawed 012B surface would blur provider identity, Workbench composition, and gallery claims.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, and the PR #43 body.
+
+Evidence: User cleanup instruction on 2026-06-30, restored workbench coverage, duplicate provider assignment failure from the 012B UI Lab surface path, and the accepted executable interaction story design's stop conditions around product-facing gallery and shell-surface expansion.
+
+Follow-up: Update PR #43 body to remove 012B/UI Lab proof-surface claims, validate the focused Phase 12/12A gate, and merge only after the branch contains no 012B implementation or planning claims.
+
+Reactivation condition: Create `PT-UI-GALLERY-001` only through a separate active planning entry with owner, scope, validation envelope, evidence expectation, and stop conditions.
+
 ## Lifecycle rule
 
 Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.
