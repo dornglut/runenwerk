@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-29
+last_reviewed: 2026-06-30
 related_docs:
   - ../workflow-lifecycle.md
 ---
@@ -318,6 +318,46 @@ Evidence: User cleanup instruction on 2026-06-30, restored workbench coverage, d
 Follow-up: Update PR #43 body to remove 012B/UI Lab surface claims, validate the focused Phase 12/12A gate, and merge only after the branch contains no 012B work or planning claims.
 
 Reactivation condition: Create `PT-UI-GALLERY-001` only through a separate active planning entry with owner, scope, validation envelope, evidence expectation, and stop conditions.
+
+## Phase 12 / 12A completion and Phase 13 activation decision
+
+Date: 2026-06-30
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-012` and `PT-UI-COMPONENT-PLATFORM-012A` completed from merged PR #43 evidence and start `PT-UI-COMPONENT-PLATFORM-013` as overlay/popup/layering design intake.
+
+State transition: `review -> completed`; `production-track -> active-planning`
+
+Context: PR #43 is closed and merged into `main` at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. User start condition reports PR #43 validated and merged. The PR body records Phase 12 generic interaction evidence and Phase 12A executable interaction story evidence while excluding overlays, popups, dropdowns, tooltips, modals, layering, product command execution, product/editor/game mutation, full text editing, dynamic plugin loading, and UI Gallery exposure.
+
+Options considered: Leave Phase 12/12A in review because the PR body still contains stale review wording; mark completion using PR metadata plus user validation evidence and correct planning truth; start Phase 13 implementation immediately.
+
+Reason: Planning truth must follow merged repository evidence. The stale PR-body review sentence is superseded by the actual closed/merged PR metadata and the user-reported validation start condition. Phase 13 can begin as design intake only because overlays/layering were explicitly excluded from PR #43 and need their own owner-first contract before code.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-executable-interaction-story-implementation-scope.md`, and `ui-component-platform-overlay-popup-layering-design.md`.
+
+Evidence: PR #43 merged metadata, merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`, user validation/merge start condition, PR #43 proof-path list, durable base-controls naming cleanup, and current planning docs.
+
+Follow-up: Keep Phase 13 in active planning until `ui-component-platform-overlay-popup-layering-design.md` is accepted and a Rust implementation scope records exact owner crates/files, validation commands, proof scenarios, negative scenarios, evidence contracts, no-bypass assertions, and stop conditions.
+
+## Phase 13 overlay / popup / layering design intake decision
+
+Date: 2026-06-30
+
+Decision: Use `ui-component-platform-overlay-popup-layering-design.md` as the active Phase 13 design document for reusable overlay, popup, dropdown, tooltip, modal-like, and layering semantics.
+
+State transition: `active-planning -> proposed-design`
+
+Context: The existing overlay design was stale activation-vocabulary material. The component platform now has base controls, generic interaction facts, executable interaction stories, and static frame proof. The older editor Interaction V2 design also records popup-stack lessons for anchoring, focus return, outside dismissal, Escape dismissal, scroll ownership, layer order, and viewport arbitration, but those lessons must be extracted without moving editor shell behavior or commands into generic UI.
+
+Options considered: Implement editor popup behavior directly; turn product UI Gallery or UI Designer into the Phase 13 target; create a reusable overlay/layering substrate design that consumes Phase 12/12A and keeps product behavior outside generic UI.
+
+Reason: Overlay, popup, dropdown, tooltip, menu, and modal-like behavior are reusable UI substrate concerns, but app-specific command execution, product mutation, authored UI editing, and Workbench/provider behavior are not. A design-first owner map prevents a repeat of the removed 012B/UI Lab overreach.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, and `ui-component-platform-overlay-popup-layering-design.md`.
+
+Evidence: Completed Phase 12/12A PR #43 proof, accepted executable interaction story standard, Interaction V2 popup-stack contract, and implemented self-authoring UI design goals that defer product/editor-specific command and authoring behavior.
+
+Follow-up: Review and accept, revise, or reject the Phase 13 design. Do not authorize implementation until the implementation-scope section is accepted.
 
 ## Lifecycle rule
 
