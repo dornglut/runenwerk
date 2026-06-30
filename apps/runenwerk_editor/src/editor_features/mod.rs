@@ -1,6 +1,5 @@
 pub mod base_controls_interaction_proof_host;
 pub mod outliner;
-pub mod phase12a_interaction_proof_host;
 pub mod scene_commands;
 pub mod tool_action;
 pub mod tools;
