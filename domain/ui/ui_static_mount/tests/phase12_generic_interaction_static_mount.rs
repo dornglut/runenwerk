@@ -7,14 +7,14 @@ use ui_runtime::{
 use ui_static_mount::UiStaticMountReport;
 
 #[test]
-fn phase12_generic_interaction_visual_proof_static_mounts() {
+fn base_controls_generic_interaction_visual_proof_static_mounts() {
     let compiled = BaseControlsPlugin::new().compile();
     let proof_frame = base_controls_generic_interaction_proof_frame(&compiled);
     let rendered = interaction_visual_proof_to_frame(&proof_frame.proof);
 
     let mount_report = UiStaticMountReport::from_frame(rendered.frame.clone());
 
-    assert!(mount_report.passed(), "{:?}", mount_report.diagnostics());
+    assert!(mount_report.passed());
     assert_eq!(
         rendered.proof_id,
         BASE_CONTROLS_GENERIC_INTERACTION_PROOF_ID
@@ -100,12 +100,7 @@ fn assert_marker(
         .main_view
         .control(widget_id)
         .expect("visual proof should contain control");
-    assert!(
-        control.has_marker(state),
-        "{:?} missing {:?}",
-        control.observed_markers,
-        state
-    );
+    assert!(control.has_marker(state));
 }
 
 fn primitive_sort_keys_are_stable(frame: &ui_render_data::UiFrame) -> bool {
