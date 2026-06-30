@@ -24,8 +24,6 @@ use super::{
 };
 
 const PROVIDER_VALIDATION_INSTANCE_RAW_ID: u64 = 1;
-const UI_LAB_PROVIDER_BRIDGE_RAW_ID: u64 = 11;
-const UI_LAB_PROVIDER_FAMILY_ID: &str = "runenwerk.ui_lab";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunenwerkWorkbenchComposition {
@@ -321,7 +319,6 @@ fn installed_tool_suites() -> Vec<EditorToolSuite> {
         tool_suites::asset_tool_suite::asset_tool_suite(),
         tool_suites::field_sdf_tool_suite::field_sdf_tool_suite(),
         tool_suites::diagnostics_tool_suite::diagnostics_tool_suite(),
-        tool_suites::ui_lab_tool_suite::ui_lab_tool_suite(),
         tool_suites::texture_tool_suite::texture_tool_suite(),
         tool_suites::procgen_tool_suite::procgen_tool_suite(),
         material_lab_tool_suite(),
@@ -362,23 +359,12 @@ fn provider_family_assignments_for_tool_suites(
         .map(|provider_family| provider_family.id.as_str().to_string())
         .collect::<BTreeSet<_>>();
 
-    let mut assignments = runenwerk_provider_family_assignments()
+    runenwerk_provider_family_assignments()
         .into_iter()
         .filter(|assignment| {
             installed_provider_families.contains(assignment.provider_family_id.as_str())
         })
-        .collect::<Vec<_>>();
-
-    if installed_provider_families.contains(UI_LAB_PROVIDER_FAMILY_ID) {
-        assignments.push(ProviderFamilyProviderAssignment::new(
-            ProviderFamilyId::new(UI_LAB_PROVIDER_FAMILY_ID)
-                .expect("compiled-in UI Lab provider family should be valid"),
-            SurfaceProviderId::try_from_raw(UI_LAB_PROVIDER_BRIDGE_RAW_ID)
-                .expect("UI Lab provider bridge id should be non-zero"),
-        ));
-    }
-
-    assignments
+        .collect()
 }
 
 fn provider_family_assignments_for_composition(
@@ -665,7 +651,7 @@ mod tests {
 
     use editor_shell::{
         ProviderFamilyId, ProviderFamilyProviderAssignment, SurfaceDocumentContext,
-        SurfaceProviderId, SurfaceProviderRequest, ToolSuiteRegistryError, ToolSurfaceRoute,
+        SurfaceProviderId, SurfaceProviderRequest, ToolSurfaceRoute,
     };
     use ui_theme::ThemeTokens;
 
@@ -848,12 +834,11 @@ mod tests {
             Err(error) => error,
         };
 
-        assert!(matches!(
-            error,
-            RunenwerkWorkbenchHostError::ToolSuiteRegistry(
-                ToolSuiteRegistryError::DuplicateToolSuiteId { .. }
-            )
-        ));
+        let rendered = format!("{error:?}");
+        assert!(
+            rendered.contains("DuplicateInstalledSuiteId"),
+            "duplicate suite fixture should reject with DuplicateInstalledSuiteId, got {rendered}"
+        );
     }
 
     #[test]

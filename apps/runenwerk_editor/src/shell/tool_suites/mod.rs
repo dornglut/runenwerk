@@ -21,7 +21,6 @@ pub mod graph_tool_suite;
 pub mod procgen_tool_suite;
 pub mod simulation_tool_suite;
 pub mod texture_tool_suite;
-pub mod ui_lab_tool_suite;
 
 pub(crate) const SCENE_OUTLINER_SURFACE_KEY: &str = "runenwerk.scene.outliner";
 pub(crate) const SCENE_ENTITY_TABLE_SURFACE_KEY: &str = "runenwerk.scene.entity_table";
@@ -54,7 +53,6 @@ pub(crate) const DIAGNOSTICS_SURFACE_KEYS: &[&str] = &[
 ];
 pub(crate) const TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY: &str =
     "runenwerk.diagnostics.tool_suite_registry_inspector";
-pub(crate) const UI_LAB_INTERACTION_STORY_SURFACE_KEY: &str = "runenwerk.ui_lab.interaction_story";
 pub(crate) const MATERIAL_GRAPH_CANVAS_SURFACE_KEY: &str = "runenwerk.material_lab.graph_canvas";
 pub(crate) const MATERIAL_INSPECTOR_SURFACE_KEY: &str = "runenwerk.material_lab.inspector";
 pub(crate) const MATERIAL_PREVIEW_SURFACE_KEY: &str = "runenwerk.material_lab.preview";
@@ -72,7 +70,6 @@ pub fn runenwerk_shell_tool_suites() -> Vec<EditorToolSuite> {
         field_sdf_tool_suite::field_sdf_tool_suite(),
         graph_tool_suite::graph_tool_suite(),
         diagnostics_tool_suite::diagnostics_tool_suite(),
-        ui_lab_tool_suite::ui_lab_tool_suite(),
         texture_tool_suite::texture_tool_suite(),
         procgen_tool_suite::procgen_tool_suite(),
         gameplay_tool_suite::gameplay_tool_suite(),
@@ -252,20 +249,6 @@ mod tests {
     }
 
     #[test]
-    fn ui_lab_suite_registers_interaction_story_surface() {
-        let suite = ui_lab_tool_suite::ui_lab_tool_suite();
-        let surface = suite
-            .surfaces
-            .iter()
-            .find(|surface| surface.key.as_str() == UI_LAB_INTERACTION_STORY_SURFACE_KEY)
-            .expect("UI Lab interaction story surface should be registered");
-
-        assert_eq!(suite.suite_id.as_str(), "runenwerk.ui_lab");
-        assert_eq!(surface.label, "Interaction Story Lab");
-        assert_eq!(surface.provider_family.as_str(), "runenwerk.ui_lab");
-    }
-
-    #[test]
     fn inspector_surface_has_no_legacy_tool_surface_kind() {
         let suite = diagnostics_tool_suite::diagnostics_tool_suite();
         let surface = suite
@@ -278,18 +261,6 @@ mod tests {
     }
 
     #[test]
-    fn ui_lab_interaction_story_surface_has_no_legacy_tool_surface_kind() {
-        let suite = ui_lab_tool_suite::ui_lab_tool_suite();
-        let surface = suite
-            .surfaces
-            .iter()
-            .find(|surface| surface.key.as_str() == UI_LAB_INTERACTION_STORY_SURFACE_KEY)
-            .expect("UI Lab interaction story surface should be registered");
-
-        assert_eq!(tool_surface_kind_for_stable_key(&surface.key), None);
-    }
-
-    #[test]
     fn inspector_surface_uses_provider_owned_local_route() {
         let suite = diagnostics_tool_suite::diagnostics_tool_suite();
         let surface = suite
@@ -297,19 +268,6 @@ mod tests {
             .iter()
             .find(|surface| surface.key.as_str() == TOOL_SUITE_REGISTRY_INSPECTOR_SURFACE_KEY)
             .expect("Tool Suite Registry Inspector surface should be registered");
-
-        assert_eq!(surface.route, ToolSurfaceRoute::ProviderOwnedLocal);
-        assert_eq!(surface.persistence, ToolSurfacePersistence::StableKey);
-    }
-
-    #[test]
-    fn ui_lab_interaction_story_surface_uses_provider_owned_local_route() {
-        let suite = ui_lab_tool_suite::ui_lab_tool_suite();
-        let surface = suite
-            .surfaces
-            .iter()
-            .find(|surface| surface.key.as_str() == UI_LAB_INTERACTION_STORY_SURFACE_KEY)
-            .expect("UI Lab interaction story surface should be registered");
 
         assert_eq!(surface.route, ToolSurfaceRoute::ProviderOwnedLocal);
         assert_eq!(surface.persistence, ToolSurfacePersistence::StableKey);
