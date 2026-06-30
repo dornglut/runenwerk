@@ -1,16 +1,16 @@
 use ui_controls::BaseControlsPlugin;
 use ui_runtime::{
     InteractionStoryExecutionMode, InteractionVisibleState, WidgetId,
+    base_controls_executable_interaction_expected_evidence,
     base_controls_executable_interaction_story_session,
     base_controls_generic_interaction_positive_script,
-    phase12_executable_generic_interaction_expected_evidence,
 };
 
 #[test]
 fn phase12_executable_interaction_story_replay_produces_expected_evidence() {
     let compiled = BaseControlsPlugin::new().compile();
     let script = base_controls_generic_interaction_positive_script();
-    let expected = phase12_executable_generic_interaction_expected_evidence();
+    let expected = base_controls_executable_interaction_expected_evidence();
     let mut session = base_controls_executable_interaction_story_session(
         &compiled,
         InteractionStoryExecutionMode::Replay,
@@ -18,34 +18,23 @@ fn phase12_executable_interaction_story_replay_produces_expected_evidence() {
 
     let report = session.run_script_with_expected(&script, &expected);
 
-    assert!(
-        report.evidence_result.passed(),
-        "missing evidence: {:?}",
-        report.evidence_result.missing
-    );
+    assert!(report.evidence_result.passed());
     assert_eq!(report.input_log.len(), script.steps.len());
     assert!(report.boundary_assertions.no_bypass_evidence());
     assert!(report.render_summary.has_main_inspector_and_report);
 
-    let button = report
-        .visual_proof
-        .main_view
-        .control(WidgetId(1))
-        .expect("button should exist in proof");
+    let button = report.visual_proof.main_view.control(WidgetId(1)).unwrap();
     assert!(button.has_marker(InteractionVisibleState::Pressed));
     assert!(button.has_marker(InteractionVisibleState::Captured));
     assert!(button.has_marker(InteractionVisibleState::ActivationRequested));
-    assert!(
-        !button.has_current_state(InteractionVisibleState::Pressed),
-        "pressed must be observed evidence, not final current state"
-    );
+    assert!(!button.has_current_state(InteractionVisibleState::Pressed));
 }
 
 #[test]
 fn phase12_executable_interaction_story_live_log_replays_with_semantic_parity() {
     let compiled = BaseControlsPlugin::new().compile();
     let script = base_controls_generic_interaction_positive_script();
-    let expected = phase12_executable_generic_interaction_expected_evidence();
+    let expected = base_controls_executable_interaction_expected_evidence();
     let mut live = base_controls_executable_interaction_story_session(
         &compiled,
         InteractionStoryExecutionMode::Live,
@@ -55,19 +44,12 @@ fn phase12_executable_interaction_story_live_log_replays_with_semantic_parity() 
         live.apply_step(step.clone());
     }
 
-    let live_report = live.run_report_with_expected(&expected);
-    assert!(
-        live_report.evidence_result.passed(),
-        "missing live evidence: {:?}",
-        live_report.evidence_result.missing
-    );
+    let report = live.run_report_with_expected(&expected);
+    assert!(report.evidence_result.passed());
 
     let parity = live.replay_live_parity_report();
-    assert!(parity.passed(), "parity failed: {parity:#?}");
-    assert_eq!(
-        parity.live_report.input_log,
-        parity.replayed_live_log_report.input_log
-    );
+    assert!(parity.passed());
+    assert_eq!(parity.live_report.input_log, parity.replayed_live_log_report.input_log);
     assert!(parity.equivalent_target_resolution);
     assert!(parity.equivalent_focus_resolution);
     assert!(parity.equivalent_state_transitions);
