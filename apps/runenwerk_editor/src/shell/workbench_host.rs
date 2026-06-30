@@ -629,6 +629,12 @@ impl From<SurfaceProviderRegistryError> for RunenwerkWorkbenchHostError {
     }
 }
 
+impl From<SurfaceProviderDiagnostic> for RunenwerkWorkbenchHostError {
+    fn from(diagnostic: SurfaceProviderDiagnostic) -> Self {
+        Self::SurfaceProviderSupport(diagnostic)
+    }
+}
+
 impl From<ProviderFamilyProviderMapError> for RunenwerkWorkbenchHostError {
     fn from(error: ProviderFamilyProviderMapError) -> Self {
         Self::ProviderFamilyProviderMap(error)
@@ -650,5 +656,266 @@ impl From<WorkbenchCompositionCompileError> for RunenwerkWorkbenchHostError {
 impl From<WorkspaceProfileRegistryBackedBuildError> for RunenwerkWorkbenchHostError {
     fn from(error: WorkspaceProfileRegistryBackedBuildError) -> Self {
         Self::WorkspaceProfileRegistry(error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use editor_shell::{
+        ProviderFamilyId, ProviderFamilyProviderAssignment, SurfaceDocumentContext,
+        SurfaceProviderId, SurfaceProviderRequest, ToolSuiteRegistryError, ToolSurfaceRoute,
+    };
+    use ui_theme::ThemeTokens;
+
+    use crate::{
+        editor_app::RunenwerkEditorApp,
+        shell::{
+            RunenwerkEditorShellState, SurfaceProviderBuildContext, SurfaceSessionState,
+            mounted_surface_requests_with_registry,
+        },
+    };
+
+    use super::*;
+
+    #[test]
+    fn workbench_host_builds_with_material_lab_suite_metadata() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let suite = host
+            .tool_suite_registry()
+            .suites()
+            .iter()
+            .find(|suite| suite.suite_id.as_str() == "runenwerk.material_lab")
+            .expect("Material Lab suite metadata should be installed");
+
+        assert_eq!(suite.provider_families.len(), 1);
+        assert_eq!(suite.surfaces.len(), 3);
+    }
+
+    #[test]
+    fn workbench_host_exposes_tool_surface_registry() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let key =
+            editor_shell::ToolSurfaceStableKey::new("runenwerk.material_lab.graph_canvas").unwrap();
+        let surface = host
+            .tool_surface_registry()
+            .get(&key)
+            .expect("Material graph canvas metadata should be registered");
+
+        assert_eq!(surface.label, "Material Graph");
+        assert_eq!(surface.route, ToolSurfaceRoute::ProviderOwnedGraphCanvas);
+        assert_eq!(surface.provider_family.as_str(), "runenwerk.material_lab");
+    }
+
+    #[test]
+    fn no_duplicate_stable_keys_across_installed_suites() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let mut keys = BTreeSet::new();
+
+        for surface in host.tool_surface_registry().iter() {
+            assert!(keys.insert(surface.key.as_str()));
+        }
+    }
+
+    #[test]
+    fn no_duplicate_provider_families_across_installed_suites() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let mut provider_families = BTreeSet::new();
+
+        for suite in host.tool_suite_registry().suites() {
+            for provider_family in &suite.provider_families {
+                assert!(provider_families.insert(provider_family.id.as_str()));
+            }
+        }
+    }
+
+    #[test]
+    fn workbench_host_builds_provider_family_provider_map() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let scene_family = ProviderFamilyId::new("runenwerk.scene").unwrap();
+
+        let scene_providers = host
+            .provider_family_provider_map()
+            .providers_for(&scene_family)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            scene_providers,
+            vec![
+                surface_provider_id(1),
+                surface_provider_id(2),
+                surface_provider_id(3),
+                surface_provider_id(4),
+            ]
+        );
+    }
+
+    #[test]
+    fn workbench_host_provider_family_map_rejects_unknown_provider_id() {
+        let material_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
+        let unknown_provider_id = SurfaceProviderId::try_from_raw(999).unwrap();
+        let error = match RunenwerkWorkbenchHost::from_tool_suites_provider_registry_and_provider_family_assignments(
+            vec![material_lab_tool_suite()],
+            EditorSurfaceProviderRegistry::runenwerk_default(),
+            vec![ProviderFamilyProviderAssignment::new(
+                material_family.clone(),
+                unknown_provider_id,
+            )],
+        ) {
+            Ok(_) => panic!("unknown provider ids should be rejected"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(
+            error,
+            RunenwerkWorkbenchHostError::UnknownProviderId {
+                provider_family_id,
+                provider_id,
+            } if provider_family_id == material_family && provider_id == unknown_provider_id
+        ));
+    }
+
+    #[test]
+    fn material_lab_provider_family_maps_to_three_material_providers() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let material_family = ProviderFamilyId::new("runenwerk.material_lab").unwrap();
+
+        let providers = host
+            .provider_family_provider_map()
+            .providers_for(&material_family)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            providers,
+            vec![
+                surface_provider_id(12),
+                surface_provider_id(13),
+                surface_provider_id(14),
+            ]
+        );
+    }
+
+    #[test]
+    fn inspector_provider_is_assigned_to_diagnostics_provider_family() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let diagnostics_family = ProviderFamilyId::new("runenwerk.diagnostics").unwrap();
+
+        let providers = host
+            .provider_family_provider_map()
+            .providers_for(&diagnostics_family)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            providers,
+            vec![surface_provider_id(11), surface_provider_id(21)]
+        );
+    }
+
+    #[test]
+    fn workbench_host_does_not_change_default_provider_registry_behavior() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let default_registry = EditorSurfaceProviderRegistry::runenwerk_default();
+        let app = RunenwerkEditorApp::new();
+        let shell_state = RunenwerkEditorShellState::new();
+        let theme = ThemeTokens::default();
+        let request = material_graph_request();
+        let session = SurfaceSessionState::default();
+
+        let hosted_frame = host.provider_registry().resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &session,
+        );
+        let default_frame = default_registry.resolve_frame(
+            &context(&app, &shell_state, &theme),
+            &request,
+            &session,
+        );
+
+        assert_eq!(hosted_frame.availability, default_frame.availability);
+        assert_eq!(hosted_frame.provider_id, default_frame.provider_id);
+        assert_eq!(hosted_frame.title, default_frame.title);
+    }
+
+    #[test]
+    fn workbench_host_rejects_invalid_duplicate_suite_fixture() {
+        let error = match RunenwerkWorkbenchHost::from_tool_suites_and_provider_registry(
+            vec![material_lab_tool_suite(), material_lab_tool_suite()],
+            EditorSurfaceProviderRegistry::runenwerk_default(),
+        ) {
+            Ok(_) => panic!("duplicate suites should be rejected"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(
+            error,
+            RunenwerkWorkbenchHostError::ToolSuiteRegistry(
+                ToolSuiteRegistryError::DuplicateToolSuiteId { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn material_lab_suite_remains_metadata_only_not_startup_surface_authority() {
+        let host = RunenwerkWorkbenchHost::new().expect("host should build");
+        let shell_state = RunenwerkEditorShellState::new();
+        let hosted_metadata_requests = mounted_surface_requests_with_registry(
+            &shell_state,
+            SurfaceDocumentContext::NoActiveDocument,
+            Some(host.tool_surface_registry()),
+        );
+
+        assert!(hosted_metadata_requests.iter().all(|request| {
+            request.stable_surface_key.as_str() != "runenwerk.material_lab.graph_canvas"
+        }));
+    }
+
+    fn material_graph_request() -> SurfaceProviderRequest {
+        SurfaceProviderRequest {
+            mounted_unit_id: ui_composition::MountedUnitId::try_from_raw(50).unwrap(),
+            unavailable_content_policy: ui_composition::UnavailableContentPolicy::ShowFallback,
+            workspace_profile_id: editor_shell::MATERIAL_WORKSPACE_PROFILE_ID,
+            document_context: SurfaceDocumentContext::Resolved {
+                document_id: editor_core::DocumentId(6),
+                document_kind: editor_core::DocumentKind::MaterialGraph,
+            },
+            panel_instance_id: PanelInstanceId::try_from_raw(50).unwrap(),
+            tab_stack_id: TabStackId::try_from_raw(50).unwrap(),
+            tool_surface_instance_id: ToolSurfaceInstanceId::try_from_raw(50).unwrap(),
+            stable_surface_key: editor_shell::ToolSurfaceStableKey::new(
+                "runenwerk.material_lab.graph_canvas",
+            )
+            .unwrap(),
+            provider_family_id: None,
+            surface_route: None,
+            surface_definition_id: editor_shell::MATERIAL_GRAPH_CANVAS_SURFACE_DEFINITION_ID,
+            capabilities: editor_shell::tool_surface_capability_set(
+                editor_shell::ToolSurfaceKind::MaterialGraphCanvas,
+            ),
+        }
+    }
+
+    fn context<'a>(
+        app: &'a RunenwerkEditorApp,
+        shell_state: &'a RunenwerkEditorShellState,
+        theme: &'a ThemeTokens,
+    ) -> SurfaceProviderBuildContext<'a> {
+        SurfaceProviderBuildContext {
+            app,
+            shell_state,
+            theme,
+            frame_metrics: None,
+            viewport_observations: None,
+            tool_surface_bindings: None,
+            viewport_instances: None,
+        }
+    }
+
+    const fn surface_provider_id(raw: u64) -> SurfaceProviderId {
+        match SurfaceProviderId::try_from_raw(raw) {
+            Ok(id) => id,
+            Err(_) => panic!("surface provider ids must be non-zero"),
+        }
     }
 }

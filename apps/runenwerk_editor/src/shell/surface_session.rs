@@ -364,6 +364,30 @@ mod tests {
     }
 
     #[test]
+    fn prune_for_workspace_retains_mounted_console_surface_session() {
+        let mut allocator = WorkspaceIdentityAllocator::new();
+        let workspace_id = WorkspaceId::try_from_raw(1).unwrap();
+        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
+        let surface_id = workspace
+            .tool_surfaces()
+            .find(|surface| surface.stable_surface_key().as_str() == EDITOR_CONSOLE_SURFACE_KEY)
+            .expect("editor console surface should exist")
+            .id;
+        let mut store = SurfaceSessionStore::default();
+        store.session_mut(surface_id).console_follow_enabled = false;
+
+        store.prune_for_workspace(&workspace);
+
+        assert_eq!(
+            store
+                .session(surface_id)
+                .expect("console surface session should be retained")
+                .console_follow_enabled,
+            false
+        );
+    }
+
+    #[test]
     fn clear_transient_removes_all_surface_sessions() {
         let mut store = SurfaceSessionStore::default();
         store
