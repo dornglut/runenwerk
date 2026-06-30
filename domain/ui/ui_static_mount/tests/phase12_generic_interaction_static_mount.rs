@@ -1,21 +1,21 @@
 use ui_controls::BaseControlsPlugin;
 use ui_render_data::{UiPrimitive, UiSortKey};
 use ui_runtime::{
-    InteractionVisibleState, PHASE12_GENERIC_INTERACTION_PROOF_ID, WidgetId,
-    interaction_visual_proof_to_frame, phase12_generic_interaction_proof_frame,
+    BASE_CONTROLS_GENERIC_INTERACTION_PROOF_ID, InteractionVisibleState, WidgetId,
+    base_controls_generic_interaction_proof_frame, interaction_visual_proof_to_frame,
 };
 use ui_static_mount::UiStaticMountReport;
 
 #[test]
 fn phase12_generic_interaction_visual_proof_static_mounts() {
     let compiled = BaseControlsPlugin::new().compile();
-    let proof_frame = phase12_generic_interaction_proof_frame(&compiled);
+    let proof_frame = base_controls_generic_interaction_proof_frame(&compiled);
     let rendered = interaction_visual_proof_to_frame(&proof_frame.proof);
 
     let mount_report = UiStaticMountReport::from_frame(rendered.frame.clone());
 
     assert!(mount_report.passed(), "{:?}", mount_report.diagnostics());
-    assert_eq!(rendered.proof_id, PHASE12_GENERIC_INTERACTION_PROOF_ID);
+    assert_eq!(rendered.proof_id, BASE_CONTROLS_GENERIC_INTERACTION_PROOF_ID);
     assert!(rendered.summary.has_main_inspector_and_report);
     assert!(rendered.summary.main_control_count >= 8);
     assert!(rendered.summary.marker_count >= 8);
