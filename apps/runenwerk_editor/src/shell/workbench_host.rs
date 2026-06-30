@@ -24,6 +24,8 @@ use super::{
 };
 
 const PROVIDER_VALIDATION_INSTANCE_RAW_ID: u64 = 1;
+const UI_LAB_PROVIDER_BRIDGE_RAW_ID: u64 = 11;
+const UI_LAB_PROVIDER_FAMILY_ID: &str = "runenwerk.ui_lab";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunenwerkWorkbenchComposition {
@@ -361,12 +363,23 @@ fn provider_family_assignments_for_tool_suites(
         .map(|provider_family| provider_family.id.as_str().to_string())
         .collect::<BTreeSet<_>>();
 
-    runenwerk_provider_family_assignments()
+    let mut assignments = runenwerk_provider_family_assignments()
         .into_iter()
         .filter(|assignment| {
             installed_provider_families.contains(assignment.provider_family_id.as_str())
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    if installed_provider_families.contains(UI_LAB_PROVIDER_FAMILY_ID) {
+        assignments.push(ProviderFamilyProviderAssignment::new(
+            ProviderFamilyId::new(UI_LAB_PROVIDER_FAMILY_ID)
+                .expect("compiled-in UI Lab provider family should be valid"),
+            SurfaceProviderId::try_from_raw(UI_LAB_PROVIDER_BRIDGE_RAW_ID)
+                .expect("UI Lab provider bridge id should be non-zero"),
+        ));
+    }
+
+    assignments
 }
 
 fn provider_family_assignments_for_composition(
