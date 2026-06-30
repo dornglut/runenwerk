@@ -1,4 +1,4 @@
-//! Executable interaction story session for Phase 12A proof-host core.
+//! Executable interaction story session.
 //!
 //! A session can be driven by deterministic replay scripts or live-shaped
 //! normalized input samples. Both modes rebuild evidence through the existing
@@ -533,9 +533,8 @@ impl InteractionStoryEvidenceResult {
     }
 }
 
-/// Expected evidence for the canonical Phase 12A executable interaction story.
-pub fn phase12_executable_generic_interaction_expected_evidence() -> InteractionStoryExpectedEvidence
-{
+/// Expected evidence for the canonical base-controls executable interaction story.
+pub fn base_controls_executable_interaction_expected_evidence() -> InteractionStoryExpectedEvidence {
     InteractionStoryExpectedEvidence {
         required_markers: vec![
             ExpectedInteractionMarker::new(WidgetId(1), InteractionVisibleState::Hovered),
