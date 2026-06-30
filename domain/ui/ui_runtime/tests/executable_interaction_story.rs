@@ -1,17 +1,17 @@
 use ui_controls::BaseControlsPlugin;
 use ui_runtime::{
     InteractionStoryExecutionMode, InteractionVisibleState, WidgetId,
+    base_controls_executable_interaction_story_session,
+    base_controls_generic_interaction_positive_script,
     phase12_executable_generic_interaction_expected_evidence,
-    phase12_executable_generic_interaction_story_session,
-    phase12_generic_interaction_positive_script,
 };
 
 #[test]
 fn phase12_executable_interaction_story_replay_produces_expected_evidence() {
     let compiled = BaseControlsPlugin::new().compile();
-    let script = phase12_generic_interaction_positive_script();
+    let script = base_controls_generic_interaction_positive_script();
     let expected = phase12_executable_generic_interaction_expected_evidence();
-    let mut session = phase12_executable_generic_interaction_story_session(
+    let mut session = base_controls_executable_interaction_story_session(
         &compiled,
         InteractionStoryExecutionMode::Replay,
     );
@@ -44,9 +44,9 @@ fn phase12_executable_interaction_story_replay_produces_expected_evidence() {
 #[test]
 fn phase12_executable_interaction_story_live_log_replays_with_semantic_parity() {
     let compiled = BaseControlsPlugin::new().compile();
-    let script = phase12_generic_interaction_positive_script();
+    let script = base_controls_generic_interaction_positive_script();
     let expected = phase12_executable_generic_interaction_expected_evidence();
-    let mut live = phase12_executable_generic_interaction_story_session(
+    let mut live = base_controls_executable_interaction_story_session(
         &compiled,
         InteractionStoryExecutionMode::Live,
     );
