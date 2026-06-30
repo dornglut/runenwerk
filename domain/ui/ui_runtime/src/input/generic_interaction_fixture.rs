@@ -1,7 +1,8 @@
-//! Canonical Phase 12 generic interaction proof fixtures.
+//! Canonical base-control generic interaction proof fixtures.
 //!
 //! These helpers build descriptor-backed replay fixtures and scripts for the
-//! reusable interaction proof. They do not create product UI, execute
+//! reusable interaction proof. They are stable base-control story fixtures, not
+//! product UI and not a phase-shaped runtime API. They do not execute
 //! app/editor/game commands, mutate product state, open overlays, or perform
 //! full text editing.
 
@@ -23,23 +24,24 @@ use crate::{
     MountedInteractionFixture, MountedInteractionPlacement, WidgetId, replay_interactions,
 };
 
-/// Stable proof id for the Phase 12 generic interaction visual proof.
-pub const PHASE12_GENERIC_INTERACTION_PROOF_ID: &str = "phase12.generic_interaction";
+/// Stable proof id for the canonical base-controls generic interaction proof.
+pub const BASE_CONTROLS_GENERIC_INTERACTION_PROOF_ID: &str =
+    "runenwerk.ui.controls.base.generic_interaction";
 
-/// Stable executable story id for the Phase 12A generic interaction proof-host core.
-pub const PHASE12_EXECUTABLE_GENERIC_INTERACTION_STORY_ID: &str =
-    "phase12a.executable_generic_interaction";
+/// Stable executable story id for the canonical base-controls interaction story.
+pub const BASE_CONTROLS_EXECUTABLE_INTERACTION_STORY_ID: &str =
+    "runenwerk.ui.controls.base.executable_interaction";
 
-/// Builds the canonical Phase 12 mounted interaction fixture.
+/// Builds the canonical base-controls mounted interaction fixture.
 ///
 /// The fixture uses package-backed base-control interaction descriptors from
 /// the compiled package. It does not recreate descriptor data locally and will
 /// fail if a base control no longer lowers its package interaction descriptor.
-pub fn phase12_generic_interaction_fixture(
+pub fn base_controls_generic_interaction_fixture(
     compiled: &CompiledControlPackage,
 ) -> MountedInteractionFixture {
     MountedInteractionFixture::from_compiled_controls(
-        "phase12.generic-interaction.fixture",
+        "runenwerk.ui.controls.base.generic_interaction.fixture",
         compiled,
         [
             MountedInteractionPlacement::new(
@@ -109,13 +111,13 @@ pub fn phase12_generic_interaction_fixture(
     )
 }
 
-/// Builds the canonical positive replay script for Phase 12 generic interaction.
+/// Builds the canonical positive replay script for base-controls interaction.
 ///
 /// The script exercises hover, press/release activation, focus traversal,
 /// keyboard intent, text-intent probe, list/tree/table navigation intent,
 /// disabled suppression, and no-target evidence.
-pub fn phase12_generic_interaction_positive_script() -> InteractionReplayScript {
-    InteractionReplayScript::new("phase12.replay")
+pub fn base_controls_generic_interaction_positive_script() -> InteractionReplayScript {
+    InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.replay")
         .with_step(focus_target_step("focus_button", WidgetId(1)))
         .with_step(pointer_step(
             "move_button",
@@ -165,9 +167,9 @@ pub fn phase12_generic_interaction_positive_script() -> InteractionReplayScript 
 ///
 /// These scripts prove disabled, no-target, focus-validation, release-outside,
 /// and text-intent boundary behavior without product mutation or text editing.
-pub fn phase12_generic_interaction_negative_scripts() -> Vec<InteractionReplayScript> {
+pub fn base_controls_generic_interaction_negative_scripts() -> Vec<InteractionReplayScript> {
     vec![
-        InteractionReplayScript::new("phase12.release-outside")
+        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.release_outside")
             .with_step(pointer_step(
                 "press_button",
                 PointerEventKind::Down,
@@ -186,14 +188,14 @@ pub fn phase12_generic_interaction_negative_scripts() -> Vec<InteractionReplaySc
                 260.0,
                 260.0,
             )),
-        InteractionReplayScript::new("phase12.focus-validation")
+        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.focus_validation")
             .with_step(focus_target_step("focus_button", WidgetId(1)))
             .with_step(focus_target_step("focus_missing", WidgetId(404)))
             .with_step(focus_target_step("focus_disabled", WidgetId(7)))
             .with_step(focus_target_step("focus_label_without_focus", WidgetId(9)))
             .with_step(focus_target_step("focus_inert", WidgetId(10)))
             .with_step(focus_next_step("focus_traversal")),
-        InteractionReplayScript::new("phase12.negative")
+        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.negative")
             .with_step(key_step("keyboard_without_focus", Key::Enter))
             .with_step(pointer_step(
                 "disabled_button",
@@ -207,28 +209,28 @@ pub fn phase12_generic_interaction_negative_scripts() -> Vec<InteractionReplaySc
                 260.0,
                 260.0,
             )),
-        InteractionReplayScript::new("phase12.text-negative")
+        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.text_negative")
             .with_step(focus_target_step("focus_action", WidgetId(2)))
             .with_step(text_intent_step("text_against_action")),
-        InteractionReplayScript::new("phase12.read-only-text")
+        InteractionReplayScript::new("runenwerk.ui.controls.base.generic_interaction.read_only_text")
             .with_step(focus_target_step("focus_read_only_inspector", WidgetId(8)))
             .with_step(text_intent_step("text_read_only_probe")),
     ]
 }
 
-/// Builds the complete Phase 12 visual proof frame from compiled base controls.
+/// Builds the complete base-controls visual proof frame from compiled controls.
 ///
 /// This helper runs the canonical positive replay against package-backed base
 /// control descriptors and returns semantic visible proof data. Static/generic
 /// gallery adapters should project this frame rather than rebuilding fixtures.
-pub fn phase12_generic_interaction_proof_frame(
+pub fn base_controls_generic_interaction_proof_frame(
     compiled: &CompiledControlPackage,
 ) -> InteractionProofFrame {
-    let fixture = phase12_generic_interaction_fixture(compiled);
-    let script = phase12_generic_interaction_positive_script();
+    let fixture = base_controls_generic_interaction_fixture(compiled);
+    let script = base_controls_generic_interaction_positive_script();
     let report = replay_interactions(&fixture, &script);
     let proof = InteractionVisualProof::from_fixture_report(
-        PHASE12_GENERIC_INTERACTION_PROOF_ID,
+        BASE_CONTROLS_GENERIC_INTERACTION_PROOF_ID,
         &fixture,
         &report,
         WidgetId(1),
@@ -237,18 +239,18 @@ pub fn phase12_generic_interaction_proof_frame(
     InteractionProofFrame::new(proof)
 }
 
-/// Builds the canonical Phase 12A executable interaction story session.
+/// Builds the canonical base-controls executable interaction story session.
 ///
 /// The returned session is empty. Callers can drive it with the canonical replay
 /// script or live-shaped normalized input samples. Both paths reuse the same
 /// descriptor-backed replay formation path.
-pub fn phase12_executable_generic_interaction_story_session(
+pub fn base_controls_executable_interaction_story_session(
     compiled: &CompiledControlPackage,
     mode: InteractionStoryExecutionMode,
 ) -> InteractionStorySession {
     InteractionStorySession::new(
-        PHASE12_EXECUTABLE_GENERIC_INTERACTION_STORY_ID,
-        phase12_generic_interaction_fixture(compiled),
+        BASE_CONTROLS_EXECUTABLE_INTERACTION_STORY_ID,
+        base_controls_generic_interaction_fixture(compiled),
         mode,
         WidgetId(1),
     )
