@@ -1,6 +1,6 @@
 ---
 title: UI Component Platform Generic Interaction Design
-description: Review-state Phase 12 reference for reusable generic interaction semantics across ui_controls, ui_input, ui_runtime, host-owned policy, visible proof, and later text-editing readiness.
+description: Completed Phase 12 reference for reusable generic interaction semantics across ui_controls, ui_input, ui_runtime, host-owned policy, visible proof, and later text-editing readiness.
 status: active
 owner: ui
 layer: domain
@@ -13,6 +13,7 @@ related_docs:
   - ./ui-component-platform-input-gesture-device-design.md
   - ./ui-component-platform-executable-interaction-story-design.md
   - ./ui-component-platform-executable-interaction-story-implementation-scope.md
+  - ./ui-component-platform-overlay-popup-layering-design.md
   - ./editor-ui-runtime-v2-and-interaction-formation-design.md
   - ./ui-component-platform-base-control-packages-design.md
 ---
@@ -21,11 +22,13 @@ related_docs:
 
 ## Status
 
-This is the accepted Phase 12 design for `PT-UI-COMPONENT-PLATFORM-012`.
+This is the completed Phase 12 design reference for `PT-UI-COMPONENT-PLATFORM-012`.
 
-Lifecycle state: `review`.
+Lifecycle state: `completed`.
 
-PR #43 is the implementation PR for reusable generic interaction behavior for descriptor-backed base controls. The implementation evidence remains pending cleanup, validation, review, and merge. This design is the owner-boundary reference for package-backed declarations, normalized input replay, renderer-neutral visible proof, negative proof cases, durable base-controls proof fixtures, and no-bypass assertions.
+PR #43 merged the implementation into `main` on 2026-06-30 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. User start condition for Phase 13 reports PR #43 was validated and merged.
+
+This design remains the owner-boundary reference for package-backed declarations, normalized input replay, renderer-neutral visible proof, negative proof cases, durable base-controls proof fixtures, and no-bypass assertions. It does not authorize overlays, popups, dropdowns, tooltips, modal-like behavior, full text editing, product command execution, product/editor/game mutation, UI Gallery exposure, UI Designer work, shared plugin framework extraction, generic plugin primitives, or `foundation/meta`.
 
 ## Decision summary
 
@@ -163,7 +166,7 @@ Important rules:
 
 ## Deterministic replay proof
 
-The deterministic replay proof should cover:
+The deterministic replay proof covers:
 
 ```text
 pointer move over Button
@@ -215,7 +218,7 @@ report/event view:
 
 ## Text-intent probe
 
-This phase proves text-intent seams only. It must not introduce:
+This phase proves text-intent seams only. It does not introduce:
 
 - caret geometry;
 - selection ranges;
@@ -267,11 +270,11 @@ domain/ui/ui_static_mount/src/lib.rs
 domain/ui/ui_static_mount/tests/base_controls_generic_interaction_static_mount.rs
 ```
 
-The implementation PR did not rewrite Phase 11 base controls. Additive interaction declarations attach through the existing contribution/lowering path and preserve the Phase 11 ownership model.
+The implementation did not rewrite Phase 11 base controls. Additive interaction declarations attach through the existing contribution/lowering path and preserve the Phase 11 ownership model.
 
-## Validation gate
+## Validation gate used for completion evidence
 
-Current focused validation should include:
+Completion evidence is recorded in planning from merged PR #43 plus the user validation report. The focused validation gate for the implementation was:
 
 ```text
 cargo fmt --all --check
@@ -288,22 +291,24 @@ python tools/docs/validate_docs.py
 git diff --check
 ```
 
-## Stop conditions
+## Stop conditions retained for later work
 
-Stop and redesign if implementation requires:
+Stop and redesign if later changes require:
 
 - app/editor/game command behavior in reusable control code;
 - OS/window input collection in `ui_controls`;
 - product state changes in reusable control code;
 - backend renderer behavior;
-- overlay, popup, dropdown, tooltip, or layering behavior;
+- overlay, popup, dropdown, tooltip, or layering behavior inside Phase 12 artifacts;
 - full text editing behavior;
 - broad shared plugin framework extraction;
 - `foundation/meta`;
 - generic plugin primitives;
 - Phase 11 base-control rewrites;
-- UI Gallery product exposure inside PR #43.
+- UI Gallery product exposure inside generic interaction proof.
 
 ## Relationship to next work
 
-Phase 13 remains overlay/popup/layering. Full text editing remains later and must consume the Phase 12 focus, keyboard, text-intent, replay/report, and no-bypass substrate rather than bypassing it.
+`PT-UI-COMPONENT-PLATFORM-013` is the active overlay/popup/layering design intake. It must consume the Phase 12 focus, keyboard, pointer capture, normalized input, replay/report, static frame, and no-bypass substrate rather than bypassing it.
+
+Full text editing remains later and must consume the Phase 12 text-intent seam without treating text-intent evidence as editable text-buffer ownership.
