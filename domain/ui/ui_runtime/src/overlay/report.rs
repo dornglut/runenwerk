@@ -59,3 +59,51 @@ pub struct OverlayStackEntry {
     pub hit_regions: Vec<UiRect>,
     pub is_topmost_dismissible: bool,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OverlayPlacementResolution {
+    pub anchor_id: String,
+    pub request_id: String,
+    pub anchor_rect: UiRect,
+    pub requested_side: String,
+    pub requested_alignment: String,
+    pub resolved_side: String,
+    pub resolved_alignment: String,
+    pub resolved_rect: UiRect,
+    pub viewport_rect: UiRect,
+    pub clamped: bool,
+    pub shifted: bool,
+    pub hidden_or_suppressed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverlayLayerAssignment {
+    pub request_id: String,
+    pub layer_id: String,
+    pub layer_class: String,
+    pub ordinal: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverlayFocusEvidence {
+    pub request_id: String,
+    pub focus_policy: String,
+    pub focus_return_target: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverlayPointerCaptureEvidence {
+    pub input_sample_id: String,
+    pub anchor_id: String,
+    pub outside_dismissal_blocked: bool,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverlayKeyboardNavigationEvidence {
+    pub input_sample_id: String,
+    pub request_id: Option<String>,
+    pub key: String,
+    pub navigation_intent: String,
+    pub product_commands_executed: u32,
+}
