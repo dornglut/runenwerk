@@ -5,6 +5,7 @@ pub(crate) mod accessibility;
 pub(crate) mod input;
 pub(crate) mod inspection;
 pub(crate) mod interaction;
+pub(crate) mod layering_support;
 pub(crate) mod layout;
 pub(crate) mod module;
 pub(crate) mod render;
