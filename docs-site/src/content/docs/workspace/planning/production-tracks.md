@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-30
+last_reviewed: 2026-07-01
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
@@ -47,11 +47,11 @@ Milestones:
 007 Theme / state / style — completed by user validation report
 008 Accessibility / focus / inspection — completed by user validation report
 009 Layout / container / virtualization — completed by user validation report through 009A/009B/009C
-010 Render surface / output — completed by user validation report through PR #34
+010 Render surface / output — completed through PR #34 and user validation report
 011 Base control packages — completed through PR #37 and user validation report
 012 Generic interaction — completed through PR #43 and user validation report
 012A Executable interaction story — completed through PR #43 and user validation report
-013 Overlay / popup / layering — active planning / design intake
+013 Overlay / popup / layering — active implementation on PR #44
 014 Minimum text editing — future
 015 Generic text — future
 016 Surface2D — future
@@ -75,7 +75,7 @@ Design gates:
 011 proved UI-local contribution/preset/lowering authoring for package-quality base controls while keeping full interaction behavior for Phase 12.
 012 merged PR #43 implementation evidence for generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, static mount frame evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
 012A merged PR #43 implementation evidence for one executable story that supports deterministic replay, live proof-host input, semantic replay/live parity, static frame validation, and no-bypass counters.
-013 is active design intake for reusable overlay, popup, dropdown, tooltip, modal-like, and layering semantics. It must consume the Phase 12/12A interaction substrate and the older Interaction V2 popup-stack lessons without moving product/editor/game behavior into generic UI.
+013 accepted the overlay/popup/layering design and is implementing reusable overlay declarations, runtime overlay session/stack proof, deterministic replay/report evidence, static mount evidence, and no-bypass assertions without moving product/editor/game behavior into generic UI.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -95,14 +95,14 @@ Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge,
 Phase 11: PR #37 merged the UI-local base-control contribution/preset/lowering proof; user reported the validation gate green.
 Phase 12: PR #43 merged package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions; user reported the validation gate green before the next phase started.
 Phase 12A: PR #43 merged an Executable UI Interaction Story with replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions; user reported the validation gate green before the next phase started.
-Phase 13: design intake must define owner crates/files, durable vocabulary, static/story proof shape, replay/report evidence, no-bypass assertions, validation commands, and stop conditions before implementation.
+Phase 13: PR #44 now contains active implementation evidence for control overlay declarations, runtime overlay layering replay/report, base-controls overlay fixtures/scripts, overlay tests, story-workflow consumption, and static mount proof. Local command validation is still required before completion.
 Later phases: text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-Phase 13 implementation is blocked until the overlay/popup/layering design is accepted and an implementation-scope section names exact owner crates/files, non-goals, proof scenarios, negative scenarios, evidence contracts, validation commands, no-bypass assertions, and stop conditions.
+Phase 13 must not be marked completed or merged until local validation status is recorded. Connector-only implementation cannot prove cargo/docs/diff commands.
 ```
 
 Activation condition:
@@ -114,7 +114,7 @@ Each future milestone activates only through an accepted planning/design update 
 Next action:
 
 ```text
-Review and accept, revise, or reject `docs-site/src/content/docs/design/active/ui-component-platform-overlay-popup-layering-design.md`. Do not implement UI Gallery exposure, full UI Designer, authored UI editing, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of Phase 13 design intake.
+Run the Phase 13 validation gate from a local checkout, fix any compile/test/docs issues, then move PR #44 to review/closeout. Do not implement UI Gallery exposure, full UI Designer, authored UI editing, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of Phase 13.
 ```
 
 ## Track shape
@@ -134,12 +134,3 @@ Current blocker:
 Activation condition:
 Next action:
 ```
-
-## Rules
-
-- Production tracks guide sequencing.
-- Production tracks do not authorize code without an owned implementation scope.
-- Strategic order must be readable without generated views.
-- Legacy structured track files may remain as optional mirrors.
-- Use `../workflow-lifecycle.md` before promoting a track to active planning or active implementation.
-- Do not create a production track for every accepted design. Use a production track only for strategic multi-phase work.
