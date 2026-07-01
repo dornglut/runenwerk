@@ -107,3 +107,70 @@ pub struct OverlayKeyboardNavigationEvidence {
     pub navigation_intent: String,
     pub product_commands_executed: u32,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverlayDismissalEvidence {
+    pub request_id: Option<String>,
+    pub stack_entry_id: Option<String>,
+    pub reason: String,
+    pub input_sample_id: String,
+    pub focus_return_target: Option<String>,
+    pub outside_pointer_target: Option<String>,
+    pub escape_key_seen: bool,
+    pub closed: bool,
+    pub suppressed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverlaySuppressionEvidence {
+    pub anchor_id: Option<String>,
+    pub request_kind: String,
+    pub trigger: String,
+    pub reason: String,
+    pub input_sample_id: String,
+    pub opened: bool,
+    pub host_commands_executed: u32,
+    pub product_mutations: u32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OverlayViewportEvidence {
+    pub step_id: String,
+    pub viewport_rect: UiRect,
+    pub scroll_recomputed: bool,
+    pub viewport_recomputed: bool,
+    pub anchor_still_valid: bool,
+    pub placement_suppressed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct OverlayBoundaryAssertions {
+    pub host_commands_executed: u32,
+    pub product_mutations: u32,
+    pub text_edit_transactions: u32,
+    pub app_specific_modal_operations: u32,
+    pub authored_ui_edits: u32,
+    pub plugin_framework_operations: u32,
+    pub overlay_open_requests: u32,
+    pub overlay_opened: u32,
+    pub overlay_suppressed: u32,
+    pub overlay_dismissed_by_escape: u32,
+    pub overlay_dismissed_by_outside_pointer: u32,
+    pub overlay_stack_entries_opened: u32,
+    pub overlay_stack_entries_closed: u32,
+    pub placement_recomputed_after_scroll: u32,
+    pub placement_recomputed_after_viewport_resize: u32,
+    pub anchor_invalidation_suppressed: u32,
+    pub focus_returned: u32,
+}
+
+impl OverlayBoundaryAssertions {
+    pub const fn no_bypass_evidence(self) -> bool {
+        self.host_commands_executed == 0
+            && self.product_mutations == 0
+            && self.text_edit_transactions == 0
+            && self.app_specific_modal_operations == 0
+            && self.authored_ui_edits == 0
+            && self.plugin_framework_operations == 0
+    }
+}
