@@ -1,7 +1,13 @@
 //! Overlay fixture and replay script helpers.
 
-use ui_controls::ControlOverlayDescriptor;
-use ui_input::{NormalizedInputSample, PointerEventKind};
+use ui_controls::{
+    ControlKindId, ControlOverlayDescriptor, ControlOverlayKind, ControlOverlayLayerPreference,
+    ControlOverlayRequirement, ControlOverlayTrigger,
+};
+use ui_input::{
+    FocusInputFact, FocusTargetId, Key, KeyState, KeyboardInputFact, NormalizedInputFact,
+    NormalizedInputSample, PointerEventKind, PointerInputFact,
+};
 use ui_math::{UiPoint, UiRect};
 
 use crate::WidgetId;
@@ -28,15 +34,11 @@ impl MountedOverlayLayeringFixture {
     }
 
     pub fn target_at(&self, point: UiPoint) -> Option<&MountedOverlayControl> {
-        self.controls
-            .iter()
-            .find(|control| control.bounds.contains(point))
+        self.controls.iter().find(|control| control.bounds.contains(point))
     }
 
     pub fn control_by_anchor(&self, anchor_id: &str) -> Option<&MountedOverlayControl> {
-        self.controls
-            .iter()
-            .find(|control| control.anchor_id == anchor_id)
+        self.controls.iter().find(|control| control.anchor_id == anchor_id)
     }
 }
 
@@ -123,6 +125,22 @@ impl OverlayLayeringStep {
     }
 }
 
-pub fn placeholder_pointer_event_kind() -> PointerEventKind {
-    PointerEventKind::Down
+pub fn base_controls_overlay_layering_fixture() -> MountedOverlayLayeringFixture {
+    MountedOverlayLayeringFixture::new(
+        "base-controls.overlay-layering.fixture",
+        UiRect::new(0.0, 0.0, 900.0, 640.0),
+    )
+    .with_control(control(101, "anchor.button.popup", "Button popup", 32.0, ControlOverlayDescriptor::popup_on_press(ControlKindId::new("runenwerk.ui.button"), "anchor.button.popup", "popup.button")))
+    .with_control(control(102, "anchor.action-prompt.menu", "ActionPrompt menu", 84.0, ControlOverlayDescriptor::menu_on_press(ControlKindId::new("runenwerk.ui.action_prompt"), "anchor.action-prompt.menu", "menu.action-prompt")))
+    .with_control(control(103, "anchor.action-prompt.submenu", "Submenu item", 136.0, ControlOverlayDescriptor::new(ControlKindId::new("runenwerk.ui.action_prompt")).with_requirement(ControlOverlayRequirement::new(ControlOverlayKind::Menu, ControlOverlayTrigger::PointerPress, "anchor.action-prompt.submenu", "submenu.action-prompt").with_layer(ControlOverlayLayerPreference::Submenu))))
+    .with_control(control(104, "anchor.dropdown.fixture", "Dropdown fixture", 188.0, ControlOverlayDescriptor::dropdown_on_press(ControlKindId::new("runenwerk.ui.list_view"), "anchor.dropdown.fixture", "dropdown.options")))
+    .with_control(control(105, "anchor.tooltip.hover", "Tooltip hover", 240.0, ControlOverlayDescriptor::tooltip_on_hover(ControlKindId::new("runenwerk.ui.label"), "anchor.tooltip.hover", "tooltip.hover")))
+    .with_control(control(106, "anchor.tooltip.focus", "Tooltip focus", 292.0, ControlOverlayDescriptor::tooltip_on_focus(ControlKindId::new("runenwerk.ui.label"), "anchor.tooltip.focus", "tooltip.focus")))
+    .with_control(control(107, "anchor.color-picker.picker-popup", "Picker popup", 344.0, ControlOverlayDescriptor::picker_popup_on_press(ControlKindId::new("runenwerk.ui.color_picker"), "anchor.color-picker.picker-popup", "picker.color")))
+    .with_control(control(108, "anchor.focus-containing.fixture", "Focus-containing", 396.0, ControlOverlayDescriptor::focus_containing_overlay_on_press(ControlKindId::new("runenwerk.ui.button"), "anchor.focus-containing.fixture", "focus-containing.fixture")))
+    .with_control(control(109, "anchor.disabled.fixture", "Disabled popup", 448.0, ControlOverlayDescriptor::popup_on_press(ControlKindId::new("runenwerk.ui.button"), "anchor.disabled.fixture", "popup.disabled")).disabled())
+}
+
+fn control(id: u64, anchor: &str, label: &str, y: f32, descriptor: ControlOverlayDescriptor) -> MountedOverlayControl {
+    MountedOverlayControl::new(WidgetId(id), anchor, label, UiRect::new(24.0, y, 200.0, 34.0), descriptor)
 }
