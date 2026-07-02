@@ -14,6 +14,7 @@ use super::metadata::{
 };
 use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
 use crate::editable_text::ControlEditableTextDescriptor;
+use crate::generic_text::ControlGenericTextDescriptor;
 use crate::interaction::ControlInteractionDescriptor;
 use crate::kernel::{ControlKernelDescriptor, ControlKernelId, ControlKernelSet};
 use crate::migration::{ControlDeprecationStatus, ControlMigrationHook, ControlMigrationId};
@@ -102,80 +103,23 @@ impl ControlKindDescriptor {
             deprecation: ControlDeprecationStatus::Active,
         }
     }
-    pub fn with_description(mut self, value: impl Into<String>) -> Self {
-        self.description = value.into();
-        self
-    }
-    pub fn with_category(mut self, value: impl Into<String>) -> Self {
-        self.category = ControlPackageCategory::new(value);
-        self
-    }
-    pub fn with_tag(mut self, value: impl Into<String>) -> Self {
-        self.tags.push(ControlTag::new(value));
-        self
-    }
-    pub fn with_target_profile(mut self, value: ControlTargetProfileRef) -> Self {
-        self.target_profiles.push(value);
-        self
-    }
-    pub fn with_required_capability(mut self, value: RouteCapability) -> Self {
-        self.required_capabilities.push(value);
-        self
-    }
-    pub fn with_route_requirement(mut self, value: ControlRouteRequirement) -> Self {
-        self.route_requirements.push(value);
-        self
-    }
-    pub fn with_fixture(mut self, value: ControlFixtureId) -> Self {
-        self.fixture_ids.push(value);
-        self
-    }
-    pub fn with_diagnostic(mut self, value: ControlDiagnosticId) -> Self {
-        self.diagnostic_ids.push(value);
-        self
-    }
-    pub fn with_migration(mut self, value: ControlMigrationId) -> Self {
-        self.migration_ids.push(value);
-        self
-    }
-    pub fn with_story(mut self, value: ControlStoryId) -> Self {
-        self.story_ids.push(value);
-        self
-    }
-    pub fn with_mount_eligibility(mut self, value: ControlMountEligibility) -> Self {
-        self.mount_eligibility = value;
-        self
-    }
-    pub fn with_binding_requirement(mut self, value: ControlRequirement) -> Self {
-        self.binding_requirements.push(value);
-        self
-    }
-    pub fn with_theme_token_requirement(mut self, value: ControlRequirement) -> Self {
-        self.theme_token_requirements.push(value);
-        self
-    }
-    pub fn with_accessibility_requirement(mut self, value: ControlRequirement) -> Self {
-        self.accessibility_requirements.push(value);
-        self
-    }
-    pub fn with_render_evidence_requirement(
-        mut self,
-        value: ControlRenderEvidenceRequirement,
-    ) -> Self {
-        self.render_evidence_requirements.push(value);
-        self
-    }
-    pub fn with_budget_evidence_requirement(
-        mut self,
-        value: ControlBudgetEvidenceRequirement,
-    ) -> Self {
-        self.budget_evidence_requirements.push(value);
-        self
-    }
-    pub fn with_deprecation(mut self, value: ControlDeprecationStatus) -> Self {
-        self.deprecation = value;
-        self
-    }
+    pub fn with_description(mut self, value: impl Into<String>) -> Self { self.description = value.into(); self }
+    pub fn with_category(mut self, value: impl Into<String>) -> Self { self.category = ControlPackageCategory::new(value); self }
+    pub fn with_tag(mut self, value: impl Into<String>) -> Self { self.tags.push(ControlTag::new(value)); self }
+    pub fn with_target_profile(mut self, value: ControlTargetProfileRef) -> Self { self.target_profiles.push(value); self }
+    pub fn with_required_capability(mut self, value: RouteCapability) -> Self { self.required_capabilities.push(value); self }
+    pub fn with_route_requirement(mut self, value: ControlRouteRequirement) -> Self { self.route_requirements.push(value); self }
+    pub fn with_fixture(mut self, value: ControlFixtureId) -> Self { self.fixture_ids.push(value); self }
+    pub fn with_diagnostic(mut self, value: ControlDiagnosticId) -> Self { self.diagnostic_ids.push(value); self }
+    pub fn with_migration(mut self, value: ControlMigrationId) -> Self { self.migration_ids.push(value); self }
+    pub fn with_story(mut self, value: ControlStoryId) -> Self { self.story_ids.push(value); self }
+    pub fn with_mount_eligibility(mut self, value: ControlMountEligibility) -> Self { self.mount_eligibility = value; self }
+    pub fn with_binding_requirement(mut self, value: ControlRequirement) -> Self { self.binding_requirements.push(value); self }
+    pub fn with_theme_token_requirement(mut self, value: ControlRequirement) -> Self { self.theme_token_requirements.push(value); self }
+    pub fn with_accessibility_requirement(mut self, value: ControlRequirement) -> Self { self.accessibility_requirements.push(value); self }
+    pub fn with_render_evidence_requirement(mut self, value: ControlRenderEvidenceRequirement) -> Self { self.render_evidence_requirements.push(value); self }
+    pub fn with_budget_evidence_requirement(mut self, value: ControlBudgetEvidenceRequirement) -> Self { self.budget_evidence_requirements.push(value); self }
+    pub fn with_deprecation(mut self, value: ControlDeprecationStatus) -> Self { self.deprecation = value; self }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -197,40 +141,14 @@ pub struct ControlModuleDescriptor {
 
 impl ControlModuleDescriptor {
     pub fn new(kind: ControlKindDescriptor) -> Self {
-        Self {
-            kind,
-            schemas: Vec::new(),
-            kernels: Vec::new(),
-            fixtures: Vec::new(),
-            diagnostics: Vec::new(),
-            migrations: Vec::new(),
-            stories: Vec::new(),
-        }
+        Self { kind, schemas: Vec::new(), kernels: Vec::new(), fixtures: Vec::new(), diagnostics: Vec::new(), migrations: Vec::new(), stories: Vec::new() }
     }
-    pub fn with_schema(mut self, value: ControlSchemaDescriptor) -> Self {
-        self.schemas.push(value);
-        self
-    }
-    pub fn with_kernel(mut self, value: ControlKernelDescriptor) -> Self {
-        self.kernels.push(value);
-        self
-    }
-    pub fn with_fixture(mut self, value: ControlFixtureDescriptor) -> Self {
-        self.fixtures.push(value);
-        self
-    }
-    pub fn with_diagnostic(mut self, value: ControlDiagnosticDescriptor) -> Self {
-        self.diagnostics.push(value);
-        self
-    }
-    pub fn with_migration(mut self, value: ControlMigrationHook) -> Self {
-        self.migrations.push(value);
-        self
-    }
-    pub fn with_story(mut self, value: ControlStoryDescriptor) -> Self {
-        self.stories.push(value);
-        self
-    }
+    pub fn with_schema(mut self, value: ControlSchemaDescriptor) -> Self { self.schemas.push(value); self }
+    pub fn with_kernel(mut self, value: ControlKernelDescriptor) -> Self { self.kernels.push(value); self }
+    pub fn with_fixture(mut self, value: ControlFixtureDescriptor) -> Self { self.fixtures.push(value); self }
+    pub fn with_diagnostic(mut self, value: ControlDiagnosticDescriptor) -> Self { self.diagnostics.push(value); self }
+    pub fn with_migration(mut self, value: ControlMigrationHook) -> Self { self.migrations.push(value); self }
+    pub fn with_story(mut self, value: ControlStoryDescriptor) -> Self { self.stories.push(value); self }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -290,6 +208,8 @@ pub struct ControlPackageDescriptor {
     #[serde(default)]
     pub editable_text_descriptors: Vec<ControlEditableTextDescriptor>,
     #[serde(default)]
+    pub generic_text_descriptors: Vec<ControlGenericTextDescriptor>,
+    #[serde(default)]
     pub mount_eligibility: ControlMountEligibility,
     #[serde(default)]
     pub binding_requirements: Vec<ControlRequirement>,
@@ -336,6 +256,7 @@ impl ControlPackageDescriptor {
             interaction_descriptors: Vec::new(),
             overlay_descriptors: Vec::new(),
             editable_text_descriptors: Vec::new(),
+            generic_text_descriptors: Vec::new(),
             mount_eligibility: ControlMountEligibility::default(),
             binding_requirements: Vec::new(),
             theme_token_requirements: Vec::new(),
@@ -345,78 +266,32 @@ impl ControlPackageDescriptor {
             deprecation: ControlDeprecationStatus::Active,
         }
     }
-    pub fn from_modules(
-        package_id: ControlPackageId,
-        version: ControlPackageVersion,
-        modules: impl IntoIterator<Item = ControlModuleDescriptor>,
-    ) -> Self {
+    pub fn from_modules(package_id: ControlPackageId, version: ControlPackageVersion, modules: impl IntoIterator<Item = ControlModuleDescriptor>) -> Self {
         let mut package = Self::new(package_id, version);
-        for module in modules {
-            package = package.with_module(module);
-        }
+        for module in modules { package = package.with_module(module); }
         package
     }
-    pub fn with_display_name(mut self, value: impl Into<String>) -> Self {
-        self.display_name = value.into();
-        self
-    }
-    pub fn with_description(mut self, value: impl Into<String>) -> Self {
-        self.description = value.into();
-        self
-    }
-    pub fn with_category(mut self, value: impl Into<String>) -> Self {
-        self.category = ControlPackageCategory::new(value);
-        self
-    }
-    pub fn with_tag(mut self, value: impl Into<String>) -> Self {
-        self.tags.push(ControlTag::new(value));
-        self
-    }
-    pub fn with_target_profile(mut self, value: ControlTargetProfileRef) -> Self {
-        self.target_profiles.push(value);
-        self
-    }
-    pub fn with_catalog_metadata(mut self, value: ControlCatalogMetadata) -> Self {
-        self.catalog_metadata = value;
-        self
-    }
-    pub fn with_mount_eligibility(mut self, value: ControlMountEligibility) -> Self {
-        self.mount_eligibility = value;
-        self
-    }
+    pub fn with_display_name(mut self, value: impl Into<String>) -> Self { self.display_name = value.into(); self }
+    pub fn with_description(mut self, value: impl Into<String>) -> Self { self.description = value.into(); self }
+    pub fn with_category(mut self, value: impl Into<String>) -> Self { self.category = ControlPackageCategory::new(value); self }
+    pub fn with_tag(mut self, value: impl Into<String>) -> Self { self.tags.push(ControlTag::new(value)); self }
+    pub fn with_target_profile(mut self, value: ControlTargetProfileRef) -> Self { self.target_profiles.push(value); self }
+    pub fn with_catalog_metadata(mut self, value: ControlCatalogMetadata) -> Self { self.catalog_metadata = value; self }
+    pub fn with_mount_eligibility(mut self, value: ControlMountEligibility) -> Self { self.mount_eligibility = value; self }
     pub fn with_module(mut self, module: ControlModuleDescriptor) -> Self {
-        let ControlModuleDescriptor {
-            kind,
-            schemas,
-            kernels,
-            fixtures,
-            diagnostics,
-            migrations,
-            stories,
-        } = module;
-        self.required_capabilities
-            .extend(kind.required_capabilities.iter().cloned());
-        self.route_requirements
-            .extend(kind.route_requirements.iter().cloned());
+        let ControlModuleDescriptor { kind, schemas, kernels, fixtures, diagnostics, migrations, stories } = module;
+        self.required_capabilities.extend(kind.required_capabilities.iter().cloned());
+        self.route_requirements.extend(kind.route_requirements.iter().cloned());
         self.fixture_ids.extend(kind.fixture_ids.iter().cloned());
-        self.diagnostic_ids
-            .extend(kind.diagnostic_ids.iter().cloned());
-        self.migration_ids
-            .extend(kind.migration_ids.iter().cloned());
+        self.diagnostic_ids.extend(kind.diagnostic_ids.iter().cloned());
+        self.migration_ids.extend(kind.migration_ids.iter().cloned());
         self.story_ids.extend(kind.story_ids.iter().cloned());
-        self.binding_requirements
-            .extend(kind.binding_requirements.iter().cloned());
-        self.theme_token_requirements
-            .extend(kind.theme_token_requirements.iter().cloned());
-        self.accessibility_requirements
-            .extend(kind.accessibility_requirements.iter().cloned());
-        self.render_evidence_requirements
-            .extend(kind.render_evidence_requirements.iter().cloned());
-        self.budget_evidence_requirements
-            .extend(kind.budget_evidence_requirements.iter().cloned());
-        for kernel_id in kind.kernels.ids() {
-            self.kernel_ids.push(kernel_id.clone());
-        }
+        self.binding_requirements.extend(kind.binding_requirements.iter().cloned());
+        self.theme_token_requirements.extend(kind.theme_token_requirements.iter().cloned());
+        self.accessibility_requirements.extend(kind.accessibility_requirements.iter().cloned());
+        self.render_evidence_requirements.extend(kind.render_evidence_requirements.iter().cloned());
+        self.budget_evidence_requirements.extend(kind.budget_evidence_requirements.iter().cloned());
+        for kernel_id in kind.kernels.ids() { self.kernel_ids.push(kernel_id.clone()); }
         for schema in schemas {
             match schema.role {
                 ControlSchemaRole::Properties => self.property_schemas.push(schema),
@@ -432,48 +307,13 @@ impl ControlPackageDescriptor {
         self.control_kinds.push(kind);
         self
     }
-    pub fn with_interaction_descriptor(mut self, descriptor: ControlInteractionDescriptor) -> Self {
-        self.interaction_descriptors.push(descriptor);
-        self
-    }
-    pub fn with_overlay_descriptor(mut self, descriptor: ControlOverlayDescriptor) -> Self {
-        self.overlay_descriptors.push(descriptor);
-        self
-    }
-    pub fn with_editable_text_descriptor(
-        mut self,
-        descriptor: ControlEditableTextDescriptor,
-    ) -> Self {
-        self.editable_text_descriptors.push(descriptor);
-        self
-    }
-    pub fn control_kind(&self, id: &ControlKindId) -> Option<&ControlKindDescriptor> {
-        self.control_kinds
-            .iter()
-            .find(|kind| &kind.control_kind_id == id)
-    }
-    pub fn interaction_descriptor(
-        &self,
-        control_kind_id: &ControlKindId,
-    ) -> Option<&ControlInteractionDescriptor> {
-        self.interaction_descriptors
-            .iter()
-            .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
-    }
-    pub fn overlay_descriptor(
-        &self,
-        control_kind_id: &ControlKindId,
-    ) -> Option<&ControlOverlayDescriptor> {
-        self.overlay_descriptors
-            .iter()
-            .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
-    }
-    pub fn editable_text_descriptor(
-        &self,
-        control_kind_id: &ControlKindId,
-    ) -> Option<&ControlEditableTextDescriptor> {
-        self.editable_text_descriptors
-            .iter()
-            .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
-    }
+    pub fn with_interaction_descriptor(mut self, descriptor: ControlInteractionDescriptor) -> Self { self.interaction_descriptors.push(descriptor); self }
+    pub fn with_overlay_descriptor(mut self, descriptor: ControlOverlayDescriptor) -> Self { self.overlay_descriptors.push(descriptor); self }
+    pub fn with_editable_text_descriptor(mut self, descriptor: ControlEditableTextDescriptor) -> Self { self.editable_text_descriptors.push(descriptor); self }
+    pub fn with_generic_text_descriptor(mut self, descriptor: ControlGenericTextDescriptor) -> Self { self.generic_text_descriptors.push(descriptor); self }
+    pub fn control_kind(&self, id: &ControlKindId) -> Option<&ControlKindDescriptor> { self.control_kinds.iter().find(|kind| &kind.control_kind_id == id) }
+    pub fn interaction_descriptor(&self, control_kind_id: &ControlKindId) -> Option<&ControlInteractionDescriptor> { self.interaction_descriptors.iter().find(|descriptor| &descriptor.control_kind_id == control_kind_id) }
+    pub fn overlay_descriptor(&self, control_kind_id: &ControlKindId) -> Option<&ControlOverlayDescriptor> { self.overlay_descriptors.iter().find(|descriptor| &descriptor.control_kind_id == control_kind_id) }
+    pub fn editable_text_descriptor(&self, control_kind_id: &ControlKindId) -> Option<&ControlEditableTextDescriptor> { self.editable_text_descriptors.iter().find(|descriptor| &descriptor.control_kind_id == control_kind_id) }
+    pub fn generic_text_descriptor(&self, control_kind_id: &ControlKindId) -> Option<&ControlGenericTextDescriptor> { self.generic_text_descriptors.iter().find(|descriptor| &descriptor.control_kind_id == control_kind_id) }
 }
