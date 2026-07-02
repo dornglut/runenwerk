@@ -20,22 +20,12 @@ pub struct TextSourceRange {
 
 impl TextSourceRange {
     pub const fn new(start_cluster: u32, end_cluster: u32) -> Self {
-        Self {
-            start_cluster,
-            end_cluster,
-        }
+        Self { start_cluster, end_cluster }
     }
-
     pub const fn collapsed(cluster: u32) -> Self {
-        Self {
-            start_cluster: cluster,
-            end_cluster: cluster,
-        }
+        Self { start_cluster: cluster, end_cluster: cluster }
     }
-
-    pub fn len(self) -> u32 {
-        self.end_cluster.saturating_sub(self.start_cluster)
-    }
+    pub fn len(self) -> u32 { self.end_cluster.saturating_sub(self.start_cluster) }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -81,23 +71,10 @@ pub struct TextSpan {
 
 impl TextSpan {
     pub fn new(span_id: TextSpanId, source_range: TextSourceRange) -> Self {
-        Self {
-            span_id,
-            source_range,
-            style: TextSpanStyle::inherit(),
-            semantic_role: None,
-        }
+        Self { span_id, source_range, style: TextSpanStyle::inherit(), semantic_role: None }
     }
-
-    pub fn with_style(mut self, style: TextSpanStyle) -> Self {
-        self.style = style;
-        self
-    }
-
-    pub fn with_semantic_role(mut self, role: TextSemanticRole) -> Self {
-        self.semantic_role = Some(role);
-        self
-    }
+    pub fn with_style(mut self, style: TextSpanStyle) -> Self { self.style = style; self }
+    pub fn with_semantic_role(mut self, role: TextSemanticRole) -> Self { self.semantic_role = Some(role); self }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,40 +89,13 @@ pub struct TextRun {
 
 impl TextRun {
     pub fn new(run_id: TextRunId, text: impl Into<String>) -> Self {
-        Self {
-            run_id,
-            text: text.into(),
-            style: TextSpanStyle::inherit(),
-            semantic_role: None,
-            source_range: None,
-            spans: Vec::new(),
-        }
+        Self { run_id, text: text.into(), style: TextSpanStyle::inherit(), semantic_role: None, source_range: None, spans: Vec::new() }
     }
-
-    pub fn with_style(mut self, style: TextSpanStyle) -> Self {
-        self.style = style;
-        self
-    }
-
-    pub fn with_semantic_role(mut self, role: TextSemanticRole) -> Self {
-        self.semantic_role = Some(role);
-        self
-    }
-
-    pub fn with_source_range(mut self, range: TextSourceRange) -> Self {
-        self.source_range = Some(range);
-        self
-    }
-
-    pub fn with_span(mut self, span: TextSpan) -> Self {
-        self.spans.push(span);
-        self
-    }
-
-    pub fn with_spans(mut self, spans: impl IntoIterator<Item = TextSpan>) -> Self {
-        self.spans.extend(spans);
-        self
-    }
+    pub fn with_style(mut self, style: TextSpanStyle) -> Self { self.style = style; self }
+    pub fn with_semantic_role(mut self, role: TextSemanticRole) -> Self { self.semantic_role = Some(role); self }
+    pub fn with_source_range(mut self, range: TextSourceRange) -> Self { self.source_range = Some(range); self }
+    pub fn with_span(mut self, span: TextSpan) -> Self { self.spans.push(span); self }
+    pub fn with_spans(mut self, spans: impl IntoIterator<Item = TextSpan>) -> Self { self.spans.extend(spans); self }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -160,58 +110,52 @@ pub struct TextBlock {
 
 impl TextBlock {
     pub fn new(text_block_id: TextBlockId, base_style: TextStyle) -> Self {
-        Self {
-            text_block_id,
-            runs: Vec::new(),
-            base_style,
-            layout: TextLayoutPolicy::default(),
-            semantic_role: None,
-            accessibility_label_role: None,
-        }
+        Self { text_block_id, runs: Vec::new(), base_style, layout: TextLayoutPolicy::default(), semantic_role: None, accessibility_label_role: None }
     }
-
     pub fn label(text: impl Into<String>) -> Self {
         Self::new(TextBlockId(1), TextStyle::default())
             .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::Label))
             .with_semantic_role(TextSemanticRole::Label)
             .with_layout(TextLayoutPolicy::no_wrap_label())
     }
-
     pub fn body(text: impl Into<String>, max_width: f32) -> Self {
         Self::new(TextBlockId(1), TextStyle::default())
             .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::Body))
             .with_semantic_role(TextSemanticRole::Body)
             .with_layout(TextLayoutPolicy::wrapping_body(max_width))
     }
-
+    pub fn helper(text: impl Into<String>, max_width: f32, max_lines: u32) -> Self {
+        Self::new(TextBlockId(1), TextStyle::default())
+            .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::Helper))
+            .with_semantic_role(TextSemanticRole::Helper)
+            .with_layout(TextLayoutPolicy::helper_text(max_width, max_lines))
+    }
+    pub fn badge(text: impl Into<String>, max_width: f32) -> Self {
+        Self::new(TextBlockId(1), TextStyle::default())
+            .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::Badge))
+            .with_semantic_role(TextSemanticRole::Badge)
+            .with_layout(TextLayoutPolicy::badge(max_width))
+    }
+    pub fn tab_label(text: impl Into<String>, max_width: f32) -> Self {
+        Self::new(TextBlockId(1), TextStyle::default())
+            .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::TabLabel))
+            .with_semantic_role(TextSemanticRole::TabLabel)
+            .with_layout(TextLayoutPolicy::tab_label(max_width))
+    }
+    pub fn inspector_row_value(text: impl Into<String>, max_width: f32) -> Self {
+        Self::new(TextBlockId(1), TextStyle::default())
+            .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::InspectorValue))
+            .with_semantic_role(TextSemanticRole::InspectorValue)
+            .with_layout(TextLayoutPolicy::inspector_row_value(max_width))
+    }
     pub fn inline_spans(text: impl Into<String>, spans: Vec<TextSpan>) -> Self {
         Self::new(TextBlockId(1), TextStyle::default())
             .with_run(TextRun::new(TextRunId(1), text).with_spans(spans))
             .with_semantic_role(TextSemanticRole::Body)
     }
-
-    pub fn with_run(mut self, run: TextRun) -> Self {
-        self.runs.push(run);
-        self
-    }
-
-    pub fn with_base_style(mut self, style: TextStyle) -> Self {
-        self.base_style = style;
-        self
-    }
-
-    pub fn with_layout(mut self, layout: TextLayoutPolicy) -> Self {
-        self.layout = layout;
-        self
-    }
-
-    pub fn with_semantic_role(mut self, role: TextSemanticRole) -> Self {
-        self.semantic_role = Some(role);
-        self
-    }
-
-    pub fn with_accessibility_label_role(mut self, role: impl Into<String>) -> Self {
-        self.accessibility_label_role = Some(role.into());
-        self
-    }
+    pub fn with_run(mut self, run: TextRun) -> Self { self.runs.push(run); self }
+    pub fn with_base_style(mut self, style: TextStyle) -> Self { self.base_style = style; self }
+    pub fn with_layout(mut self, layout: TextLayoutPolicy) -> Self { self.layout = layout; self }
+    pub fn with_semantic_role(mut self, role: TextSemanticRole) -> Self { self.semantic_role = Some(role); self }
+    pub fn with_accessibility_label_role(mut self, role: impl Into<String>) -> Self { self.accessibility_label_role = Some(role.into()); self }
 }
