@@ -12,6 +12,15 @@ pub struct TextEditFact {
 }
 
 impl TextEditFact {
+    pub fn intent(intent: TextEditIntent) -> Self {
+        Self {
+            target_id: None,
+            intent,
+            text: String::new(),
+            host_owned_source: None,
+        }
+    }
+
     pub fn insert_text(text: impl Into<String>) -> Self {
         Self {
             target_id: None,
@@ -28,6 +37,47 @@ impl TextEditFact {
             text: String::new(),
             host_owned_source: Some(source.into()),
         }
+    }
+
+    pub fn delete_backward() -> Self {
+        Self::intent(TextEditIntent::DeleteBackward)
+    }
+
+    pub fn delete_forward() -> Self {
+        Self::intent(TextEditIntent::DeleteForward)
+    }
+
+    pub fn move_caret() -> Self {
+        Self::intent(TextEditIntent::MoveCaret)
+    }
+
+    pub fn extend_selection() -> Self {
+        Self::intent(TextEditIntent::ExtendSelection)
+    }
+
+    pub fn replace_selection(text: impl Into<String>) -> Self {
+        Self {
+            target_id: None,
+            intent: TextEditIntent::ReplaceSelection,
+            text: text.into(),
+            host_owned_source: None,
+        }
+    }
+
+    pub fn submit() -> Self {
+        Self::intent(TextEditIntent::Submit)
+    }
+
+    pub fn cancel() -> Self {
+        Self::intent(TextEditIntent::Cancel)
+    }
+
+    pub fn copy() -> Self {
+        Self::intent(TextEditIntent::Copy)
+    }
+
+    pub fn cut() -> Self {
+        Self::intent(TextEditIntent::Cut)
     }
 
     pub fn with_target(mut self, target_id: impl Into<String>) -> Self {
@@ -77,7 +127,10 @@ mod tests {
     fn source_insert_is_host_owned_intent() {
         let fact = TextEditFact::source_insert("host.text-source.plain");
         assert_eq!(fact.intent.as_str(), "source-insert");
-        assert_eq!(fact.host_owned_source.as_deref(), Some("host.text-source.plain"));
+        assert_eq!(
+            fact.host_owned_source.as_deref(),
+            Some("host.text-source.plain")
+        );
         assert!(fact.text.is_empty());
     }
 }

@@ -37,15 +37,15 @@ ID: `PT-UI-COMPONENT-PLATFORM-014`
 
 Title: Text Editing / Editable Text Behavior
 
-State: planning/design intake
+State: review after local implementation validation
 
-Lifecycle state: `active-planning`
+Lifecycle state: `review`
 
 Authority: `ui-component-platform-text-editing-design.md`.
 
-Evidence: Current code inspection found read-only text-intent probe support only. Full editable text behavior is not implemented and is not authorized by this roadmap entry.
+Evidence: Local Phase 14 implementation branch now contains package-backed editable-text declarations, InspectorField lowering, descriptor validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, no-bypass evidence, and focused tests. Completion is not recorded until acceptance or merge.
 
-Next action: Review and accept, revise, or reject the Phase 14 design before implementation.
+Next action: Review the implementation branch. After acceptance or merge, record Phase 14 completion truth before opening Phase 15.
 
 ## Rules
 

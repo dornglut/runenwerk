@@ -188,7 +188,11 @@ fn apply_fact(
                 }
             }
         }
-        NormalizedInputFact::Semantic(_) | NormalizedInputFact::TextIntent(_) => {}
+        NormalizedInputFact::Semantic(_)
+        | NormalizedInputFact::TextIntent(_)
+        | NormalizedInputFact::TextEdit(_)
+        | NormalizedInputFact::TextComposition(_)
+        | NormalizedInputFact::TextSelection(_) => {}
     }
 }
 

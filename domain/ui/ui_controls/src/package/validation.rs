@@ -147,6 +147,7 @@ pub enum ControlPackageValidationReason {
     DuplicateStoryId,
     DuplicateInteractionDescriptor,
     DuplicateOverlayDescriptor,
+    DuplicateEditableTextDescriptor,
     DuplicateRouteRequirement,
     InvalidDeprecation,
     InvalidMigrationVersion,
@@ -154,6 +155,8 @@ pub enum ControlPackageValidationReason {
     UnresolvedInteractionDescriptor,
     UnresolvedOverlayDescriptor,
     InvalidOverlayDescriptor,
+    UnresolvedEditableTextDescriptor,
+    InvalidEditableTextDescriptor,
     UnsupportedTargetProfile,
     UnresolvedReference,
     RenderEvidenceMissing,
@@ -184,6 +187,7 @@ impl ControlPackageValidationReason {
             Self::DuplicateStoryId => "duplicate_story_id",
             Self::DuplicateInteractionDescriptor => "duplicate_interaction_descriptor",
             Self::DuplicateOverlayDescriptor => "duplicate_overlay_descriptor",
+            Self::DuplicateEditableTextDescriptor => "duplicate_editable_text_descriptor",
             Self::DuplicateRouteRequirement => "duplicate_route_requirement",
             Self::InvalidDeprecation => "invalid_deprecation",
             Self::InvalidMigrationVersion => "invalid_migration_version",
@@ -191,6 +195,8 @@ impl ControlPackageValidationReason {
             Self::UnresolvedInteractionDescriptor => "unresolved_interaction_descriptor",
             Self::UnresolvedOverlayDescriptor => "unresolved_overlay_descriptor",
             Self::InvalidOverlayDescriptor => "invalid_overlay_descriptor",
+            Self::UnresolvedEditableTextDescriptor => "unresolved_editable_text_descriptor",
+            Self::InvalidEditableTextDescriptor => "invalid_editable_text_descriptor",
             Self::UnsupportedTargetProfile => "unsupported_target_profile",
             Self::UnresolvedReference => "unresolved_reference",
             Self::RenderEvidenceMissing => "render_evidence_missing",
@@ -455,6 +461,11 @@ impl ControlPackageDescriptor {
             &control_kind_ids,
             &mut report,
         );
+        super::editable_text_validation::validate_editable_text_descriptors(
+            self,
+            &control_kind_ids,
+            &mut report,
+        );
         report
     }
 }
@@ -562,6 +573,16 @@ fn validate_duplicates(
             .iter()
             .map(|descriptor| descriptor.control_kind_id.as_str().to_owned()),
         ControlPackageValidationReason::DuplicateInteractionDescriptor,
+    );
+    push_duplicate_package_values(
+        report,
+        &package.package_id,
+        "editable_text_descriptor",
+        package
+            .editable_text_descriptors
+            .iter()
+            .map(|descriptor| descriptor.control_kind_id.as_str().to_owned()),
+        ControlPackageValidationReason::DuplicateEditableTextDescriptor,
     );
 }
 

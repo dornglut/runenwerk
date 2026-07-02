@@ -5,6 +5,7 @@ use super::{
     diagnostic_badges,
 };
 use crate::accessibility::ControlAccessibilityCapabilitySummary;
+use crate::editable_text::ControlEditableTextSupportSummary;
 use crate::input::ControlInputCapabilitySummary;
 use crate::interaction::ControlInteractionSupportSummary;
 use crate::overlay::ControlOverlaySupportSummary;
@@ -156,6 +157,12 @@ impl ControlInspectionDescriptor {
             "overlay.supported",
             bool_string(entry.overlay_supported),
         );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextEditing,
+            "text_editing.supported",
+            bool_string(entry.editable_text_supported),
+        );
         Self {
             package_id: entry.package_id,
             control_kind_id: entry.control_kind_id,
@@ -196,6 +203,20 @@ impl ControlInspectionDescriptor {
             push_fact(
                 &mut self.facts,
                 ControlInspectionSection::Layering,
+                &fact.key,
+                &fact.value,
+            );
+        }
+        self
+    }
+    pub fn with_editable_text_summary(
+        mut self,
+        summary: &ControlEditableTextSupportSummary,
+    ) -> Self {
+        for fact in summary.inspection_facts() {
+            push_fact(
+                &mut self.facts,
+                ControlInspectionSection::TextEditing,
                 &fact.key,
                 &fact.value,
             );
@@ -260,6 +281,7 @@ pub enum ControlInspectionSection {
     Input,
     Interaction,
     Layering,
+    TextEditing,
     State,
     Theme,
     Accessibility,

@@ -88,7 +88,10 @@ impl ControlEditableTextIntent {
     }
 
     pub const fn requires_selection(self) -> bool {
-        matches!(self, Self::ReplaceSelection | Self::ExtendSelection | Self::Copy | Self::Cut)
+        matches!(
+            self,
+            Self::ReplaceSelection | Self::ExtendSelection | Self::Copy | Self::Cut
+        )
     }
 
     pub const fn requires_composition(self) -> bool {
@@ -237,10 +240,8 @@ impl ControlTextRange {
         Self { anchor, extent }
     }
 
-    pub const fn is_collapsed(&self) -> bool {
-        self.anchor.ordinal == self.extent.ordinal
-            && self.anchor.line.is_none() == self.extent.line.is_none()
-            && self.anchor.column.is_none() == self.extent.column.is_none()
+    pub fn is_collapsed(&self) -> bool {
+        self.anchor == self.extent
     }
 }
 
@@ -272,13 +273,15 @@ pub struct ControlEditableTextDescriptor {
 
 impl ControlEditableTextDescriptor {
     pub fn new(control_kind_id: ControlKindId, mode: ControlEditableTextMode) -> Self {
+        let (selection_policy, composition_policy, supported_intents) =
+            default_policy_for_mode(mode);
         Self {
             control_kind_id,
             mode,
             focus_policy: ControlEditableTextFocusPolicy::RequiresFocus,
-            selection_policy: ControlEditableTextSelectionPolicy::CaretOnly,
-            composition_policy: ControlEditableTextCompositionPolicy::Preedit,
-            supported_intents: default_mutating_intents(),
+            selection_policy,
+            composition_policy,
+            supported_intents,
             label_role: None,
             placeholder_role: None,
             suppresses_when_disabled: true,
@@ -295,38 +298,22 @@ impl ControlEditableTextDescriptor {
 
     pub fn multi_line(control_kind_id: ControlKindId) -> Self {
         Self::new(control_kind_id, ControlEditableTextMode::MultiLine)
-            .with_intent(ControlEditableTextIntent::MoveCaret)
-            .with_intent(ControlEditableTextIntent::ExtendSelection)
     }
 
     pub fn read_only_selectable(control_kind_id: ControlKindId) -> Self {
-        Self {
-            supported_intents: vec![
-                ControlEditableTextIntent::MoveCaret,
-                ControlEditableTextIntent::ExtendSelection,
-                ControlEditableTextIntent::Copy,
-            ],
-            selection_policy: ControlEditableTextSelectionPolicy::RangeSelection,
-            composition_policy: ControlEditableTextCompositionPolicy::None,
-            ..Self::new(control_kind_id, ControlEditableTextMode::ReadOnlySelectable)
-        }
+        Self::new(control_kind_id, ControlEditableTextMode::ReadOnlySelectable)
     }
 
     pub fn search_field(control_kind_id: ControlKindId) -> Self {
         Self::new(control_kind_id, ControlEditableTextMode::SearchField)
-            .with_intent(ControlEditableTextIntent::Submit)
     }
 
     pub fn command_input(control_kind_id: ControlKindId) -> Self {
         Self::new(control_kind_id, ControlEditableTextMode::CommandInput)
-            .with_intent(ControlEditableTextIntent::Submit)
-            .with_intent(ControlEditableTextIntent::Cancel)
     }
 
     pub fn inspector_field_input(control_kind_id: ControlKindId) -> Self {
         Self::new(control_kind_id, ControlEditableTextMode::InspectorField)
-            .with_intent(ControlEditableTextIntent::Submit)
-            .with_intent(ControlEditableTextIntent::Cancel)
             .with_label_role("label.inspector-field")
             .with_placeholder_role("placeholder.inspector-field")
     }
@@ -427,7 +414,8 @@ impl ControlEditableTextSupportSummary {
             selection_policy: descriptor.selection_policy.as_str().to_owned(),
             composition_policy: descriptor.composition_policy.as_str().to_owned(),
             editable_text_supported: !descriptor.supported_intents.is_empty(),
-            caret_supported: descriptor.selection_policy != ControlEditableTextSelectionPolicy::None,
+            caret_supported: descriptor.selection_policy
+                != ControlEditableTextSelectionPolicy::None,
             range_selection_supported: descriptor.selection_policy.supports_ranges(),
             composition_supported: descriptor.composition_policy.supports_preedit(),
             suppresses_when_disabled: descriptor.suppresses_when_disabled,
@@ -521,20 +509,96 @@ impl ControlEditableTextInspectionFact {
     }
 }
 
-fn default_mutating_intents() -> Vec<ControlEditableTextIntent> {
-    vec![
+fn default_policy_for_mode(
+    mode: ControlEditableTextMode,
+) -> (
+    ControlEditableTextSelectionPolicy,
+    ControlEditableTextCompositionPolicy,
+    Vec<ControlEditableTextIntent>,
+) {
+    match mode {
+        ControlEditableTextMode::SingleLine | ControlEditableTextMode::SearchField => (
+            ControlEditableTextSelectionPolicy::CaretOnly,
+            ControlEditableTextCompositionPolicy::Preedit,
+            single_line_intents_with_mode_commands(mode),
+        ),
+        ControlEditableTextMode::CommandInput => (
+            ControlEditableTextSelectionPolicy::CaretOnly,
+            ControlEditableTextCompositionPolicy::Preedit,
+            with_submit_cancel(single_line_intents()),
+        ),
+        ControlEditableTextMode::InspectorField => (
+            ControlEditableTextSelectionPolicy::RangeSelection,
+            ControlEditableTextCompositionPolicy::Preedit,
+            with_submit_cancel(with_range_intents(single_line_intents())),
+        ),
+        ControlEditableTextMode::MultiLine => (
+            ControlEditableTextSelectionPolicy::RangeSelection,
+            ControlEditableTextCompositionPolicy::Preedit,
+            with_range_intents(single_line_intents()),
+        ),
+        ControlEditableTextMode::ReadOnlySelectable => (
+            ControlEditableTextSelectionPolicy::RangeSelection,
+            ControlEditableTextCompositionPolicy::None,
+            vec![
+                ControlEditableTextIntent::MoveCaret,
+                ControlEditableTextIntent::ExtendSelection,
+                ControlEditableTextIntent::Copy,
+            ],
+        ),
+    }
+}
+
+fn single_line_intents_with_mode_commands(
+    mode: ControlEditableTextMode,
+) -> Vec<ControlEditableTextIntent> {
+    match mode {
+        ControlEditableTextMode::SearchField => {
+            let mut intents = single_line_intents();
+            intents.push(ControlEditableTextIntent::Submit);
+            sort_dedup(&mut intents);
+            intents
+        }
+        _ => single_line_intents(),
+    }
+}
+
+fn single_line_intents() -> Vec<ControlEditableTextIntent> {
+    let mut intents = vec![
         ControlEditableTextIntent::InsertText,
         ControlEditableTextIntent::DeleteBackward,
         ControlEditableTextIntent::DeleteForward,
-        ControlEditableTextIntent::ReplaceSelection,
         ControlEditableTextIntent::MoveCaret,
-        ControlEditableTextIntent::ExtendSelection,
-        ControlEditableTextIntent::Paste,
         ControlEditableTextIntent::CompositionStart,
         ControlEditableTextIntent::CompositionUpdate,
         ControlEditableTextIntent::CompositionCommit,
         ControlEditableTextIntent::CompositionCancel,
-    ]
+    ];
+    sort_dedup(&mut intents);
+    intents
+}
+
+fn with_range_intents(
+    mut intents: Vec<ControlEditableTextIntent>,
+) -> Vec<ControlEditableTextIntent> {
+    intents.push(ControlEditableTextIntent::ExtendSelection);
+    intents.push(ControlEditableTextIntent::ReplaceSelection);
+    sort_dedup(&mut intents);
+    intents
+}
+
+fn with_submit_cancel(
+    mut intents: Vec<ControlEditableTextIntent>,
+) -> Vec<ControlEditableTextIntent> {
+    intents.push(ControlEditableTextIntent::Submit);
+    intents.push(ControlEditableTextIntent::Cancel);
+    sort_dedup(&mut intents);
+    intents
+}
+
+fn sort_dedup(intents: &mut Vec<ControlEditableTextIntent>) {
+    intents.sort();
+    intents.dedup();
 }
 
 fn default_true() -> bool {

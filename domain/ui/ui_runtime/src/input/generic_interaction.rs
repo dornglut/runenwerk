@@ -1227,6 +1227,9 @@ fn apply_fact(
             }
             emit_declared_outcomes(report, step, target, requirement);
         }
+        NormalizedInputFact::TextEdit(_)
+        | NormalizedInputFact::TextComposition(_)
+        | NormalizedInputFact::TextSelection(_) => {}
     }
 }
 

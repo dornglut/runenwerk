@@ -74,6 +74,10 @@ impl TextRange {
     pub const fn new(anchor: TextPosition, extent: TextPosition) -> Self {
         Self { anchor, extent }
     }
+
+    pub fn is_collapsed(&self) -> bool {
+        self.anchor == self.extent
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

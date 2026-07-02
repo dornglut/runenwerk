@@ -39,7 +39,7 @@ mod tests {
         assert_eq!(handled.propagation, EventPropagation::Stop);
         assert_eq!(handled.capture, PointerCapture::None);
         assert_eq!(handled.focus_change, FocusChange::None);
-        assert!(handled.repaint);
+        assert!(!handled.repaint);
         assert!(!handled.relayout);
     }
 

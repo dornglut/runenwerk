@@ -20,11 +20,11 @@ related_docs:
 
 # UI Component Platform Text Editing / Editable Text Behavior Design
 
-Lifecycle state: `active-planning`.
+Lifecycle state: `review`.
 
 Planning ID: `PT-UI-COMPONENT-PLATFORM-014`.
 
-This document is the Phase 14 design and implementation plan. It does not authorize Rust implementation by itself. Implementation requires a later `active-implementation` transition in planning records with accepted scope, exact owner files, validation envelope, evidence expectations, and stop conditions.
+This document is the Phase 14 design and implementation plan. It did not authorize Rust implementation by itself. The 2026-07-02 user handoff supplied the exact owner files, validation envelope, evidence expectations, and stop conditions required to promote the local branch through implementation and into review.
 
 ## Decision summary
 
@@ -638,7 +638,7 @@ python tools/docs/validate_docs.py
 git diff --check
 ```
 
-This planning pass does not claim those commands were run.
+Review readiness requires this gate to pass locally before completion is claimed.
 
 ## Completion criteria
 
@@ -695,4 +695,4 @@ Additional design tripwires:
 
 ## Relationship to current work
 
-Phase 13 is completed through PR #44. Phase 14 is the next planning/design intake only. Implementation remains blocked until this design is accepted and the active-work record is promoted to `active-implementation` with exact scope.
+Phase 13 is completed through PR #44. Phase 14 is implemented on a local review branch using the owner files, validation envelope, evidence expectations, and stop conditions supplied by the 2026-07-02 handoff. Completion remains blocked until branch acceptance or merge and completion truth recording.

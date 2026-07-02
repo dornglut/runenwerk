@@ -6,6 +6,7 @@ pub mod output;
 pub mod overlay;
 pub mod runtime;
 pub mod state;
+pub mod text_editing;
 
 pub use input::dispatch::UiInputDispatchResult;
 pub use input::generic_interaction::*;
@@ -21,3 +22,4 @@ pub use output::*;
 pub use overlay::*;
 pub use runtime::*;
 pub use state::*;
+pub use text_editing::*;

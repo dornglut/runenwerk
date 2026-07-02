@@ -11,7 +11,7 @@ use crate::{
 
 use super::lowering::{
     accessibility, input, inspection, interaction, layering_support, layout, module, render, state,
-    theme,
+    text_editing_support, theme,
 };
 use super::{
     CompiledControl, CompiledControlPackage, ControlContribution, ControlInspection, UiControls,
@@ -53,6 +53,12 @@ impl ControlCompiler {
                 control.contribution.def(),
                 control.module.kind.control_kind_id.clone(),
             ));
+            if let Some(descriptor) = text_editing_support::lower_text_editing_support(
+                control.contribution.def(),
+                control.module.kind.control_kind_id.clone(),
+            ) {
+                package = package.with_editable_text_descriptor(descriptor);
+            }
         }
         let controls = lowered
             .into_iter()
