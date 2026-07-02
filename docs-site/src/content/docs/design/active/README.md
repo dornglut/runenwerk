@@ -95,6 +95,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [UI Component Platform State Binding / Host Intent Design](ui-component-platform-state-binding-host-intent-design.md)
 - [UI Component Platform Story Proof Envelope Design](ui-component-platform-story-proof-envelope-design.md)
 - [UI Component Platform Surface2D Design](ui-component-platform-surface2d-design.md)
+- [UI Component Platform Text Editing / Editable Text Behavior Design](ui-component-platform-text-editing-design.md)
 - [UI Component Platform Theme / State / Style Design](ui-component-platform-theme-state-style-design.md)
 - [UI Component Platform Track Surface Design](ui-component-platform-track-surface-design.md)
 - [UI Component Platform Transitions / Effects Design](ui-component-platform-transitions-effects-design.md)

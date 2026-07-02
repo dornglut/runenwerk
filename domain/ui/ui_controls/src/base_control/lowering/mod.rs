@@ -10,4 +10,5 @@ pub(crate) mod layout;
 pub(crate) mod module;
 pub(crate) mod render;
 pub(crate) mod state;
+pub(crate) mod text_editing_support;
 pub(crate) mod theme;

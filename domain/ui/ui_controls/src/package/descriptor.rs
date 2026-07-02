@@ -13,6 +13,7 @@ use super::metadata::{
     ControlStoryDescriptor, ControlTag,
 };
 use crate::diagnostics::{ControlDiagnosticDescriptor, ControlDiagnosticId};
+use crate::editable_text::ControlEditableTextDescriptor;
 use crate::interaction::ControlInteractionDescriptor;
 use crate::kernel::{ControlKernelDescriptor, ControlKernelId, ControlKernelSet};
 use crate::migration::{ControlDeprecationStatus, ControlMigrationHook, ControlMigrationId};
@@ -287,6 +288,8 @@ pub struct ControlPackageDescriptor {
     #[serde(default)]
     pub overlay_descriptors: Vec<ControlOverlayDescriptor>,
     #[serde(default)]
+    pub editable_text_descriptors: Vec<ControlEditableTextDescriptor>,
+    #[serde(default)]
     pub mount_eligibility: ControlMountEligibility,
     #[serde(default)]
     pub binding_requirements: Vec<ControlRequirement>,
@@ -332,6 +335,7 @@ impl ControlPackageDescriptor {
             stories: Vec::new(),
             interaction_descriptors: Vec::new(),
             overlay_descriptors: Vec::new(),
+            editable_text_descriptors: Vec::new(),
             mount_eligibility: ControlMountEligibility::default(),
             binding_requirements: Vec::new(),
             theme_token_requirements: Vec::new(),
@@ -436,6 +440,13 @@ impl ControlPackageDescriptor {
         self.overlay_descriptors.push(descriptor);
         self
     }
+    pub fn with_editable_text_descriptor(
+        mut self,
+        descriptor: ControlEditableTextDescriptor,
+    ) -> Self {
+        self.editable_text_descriptors.push(descriptor);
+        self
+    }
     pub fn control_kind(&self, id: &ControlKindId) -> Option<&ControlKindDescriptor> {
         self.control_kinds
             .iter()
@@ -454,6 +465,14 @@ impl ControlPackageDescriptor {
         control_kind_id: &ControlKindId,
     ) -> Option<&ControlOverlayDescriptor> {
         self.overlay_descriptors
+            .iter()
+            .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
+    }
+    pub fn editable_text_descriptor(
+        &self,
+        control_kind_id: &ControlKindId,
+    ) -> Option<&ControlEditableTextDescriptor> {
+        self.editable_text_descriptors
             .iter()
             .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
     }

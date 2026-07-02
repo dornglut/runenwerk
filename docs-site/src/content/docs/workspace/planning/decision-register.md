@@ -43,6 +43,20 @@ Evidence: Current `ui_controls` package descriptor and validation paths, current
 
 Follow-up: Review and accept, revise, or reject the Phase 14 design. Do not implement until active planning is promoted with exact scope, owner files, validation, evidence, and stop conditions.
 
+## Phase 14 implementation and review readiness decision
+
+Date: 2026-07-02
+
+Decision: Promote `PT-UI-COMPONENT-PLATFORM-014` from planning to local implementation using the 2026-07-02 user handoff, then move the branch to review after package-backed implementation evidence was added locally.
+
+State transition: `active-planning -> active-implementation -> review`
+
+Context: The Phase 14 design required a later implementation transition with exact owner files, validation envelope, evidence expectations, and stop conditions. The 2026-07-02 handoff supplied those details and identified the connector blocker as write capability, not design uncertainty.
+
+Evidence: The local branch implements editable-text vocabulary, `ControlPackageDescriptor::editable_text_descriptors`, package validation, InspectorField text-editing lowering, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, no-bypass evidence, and focused tests. Local validation passed on 2026-07-02 with the recorded Phase 14 cargo/docs/diff gate.
+
+Follow-up: Review the implementation branch. After acceptance or merge, record Phase 14 completion truth in active work, roadmap, production track, completed work, decision register, and any required closeout report before opening Phase 15.
+
 ## Lifecycle rule
 
 Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.

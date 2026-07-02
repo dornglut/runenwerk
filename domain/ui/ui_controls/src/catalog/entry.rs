@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::editable_text::ControlEditableTextSupportSummary;
 use crate::interaction::ControlInteractionSupportSummary;
 use crate::overlay::ControlOverlaySupportSummary;
 use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
@@ -61,6 +62,20 @@ pub struct ControlCatalogEntryDescriptor {
     pub overlay_focus_policies: Vec<String>,
     #[serde(default)]
     pub overlay_supported: bool,
+    #[serde(default)]
+    pub editable_text_modes: Vec<String>,
+    #[serde(default)]
+    pub editable_text_intents: Vec<String>,
+    #[serde(default)]
+    pub editable_text_supported: bool,
+    #[serde(default)]
+    pub editable_text_caret_supported: bool,
+    #[serde(default)]
+    pub editable_text_range_selection_supported: bool,
+    #[serde(default)]
+    pub editable_text_composition_supported: bool,
+    #[serde(default)]
+    pub editable_text_host_owned_mutation: bool,
     #[serde(default)]
     pub control_owned_runtime_behavior: bool,
     #[serde(default)]
@@ -162,6 +177,13 @@ impl ControlCatalogEntryDescriptor {
             overlay_dismiss_policies: Vec::new(),
             overlay_focus_policies: Vec::new(),
             overlay_supported: false,
+            editable_text_modes: Vec::new(),
+            editable_text_intents: Vec::new(),
+            editable_text_supported: false,
+            editable_text_caret_supported: false,
+            editable_text_range_selection_supported: false,
+            editable_text_composition_supported: false,
+            editable_text_host_owned_mutation: false,
             control_owned_runtime_behavior: false,
             executes_host_commands: false,
             mutates_product_state: false,
@@ -171,6 +193,9 @@ impl ControlCatalogEntryDescriptor {
         }
         if let Some(descriptor) = package.overlay_descriptor(&kind.control_kind_id) {
             entry = entry.with_overlay_summary(&descriptor.summary());
+        }
+        if let Some(descriptor) = package.editable_text_descriptor(&kind.control_kind_id) {
+            entry = entry.with_editable_text_summary(&descriptor.summary());
         }
         entry
     }
@@ -196,6 +221,22 @@ impl ControlCatalogEntryDescriptor {
         self.overlay_focus_policies = summary.focus_policies.clone();
         self.overlay_supported = summary.overlay_supported;
         self.control_owned_runtime_behavior |= summary.control_owned_runtime_behavior;
+        self.executes_host_commands |= summary.executes_host_commands;
+        self.mutates_product_state |= summary.mutates_product_state;
+        self
+    }
+
+    pub fn with_editable_text_summary(
+        mut self,
+        summary: &ControlEditableTextSupportSummary,
+    ) -> Self {
+        self.editable_text_modes = summary.modes.clone();
+        self.editable_text_intents = summary.edit_intents.clone();
+        self.editable_text_supported = summary.editable_text_supported;
+        self.editable_text_caret_supported = summary.caret_supported;
+        self.editable_text_range_selection_supported = summary.range_selection_supported;
+        self.editable_text_composition_supported = summary.composition_supported;
+        self.editable_text_host_owned_mutation = summary.host_owned_mutation;
         self.executes_host_commands |= summary.executes_host_commands;
         self.mutates_product_state |= summary.mutates_product_state;
         self

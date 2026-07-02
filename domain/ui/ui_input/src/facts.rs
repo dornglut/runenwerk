@@ -6,6 +6,7 @@
 use crate::{
     FocusChange, FocusDirection, FocusTargetId, Key, KeyState, Modifiers, PointerButton,
     PointerDelta, PointerEventKind, PointerPacket, PointerPosition, SemanticActionEvent,
+    TextCompositionFact, TextEditFact, TextSelectionFact,
 };
 
 /// Normalized input fact delivered to runtime interaction formation.
@@ -29,6 +30,15 @@ pub enum NormalizedInputFact {
 
     /// Text intent input observed before full text editing exists.
     TextIntent(TextIntentFact),
+
+    /// Editable-text input intent fact. Runtime resolves this against package descriptors.
+    TextEdit(TextEditFact),
+
+    /// IME/preedit composition fact. Runtime keeps it separate from committed text.
+    TextComposition(TextCompositionFact),
+
+    /// Text caret or range selection fact.
+    TextSelection(TextSelectionFact),
 }
 
 impl NormalizedInputFact {
@@ -40,6 +50,9 @@ impl NormalizedInputFact {
             Self::Focus(_) => NormalizedInputFactKind::Focus,
             Self::Semantic(_) => NormalizedInputFactKind::Semantic,
             Self::TextIntent(_) => NormalizedInputFactKind::TextIntent,
+            Self::TextEdit(_) => NormalizedInputFactKind::TextEdit,
+            Self::TextComposition(_) => NormalizedInputFactKind::TextComposition,
+            Self::TextSelection(_) => NormalizedInputFactKind::TextSelection,
         }
     }
 }
@@ -61,6 +74,15 @@ pub enum NormalizedInputFactKind {
 
     /// Text-intent fact family.
     TextIntent,
+
+    /// Editable-text edit fact family.
+    TextEdit,
+
+    /// Editable-text composition fact family.
+    TextComposition,
+
+    /// Editable-text selection fact family.
+    TextSelection,
 }
 
 impl NormalizedInputFactKind {
@@ -72,6 +94,9 @@ impl NormalizedInputFactKind {
             Self::Focus => "focus",
             Self::Semantic => "semantic",
             Self::TextIntent => "text-intent",
+            Self::TextEdit => "text-edit",
+            Self::TextComposition => "text-composition",
+            Self::TextSelection => "text-selection",
         }
     }
 }

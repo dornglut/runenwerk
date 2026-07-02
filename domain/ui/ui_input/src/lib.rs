@@ -1,20 +1,26 @@
+pub mod composition;
 pub mod event;
 pub mod facts;
 pub mod focus;
 pub mod keyboard;
 pub mod pointer;
 pub mod routing;
+pub mod selection;
 pub mod semantic;
 pub mod shortcut;
+pub mod text;
 
+pub use composition::*;
 pub use event::*;
 pub use facts::*;
 pub use focus::*;
 pub use keyboard::*;
 pub use pointer::*;
 pub use routing::*;
+pub use selection::*;
 pub use semantic::*;
 pub use shortcut::*;
+pub use text::*;
 
 #[cfg(test)]
 mod tests {
@@ -118,7 +124,6 @@ mod tests {
                 hover: true,
                 ..PointerDeviceCapabilities::default()
             });
-
         assert_eq!(packet.source_kind, PointerSourceKind::Stylus);
         assert_eq!(packet.device_id, Some(PointerDeviceId(7)));
         assert!(!packet.capabilities.pressure);
@@ -141,7 +146,6 @@ mod tests {
                 PointerPosition::new(0.0, 0.0),
                 PointerDelta::ZERO,
             )]);
-
         assert!(!invalid_pressure.is_valid());
         assert!(!invalid_tilt.is_valid());
         assert!(!wrong_sample_role.is_valid());
@@ -151,7 +155,6 @@ mod tests {
     fn eraser_packets_route_as_stylus_eraser_tool() {
         let packet =
             PointerPacket::stylus(PointerDeviceId(99), PointerToolKind::Pen).with_eraser(true);
-
         assert!(packet.eraser);
         assert_eq!(packet.tool_kind, PointerToolKind::Eraser);
         assert!(packet.capabilities.eraser);

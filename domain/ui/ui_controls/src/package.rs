@@ -4,6 +4,7 @@
 #[path = "authoring/mod.rs"]
 pub mod authoring;
 pub mod descriptor;
+mod editable_text_validation;
 pub mod ids;
 pub mod metadata;
 mod overlay_validation;
