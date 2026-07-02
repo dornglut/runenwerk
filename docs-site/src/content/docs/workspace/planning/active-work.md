@@ -7,8 +7,8 @@ canonical: true
 last_reviewed: 2026-07-02
 related_docs:
   - ../workflow-lifecycle.md
-  - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
+  - ../../design/active/ui-component-platform-generic-text-design.md
 ---
 
 # Active Work
@@ -17,27 +17,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-014`
+ID: `PT-UI-COMPONENT-PLATFORM-015`
 
-Title: Text Editing / Editable Text Behavior
+Title: Generic Text
 
-State: review after local Phase 14 implementation validation
+State: active planning for renderer-neutral reusable text display and layout proof
 
-Lifecycle state: `review`
+Lifecycle state: `active-planning`
 
-Owner: `ui_controls` owns package-backed editable-text declarations, base-control text-editing lowering, package descriptors, package validation, catalog projection, and inspection projection. `ui_input` owns normalized keyboard, text, composition, focus, and selection facts only. `ui_runtime` owns renderer-neutral text-editing replay/report/caret/selection/composition/edit-intent/validation/suppression/focus/no-bypass evidence and proof-frame projection. `ui_static_mount` owns static frame validation. Host/product/editor/game layers own actual persistence, domain mutation, command routing, authored UI editing, app-specific editor policy, and product undo stacks.
+Owner: `ui_text` owns renderer-neutral text layout contracts, text runs, line metrics, glyph/run evidence, wrapping, alignment, truncation, and overflow vocabulary. `ui_controls` owns package-backed generic-text declarations, package validation, catalog projection, and inspection projection for reusable controls that display text. `ui_runtime` owns renderer-neutral visual proof-frame projection that consumes generic-text evidence without owning renderer backend policy. `ui_static_mount` owns static validation of the proof frame. Host/product/editor/game layers own app-specific copy policy, document buffers, authored UI editing, text editing, code editing, localization policy, font asset provisioning, and renderer backend implementation.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `ARCHITECTURE.md`, `DEPENDENCY_RULES.md`, `DOMAIN_MAP.md`, `TESTING.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-overlay-popup-layering-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-text-editing-design.md`, `docs-site/src/content/docs/workspace/planning/active-work.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/workspace/planning/decision-register.md`, and `docs-site/src/content/docs/workspace/planning/completed-work.md`.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `ARCHITECTURE.md`, `DEPENDENCY_RULES.md`, `DOMAIN_MAP.md`, `TESTING.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-text-editing-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-text-design.md`, `docs-site/src/content/docs/workspace/planning/active-work.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/workspace/planning/decision-register.md`, and `docs-site/src/content/docs/workspace/planning/completed-work.md`.
 
-Write scope: Review the local Phase 14 implementation branch. The implementation scope is package-backed editable-text declaration vocabulary, descriptor wiring, package validation, base-control lowering for semantically editable `InspectorField`, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, focused tests, and planning closeout. Do not add product/editor/game mutation, command execution, authored UI editing, UI Gallery, UI Designer, Workbench/provider redesign, rich text editor, code editor, app-specific undo/redo, dynamic plugin framework, `foundation/meta`, shared plugin primitives, overlay runtime changes unrelated to text editing, compatibility-only aliases/shims, or phase-shaped public API names.
+Write scope: Design intake for reusable renderer-neutral text display/layout proof. The planning scope is text runs, inline spans, wrapping, alignment, truncation/ellipsis, line metrics, glyph/run evidence, package/catalog/inspection projection, visual proof, and static mount proof. Prefer docs-only planning until owner files, implementation scope, validation, evidence expectations, and stop conditions are exact.
 
-Validation expectation: The implementation gate is recorded in `ui-component-platform-text-editing-design.md` and includes focused checks/tests for `ui_controls`, `ui_input`, `ui_runtime`, `ui_static_mount`, `ui_story`, `runenwerk_editor`, text-editing package/catalog/inspection/runtime/static proof, docs validation, and `git diff --check`.
+Validation expectation: Planning docs must pass `python tools/docs/validate_docs.py` and `git diff --check`. A later implementation gate must include focused checks/tests for `ui_text`, `ui_controls`, `ui_runtime`, `ui_static_mount`, `ui_story`, and any package/catalog/inspection/runtime/static proof that Phase 15 changes.
 
-Known blockers: No local implementation blocker remains. Completion remains blocked until the Phase 14 branch is accepted or merged and completion truth is recorded. Product/editor/game mutation, command execution, authored UI editing, UI Gallery, UI Designer, Workbench/provider redesign, rich text editor behavior, code editor behavior, dynamic plugin framework, `foundation/meta`, shared plugin primitives, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
+Known blockers: No Phase 14 blocker remains. Phase 15 is not yet implementation-authorized. Text editing, rich text editor behavior, code editor behavior, product document buffers, undo/redo, clipboard, LSP/syntax highlighting, app-specific text rendering policy, dynamic plugin framework, `foundation/meta`, shared plugin primitives, UI Designer, UI Gallery product surface, Workbench/provider redesign, product/editor/game mutation, command execution, authored UI editing, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
 
-Next action: Review the Phase 14 implementation branch. After acceptance or merge, record completion truth before opening Phase 15.
+Next action: Review and refine the Phase 15 Generic Text design intake. Do not start implementation until active planning is promoted with exact owner files, implementation scope, validation, evidence, and stop conditions.
 
-Evidence: Main was inspected after PR #44 merge and is identical to merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Phase 13 completed evidence is recorded in completed work, roadmap, production track, decision register, and the overlay design. The 2026-07-02 user handoff supplied exact owner files, validation envelope, evidence expectations, and stop conditions for local implementation. The local branch implements package-backed editable text through `ui_controls`, `ui_input`, `ui_runtime::text_editing`, and `ui_static_mount` without product/editor/game mutation. Local Phase 14 validation passed on 2026-07-02 with this gate: `cargo fmt --all --check`; `cargo check -p ui_controls`; `cargo check -p ui_input`; `cargo check -p ui_runtime`; `cargo check -p ui_static_mount`; `cargo check -p ui_story`; `cargo check -p runenwerk_editor`; `cargo test -p ui_controls text`; `cargo test -p ui_controls --test base_controls_text_editing_package`; `cargo test -p ui_controls --test base_controls_text_editing_catalog`; `cargo test -p ui_controls --test base_controls_text_editing_inspection`; `cargo test -p ui_input input`; `cargo test -p ui_runtime text_editing`; `cargo test -p ui_runtime --test text_editing_report`; `cargo test -p ui_runtime --test text_editing_package_backed`; `cargo test -p ui_static_mount text_editing`; `python tools/docs/validate_docs.py`; `git diff --check`.
+Evidence: Phase 14 is completed through merged PR #46 at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Main was inspected after PR #46 merge and is identical to that merge commit. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, and focused tests. Local Phase 14 validation passed on 2026-07-02 with the recorded cargo/docs/diff gate before merge. The Phase 15 scope starts from the completed Phase 14 text-editing substrate but is display/layout-only.
 
 ## Active-work rules
 
