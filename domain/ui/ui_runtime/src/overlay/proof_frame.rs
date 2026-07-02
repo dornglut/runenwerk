@@ -160,8 +160,13 @@ fn panel(primitives: &mut Vec<UiPrimitive>, order: &mut u32, area: UiRect, title
 }
 
 fn label(primitives: &mut Vec<UiPrimitive>, order: &mut u32, x: f32, y: f32, text: &str) {
-    let layout =
-        crate::proof_text::proof_label_layout(text, UiPoint::new(x, y), 240.0, FontId(13), *order);
+    let layout = crate::text_emission::proof_label_layout(
+        text,
+        UiPoint::new(x, y),
+        240.0,
+        FontId(13),
+        *order,
+    );
     primitives.push(
         GlyphRunPrimitive::new(
             layout,

@@ -1,5 +1,5 @@
-//! File: domain/ui/ui_runtime/src/proof_text.rs
-//! Purpose: Runtime-local helpers for projecting renderer-neutral text proof evidence.
+//! File: domain/ui/ui_runtime/src/text_emission.rs
+//! Purpose: Runtime-local helpers for emitting renderer-neutral text layout evidence.
 
 use std::collections::HashMap;
 

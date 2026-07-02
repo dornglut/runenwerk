@@ -507,7 +507,7 @@ mod tests {
                 let UiPrimitive::GlyphRun(run) = primitive else {
                     return None;
                 };
-                let text = crate::proof_text::text_from_primitive(run);
+                let text = crate::text_emission::text_from_primitive(run);
                 (text == "Save").then_some(run)
             })
             .unwrap_or_else(|| {
@@ -616,7 +616,7 @@ mod tests {
                 let UiPrimitive::GlyphRun(run) = primitive else {
                     return None;
                 };
-                let text = crate::proof_text::text_from_primitive(run);
+                let text = crate::text_emission::text_from_primitive(run);
                 (text == "x").then_some(run)
             })
             .unwrap_or_else(|| {
@@ -1306,7 +1306,7 @@ mod tests {
                 ),
                 UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => "ClipPop".to_string(),
                 UiPrimitive::GlyphRun(value) => {
-                    let text = crate::proof_text::text_from_primitive(value);
+                    let text = crate::text_emission::text_from_primitive(value);
                     format!(
                         "GlyphRun(text=\"{}\" clip={})",
                         text,
