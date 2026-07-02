@@ -10,8 +10,8 @@ use crate::{
 };
 
 use super::lowering::{
-    accessibility, input, inspection, interaction, layering_support, layout, module, render, state,
-    text_editing_support, theme,
+    accessibility, generic_text_support, input, inspection, interaction, layering_support, layout,
+    module, render, state, text_editing_support, theme,
 };
 use super::{
     CompiledControl, CompiledControlPackage, ControlContribution, ControlInspection, UiControls,
@@ -21,9 +21,7 @@ use super::{
 pub struct ControlCompiler;
 
 impl ControlCompiler {
-    pub const fn new() -> Self {
-        Self
-    }
+    pub const fn new() -> Self { Self }
 
     pub fn compile(&self, controls: &UiControls) -> CompiledControlPackage {
         let lowered = controls
@@ -59,6 +57,12 @@ impl ControlCompiler {
             ) {
                 package = package.with_editable_text_descriptor(descriptor);
             }
+            if let Some(descriptor) = generic_text_support::lower_generic_text_support(
+                control.contribution.def(),
+                control.module.kind.control_kind_id.clone(),
+            ) {
+                package = package.with_generic_text_descriptor(descriptor);
+            }
         }
         let controls = lowered
             .into_iter()
@@ -84,18 +88,10 @@ impl ControlCompiler {
             .collect::<Vec<_>>();
         let catalog = ControlCatalogIndex::from_packages([&package]);
         let inspection = ControlInspection {
-            controls: controls
-                .iter()
-                .map(|control| control.inspection.clone())
-                .collect(),
+            controls: controls.iter().map(|control| control.inspection.clone()).collect(),
         };
 
-        CompiledControlPackage {
-            package,
-            controls,
-            catalog,
-            inspection,
-        }
+        CompiledControlPackage { package, controls, catalog, inspection }
     }
 
     pub fn compile_module(&self, contribution: &ControlContribution) -> ControlModuleDescriptor {
