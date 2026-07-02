@@ -4,13 +4,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-01
+last_reviewed: 2026-07-02
 related_docs:
   - ../workflow-lifecycle.md
-  - ../../design/active/ui-component-platform-generic-interaction-design.md
-  - ../../design/active/ui-component-platform-executable-interaction-story-design.md
-  - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
+  - ../../design/active/ui-component-platform-text-editing-design.md
 ---
 
 # Active Work
@@ -19,27 +17,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-013`
+ID: `PT-UI-COMPONENT-PLATFORM-014`
 
-Title: Overlay / Popup / Layering full implementation
+Title: Text Editing / Editable Text Behavior
 
-State: review on PR #44 after local validation gate passed
+State: planning/design intake after Phase 13 closeout
 
-Lifecycle state: `review`
+Lifecycle state: `active-planning`
 
-Owner: `ui_controls` owns reusable overlay declarations, ergonomic builders, base-control lowering, package descriptors, package validation, catalog projection, and inspection projection. `ui_input` owns normalized input facts only. `ui_runtime` owns package-backed runtime overlay intent formation, overlay session/stack state, placement, layer/focus/dismissal evidence, deterministic replay/report proof, renderer-neutral proof data, proof-frame projection, and no-bypass assertions through `ui_runtime::overlay`, not through `ui_runtime::input`. `ui_static_mount` owns static frame validation.
+Owner: `ui_controls` owns package-backed editable-text declarations, base-control text-editing lowering, package descriptors, package validation, catalog projection, and inspection projection. `ui_input` owns normalized keyboard, text, composition, focus, and selection facts only. `ui_runtime` owns renderer-neutral text-editing replay/report/caret/selection/composition/edit-intent/validation/suppression/focus/no-bypass evidence and proof-frame projection. `ui_static_mount` owns static frame validation. Host/product/editor/game layers own actual persistence, domain mutation, command routing, authored UI editing, app-specific editor policy, and product undo stacks.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `ARCHITECTURE.md`, `DEPENDENCY_RULES.md`, `DOMAIN_MAP.md`, `TESTING.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/workspace/planning/active-work.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/workspace/planning/completed-work.md`, `docs-site/src/content/docs/workspace/planning/decision-register.md`, and `docs-site/src/content/docs/design/active/ui-component-platform-overlay-popup-layering-design.md`.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `ARCHITECTURE.md`, `DEPENDENCY_RULES.md`, `DOMAIN_MAP.md`, `TESTING.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-overlay-popup-layering-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-text-editing-design.md`, `docs-site/src/content/docs/workspace/planning/active-work.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/workspace/planning/decision-register.md`, and `docs-site/src/content/docs/workspace/planning/completed-work.md`.
 
-Write scope: Continue PR #44 into the full Phase 13 implementation. Implement package-backed reusable overlay / popup / layering: control vocabulary, base-control lowering, package descriptors, package validation, catalog projection, inspection projection, runtime package-backed replay/report/proof, proof-frame projection, and static mount validation. Runtime overlay files must live under `domain/ui/ui_runtime/src/overlay/`. Do not implement UI Gallery, UI Designer, authored UI editing, command execution, product/editor/game mutation, full text editing, generic plugin framework, `foundation/meta`, shared plugin primitives, broad Workbench/provider redesign, backend renderer behavior, or world-space overlays.
+Write scope: Design/planning intake only. Maintain the canonical Phase 14 design and planning state. Do not implement Rust code until exact owner files, implementation scope, validation envelope, evidence expectation, and stop conditions are accepted. Do not add product/editor/game mutation, command execution, authored UI editing, UI Gallery, UI Designer, Workbench/provider redesign, rich text editor, code editor, app-specific undo/redo, dynamic plugin framework, `foundation/meta`, shared plugin primitives, overlay runtime changes unrelated to text editing, compatibility-only aliases/shims, or phase-shaped public API names.
 
-Validation expectation: Local validation passed on 2026-07-02 with the full Phase 13 gate from the canonical overlay design: `cargo fmt --all --check`, focused `cargo check`, package/catalog/inspection overlay tests, runtime package-backed overlay tests, static mount tests, docs validation, and `git diff --check`.
+Validation expectation: The eventual implementation gate is recorded in `ui-component-platform-text-editing-design.md` and includes focused checks/tests for `ui_controls`, `ui_input`, `ui_runtime`, `ui_static_mount`, `ui_story`, `runenwerk_editor`, text-editing package/catalog/inspection/runtime/static proof, docs validation, and `git diff --check`.
 
-Known blockers: No local validation blocker remains. Stop and revise scope if follow-up work requires files outside the canonical expected file list, editor shell surface registration, Workbench provider redesign, command execution in generic UI, product/editor/game mutation in generic UI, app-specific modal lifecycle in generic UI, full text editing, dynamic plugin framework, `foundation/meta`, generic plugin primitives, phase-shaped public API names, compatibility-only aliases/shims, or overlay behavior below `ui_runtime::input`.
+Known blockers: No Phase 13 closeout blocker remains. Phase 13 is completed through merged PR #44 at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Phase 14 implementation remains blocked until planning moves from `active-planning` to `active-implementation` with exact implementation scope, owner files, validation, evidence, and stop conditions.
 
-Next action: Review PR #44 and merge only after explicit instruction. After PR acceptance or merge, record Phase 13 completion truth before opening the next implementation phase.
+Next action: Review and accept, revise, or reject the Phase 14 design. Do not start implementation from this planning entry alone.
 
-Evidence: PR #43 is closed and merged into `main` at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. User correction on 2026-07-01 requires PR #44 to close the full Phase 13, not merge as design-only or partial implementation. PR #44 now has local green validation evidence for package-backed overlay declarations, base-control lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime package-backed replay/report/proof, static mount proof, and no-bypass evidence.
+Evidence: Main was inspected after PR #44 merge and is identical to merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Phase 13 completed evidence is recorded in completed work, roadmap, production track, decision register, and the overlay design. Current implementation inspection found read-only text-intent probe support, not full editable text behavior.
 
 ## Active-work rules
 
