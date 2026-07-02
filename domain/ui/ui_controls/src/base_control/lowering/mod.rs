@@ -2,6 +2,7 @@
 //! Crate: ui_controls
 
 pub(crate) mod accessibility;
+pub(crate) mod generic_text_support;
 pub(crate) mod input;
 pub(crate) mod inspection;
 pub(crate) mod interaction;
