@@ -10,6 +10,7 @@ related_docs:
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
+  - ../../design/active/ui-component-platform-surface2d-design.md
 ---
 
 # Roadmap
@@ -54,13 +55,13 @@ ID: `PT-UI-COMPONENT-PLATFORM-015`
 
 Title: Generic Text
 
-State: completed through merged PR #48
+State: completed through baseline PR #48 and hardening PR #49
 
 Lifecycle state: `completed`
 
 Authority: `ui-component-platform-generic-text-design.md`.
 
-Evidence: PR #48 merged into `main` at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. Implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680` contains the renderer-neutral Generic Text substrate, package-backed descriptors and validation, catalog and `TextDisplay` inspection projection, runtime proof report/frame, static mount proof, renderer-neutral frame/extract adaptation to `TextVisualRun` / `TextGlyph` evidence, and the migration away from the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path. Local validation passed on 2026-07-02 with `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`.
+Evidence: PR #48 merged into `main` at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. Implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680` contains the renderer-neutral Generic Text substrate, package-backed descriptors and validation, catalog and `TextDisplay` inspection projection, runtime proof report/frame, static mount proof, renderer-neutral frame/extract adaptation to `TextVisualRun` / `TextGlyph` evidence, and the migration away from the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path. PR #49 merged into `main` at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9` and completed the hardening pass: resolved source-run/cluster evidence, height overflow evidence, stable-ID constructors, homogeneous visual-run segmentation, `button_label()` policy cleanup, `text_emission` naming, Generic Text direction-policy inspection, and runtime output-emission splits. Final local validation passed on 2026-07-02 with the full Phase 15 cargo workspace/docs/diff gate.
 
 Next action: Keep as completed dependency.
 
@@ -76,9 +77,9 @@ Lifecycle state: `active-planning`
 
 Authority: `ui-component-platform-surface2d-design.md`.
 
-Evidence: Phase 15 Generic Text local closeout evidence exists on PR #48 and the validated implementation commit is recorded above. Phase 16 planning starts from the existing Surface2D design, which scopes generic surface identity, content/viewport bounds, world/screen transforms, pan, zoom, fit, selection rectangle, hover coordinate, pointer capture, gesture cancel/commit, overlays, diagnostic layers, grid/background vocabulary, large-content bounds, LOD readiness, and budget evidence.
+Evidence: Phase 15 Generic Text completed through PR #48 baseline and PR #49 hardening. Phase 16 planning starts from the existing Surface2D design, but that design must be refreshed before implementation to settle owner files, minimum implementation scope, validation envelope, no-mutation boundaries, accessibility/input acceptance, performance budget evidence, and the current relationship with existing `ui_surface` vocabulary. Typed App Composition is a proposed architecture reference only and does not authorize Phase 16 implementation.
 
-Next action: Review and refine Phase 16 design intake. Do not start implementation until planning records exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
+Next action: Harden the Phase 16 design intake. Do not start implementation until planning records exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
 
 ## Rules
 
