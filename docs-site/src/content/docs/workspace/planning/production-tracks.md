@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
+  - ../../design/active/ui-component-platform-generic-text-design.md
 ---
 
 # Production Tracks
@@ -50,8 +51,8 @@ Milestones:
 012 Generic interaction — completed through PR #43 and user validation report
 012A Executable interaction story — completed through PR #43 and user validation report
 013 Overlay / popup / layering — completed through PR #44 and local validation report
-014 Text Editing / Editable Text Behavior — review after recorded local implementation validation
-015 Generic text — future
+014 Text Editing / Editable Text Behavior — completed through PR #46 and local validation report
+015 Generic text — active-planning
 016 Surface2D — future
 017 SpatialCanvas — future
 018 NodeCanvas — future
@@ -67,19 +68,20 @@ Evidence gates:
 
 ```text
 Phase 13: PR #44 merged into main at merge commit 6f2d3827f315191d7aeaf68a64f523627197cad8. Local validation passed on 2026-07-02 with the full Phase 13 cargo/docs/diff gate.
-Phase 14: local implementation branch contains package-backed editable-text declarations, InspectorField lowering, descriptor validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, no-bypass evidence, and focused tests. Local validation passed on 2026-07-02 with the Phase 14 cargo/docs/diff gate recorded in active work. Completion is blocked until branch acceptance or merge.
+Phase 14: PR #46 merged into main at merge commit 6d9bf983c77a32c701681ff55a05e1f9ebcdeed1. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, ui_runtime::text_editing replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, and final proof-frame cleanup. Local validation passed on 2026-07-02 with the recorded Phase 14 cargo/docs/diff gate before merge.
+Phase 15: Generic Text is active planning for renderer-neutral text display/layout proof over text runs, inline spans, wrapping, alignment, truncation/ellipsis, line metrics, glyph/run evidence, catalog/inspection projection, visual proof, and static mount proof.
 ```
 
 Current blocker:
 
 ```text
-No Phase 13 blocker remains. No local Phase 14 implementation blocker remains. Phase 14 completion remains blocked until branch acceptance or merge and completion truth recording.
+No Phase 14 blocker remains. Phase 15 has not been implementation-authorized; planning must first settle exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
 ```
 
 Next action:
 
 ```text
-Review the Phase 14 implementation branch. After acceptance or merge, record Phase 14 completion truth before opening Phase 15 Generic Text.
+Review and refine the Phase 15 Generic Text design intake. Preserve future order 016+ unchanged.
 ```
 
 ## Track shape
