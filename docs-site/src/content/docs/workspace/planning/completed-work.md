@@ -26,6 +26,7 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-COMPONENT-PLATFORM-012A` Executable Interaction Story: completed 2026-06-30 through merged PR #43 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f` and user validation report.
 - `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation: completed 2026-07-02 through merged PR #44 at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`.
 - `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior: completed 2026-07-02 through merged PR #46 at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
+- `PT-UI-COMPONENT-PLATFORM-015` Generic Text: local implementation closeout validated 2026-07-02 on PR #48 branch `ui/generic-text-phase-15` at implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680`; PR readiness and merge commit remain pending PR workflow completion.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 
@@ -38,6 +39,18 @@ Validation: The full Phase 14 local validation gate passed on 2026-07-02 before 
 Known non-goals: Generic Text remains Phase 15 planning only. Rich text editor behavior, code editor behavior, product document buffers, undo/redo, clipboard integration, UI Designer, UI Gallery product surface, Workbench/provider redesign, dynamic plugin framework, `foundation/meta`, shared plugin primitives, product/editor/game mutation, authored UI editing, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
 
 Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-015` Generic Text as design/planning intake only. Do not start implementation until active planning records exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
+
+## PT-UI-COMPONENT-PLATFORM-015 evidence
+
+Evidence: PR #48 branch `ui/generic-text-phase-15` implements the renderer-neutral Generic Text substrate across `ui_text`, `ui_render_data`, `ui_controls`, `ui_runtime`, and `ui_static_mount`. The local closeout keeps text display separate from Phase 14 text editing; removes the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path; keeps `GlyphRunPrimitive` backed by `TextBlockLayoutResult` / `TextVisualRun` evidence; adds package-backed Generic Text descriptors, validation reasons, catalog projection, and `TextDisplay` inspection projection; migrates text-editing proof frames to visual-run evidence; and adds runtime/static-mount proof coverage.
+
+PR evidence: PR #48, `ui/generic-text-phase-15`, implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680`. Merge commit is pending PR #48 readiness and mergeability checks.
+
+Validation: The Phase 15 local validation gate passed on 2026-07-02 with `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`.
+
+Known non-goals: Renderer backend implementation, GPU atlas upload, OS font discovery, rich/code editor behavior, document buffers, undo/redo, clipboard, LSP/syntax highlighting, app localization policy, product/editor/game mutation, authored UI editing, UI Designer/Gallery product surface, Workbench/provider redesign, dynamic plugin framework, `foundation/meta`, shared plugin primitives, and compatibility-only public API shims remain out of scope.
+
+Follow-up: Complete PR #48 workflow by marking the PR ready for review only after docs validation stays green, then merge only if GitHub reports the PR mergeable. Record the merge commit after merge.
 
 ## Historical completed dependencies
 

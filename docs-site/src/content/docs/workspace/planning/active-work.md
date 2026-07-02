@@ -7,8 +7,8 @@ canonical: true
 last_reviewed: 2026-07-02
 related_docs:
   - ../workflow-lifecycle.md
-  - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
+  - ../../design/active/ui-component-platform-surface2d-design.md
 ---
 
 # Active Work
@@ -17,27 +17,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-015`
+ID: `PT-UI-COMPONENT-PLATFORM-016`
 
-Title: Generic Text
+Title: Surface2D
 
-State: active planning for renderer-neutral reusable text display and layout proof
+State: active planning for reusable renderer-neutral 2D coordinate and navigation surface contracts
 
 Lifecycle state: `active-planning`
 
-Owner: `ui_text` owns renderer-neutral text layout contracts, text runs, line metrics, glyph/run evidence, wrapping, alignment, truncation, and overflow vocabulary. `ui_controls` owns package-backed generic-text declarations, package validation, catalog projection, and inspection projection for reusable controls that display text. `ui_runtime` owns renderer-neutral visual proof-frame projection that consumes generic-text evidence without owning renderer backend policy. `ui_static_mount` owns static validation of the proof frame. Host/product/editor/game layers own app-specific copy policy, document buffers, authored UI editing, text editing, code editing, localization policy, font asset provisioning, and renderer backend implementation.
+Owner: `ui_controls` owns package-backed reusable control declarations and catalog/inspection projection. `ui_runtime` owns renderer-neutral proof-frame projection for runtime control surfaces. `ui_static_mount` owns static validation of proof frames. Phase 16 planning must settle the exact `Surface2D` owner split before implementation. Host/product/editor/game layers own app-specific canvas semantics, graph semantics, timeline semantics, command execution, authored UI editing, product mutation, and renderer backend implementation.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `ARCHITECTURE.md`, `DEPENDENCY_RULES.md`, `DOMAIN_MAP.md`, `TESTING.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-text-editing-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-text-design.md`, `docs-site/src/content/docs/workspace/planning/active-work.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/workspace/planning/decision-register.md`, and `docs-site/src/content/docs/workspace/planning/completed-work.md`.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `ARCHITECTURE.md`, `DEPENDENCY_RULES.md`, `DOMAIN_MAP.md`, `TESTING.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md`, `docs-site/src/content/docs/workspace/planning/active-work.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/workspace/planning/decision-register.md`, and `docs-site/src/content/docs/workspace/planning/completed-work.md`.
 
-Write scope: Design intake for reusable renderer-neutral text display/layout proof. The planning scope is text runs, inline spans, wrapping, alignment, truncation/ellipsis, line metrics, glyph/run evidence, package/catalog/inspection projection, visual proof, and static mount proof. Prefer docs-only planning until owner files, implementation scope, validation, evidence expectations, and stop conditions are exact.
+Write scope: Design intake for reusable renderer-neutral `Surface2D` coordinate/navigation proof. The planning scope is surface identity, content and viewport bounds, world/screen transforms, pan, zoom, fit, selection rectangle, hover coordinate, pointer capture, gesture cancel/commit, overlay/diagnostic layers, grid/background vocabulary, large-content bounds, LOD readiness, and budget evidence. Prefer docs-only planning until owner files, implementation scope, validation, evidence expectations, and stop conditions are exact.
 
-Validation expectation: Planning docs must pass `python tools/docs/validate_docs.py` and `git diff --check`. A later implementation gate must include focused checks/tests for `ui_text`, `ui_controls`, `ui_runtime`, `ui_static_mount`, `ui_story`, and any package/catalog/inspection/runtime/static proof that Phase 15 changes.
+Validation expectation: Planning docs must pass `python tools/docs/validate_docs.py` and `git diff --check`. A later implementation gate must include focused checks/tests for the selected `Surface2D` owner crates, package/catalog/inspection projection, runtime proof, static mount proof, and any affected renderer-neutral primitive data.
 
-Known blockers: No Phase 14 blocker remains. Phase 15 is not yet implementation-authorized. Text editing, rich text editor behavior, code editor behavior, product document buffers, undo/redo, clipboard, LSP/syntax highlighting, app-specific text rendering policy, dynamic plugin framework, `foundation/meta`, shared plugin primitives, UI Designer, UI Gallery product surface, Workbench/provider redesign, product/editor/game mutation, command execution, authored UI editing, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
+Known blockers: No Phase 15 implementation blocker remains in local validation. Phase 16 is not implementation-authorized. Graph semantics, timeline semantics, Gallery catalog semantics, editor commands, renderer backend resources, product/editor/game mutation, authored UI editing, Workbench/provider redesign, dynamic plugin framework, `foundation/meta`, shared plugin primitives, and phase-shaped public API names remain out of scope.
 
-Next action: Review and refine the Phase 15 Generic Text design intake. Do not start implementation until active planning is promoted with exact owner files, implementation scope, validation, evidence, and stop conditions.
+Next action: Review and refine the Phase 16 Surface2D design intake. Do not start implementation until active planning is promoted with exact owner files, implementation scope, validation, evidence, and stop conditions.
 
-Evidence: Phase 14 is completed through merged PR #46 at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Main was inspected after PR #46 merge and is identical to that merge commit. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, and focused tests. Local Phase 14 validation passed on 2026-07-02 with the recorded cargo/docs/diff gate before merge. The Phase 15 scope starts from the completed Phase 14 text-editing substrate but is display/layout-only.
+Evidence: Phase 15 Generic Text has local closeout evidence on PR #48 branch `ui/generic-text-phase-15` at implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680`. Validation passed on 2026-07-02 with `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`. Merge commit is pending PR #48 workflow completion.
 
 ## Active-work rules
 
