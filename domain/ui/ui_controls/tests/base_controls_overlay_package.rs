@@ -17,3 +17,12 @@ fn base_controls_package_exposes_overlay_descriptors_for_all_controls() {
         assert_eq!(descriptor.control_kind_id, kind.control_kind_id);
     }
 }
+
+#[test]
+fn base_controls_package_rejects_duplicate_overlay_descriptor() {
+    let mut package = runenwerk_control_package();
+    package
+        .overlay_descriptors
+        .push(package.overlay_descriptors[0].clone());
+    assert!(!package.validate_overlay_descriptors().is_valid());
+}
