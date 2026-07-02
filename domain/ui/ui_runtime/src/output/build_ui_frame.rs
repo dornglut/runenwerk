@@ -2,13 +2,16 @@
 //! Purpose: Convert retained tree + computed layout into UiFrame.
 
 use crate::{
-    ButtonNode, ComputedLayoutMap, DividerNode, GraphCanvasNode, ImageNode, LabelNode,
-    NumericInputNode, PanelNode, PopupNode, ProductSurfaceNode, RadialMenuNode, ScrollNode,
-    ScrollbarAxisOpacities, ScrollbarAxisTarget, SelectNode, TableNode, TabsNode, TextInputNode,
-    ToggleNode, TreeNode, UiNode, UiNodeKind, UiTree, ViewportSurfaceEmbedNode, WidgetId,
+    ButtonNode, ComputedLayoutMap, GraphCanvasNode, LabelNode, NumericInputNode, PanelNode,
+    PopupNode, RadialMenuNode, ScrollNode, ScrollbarAxisOpacities, ScrollbarAxisTarget,
+    SelectNode, TableNode, TabsNode, TextInputNode, ToggleNode, TreeNode, UiNode, UiNodeKind,
+    UiTree, WidgetId,
 };
 use std::collections::BTreeMap;
 
+use super::emit::surface::{
+    emit_divider, emit_image, emit_product_surface, emit_viewport_surface_embed,
+};
 use super::primitives::{
     brighten, darken, default_draw_key, paint_from_color, sort_key, with_alpha,
 };
@@ -16,14 +19,12 @@ use super::text::{clipped_text_layout, ellipsis_text_layout};
 use ui_math::{Axis, UiRect, UiSize};
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, GraphCanvasPrimitiveBatch,
-    GraphCanvasPrimitiveRole, ImagePrimitive, ProductSurfacePrimitive, RectPrimitive,
-    StrokePrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
-    UiSurface, UiSurfaceId, ViewportSurfaceEmbedPrimitive,
+    GraphCanvasPrimitiveRole, RectPrimitive, StrokePrimitive, UiDrawKey, UiFrame, UiLayer,
+    UiLayerId, UiPaint, UiPrimitive, UiSurface, UiSurfaceId,
 };
 use ui_text::{
-    AtlasTextLayouter, FontAtlasSource, TextBlockId, TextDirectionPolicy, TextEllipsisPlacement,
-    TextHorizontalAlign, TextLayoutPolicy, TextLayouter, TextOverflowPolicy, TextVerticalAlign,
-    TextWhitespacePolicy, TextWrapPolicy,
+    AtlasTextLayouter, FontAtlasSource, TextBlockId, TextHorizontalAlign, TextLayoutPolicy,
+    TextLayouter,
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -716,79 +717,6 @@ fn scroll_max_offset_for_axis(
             (content_width - viewport_width).max(0.0)
         }
     }
-}
-
-fn emit_viewport_surface_embed(
-    embed: &ViewportSurfaceEmbedNode,
-    bounds: UiRect,
-    _surface_size: UiSize,
-    layer: &mut UiLayer,
-    depth: u32,
-    primitive_order: &mut u32,
-) {
-    layer.push(UiPrimitive::ViewportSurfaceEmbed(
-        ViewportSurfaceEmbedPrimitive::new(
-            embed.viewport_id,
-            embed.slot,
-            bounds,
-            UiRect::new(0.0, 0.0, 1.0, 1.0),
-            UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
-            sort_key(depth, *primitive_order),
-        ),
-    ));
-    *primitive_order += 1;
-}
-
-fn emit_divider(
-    divider: &DividerNode,
-    bounds: UiRect,
-    layer: &mut UiLayer,
-    depth: u32,
-    primitive_order: &mut u32,
-) {
-    layer.push(UiPrimitive::Rect(RectPrimitive::new(
-        bounds,
-        0.0,
-        paint_from_color(divider.color),
-        default_draw_key(),
-        sort_key(depth, *primitive_order),
-    )));
-    *primitive_order += 1;
-}
-
-fn emit_image(
-    image: &ImageNode,
-    bounds: UiRect,
-    layer: &mut UiLayer,
-    depth: u32,
-    primitive_order: &mut u32,
-) {
-    layer.push(UiPrimitive::Image(ImagePrimitive::new(
-        bounds,
-        image.uv_rect,
-        image.tint,
-        image.draw_key,
-        sort_key(depth, *primitive_order),
-    )));
-    *primitive_order += 1;
-}
-
-fn emit_product_surface(
-    surface: &ProductSurfaceNode,
-    bounds: UiRect,
-    layer: &mut UiLayer,
-    depth: u32,
-    primitive_order: &mut u32,
-) {
-    layer.push(UiPrimitive::ProductSurface(ProductSurfacePrimitive::new(
-        surface.source.clone(),
-        bounds,
-        surface.uv_rect,
-        surface.tint,
-        surface.alpha_mode,
-        sort_key(depth, *primitive_order),
-    )));
-    *primitive_order += 1;
 }
 
 #[expect(
@@ -2094,8 +2022,8 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::{UiRuntimeState, WidgetId, compute_tree_layout};
-    use ui_render_data::ViewportSurfaceEmbedSlotId;
+    use crate::{UiRuntimeState, ViewportSurfaceEmbedNode, WidgetId, compute_tree_layout};
+    use ui_render_data::{UiSortKey, ViewportSurfaceEmbedSlotId};
     use ui_text::{
         FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas, TextEllipsisPlacement,
         TextLineHeightPolicy, TextOverflowPolicy, TextStyle,
