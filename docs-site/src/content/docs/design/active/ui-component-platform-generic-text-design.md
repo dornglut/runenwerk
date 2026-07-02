@@ -1,92 +1,171 @@
 ---
 title: UI Component Platform Generic Text Design
-description: Reusable text layout, editing, shaping, glyph evidence, accessibility labels, and fail-closed diagnostics.
+description: Phase 15 design intake for reusable renderer-neutral text display and layout proof.
 status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-06-24
+last_reviewed: 2026-07-02
 related_designs:
   - ./runenwerk-ui-platform-capability-roadmap.md
   - ./runenwerk-ui-story-driven-golden-workflow-design.md
   - ./editor-ui-runtime-v2-and-interaction-formation-design.md
+  - ./ui-component-platform-text-editing-design.md
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
-  - ../../workspace/production-milestone-register.md
+  - ../../workspace/planning/active-work.md
+  - ../../workspace/planning/roadmap.md
+  - ../../workspace/planning/production-tracks.md
+  - ../../workspace/planning/decision-register.md
 ---
 
 # UI Component Platform Generic Text Design
 
-## Status
+Lifecycle state: `active-planning`.
 
-This is an active design for the docs-only activation branch `feature/ui-component-platform-000-activation-vocabulary-ergonomics`. It records scope, vocabulary, and acceptance criteria. It does not authorize product code by itself.
+Planning ID: `PT-UI-COMPONENT-PLATFORM-015`.
 
-## Canonical Vocabulary
+Generic Text is the reusable renderer-neutral text display and layout proof for the UI Component Platform. It is display/layout infrastructure. It is not text editing, not a rich text editor, not a code editor, and not a product document surface.
 
-- `ControlPackage` - packaged reusable control family with schema, states, interactions, diagnostics, fixtures, stories, accessibility, tokens, render facts, and host routes.
-- `control kernel` - shared contract every control package follows.
-- `control authoring kit` - templates, naming conventions, checklists, and examples that make new controls easy to add correctly.
-- `component story matrix` - story-proven normal, edge, failure, accessibility, interaction, layout, text, mount, and render states for a package.
-- `story proof envelope` - `UiStoryRunReport`, evidence records, expected-failure matching, CLI/Gallery report projection, and mount eligibility.
-- `catalog/discovery/inspection contract` - searchable and filterable metadata used by Gallery, UI Designer, docs, and Workbench consumers.
-- `host intent proposal` - UI output that proposes host action without mutating app/editor/game truth.
-- `route/capability decision` - host-owned authorization result for a proposed route or action.
-- `state bucket` - named ownership class for transient, preview, committed, focus, hover, drag, animation, host-fed, or package-owned state.
-- `Surface2D` - generic 2D coordinate/navigation primitive.
-- `SpatialCanvas` - generic positioned-item surface built on `Surface2D`.
-- `NodeCanvas` - generic node/link surface built on `SpatialCanvas`.
-- `PortGraphCanvas` - editable port/socket graph specialization built on `NodeCanvas`.
-- `ProgressionTreeView` - reusable skill/tech/progression tree package built on `NodeCanvas`, without gameplay rule ownership.
-- `TrackSurface` - generic time/track surface; `Timeline` and `CurveEditor` specialize it.
+## Decision summary
 
-## Non-Negotiable Rules
+Text display/layout should become package-visible, inspectable, proof-frame-visible, and static-mount-validatable in the same owner-first style as generic interaction, overlay/layering, and editable text.
 
-- General kernels come before specializations.
-- Story proof comes before mount eligibility.
-- Control packages come before product-specific surfaces.
-- `Surface2D` must not collapse into Gallery or GraphCanvas.
-- `NodeCanvas` must not contain ports or graph-editor commands.
-- `PortGraphCanvas` must not own graph/domain truth.
-- `ProgressionTreeView` must not own gameplay/progression rules, point spending, persistence, or mutation.
-- `TrackSurface` must not inherit graph semantics.
-- Host/app/editor/game mutation remains outside `domain/ui` through explicit host intent or command paths.
-- UI Story owns proof orchestration only.
-- Gallery, Workbench, and UI Designer consume platform contracts; they do not own reusable control semantics.
-- Renderer output remains backend-neutral and must not become UI source truth.
+The phase should prove that reusable controls can declare and expose text display requirements without requiring a renderer backend, product document buffer, authored UI editor, UI Gallery product surface, or app-specific text rendering policy.
 
-## Decision
+## Problem
 
-Text becomes story-proven infrastructure with renderer-facing shaped/glyph evidence.
+Current text evidence exists in limited renderer-neutral primitives and proof frames. That is not yet a reusable Generic Text platform proof.
 
-## Feature List
+Phase 15 must make text display/layout behavior explicit enough that future controls can rely on consistent text runs, inline spans, wrapping, alignment, truncation, line metrics, glyph/run evidence, catalog projection, inspection projection, visual proof, and static mount proof.
 
-- static and dynamic labels
-- single-line and editable text path
-- overflow, wrapping, truncation
-- accessibility labels
-- shaped text and glyph-run primitive evidence
-- unsupported shaping/font/language/editing expected failures
+The failure mode to avoid is treating a simple glyph run as the whole text platform. Generic Text must prove layout behavior and evidence, not only character emission.
 
-## Ergonomics Gate
+## Goals
 
-Text failures point to font, shaping, language, or editing limitations rather than vague render mismatch.
+- Define reusable renderer-neutral text display/layout vocabulary.
+- Cover text runs and inline spans without implementing rich text editing.
+- Cover wrapping, alignment, truncation, and ellipsis behavior.
+- Cover line metrics including baseline, line-height evidence, and measured content size.
+- Emit glyph/run evidence that is stable enough for visual proof and static mount validation.
+- Make generic text capability visible through package validation, catalog projection, and inspection projection.
+- Provide a renderer-neutral visual proof frame that shows text layout state and evidence.
+- Add static mount proof for the generic text frame.
+- Preserve clean owner boundaries between `ui_text`, `ui_controls`, `ui_runtime`, `ui_static_mount`, renderer backends, and product/editor/game layers.
+- Avoid public phase-shaped API names and compatibility-only aliases/shims.
 
-## Out Of Scope
+## Explicit non-goals
 
-- game HUD vocabulary
-- world-space label binding
-- Designer/Workbench product copy workflows
+This phase does not implement or authorize text editing, rich text editor behavior, code editor behavior, product document buffers, undo/redo, clipboard integration, LSP/syntax highlighting, app-specific text rendering policy, renderer backend implementation, dynamic plugin framework, `foundation/meta`, shared plugin primitives, UI Designer, UI Gallery product surface, Workbench/provider redesign, product/editor/game mutation, command execution, authored UI editing, compatibility-only aliases/shims, or phase-shaped public API names.
 
-## Validation
+## Owner boundaries
 
-Run the branch-level docs and production validation before implementation:
+`ui_text` owns renderer-neutral text display/layout contracts and evidence vocabulary. Phase 15 planning should inspect whether current `TextLayoutRequest`, `GlyphRun`, `PositionedGlyph`, `TextStyle`, wrapping, alignment, overflow, and atlas-backed layout contracts are sufficient or need clean cutover changes.
+
+`ui_controls` owns package-backed generic-text declarations, package validation, catalog projection, and inspection projection for reusable controls that display text.
+
+`ui_runtime` owns renderer-neutral generic-text proof reporting and proof-frame projection.
+
+`ui_static_mount` owns static validation of the renderer-neutral generic-text proof frame.
+
+Renderer backends may later consume text layout/glyph evidence, but backend implementation is not Phase 15 scope.
+
+Host/product/editor/game layers own app-specific copy, localization policy, persistence, document buffers, authored UI editing, code editing, undo/redo, commands, and domain mutation.
+
+## Planning scope
+
+The accepted implementation scope should be limited to a vertical proof for:
 
 ```text
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task docs:validate
-task production:validate
-cargo fmt --all --check
+ui_text text run/span/layout vocabulary
+  -> ui_controls package-backed generic-text declaration
+  -> package validation
+  -> catalog projection
+  -> inspection projection
+  -> generic text layout evidence
+  -> generic text visual proof
+  -> GenericTextProofRenderFrame / UiFrame
+  -> ui_static_mount validation
 ```
+
+Exact file scope must be recorded before implementation starts. Candidate owner areas to inspect during planning:
+
+```text
+domain/ui/ui_text/src/layout.rs
+domain/ui/ui_text/src/style.rs
+domain/ui/ui_text/src/buffer.rs
+domain/ui/ui_controls/src/package/descriptor.rs
+domain/ui/ui_controls/src/package/validation.rs
+domain/ui/ui_controls/src/catalog/entry.rs
+domain/ui/ui_controls/src/catalog/inspection.rs
+domain/ui/ui_runtime/src/
+domain/ui/ui_static_mount/tests/
+```
+
+These candidates are inspection targets for the design intake, not blanket authorization to edit all of them.
+
+## Required design details before implementation
+
+Before moving to `active-implementation`, the design must specify:
+
+- stable public vocabulary for text runs and inline spans;
+- exact wrapping model;
+- exact alignment model;
+- truncation and ellipsis policy;
+- line metric evidence;
+- glyph/run evidence needed for visual proof;
+- package descriptor shape and validation failure modes;
+- catalog facts and inspection facts;
+- visual proof structure and static mount expectations;
+- tests that prove positive, negative, and no-bypass behavior;
+- explicit stop conditions.
+
+## Proof requirements
+
+Phase 15 should prove:
+
+- at least one package-backed text display declaration;
+- at least one simple text run;
+- at least one inline span scenario;
+- no-wrap layout;
+- wrapping layout;
+- horizontal alignment;
+- truncation and ellipsis;
+- line metrics and measured size evidence;
+- glyph/run evidence with stable draw order;
+- catalog projection;
+- inspection projection;
+- visual proof frame with text layout evidence;
+- static mount acceptance of the renderer-neutral proof frame;
+- rejection or diagnostics for unsupported text layout declarations;
+- no product/editor/game mutation;
+- no command execution;
+- no authored UI editing;
+- no text editing behavior;
+- no dynamic plugin or `foundation/meta` dependency.
+
+## Ergonomics requirements
+
+Generic Text should be easy for future control authors to consume. The implementation should avoid repeated manual layout/proof boilerplate by providing narrow builders, fixtures, or helper constructors where they improve clarity.
+
+The design should prefer a clean cutover if existing text contracts are too narrow. Do not add compatibility-only aliases or maintain parallel legacy vocabulary.
+
+## Stop conditions
+
+Stop and redesign if Phase 15 requires text editing behavior, rich text editor behavior, code editor behavior, product document buffer ownership, command execution inside generic UI, product/editor/game mutation, authored UI editing, UI Designer, UI Gallery product surface, Workbench/provider redesign, renderer backend ownership inside `ui_text`, `ui_controls`, or `ui_runtime`, dynamic plugin framework, `foundation/meta`, shared plugin primitives, compatibility-only aliases/shims, or phase-shaped public API names.
+
+## Validation planning
+
+Docs-only planning changes must pass:
+
+```text
+python tools/docs/validate_docs.py
+git diff --check
+```
+
+A later implementation gate must be recorded before promotion to `active-implementation`. It should include focused checks/tests for `ui_text`, `ui_controls`, `ui_runtime`, `ui_static_mount`, `ui_story`, package/catalog/inspection projection, visual proof, and static mount proof.
+
+## Relationship to completed work
+
+Phase 14 is completed through PR #46 and remains the editable-text behavior proof. Phase 15 builds adjacent display/layout infrastructure. It must not reopen Phase 14 text editing scope.
