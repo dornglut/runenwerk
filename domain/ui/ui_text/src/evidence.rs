@@ -179,6 +179,7 @@ pub struct TextBlockLayoutResult {
     pub block_id: TextBlockId,
     pub input_run_count: usize,
     pub resolved_run_count: usize,
+    pub resolved_cluster_count: usize,
     pub line_count: usize,
     pub glyph_run_count: usize,
     pub glyph_count: usize,

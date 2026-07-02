@@ -89,14 +89,20 @@ pub fn layout_text_block(
         }
     }
 
+    let content_height = lines.iter().map(line_height).sum::<f32>();
     let horizontal_overflow = width_limit.is_some_and(|limit| {
         lines
             .iter()
             .any(|line| line_width(&line.glyphs) > limit + f32::EPSILON)
     });
+    let height_overflow = block
+        .layout
+        .height_constraint
+        .limit()
+        .is_some_and(|limit| content_height > limit + f32::EPSILON);
     let mut overflow = TextOverflowEvidence::none();
     overflow.horizontal_overflow = horizontal_overflow;
-    overflow.vertical_overflow = max_lines_applied;
+    overflow.vertical_overflow = max_lines_applied || height_overflow;
     overflow.max_lines_applied = max_lines_applied;
     overflow.omitted_cluster_count = source
         .len()
@@ -116,8 +122,11 @@ pub fn layout_text_block(
         overflow.ellipsized = true;
         overflow.ellipsis_placement = Some(TextEllipsisPlacement::End);
     } else if matches!(block.layout.overflow, TextOverflowPolicy::Clip)
-        && (horizontal_overflow || max_lines_applied)
+        && (horizontal_overflow || max_lines_applied || height_overflow)
     {
+        overflow.clipped = true;
+    }
+    if height_overflow {
         overflow.clipped = true;
     }
     overflow.visible_source_range = visible_range(&lines);
@@ -134,15 +143,12 @@ pub fn layout_text_block(
         .iter()
         .map(|run| run.glyphs.len())
         .sum::<usize>();
-    let content_height = line_metrics
-        .iter()
-        .map(|line| line.line_height)
-        .sum::<f32>();
 
     TextBlockLayoutResult {
         block_id: block.text_block_id,
         input_run_count: block.runs.len(),
-        resolved_run_count: source.len(),
+        resolved_run_count: resolved_run_count(&source),
+        resolved_cluster_count: source.len(),
         line_count: line_metrics.len(),
         glyph_run_count: visual_runs.len(),
         glyph_count,
@@ -169,6 +175,7 @@ fn empty_result(block: TextBlock, diagnostics: Vec<TextLayoutDiagnostic>) -> Tex
         block_id: block.text_block_id,
         input_run_count: 0,
         resolved_run_count: 0,
+        resolved_cluster_count: 0,
         line_count: 0,
         glyph_run_count: 0,
         glyph_count: 0,
@@ -439,6 +446,37 @@ fn line_width(line: &[ProofGlyph]) -> f32 {
     line.iter().map(|glyph| glyph.advance).sum()
 }
 
+fn line_dimensions(line: &ProofLine) -> (f32, f32, f32) {
+    let ascent = line
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.ascent)
+        .fold(0.0, f32::max);
+    let descent = line
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.descent)
+        .fold(0.0, f32::max);
+    let height = line
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.line_height)
+        .fold((ascent + descent).max(1.0), f32::max);
+    (ascent, descent, height)
+}
+
+fn line_height(line: &ProofLine) -> f32 {
+    line_dimensions(line).2
+}
+
+fn resolved_run_count(source: &[ProofGlyph]) -> usize {
+    source
+        .iter()
+        .map(|glyph| glyph.cluster.run_id)
+        .collect::<std::collections::BTreeSet<TextRunId>>()
+        .len()
+}
+
 fn line_metrics(
     block: &TextBlock,
     lines: &[ProofLine],
@@ -449,21 +487,7 @@ fn line_metrics(
     let mut metrics = Vec::new();
     for (line_index, line) in lines.iter().enumerate() {
         let width = line_width(&line.glyphs);
-        let ascent = line
-            .glyphs
-            .iter()
-            .map(|glyph| glyph.ascent)
-            .fold(0.0, f32::max);
-        let descent = line
-            .glyphs
-            .iter()
-            .map(|glyph| glyph.descent)
-            .fold(0.0, f32::max);
-        let height = line
-            .glyphs
-            .iter()
-            .map(|glyph| glyph.line_height)
-            .fold((ascent + descent).max(1.0), f32::max);
+        let (ascent, descent, height) = line_dimensions(line);
         let x = match block.layout.horizontal_align {
             TextHorizontalAlign::Start => 0.0,
             TextHorizontalAlign::Center => ((resolved_width - width) * 0.5).max(0.0),

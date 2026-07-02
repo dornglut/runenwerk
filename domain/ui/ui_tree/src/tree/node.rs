@@ -7,7 +7,7 @@ use ui_render_data::{
     ProductSurfaceAlphaMode, ProductSurfaceTextureBindingSource, UiDrawKey, UiPaint,
     ViewportSurfaceEmbedSlotId,
 };
-use ui_text::TextStyle;
+use ui_text::{TextDirectionPolicy, TextLayoutPolicy, TextStyle, TextVerticalAlign};
 use ui_theme::{ThemeTokens, UiColor};
 
 use crate::WidgetId;
@@ -350,6 +350,7 @@ impl PanelNode {
 pub struct LabelNode {
     pub text: String,
     pub text_style: TextStyle,
+    pub text_layout: TextLayoutPolicy,
     pub constraints: LayoutConstraints,
 }
 
@@ -358,8 +359,19 @@ impl LabelNode {
         Self {
             text: text.into(),
             text_style,
+            text_layout: TextLayoutPolicy {
+                vertical_align: TextVerticalAlign::Center,
+                max_lines: Some(1),
+                text_direction: TextDirectionPolicy::Ltr,
+                ..TextLayoutPolicy::no_wrap_label()
+            },
             constraints: LayoutConstraints::loose(UiSize::new(f32::MAX, f32::MAX)),
         }
+    }
+
+    pub fn with_text_layout(mut self, text_layout: TextLayoutPolicy) -> Self {
+        self.text_layout = text_layout;
+        self
     }
 }
 
@@ -368,6 +380,7 @@ pub struct ButtonNode {
     pub label: String,
     pub accessible_label: Option<String>,
     pub text_style: TextStyle,
+    pub text_layout: TextLayoutPolicy,
     pub padding: UiInsets,
     pub min_size: UiSize,
     pub theme: ThemeTokens,
@@ -393,6 +406,7 @@ impl ButtonNode {
             label: label.into(),
             accessible_label: None,
             text_style,
+            text_layout: TextLayoutPolicy::badge(f32::MAX),
             padding,
             min_size: UiSize::new(
                 (theme.spacing.xl * 2.0).max(32.0),
@@ -407,6 +421,11 @@ impl ButtonNode {
             fill_width: false,
             reveal_on_hover_anchor: None,
         }
+    }
+
+    pub fn with_text_layout(mut self, text_layout: TextLayoutPolicy) -> Self {
+        self.text_layout = text_layout;
+        self
     }
 }
 

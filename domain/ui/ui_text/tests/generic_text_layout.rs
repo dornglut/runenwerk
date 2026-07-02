@@ -2,19 +2,57 @@ use std::collections::HashMap;
 
 use ui_text::{
     AtlasTextLayouter, FontAtlasSource, FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas,
-    TextBlock, TextBlockLayoutRequest, TextDecoration, TextDirectionPolicy, TextEllipsisPlacement,
-    TextHorizontalAlign, TextLayoutPolicy, TextLayouter, TextOverflowPolicy, TextSemanticRole,
-    TextSourceRange, TextSpan, TextSpanId, TextSpanStyle, TextWhitespacePolicy,
-    TextWidthConstraint, TextWrapPolicy,
+    TextBlock, TextBlockId, TextBlockLayoutRequest, TextDecoration, TextDirectionPolicy,
+    TextEllipsisPlacement, TextHeightConstraint, TextHorizontalAlign, TextLayoutPolicy,
+    TextLayouter, TextOverflowPolicy, TextRun, TextRunId, TextSemanticRole, TextSourceRange,
+    TextSpan, TextSpanId, TextSpanStyle, TextStyle, TextWhitespacePolicy, TextWidthConstraint,
+    TextWrapPolicy,
 };
 
 #[test]
 fn simple_label_emits_line_metrics_and_glyph_evidence() {
     let result = layout(TextBlock::label("Label"));
     assert_eq!(result.input_run_count, 1);
+    assert_eq!(result.resolved_run_count, 1);
+    assert_eq!(result.resolved_cluster_count, 5);
     assert_eq!(result.line_count, 1);
     assert_eq!(result.glyph_count, 5);
     assert_eq!(result.line_metrics[0].baseline_y, 10.5);
+}
+
+#[test]
+fn ergonomic_constructors_accept_stable_source_ids() {
+    let result = layout(TextBlock::label_with_id(
+        TextBlockId(42),
+        TextRunId(7),
+        "Label",
+    ));
+    assert_eq!(result.block_id, TextBlockId(42));
+    assert!(
+        result
+            .clusters
+            .iter()
+            .all(|cluster| cluster.run_id == TextRunId(7))
+    );
+    assert!(
+        result
+            .visual_runs
+            .iter()
+            .flat_map(|run| run.glyphs.iter())
+            .all(|glyph| glyph.run_id == TextRunId(7))
+    );
+}
+
+#[test]
+fn resolved_run_count_counts_source_runs_not_clusters() {
+    let result = layout(
+        TextBlock::new(TextBlockId(9), TextStyle::default())
+            .with_run(TextRun::new(TextRunId(3), "ab"))
+            .with_run(TextRun::new(TextRunId(4), "cd")),
+    );
+    assert_eq!(result.input_run_count, 2);
+    assert_eq!(result.resolved_run_count, 2);
+    assert_eq!(result.resolved_cluster_count, 4);
 }
 
 #[test]
@@ -125,6 +163,18 @@ fn max_line_clamp_is_recorded_before_ellipsis() {
     assert_eq!(result.line_count, 1);
     assert!(result.overflow_evidence.max_lines_applied);
     assert!(result.overflow_evidence.ellipsized);
+}
+
+#[test]
+fn height_constraint_overflow_is_recorded_without_max_line_clamp() {
+    let result = layout(TextBlock::label("one\ntwo").with_layout(TextLayoutPolicy {
+        height_constraint: TextHeightConstraint::Max(8.0),
+        overflow: TextOverflowPolicy::Clip,
+        ..TextLayoutPolicy::default()
+    }));
+    assert!(result.overflow_evidence.vertical_overflow);
+    assert!(result.overflow_evidence.clipped);
+    assert!(!result.overflow_evidence.max_lines_applied);
 }
 
 #[test]

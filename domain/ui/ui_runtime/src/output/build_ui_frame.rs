@@ -16,8 +16,9 @@ use ui_render_data::{
     UiSurface, UiSurfaceId, ViewportSurfaceEmbedPrimitive,
 };
 use ui_text::{
-    AtlasTextLayouter, FontAtlasSource, TextBlockId, TextHorizontalAlign, TextLayouter,
-    TextVerticalAlign,
+    AtlasTextLayouter, FontAtlasSource, TextBlockId, TextDirectionPolicy, TextEllipsisPlacement,
+    TextHorizontalAlign, TextLayoutPolicy, TextLayouter, TextOverflowPolicy, TextVerticalAlign,
+    TextWhitespacePolicy, TextWrapPolicy,
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -74,6 +75,39 @@ pub fn build_ui_frame(
         surface_size,
         vec![layer],
     )])
+}
+
+fn single_line_text_layout(
+    horizontal_align: TextHorizontalAlign,
+    vertical_align: TextVerticalAlign,
+    overflow: TextOverflowPolicy,
+) -> TextLayoutPolicy {
+    TextLayoutPolicy {
+        wrap: TextWrapPolicy::NoWrap,
+        whitespace: TextWhitespacePolicy::Preserve,
+        horizontal_align,
+        vertical_align,
+        overflow,
+        max_lines: Some(1),
+        text_direction: TextDirectionPolicy::Ltr,
+        ..TextLayoutPolicy::default()
+    }
+}
+
+fn clipped_text_layout(horizontal_align: TextHorizontalAlign) -> TextLayoutPolicy {
+    single_line_text_layout(
+        horizontal_align,
+        TextVerticalAlign::Center,
+        TextOverflowPolicy::Clip,
+    )
+}
+
+fn ellipsis_text_layout(horizontal_align: TextHorizontalAlign) -> TextLayoutPolicy {
+    single_line_text_layout(
+        horizontal_align,
+        TextVerticalAlign::Center,
+        TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
+    )
 }
 
 #[expect(
@@ -134,7 +168,6 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
-            TextHorizontalAlign::Start,
             node_layer_order,
             primitive_order,
         ),
@@ -959,6 +992,7 @@ fn emit_graph_canvas(
         let label = LabelNode {
             text: node.title.clone(),
             text_style: graph_canvas.text_style.clone(),
+            text_layout: ellipsis_text_layout(TextHorizontalAlign::Start),
             constraints: ui_layout::LayoutConstraints::tight(label_rect.size()),
         };
         emit_label(
@@ -967,7 +1001,6 @@ fn emit_graph_canvas(
             layer,
             atlas_source,
             layouter,
-            TextHorizontalAlign::Start,
             depth,
             primitive_order,
         );
@@ -1015,6 +1048,7 @@ fn emit_graph_canvas(
         let label = LabelNode {
             text: port.label.clone(),
             text_style: port_text_style,
+            text_layout: ellipsis_text_layout(port_text_align),
             constraints: ui_layout::LayoutConstraints::tight(label_rect.size()),
         };
         emit_label(
@@ -1023,7 +1057,6 @@ fn emit_graph_canvas(
             layer,
             atlas_source,
             layouter,
-            port_text_align,
             depth,
             primitive_order,
         );
@@ -1261,6 +1294,7 @@ fn emit_button(
     emit_button_label(
         &button.label,
         &button_text_style(button, interaction),
+        button.text_layout,
         text_rect,
         layer,
         atlas_source,
@@ -1286,6 +1320,7 @@ fn button_radius(button: &ButtonNode, bounds: UiRect) -> f32 {
 fn emit_button_label(
     text: &str,
     text_style: &ui_text::TextStyle,
+    text_layout: TextLayoutPolicy,
     bounds: UiRect,
     layer: &mut UiLayer,
     atlas_source: &dyn FontAtlasSource,
@@ -1300,8 +1335,7 @@ fn emit_button_label(
         text,
         text_style,
         bounds,
-        TextHorizontalAlign::Center,
-        TextVerticalAlign::Center,
+        text_layout,
     );
 
     layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
@@ -1388,6 +1422,7 @@ fn emit_text_input(
     let label = LabelNode {
         text,
         text_style,
+        text_layout: clipped_text_layout(TextHorizontalAlign::Start),
         constraints: ui_layout::LayoutConstraints::tight(content_bounds.size()),
     };
     emit_label(
@@ -1396,7 +1431,6 @@ fn emit_text_input(
         layer,
         atlas_source,
         layouter,
-        TextHorizontalAlign::Start,
         depth,
         primitive_order,
     );
@@ -1485,6 +1519,7 @@ fn emit_toggle(
     let label = LabelNode {
         text: toggle.label.clone(),
         text_style: toggle.text_style.clone(),
+        text_layout: ellipsis_text_layout(TextHorizontalAlign::Start),
         constraints: ui_layout::LayoutConstraints::tight(text_bounds.size()),
     };
     emit_label(
@@ -1493,7 +1528,6 @@ fn emit_toggle(
         layer,
         atlas_source,
         layouter,
-        TextHorizontalAlign::Start,
         depth,
         primitive_order,
     );
@@ -1558,6 +1592,7 @@ fn emit_numeric_input(
     let label = LabelNode {
         text: value_text,
         text_style: numeric.text_style.clone(),
+        text_layout: clipped_text_layout(TextHorizontalAlign::Start),
         constraints: ui_layout::LayoutConstraints::tight(content_bounds.size()),
     };
     emit_label(
@@ -1566,7 +1601,6 @@ fn emit_numeric_input(
         layer,
         atlas_source,
         layouter,
-        TextHorizontalAlign::Start,
         depth,
         primitive_order,
     );
@@ -1658,6 +1692,7 @@ fn emit_tabs(
         let label = LabelNode {
             text: label_text.clone(),
             text_style: style,
+            text_layout: ellipsis_text_layout(TextHorizontalAlign::Center),
             constraints: ui_layout::LayoutConstraints::tight(tab_bounds.size()),
         };
         emit_label(
@@ -1666,7 +1701,6 @@ fn emit_tabs(
             layer,
             atlas_source,
             layouter,
-            TextHorizontalAlign::Center,
             depth,
             primitive_order,
         );
@@ -1735,6 +1769,7 @@ fn emit_select(
     let label = LabelNode {
         text: format!("{text} v"),
         text_style: select.text_style.clone(),
+        text_layout: ellipsis_text_layout(TextHorizontalAlign::Start),
         constraints: ui_layout::LayoutConstraints::tight(content_bounds.size()),
     };
     emit_label(
@@ -1743,7 +1778,6 @@ fn emit_select(
         layer,
         atlas_source,
         layouter,
-        TextHorizontalAlign::Start,
         depth,
         primitive_order,
     );
@@ -1949,6 +1983,7 @@ fn emit_tree(
         let label = LabelNode {
             text,
             text_style: tree.text_style.clone(),
+            text_layout: ellipsis_text_layout(TextHorizontalAlign::Start),
             constraints: ui_layout::LayoutConstraints::tight(label_bounds.size()),
         };
         emit_label(
@@ -1957,7 +1992,6 @@ fn emit_tree(
             layer,
             atlas_source,
             layouter,
-            TextHorizontalAlign::Start,
             depth,
             primitive_order,
         );
@@ -2000,6 +2034,7 @@ fn emit_table_cells(
         let label = LabelNode {
             text: cell_text.to_string(),
             text_style: text_style.clone(),
+            text_layout: ellipsis_text_layout(TextHorizontalAlign::Start),
             constraints: ui_layout::LayoutConstraints::tight(cell_bounds.size()),
         };
         emit_label(
@@ -2008,7 +2043,6 @@ fn emit_table_cells(
             layer,
             atlas_source,
             layouter,
-            TextHorizontalAlign::Start,
             depth,
             primitive_order,
         );
@@ -2022,7 +2056,6 @@ fn emit_label(
     layer: &mut UiLayer,
     atlas_source: &dyn FontAtlasSource,
     layouter: &dyn TextLayouter,
-    horizontal_align: TextHorizontalAlign,
     depth: u32,
     primitive_order: &mut u32,
 ) {
@@ -2033,8 +2066,7 @@ fn emit_label(
         &label.text,
         &label.text_style,
         bounds,
-        horizontal_align,
-        TextVerticalAlign::Center,
+        label.text_layout,
     );
 
     layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
@@ -2132,7 +2164,8 @@ mod tests {
     use crate::{UiRuntimeState, WidgetId, compute_tree_layout};
     use ui_render_data::ViewportSurfaceEmbedSlotId;
     use ui_text::{
-        FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas, TextLineHeightPolicy, TextStyle,
+        FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas, TextEllipsisPlacement,
+        TextLineHeightPolicy, TextOverflowPolicy, TextStyle,
     };
     use ui_theme::ThemeTokens;
 
@@ -2948,6 +2981,47 @@ mod tests {
         assert!(
             (glyph.origin.y - 12.0).abs() <= 0.001,
             "normal labels should keep typographic line-box centering"
+        );
+    }
+
+    #[test]
+    fn label_node_text_layout_policy_drives_runtime_overflow() {
+        let atlas_source = TestAtlasSource {
+            atlas: atlas_with_ascii(FontId(1)),
+        };
+        let style = TextStyle {
+            font_id: FontId(1),
+            font_size: 12.0,
+            line_height: TextLineHeightPolicy::Absolute(12.0),
+            ..TextStyle::default()
+        };
+        let mut label = LabelNode::new("overflowing label", style);
+        label.constraints = ui_layout::LayoutConstraints::tight(UiSize::new(28.0, 18.0));
+        label.text_layout.overflow = TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End);
+
+        let tree = UiTree::new(UiNode::new(WidgetId(242), UiNodeKind::Label(label)));
+        let bounds = UiRect::new(0.0, 0.0, 28.0, 18.0);
+        let layouts = compute_tree_layout(&tree, bounds, &UiRuntimeState::default());
+        let frame = build_ui_frame(
+            &tree,
+            &layouts,
+            bounds.size(),
+            InteractionVisualState::default(),
+            &atlas_source,
+        );
+        let run = frame.surfaces[0].layers[0]
+            .primitives
+            .iter()
+            .find_map(|primitive| match primitive {
+                UiPrimitive::GlyphRun(run) => Some(run),
+                _ => None,
+            })
+            .expect("label should emit a glyph run");
+
+        assert!(run.overflow_evidence.ellipsized);
+        assert_eq!(
+            run.overflow_evidence.ellipsis_placement,
+            Some(TextEllipsisPlacement::End)
         );
     }
 
