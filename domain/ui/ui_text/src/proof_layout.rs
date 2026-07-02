@@ -22,6 +22,13 @@ struct ProofGlyph {
     replacement: bool,
 }
 
+#[derive(Clone, Default)]
+struct ProofLine {
+    glyphs: Vec<ProofGlyph>,
+    wrapped_from_previous: bool,
+    explicit_break: bool,
+}
+
 pub fn layout_text_block(
     atlas_source: &dyn FontAtlasSource,
     request: TextBlockLayoutRequest,
@@ -63,11 +70,10 @@ pub fn layout_text_block(
         collapse_horizontal_spaces(&mut source);
     }
     let width_limit = block.layout.width_constraint.limit();
-    let mut lines = break_lines(&block, &source, width_limit);
+    let mut lines = break_lines(&block, &source, width_limit, &mut diagnostics);
     if block.layout.whitespace == TextWhitespacePolicy::TrimEdges {
         trim_line_edges(&mut lines);
     }
-    let original_line_count = lines.len();
     let max_lines_applied = block
         .layout
         .max_lines
@@ -84,13 +90,15 @@ pub fn layout_text_block(
     }
 
     let horizontal_overflow = width_limit.is_some_and(|limit| {
-        lines.iter().any(|line| line_width(line) > limit + f32::EPSILON)
+        lines.iter().any(|line| line_width(&line.glyphs) > limit + f32::EPSILON)
     });
     let mut overflow = TextOverflowEvidence::none();
     overflow.horizontal_overflow = horizontal_overflow;
     overflow.vertical_overflow = max_lines_applied;
     overflow.max_lines_applied = max_lines_applied;
-    overflow.omitted_cluster_count = source.len().saturating_sub(lines.iter().map(Vec::len).sum()) as u32;
+    overflow.omitted_cluster_count = source
+        .len()
+        .saturating_sub(lines.iter().map(|line| line.glyphs.len()).sum()) as u32;
     overflow.omitted_run_count = omitted_run_count(&block, &lines);
 
     let end_ellipsis = matches!(
@@ -99,7 +107,11 @@ pub fn layout_text_block(
     );
     if end_ellipsis && (horizontal_overflow || max_lines_applied) {
         if let Some(last_line) = lines.last_mut() {
-            apply_end_ellipsis(last_line, width_limit.unwrap_or_else(|| line_width(last_line)), atlas_source);
+            apply_end_ellipsis(
+                &mut last_line.glyphs,
+                width_limit.unwrap_or_else(|| line_width(&last_line.glyphs)),
+                atlas_source,
+            );
         }
         overflow.ellipsized = true;
         overflow.ellipsis_placement = Some(TextEllipsisPlacement::End);
@@ -110,10 +122,12 @@ pub fn layout_text_block(
     }
     overflow.visible_source_range = visible_range(&lines);
 
-    let resolved_width = block
-        .layout
-        .width_constraint
-        .resolved_width(lines.iter().map(|line| line_width(line)).fold(0.0, f32::max));
+    let resolved_width = block.layout.width_constraint.resolved_width(
+        lines
+            .iter()
+            .map(|line| line_width(&line.glyphs))
+            .fold(0.0, f32::max),
+    );
     let line_metrics = line_metrics(&block, &lines, resolved_width, &overflow);
     let visual_runs = visual_runs(&block, &lines, &line_metrics);
     let glyph_count = visual_runs.iter().map(|run| run.glyphs.len()).sum::<usize>();
@@ -126,7 +140,10 @@ pub fn layout_text_block(
         line_count: line_metrics.len(),
         glyph_run_count: visual_runs.len(),
         glyph_count,
-        measured_size: UiSize::new(resolved_width, block.layout.height_constraint.resolved_height(content_height)),
+        measured_size: UiSize::new(
+            resolved_width,
+            block.layout.height_constraint.resolved_height(content_height),
+        ),
         content_bounds: UiRect::new(0.0, 0.0, resolved_width, content_height),
         ink_bounds: UiRect::new(0.0, 0.0, resolved_width, content_height),
         line_metrics,
@@ -189,7 +206,7 @@ fn lower_source(
                     span_id: span.map(|span| span.span_id),
                     source_range: TextSourceRange::new(index, index + 1),
                     text_preview: ch.to_string(),
-                    style,
+                    style: style.clone(),
                     semantic_role: span
                         .and_then(|span| span.semantic_role)
                         .or(run.semantic_role)
@@ -197,11 +214,15 @@ fn lower_source(
                     is_whitespace: ch.is_whitespace() && ch != '\n',
                     is_newline: ch == '\n',
                 },
-                glyph_key: if metrics.5 { "replacement:?".to_owned() } else { format!("char:{ch}") },
-                advance: metrics.0.advance.max(0.0) * metrics.4,
+                glyph_key: if metrics.5 {
+                    "replacement:?".to_owned()
+                } else {
+                    format!("char:{ch}")
+                },
+                advance: metrics.0.advance.max(0.0) * metrics.4 + style.letter_spacing.resolve(style.font_size),
                 ascent: metrics.1 * metrics.4,
                 descent: metrics.2.abs() * metrics.4,
-                line_height: block.base_style.line_height_or_default(metrics.3 * metrics.4),
+                line_height: style.line_height_or_default(metrics.3 * metrics.4),
                 replacement: metrics.5,
             });
             index += 1;
@@ -257,34 +278,78 @@ fn collapse_horizontal_spaces(source: &mut Vec<ProofGlyph>) {
     *source = collapsed;
 }
 
-fn break_lines(block: &TextBlock, source: &[ProofGlyph], width_limit: Option<f32>) -> Vec<Vec<ProofGlyph>> {
+fn break_lines(
+    block: &TextBlock,
+    source: &[ProofGlyph],
+    width_limit: Option<f32>,
+    diagnostics: &mut Vec<TextLayoutDiagnostic>,
+) -> Vec<ProofLine> {
     let mut lines = Vec::new();
-    let mut line = Vec::new();
+    let mut line = ProofLine::default();
     for glyph in source {
         if glyph.cluster.is_newline {
+            line.explicit_break = true;
             lines.push(line);
-            line = Vec::new();
+            line = ProofLine::default();
             continue;
         }
         let wraps = block.layout.wrap != TextWrapPolicy::NoWrap
-            && width_limit.is_some_and(|limit| !line.is_empty() && line_width(&line) + glyph.advance > limit);
+            && width_limit.is_some_and(|limit| {
+                !line.glyphs.is_empty() && line_width(&line.glyphs) + glyph.advance > limit
+            });
         if wraps {
-            lines.push(line);
-            line = Vec::new();
+            match block.layout.wrap {
+                TextWrapPolicy::Word => wrap_word_line(&mut lines, &mut line, diagnostics),
+                TextWrapPolicy::Character => wrap_character_line(&mut lines, &mut line),
+                TextWrapPolicy::NoWrap => {}
+            }
         }
-        line.push(glyph.clone());
+        line.glyphs.push(glyph.clone());
     }
     lines.push(line);
     lines
 }
 
-fn trim_line_edges(lines: &mut [Vec<ProofGlyph>]) {
-    for line in lines {
-        while line.first().is_some_and(|glyph| glyph.cluster.is_whitespace) {
-            line.remove(0);
+fn wrap_word_line(
+    lines: &mut Vec<ProofLine>,
+    line: &mut ProofLine,
+    diagnostics: &mut Vec<TextLayoutDiagnostic>,
+) {
+    if let Some(boundary) = line.glyphs.iter().rposition(|glyph| glyph.cluster.is_whitespace) {
+        let mut remainder = line.glyphs.split_off(boundary + 1);
+        while line.glyphs.last().is_some_and(|glyph| glyph.cluster.is_whitespace) {
+            line.glyphs.pop();
         }
-        while line.last().is_some_and(|glyph| glyph.cluster.is_whitespace) {
-            line.pop();
+        while remainder.first().is_some_and(|glyph| glyph.cluster.is_whitespace) {
+            remainder.remove(0);
+        }
+        let pushed = core::mem::replace(
+            line,
+            ProofLine { glyphs: remainder, wrapped_from_previous: true, explicit_break: false },
+        );
+        lines.push(ProofLine { explicit_break: false, ..pushed });
+    } else {
+        diagnostics.push(TextLayoutDiagnostic::warning(
+            "ui.text.wrap.word_fell_back_to_character",
+            "word wrap found no whitespace boundary and fell back to cluster wrapping",
+        ));
+        wrap_character_line(lines, line);
+    }
+}
+
+fn wrap_character_line(lines: &mut Vec<ProofLine>, line: &mut ProofLine) {
+    let pushed = core::mem::take(line);
+    lines.push(ProofLine { explicit_break: false, ..pushed });
+    line.wrapped_from_previous = true;
+}
+
+fn trim_line_edges(lines: &mut [ProofLine]) {
+    for line in lines {
+        while line.glyphs.first().is_some_and(|glyph| glyph.cluster.is_whitespace) {
+            line.glyphs.remove(0);
+        }
+        while line.glyphs.last().is_some_and(|glyph| glyph.cluster.is_whitespace) {
+            line.glyphs.pop();
         }
     }
 }
@@ -310,23 +375,21 @@ fn apply_end_ellipsis(line: &mut Vec<ProofGlyph>, limit: f32, atlas_source: &dyn
     }
 }
 
-fn line_width(line: &[ProofGlyph]) -> f32 {
-    line.iter().map(|glyph| glyph.advance).sum()
-}
+fn line_width(line: &[ProofGlyph]) -> f32 { line.iter().map(|glyph| glyph.advance).sum() }
 
 fn line_metrics(
     block: &TextBlock,
-    lines: &[Vec<ProofGlyph>],
+    lines: &[ProofLine],
     resolved_width: f32,
     overflow: &TextOverflowEvidence,
 ) -> Vec<TextLineMetrics> {
     let mut y = 0.0;
     let mut metrics = Vec::new();
     for (line_index, line) in lines.iter().enumerate() {
-        let width = line_width(line);
-        let ascent = line.iter().map(|glyph| glyph.ascent).fold(0.0, f32::max);
-        let descent = line.iter().map(|glyph| glyph.descent).fold(0.0, f32::max);
-        let height = line.iter().map(|glyph| glyph.line_height).fold((ascent + descent).max(1.0), f32::max);
+        let width = line_width(&line.glyphs);
+        let ascent = line.glyphs.iter().map(|glyph| glyph.ascent).fold(0.0, f32::max);
+        let descent = line.glyphs.iter().map(|glyph| glyph.descent).fold(0.0, f32::max);
+        let height = line.glyphs.iter().map(|glyph| glyph.line_height).fold((ascent + descent).max(1.0), f32::max);
         let x = match block.layout.horizontal_align {
             TextHorizontalAlign::Start => 0.0,
             TextHorizontalAlign::Center => ((resolved_width - width) * 0.5).max(0.0),
@@ -347,8 +410,8 @@ fn line_metrics(
             content_width: width,
             ink_bounds: line_box,
             horizontal_align: block.layout.horizontal_align,
-            is_wrapped: line_index > 0,
-            is_explicit_break: false,
+            is_wrapped: line.wrapped_from_previous,
+            is_explicit_break: line.explicit_break,
             is_truncated: line_index + 1 == lines.len() && (overflow.clipped || overflow.ellipsized || overflow.max_lines_applied),
         });
         y += height;
@@ -356,14 +419,14 @@ fn line_metrics(
     metrics
 }
 
-fn visual_runs(block: &TextBlock, lines: &[Vec<ProofGlyph>], metrics: &[TextLineMetrics]) -> Vec<TextVisualRun> {
+fn visual_runs(block: &TextBlock, lines: &[ProofLine], metrics: &[TextLineMetrics]) -> Vec<TextVisualRun> {
     let mut runs = Vec::new();
     let mut draw_order = 0_u32;
     for (line_index, line) in lines.iter().enumerate() {
         let Some(line_metrics) = metrics.get(line_index) else { continue; };
         let mut pen_x = line_metrics.origin.x;
         let mut glyphs = Vec::new();
-        for glyph in line {
+        for glyph in &line.glyphs {
             let origin = UiPoint::new(pen_x, line_metrics.baseline_y);
             let bounds = UiRect::new(origin.x, line_metrics.baseline_y - glyph.ascent, glyph.advance, line_metrics.line_height);
             glyphs.push(TextGlyph {
@@ -386,10 +449,10 @@ fn visual_runs(block: &TextBlock, lines: &[Vec<ProofGlyph>], metrics: &[TextLine
         runs.push(TextVisualRun {
             visual_run_id: runs.len() as u32,
             line_index: line_index as u32,
-            run_id: line.first().map(|glyph| glyph.cluster.run_id).unwrap_or(TextRunId(0)),
-            span_id: line.first().and_then(|glyph| glyph.cluster.span_id),
-            font_id: line.first().map(|glyph| glyph.cluster.style.font_id).unwrap_or(block.base_style.font_id),
-            style: line.first().map(|glyph| glyph.cluster.style.clone()).unwrap_or_else(|| block.base_style.clone()),
+            run_id: line.glyphs.first().map(|glyph| glyph.cluster.run_id).unwrap_or(TextRunId(0)),
+            span_id: line.glyphs.first().and_then(|glyph| glyph.cluster.span_id),
+            font_id: line.glyphs.first().map(|glyph| glyph.cluster.style.font_id).unwrap_or(block.base_style.font_id),
+            style: line.glyphs.first().map(|glyph| glyph.cluster.style.clone()).unwrap_or_else(|| block.base_style.clone()),
             direction: block.layout.text_direction,
             glyphs,
             bounds: line_metrics.line_box,
@@ -398,26 +461,26 @@ fn visual_runs(block: &TextBlock, lines: &[Vec<ProofGlyph>], metrics: &[TextLine
     runs
 }
 
-fn visible_range(lines: &[Vec<ProofGlyph>]) -> TextClusterRange {
-    let start = lines.first().map(|line| visible_range_for_line(line).start).unwrap_or(0);
-    let end = lines.last().map(|line| visible_range_for_line(line).end).unwrap_or(start);
+fn visible_range(lines: &[ProofLine]) -> TextClusterRange {
+    let start = lines.first().map(visible_range_for_line).map(|range| range.start).unwrap_or(0);
+    let end = lines.last().map(visible_range_for_line).map(|range| range.end).unwrap_or(start);
     TextClusterRange::new(start, end)
 }
 
-fn visible_range_for_line(line: &[ProofGlyph]) -> TextClusterRange {
-    let start = line.first().map(|glyph| glyph.cluster.cluster_index).unwrap_or(0);
-    let end = line.last().map(|glyph| glyph.cluster.cluster_index + 1).unwrap_or(start);
+fn visible_range_for_line(line: &ProofLine) -> TextClusterRange {
+    let start = line.glyphs.first().map(|glyph| glyph.cluster.cluster_index).unwrap_or(0);
+    let end = line.glyphs.last().map(|glyph| glyph.cluster.cluster_index + 1).unwrap_or(start);
     TextClusterRange::new(start, end)
 }
 
-fn omitted_run_count(block: &TextBlock, lines: &[Vec<ProofGlyph>]) -> u32 {
+fn omitted_run_count(block: &TextBlock, lines: &[ProofLine]) -> u32 {
     block
         .runs
         .iter()
         .filter(|run| {
             !lines
                 .iter()
-                .flat_map(|line| line.iter())
+                .flat_map(|line| line.glyphs.iter())
                 .any(|glyph| glyph.cluster.run_id == run.run_id)
         })
         .count() as u32
