@@ -369,6 +369,7 @@ mod tests {
             block_id: TextBlockId(7),
             input_run_count: 1,
             resolved_run_count: 1,
+            resolved_cluster_count: 1,
             line_count: 1,
             glyph_run_count: 1,
             glyph_count: 1,

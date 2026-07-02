@@ -161,49 +161,105 @@ impl TextBlock {
         }
     }
     pub fn label(text: impl Into<String>) -> Self {
-        Self::new(TextBlockId(1), TextStyle::default())
-            .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::Label))
+        Self::label_with_id(TextBlockId(1), TextRunId(1), text)
+    }
+    pub fn label_with_id(
+        text_block_id: TextBlockId,
+        text_run_id: TextRunId,
+        text: impl Into<String>,
+    ) -> Self {
+        Self::new(text_block_id, TextStyle::default())
+            .with_run(TextRun::new(text_run_id, text).with_semantic_role(TextSemanticRole::Label))
             .with_semantic_role(TextSemanticRole::Label)
             .with_layout(TextLayoutPolicy::no_wrap_label())
     }
     pub fn body(text: impl Into<String>, max_width: f32) -> Self {
-        Self::new(TextBlockId(1), TextStyle::default())
-            .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::Body))
+        Self::body_with_id(TextBlockId(1), TextRunId(1), text, max_width)
+    }
+    pub fn body_with_id(
+        text_block_id: TextBlockId,
+        text_run_id: TextRunId,
+        text: impl Into<String>,
+        max_width: f32,
+    ) -> Self {
+        Self::new(text_block_id, TextStyle::default())
+            .with_run(TextRun::new(text_run_id, text).with_semantic_role(TextSemanticRole::Body))
             .with_semantic_role(TextSemanticRole::Body)
             .with_layout(TextLayoutPolicy::wrapping_body(max_width))
     }
     pub fn helper(text: impl Into<String>, max_width: f32, max_lines: u32) -> Self {
-        Self::new(TextBlockId(1), TextStyle::default())
-            .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::Helper))
+        Self::helper_with_id(TextBlockId(1), TextRunId(1), text, max_width, max_lines)
+    }
+    pub fn helper_with_id(
+        text_block_id: TextBlockId,
+        text_run_id: TextRunId,
+        text: impl Into<String>,
+        max_width: f32,
+        max_lines: u32,
+    ) -> Self {
+        Self::new(text_block_id, TextStyle::default())
+            .with_run(TextRun::new(text_run_id, text).with_semantic_role(TextSemanticRole::Helper))
             .with_semantic_role(TextSemanticRole::Helper)
             .with_layout(TextLayoutPolicy::helper_text(max_width, max_lines))
     }
     pub fn badge(text: impl Into<String>, max_width: f32) -> Self {
-        Self::new(TextBlockId(1), TextStyle::default())
-            .with_run(TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::Badge))
+        Self::badge_with_id(TextBlockId(1), TextRunId(1), text, max_width)
+    }
+    pub fn badge_with_id(
+        text_block_id: TextBlockId,
+        text_run_id: TextRunId,
+        text: impl Into<String>,
+        max_width: f32,
+    ) -> Self {
+        Self::new(text_block_id, TextStyle::default())
+            .with_run(TextRun::new(text_run_id, text).with_semantic_role(TextSemanticRole::Badge))
             .with_semantic_role(TextSemanticRole::Badge)
             .with_layout(TextLayoutPolicy::badge(max_width))
     }
     pub fn tab_label(text: impl Into<String>, max_width: f32) -> Self {
-        Self::new(TextBlockId(1), TextStyle::default())
+        Self::tab_label_with_id(TextBlockId(1), TextRunId(1), text, max_width)
+    }
+    pub fn tab_label_with_id(
+        text_block_id: TextBlockId,
+        text_run_id: TextRunId,
+        text: impl Into<String>,
+        max_width: f32,
+    ) -> Self {
+        Self::new(text_block_id, TextStyle::default())
             .with_run(
-                TextRun::new(TextRunId(1), text).with_semantic_role(TextSemanticRole::TabLabel),
+                TextRun::new(text_run_id, text).with_semantic_role(TextSemanticRole::TabLabel),
             )
             .with_semantic_role(TextSemanticRole::TabLabel)
             .with_layout(TextLayoutPolicy::tab_label(max_width))
     }
     pub fn inspector_row_value(text: impl Into<String>, max_width: f32) -> Self {
-        Self::new(TextBlockId(1), TextStyle::default())
+        Self::inspector_row_value_with_id(TextBlockId(1), TextRunId(1), text, max_width)
+    }
+    pub fn inspector_row_value_with_id(
+        text_block_id: TextBlockId,
+        text_run_id: TextRunId,
+        text: impl Into<String>,
+        max_width: f32,
+    ) -> Self {
+        Self::new(text_block_id, TextStyle::default())
             .with_run(
-                TextRun::new(TextRunId(1), text)
+                TextRun::new(text_run_id, text)
                     .with_semantic_role(TextSemanticRole::InspectorValue),
             )
             .with_semantic_role(TextSemanticRole::InspectorValue)
             .with_layout(TextLayoutPolicy::inspector_row_value(max_width))
     }
     pub fn inline_spans(text: impl Into<String>, spans: Vec<TextSpan>) -> Self {
-        Self::new(TextBlockId(1), TextStyle::default())
-            .with_run(TextRun::new(TextRunId(1), text).with_spans(spans))
+        Self::inline_spans_with_id(TextBlockId(1), TextRunId(1), text, spans)
+    }
+    pub fn inline_spans_with_id(
+        text_block_id: TextBlockId,
+        text_run_id: TextRunId,
+        text: impl Into<String>,
+        spans: Vec<TextSpan>,
+    ) -> Self {
+        Self::new(text_block_id, TextStyle::default())
+            .with_run(TextRun::new(text_run_id, text).with_spans(spans))
             .with_semantic_role(TextSemanticRole::Body)
     }
     pub fn with_run(mut self, run: TextRun) -> Self {

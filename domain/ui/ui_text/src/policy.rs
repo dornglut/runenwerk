@@ -221,19 +221,60 @@ pub struct TextLayoutPolicy {
 }
 
 impl TextLayoutPolicy {
-    pub const fn no_wrap_label() -> Self {
+    pub const fn single_line(
+        horizontal_align: TextHorizontalAlign,
+        vertical_align: TextVerticalAlign,
+        overflow: TextOverflowPolicy,
+    ) -> Self {
         Self {
             width_constraint: TextWidthConstraint::Unconstrained,
             height_constraint: TextHeightConstraint::Unconstrained,
             wrap: TextWrapPolicy::NoWrap,
             whitespace: TextWhitespacePolicy::Preserve,
-            horizontal_align: TextHorizontalAlign::Start,
-            vertical_align: TextVerticalAlign::Start,
-            overflow: TextOverflowPolicy::Clip,
-            max_lines: None,
+            horizontal_align,
+            vertical_align,
+            overflow,
+            max_lines: Some(1),
             text_direction: TextDirectionPolicy::Auto,
         }
     }
+
+    pub const fn single_line_start() -> Self {
+        Self::single_line(
+            TextHorizontalAlign::Start,
+            TextVerticalAlign::Start,
+            TextOverflowPolicy::Clip,
+        )
+    }
+
+    pub const fn single_line_centered() -> Self {
+        Self::single_line(
+            TextHorizontalAlign::Center,
+            TextVerticalAlign::Center,
+            TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
+        )
+    }
+
+    pub const fn single_line_end() -> Self {
+        Self::single_line(
+            TextHorizontalAlign::End,
+            TextVerticalAlign::Center,
+            TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
+        )
+    }
+
+    pub const fn no_wrap_label() -> Self {
+        Self {
+            max_lines: None,
+            text_direction: TextDirectionPolicy::Auto,
+            ..Self::single_line_start()
+        }
+    }
+
+    pub const fn button_label() -> Self {
+        Self::single_line_centered()
+    }
+
     pub const fn wrapping_body(max_width: f32) -> Self {
         Self {
             width_constraint: TextWidthConstraint::Max(max_width),
@@ -247,6 +288,7 @@ impl TextLayoutPolicy {
             text_direction: TextDirectionPolicy::Auto,
         }
     }
+
     pub const fn helper_text(max_width: f32, max_lines: u32) -> Self {
         Self {
             width_constraint: TextWidthConstraint::Max(max_width),
@@ -260,32 +302,23 @@ impl TextLayoutPolicy {
             text_direction: TextDirectionPolicy::Auto,
         }
     }
+
     pub const fn badge(max_width: f32) -> Self {
         Self {
             width_constraint: TextWidthConstraint::Max(max_width),
-            height_constraint: TextHeightConstraint::Unconstrained,
-            wrap: TextWrapPolicy::NoWrap,
             whitespace: TextWhitespacePolicy::TrimEdges,
-            horizontal_align: TextHorizontalAlign::Center,
-            vertical_align: TextVerticalAlign::Center,
-            overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
-            max_lines: Some(1),
-            text_direction: TextDirectionPolicy::Auto,
+            ..Self::single_line_centered()
         }
     }
+
     pub const fn tab_label(max_width: f32) -> Self {
         Self {
             width_constraint: TextWidthConstraint::Max(max_width),
-            height_constraint: TextHeightConstraint::Unconstrained,
-            wrap: TextWrapPolicy::NoWrap,
             whitespace: TextWhitespacePolicy::TrimEdges,
-            horizontal_align: TextHorizontalAlign::Center,
-            vertical_align: TextVerticalAlign::Center,
-            overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
-            max_lines: Some(1),
-            text_direction: TextDirectionPolicy::Auto,
+            ..Self::single_line_centered()
         }
     }
+
     pub const fn inspector_row_value(max_width: f32) -> Self {
         Self {
             width_constraint: TextWidthConstraint::Max(max_width),

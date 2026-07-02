@@ -208,6 +208,7 @@ pub struct ControlGenericTextSupportSummary {
     pub line_metrics_support: bool,
     pub glyph_evidence_support: bool,
     pub fallback_evidence_support: bool,
+    pub text_direction_policy_support: bool,
     pub renderer_backend_required: bool,
     pub executes_host_commands: bool,
     pub mutates_product_state: bool,
@@ -258,6 +259,7 @@ impl ControlGenericTextSupportSummary {
             line_metrics_support: descriptor.layout_support.line_metrics,
             glyph_evidence_support: descriptor.layout_support.glyph_evidence,
             fallback_evidence_support: descriptor.layout_support.fallback_evidence,
+            text_direction_policy_support: descriptor.layout_support.text_direction_policy,
             renderer_backend_required: descriptor.layout_support.renderer_backend_required,
             executes_host_commands: false,
             mutates_product_state: false,
@@ -304,6 +306,10 @@ impl ControlGenericTextSupportSummary {
             ControlGenericTextInspectionFact::new(
                 "text_display.fallback_evidence",
                 bool_string(self.fallback_evidence_support),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.text_direction_policy",
+                bool_string(self.text_direction_policy_support),
             ),
             ControlGenericTextInspectionFact::new(
                 "text_display.renderer_backend_required",

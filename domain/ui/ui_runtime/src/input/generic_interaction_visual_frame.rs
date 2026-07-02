@@ -425,7 +425,7 @@ fn push_glyph(
     text: &str,
     max_width: f32,
 ) {
-    let layout = crate::proof_text::proof_label_layout(
+    let layout = crate::text_emission::proof_label_layout(
         text,
         origin,
         max_width,
