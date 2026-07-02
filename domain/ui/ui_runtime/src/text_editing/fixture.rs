@@ -181,8 +181,8 @@ pub fn base_controls_text_editing_positive_script() -> TextEditingReplayScript {
             TextCompositionFact::update("e").with_target(target_id),
         ))
         .with_step(composition_step(
-            "step.composition.accept",
-            TextCompositionFact::accept("e").with_target(target_id),
+            "step.composition.commit",
+            TextCompositionFact::commit("e").with_target(target_id),
         ))
         .with_step(composition_step(
             "step.composition.cancel",

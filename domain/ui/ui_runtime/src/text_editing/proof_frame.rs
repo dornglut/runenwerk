@@ -30,6 +30,7 @@ pub struct TextEditingProofRenderFrame {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextEditingProofRenderSummary {
     pub descriptor_rows: usize,
+    pub value_rows: usize,
     pub accepted_intent_rows: usize,
     pub suppressed_intent_rows: usize,
     pub lifecycle_rows: usize,
@@ -67,78 +68,160 @@ pub fn text_editing_visual_proof_to_frame(
         "report: evidence",
     );
 
+    let value = representative_value(report);
+    let final_value = report.value_evidence.last();
+
     label(
         &mut primitives,
         &mut order,
         32.0,
         58.0,
-        &format!("targets={}", report.descriptor_evidence.len()),
+        &format!("target: {}", descriptor_target(report)),
     );
     label(
         &mut primitives,
         &mut order,
         32.0,
-        78.0,
-        &format!("caret={}", report.caret_evidence.len()),
-    );
-    label(
-        &mut primitives,
-        &mut order,
-        32.0,
-        98.0,
-        &format!("selection={}", report.selection_evidence.len()),
-    );
-    label(
-        &mut primitives,
-        &mut order,
-        32.0,
-        118.0,
-        &format!("composition={}", report.composition_evidence.len()),
-    );
-    label(
-        &mut primitives,
-        &mut order,
-        340.0,
-        58.0,
-        &format!("modes={}", mode_list(report)),
-    );
-    label(
-        &mut primitives,
-        &mut order,
-        340.0,
-        78.0,
-        &format!("accepted={}", report.accepted_edit_intents.len()),
-    );
-    label(
-        &mut primitives,
-        &mut order,
-        340.0,
-        98.0,
-        &format!("suppressed={}", report.suppressed_edit_intents.len()),
-    );
-    label(
-        &mut primitives,
-        &mut order,
-        648.0,
-        58.0,
-        &format!("steps={}", report.input_steps.len()),
-    );
-    label(
-        &mut primitives,
-        &mut order,
-        648.0,
-        78.0,
-        &format!("lifecycle={}", report.lifecycle_transitions.len()),
-    );
-    label(
-        &mut primitives,
-        &mut order,
-        648.0,
-        98.0,
+        82.0,
         &format!(
-            "no_bypass={}",
+            "value: {}",
+            value.map_or("<none>", |row| row.rendered_value.as_str())
+        ),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        32.0,
+        106.0,
+        &format!(
+            "committed: {}",
+            final_value.map_or("<empty>", |row| empty_marker(&row.committed_text))
+        ),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        32.0,
+        130.0,
+        &format!(
+            "caret: {}",
+            final_value.map_or("<none>", |row| row.caret.as_str())
+        ),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        32.0,
+        154.0,
+        &format!(
+            "selection: {}",
+            selected_range(report).unwrap_or_else(|| {
+                final_value
+                    .map(|row| row.selection.clone())
+                    .unwrap_or_else(|| "<none>".to_owned())
+            })
+        ),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        32.0,
+        178.0,
+        &format!(
+            "composition: {}",
+            value
+                .and_then(|row| row.composition_text.as_deref())
+                .unwrap_or("<none>")
+        ),
+    );
+
+    label(
+        &mut primitives,
+        &mut order,
+        340.0,
+        58.0,
+        &format!("modes: {}", mode_list(report)),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        340.0,
+        82.0,
+        &format!("accepted: {}", accepted_intents(report)),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        340.0,
+        106.0,
+        &format!("suppressed: {}", suppression_summary(report)),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        340.0,
+        130.0,
+        &format!("caret rows: {}", report.caret_evidence.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        340.0,
+        154.0,
+        &format!("selection rows: {}", report.selection_evidence.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        340.0,
+        178.0,
+        &format!("composition rows: {}", report.composition_evidence.len()),
+    );
+
+    label(
+        &mut primitives,
+        &mut order,
+        648.0,
+        58.0,
+        &format!("steps: {}", report.input_steps.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        648.0,
+        82.0,
+        &format!("lifecycle: {}", lifecycle_summary(report)),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        648.0,
+        106.0,
+        &format!("value rows: {}", report.value_evidence.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        648.0,
+        130.0,
+        &format!(
+            "no_bypass: {}",
             report.boundary_assertions.no_bypass_evidence()
         ),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        648.0,
+        154.0,
+        "host/product/authored: 0/0/0",
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        648.0,
+        178.0,
+        "undo/plugin: 0/0",
     );
 
     let mut surface = UiSurface::new(UiSurfaceId(14), size);
@@ -148,6 +231,7 @@ pub fn text_editing_visual_proof_to_frame(
         frame: UiFrame::with_surfaces(vec![surface]),
         summary: TextEditingProofRenderSummary {
             descriptor_rows: report.descriptor_evidence.len(),
+            value_rows: report.value_evidence.len(),
             accepted_intent_rows: report.accepted_edit_intents.len(),
             suppressed_intent_rows: report.suppressed_edit_intents.len(),
             lifecycle_rows: report.lifecycle_transitions.len(),
@@ -178,6 +262,67 @@ fn mode_list(report: &TextEditingReport) -> String {
     modes.sort();
     modes.dedup();
     modes.join(",")
+}
+
+fn descriptor_target(report: &TextEditingReport) -> String {
+    report
+        .descriptor_evidence
+        .first()
+        .map(|descriptor| descriptor.control_kind_id.clone())
+        .unwrap_or_else(|| "<none>".to_owned())
+}
+
+fn representative_value(report: &TextEditingReport) -> Option<&super::TextEditingValueEvidence> {
+    report
+        .value_evidence
+        .iter()
+        .find(|row| row.composition_text.is_some())
+        .or_else(|| report.value_evidence.last())
+}
+
+fn selected_range(report: &TextEditingReport) -> Option<String> {
+    report
+        .selection_evidence
+        .iter()
+        .rev()
+        .find(|selection| !selection.collapsed)
+        .map(|selection| format!("{}..{}", selection.anchor, selection.extent))
+}
+
+fn accepted_intents(report: &TextEditingReport) -> String {
+    let mut intents = report
+        .accepted_edit_intents
+        .iter()
+        .map(|intent| intent.intent.clone())
+        .collect::<Vec<_>>();
+    intents.sort();
+    intents.dedup();
+    if intents.is_empty() {
+        return "<none>".to_owned();
+    }
+    intents.join(", ")
+}
+
+fn suppression_summary(report: &TextEditingReport) -> String {
+    report
+        .suppressed_edit_intents
+        .iter()
+        .find(|suppression| suppression.intent == "paste")
+        .or_else(|| report.suppressed_edit_intents.first())
+        .map(|suppression| format!("{} / {}", suppression.intent, suppression.reason))
+        .unwrap_or_else(|| "<none>".to_owned())
+}
+
+fn lifecycle_summary(report: &TextEditingReport) -> String {
+    report
+        .lifecycle_transitions
+        .last()
+        .map(|transition| format!("{} -> {}", transition.from.as_str(), transition.to.as_str()))
+        .unwrap_or_else(|| "<none>".to_owned())
+}
+
+fn empty_marker(value: &str) -> &str {
+    if value.is_empty() { "<empty>" } else { value }
 }
 
 fn panel(primitives: &mut Vec<UiPrimitive>, order: &mut u32, area: UiRect, title: &str) {

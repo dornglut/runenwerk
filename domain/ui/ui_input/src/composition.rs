@@ -19,8 +19,8 @@ impl TextCompositionFact {
         Self::new(TextCompositionKind::Update, text)
     }
 
-    pub fn accept(text: impl Into<String>) -> Self {
-        Self::new(TextCompositionKind::Accept, text)
+    pub fn commit(text: impl Into<String>) -> Self {
+        Self::new(TextCompositionKind::Commit, text)
     }
 
     pub fn cancel() -> Self {
@@ -51,7 +51,7 @@ impl TextCompositionFact {
 pub enum TextCompositionKind {
     Start,
     Update,
-    Accept,
+    Commit,
     Cancel,
 }
 
@@ -60,7 +60,7 @@ impl TextCompositionKind {
         match self {
             Self::Start => "composition-start",
             Self::Update => "composition-update",
-            Self::Accept => "composition-accept",
+            Self::Commit => "composition-commit",
             Self::Cancel => "composition-cancel",
         }
     }

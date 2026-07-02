@@ -21,6 +21,16 @@ pub(super) fn validate_editable_text_descriptors(
                 "editable-text descriptor references no control kind in the package",
             ));
         }
+        if package
+            .interaction_descriptor(&descriptor.control_kind_id)
+            .is_none()
+        {
+            push_invalid(
+                descriptor.control_kind_id.clone(),
+                "editable-text descriptor requires a matching interaction descriptor",
+                report,
+            );
+        }
         if descriptor.supported_intents.is_empty() {
             push_invalid(
                 descriptor.control_kind_id.clone(),

@@ -15,6 +15,7 @@ fn base_controls_text_editing_static_mount_accepts_runtime_proof_frame() {
     assert!(proof_frame.summary.descriptor_rows >= 1);
     assert!(proof_frame.summary.accepted_intent_rows >= 8);
     assert!(proof_frame.summary.suppressed_intent_rows >= 1);
+    assert!(proof_frame.summary.value_rows >= 1);
     assert!(proof_frame.summary.caret_rows >= 1);
     assert!(proof_frame.summary.selection_rows >= 1);
     assert!(proof_frame.summary.composition_rows >= 1);

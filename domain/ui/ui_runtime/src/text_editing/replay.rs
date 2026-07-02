@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use ui_controls::{ControlEditableTextIntent, ControlEditableTextSelectionPolicy};
 use ui_input::{
     FocusChange, Key, KeyState, NormalizedInputFact, TextCompositionFact, TextCompositionKind,
-    TextEditFact, TextEditIntent, TextPosition, TextSelectionFact, TextSelectionReason,
+    TextEditFact, TextEditIntent, TextPosition, TextRange, TextSelectionFact, TextSelectionReason,
 };
 
 use crate::WidgetId;
@@ -13,7 +13,7 @@ use super::{
     TextEditingCaretEvidence, TextEditingCompositionEvidence, TextEditingDescriptorEvidence,
     TextEditingEditIntentEvidence, TextEditingLifecycleState, TextEditingLifecycleTransition,
     TextEditingReplayScript, TextEditingReplayStep, TextEditingReport,
-    TextEditingSelectionEvidence, TextEditingSuppressionEvidence,
+    TextEditingSelectionEvidence, TextEditingSuppressionEvidence, TextEditingValueEvidence,
 };
 
 pub fn replay_text_editing(
@@ -88,6 +88,7 @@ fn empty_report(
         caret_evidence: Vec::new(),
         selection_evidence: Vec::new(),
         composition_evidence: Vec::new(),
+        value_evidence: Vec::new(),
         accepted_edit_intents: Vec::new(),
         suppressed_edit_intents: Vec::new(),
         boundary_assertions: TextEditingBoundaryAssertions::default(),
@@ -194,7 +195,7 @@ fn apply_keyboard(
             );
         }
         Key::Left | Key::Right | Key::Home | Key::End => {
-            request_intent(
+            let accepted = request_intent(
                 step,
                 None,
                 ControlEditableTextIntent::MoveCaret,
@@ -203,15 +204,21 @@ fn apply_keyboard(
                 state,
                 report,
             );
-            if let Some(target_id) = state.focused_target_id.clone() {
+            if accepted
+                && let Some(target_id) = state.focused_target_id.clone()
+                && let Some(index) = state.control_index_by_target(&target_id)
+            {
+                move_caret_for_key(&mut state.controls[index], key);
+                let position = caret_label(&state.controls[index]);
                 report.caret_evidence.push(TextEditingCaretEvidence {
                     step_id: step.step_id.clone(),
-                    target_id,
-                    position: format!("keyboard.{key:?}"),
+                    target_id: target_id.clone(),
+                    position,
                     reason: "keyboard-navigation".to_owned(),
                     accepted: true,
                 });
                 report.boundary_assertions.caret_moves += 1;
+                record_value(step, &target_id, "caret-moved", state, report);
             }
         }
         Key::Enter => {
@@ -247,7 +254,7 @@ fn apply_text_edit(
     report: &mut TextEditingReport,
 ) {
     let intent = text_edit_intent(fact.intent);
-    request_intent(
+    let accepted = request_intent(
         step,
         fact.target_id.as_deref(),
         intent,
@@ -256,6 +263,40 @@ fn apply_text_edit(
         state,
         report,
     );
+    if !accepted {
+        return;
+    }
+    let Some(target_id) = state.resolved_target(fact.target_id.as_deref()) else {
+        return;
+    };
+    let Some(index) = state.control_index_by_target(&target_id) else {
+        return;
+    };
+    match fact.intent {
+        TextEditIntent::InsertText => {
+            replace_current_selection(&mut state.controls[index], &fact.text);
+            record_value(step, &target_id, "insert-text", state, report);
+        }
+        TextEditIntent::ReplaceSelection => {
+            replace_current_selection(&mut state.controls[index], &fact.text);
+            record_value(step, &target_id, "replace-selection", state, report);
+        }
+        TextEditIntent::DeleteBackward => {
+            delete_backward(&mut state.controls[index]);
+            record_value(step, &target_id, "delete-backward", state, report);
+        }
+        TextEditIntent::DeleteForward => {
+            delete_forward(&mut state.controls[index]);
+            record_value(step, &target_id, "delete-forward", state, report);
+        }
+        TextEditIntent::MoveCaret
+        | TextEditIntent::ExtendSelection
+        | TextEditIntent::Submit
+        | TextEditIntent::Cancel
+        | TextEditIntent::SourceInsert
+        | TextEditIntent::Copy
+        | TextEditIntent::Cut => {}
+    }
 }
 
 fn apply_selection(
@@ -327,6 +368,7 @@ fn apply_selection(
         state,
         report,
     );
+    record_value(step, &target_id, fact.reason.as_str(), state, report);
 }
 
 fn apply_composition(
@@ -352,10 +394,26 @@ fn apply_composition(
         return;
     };
     if let Some(index) = state.control_index_by_target(&target_id) {
-        state.controls[index].composition_text = match fact.kind {
-            TextCompositionKind::Start | TextCompositionKind::Update => Some(fact.text.clone()),
-            TextCompositionKind::Accept | TextCompositionKind::Cancel => None,
-        };
+        match fact.kind {
+            TextCompositionKind::Start | TextCompositionKind::Update => {
+                state.controls[index].composition_text = Some(fact.text.clone());
+            }
+            TextCompositionKind::Commit => {
+                let committed = if fact.text.is_empty() {
+                    state.controls[index]
+                        .composition_text
+                        .clone()
+                        .unwrap_or_default()
+                } else {
+                    fact.text.clone()
+                };
+                replace_current_selection(&mut state.controls[index], &committed);
+                state.controls[index].composition_text = None;
+            }
+            TextCompositionKind::Cancel => {
+                state.controls[index].composition_text = None;
+            }
+        }
     }
     report
         .composition_evidence
@@ -374,13 +432,14 @@ fn apply_composition(
             TextCompositionKind::Start | TextCompositionKind::Update => {
                 TextEditingLifecycleState::Composing
             }
-            TextCompositionKind::Accept => TextEditingLifecycleState::Editing,
+            TextCompositionKind::Commit => TextEditingLifecycleState::Editing,
             TextCompositionKind::Cancel => TextEditingLifecycleState::Focused,
         },
         fact.kind.as_str(),
         state,
         report,
     );
+    record_value(step, &target_id, fact.kind.as_str(), state, report);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -520,6 +579,122 @@ fn suppress(
     report.boundary_assertions.suppressed_edit_intents += 1;
 }
 
+fn record_value(
+    step: &TextEditingReplayStep,
+    target_id: &str,
+    reason: &str,
+    state: &TextEditingReplayState,
+    report: &mut TextEditingReport,
+) {
+    let Some(index) = state.control_index_by_target(target_id) else {
+        return;
+    };
+    let control = &state.controls[index];
+    report.value_evidence.push(TextEditingValueEvidence {
+        step_id: step.step_id.clone(),
+        target_id: target_id.to_owned(),
+        committed_text: control.committed_text.clone(),
+        composition_text: control.composition_text.clone(),
+        rendered_value: rendered_value(control),
+        caret: caret_label(control),
+        selection: range_label(control.selection),
+        reason: reason.to_owned(),
+    });
+}
+
+fn replace_current_selection(control: &mut MountedEditableTextControl, text: &str) {
+    let len = control.committed_text.chars().count();
+    let (start, end) = range_indices(control.selection, len);
+    control.committed_text = replace_char_range(&control.committed_text, start, end, text);
+    set_caret(control, start + text.chars().count());
+}
+
+fn delete_backward(control: &mut MountedEditableTextControl) {
+    let len = control.committed_text.chars().count();
+    let (start, end) = range_indices(control.selection, len);
+    if start != end {
+        control.committed_text = replace_char_range(&control.committed_text, start, end, "");
+        set_caret(control, start);
+        return;
+    }
+    if start == 0 {
+        set_caret(control, 0);
+        return;
+    }
+    control.committed_text = replace_char_range(&control.committed_text, start - 1, start, "");
+    set_caret(control, start - 1);
+}
+
+fn delete_forward(control: &mut MountedEditableTextControl) {
+    let len = control.committed_text.chars().count();
+    let (start, end) = range_indices(control.selection, len);
+    if start != end {
+        control.committed_text = replace_char_range(&control.committed_text, start, end, "");
+        set_caret(control, start);
+        return;
+    }
+    if start >= len {
+        set_caret(control, len);
+        return;
+    }
+    control.committed_text = replace_char_range(&control.committed_text, start, start + 1, "");
+    set_caret(control, start);
+}
+
+fn move_caret_for_key(control: &mut MountedEditableTextControl, key: &Key) {
+    let len = control.committed_text.chars().count();
+    let (_, end) = range_indices(control.selection, len);
+    let next = match key {
+        Key::Left => end.saturating_sub(1),
+        Key::Right => (end + 1).min(len),
+        Key::Home => 0,
+        Key::End => len,
+        _ => end,
+    };
+    set_caret(control, next);
+}
+
+fn set_caret(control: &mut MountedEditableTextControl, ordinal: usize) {
+    let position = TextPosition::grapheme(ordinal as u32);
+    control.selection = TextRange::collapsed(position);
+}
+
+fn range_indices(range: TextRange, text_len: usize) -> (usize, usize) {
+    let anchor = range.anchor.ordinal as usize;
+    let extent = range.extent.ordinal as usize;
+    let start = anchor.min(extent).min(text_len);
+    let end = anchor.max(extent).min(text_len);
+    (start, end)
+}
+
+fn replace_char_range(value: &str, start: usize, end: usize, replacement: &str) -> String {
+    let prefix = value.chars().take(start);
+    let suffix = value.chars().skip(end);
+    prefix.chain(replacement.chars()).chain(suffix).collect()
+}
+
+fn rendered_value(control: &MountedEditableTextControl) -> String {
+    let Some(composition) = &control.composition_text else {
+        return control.committed_text.clone();
+    };
+    let len = control.committed_text.chars().count();
+    let (_, caret) = range_indices(control.selection, len);
+    let marker = format!("[{composition} composing]");
+    replace_char_range(&control.committed_text, caret, caret, &marker)
+}
+
+fn caret_label(control: &MountedEditableTextControl) -> String {
+    position_label(control.selection.extent)
+}
+
+fn range_label(range: TextRange) -> String {
+    format!(
+        "{}..{}",
+        position_label(range.anchor),
+        position_label(range.extent)
+    )
+}
+
 fn text_edit_intent(intent: TextEditIntent) -> ControlEditableTextIntent {
     match intent {
         TextEditIntent::InsertText => ControlEditableTextIntent::InsertText,
@@ -540,7 +715,7 @@ fn composition_intent(kind: TextCompositionKind) -> ControlEditableTextIntent {
     match kind {
         TextCompositionKind::Start => ControlEditableTextIntent::CompositionStart,
         TextCompositionKind::Update => ControlEditableTextIntent::CompositionUpdate,
-        TextCompositionKind::Accept => ControlEditableTextIntent::CompositionCommit,
+        TextCompositionKind::Commit => ControlEditableTextIntent::CompositionCommit,
         TextCompositionKind::Cancel => ControlEditableTextIntent::CompositionCancel,
     }
 }

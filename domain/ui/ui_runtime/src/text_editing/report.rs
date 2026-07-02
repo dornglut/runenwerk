@@ -12,6 +12,7 @@ pub struct TextEditingReport {
     pub caret_evidence: Vec<TextEditingCaretEvidence>,
     pub selection_evidence: Vec<TextEditingSelectionEvidence>,
     pub composition_evidence: Vec<TextEditingCompositionEvidence>,
+    pub value_evidence: Vec<TextEditingValueEvidence>,
     pub accepted_edit_intents: Vec<TextEditingEditIntentEvidence>,
     pub suppressed_edit_intents: Vec<TextEditingSuppressionEvidence>,
     pub boundary_assertions: TextEditingBoundaryAssertions,
@@ -93,6 +94,18 @@ pub struct TextEditingCompositionEvidence {
     pub kind: String,
     pub text: String,
     pub accepted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextEditingValueEvidence {
+    pub step_id: String,
+    pub target_id: String,
+    pub committed_text: String,
+    pub composition_text: Option<String>,
+    pub rendered_value: String,
+    pub caret: String,
+    pub selection: String,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -50,7 +50,7 @@ Milestones:
 012 Generic interaction — completed through PR #43 and user validation report
 012A Executable interaction story — completed through PR #43 and user validation report
 013 Overlay / popup / layering — completed through PR #44 and local validation report
-014 Text Editing / Editable Text Behavior — review after local implementation validation
+014 Text Editing / Editable Text Behavior — review after recorded local implementation validation
 015 Generic text — future
 016 Surface2D — future
 017 SpatialCanvas — future
@@ -67,7 +67,7 @@ Evidence gates:
 
 ```text
 Phase 13: PR #44 merged into main at merge commit 6f2d3827f315191d7aeaf68a64f523627197cad8. Local validation passed on 2026-07-02 with the full Phase 13 cargo/docs/diff gate.
-Phase 14: local implementation branch contains package-backed editable-text declarations, InspectorField lowering, descriptor validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, no-bypass evidence, and focused tests. Completion is blocked until branch acceptance or merge.
+Phase 14: local implementation branch contains package-backed editable-text declarations, InspectorField lowering, descriptor validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, no-bypass evidence, and focused tests. Local validation passed on 2026-07-02 with the Phase 14 cargo/docs/diff gate recorded in active work. Completion is blocked until branch acceptance or merge.
 ```
 
 Current blocker:

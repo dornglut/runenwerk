@@ -450,10 +450,6 @@ impl ControlEditableTextSupportSummary {
                 self.composition_policy.clone(),
             ),
             ControlEditableTextInspectionFact::new(
-                "text_editing.supported",
-                bool_string(self.editable_text_supported),
-            ),
-            ControlEditableTextInspectionFact::new(
                 "text_editing.caret_supported",
                 bool_string(self.caret_supported),
             ),

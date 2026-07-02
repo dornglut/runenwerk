@@ -1,7 +1,10 @@
 //! Normalized editable-text input facts.
 //!
-//! These facts describe text-editing intent at the input seam. They do not
+//! These facts describe text-editing intent at the input boundary. They do not
 //! decide whether a control is editable or own app document changes.
+//! `SourceInsert` is a host-owned content source request; runtimes may map it
+//! to a descriptor-level paste capability without reading clipboard contents
+//! or mutating product buffers.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextEditFact {

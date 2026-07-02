@@ -68,6 +68,16 @@ fn base_controls_package_rejects_invalid_editable_text_descriptor() {
 }
 
 #[test]
+fn package_rejects_editable_text_without_matching_interaction_descriptor() {
+    let mut package = runenwerk_control_package();
+    package.interaction_descriptors.clear();
+    assert_has_reason(
+        package,
+        ControlPackageValidationReason::InvalidEditableTextDescriptor,
+    );
+}
+
+#[test]
 fn package_rejects_range_intent_without_range_selection() {
     let mut package = runenwerk_control_package();
     package.editable_text_descriptors[0] = ControlEditableTextDescriptor::single_line(
