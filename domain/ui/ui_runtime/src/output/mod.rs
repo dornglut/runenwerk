@@ -3,6 +3,7 @@
 
 pub mod build_ui_frame;
 pub mod evidence;
+mod emit;
 mod primitives;
 mod text;
 
