@@ -2,8 +2,8 @@
 //! Purpose: Build renderer-facing UI frame data from retained tree state.
 
 pub mod build_ui_frame;
-pub mod evidence;
 mod emit;
+pub mod evidence;
 mod primitives;
 mod text;
 
