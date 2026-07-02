@@ -10,6 +10,7 @@ related_docs:
   - ../../reports/closeouts/README.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
+  - ../../design/active/ui-component-platform-generic-text-design.md
 ---
 
 # Completed Work
@@ -24,40 +25,23 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction: completed 2026-06-30 through merged PR #43 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f` and user validation report.
 - `PT-UI-COMPONENT-PLATFORM-012A` Executable Interaction Story: completed 2026-06-30 through merged PR #43 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f` and user validation report.
 - `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation: completed 2026-07-02 through merged PR #44 at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`.
+- `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior: completed 2026-07-02 through merged PR #46 at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
 
-## PT-UI-COMPONENT-PLATFORM-013 evidence
+## PT-UI-COMPONENT-PLATFORM-014 evidence
 
-PR #44 completed package-backed overlay declarations, base-control overlay lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, `ui_runtime::overlay` replay/report/stack/placement/focus/dismissal/suppression proof, proof-frame projection, static mount proof, no-bypass evidence, full local validation gate passed on 2026-07-02, and merge into `main`.
+Evidence: PR #46 completed package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, final proof-frame cleanup, and merge into `main`.
 
-Validation: The full Phase 13 local validation gate passed on 2026-07-02 before merge. The gate included focused cargo checks and tests for `ui_controls`, `ui_input`, `ui_runtime`, `ui_static_mount`, `ui_story`, and `runenwerk_editor`, docs validation, and diff hygiene.
+Merge evidence: PR #46, `UI/text editing behavior phase 14`, merged into `main` on 2026-07-02 at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Post-merge inspection found `main` identical to that merge commit.
 
-Known gaps: Text Editing / Editable Text Behavior is Phase 14 planning only. Product/editor/game behavior, authored UI editing, UI Gallery, UI Designer, Workbench/provider redesign, rich text editor behavior, code editor behavior, dynamic plugin framework, `foundation/meta`, shared plugin primitives, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
+Validation: The full Phase 14 local validation gate passed on 2026-07-02 before merge. The gate covered formatting, focused cargo checks, focused cargo tests, docs validation, and diff hygiene.
 
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior as design/planning intake only. Do not start implementation until active planning records exact owner files, implementation scope, validation, evidence, and stop conditions.
+Known non-goals: Generic Text remains Phase 15 planning only. Rich text editor behavior, code editor behavior, product document buffers, undo/redo, clipboard integration, UI Designer, UI Gallery product surface, Workbench/provider redesign, dynamic plugin framework, `foundation/meta`, shared plugin primitives, product/editor/game mutation, authored UI editing, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
+
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-015` Generic Text as design/planning intake only. Do not start implementation until active planning records exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
 
 ## Historical completed dependencies
 
 Phases 001 through 010 remain completed dependencies by the prior user reports and PR evidence already recorded in roadmap, production track, and decision register. Their detailed text was intentionally not expanded here because this file is a short index.
-
-## Entry shape
-
-ID:
-
-Title:
-
-Lifecycle state: `completed`
-
-Completed on:
-
-Evidence:
-
-Validation:
-
-Known gaps:
-
-Closeout report:
-
-Follow-up:
 
 ## Rules
 
