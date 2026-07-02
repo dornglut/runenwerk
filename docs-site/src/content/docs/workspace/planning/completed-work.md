@@ -4,10 +4,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-30
+last_reviewed: 2026-07-02
 related_docs:
   - ../workflow-lifecycle.md
   - ../../reports/closeouts/README.md
+  - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
+  - ../../design/active/ui-component-platform-text-editing-design.md
 ---
 
 # Completed Work
@@ -16,225 +18,26 @@ Use this file for completed planning work.
 
 This file is a short completion index. Detailed evidence belongs in `../../reports/closeouts/` when a completion record would become too large.
 
-## PT-UI-COMPONENT-PLATFORM-001
+## Recently completed UI Component Platform work
 
-ID: `PT-UI-COMPONENT-PLATFORM-001`
+- `PT-UI-COMPONENT-PLATFORM-011` Base Control Packages: completed 2026-06-28 through merged PR #37 and user validation report. Closeout report: `../../reports/closeouts/pt-ui-component-platform-011-base-control-packages-closeout.md`.
+- `PT-UI-COMPONENT-PLATFORM-012` Generic Interaction: completed 2026-06-30 through merged PR #43 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f` and user validation report.
+- `PT-UI-COMPONENT-PLATFORM-012A` Executable Interaction Story: completed 2026-06-30 through merged PR #43 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f` and user validation report.
+- `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation: completed 2026-07-02 through merged PR #44 at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`.
 
-Title: UI Component Platform ControlPackage / ControlKernel contract
+## PT-UI-COMPONENT-PLATFORM-013 evidence
 
-Completed on: 2026-06-25 by user report
+PR #44 completed package-backed overlay declarations, base-control overlay lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, `ui_runtime::overlay` replay/report/stack/placement/focus/dismissal/suppression proof, proof-frame projection, static mount proof, no-bypass evidence, full local validation gate passed on 2026-07-02, and merge into `main`.
 
-Evidence: Phase 1 established the first reusable control package contract.
+Validation: The full Phase 13 local validation gate passed on 2026-07-02 before merge. The gate included focused cargo checks and tests for `ui_controls`, `ui_input`, `ui_runtime`, `ui_static_mount`, `ui_story`, and `runenwerk_editor`, docs validation, and diff hygiene.
 
-Validation: User reported Phase 1 done.
+Known gaps: Text Editing / Editable Text Behavior is Phase 14 planning only. Product/editor/game behavior, authored UI editing, UI Gallery, UI Designer, Workbench/provider redesign, rich text editor behavior, code editor behavior, dynamic plugin framework, `foundation/meta`, shared plugin primitives, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
 
-Known gaps: Later component-platform phases were still pending.
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior as design/planning intake only. Do not start implementation until active planning records exact owner files, implementation scope, validation, evidence, and stop conditions.
 
-Follow-up: Completed dependency for later UI Component Platform phases.
+## Historical completed dependencies
 
-## PT-UI-COMPONENT-PLATFORM-002
-
-ID: `PT-UI-COMPONENT-PLATFORM-002`
-
-Title: UI Component Platform Authoring Kit
-
-Completed on: 2026-06-25 by user validation report
-
-Evidence: Phase 2 added bounded authoring helpers and focused tests.
-
-Validation: User reported the Phase 2 validation gate green.
-
-Known gaps: Later component-platform phases were still pending.
-
-Follow-up: Completed dependency for later UI Component Platform phases.
-
-## PT-UI-COMPONENT-PLATFORM-003
-
-ID: `PT-UI-COMPONENT-PLATFORM-003`
-
-Title: UI Component Platform Story Proof Envelope
-
-Completed on: 2026-06-26 by user validation report
-
-Evidence: Phase 3 added story-proof requirements and summaries under ui_controls.
-
-Validation: User reported the Phase 3 validation gate green.
-
-Known gaps: Later component-platform phases were still pending.
-
-Follow-up: Completed dependency for later UI Component Platform phases.
-
-## PT-UI-COMPONENT-PLATFORM-004
-
-ID: `PT-UI-COMPONENT-PLATFORM-004`
-
-Title: UI Component Platform Catalog / Discovery / Inspection
-
-Completed on: 2026-06-26 by user validation report
-
-Evidence: Phase 4 added derived catalog, discovery, and inspection contracts under ui_controls.
-
-Validation: User reported the Phase 4 validation gate green.
-
-Known gaps: Later component-platform phases were still pending.
-
-Follow-up: Completed dependency for Phase 5.
-
-## PT-UI-COMPONENT-PLATFORM-005
-
-ID: `PT-UI-COMPONENT-PLATFORM-005`
-
-Title: UI Component Platform Input / Gesture / Device
-
-Completed on: 2026-06-26 by user validation report
-
-Evidence: Phase 5 added reusable input, gesture, and device declarations, catalog inspection projection, and focused tests.
-
-Validation: User reported the Phase 5 validation gate green after the catalog split cleanup.
-
-Known gaps: Phase 6 and later component-platform phases are still pending.
-
-Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-006 State Binding / Host Intent design and planning.
-
-## PT-UI-COMPONENT-PLATFORM-006
-
-ID: `PT-UI-COMPONENT-PLATFORM-006`
-
-Title: UI Component Platform State Binding / Host Intent
-
-Completed on: 2026-06-26 by user validation report
-
-Evidence: Phase 6 added reusable state binding, edit lifecycle, validation-state, host-intent proposal, route/capability decision declarations, catalog inspection projection, and focused tests.
-
-Validation: User reported the Phase 6 validation gate green.
-
-Known gaps: Phase 7 and later component-platform phases are still pending.
-
-Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-007 Theme / State / Style design and planning.
-
-## PT-UI-COMPONENT-PLATFORM-007
-
-ID: `PT-UI-COMPONENT-PLATFORM-007`
-
-Title: UI Component Platform Theme / State / Style
-
-Completed on: 2026-06-26 by user validation report
-
-Evidence: Phase 7 added reusable theme token, visual state, style role, fallback, diagnostic, catalog inspection projection, and focused tests.
-
-Validation: User reported the Phase 7 validation gate green.
-
-Known gaps: Phase 8 and later component-platform phases are still pending.
-
-Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-008 Accessibility / Focus / Inspection design and planning.
-
-## PT-UI-COMPONENT-PLATFORM-008
-
-ID: `PT-UI-COMPONENT-PLATFORM-008`
-
-Title: UI Component Platform Accessibility / Focus / Inspection
-
-Completed on: 2026-06-26 by user validation report
-
-Evidence: Phase 8 added reusable accessibility role, label, description, semantic hint, focus, keyboard activation, semantic state, value/range, diagnostic, catalog inspection projection, and focused tests.
-
-Validation: User reported the Phase 8 validation gate green and merged.
-
-Known gaps: Phase 9 and later component-platform phases are still pending.
-
-Follow-up: Proceed to PT-UI-COMPONENT-PLATFORM-009 Layout / Container / Virtualization design and planning.
-
-## PT-UI-COMPONENT-PLATFORM-009
-
-ID: `PT-UI-COMPONENT-PLATFORM-009`
-
-Title: UI Component Platform Layout / Container / Virtualization
-
-Completed on: 2026-06-26 by user validation report
-
-Evidence: PR #29 merged the corrected Phase 9 owner-first work. 009A added the ownership realignment design and recorded that owning crates define reusable UI vocabulary while `ui_controls` defines per-control requirements and summaries. 009B added generic layout/container/scroll/content/identity/virtualization vocabulary in `ui_layout`. 009C added the `ui_controls` control layout bridge over `ui_layout`. The catalog bridge exposes read-only layout facts through prefixed metadata keys.
-
-Validation: User reported the Phase 9 validation gate green after `cargo fmt`, focused `ui_layout` and `ui_controls` checks/tests, related `ui_artifacts` and `ui_program` tests, and `git diff --check`.
-
-Known gaps: Phase 5-8 still need later owner-crate vocabulary migration where generic concepts were declared in `ui_controls`. The catalog layout bridge still uses `ControlInspectionSection::Metadata` with `layout.*` keys; this is accepted as non-blocking until a future explicit cleanup adds a first-class layout section.
-
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-010` Render Surface / Output.
-
-## PT-UI-COMPONENT-PLATFORM-010
-
-ID: `PT-UI-COMPONENT-PLATFORM-010`
-
-Title: UI Component Platform Render Surface / Output
-
-Completed on: 2026-06-26 by user validation report
-
-Evidence: PR #34 merged the full owner-first Phase 10 implementation into `main`. It added renderer-neutral output evidence contracts in `ui_render_data`, the `ui_controls` render bridge and catalog projection, `ui_runtime` evidence generation from emitted `UiFrame` output, and engine render submission proof that consumes evidence without owning UI semantics.
-
-Validation: User reported the full P10 validation gate green after focused checks/tests for `ui_render_data`, `ui_controls`, `ui_runtime`, `engine`, formatting, and `git diff --check`.
-
-Known gaps: Full runtime interaction behavior remains Phase 12. Base controls still need Phase 11 hardening before Gallery/Workbench/UI Designer should rely on them as package-quality reusable controls.
-
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-011-PLANNING` Base Control Packages design intake.
-
-## PT-UI-COMPONENT-PLATFORM-011
-
-ID: `PT-UI-COMPONENT-PLATFORM-011`
-
-Title: UI Component Platform Base Control Packages
-
-Lifecycle state: `completed`
-
-Completed on: 2026-06-28 through merged PR #37 and user validation report
-
-Evidence: PR #37 merged the Phase 11 base-control hardening into `main`. The implementation kept the proof UI-local in `domain/ui/ui_controls`, covered Label, Button, InspectorField, ColorPicker, ActionPrompt, ListView, TreeView, and TableView, and used `BaseControlsPlugin`, `UiControls`, `ControlContribution`, `ControlDef` builder, control presets, field groups, theme groups, `ControlCompiler`, `ControlCatalog`, and `ControlInspection`.
-
-Validation: PR #37 reported `cargo fmt --all --check`, `cargo check -p ui_controls`, focused `ui_controls` package/catalog/layout/render/base_control tests, full `cargo test -p ui_controls`, `python3 tools/docs/validate_docs.py`, and `git diff --check` green locally.
-
-Known gaps: Full runtime interaction remains Phase 12. Overlays, popups, dropdowns, tooltips, and layering remain Phase 13. Text editing remains later. No shared plugin framework extraction, no `foundation/meta`, and no generic plugin primitives were authorized or introduced.
-
-Closeout report: `../../reports/closeouts/pt-ui-component-platform-011-base-control-packages-closeout.md`
-
-Follow-up: Phase 12 is completed through PR #43. Proceed to Phase 13 overlay/popup/layering design intake.
-
-## PT-UI-COMPONENT-PLATFORM-012
-
-ID: `PT-UI-COMPONENT-PLATFORM-012`
-
-Title: UI Component Platform Generic Interaction
-
-Lifecycle state: `completed`
-
-Completed on: 2026-06-30 through merged PR #43 and user validation report
-
-Evidence: PR #43 merged the generic interaction proof into `main` at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. Evidence covers reusable interaction descriptors, normalized input facts, descriptor-backed replay/report, renderer-neutral proof frames, static mount validation, durable base-controls proof names, and no-bypass boundary assertions.
-
-Validation: User start condition reports PR #43 validated and merged.
-
-Known gaps: UI Gallery exposure remains separate future work. Overlay/popup/layering remains Phase 13. Full text editing remains later. Product/editor/game command execution and mutation remain out of generic UI.
-
-Closeout report: Not created in this pass; roadmap, production-track, decision-register, and PR #43 metadata hold the completion evidence.
-
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation.
-
-## PT-UI-COMPONENT-PLATFORM-012A
-
-ID: `PT-UI-COMPONENT-PLATFORM-012A`
-
-Title: UI Component Platform Executable Interaction Story
-
-Lifecycle state: `completed`
-
-Completed on: 2026-06-30 through merged PR #43 and user validation report
-
-Evidence: PR #43 merged the executable base-controls interaction story into `main` at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. Evidence covers deterministic replay, live proof-host application through the same runtime session path, normalized input logging, semantic replay/live parity, static frame validation, `BaseControlsInteractionProofHost`, durable base-controls proof names, and no-bypass boundary assertions.
-
-Validation: User start condition reports PR #43 validated and merged.
-
-Known gaps: Product-facing editor window/gallery display remains separate future work. UI Lab / 012B surface work was removed from PR #43 scope and is not valid evidence. Overlay/popup/layering remains Phase 13. Full text editing remains later.
-
-Closeout report: Not created in this pass; roadmap, production-track, decision-register, and PR #43 metadata hold the completion evidence.
-
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation.
+Phases 001 through 010 remain completed dependencies by the prior user reports and PR evidence already recorded in roadmap, production track, and decision register. Their detailed text was intentionally not expanded here because this file is a short index.
 
 ## Entry shape
 

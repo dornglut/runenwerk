@@ -4,13 +4,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-01
+last_reviewed: 2026-07-02
 related_docs:
   - ../workflow-lifecycle.md
-  - ../../design/active/ui-component-platform-generic-interaction-design.md
-  - ../../design/active/ui-component-platform-executable-interaction-story-design.md
-  - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
+  - ../../design/active/ui-component-platform-text-editing-design.md
 ---
 
 # Production Tracks
@@ -32,7 +30,7 @@ Lifecycle state: `production-track`
 Goal:
 
 ```text
-Make reusable Runenwerk UI controls and component surfaces story-proven, descriptor-backed, inspectable, executable, and consumable by Gallery, Workbench, UI Designer, and future product tracks without moving reusable control semantics into those consumers.
+Make reusable Runenwerk UI controls and component surfaces story-proven, descriptor-backed, inspectable, executable, and consumable by higher product tracks without moving reusable control semantics into those consumers.
 ```
 
 Milestones:
@@ -51,8 +49,8 @@ Milestones:
 011 Base control packages — completed through PR #37 and user validation report
 012 Generic interaction — completed through PR #43 and user validation report
 012A Executable interaction story — completed through PR #43 and user validation report
-013 Overlay / popup / layering — review on PR #44 after local validation gate passed
-014 Minimum text editing — future
+013 Overlay / popup / layering — completed through PR #44 and local validation report
+014 Text Editing / Editable Text Behavior — active planning/design intake
 015 Generic text — future
 016 Surface2D — future
 017 SpatialCanvas — future
@@ -65,56 +63,23 @@ Milestones:
 024 Runtime-proven closeout — future
 ```
 
-Design gates:
-
-```text
-009A corrected the owner-first rule before Phase 9 implementation.
-009B proved generic layout vocabulary belongs in ui_layout.
-009C proved ui_controls should bridge owner-crate vocabulary through per-control descriptors and read-only summaries.
-010 proved render/output ownership across ui_render_data, ui_controls, ui_runtime, and engine render.
-011 proved UI-local contribution/preset/lowering authoring for package-quality base controls while keeping full interaction behavior for Phase 12.
-012 merged PR #43 implementation evidence for generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, static mount frame evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
-012A merged PR #43 implementation evidence for one executable story that supports deterministic replay, live proof-host input, semantic replay/live parity, static frame validation, and no-bypass counters.
-013 accepted the overlay/popup/layering design and is implementing package-backed overlay declarations, base-control lowering, package validation, catalog projection, inspection projection, runtime package-backed replay/report/stack/placement/focus/dismissal/suppression proof, proof-frame projection, static mount evidence, and no-bypass assertions without moving product/editor/game behavior into generic UI.
-Each later milestone requires its own owning design or planning update before code.
-```
-
 Evidence gates:
 
 ```text
-Phase 1: local validation and branch/PR evidence.
-Phase 2: user reported the authoring-kit validation gate green.
-Phase 3: user reported the story-proof validation gate green.
-Phase 4: user reported the catalog validation gate green.
-Phase 5: user reported the input validation gate green.
-Phase 6: user reported the state/host-intent validation gate green.
-Phase 7: user reported the theme/state/style validation gate green.
-Phase 8: user reported the accessibility/focus/inspection validation gate green.
-Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundation, 009C ui_controls layout bridge, read-only catalog inspection bridge, and focused tests; user reported the validation gate green.
-Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
-Phase 11: PR #37 merged the UI-local base-control contribution/preset/lowering proof; user reported the validation gate green.
-Phase 12: PR #43 merged package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions; user reported the validation gate green before the next phase started.
-Phase 12A: PR #43 merged an Executable UI Interaction Story with replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions; user reported the validation gate green before the next phase started.
-Phase 13: PR #44 now contains implementation evidence for package-backed overlay declarations, base-control lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime package-backed replay/report/proof, static mount proof, and no-bypass evidence. Local validation passed on 2026-07-02 with the full Phase 13 cargo/docs/diff gate.
-Later phases: text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
+Phase 13: PR #44 merged into main at merge commit 6f2d3827f315191d7aeaf68a64f523627197cad8. Local validation passed on 2026-07-02 with the full Phase 13 cargo/docs/diff gate.
+Phase 14: planning/design only. Current implementation inspection found read-only text-intent probe support, not full editable text behavior.
 ```
 
 Current blocker:
 
 ```text
-Phase 13 has local validation evidence on PR #44. It must not be merged without explicit instruction, and completion truth must be recorded after PR acceptance or merge before the next implementation phase starts.
-```
-
-Activation condition:
-
-```text
-Each future milestone activates only through an accepted planning/design update and active-work transition.
+No Phase 13 blocker remains. Phase 14 implementation remains blocked until active planning is promoted with exact implementation scope, owner files, validation envelope, evidence expectations, and stop conditions.
 ```
 
 Next action:
 
 ```text
-Review PR #44 and merge only after explicit instruction. After PR acceptance or merge, record Phase 13 completion truth before opening the next implementation phase. Do not implement UI Gallery exposure, full UI Designer, authored UI editing, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of Phase 13.
+Review and accept, revise, or reject the Phase 14 Text Editing / Editable Text Behavior design. Do not implement Phase 14 until the implementation scope is explicitly authorized.
 ```
 
 ## Track shape
