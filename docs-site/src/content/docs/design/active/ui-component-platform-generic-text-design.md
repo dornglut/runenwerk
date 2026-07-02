@@ -104,6 +104,12 @@ Renderer backends may later consume text layout/glyph evidence. Backend implemen
 
 Host/product/editor/game layers own app-specific copy, localization selection, content persistence, document buffers, authored UI editing, code editing, undo/redo, commands, domain mutation, and product-specific text semantics.
 
+## Existing editable-text primitives in `ui_text`
+
+`ui_text` currently also contains editable-text support modules such as buffer, cursor, and selection primitives. Phase 15 must not redesign or remove those modules as part of the Generic Text cutover. They may receive only mechanical compile adaptations caused by renamed layout/style exports.
+
+The display/layout cutover must be isolated from editing semantics. Any future split between display text and editable text ownership is a separate design decision, not an implicit side effect of Phase 15.
+
 ## Required clean cutover
 
 The current `TextLayoutRequest { text, style, max_width } -> Option<GlyphRun>` model must not remain the primary Generic Text contract. Phase 15 should introduce a new block-oriented model and either remove, demote, or adapt the old model behind the new tests.
@@ -233,6 +239,30 @@ line/column
 ```
 
 Layout evidence may include internal UTF-8 byte ranges only if they remain private implementation details. Public reports, catalog facts, and inspection facts must use logical text units.
+
+## Deterministic proof layout algorithm
+
+The implementation must include a deterministic proof layouter. It is allowed to be simple, but its behavior must be specified and tested so Phase 15 does not become subjective renderer behavior.
+
+Algorithm rules:
+
+1. Lower text blocks into ordered source runs and style segments before layout.
+2. Split source text into proof clusters. The initial proof cluster may be one Unicode scalar value, but the public evidence type must be named and shaped as a cluster so later shaping can map many scalars to one glyph or one scalar to multiple glyphs.
+3. Resolve font metrics from the deterministic proof atlas. Missing glyphs use a stable replacement glyph and emit fallback evidence.
+4. Resolve line height before line placement. The default line height must be at least the scaled font default. Absolute or multiplier line-height policies must be recorded in line metrics.
+5. Apply explicit newline breaks before width wrapping.
+6. Apply whitespace policy before word wrapping. `preserve` keeps source whitespace clusters. `collapse_runs` collapses consecutive horizontal whitespace for measurement and evidence. `trim_edges` trims leading/trailing line-edge whitespace after wrapping.
+7. `no_wrap` produces one visual line per explicit source line and records horizontal overflow when content exceeds the width constraint.
+8. `word` wrapping prefers the last legal whitespace boundary before the width limit. If no boundary exists, it falls back to cluster wrapping and records that fallback in evidence.
+9. `character` wrapping breaks at cluster boundaries.
+10. Horizontal alignment shifts each visual line origin inside the width constraint after wrapping/truncation. Alignment evidence must record start, center, or end.
+11. Max-line clamping is applied after wrapping and before ellipsis placement.
+12. Clip overflow records visible range and omitted cluster counts without inserting ellipsis glyph evidence.
+13. End ellipsis replaces the last visible clusters that fit after max-line clamping or no-wrap overflow. The proof must record ellipsis as an overflow decision even when the visual fallback is three dots rather than a single ellipsis glyph.
+14. Start and middle ellipsis policies must exist in the model. If not implemented in the deterministic proof layouter, they must produce explicit unsupported-policy diagnostics rather than silently behaving like end ellipsis.
+15. Text direction may default to left-to-right for the deterministic proof. `auto` and `rtl` must exist in the model. Unsupported direction behavior must be explicit in diagnostics or evidence.
+
+The deterministic proof layouter must return a complete layout result, not `Option<GlyphRun>`. Failure cases must return diagnostics with enough context for tests and inspection.
 
 ## Layout result and evidence model
 
@@ -389,6 +419,16 @@ Validation must reject or report:
 - command execution, product mutation, authored UI editing, document-buffer ownership, undo/redo, or clipboard ownership claims;
 - compatibility-only descriptor aliases.
 
+Validation must add dedicated generic-text validation reasons instead of reusing editable-text reasons. Expected variants or equivalent names:
+
+```text
+DuplicateGenericTextDescriptor
+UnresolvedGenericTextDescriptor
+InvalidGenericTextDescriptor
+InvalidGenericTextRole
+UnsupportedGenericTextLayoutPolicy
+```
+
 Validation should preserve the existing descriptor/package style: narrow builders, stable sorted summaries, deterministic diagnostics, and no global plugin mechanism.
 
 ## Catalog projection
@@ -544,12 +584,13 @@ Phase 15 is not complete until these scenarios are covered by focused tests:
 11. **Max-line clamp**: multi-line text clamps to a configured max line count.
 12. **Fallback glyph**: missing glyph/replacement evidence is emitted.
 13. **Render-data primitive compatibility**: `UiFrame` can carry the new visual-run/text evidence without depending on the retired single-run layout type.
-14. **Catalog projection**: descriptor facts appear in catalog entry.
-15. **Inspection projection**: text display facts appear in inspection descriptor under text display, not text editing.
-16. **Runtime proof frame**: `UiFrame` summary proves source/layout/evidence panels.
-17. **Static mount acceptance**: static mount validates the renderer-neutral proof frame.
-18. **Negative validation**: duplicate role, missing kind, invalid max lines, unsupported span, and backend-required descriptor produce diagnostics.
-19. **Boundary/no-bypass**: no commands, product mutation, authored UI edits, undo/redo, renderer backend ownership, or plugin operations.
+14. **Generic-text validation reasons**: duplicate, unresolved, invalid role, unsupported policy, and backend-required descriptors use dedicated generic-text diagnostics.
+15. **Catalog projection**: descriptor facts appear in catalog entry.
+16. **Inspection projection**: text display facts appear in inspection descriptor under text display, not text editing.
+17. **Runtime proof frame**: `UiFrame` summary proves source/layout/evidence panels.
+18. **Static mount acceptance**: static mount validates the renderer-neutral proof frame.
+19. **Negative validation**: duplicate role, missing kind, invalid max lines, unsupported span, and backend-required descriptor produce diagnostics.
+20. **Boundary/no-bypass**: no commands, product mutation, authored UI edits, undo/redo, renderer backend ownership, or plugin operations.
 
 ## Implementation roadmap
 
@@ -575,6 +616,8 @@ domain/ui/ui_text/src/policy.rs
 domain/ui/ui_text/src/proof_layout.rs
 ```
 
+Do not redesign `domain/ui/ui_text/src/buffer.rs`, `cursor.rs`, or `selection.rs` as part of this step. Those modules remain editing-related substrate from earlier work unless a separate design explicitly changes ownership.
+
 ### Step 2: Keep render-data primitives compatible with the cutover
 
 Update the renderer-neutral text primitive surface if it currently depends on the retired `GlyphRun` shape. This is not a renderer backend task; it is the `UiFrame` transport layer for already-laid-out text evidence.
@@ -599,6 +642,7 @@ domain/ui/ui_controls/src/generic_text.rs
 domain/ui/ui_controls/src/lib.rs
 domain/ui/ui_controls/src/package/descriptor.rs
 domain/ui/ui_controls/src/package/validation.rs
+domain/ui/ui_controls/src/package/generic_text_validation.rs
 ```
 
 ### Step 4: Project catalog and inspection facts
@@ -694,13 +738,15 @@ Do not implement these as product features in Phase 15 unless they are needed fo
 Phase 15 can be considered complete only when:
 
 - `ui_text` has a block/run/span/layout/evidence model, not only a single string-to-glyph-run API;
+- existing `ui_text` buffer/cursor/selection editing primitives are not redesigned as part of Generic Text;
+- the deterministic proof layouter follows the documented wrapping, whitespace, alignment, overflow, ellipsis, fallback, and diagnostics rules;
 - `ui_render_data` can carry the new visual-run/text evidence in `UiFrame` without depending on the retired single-run layout shape;
 - inline spans are declared, laid out, and visible in proof evidence;
 - no-wrap, word-wrap, character-wrap, alignment, explicit newline, clip overflow, ellipsis, and max-line clamping are proven;
 - line metrics include baseline, line box, content width, measured size, and truncation state;
 - glyph evidence includes visual order, run/span linkage, font identity, cluster/range evidence, origin, advance, and bounds;
 - package descriptors can declare Generic Text support;
-- package validation rejects invalid or boundary-breaking declarations;
+- package validation rejects invalid or boundary-breaking declarations with dedicated generic-text validation reasons;
 - catalog projection exposes text display support;
 - inspection projection exposes text display facts separately from text editing;
 - runtime proof report exposes descriptor/source/layout/glyph/overflow/projection/boundary evidence;
@@ -720,10 +766,12 @@ Stop and redesign if implementation attempts any of the following:
 
 - preserves the current single-run layout API as the primary Generic Text contract;
 - leaves `ui_render_data` tied to a retired single-run text layout type after the cutover;
+- redesigns existing `ui_text` buffer/cursor/selection editing primitives as part of Generic Text;
 - represents public glyph evidence only as `char` plus position;
 - omits line metrics from the proof;
 - omits inline spans from the proof;
 - treats ellipsis as only a rendered character without overflow evidence;
+- silently maps unsupported start/middle ellipsis or unsupported text direction to another policy without diagnostics;
 - stores product copy or localization policy inside package descriptors;
 - places text editing, selection, clipboard, undo/redo, or document-buffer ownership in Generic Text;
 - requires renderer backend implementation to complete the proof;
