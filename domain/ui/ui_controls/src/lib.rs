@@ -8,6 +8,7 @@ pub mod button;
 pub mod catalog;
 pub mod color_picker;
 pub mod diagnostics;
+pub mod editable_text;
 pub mod input;
 pub mod inspector_field;
 pub mod interaction;
@@ -32,6 +33,7 @@ pub use button::BUTTON_CONTROL_KIND_ID;
 pub use catalog::*;
 pub use color_picker::COLOR_PICKER_CONTROL_KIND_ID;
 pub use diagnostics::*;
+pub use editable_text::*;
 pub use inspector_field::INSPECTOR_FIELD_CONTROL_KIND_ID;
 pub use interaction::*;
 pub use kernel::*;
@@ -73,6 +75,7 @@ mod tests {
         assert_eq!(package.stories.len(), 8);
         assert_eq!(package.interaction_descriptors.len(), 8);
         assert_eq!(package.overlay_descriptors.len(), 8);
+        assert_eq!(package.editable_text_descriptors.len(), 1);
     }
 
     #[test]
@@ -181,6 +184,17 @@ mod tests {
         assert_has_reason(
             package,
             ControlPackageValidationReason::DuplicateInteractionDescriptor,
+        );
+    }
+    #[test]
+    fn control_package_rejects_duplicate_editable_text_descriptor() {
+        let mut package = runenwerk_control_package();
+        package
+            .editable_text_descriptors
+            .push(package.editable_text_descriptors[0].clone());
+        assert_has_reason(
+            package,
+            ControlPackageValidationReason::DuplicateEditableTextDescriptor,
         );
     }
     #[test]
