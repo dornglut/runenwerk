@@ -78,6 +78,36 @@ fn inline_spans_keep_span_and_semantic_evidence() {
 }
 
 #[test]
+fn visual_runs_are_homogeneous_style_span_and_font_segments() {
+    let result = layout(TextBlock::inline_spans(
+        "abc def",
+        vec![
+            TextSpan::new(TextSpanId(11), TextSourceRange::new(0, 3))
+                .with_style(TextSpanStyle::inherit().with_decoration(TextDecoration::underline())),
+            TextSpan::new(TextSpanId(12), TextSourceRange::new(4, 7))
+                .with_style(TextSpanStyle::inherit().with_font_weight(ui_text::TextFontWeight::Bold)),
+        ],
+    ));
+
+    let styled_runs = result
+        .visual_runs
+        .iter()
+        .filter(|run| run.span_id.is_some())
+        .collect::<Vec<_>>();
+    assert_eq!(styled_runs.len(), 2);
+    assert!(styled_runs.iter().any(|run| {
+        run.span_id == Some(TextSpanId(11))
+            && run.style.decoration.underline
+            && run.glyphs.iter().all(|glyph| glyph.span_id == run.span_id)
+    }));
+    assert!(styled_runs.iter().any(|run| {
+        run.span_id == Some(TextSpanId(12))
+            && run.style.font_weight == ui_text::TextFontWeight::Bold
+            && run.glyphs.iter().all(|glyph| glyph.span_id == run.span_id)
+    }));
+}
+
+#[test]
 fn explicit_newline_creates_explicit_break_line() {
     let result = layout(TextBlock::label("one\ntwo"));
     assert_eq!(result.line_count, 2);
