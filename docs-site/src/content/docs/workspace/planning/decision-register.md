@@ -88,7 +88,19 @@ Evidence: PR #48 branch `ui/generic-text-phase-15` at implementation commit `32e
 
 Validation: `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check` passed locally on 2026-07-02.
 
-Follow-up: Mark PR #48 ready for review after docs validation remains green, then merge only if GitHub reports the PR mergeable. Record the merge commit after merge.
+Follow-up: Complete PR #48 merge, then record the merge commit.
+
+## Phase 15 generic text completion decision
+
+Date: 2026-07-02
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-015` Generic Text completed through merged PR #48.
+
+State transition: `review -> completed`
+
+Evidence: PR #48 merged into `main` at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. The validated implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680` passed the local Phase 15 gate: `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`.
+
+Follow-up: Keep Phase 15 as completed dependency and use it as the preceding substrate for Phase 16 Surface2D planning.
 
 ## Phase 16 Surface2D planning-start decision
 
@@ -98,7 +110,7 @@ Decision: Start `PT-UI-COMPONENT-PLATFORM-016` as Surface2D design/planning inta
 
 State transition: `production-track -> active-planning`
 
-Evidence: Phase 15 Generic Text local closeout evidence is recorded for PR #48 at implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680`. The existing Surface2D design scopes generic renderer-neutral 2D surface identity, content/viewport bounds, world/screen transforms, pan, zoom, fit, selection rectangle, hover coordinate, pointer capture, gesture cancel/commit, overlay/diagnostic layers, grid/background vocabulary, large-content bounds, LOD readiness, and budget evidence.
+Evidence: Phase 15 Generic Text completed through merged PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. The existing Surface2D design scopes generic renderer-neutral 2D surface identity, content/viewport bounds, world/screen transforms, pan, zoom, fit, selection rectangle, hover coordinate, pointer capture, gesture cancel/commit, overlay/diagnostic layers, grid/background vocabulary, large-content bounds, LOD readiness, and budget evidence.
 
 Follow-up: Review and refine the Surface2D design. Do not implement until active planning is promoted with exact scope, owner files, validation, evidence, and stop conditions.
 

@@ -37,7 +37,7 @@ Known blockers: No Phase 15 implementation blocker remains in local validation. 
 
 Next action: Review and refine the Phase 16 Surface2D design intake. Do not start implementation until active planning is promoted with exact owner files, implementation scope, validation, evidence, and stop conditions.
 
-Evidence: Phase 15 Generic Text has local closeout evidence on PR #48 branch `ui/generic-text-phase-15` at implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680`. Validation passed on 2026-07-02 with `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`. Merge commit is pending PR #48 workflow completion.
+Evidence: Phase 15 Generic Text completed through merged PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`; implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680` carried the validated code closeout. Validation passed on 2026-07-02 with `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`.
 
 ## Active-work rules
 
