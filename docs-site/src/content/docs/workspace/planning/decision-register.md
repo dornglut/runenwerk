@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
+  - ../../design/active/ui-component-platform-generic-text-design.md
 ---
 
 # Decision Register
@@ -23,9 +24,7 @@ Decision: Mark `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full im
 
 State transition: `review -> completed`
 
-Context: PR #44 is merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Inspection after merge showed `main` identical to that merge commit.
-
-Evidence: Package-backed overlay declarations, base-control overlay lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, `ui_runtime::overlay` replay/report/stack/placement/focus/dismissal/suppression proof, proof-frame projection, static mount proof, no-bypass evidence, full local validation gate passed on 2026-07-02, and merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`.
+Evidence: PR #44 merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`; local validation passed on 2026-07-02; package-backed overlay declarations, runtime overlay proof, proof-frame projection, static mount proof, and no-bypass evidence are present.
 
 Follow-up: Keep Phase 13 as completed dependency.
 
@@ -37,25 +36,45 @@ Decision: Start `PT-UI-COMPONENT-PLATFORM-014` as Text Editing / Editable Text B
 
 State transition: `production-track -> active-planning`
 
-Context: Phase 12 provided read-only text-intent probe support. Phase 13 completed overlay/layering. Current code inspection shows no full editable text behavior yet.
+Evidence: Phase 13 completed overlay/layering, and Phase 14 planning scope required package-backed editable text behavior without moving product/editor/game ownership into generic UI.
 
-Evidence: Current `ui_controls` package descriptor and validation paths, current base-control compiler and interaction lowering, current catalog and inspection projections, current `ui_input` normalized facts, current `ui_runtime` interaction and overlay proof paths, current `ui_static_mount` frame validation, and completed Phase 13 closeout.
-
-Follow-up: Review and accept, revise, or reject the Phase 14 design. Do not implement until active planning is promoted with exact scope, owner files, validation, evidence, and stop conditions.
+Follow-up: Review and accept, revise, or reject the Phase 14 design before implementation.
 
 ## Phase 14 implementation and review readiness decision
 
 Date: 2026-07-02
 
-Decision: Promote `PT-UI-COMPONENT-PLATFORM-014` from planning to local implementation using the 2026-07-02 user handoff, then move the branch to review after package-backed implementation evidence was added locally.
+Decision: Promote `PT-UI-COMPONENT-PLATFORM-014` from planning to local implementation, then move the branch to review after package-backed implementation evidence was added locally.
 
 State transition: `active-planning -> active-implementation -> review`
 
-Context: The Phase 14 design required a later implementation transition with exact owner files, validation envelope, evidence expectations, and stop conditions. The 2026-07-02 handoff supplied those details and identified the connector blocker as write capability, not design uncertainty.
+Evidence: The local branch implemented editable-text vocabulary, descriptor wiring, package validation, InspectorField text-editing lowering, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, no-bypass evidence, and focused tests. Local validation passed on 2026-07-02 with the recorded Phase 14 cargo/docs/diff gate.
 
-Evidence: The local branch implements editable-text vocabulary, `ControlPackageDescriptor::editable_text_descriptors`, package validation, InspectorField text-editing lowering, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, no-bypass evidence, and focused tests. Local validation passed on 2026-07-02 with the recorded Phase 14 cargo/docs/diff gate.
+Follow-up: After acceptance or merge, record Phase 14 completion truth and open Phase 15.
 
-Follow-up: Review the implementation branch. After acceptance or merge, record Phase 14 completion truth in active work, roadmap, production track, completed work, decision register, and any required closeout report before opening Phase 15.
+## Phase 14 completion decision
+
+Date: 2026-07-02
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior completed through merged PR #46.
+
+State transition: `review -> completed`
+
+Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Post-merge inspection showed `main` identical to that merge commit. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, and final proof-frame cleanup. Local Phase 14 validation passed on 2026-07-02 before merge.
+
+Follow-up: Keep Phase 14 as completed dependency and use it as the preceding substrate for Generic Text planning.
+
+## Phase 15 generic text planning-start decision
+
+Date: 2026-07-02
+
+Decision: Start `PT-UI-COMPONENT-PLATFORM-015` as Generic Text design/planning intake.
+
+State transition: `production-track -> active-planning`
+
+Evidence: Existing `ui_text` owns renderer-independent text contracts. Phase 15 planning scope is text runs, inline spans, wrapping, alignment, truncation/ellipsis, line metrics, glyph/run evidence, package/catalog/inspection projection, visual proof, and static mount proof. Text editing, rich text editor behavior, code editor behavior, product document buffers, undo/redo, clipboard, app-specific text rendering policy, dynamic plugin framework, `foundation/meta`, shared plugin primitives, UI Designer, UI Gallery product surface, Workbench/provider redesign, product/editor/game mutation, authored UI editing, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
+
+Follow-up: Review and refine the Generic Text design. Do not implement until active planning is promoted with exact scope, owner files, validation, evidence, and stop conditions.
 
 ## Lifecycle rule
 

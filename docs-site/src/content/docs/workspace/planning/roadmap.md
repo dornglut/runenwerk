@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
+  - ../../design/active/ui-component-platform-generic-text-design.md
 ---
 
 # Roadmap
@@ -37,15 +38,31 @@ ID: `PT-UI-COMPONENT-PLATFORM-014`
 
 Title: Text Editing / Editable Text Behavior
 
-State: review after local implementation validation
+State: completed through merged PR #46
 
-Lifecycle state: `review`
+Lifecycle state: `completed`
 
 Authority: `ui-component-platform-text-editing-design.md`.
 
-Evidence: Local Phase 14 implementation branch now contains package-backed editable-text declarations, InspectorField lowering, descriptor validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/proof-frame evidence, static mount validation, no-bypass evidence, and focused tests. Local validation passed on 2026-07-02 with the recorded Phase 14 cargo/docs/diff gate. Completion is not recorded until acceptance or merge.
+Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Evidence covers package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, final proof-frame cleanup, and full local validation gate passed on 2026-07-02.
 
-Next action: Review the implementation branch. After acceptance or merge, record Phase 14 completion truth before opening Phase 15.
+Next action: Keep as completed dependency.
+
+### PT-UI-COMPONENT-PLATFORM-015
+
+ID: `PT-UI-COMPONENT-PLATFORM-015`
+
+Title: Generic Text
+
+State: active planning for reusable renderer-neutral text display and layout proof
+
+Lifecycle state: `active-planning`
+
+Authority: `ui-component-platform-generic-text-design.md`.
+
+Evidence: Phase 14 is complete and provides the preceding editable-text substrate. Existing `ui_text` owns renderer-independent text contracts; Phase 15 planning now scopes reusable display/layout proof around text runs, inline spans, wrapping, alignment, truncation/ellipsis, line metrics, glyph/run evidence, catalog/inspection projection, visual proof, and static mount proof.
+
+Next action: Review and refine Phase 15 design intake. Do not start implementation until planning records exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
 
 ## Rules
 
