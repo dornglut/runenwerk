@@ -32,81 +32,180 @@ impl TextWidthConstraint {
         }
     }
 }
-impl Default for TextWidthConstraint { fn default() -> Self { Self::Unconstrained } }
+impl Default for TextWidthConstraint {
+    fn default() -> Self {
+        Self::Unconstrained
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum TextHeightConstraint { Unconstrained, Exact(f32), Max(f32) }
+pub enum TextHeightConstraint {
+    Unconstrained,
+    Exact(f32),
+    Max(f32),
+}
 impl TextHeightConstraint {
     pub fn limit(self) -> Option<f32> {
-        match self { Self::Unconstrained => None, Self::Exact(value) | Self::Max(value) => Some(value.max(0.0)) }
+        match self {
+            Self::Unconstrained => None,
+            Self::Exact(value) | Self::Max(value) => Some(value.max(0.0)),
+        }
     }
     pub fn resolved_height(self, content_height: f32) -> f32 {
-        match self { Self::Unconstrained => content_height, Self::Exact(value) => value.max(0.0), Self::Max(value) => content_height.min(value.max(0.0)) }
+        match self {
+            Self::Unconstrained => content_height,
+            Self::Exact(value) => value.max(0.0),
+            Self::Max(value) => content_height.min(value.max(0.0)),
+        }
     }
 }
-impl Default for TextHeightConstraint { fn default() -> Self { Self::Unconstrained } }
+impl Default for TextHeightConstraint {
+    fn default() -> Self {
+        Self::Unconstrained
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TextWrapPolicy { NoWrap, Word, Character }
+pub enum TextWrapPolicy {
+    NoWrap,
+    Word,
+    Character,
+}
 impl TextWrapPolicy {
     pub const fn as_str(self) -> &'static str {
-        match self { Self::NoWrap => "no-wrap", Self::Word => "word", Self::Character => "character" }
+        match self {
+            Self::NoWrap => "no-wrap",
+            Self::Word => "word",
+            Self::Character => "character",
+        }
     }
 }
-impl Default for TextWrapPolicy { fn default() -> Self { Self::NoWrap } }
+impl Default for TextWrapPolicy {
+    fn default() -> Self {
+        Self::NoWrap
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TextWhitespacePolicy { Preserve, CollapseRuns, TrimEdges }
+pub enum TextWhitespacePolicy {
+    Preserve,
+    CollapseRuns,
+    TrimEdges,
+}
 impl TextWhitespacePolicy {
     pub const fn as_str(self) -> &'static str {
-        match self { Self::Preserve => "preserve", Self::CollapseRuns => "collapse-runs", Self::TrimEdges => "trim-edges" }
+        match self {
+            Self::Preserve => "preserve",
+            Self::CollapseRuns => "collapse-runs",
+            Self::TrimEdges => "trim-edges",
+        }
     }
 }
-impl Default for TextWhitespacePolicy { fn default() -> Self { Self::Preserve } }
+impl Default for TextWhitespacePolicy {
+    fn default() -> Self {
+        Self::Preserve
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TextHorizontalAlign { Start, Center, End }
+pub enum TextHorizontalAlign {
+    Start,
+    Center,
+    End,
+}
 impl TextHorizontalAlign {
     pub const fn as_str(self) -> &'static str {
-        match self { Self::Start => "start", Self::Center => "center", Self::End => "end" }
+        match self {
+            Self::Start => "start",
+            Self::Center => "center",
+            Self::End => "end",
+        }
     }
 }
-impl Default for TextHorizontalAlign { fn default() -> Self { Self::Start } }
+impl Default for TextHorizontalAlign {
+    fn default() -> Self {
+        Self::Start
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TextVerticalAlign { Start, Center, End, Baseline }
+pub enum TextVerticalAlign {
+    Start,
+    Center,
+    End,
+    Baseline,
+}
 impl TextVerticalAlign {
     pub const fn as_str(self) -> &'static str {
-        match self { Self::Start => "start", Self::Center => "center", Self::End => "end", Self::Baseline => "baseline" }
+        match self {
+            Self::Start => "start",
+            Self::Center => "center",
+            Self::End => "end",
+            Self::Baseline => "baseline",
+        }
     }
 }
-impl Default for TextVerticalAlign { fn default() -> Self { Self::Start } }
+impl Default for TextVerticalAlign {
+    fn default() -> Self {
+        Self::Start
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TextOverflowPolicy { Clip, Ellipsis(TextEllipsisPlacement) }
+pub enum TextOverflowPolicy {
+    Clip,
+    Ellipsis(TextEllipsisPlacement),
+}
 impl TextOverflowPolicy {
     pub const fn as_str(self) -> &'static str {
-        match self { Self::Clip => "clip", Self::Ellipsis(_) => "ellipsis" }
+        match self {
+            Self::Clip => "clip",
+            Self::Ellipsis(_) => "ellipsis",
+        }
     }
 }
-impl Default for TextOverflowPolicy { fn default() -> Self { Self::Clip } }
+impl Default for TextOverflowPolicy {
+    fn default() -> Self {
+        Self::Clip
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TextEllipsisPlacement { Start, Middle, End }
+pub enum TextEllipsisPlacement {
+    Start,
+    Middle,
+    End,
+}
 impl TextEllipsisPlacement {
     pub const fn as_str(self) -> &'static str {
-        match self { Self::Start => "start", Self::Middle => "middle", Self::End => "end" }
+        match self {
+            Self::Start => "start",
+            Self::Middle => "middle",
+            Self::End => "end",
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TextDirectionPolicy { Auto, Ltr, Rtl }
+pub enum TextDirectionPolicy {
+    Auto,
+    Ltr,
+    Rtl,
+}
 impl TextDirectionPolicy {
     pub const fn as_str(self) -> &'static str {
-        match self { Self::Auto => "auto", Self::Ltr => "ltr", Self::Rtl => "rtl" }
+        match self {
+            Self::Auto => "auto",
+            Self::Ltr => "ltr",
+            Self::Rtl => "rtl",
+        }
     }
 }
-impl Default for TextDirectionPolicy { fn default() -> Self { Self::Auto } }
+impl Default for TextDirectionPolicy {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextLayoutPolicy {
@@ -123,23 +222,87 @@ pub struct TextLayoutPolicy {
 
 impl TextLayoutPolicy {
     pub const fn no_wrap_label() -> Self {
-        Self { width_constraint: TextWidthConstraint::Unconstrained, height_constraint: TextHeightConstraint::Unconstrained, wrap: TextWrapPolicy::NoWrap, whitespace: TextWhitespacePolicy::Preserve, horizontal_align: TextHorizontalAlign::Start, vertical_align: TextVerticalAlign::Start, overflow: TextOverflowPolicy::Clip, max_lines: None, text_direction: TextDirectionPolicy::Auto }
+        Self {
+            width_constraint: TextWidthConstraint::Unconstrained,
+            height_constraint: TextHeightConstraint::Unconstrained,
+            wrap: TextWrapPolicy::NoWrap,
+            whitespace: TextWhitespacePolicy::Preserve,
+            horizontal_align: TextHorizontalAlign::Start,
+            vertical_align: TextVerticalAlign::Start,
+            overflow: TextOverflowPolicy::Clip,
+            max_lines: None,
+            text_direction: TextDirectionPolicy::Auto,
+        }
     }
     pub const fn wrapping_body(max_width: f32) -> Self {
-        Self { width_constraint: TextWidthConstraint::Max(max_width), height_constraint: TextHeightConstraint::Unconstrained, wrap: TextWrapPolicy::Word, whitespace: TextWhitespacePolicy::CollapseRuns, horizontal_align: TextHorizontalAlign::Start, vertical_align: TextVerticalAlign::Start, overflow: TextOverflowPolicy::Clip, max_lines: None, text_direction: TextDirectionPolicy::Auto }
+        Self {
+            width_constraint: TextWidthConstraint::Max(max_width),
+            height_constraint: TextHeightConstraint::Unconstrained,
+            wrap: TextWrapPolicy::Word,
+            whitespace: TextWhitespacePolicy::CollapseRuns,
+            horizontal_align: TextHorizontalAlign::Start,
+            vertical_align: TextVerticalAlign::Start,
+            overflow: TextOverflowPolicy::Clip,
+            max_lines: None,
+            text_direction: TextDirectionPolicy::Auto,
+        }
     }
     pub const fn helper_text(max_width: f32, max_lines: u32) -> Self {
-        Self { width_constraint: TextWidthConstraint::Max(max_width), height_constraint: TextHeightConstraint::Unconstrained, wrap: TextWrapPolicy::Word, whitespace: TextWhitespacePolicy::CollapseRuns, horizontal_align: TextHorizontalAlign::Start, vertical_align: TextVerticalAlign::Start, overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End), max_lines: Some(max_lines), text_direction: TextDirectionPolicy::Auto }
+        Self {
+            width_constraint: TextWidthConstraint::Max(max_width),
+            height_constraint: TextHeightConstraint::Unconstrained,
+            wrap: TextWrapPolicy::Word,
+            whitespace: TextWhitespacePolicy::CollapseRuns,
+            horizontal_align: TextHorizontalAlign::Start,
+            vertical_align: TextVerticalAlign::Start,
+            overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
+            max_lines: Some(max_lines),
+            text_direction: TextDirectionPolicy::Auto,
+        }
     }
     pub const fn badge(max_width: f32) -> Self {
-        Self { width_constraint: TextWidthConstraint::Max(max_width), height_constraint: TextHeightConstraint::Unconstrained, wrap: TextWrapPolicy::NoWrap, whitespace: TextWhitespacePolicy::TrimEdges, horizontal_align: TextHorizontalAlign::Center, vertical_align: TextVerticalAlign::Center, overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End), max_lines: Some(1), text_direction: TextDirectionPolicy::Auto }
+        Self {
+            width_constraint: TextWidthConstraint::Max(max_width),
+            height_constraint: TextHeightConstraint::Unconstrained,
+            wrap: TextWrapPolicy::NoWrap,
+            whitespace: TextWhitespacePolicy::TrimEdges,
+            horizontal_align: TextHorizontalAlign::Center,
+            vertical_align: TextVerticalAlign::Center,
+            overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
+            max_lines: Some(1),
+            text_direction: TextDirectionPolicy::Auto,
+        }
     }
     pub const fn tab_label(max_width: f32) -> Self {
-        Self { width_constraint: TextWidthConstraint::Max(max_width), height_constraint: TextHeightConstraint::Unconstrained, wrap: TextWrapPolicy::NoWrap, whitespace: TextWhitespacePolicy::TrimEdges, horizontal_align: TextHorizontalAlign::Center, vertical_align: TextVerticalAlign::Center, overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End), max_lines: Some(1), text_direction: TextDirectionPolicy::Auto }
+        Self {
+            width_constraint: TextWidthConstraint::Max(max_width),
+            height_constraint: TextHeightConstraint::Unconstrained,
+            wrap: TextWrapPolicy::NoWrap,
+            whitespace: TextWhitespacePolicy::TrimEdges,
+            horizontal_align: TextHorizontalAlign::Center,
+            vertical_align: TextVerticalAlign::Center,
+            overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
+            max_lines: Some(1),
+            text_direction: TextDirectionPolicy::Auto,
+        }
     }
     pub const fn inspector_row_value(max_width: f32) -> Self {
-        Self { width_constraint: TextWidthConstraint::Max(max_width), height_constraint: TextHeightConstraint::Unconstrained, wrap: TextWrapPolicy::Word, whitespace: TextWhitespacePolicy::CollapseRuns, horizontal_align: TextHorizontalAlign::Start, vertical_align: TextVerticalAlign::Baseline, overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End), max_lines: Some(1), text_direction: TextDirectionPolicy::Auto }
+        Self {
+            width_constraint: TextWidthConstraint::Max(max_width),
+            height_constraint: TextHeightConstraint::Unconstrained,
+            wrap: TextWrapPolicy::Word,
+            whitespace: TextWhitespacePolicy::CollapseRuns,
+            horizontal_align: TextHorizontalAlign::Start,
+            vertical_align: TextVerticalAlign::Baseline,
+            overflow: TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
+            max_lines: Some(1),
+            text_direction: TextDirectionPolicy::Auto,
+        }
     }
 }
 
-impl Default for TextLayoutPolicy { fn default() -> Self { Self::no_wrap_label() } }
+impl Default for TextLayoutPolicy {
+    fn default() -> Self {
+        Self::no_wrap_label()
+    }
+}

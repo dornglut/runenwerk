@@ -29,7 +29,7 @@ use ui_definition::{
 };
 use ui_math::Axis;
 use ui_math::{UiInsets, UiSize};
-use ui_text::{FontId, TextVerticalAlign};
+use ui_text::FontId;
 use ui_theme::{ThemeTokens, UiColor};
 use ui_tree::{PopupAlign, PopupFlipPolicy, PopupNode, PopupSide, UiNode, UiNodeKind};
 use ui_widgets::{button, button_selected, hstack_with_policies};
@@ -155,8 +155,7 @@ pub fn build_defined_toolbar_menu_popup_with_binding(
         fallback = checked_in_toolbar_binding();
         &fallback
     };
-    let mut text_style = theme.body_small_text_style(FontId(1));
-    text_style.vertical_align = TextVerticalAlign::CapHeightCenter;
+    let text_style = theme.body_small_text_style(FontId(1));
     let mut routes_by_widget_id = BTreeMap::new();
     let mut paths_by_widget_id = BTreeMap::new();
     let mut availability_by_widget_id = BTreeMap::new();
@@ -357,9 +356,6 @@ fn compact_toolbar_root(root: &mut UiNode, theme: &ThemeTokens) {
 }
 
 fn apply_compact_toolbar_text_alignment(node: &mut UiNode) {
-    if let UiNodeKind::Button(button) = &mut node.kind {
-        button.text_style.vertical_align = TextVerticalAlign::CapHeightCenter;
-    }
     for child in &mut node.children {
         apply_compact_toolbar_text_alignment(child);
     }
@@ -578,9 +574,7 @@ fn workspace_button_is_active(
 }
 
 fn toolbar_icon_text_style(theme: &ThemeTokens) -> ui_text::TextStyle {
-    let mut text_style = theme.body_small_text_style(FontId(1));
-    text_style.vertical_align = TextVerticalAlign::InkBoundsCenter;
-    text_style
+    theme.body_small_text_style(FontId(1))
 }
 
 fn style_workspace_close_button(

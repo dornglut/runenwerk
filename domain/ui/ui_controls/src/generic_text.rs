@@ -104,7 +104,13 @@ pub struct ControlGenericTextRoleDescriptor {
 
 impl ControlGenericTextRoleDescriptor {
     pub fn new(role_id: impl Into<String>, semantic_role: ControlGenericTextSemanticRole) -> Self {
-        Self { role_id: role_id.into(), semantic_role, required: true, inline_spans_allowed: false, max_lines: None }
+        Self {
+            role_id: role_id.into(),
+            semantic_role,
+            required: true,
+            inline_spans_allowed: false,
+            max_lines: None,
+        }
     }
 
     pub fn with_inline_spans(mut self) -> Self {
@@ -134,9 +140,22 @@ pub struct ControlGenericTextLayoutSupport {
 impl ControlGenericTextLayoutSupport {
     pub fn renderer_neutral_display() -> Self {
         Self {
-            wrap_policies: vec![ControlGenericTextWrapPolicy::NoWrap, ControlGenericTextWrapPolicy::Word, ControlGenericTextWrapPolicy::Character],
-            overflow_policies: vec![ControlGenericTextOverflowPolicy::Clip, ControlGenericTextOverflowPolicy::EndEllipsis, ControlGenericTextOverflowPolicy::StartEllipsisModeled, ControlGenericTextOverflowPolicy::MiddleEllipsisModeled],
-            alignment_policies: vec![ControlGenericTextAlignmentPolicy::Start, ControlGenericTextAlignmentPolicy::Center, ControlGenericTextAlignmentPolicy::End],
+            wrap_policies: vec![
+                ControlGenericTextWrapPolicy::NoWrap,
+                ControlGenericTextWrapPolicy::Word,
+                ControlGenericTextWrapPolicy::Character,
+            ],
+            overflow_policies: vec![
+                ControlGenericTextOverflowPolicy::Clip,
+                ControlGenericTextOverflowPolicy::EndEllipsis,
+                ControlGenericTextOverflowPolicy::StartEllipsisModeled,
+                ControlGenericTextOverflowPolicy::MiddleEllipsisModeled,
+            ],
+            alignment_policies: vec![
+                ControlGenericTextAlignmentPolicy::Start,
+                ControlGenericTextAlignmentPolicy::Center,
+                ControlGenericTextAlignmentPolicy::End,
+            ],
             inline_spans: true,
             line_metrics: true,
             glyph_evidence: true,
@@ -158,7 +177,12 @@ pub struct ControlGenericTextDescriptor {
 
 impl ControlGenericTextDescriptor {
     pub fn new(control_kind_id: ControlKindId) -> Self {
-        Self { control_kind_id, roles: Vec::new(), layout_support: ControlGenericTextLayoutSupport::renderer_neutral_display(), proof_required: true }
+        Self {
+            control_kind_id,
+            roles: Vec::new(),
+            layout_support: ControlGenericTextLayoutSupport::renderer_neutral_display(),
+            proof_required: true,
+        }
     }
 
     pub fn with_role(mut self, role: ControlGenericTextRoleDescriptor) -> Self {
@@ -193,10 +217,18 @@ pub struct ControlGenericTextSupportSummary {
 
 impl ControlGenericTextSupportSummary {
     pub fn from_descriptor(descriptor: &ControlGenericTextDescriptor) -> Self {
-        let mut roles = descriptor.roles.iter().map(|role| role.role_id.clone()).collect::<Vec<_>>();
+        let mut roles = descriptor
+            .roles
+            .iter()
+            .map(|role| role.role_id.clone())
+            .collect::<Vec<_>>();
         roles.sort();
         roles.dedup();
-        let mut semantic_roles = descriptor.roles.iter().map(|role| role.semantic_role.as_str().to_owned()).collect::<Vec<_>>();
+        let mut semantic_roles = descriptor
+            .roles
+            .iter()
+            .map(|role| role.semantic_role.as_str().to_owned())
+            .collect::<Vec<_>>();
         semantic_roles.sort();
         semantic_roles.dedup();
         Self {
@@ -204,9 +236,24 @@ impl ControlGenericTextSupportSummary {
             generic_text_supported: !descriptor.roles.is_empty(),
             roles,
             semantic_roles,
-            wrap_policies: descriptor.layout_support.wrap_policies.iter().map(|policy| policy.as_str().to_owned()).collect(),
-            overflow_policies: descriptor.layout_support.overflow_policies.iter().map(|policy| policy.as_str().to_owned()).collect(),
-            alignment_policies: descriptor.layout_support.alignment_policies.iter().map(|policy| policy.as_str().to_owned()).collect(),
+            wrap_policies: descriptor
+                .layout_support
+                .wrap_policies
+                .iter()
+                .map(|policy| policy.as_str().to_owned())
+                .collect(),
+            overflow_policies: descriptor
+                .layout_support
+                .overflow_policies
+                .iter()
+                .map(|policy| policy.as_str().to_owned())
+                .collect(),
+            alignment_policies: descriptor
+                .layout_support
+                .alignment_policies
+                .iter()
+                .map(|policy| policy.as_str().to_owned())
+                .collect(),
             inline_span_support: descriptor.layout_support.inline_spans,
             line_metrics_support: descriptor.layout_support.line_metrics,
             glyph_evidence_support: descriptor.layout_support.glyph_evidence,
@@ -221,17 +268,47 @@ impl ControlGenericTextSupportSummary {
 
     pub fn inspection_facts(&self) -> Vec<ControlGenericTextInspectionFact> {
         vec![
-            ControlGenericTextInspectionFact::new("text_display.supported", bool_string(self.generic_text_supported)),
+            ControlGenericTextInspectionFact::new(
+                "text_display.supported",
+                bool_string(self.generic_text_supported),
+            ),
             ControlGenericTextInspectionFact::new("text_display.roles", self.roles.join(",")),
-            ControlGenericTextInspectionFact::new("text_display.semantic_roles", self.semantic_roles.join(",")),
-            ControlGenericTextInspectionFact::new("text_display.wrap_policies", self.wrap_policies.join(",")),
-            ControlGenericTextInspectionFact::new("text_display.overflow_policies", self.overflow_policies.join(",")),
-            ControlGenericTextInspectionFact::new("text_display.alignment_policies", self.alignment_policies.join(",")),
-            ControlGenericTextInspectionFact::new("text_display.inline_spans", bool_string(self.inline_span_support)),
-            ControlGenericTextInspectionFact::new("text_display.line_metrics", bool_string(self.line_metrics_support)),
-            ControlGenericTextInspectionFact::new("text_display.glyph_evidence", bool_string(self.glyph_evidence_support)),
-            ControlGenericTextInspectionFact::new("text_display.fallback_evidence", bool_string(self.fallback_evidence_support)),
-            ControlGenericTextInspectionFact::new("text_display.renderer_backend_required", bool_string(self.renderer_backend_required)),
+            ControlGenericTextInspectionFact::new(
+                "text_display.semantic_roles",
+                self.semantic_roles.join(","),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.wrap_policies",
+                self.wrap_policies.join(","),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.overflow_policies",
+                self.overflow_policies.join(","),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.alignment_policies",
+                self.alignment_policies.join(","),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.inline_spans",
+                bool_string(self.inline_span_support),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.line_metrics",
+                bool_string(self.line_metrics_support),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.glyph_evidence",
+                bool_string(self.glyph_evidence_support),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.fallback_evidence",
+                bool_string(self.fallback_evidence_support),
+            ),
+            ControlGenericTextInspectionFact::new(
+                "text_display.renderer_backend_required",
+                bool_string(self.renderer_backend_required),
+            ),
         ]
     }
 }
@@ -244,9 +321,16 @@ pub struct ControlGenericTextInspectionFact {
 
 impl ControlGenericTextInspectionFact {
     pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
-        Self { key: key.into(), value: value.into() }
+        Self {
+            key: key.into(),
+            value: value.into(),
+        }
     }
 }
 
-fn default_true() -> bool { true }
-fn bool_string(value: bool) -> &'static str { if value { "true" } else { "false" } }
+fn default_true() -> bool {
+    true
+}
+fn bool_string(value: bool) -> &'static str {
+    if value { "true" } else { "false" }
+}

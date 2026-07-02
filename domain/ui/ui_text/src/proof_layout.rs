@@ -7,8 +7,8 @@ use crate::{
     FontAtlasSource, FontId, GlyphMetrics, TextBlock, TextBlockLayoutRequest,
     TextBlockLayoutResult, TextCluster, TextClusterRange, TextDirectionPolicy,
     TextEllipsisPlacement, TextFallbackEvidence, TextGlyph, TextHorizontalAlign,
-    TextLayoutDiagnostic, TextLineMetrics, TextOverflowEvidence, TextOverflowPolicy,
-    TextRunId, TextSourceRange, TextVisualRun, TextWhitespacePolicy, TextWrapPolicy,
+    TextLayoutDiagnostic, TextLineMetrics, TextOverflowEvidence, TextOverflowPolicy, TextRunId,
+    TextSourceRange, TextVisualRun, TextWhitespacePolicy, TextWrapPolicy,
 };
 
 #[derive(Clone)]
@@ -90,7 +90,9 @@ pub fn layout_text_block(
     }
 
     let horizontal_overflow = width_limit.is_some_and(|limit| {
-        lines.iter().any(|line| line_width(&line.glyphs) > limit + f32::EPSILON)
+        lines
+            .iter()
+            .any(|line| line_width(&line.glyphs) > limit + f32::EPSILON)
     });
     let mut overflow = TextOverflowEvidence::none();
     overflow.horizontal_overflow = horizontal_overflow;
@@ -98,7 +100,8 @@ pub fn layout_text_block(
     overflow.max_lines_applied = max_lines_applied;
     overflow.omitted_cluster_count = source
         .len()
-        .saturating_sub(lines.iter().map(|line| line.glyphs.len()).sum()) as u32;
+        .saturating_sub(lines.iter().map(|line| line.glyphs.len()).sum())
+        as u32;
     overflow.omitted_run_count = omitted_run_count(&block, &lines);
 
     let end_ellipsis = matches!(
@@ -107,11 +110,8 @@ pub fn layout_text_block(
     );
     if end_ellipsis && (horizontal_overflow || max_lines_applied) {
         if let Some(last_line) = lines.last_mut() {
-            apply_end_ellipsis(
-                &mut last_line.glyphs,
-                width_limit.unwrap_or_else(|| line_width(&last_line.glyphs)),
-                atlas_source,
-            );
+            let ellipsis_limit = width_limit.unwrap_or_else(|| line_width(&last_line.glyphs));
+            apply_end_ellipsis(&mut last_line.glyphs, ellipsis_limit, atlas_source);
         }
         overflow.ellipsized = true;
         overflow.ellipsis_placement = Some(TextEllipsisPlacement::End);
@@ -130,8 +130,14 @@ pub fn layout_text_block(
     );
     let line_metrics = line_metrics(&block, &lines, resolved_width, &overflow);
     let visual_runs = visual_runs(&block, &lines, &line_metrics);
-    let glyph_count = visual_runs.iter().map(|run| run.glyphs.len()).sum::<usize>();
-    let content_height = line_metrics.iter().map(|line| line.line_height).sum::<f32>();
+    let glyph_count = visual_runs
+        .iter()
+        .map(|run| run.glyphs.len())
+        .sum::<usize>();
+    let content_height = line_metrics
+        .iter()
+        .map(|line| line.line_height)
+        .sum::<f32>();
 
     TextBlockLayoutResult {
         block_id: block.text_block_id,
@@ -142,7 +148,10 @@ pub fn layout_text_block(
         glyph_count,
         measured_size: UiSize::new(
             resolved_width,
-            block.layout.height_constraint.resolved_height(content_height),
+            block
+                .layout
+                .height_constraint
+                .resolved_height(content_height),
         ),
         content_bounds: UiRect::new(0.0, 0.0, resolved_width, content_height),
         ink_bounds: UiRect::new(0.0, 0.0, resolved_width, content_height),
@@ -219,7 +228,8 @@ fn lower_source(
                 } else {
                     format!("char:{ch}")
                 },
-                advance: metrics.0.advance.max(0.0) * metrics.4 + style.letter_spacing.resolve(style.font_size),
+                advance: metrics.0.advance.max(0.0) * metrics.4
+                    + style.letter_spacing.resolve(style.font_size),
                 ascent: metrics.1 * metrics.4,
                 descent: metrics.2.abs() * metrics.4,
                 line_height: style.line_height_or_default(metrics.3 * metrics.4),
@@ -241,7 +251,17 @@ fn metrics(
     let atlas = atlas_source.atlas(font_id);
     let replacement = atlas
         .and_then(|atlas| atlas.glyphs.get(&'?').copied())
-        .unwrap_or(GlyphMetrics { advance: 8.0, plane_left: 0.0, plane_top: 8.0, plane_right: 8.0, plane_bottom: -2.0, atlas_left: 0.0, atlas_top: 0.0, atlas_right: 0.0, atlas_bottom: 0.0 });
+        .unwrap_or(GlyphMetrics {
+            advance: 8.0,
+            plane_left: 0.0,
+            plane_top: 8.0,
+            plane_right: 8.0,
+            plane_bottom: -2.0,
+            atlas_left: 0.0,
+            atlas_top: 0.0,
+            atlas_right: 0.0,
+            atlas_bottom: 0.0,
+        });
     let (glyph, missing) = atlas
         .and_then(|atlas| atlas.glyphs.get(&ch).copied())
         .map(|glyph| (glyph, false))
@@ -315,19 +335,37 @@ fn wrap_word_line(
     line: &mut ProofLine,
     diagnostics: &mut Vec<TextLayoutDiagnostic>,
 ) {
-    if let Some(boundary) = line.glyphs.iter().rposition(|glyph| glyph.cluster.is_whitespace) {
+    if let Some(boundary) = line
+        .glyphs
+        .iter()
+        .rposition(|glyph| glyph.cluster.is_whitespace)
+    {
         let mut remainder = line.glyphs.split_off(boundary + 1);
-        while line.glyphs.last().is_some_and(|glyph| glyph.cluster.is_whitespace) {
+        while line
+            .glyphs
+            .last()
+            .is_some_and(|glyph| glyph.cluster.is_whitespace)
+        {
             line.glyphs.pop();
         }
-        while remainder.first().is_some_and(|glyph| glyph.cluster.is_whitespace) {
+        while remainder
+            .first()
+            .is_some_and(|glyph| glyph.cluster.is_whitespace)
+        {
             remainder.remove(0);
         }
         let pushed = core::mem::replace(
             line,
-            ProofLine { glyphs: remainder, wrapped_from_previous: true, explicit_break: false },
+            ProofLine {
+                glyphs: remainder,
+                wrapped_from_previous: true,
+                explicit_break: false,
+            },
         );
-        lines.push(ProofLine { explicit_break: false, ..pushed });
+        lines.push(ProofLine {
+            explicit_break: false,
+            ..pushed
+        });
     } else {
         diagnostics.push(TextLayoutDiagnostic::warning(
             "ui.text.wrap.word_fell_back_to_character",
@@ -339,30 +377,52 @@ fn wrap_word_line(
 
 fn wrap_character_line(lines: &mut Vec<ProofLine>, line: &mut ProofLine) {
     let pushed = core::mem::take(line);
-    lines.push(ProofLine { explicit_break: false, ..pushed });
+    lines.push(ProofLine {
+        explicit_break: false,
+        ..pushed
+    });
     line.wrapped_from_previous = true;
 }
 
 fn trim_line_edges(lines: &mut [ProofLine]) {
     for line in lines {
-        while line.glyphs.first().is_some_and(|glyph| glyph.cluster.is_whitespace) {
+        while line
+            .glyphs
+            .first()
+            .is_some_and(|glyph| glyph.cluster.is_whitespace)
+        {
             line.glyphs.remove(0);
         }
-        while line.glyphs.last().is_some_and(|glyph| glyph.cluster.is_whitespace) {
+        while line
+            .glyphs
+            .last()
+            .is_some_and(|glyph| glyph.cluster.is_whitespace)
+        {
             line.glyphs.pop();
         }
     }
 }
 
 fn apply_end_ellipsis(line: &mut Vec<ProofGlyph>, limit: f32, atlas_source: &dyn FontAtlasSource) {
-    let Some(template) = line.last().cloned() else { return; };
+    let Some(template) = line.last().cloned() else {
+        return;
+    };
     let mut fallback = TextFallbackEvidence::none(template.cluster.style.font_id);
-    let dot = metrics(atlas_source, template.cluster.style.font_id, template.cluster.style.font_size, '.', &mut fallback);
+    let dot = metrics(
+        atlas_source,
+        template.cluster.style.font_id,
+        template.cluster.style.font_size,
+        '.',
+        &mut fallback,
+    );
     let dot_width = dot.0.advance.max(0.0) * dot.4;
     while !line.is_empty() && line_width(line) + dot_width * 3.0 > limit + f32::EPSILON {
         line.pop();
     }
-    let start = line.last().map(|glyph| glyph.cluster.cluster_index + 1).unwrap_or(template.cluster.cluster_index);
+    let start = line
+        .last()
+        .map(|glyph| glyph.cluster.cluster_index + 1)
+        .unwrap_or(template.cluster.cluster_index);
     for offset in 0..3 {
         let mut next = template.clone();
         next.cluster.cluster_index = start + offset;
@@ -375,7 +435,9 @@ fn apply_end_ellipsis(line: &mut Vec<ProofGlyph>, limit: f32, atlas_source: &dyn
     }
 }
 
-fn line_width(line: &[ProofGlyph]) -> f32 { line.iter().map(|glyph| glyph.advance).sum() }
+fn line_width(line: &[ProofGlyph]) -> f32 {
+    line.iter().map(|glyph| glyph.advance).sum()
+}
 
 fn line_metrics(
     block: &TextBlock,
@@ -387,9 +449,21 @@ fn line_metrics(
     let mut metrics = Vec::new();
     for (line_index, line) in lines.iter().enumerate() {
         let width = line_width(&line.glyphs);
-        let ascent = line.glyphs.iter().map(|glyph| glyph.ascent).fold(0.0, f32::max);
-        let descent = line.glyphs.iter().map(|glyph| glyph.descent).fold(0.0, f32::max);
-        let height = line.glyphs.iter().map(|glyph| glyph.line_height).fold((ascent + descent).max(1.0), f32::max);
+        let ascent = line
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.ascent)
+            .fold(0.0, f32::max);
+        let descent = line
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.descent)
+            .fold(0.0, f32::max);
+        let height = line
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.line_height)
+            .fold((ascent + descent).max(1.0), f32::max);
         let x = match block.layout.horizontal_align {
             TextHorizontalAlign::Start => 0.0,
             TextHorizontalAlign::Center => ((resolved_width - width) * 0.5).max(0.0),
@@ -412,23 +486,35 @@ fn line_metrics(
             horizontal_align: block.layout.horizontal_align,
             is_wrapped: line.wrapped_from_previous,
             is_explicit_break: line.explicit_break,
-            is_truncated: line_index + 1 == lines.len() && (overflow.clipped || overflow.ellipsized || overflow.max_lines_applied),
+            is_truncated: line_index + 1 == lines.len()
+                && (overflow.clipped || overflow.ellipsized || overflow.max_lines_applied),
         });
         y += height;
     }
     metrics
 }
 
-fn visual_runs(block: &TextBlock, lines: &[ProofLine], metrics: &[TextLineMetrics]) -> Vec<TextVisualRun> {
+fn visual_runs(
+    block: &TextBlock,
+    lines: &[ProofLine],
+    metrics: &[TextLineMetrics],
+) -> Vec<TextVisualRun> {
     let mut runs = Vec::new();
     let mut draw_order = 0_u32;
     for (line_index, line) in lines.iter().enumerate() {
-        let Some(line_metrics) = metrics.get(line_index) else { continue; };
+        let Some(line_metrics) = metrics.get(line_index) else {
+            continue;
+        };
         let mut pen_x = line_metrics.origin.x;
         let mut glyphs = Vec::new();
         for glyph in &line.glyphs {
             let origin = UiPoint::new(pen_x, line_metrics.baseline_y);
-            let bounds = UiRect::new(origin.x, line_metrics.baseline_y - glyph.ascent, glyph.advance, line_metrics.line_height);
+            let bounds = UiRect::new(
+                origin.x,
+                line_metrics.baseline_y - glyph.ascent,
+                glyph.advance,
+                line_metrics.line_height,
+            );
             glyphs.push(TextGlyph {
                 draw_order,
                 line_index: line_index as u32,
@@ -436,7 +522,10 @@ fn visual_runs(block: &TextBlock, lines: &[ProofLine], metrics: &[TextLineMetric
                 span_id: glyph.cluster.span_id,
                 font_id: glyph.cluster.style.font_id,
                 glyph_key: glyph.glyph_key.clone(),
-                cluster_range: TextClusterRange::new(glyph.cluster.cluster_index, glyph.cluster.cluster_index + 1),
+                cluster_range: TextClusterRange::new(
+                    glyph.cluster.cluster_index,
+                    glyph.cluster.cluster_index + 1,
+                ),
                 origin,
                 advance: glyph.advance,
                 bounds,
@@ -449,10 +538,22 @@ fn visual_runs(block: &TextBlock, lines: &[ProofLine], metrics: &[TextLineMetric
         runs.push(TextVisualRun {
             visual_run_id: runs.len() as u32,
             line_index: line_index as u32,
-            run_id: line.glyphs.first().map(|glyph| glyph.cluster.run_id).unwrap_or(TextRunId(0)),
+            run_id: line
+                .glyphs
+                .first()
+                .map(|glyph| glyph.cluster.run_id)
+                .unwrap_or(TextRunId(0)),
             span_id: line.glyphs.first().and_then(|glyph| glyph.cluster.span_id),
-            font_id: line.glyphs.first().map(|glyph| glyph.cluster.style.font_id).unwrap_or(block.base_style.font_id),
-            style: line.glyphs.first().map(|glyph| glyph.cluster.style.clone()).unwrap_or_else(|| block.base_style.clone()),
+            font_id: line
+                .glyphs
+                .first()
+                .map(|glyph| glyph.cluster.style.font_id)
+                .unwrap_or(block.base_style.font_id),
+            style: line
+                .glyphs
+                .first()
+                .map(|glyph| glyph.cluster.style.clone())
+                .unwrap_or_else(|| block.base_style.clone()),
             direction: block.layout.text_direction,
             glyphs,
             bounds: line_metrics.line_box,
@@ -462,14 +563,30 @@ fn visual_runs(block: &TextBlock, lines: &[ProofLine], metrics: &[TextLineMetric
 }
 
 fn visible_range(lines: &[ProofLine]) -> TextClusterRange {
-    let start = lines.first().map(visible_range_for_line).map(|range| range.start).unwrap_or(0);
-    let end = lines.last().map(visible_range_for_line).map(|range| range.end).unwrap_or(start);
+    let start = lines
+        .first()
+        .map(visible_range_for_line)
+        .map(|range| range.start)
+        .unwrap_or(0);
+    let end = lines
+        .last()
+        .map(visible_range_for_line)
+        .map(|range| range.end)
+        .unwrap_or(start);
     TextClusterRange::new(start, end)
 }
 
 fn visible_range_for_line(line: &ProofLine) -> TextClusterRange {
-    let start = line.glyphs.first().map(|glyph| glyph.cluster.cluster_index).unwrap_or(0);
-    let end = line.glyphs.last().map(|glyph| glyph.cluster.cluster_index + 1).unwrap_or(start);
+    let start = line
+        .glyphs
+        .first()
+        .map(|glyph| glyph.cluster.cluster_index)
+        .unwrap_or(0);
+    let end = line
+        .glyphs
+        .last()
+        .map(|glyph| glyph.cluster.cluster_index + 1)
+        .unwrap_or(start);
     TextClusterRange::new(start, end)
 }
 

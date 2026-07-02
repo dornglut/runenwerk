@@ -20,7 +20,12 @@ impl Default for MsdfFontAtlas {
             font_id: FontId(0),
             texture_width: 0,
             texture_height: 0,
-            metrics: FontFaceMetrics { ascender: 0.0, descender: 0.0, line_height: 1.0, base_size: 1.0 },
+            metrics: FontFaceMetrics {
+                ascender: 0.0,
+                descender: 0.0,
+                line_height: 1.0,
+                base_size: 1.0,
+            },
             glyphs: HashMap::new(),
         }
     }

@@ -16,7 +16,7 @@ use ui_runtime::{
     ComputedLayout, ComputedLayoutMap, InteractionVisualState, LabelNode, PanelNode, UiNode,
     UiNodeKind, UiTree, WidgetId, build_ui_frame,
 };
-use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextWrap};
+use ui_text::{FontId, TextLineHeightPolicy, TextStyle};
 use ui_theme::{ThemeTokens, UiColor};
 
 const TEXT_PADDING_X: f32 = 10.0;
@@ -448,7 +448,7 @@ fn append_text_panel_node(
     let text_style = text_style_from_scene_text(&text);
     let line_height = text_style
         .line_height
-        .unwrap_or((text.size.max(1.0) * 1.25).max(1.0));
+        .resolve((text.size.max(1.0) * 1.25).max(1.0), text_style.font_size);
     let lines = if text.content.is_empty() {
         vec![String::new()]
     } else {
@@ -529,11 +529,8 @@ fn text_style_from_scene_text(text: &UiText) -> TextStyle {
         font_id: FontId(DEFAULT_EDITOR_FONT_ID.0),
         font_size: text.size.max(1.0),
         color: text.color,
-        line_height: Some((text.size.max(1.0) * 1.25).max(1.0)),
-        align: TextAlign::Start,
-        vertical_align: ui_text::TextVerticalAlign::LineBoxCenter,
-        wrap: TextWrap::NoWrap,
-        overflow: TextOverflow::Clip,
+        line_height: TextLineHeightPolicy::Absolute((text.size.max(1.0) * 1.25).max(1.0)),
+        ..TextStyle::default()
     }
 }
 

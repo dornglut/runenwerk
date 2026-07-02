@@ -1,7 +1,7 @@
 //! File: domain/ui/ui_theme/src/theme.rs
 //! Purpose: Root theme token container.
 
-use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextVerticalAlign, TextWrap};
+use ui_text::{FontId, TextLineHeightPolicy, TextStyle};
 
 use crate::{RadiusScale, SpacingScale, TypographyScale, UiColor};
 
@@ -35,11 +35,8 @@ impl ThemeTokens {
                 self.foreground.b,
                 self.foreground.a,
             ],
-            line_height: Some((self.typography.body * 1.35).max(1.0)),
-            align: TextAlign::Start,
-            vertical_align: TextVerticalAlign::LineBoxCenter,
-            wrap: TextWrap::NoWrap,
-            overflow: TextOverflow::Clip,
+            line_height: TextLineHeightPolicy::Absolute((self.typography.body * 1.35).max(1.0)),
+            ..TextStyle::default()
         }
     }
 
@@ -53,11 +50,10 @@ impl ThemeTokens {
                 self.foreground_muted.b,
                 self.foreground_muted.a,
             ],
-            line_height: Some((self.typography.body_small * 1.35).max(1.0)),
-            align: TextAlign::Start,
-            vertical_align: TextVerticalAlign::LineBoxCenter,
-            wrap: TextWrap::NoWrap,
-            overflow: TextOverflow::Clip,
+            line_height: TextLineHeightPolicy::Absolute(
+                (self.typography.body_small * 1.35).max(1.0),
+            ),
+            ..TextStyle::default()
         }
     }
 
@@ -71,11 +67,8 @@ impl ThemeTokens {
                 self.foreground.b,
                 self.foreground.a,
             ],
-            line_height: Some((self.typography.heading * 1.25).max(1.0)),
-            align: TextAlign::Start,
-            vertical_align: TextVerticalAlign::LineBoxCenter,
-            wrap: TextWrap::NoWrap,
-            overflow: TextOverflow::Clip,
+            line_height: TextLineHeightPolicy::Absolute((self.typography.heading * 1.25).max(1.0)),
+            ..TextStyle::default()
         }
     }
 
@@ -89,11 +82,10 @@ impl ThemeTokens {
                 self.foreground.b,
                 self.foreground.a,
             ],
-            line_height: Some((self.typography.monospace * 1.35).max(1.0)),
-            align: TextAlign::Start,
-            vertical_align: TextVerticalAlign::LineBoxCenter,
-            wrap: TextWrap::NoWrap,
-            overflow: TextOverflow::Clip,
+            line_height: TextLineHeightPolicy::Absolute(
+                (self.typography.monospace * 1.35).max(1.0),
+            ),
+            ..TextStyle::default()
         }
     }
 

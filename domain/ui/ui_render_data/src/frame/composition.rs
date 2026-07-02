@@ -95,13 +95,16 @@ fn translate_primitive(primitive: UiPrimitive, origin: UiPoint, surface_order: u
             ..value
         }),
         UiPrimitive::GlyphRun(value) => {
-            let mut glyph_run = value.glyph_run.clone();
-            for glyph in &mut glyph_run.glyphs {
-                glyph.origin.x += origin.x;
-                glyph.origin.y += origin.y;
+            let mut visual_runs = value.visual_runs.clone();
+            for visual_run in &mut visual_runs {
+                visual_run.bounds = translate_rect(visual_run.bounds, origin);
+                for glyph in &mut visual_run.glyphs {
+                    glyph.origin = translate_point(glyph.origin, origin);
+                    glyph.bounds = translate_rect(glyph.bounds, origin);
+                }
             }
             UiPrimitive::GlyphRun(GlyphRunPrimitive {
-                glyph_run,
+                visual_runs,
                 baseline_origin_clip: value
                     .baseline_origin_clip
                     .map(|clip| translate_rect(clip, origin)),
@@ -180,7 +183,10 @@ mod tests {
         ProductSurfaceAlphaMode, ProductSurfaceTextureBindingSource, UiDrawKey, UiPaint,
         ViewportSurfaceEmbedSlotId,
     };
-    use ui_text::{FontId, GlyphRun, PositionedGlyph};
+    use ui_text::{
+        FontId, TextBlockId, TextClusterRange, TextDirectionPolicy, TextGlyph,
+        TextOverflowEvidence, TextRunId, TextStyle, TextVisualRun,
+    };
 
     #[test]
     fn composition_translates_all_current_primitive_shapes_and_rewrites_surface_order() {
@@ -208,16 +214,7 @@ mod tests {
                         UiSortKey::new(0, 5, 2),
                     )),
                     UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
-                        GlyphRun {
-                            font_id: FontId(7),
-                            font_size: 12.0,
-                            glyphs: vec![PositionedGlyph {
-                                ch: 'A',
-                                origin: UiPoint::new(4.0, 5.0),
-                                advance: 6.0,
-                            }],
-                            size: UiSize::new(7.0, 8.0),
-                        },
+                        test_text_layout(),
                         Some(UiRect::new(3.0, 4.0, 20.0, 10.0)),
                         paint,
                         draw_key,
@@ -308,7 +305,10 @@ mod tests {
         let UiPrimitive::GlyphRun(run) = &primitives[3] else {
             panic!("expected translated glyph run");
         };
-        assert_eq!(run.glyph_run.glyphs[0].origin, UiPoint::new(24.0, 35.0));
+        assert_eq!(
+            run.visual_runs[0].glyphs[0].origin,
+            UiPoint::new(24.0, 35.0)
+        );
         assert_eq!(
             run.baseline_origin_clip,
             Some(UiRect::new(23.0, 34.0, 20.0, 10.0))
@@ -362,5 +362,52 @@ mod tests {
         assert_eq!(composed.surfaces.len(), 1);
         assert!(composed.surfaces[0].layers.is_empty());
         assert!(composed.is_empty());
+    }
+
+    fn test_text_layout() -> ui_text::TextBlockLayoutResult {
+        ui_text::TextBlockLayoutResult {
+            block_id: TextBlockId(7),
+            input_run_count: 1,
+            resolved_run_count: 1,
+            line_count: 1,
+            glyph_run_count: 1,
+            glyph_count: 1,
+            measured_size: UiSize::new(7.0, 8.0),
+            content_bounds: UiRect::new(0.0, 0.0, 7.0, 8.0),
+            ink_bounds: UiRect::new(0.0, 0.0, 7.0, 8.0),
+            line_metrics: Vec::new(),
+            visual_runs: vec![TextVisualRun {
+                visual_run_id: 0,
+                line_index: 0,
+                run_id: TextRunId(1),
+                span_id: None,
+                font_id: FontId(7),
+                style: TextStyle {
+                    font_id: FontId(7),
+                    font_size: 12.0,
+                    ..TextStyle::default()
+                },
+                direction: TextDirectionPolicy::Ltr,
+                glyphs: vec![TextGlyph {
+                    draw_order: 0,
+                    line_index: 0,
+                    run_id: TextRunId(1),
+                    span_id: None,
+                    font_id: FontId(7),
+                    glyph_key: "char:A".to_owned(),
+                    cluster_range: TextClusterRange::new(0, 1),
+                    origin: UiPoint::new(4.0, 5.0),
+                    advance: 6.0,
+                    bounds: UiRect::new(4.0, -7.0, 6.0, 12.0),
+                    source_text_preview: "A".to_owned(),
+                    replacement: false,
+                }],
+                bounds: UiRect::new(0.0, 0.0, 7.0, 8.0),
+            }],
+            clusters: Vec::new(),
+            overflow_evidence: TextOverflowEvidence::none(),
+            fallback_evidence: Vec::new(),
+            diagnostics: Vec::new(),
+        }
     }
 }

@@ -16,7 +16,7 @@ use ui_render_data::{
     UiSurface, UiSurfaceId, ViewportSurfaceEmbedPrimitive,
 };
 use ui_text::{
-    AtlasTextLayouter, FontAtlasSource, TextAlign, TextLayoutRequest, TextLayouter,
+    AtlasTextLayouter, FontAtlasSource, TextBlockId, TextHorizontalAlign, TextLayouter,
     TextVerticalAlign,
 };
 
@@ -134,6 +134,7 @@ fn emit_node(
             layer,
             atlas_source,
             layouter,
+            TextHorizontalAlign::Start,
             node_layer_order,
             primitive_order,
         ),
@@ -966,6 +967,7 @@ fn emit_graph_canvas(
             layer,
             atlas_source,
             layouter,
+            TextHorizontalAlign::Start,
             depth,
             primitive_order,
         );
@@ -991,9 +993,9 @@ fn emit_graph_canvas(
         *primitive_order += 1;
         let mut port_text_style = graph_canvas.text_style.clone();
         port_text_style.color[3] = (port_text_style.color[3] * 0.82).clamp(0.0, 1.0);
-        port_text_style.align = match port.direction {
-            ui_graph_editor::GraphPortDirection::Input => TextAlign::Start,
-            ui_graph_editor::GraphPortDirection::Output => TextAlign::End,
+        let port_text_align = match port.direction {
+            ui_graph_editor::GraphPortDirection::Input => TextHorizontalAlign::Start,
+            ui_graph_editor::GraphPortDirection::Output => TextHorizontalAlign::End,
         };
         let label_width = 150.0;
         let label_rect = match port.direction {
@@ -1021,6 +1023,7 @@ fn emit_graph_canvas(
             layer,
             atlas_source,
             layouter,
+            port_text_align,
             depth,
             primitive_order,
         );
@@ -1290,32 +1293,19 @@ fn emit_button_label(
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let Some(mut glyph_run) = layouter.layout(
+    let layout = crate::proof_text::layout_text_in_bounds(
         atlas_source,
-        TextLayoutRequest {
-            text,
-            style: text_style,
-            max_width: Some(bounds.width.max(0.0)),
-        },
-    ) else {
-        return;
-    };
-
-    let align_offset = match text_style.align {
-        TextAlign::Start => 0.0,
-        TextAlign::Center => ((bounds.width - glyph_run.size.width) * 0.5).max(0.0),
-        TextAlign::End => (bounds.width - glyph_run.size.width).max(0.0),
-    };
-    let vertical_offset =
-        vertical_alignment_offset(&glyph_run, text_style, bounds.height, atlas_source);
-
-    for glyph in &mut glyph_run.glyphs {
-        glyph.origin.x += bounds.x + align_offset;
-        glyph.origin.y += bounds.y + vertical_offset;
-    }
+        layouter,
+        TextBlockId(u64::from(*primitive_order) + 1),
+        text,
+        text_style,
+        bounds,
+        TextHorizontalAlign::Center,
+        TextVerticalAlign::Center,
+    );
 
     layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
-        glyph_run,
+        layout,
         Some(bounds),
         UiPaint::rgba(
             text_style.color[0],
@@ -1406,6 +1396,7 @@ fn emit_text_input(
         layer,
         atlas_source,
         layouter,
+        TextHorizontalAlign::Start,
         depth,
         primitive_order,
     );
@@ -1502,6 +1493,7 @@ fn emit_toggle(
         layer,
         atlas_source,
         layouter,
+        TextHorizontalAlign::Start,
         depth,
         primitive_order,
     );
@@ -1574,6 +1566,7 @@ fn emit_numeric_input(
         layer,
         atlas_source,
         layouter,
+        TextHorizontalAlign::Start,
         depth,
         primitive_order,
     );
@@ -1673,6 +1666,7 @@ fn emit_tabs(
             layer,
             atlas_source,
             layouter,
+            TextHorizontalAlign::Center,
             depth,
             primitive_order,
         );
@@ -1749,6 +1743,7 @@ fn emit_select(
         layer,
         atlas_source,
         layouter,
+        TextHorizontalAlign::Start,
         depth,
         primitive_order,
     );
@@ -1962,6 +1957,7 @@ fn emit_tree(
             layer,
             atlas_source,
             layouter,
+            TextHorizontalAlign::Start,
             depth,
             primitive_order,
         );
@@ -2012,6 +2008,7 @@ fn emit_table_cells(
             layer,
             atlas_source,
             layouter,
+            TextHorizontalAlign::Start,
             depth,
             primitive_order,
         );
@@ -2025,35 +2022,23 @@ fn emit_label(
     layer: &mut UiLayer,
     atlas_source: &dyn FontAtlasSource,
     layouter: &dyn TextLayouter,
+    horizontal_align: TextHorizontalAlign,
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let Some(mut glyph_run) = layouter.layout(
+    let layout = crate::proof_text::layout_text_in_bounds(
         atlas_source,
-        TextLayoutRequest {
-            text: &label.text,
-            style: &label.text_style,
-            max_width: Some(bounds.width.max(0.0)),
-        },
-    ) else {
-        return;
-    };
-
-    let align_offset = match label.text_style.align {
-        TextAlign::Start => 0.0,
-        TextAlign::Center => ((bounds.width - glyph_run.size.width) * 0.5).max(0.0),
-        TextAlign::End => (bounds.width - glyph_run.size.width).max(0.0),
-    };
-
-    let vertical_offset =
-        vertical_alignment_offset(&glyph_run, &label.text_style, bounds.height, atlas_source);
-    for glyph in &mut glyph_run.glyphs {
-        glyph.origin.x += bounds.x + align_offset;
-        glyph.origin.y += bounds.y + vertical_offset;
-    }
+        layouter,
+        TextBlockId(u64::from(*primitive_order) + 1),
+        &label.text,
+        &label.text_style,
+        bounds,
+        horizontal_align,
+        TextVerticalAlign::Center,
+    );
 
     layer.push(UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
-        glyph_run,
+        layout,
         Some(bounds),
         UiPaint::rgba(
             label.text_style.color[0],
@@ -2065,48 +2050,6 @@ fn emit_label(
         sort_key(depth, *primitive_order),
     )));
     *primitive_order += 1;
-}
-
-fn vertical_alignment_offset(
-    glyph_run: &ui_text::GlyphRun,
-    text_style: &ui_text::TextStyle,
-    bounds_height: f32,
-    atlas_source: &dyn FontAtlasSource,
-) -> f32 {
-    match text_style.vertical_align {
-        TextVerticalAlign::LineBoxCenter => {
-            ((bounds_height - glyph_run.size.height) * 0.5).max(0.0)
-        }
-        TextVerticalAlign::InkBoundsCenter | TextVerticalAlign::CapHeightCenter => {
-            ink_bounds_vertical_offset(glyph_run, text_style, bounds_height, atlas_source)
-                .unwrap_or_else(|| ((bounds_height - glyph_run.size.height) * 0.5).max(0.0))
-        }
-    }
-}
-
-fn ink_bounds_vertical_offset(
-    glyph_run: &ui_text::GlyphRun,
-    text_style: &ui_text::TextStyle,
-    bounds_height: f32,
-    atlas_source: &dyn FontAtlasSource,
-) -> Option<f32> {
-    let atlas = atlas_source.atlas(text_style.font_id)?;
-    let scale = text_style.font_size / atlas.metrics.base_size.max(f32::EPSILON);
-    let mut top = f32::INFINITY;
-    let mut bottom = f32::NEG_INFINITY;
-    for glyph in &glyph_run.glyphs {
-        let metrics = atlas
-            .glyphs
-            .get(&glyph.ch)
-            .or_else(|| atlas.glyphs.get(&'?'))?;
-        top = top.min(glyph.origin.y - metrics.plane_top * scale);
-        bottom = bottom.max(glyph.origin.y - metrics.plane_bottom * scale);
-    }
-    if !top.is_finite() || !bottom.is_finite() {
-        return None;
-    }
-
-    Some(bounds_height * 0.5 - (top + bottom) * 0.5)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -2128,7 +2071,6 @@ impl InteractionVisualState {
 
 fn button_text_style(button: &ButtonNode, interaction: WidgetInteraction) -> ui_text::TextStyle {
     let mut text_style = button.text_style.clone();
-    text_style.align = TextAlign::Center;
     if !button.enabled {
         text_style.color[3] = (text_style.color[3] * 0.55).clamp(0.0, 1.0);
         return text_style;
@@ -2190,8 +2132,7 @@ mod tests {
     use crate::{UiRuntimeState, WidgetId, compute_tree_layout};
     use ui_render_data::ViewportSurfaceEmbedSlotId;
     use ui_text::{
-        FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas, TextAlign, TextOverflow, TextStyle,
-        TextVerticalAlign, TextWrap,
+        FontFaceMetrics, FontId, GlyphMetrics, MsdfFontAtlas, TextLineHeightPolicy, TextStyle,
     };
     use ui_theme::ThemeTokens;
 
@@ -2216,11 +2157,8 @@ mod tests {
             font_id: FontId(1),
             font_size: 14.0,
             color: [0.9, 0.95, 1.0, 1.0],
-            line_height: Some(18.0),
-            align: TextAlign::Start,
-            vertical_align: TextVerticalAlign::LineBoxCenter,
-            wrap: TextWrap::NoWrap,
-            overflow: TextOverflow::Clip,
+            line_height: TextLineHeightPolicy::Absolute(18.0),
+            ..TextStyle::default()
         };
         let tree = UiTree::new(UiNode::with_children(
             WidgetId(1),
@@ -2245,7 +2183,7 @@ mod tests {
             "Rect(x=12.0 y=16.0 w=240.0 h=96.0)",
             "Border(x=12.0 y=16.0 w=240.0 h=96.0)",
             "ClipPush(x=14.0 y=18.0 w=236.0 h=92.0)",
-            "GlyphRun(text=\"Overl\" clip=true)",
+            "GlyphRun(text=\"Overlay\" clip=true)",
             "ClipPop",
         ]
         .join("\n");
@@ -2338,12 +2276,7 @@ mod tests {
                 let UiPrimitive::GlyphRun(run) = primitive else {
                     return None;
                 };
-                let text = run
-                    .glyph_run
-                    .glyphs
-                    .iter()
-                    .map(|glyph| glyph.ch)
-                    .collect::<String>();
+                let text = crate::proof_text::text_from_primitive(run);
                 (text == "Save").then_some(run)
             })
             .unwrap_or_else(|| {
@@ -2452,12 +2385,7 @@ mod tests {
                 let UiPrimitive::GlyphRun(run) = primitive else {
                     return None;
                 };
-                let text = run
-                    .glyph_run
-                    .glyphs
-                    .iter()
-                    .map(|glyph| glyph.ch)
-                    .collect::<String>();
+                let text = crate::proof_text::text_from_primitive(run);
                 (text == "x").then_some(run)
             })
             .unwrap_or_else(|| {
@@ -2946,7 +2874,7 @@ mod tests {
             .flat_map(|surface| surface.layers.iter())
             .flat_map(|layer| layer.primitives.iter())
             .find_map(|primitive| match primitive {
-                UiPrimitive::GlyphRun(run) => run.glyph_run.glyphs.first(),
+                UiPrimitive::GlyphRun(run) => first_text_glyph(run),
                 _ => None,
             })
             .expect("button label should emit a glyph");
@@ -2957,7 +2885,7 @@ mod tests {
     }
 
     #[test]
-    fn icon_button_uses_ink_bounds_vertical_centering() {
+    fn icon_button_uses_line_box_vertical_centering() {
         let mut atlas = atlas_with_ascii(FontId(1));
         let metrics = atlas.glyphs.get_mut(&'x').expect("x glyph should exist");
         metrics.plane_top = 3.0;
@@ -2965,12 +2893,11 @@ mod tests {
         let atlas_source = TestAtlasSource { atlas };
         let theme = ThemeTokens::default();
         let button_id = WidgetId(231);
-        let mut style = TextStyle {
+        let style = TextStyle {
             font_id: FontId(1),
             font_size: 12.0,
             ..TextStyle::default()
         };
-        style.vertical_align = TextVerticalAlign::InkBoundsCenter;
         let mut button = crate::ButtonNode::new("x", style, theme);
         button.padding = ui_math::UiInsets::ZERO;
         button.min_size = UiSize::new(18.0, 18.0);
@@ -2985,13 +2912,9 @@ mod tests {
             &atlas_source,
         );
         let glyph = first_glyph(&frame).expect("button label should emit a glyph");
-        let rendered_top = glyph.origin.y - 3.0;
-        let rendered_bottom = glyph.origin.y;
-        let ink_center = (rendered_top + rendered_bottom) * 0.5;
-
         assert!(
-            (ink_center - 9.0).abs() <= 0.001,
-            "icon glyph ink bounds should be centered in the button"
+            (glyph.origin.y - 12.0).abs() <= 0.001,
+            "button label line box should be centered in the button"
         );
     }
 
@@ -3005,8 +2928,7 @@ mod tests {
         let style = TextStyle {
             font_id: FontId(1),
             font_size: 12.0,
-            line_height: Some(12.0),
-            vertical_align: TextVerticalAlign::LineBoxCenter,
+            line_height: TextLineHeightPolicy::Absolute(12.0),
             ..TextStyle::default()
         };
         let mut label = LabelNode::new("x", style);
@@ -3112,12 +3034,7 @@ mod tests {
                 ),
                 UiPrimitive::Clip(ClipPrimitive::Pop { .. }) => "ClipPop".to_string(),
                 UiPrimitive::GlyphRun(value) => {
-                    let text = value
-                        .glyph_run
-                        .glyphs
-                        .iter()
-                        .map(|glyph| glyph.ch)
-                        .collect::<String>();
+                    let text = crate::proof_text::text_from_primitive(value);
                     format!(
                         "GlyphRun(text=\"{}\" clip={})",
                         text,
@@ -3197,16 +3114,23 @@ mod tests {
             })
     }
 
-    fn first_glyph(frame: &UiFrame) -> Option<&ui_text::PositionedGlyph> {
+    fn first_glyph(frame: &UiFrame) -> Option<&ui_text::TextGlyph> {
         frame
             .surfaces
             .iter()
             .flat_map(|surface| surface.layers.iter())
             .flat_map(|layer| layer.primitives.iter())
             .find_map(|primitive| match primitive {
-                UiPrimitive::GlyphRun(run) => run.glyph_run.glyphs.first(),
+                UiPrimitive::GlyphRun(run) => first_text_glyph(run),
                 _ => None,
             })
+    }
+
+    fn first_text_glyph(run: &GlyphRunPrimitive) -> Option<&ui_text::TextGlyph> {
+        run.visual_runs
+            .iter()
+            .flat_map(|visual_run| visual_run.glyphs.iter())
+            .next()
     }
 
     fn rect_approx_eq(left: UiRect, right: UiRect) -> bool {

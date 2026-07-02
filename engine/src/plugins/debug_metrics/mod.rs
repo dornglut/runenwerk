@@ -15,7 +15,7 @@ use ui_runtime::{
     ComputedLayout, ComputedLayoutMap, InteractionVisualState, LabelNode, PanelNode, UiNode,
     UiNodeKind, UiTree, WidgetId, build_ui_frame,
 };
-use ui_text::{FontId, TextAlign, TextOverflow, TextStyle, TextWrap};
+use ui_text::{FontId, TextLineHeightPolicy, TextStyle};
 use ui_theme::{ThemeTokens, UiColor};
 use winit::keyboard::KeyCode;
 
@@ -214,11 +214,8 @@ fn build_debug_metrics_frame(
         font_id: FontId(DEFAULT_EDITOR_FONT_ID.0),
         font_size: (12.0 * scale).max(1.0),
         color: [0.84, 0.92, 0.98, 1.0],
-        line_height: Some(line_height.max(1.0)),
-        align: TextAlign::Start,
-        vertical_align: ui_text::TextVerticalAlign::LineBoxCenter,
-        wrap: TextWrap::NoWrap,
-        overflow: TextOverflow::Clip,
+        line_height: TextLineHeightPolicy::Absolute(line_height.max(1.0)),
+        ..TextStyle::default()
     };
 
     let mut children = Vec::with_capacity(lines.len());

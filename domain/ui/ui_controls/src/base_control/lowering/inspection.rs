@@ -25,10 +25,14 @@ pub(crate) fn lower_inspection(
     if let Some(layering) = package.overlay_descriptor(&control.module.kind.control_kind_id) {
         descriptor = descriptor.with_layering_summary(&layering.summary());
     }
-    if let Some(generic_text) = package.generic_text_descriptor(&control.module.kind.control_kind_id) {
+    if let Some(generic_text) =
+        package.generic_text_descriptor(&control.module.kind.control_kind_id)
+    {
         descriptor = descriptor.with_generic_text_summary(&generic_text.summary());
     }
-    if let Some(editable_text) = package.editable_text_descriptor(&control.module.kind.control_kind_id) {
+    if let Some(editable_text) =
+        package.editable_text_descriptor(&control.module.kind.control_kind_id)
+    {
         descriptor = descriptor.with_editable_text_summary(&editable_text.summary());
     }
     descriptor

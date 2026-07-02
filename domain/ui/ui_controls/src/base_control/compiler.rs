@@ -21,7 +21,9 @@ use super::{
 pub struct ControlCompiler;
 
 impl ControlCompiler {
-    pub const fn new() -> Self { Self }
+    pub const fn new() -> Self {
+        Self
+    }
 
     pub fn compile(&self, controls: &UiControls) -> CompiledControlPackage {
         let lowered = controls
@@ -88,10 +90,18 @@ impl ControlCompiler {
             .collect::<Vec<_>>();
         let catalog = ControlCatalogIndex::from_packages([&package]);
         let inspection = ControlInspection {
-            controls: controls.iter().map(|control| control.inspection.clone()).collect(),
+            controls: controls
+                .iter()
+                .map(|control| control.inspection.clone())
+                .collect(),
         };
 
-        CompiledControlPackage { package, controls, catalog, inspection }
+        CompiledControlPackage {
+            package,
+            controls,
+            catalog,
+            inspection,
+        }
     }
 
     pub fn compile_module(&self, contribution: &ControlContribution) -> ControlModuleDescriptor {

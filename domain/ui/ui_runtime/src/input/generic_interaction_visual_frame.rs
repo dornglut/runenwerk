@@ -12,7 +12,7 @@ use ui_render_data::{
     BorderPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId,
     UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
 };
-use ui_text::{FontId, GlyphRun, PositionedGlyph};
+use ui_text::FontId;
 
 use crate::{
     InteractionBoundaryAssertions, InteractionReportView, InteractionVisibleState,
@@ -425,10 +425,16 @@ fn push_glyph(
     text: &str,
     max_width: f32,
 ) {
-    let run = proof_glyph_run(text, origin);
+    let layout = crate::proof_text::proof_label_layout(
+        text,
+        origin,
+        max_width,
+        INTERACTION_PROOF_FONT_ID,
+        *order,
+    );
     primitives.push(
         GlyphRunPrimitive::new(
-            run,
+            layout,
             Some(UiRect::new(origin.x, origin.y - 12.0, max_width, 16.0)),
             UiPaint::WHITE,
             UiDrawKey::new(INTERACTION_PROOF_GLYPH_DRAW_KEY, None),
@@ -442,23 +448,4 @@ fn sort_key(order: &mut u32) -> UiSortKey {
     let key = UiSortKey::new(0, 0, *order);
     *order += 1;
     key
-}
-
-fn proof_glyph_run(text: &str, origin: UiPoint) -> GlyphRun {
-    let advance = 7.0_f32;
-    let glyphs = text
-        .chars()
-        .enumerate()
-        .map(|(index, ch)| PositionedGlyph {
-            ch,
-            origin: UiPoint::new(origin.x + index as f32 * advance, origin.y),
-            advance,
-        })
-        .collect::<Vec<_>>();
-    GlyphRun {
-        font_id: INTERACTION_PROOF_FONT_ID,
-        font_size: 12.0,
-        size: UiSize::new(text.chars().count() as f32 * advance, 14.0),
-        glyphs,
-    }
 }

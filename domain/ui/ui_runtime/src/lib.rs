@@ -5,6 +5,7 @@ pub mod input;
 pub mod layout;
 pub mod output;
 pub mod overlay;
+mod proof_text;
 pub mod runtime;
 pub mod state;
 pub mod text_editing;

@@ -13,7 +13,7 @@ use ui_definition::{
     UiValue, form_retained_ui, normalize_authored_template,
 };
 use ui_layout::SizePolicy;
-use ui_text::{FontId, TextOverflow};
+use ui_text::FontId;
 use ui_theme::ThemeTokens;
 
 use super::surface_control_polish::{
@@ -151,8 +151,7 @@ fn polish_inspector(
         vec![SizePolicy::Auto, SizePolicy::flex(1.0)],
     );
     apply_surface_title_polish(root, scope.widget_id(INSPECTOR_TITLE_WIDGET_ID), theme);
-    let mut target_style = theme.body_text_style(FontId(1));
-    target_style.overflow = TextOverflow::Ellipsis;
+    let target_style = theme.body_text_style(FontId(1));
     apply_label_text_style(
         root,
         scope.widget_id(INSPECTOR_TARGET_WIDGET_ID),
@@ -180,7 +179,6 @@ fn polish_inspector_fields(node: &mut UiNode, theme: &ThemeTokens) {
         }
         UiNodeKind::Label(label) => {
             label.text_style = theme.body_small_text_style(FontId(1));
-            label.text_style.overflow = TextOverflow::Ellipsis;
         }
         UiNodeKind::Stack(stack) if matches!(stack.axis, ui_math::Axis::Horizontal) => {
             stack.child_main_policies = vec![SizePolicy::Auto, SizePolicy::flex(1.0)];

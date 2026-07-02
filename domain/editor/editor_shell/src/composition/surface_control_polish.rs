@@ -4,7 +4,7 @@
 use crate::{UiNode, UiNodeKind, WidgetId, button_selected, toggle};
 use ui_layout::SizePolicy;
 use ui_math::{Axis, UiInsets, UiSize};
-use ui_text::{FontId, TextOverflow, TextStyle, TextVerticalAlign};
+use ui_text::{FontId, TextStyle};
 use ui_theme::{ThemeTokens, UiColor};
 
 pub(crate) fn apply_compact_surface_control_polish(node: &mut UiNode, theme: &ThemeTokens) {
@@ -110,10 +110,7 @@ pub(crate) fn compact_surface_toggle(
 }
 
 pub(crate) fn compact_text_style(theme: &ThemeTokens) -> TextStyle {
-    let mut text_style = theme.body_small_text_style(FontId(1));
-    text_style.overflow = TextOverflow::Ellipsis;
-    text_style.vertical_align = TextVerticalAlign::CapHeightCenter;
-    text_style
+    theme.body_small_text_style(FontId(1))
 }
 
 pub(crate) fn compact_padding(theme: &ThemeTokens) -> UiInsets {
@@ -179,11 +176,7 @@ mod tests {
             panic!("compact toggle control should build a toggle");
         };
 
-        assert_eq!(toggle_node.text_style.overflow, TextOverflow::Ellipsis);
-        assert_eq!(
-            toggle_node.text_style.vertical_align,
-            TextVerticalAlign::CapHeightCenter
-        );
+        assert_eq!(toggle_node.text_style.font_id, FontId(1));
         assert!(toggle_node.min_size.height >= 13.0);
         assert!(toggle_node.checked);
     }
