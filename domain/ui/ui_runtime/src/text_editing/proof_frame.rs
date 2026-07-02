@@ -214,14 +214,23 @@ pub fn text_editing_visual_proof_to_frame(
         &mut order,
         648.0,
         154.0,
-        "host/product/authored: 0/0/0",
+        &format!(
+            "host/product/authored: {}/{}/{}",
+            report.boundary_assertions.host_commands_executed,
+            report.boundary_assertions.product_mutations,
+            report.boundary_assertions.authored_ui_edits,
+        ),
     );
     label(
         &mut primitives,
         &mut order,
         648.0,
         178.0,
-        "undo/plugin: 0/0",
+        &format!(
+            "undo/plugin: {}/{}",
+            report.boundary_assertions.product_undo_redo_operations,
+            report.boundary_assertions.plugin_framework_operations,
+        ),
     );
 
     let mut surface = UiSurface::new(UiSurfaceId(14), size);
