@@ -501,8 +501,14 @@ impl ControlOverlaySupportSummary {
                 "overlay.dismiss_policies",
                 self.dismiss_policies.join(","),
             ),
-            ControlOverlayInspectionFact::new("overlay.focus_policies", self.focus_policies.join(",")),
-            ControlOverlayInspectionFact::new("overlay.supported", bool_string(self.overlay_supported)),
+            ControlOverlayInspectionFact::new(
+                "overlay.focus_policies",
+                self.focus_policies.join(","),
+            ),
+            ControlOverlayInspectionFact::new(
+                "overlay.supported",
+                bool_string(self.overlay_supported),
+            ),
             ControlOverlayInspectionFact::new(
                 "overlay.control_owned_runtime_behavior",
                 bool_string(self.control_owned_runtime_behavior),
@@ -620,7 +626,10 @@ mod tests {
         assert!(!summary.control_owned_runtime_behavior);
         assert!(!summary.executes_host_commands);
         assert!(!summary.mutates_product_state);
-        assert_eq!(descriptor.requirements[0].dismiss_policy, ControlOverlayDismissPolicy::EscapeOrOutsidePointer);
+        assert_eq!(
+            descriptor.requirements[0].dismiss_policy,
+            ControlOverlayDismissPolicy::EscapeOrOutsidePointer
+        );
     }
 
     #[test]
@@ -632,7 +641,10 @@ mod tests {
         );
         let requirement = &descriptor.requirements[0];
         assert_eq!(requirement.kind, ControlOverlayKind::FocusContainingOverlay);
-        assert_eq!(requirement.focus_policy, ControlOverlayFocusPolicy::ContainFocus);
+        assert_eq!(
+            requirement.focus_policy,
+            ControlOverlayFocusPolicy::ContainFocus
+        );
         assert_eq!(requirement.kind.as_str(), "focus-containing-overlay");
     }
 }

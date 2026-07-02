@@ -1,4 +1,7 @@
-use ui_input::{FocusInputFact, FocusTargetId, NormalizedInputFact, NormalizedInputSample, PointerEventKind, PointerInputFact};
+use ui_input::{
+    FocusInputFact, FocusTargetId, NormalizedInputFact, NormalizedInputSample, PointerEventKind,
+    PointerInputFact,
+};
 use ui_math::UiPoint;
 
 #[test]

@@ -11,7 +11,10 @@ pub fn overlay_scope(requirement: &ControlOverlayRequirement) -> String {
     }
 }
 
-pub fn focus_return_anchor(control: &MountedOverlayControl, requirement: &ControlOverlayRequirement) -> Option<String> {
+pub fn focus_return_anchor(
+    control: &MountedOverlayControl,
+    requirement: &ControlOverlayRequirement,
+) -> Option<String> {
     match requirement.focus_policy {
         ControlOverlayFocusPolicy::ReturnToAnchor
         | ControlOverlayFocusPolicy::ReturnToPrevious

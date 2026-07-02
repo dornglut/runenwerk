@@ -10,8 +10,10 @@ fn base_controls_inspection_projects_overlay_facts() {
         label.fact(ControlInspectionSection::Layering, "overlay.supported"),
         Some("true")
     );
-    assert!(label
-        .fact(ControlInspectionSection::Layering, "overlay.kinds")
-        .unwrap_or_default()
-        .contains("tooltip"));
+    assert!(
+        label
+            .fact(ControlInspectionSection::Layering, "overlay.kinds")
+            .unwrap_or_default()
+            .contains("tooltip")
+    );
 }

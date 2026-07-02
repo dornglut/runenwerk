@@ -5,7 +5,7 @@ use ui_render_data::{
 };
 use ui_text::{FontId, GlyphRun, PositionedGlyph};
 
-use super::{OverlayLayeringReport, BASE_CONTROLS_OVERLAY_LAYERING_PROOF_ID};
+use super::{BASE_CONTROLS_OVERLAY_LAYERING_PROOF_ID, OverlayLayeringReport};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct OverlayLayeringVisualProof {
@@ -46,15 +46,66 @@ pub fn overlay_layering_visual_proof_to_frame(
     let mut primitives = Vec::new();
     let mut order = 0_u32;
 
-    panel(&mut primitives, &mut order, UiRect::new(16.0, 16.0, 280.0, 600.0), "main: anchors");
-    panel(&mut primitives, &mut order, UiRect::new(316.0, 16.0, 280.0, 600.0), "inspector: overlays");
-    panel(&mut primitives, &mut order, UiRect::new(616.0, 16.0, 280.0, 600.0), "report: evidence");
-    label(&mut primitives, &mut order, 32.0, 58.0, &format!("anchors={}", report.declarations.len()));
-    label(&mut primitives, &mut order, 332.0, 58.0, &format!("open={}", report.open_intents.len()));
-    label(&mut primitives, &mut order, 632.0, 58.0, &format!("stack={}", report.stack_entries.len()));
-    label(&mut primitives, &mut order, 632.0, 76.0, &format!("placement={}", report.placement_resolutions.len()));
-    label(&mut primitives, &mut order, 632.0, 94.0, &format!("dismiss={}", report.dismissal_evidence.len()));
-    label(&mut primitives, &mut order, 632.0, 112.0, &format!("suppress={}", report.suppression_evidence.len()));
+    panel(
+        &mut primitives,
+        &mut order,
+        UiRect::new(16.0, 16.0, 280.0, 600.0),
+        "main: anchors",
+    );
+    panel(
+        &mut primitives,
+        &mut order,
+        UiRect::new(316.0, 16.0, 280.0, 600.0),
+        "inspector: overlays",
+    );
+    panel(
+        &mut primitives,
+        &mut order,
+        UiRect::new(616.0, 16.0, 280.0, 600.0),
+        "report: evidence",
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        32.0,
+        58.0,
+        &format!("anchors={}", report.declarations.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        332.0,
+        58.0,
+        &format!("open={}", report.open_intents.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        632.0,
+        58.0,
+        &format!("stack={}", report.stack_entries.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        632.0,
+        76.0,
+        &format!("placement={}", report.placement_resolutions.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        632.0,
+        94.0,
+        &format!("dismiss={}", report.dismissal_evidence.len()),
+    );
+    label(
+        &mut primitives,
+        &mut order,
+        632.0,
+        112.0,
+        &format!("suppress={}", report.suppression_evidence.len()),
+    );
 
     let mut surface = UiSurface::new(UiSurfaceId(13), size);
     surface.push_layer(UiLayer::with_primitives(UiLayerId(0), primitives));
@@ -95,8 +146,15 @@ fn panel(primitives: &mut Vec<UiPrimitive>, order: &mut u32, area: UiRect, title
         .into(),
     );
     primitives.push(
-        BorderPrimitive::new(area, 3.0, 1.0, UiPaint::WHITE, UiDrawKey::new(1302, None), sort_key(order))
-            .into(),
+        BorderPrimitive::new(
+            area,
+            3.0,
+            1.0,
+            UiPaint::WHITE,
+            UiDrawKey::new(1302, None),
+            sort_key(order),
+        )
+        .into(),
     );
     label(primitives, order, area.x + 12.0, area.y + 20.0, title);
 }

@@ -27,6 +27,6 @@ fn base_controls_overlay_layering_static_mount_accepts_runtime_overlay_proof_fra
     assert_eq!(summary.surface_count, 1);
     assert!(summary.has_rect_primitive);
     assert!(summary.has_border_primitive);
-    assert!(summary.has_glyph_run_primitive);
+    assert!(summary.glyph_run_count > 0);
     assert!(summary.draw_order_stable);
 }

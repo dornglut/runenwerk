@@ -214,7 +214,7 @@ Known gaps: UI Gallery exposure remains separate future work. Overlay/popup/laye
 
 Closeout report: Not created in this pass; roadmap, production-track, decision-register, and PR #43 metadata hold the completion evidence.
 
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering substrate design intake.
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation.
 
 ## PT-UI-COMPONENT-PLATFORM-012A
 
@@ -234,7 +234,7 @@ Known gaps: Product-facing editor window/gallery display remains separate future
 
 Closeout report: Not created in this pass; roadmap, production-track, decision-register, and PR #43 metadata hold the completion evidence.
 
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering substrate design intake.
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation.
 
 ## Entry shape
 

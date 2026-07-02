@@ -146,11 +146,14 @@ pub enum ControlPackageValidationReason {
     DuplicateMigrationId,
     DuplicateStoryId,
     DuplicateInteractionDescriptor,
+    DuplicateOverlayDescriptor,
     DuplicateRouteRequirement,
     InvalidDeprecation,
     InvalidMigrationVersion,
     InvalidMountEligibility,
     UnresolvedInteractionDescriptor,
+    UnresolvedOverlayDescriptor,
+    InvalidOverlayDescriptor,
     UnsupportedTargetProfile,
     UnresolvedReference,
     RenderEvidenceMissing,
@@ -180,11 +183,14 @@ impl ControlPackageValidationReason {
             Self::DuplicateMigrationId => "duplicate_migration_id",
             Self::DuplicateStoryId => "duplicate_story_id",
             Self::DuplicateInteractionDescriptor => "duplicate_interaction_descriptor",
+            Self::DuplicateOverlayDescriptor => "duplicate_overlay_descriptor",
             Self::DuplicateRouteRequirement => "duplicate_route_requirement",
             Self::InvalidDeprecation => "invalid_deprecation",
             Self::InvalidMigrationVersion => "invalid_migration_version",
             Self::InvalidMountEligibility => "invalid_mount_eligibility",
             Self::UnresolvedInteractionDescriptor => "unresolved_interaction_descriptor",
+            Self::UnresolvedOverlayDescriptor => "unresolved_overlay_descriptor",
+            Self::InvalidOverlayDescriptor => "invalid_overlay_descriptor",
             Self::UnsupportedTargetProfile => "unsupported_target_profile",
             Self::UnresolvedReference => "unresolved_reference",
             Self::RenderEvidenceMissing => "render_evidence_missing",
@@ -444,6 +450,11 @@ impl ControlPackageDescriptor {
                 ));
             }
         }
+        super::overlay_validation::validate_overlay_descriptors(
+            self,
+            &control_kind_ids,
+            &mut report,
+        );
         report
     }
 }

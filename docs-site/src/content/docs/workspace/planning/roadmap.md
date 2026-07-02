@@ -269,21 +269,21 @@ Next action: Keep Phase 12A as completed dependency. Do not start product-facing
 
 ID: `PT-UI-COMPONENT-PLATFORM-013`
 
-Title: Overlay / Popup / Layering substrate implementation
+Title: Overlay / Popup / Layering full implementation
 
-State: active implementation on PR #44
+State: review on PR #44 after local validation gate passed
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `review`
 
-Owner: `ui_controls` may declare reusable overlay/open intent requirements and ergonomic descriptor builders only. `ui_input` owns normalized input facts only. `ui_runtime` owns overlay intent/session/stack/placement/layer/focus/dismissal/replay/report/no-bypass proof. `ui_static_mount` owns static frame validation. Product/editor/game behavior remains outside generic UI.
+Owner: `ui_controls` owns reusable overlay declarations, ergonomic builders, base-control lowering, package descriptors, package validation, catalog projection, and inspection projection. `ui_input` owns normalized input facts only. `ui_runtime` owns package-backed overlay intent/session/stack/placement/layer/focus/dismissal/suppression/replay/report/proof-frame/no-bypass evidence under `ui_runtime::overlay`. `ui_static_mount` owns static frame validation. Product/editor/game behavior remains outside generic UI.
 
 Authority: `ui-component-platform-overlay-popup-layering-design.md`, completed Phase 12/12A docs, `editor-ui-runtime-v2-and-interaction-formation-design.md`, `editor-self-authoring-and-final-ui-design.md`, and the UI Component Platform production track.
 
-Evidence: PR #44 now contains active implementation evidence for control overlay declarations, runtime overlay replay/report, base-controls overlay fixtures/scripts, overlay runtime tests, overlay workflow tests, normalized input fact tests, and static mount proof. Local command validation is still required before completion.
+Evidence: PR #44 now contains implementation evidence for package-backed overlay declarations, base-control lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime package-backed replay/report/stack/placement/focus/dismissal/suppression proof, proof-frame projection, static mount proof, and no-bypass evidence. Local validation passed on 2026-07-02 with the full Phase 13 cargo/docs/diff gate.
 
-Known gaps: Phase 13 is not complete until the local validation gate runs and any compile/test/docs issues are fixed. Connector-only implementation cannot prove the cargo/docs/diff commands.
+Known gaps: Phase 13 is not recorded in completed work until PR #44 is accepted or merged. UI Gallery, UI Designer, authored UI editing, product command execution, product/editor/game mutation, full text editing, dynamic plugin framework, `foundation/meta`, shared plugin primitives, Workbench/provider redesign, backend renderer behavior, and world-space overlays remain out of scope.
 
-Next action: Run the Phase 13 validation gate from a local checkout, fix any issues, then record closeout evidence before merge.
+Next action: Review PR #44 and merge only after explicit instruction. After PR acceptance or merge, record Phase 13 completion truth before opening the next implementation phase.
 
 ## Rules
 

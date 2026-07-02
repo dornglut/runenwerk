@@ -72,6 +72,7 @@ mod tests {
         assert_eq!(package.migrations.len(), 8);
         assert_eq!(package.stories.len(), 8);
         assert_eq!(package.interaction_descriptors.len(), 8);
+        assert_eq!(package.overlay_descriptors.len(), 8);
     }
 
     #[test]

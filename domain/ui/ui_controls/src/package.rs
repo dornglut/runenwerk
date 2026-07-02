@@ -6,7 +6,7 @@ pub mod authoring;
 pub mod descriptor;
 pub mod ids;
 pub mod metadata;
-pub mod overlay_validation;
+mod overlay_validation;
 #[path = "render.rs"]
 pub mod render;
 #[path = "story_proof/mod.rs"]

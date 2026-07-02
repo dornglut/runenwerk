@@ -349,9 +349,9 @@ State transition: `active-planning -> proposed-design`
 
 Context: The existing overlay design was stale activation-vocabulary material. The component platform now has base controls, generic interaction facts, executable interaction stories, and static frame proof. The older editor Interaction V2 design also records popup-stack lessons for anchoring, focus return, outside dismissal, Escape dismissal, scroll ownership, layer order, and viewport arbitration, but those lessons must be extracted without moving editor shell behavior or commands into generic UI.
 
-Options considered: Implement editor popup behavior directly; turn product UI Gallery or UI Designer into the Phase 13 target; create a reusable overlay/layering substrate design that consumes Phase 12/12A and keeps product behavior outside generic UI.
+Options considered: Implement editor popup behavior directly; turn product UI Gallery or UI Designer into the Phase 13 target; create a reusable package-backed overlay/layering design that consumes Phase 12/12A and keeps product behavior outside generic UI.
 
-Reason: Overlay, popup, dropdown, tooltip, menu, and focus-containing behavior are reusable UI substrate concerns, but app-specific command execution, product mutation, authored UI editing, and Workbench/provider behavior are not. A design-first owner map prevents a repeat of the removed 012B/UI Lab overreach.
+Reason: Overlay, popup, dropdown, tooltip, menu, and focus-containing behavior are reusable UI platform concerns, but app-specific command execution, product mutation, authored UI editing, and Workbench/provider behavior are not. A design-first owner map prevents a repeat of the removed 012B/UI Lab overreach.
 
 Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, and `ui-component-platform-overlay-popup-layering-design.md`.
 
@@ -377,7 +377,27 @@ Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`,
 
 Evidence: PR #44 contains implementation-in-progress evidence for `ui_controls` overlay declarations, `ui_runtime` overlay replay/report/session/stack proof, base-controls overlay fixtures/scripts, focused tests, workflow consumption, and static mount proof. Local command validation remains required before completion.
 
-Follow-up: Move overlay runtime implementation out of `ui_runtime::input`, add the report-to-proof-frame path, run the full Phase 13 validation gate from a local checkout, fix compile/test/docs issues, then record completion truth before merge. Do not mark Phase 13 completed from connector-only work.
+Follow-up: Move overlay runtime implementation out of `ui_runtime::input`, add the report-to-proof-frame path, run the full Phase 13 validation gate from a local checkout, fix compile/test/docs issues, then record completion truth only after PR acceptance or merge.
+
+## Phase 13 review readiness decision
+
+Date: 2026-07-02
+
+Decision: Move `PT-UI-COMPONENT-PLATFORM-013` to review on PR #44 after full local validation passed.
+
+State transition: `active-implementation -> review`
+
+Context: PR #44 now implements the full overlay / popup / layering chain required by the canonical design: package-backed overlay declarations, base-control lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime package-backed replay/report/proof, static mount proof, and no-bypass evidence.
+
+Options considered: Keep Phase 13 in active implementation despite green validation; mark Phase 13 completed before PR acceptance; move the phase to review and keep completion recording blocked until PR #44 is accepted or merged.
+
+Reason: Local validation is green, so implementation is no longer blocked. Completion should still wait for PR acceptance or merge so planning truth follows repository history and does not start the next implementation phase early.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, and the PR #44 body.
+
+Evidence: The full Phase 13 gate passed locally on 2026-07-02: `cargo fmt --all --check`, focused `cargo check`, package/catalog/inspection overlay tests, `ui_input` input tests, runtime overlay layering tests, runtime package-backed tests, static mount tests, docs validation, and `git diff --check`.
+
+Follow-up: Review PR #44 and merge only after explicit instruction. After PR acceptance or merge, record Phase 13 completion truth before opening the next implementation phase.
 
 ## Lifecycle rule
 
