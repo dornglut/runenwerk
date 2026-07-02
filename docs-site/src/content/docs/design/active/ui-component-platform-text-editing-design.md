@@ -1,13 +1,21 @@
 ---
-title: UI Component Platform Text Editing Design
+title: UI Component Platform Text Editing / Editable Text Behavior Design
+description: Completed reference for reusable package-backed editable text behavior.
 status: active
 owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-07-02
+related_docs:
+  - ../../workspace/planning/active-work.md
+  - ../../workspace/planning/roadmap.md
+  - ../../workspace/planning/production-tracks.md
+  - ../../workspace/planning/completed-work.md
+  - ../../workspace/planning/decision-register.md
+  - ./ui-component-platform-generic-text-design.md
 ---
 
-# UI Component Platform Text Editing Design
+# UI Component Platform Text Editing / Editable Text Behavior Design
 
 Lifecycle state: `completed-reference`.
 
