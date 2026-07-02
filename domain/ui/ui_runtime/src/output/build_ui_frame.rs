@@ -8,6 +8,8 @@ use crate::{
     ToggleNode, TreeNode, UiNode, UiNodeKind, UiTree, ViewportSurfaceEmbedNode, WidgetId,
 };
 use std::collections::BTreeMap;
+
+use super::text::{clipped_text_layout, ellipsis_text_layout};
 use ui_math::{Axis, UiRect, UiSize};
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, GraphCanvasPrimitiveBatch,
@@ -75,39 +77,6 @@ pub fn build_ui_frame(
         surface_size,
         vec![layer],
     )])
-}
-
-fn single_line_text_layout(
-    horizontal_align: TextHorizontalAlign,
-    vertical_align: TextVerticalAlign,
-    overflow: TextOverflowPolicy,
-) -> TextLayoutPolicy {
-    TextLayoutPolicy {
-        wrap: TextWrapPolicy::NoWrap,
-        whitespace: TextWhitespacePolicy::Preserve,
-        horizontal_align,
-        vertical_align,
-        overflow,
-        max_lines: Some(1),
-        text_direction: TextDirectionPolicy::Ltr,
-        ..TextLayoutPolicy::default()
-    }
-}
-
-fn clipped_text_layout(horizontal_align: TextHorizontalAlign) -> TextLayoutPolicy {
-    single_line_text_layout(
-        horizontal_align,
-        TextVerticalAlign::Center,
-        TextOverflowPolicy::Clip,
-    )
-}
-
-fn ellipsis_text_layout(horizontal_align: TextHorizontalAlign) -> TextLayoutPolicy {
-    single_line_text_layout(
-        horizontal_align,
-        TextVerticalAlign::Center,
-        TextOverflowPolicy::Ellipsis(TextEllipsisPlacement::End),
-    )
 }
 
 #[expect(
