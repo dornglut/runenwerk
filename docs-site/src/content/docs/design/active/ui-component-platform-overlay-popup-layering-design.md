@@ -75,6 +75,7 @@ Implementation must include:
 domain/ui/ui_controls/src/overlay.rs
 domain/ui/ui_controls/src/package/descriptor.rs
 domain/ui/ui_controls/src/package/validation.rs
+domain/ui/ui_controls/src/package/overlay_validation.rs
 domain/ui/ui_controls/src/base_control/lowering/layering_support.rs
 domain/ui/ui_controls/src/base_control/lowering/mod.rs
 domain/ui/ui_controls/src/base_control/compiler.rs
@@ -83,6 +84,7 @@ domain/ui/ui_controls/src/catalog/entry.rs
 domain/ui/ui_controls/src/catalog/inspection.rs
 domain/ui/ui_controls/tests/base_controls_overlay_package.rs
 domain/ui/ui_controls/tests/base_controls_overlay_catalog.rs
+domain/ui/ui_controls/tests/base_controls_overlay_inspection.rs
 
 domain/ui/ui_input/tests/overlay_normalized_facts.rs
 
@@ -123,6 +125,7 @@ cargo check -p runenwerk_editor
 cargo test -p ui_controls overlay
 cargo test -p ui_controls --test base_controls_overlay_package
 cargo test -p ui_controls --test base_controls_overlay_catalog
+cargo test -p ui_controls --test base_controls_overlay_inspection
 cargo test -p ui_input input
 cargo test -p ui_runtime overlay_layering
 cargo test -p ui_runtime --test overlay_layering_report
