@@ -36,6 +36,7 @@ The accepted design is a vertical proof chain:
 
 ```text
 ui_text text block/run/span/style/layout/evidence contracts
+  -> ui_render_data renderer-neutral text primitive compatibility
   -> ui_controls package-backed generic-text declarations
   -> package validation
   -> catalog projection
@@ -74,10 +75,11 @@ The failure modes to avoid are:
 - Support line metrics, baselines, line boxes, content bounds, measured size, and overflow state.
 - Emit glyph/run evidence that is stable enough for visual proof, static mount validation, and future renderer consumption.
 - Avoid `char` as the public glyph identity; use cluster/glyph evidence that can later support shaping, ligatures, fallback fonts, emoji, and bidirectional text.
+- Keep `ui_render_data` primitives compatible with the new text layout evidence without introducing renderer backend ownership.
 - Make generic text capability visible through package validation, catalog projection, and inspection projection.
 - Provide a renderer-neutral visual proof frame that shows source, layout, lines, glyph evidence, truncation, and boundary assertions.
 - Add static mount proof for the generic text frame.
-- Preserve owner boundaries between `ui_text`, `ui_controls`, `ui_runtime`, `ui_static_mount`, renderer backends, and product/editor/game layers.
+- Preserve owner boundaries between `ui_text`, `ui_render_data`, `ui_controls`, `ui_runtime`, `ui_static_mount`, renderer backends, and product/editor/game layers.
 - Avoid public phase-shaped API names and compatibility-only aliases/shims.
 
 ## Explicit non-goals
@@ -89,6 +91,8 @@ Important nuance: the contracts must be future-proof for shaping, fallback, emoj
 ## Owner boundaries
 
 `ui_text` owns renderer-neutral text display/layout contracts and evidence vocabulary. It owns text block declarations, run/span contracts, style contracts, layout constraints, line metrics, glyph/cluster evidence, overflow evidence, deterministic proof layout helpers, and validation-local text layout tests.
+
+`ui_render_data` owns renderer-neutral primitive transport for already-laid-out text evidence inside `UiFrame`. If the old glyph-run primitive depends on the retired single-run layout type, Phase 15 must update that primitive to carry the new visual-run/layout-evidence shape. It must not add backend-specific rendering, GPU atlas upload, font discovery, or product text policy.
 
 `ui_controls` owns package-backed generic-text declarations for reusable controls. It owns descriptor attachment, package validation, catalog projection, and inspection projection. It does not own glyph placement or renderer backend policy.
 
@@ -156,7 +160,7 @@ Run order is source order. Empty runs are invalid unless explicitly used as diag
 
 ### Inline span
 
-A span is a style/semantic subdivision inside a run or across run boundaries. The design should prefer runs as the implementation primitive and allow spans as authored subdivisions lowered into runs. Inline spans are display-only.
+A span is a display-only style/semantic subdivision that is lowered into ordered source runs or style segments before layout. Keep authored span identity in evidence, but do not let spans become product document annotations or editable ranges.
 
 Supported span features:
 
@@ -250,8 +254,9 @@ line_metrics
 visual_runs
 overflow_evidence
 fallback_evidence
-boundary_assertions
 ```
+
+Boundary/no-bypass assertions belong in the runtime proof report and static mount proof, not inside the pure `ui_text` layout result.
 
 ### Line metrics
 
@@ -479,7 +484,7 @@ Required frame panels:
 2. **Layout panel**: line boxes, baselines, measured size, content bounds, overflow status.
 3. **Evidence panel**: glyph run count, glyph count, draw order, truncation, fallback, catalog/inspection facts, boundary assertions.
 
-The `UiFrame` must contain renderer-neutral primitives only. It may use rectangles for line boxes and glyph-run primitives for text evidence. The summary struct must expose counts and booleans that tests can assert without screenshot comparison.
+The `UiFrame` must contain renderer-neutral primitives only. It may use rectangles for line boxes and an updated text/glyph primitive that carries visual-run layout evidence. The summary struct must expose counts and booleans that tests can assert without screenshot comparison.
 
 Minimum render summary fields:
 
@@ -505,7 +510,7 @@ no_bypass_proven
 `ui_static_mount` must validate that the Generic Text proof frame:
 
 - contains a source/layout/evidence panel structure;
-- contains at least one glyph-run primitive;
+- contains at least one renderer-neutral text/glyph primitive;
 - contains line-box/baseline evidence;
 - proves inline spans;
 - proves no-wrap layout;
@@ -538,12 +543,13 @@ Phase 15 is not complete until these scenarios are covered by focused tests:
 10. **End ellipsis**: visible source range is shortened and ellipsis evidence is emitted.
 11. **Max-line clamp**: multi-line text clamps to a configured max line count.
 12. **Fallback glyph**: missing glyph/replacement evidence is emitted.
-13. **Catalog projection**: descriptor facts appear in catalog entry.
-14. **Inspection projection**: text display facts appear in inspection descriptor under text display, not text editing.
-15. **Runtime proof frame**: `UiFrame` summary proves source/layout/evidence panels.
-16. **Static mount acceptance**: static mount validates the renderer-neutral proof frame.
-17. **Negative validation**: duplicate role, missing kind, invalid max lines, unsupported span, and backend-required descriptor produce diagnostics.
-18. **Boundary/no-bypass**: no commands, product mutation, authored UI edits, undo/redo, renderer backend ownership, or plugin operations.
+13. **Render-data primitive compatibility**: `UiFrame` can carry the new visual-run/text evidence without depending on the retired single-run layout type.
+14. **Catalog projection**: descriptor facts appear in catalog entry.
+15. **Inspection projection**: text display facts appear in inspection descriptor under text display, not text editing.
+16. **Runtime proof frame**: `UiFrame` summary proves source/layout/evidence panels.
+17. **Static mount acceptance**: static mount validates the renderer-neutral proof frame.
+18. **Negative validation**: duplicate role, missing kind, invalid max lines, unsupported span, and backend-required descriptor produce diagnostics.
+19. **Boundary/no-bypass**: no commands, product mutation, authored UI edits, undo/redo, renderer backend ownership, or plugin operations.
 
 ## Implementation roadmap
 
@@ -569,7 +575,20 @@ domain/ui/ui_text/src/policy.rs
 domain/ui/ui_text/src/proof_layout.rs
 ```
 
-### Step 2: Add package-backed Generic Text declarations
+### Step 2: Keep render-data primitives compatible with the cutover
+
+Update the renderer-neutral text primitive surface if it currently depends on the retired `GlyphRun` shape. This is not a renderer backend task; it is the `UiFrame` transport layer for already-laid-out text evidence.
+
+Expected owner files:
+
+```text
+domain/ui/ui_render_data/src/primitives/glyph_run.rs
+domain/ui/ui_render_data/src/primitives/mod.rs
+domain/ui/ui_render_data/src/primitives/ui_primitive.rs
+domain/ui/ui_render_data/src/lib.rs
+```
+
+### Step 3: Add package-backed Generic Text declarations
 
 Add a `ui_controls` descriptor module for generic text display. Wire it into `ControlPackageDescriptor` in the same style as interaction, overlay, and editable text descriptors.
 
@@ -582,7 +601,7 @@ domain/ui/ui_controls/src/package/descriptor.rs
 domain/ui/ui_controls/src/package/validation.rs
 ```
 
-### Step 3: Project catalog and inspection facts
+### Step 4: Project catalog and inspection facts
 
 Add Generic Text summaries to catalog and inspection. Use a distinct `TextDisplay` inspection section or equivalent, not the existing `TextEditing` section.
 
@@ -593,11 +612,11 @@ domain/ui/ui_controls/src/catalog/entry.rs
 domain/ui/ui_controls/src/catalog/inspection.rs
 ```
 
-### Step 4: Add deterministic layout proof fixtures
+### Step 5: Add deterministic layout proof fixtures
 
 Create fixture helpers that make it easy for future controls to request text proof without duplicating layout boilerplate. Builders are allowed when they reduce ceremony and remain narrow.
 
-### Step 5: Add runtime report and visual proof frame
+### Step 6: Add runtime report and visual proof frame
 
 Add a generic-text runtime proof module. The proof frame must expose source, layout, and evidence panels through renderer-neutral `UiFrame` primitives.
 
@@ -608,7 +627,7 @@ domain/ui/ui_runtime/src/generic_text/
 domain/ui/ui_runtime/tests/
 ```
 
-### Step 6: Add static mount validation
+### Step 7: Add static mount validation
 
 Add static mount tests that validate the Generic Text proof frame and no-bypass assertions.
 
@@ -618,12 +637,13 @@ Expected owner area:
 domain/ui/ui_static_mount/tests/
 ```
 
-### Step 7: Run validation and close out
+### Step 8: Run validation and close out
 
 Implementation validation must include focused crate tests plus full workspace/doc validation before merge.
 
 ```text
 cargo test -p ui_text
+cargo test -p ui_render_data
 cargo test -p ui_controls
 cargo test -p ui_runtime
 cargo test -p ui_static_mount
@@ -674,6 +694,7 @@ Do not implement these as product features in Phase 15 unless they are needed fo
 Phase 15 can be considered complete only when:
 
 - `ui_text` has a block/run/span/layout/evidence model, not only a single string-to-glyph-run API;
+- `ui_render_data` can carry the new visual-run/text evidence in `UiFrame` without depending on the retired single-run layout shape;
 - inline spans are declared, laid out, and visible in proof evidence;
 - no-wrap, word-wrap, character-wrap, alignment, explicit newline, clip overflow, ellipsis, and max-line clamping are proven;
 - line metrics include baseline, line box, content width, measured size, and truncation state;
@@ -698,6 +719,7 @@ Phase 15 can be considered complete only when:
 Stop and redesign if implementation attempts any of the following:
 
 - preserves the current single-run layout API as the primary Generic Text contract;
+- leaves `ui_render_data` tied to a retired single-run text layout type after the cutover;
 - represents public glyph evidence only as `char` plus position;
 - omits line metrics from the proof;
 - omits inline spans from the proof;
