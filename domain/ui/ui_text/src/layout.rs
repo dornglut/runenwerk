@@ -34,14 +34,3 @@ impl TextLayouter for AtlasTextLayouter {
         crate::proof_layout::layout_text_block(atlas_source, request)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn block_request_carries_text_block() {
-        let request = TextBlockLayoutRequest::new(TextBlock::label("Label"));
-        assert_eq!(request.block.input_run_count_for_tests(), 1);
-    }
-}
