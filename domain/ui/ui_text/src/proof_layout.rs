@@ -8,7 +8,7 @@ use crate::{
     TextBlockLayoutResult, TextCluster, TextClusterRange, TextDirectionPolicy,
     TextEllipsisPlacement, TextFallbackEvidence, TextGlyph, TextHorizontalAlign,
     TextLayoutDiagnostic, TextLineMetrics, TextOverflowEvidence, TextOverflowPolicy, TextRunId,
-    TextSourceRange, TextVisualRun, TextWhitespacePolicy, TextWrapPolicy,
+    TextSourceRange, TextStyle, TextVisualRun, TextWhitespacePolicy, TextWrapPolicy,
 };
 
 #[derive(Clone)]
@@ -477,6 +477,57 @@ fn resolved_run_count(source: &[ProofGlyph]) -> usize {
         .len()
 }
 
+#[derive(Clone)]
+struct PendingVisualRun {
+    line_index: u32,
+    run_id: TextRunId,
+    span_id: Option<crate::TextSpanId>,
+    font_id: FontId,
+    style: TextStyle,
+    direction: TextDirectionPolicy,
+    glyphs: Vec<TextGlyph>,
+}
+
+impl PendingVisualRun {
+    fn new(line_index: u32, glyph: &ProofGlyph, direction: TextDirectionPolicy) -> Self {
+        Self {
+            line_index,
+            run_id: glyph.cluster.run_id,
+            span_id: glyph.cluster.span_id,
+            font_id: glyph.cluster.style.font_id,
+            style: glyph.cluster.style.clone(),
+            direction,
+            glyphs: Vec::new(),
+        }
+    }
+
+    fn matches(&self, glyph: &ProofGlyph, direction: TextDirectionPolicy) -> bool {
+        self.run_id == glyph.cluster.run_id
+            && self.span_id == glyph.cluster.span_id
+            && self.font_id == glyph.cluster.style.font_id
+            && self.style == glyph.cluster.style
+            && self.direction == direction
+    }
+
+    fn push(&mut self, glyph: TextGlyph) {
+        self.glyphs.push(glyph);
+    }
+
+    fn finish(self, visual_run_id: u32) -> TextVisualRun {
+        TextVisualRun {
+            visual_run_id,
+            line_index: self.line_index,
+            run_id: self.run_id,
+            span_id: self.span_id,
+            font_id: self.font_id,
+            style: self.style,
+            direction: self.direction,
+            bounds: glyph_bounds(&self.glyphs),
+            glyphs: self.glyphs,
+        }
+    }
+}
+
 fn line_metrics(
     block: &TextBlock,
     lines: &[ProofLine],
@@ -530,7 +581,7 @@ fn visual_runs(
             continue;
         };
         let mut pen_x = line_metrics.origin.x;
-        let mut glyphs = Vec::new();
+        let mut pending: Option<PendingVisualRun> = None;
         for glyph in &line.glyphs {
             let origin = UiPoint::new(pen_x, line_metrics.baseline_y);
             let bounds = UiRect::new(
@@ -539,7 +590,7 @@ fn visual_runs(
                 glyph.advance,
                 line_metrics.line_height,
             );
-            glyphs.push(TextGlyph {
+            let text_glyph = TextGlyph {
                 draw_order,
                 line_index: line_index as u32,
                 run_id: glyph.cluster.run_id,
@@ -555,35 +606,45 @@ fn visual_runs(
                 bounds,
                 source_text_preview: glyph.cluster.text_preview.clone(),
                 replacement: glyph.replacement,
-            });
+            };
+            let direction = block.layout.text_direction;
+            if pending
+                .as_ref()
+                .is_some_and(|segment| !segment.matches(glyph, direction))
+            {
+                if let Some(segment) = pending.take() {
+                    runs.push(segment.finish(runs.len() as u32));
+                }
+            }
+            if pending.is_none() {
+                pending = Some(PendingVisualRun::new(line_index as u32, glyph, direction));
+            }
+            pending.as_mut().expect("pending visual run").push(text_glyph);
             draw_order += 1;
             pen_x += glyph.advance;
         }
-        runs.push(TextVisualRun {
-            visual_run_id: runs.len() as u32,
-            line_index: line_index as u32,
-            run_id: line
-                .glyphs
-                .first()
-                .map(|glyph| glyph.cluster.run_id)
-                .unwrap_or(TextRunId(0)),
-            span_id: line.glyphs.first().and_then(|glyph| glyph.cluster.span_id),
-            font_id: line
-                .glyphs
-                .first()
-                .map(|glyph| glyph.cluster.style.font_id)
-                .unwrap_or(block.base_style.font_id),
-            style: line
-                .glyphs
-                .first()
-                .map(|glyph| glyph.cluster.style.clone())
-                .unwrap_or_else(|| block.base_style.clone()),
-            direction: block.layout.text_direction,
-            glyphs,
-            bounds: line_metrics.line_box,
-        });
+        if let Some(segment) = pending.take() {
+            runs.push(segment.finish(runs.len() as u32));
+        }
     }
     runs
+}
+
+fn glyph_bounds(glyphs: &[TextGlyph]) -> UiRect {
+    let Some(first) = glyphs.first() else {
+        return UiRect::ZERO;
+    };
+    let mut min_x = first.bounds.x;
+    let mut min_y = first.bounds.y;
+    let mut max_x = first.bounds.x + first.bounds.width;
+    let mut max_y = first.bounds.y + first.bounds.height;
+    for glyph in glyphs.iter().skip(1) {
+        min_x = min_x.min(glyph.bounds.x);
+        min_y = min_y.min(glyph.bounds.y);
+        max_x = max_x.max(glyph.bounds.x + glyph.bounds.width);
+        max_y = max_y.max(glyph.bounds.y + glyph.bounds.height);
+    }
+    UiRect::new(min_x, min_y, max_x - min_x, max_y - min_y)
 }
 
 fn visible_range(lines: &[ProofLine]) -> TextClusterRange {
