@@ -9,6 +9,9 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
+use super::primitives::{
+    brighten, darken, default_draw_key, paint_from_color, sort_key, with_alpha,
+};
 use super::text::{clipped_text_layout, ellipsis_text_layout};
 use ui_math::{Axis, UiRect, UiSize};
 use ui_render_data::{
@@ -2084,45 +2087,6 @@ fn button_text_style(button: &ButtonNode, interaction: WidgetInteraction) -> ui_
         text_style.color[3] = (text_style.color[3] * 0.95).clamp(0.0, 1.0);
     }
     text_style
-}
-
-fn brighten(color: ui_theme::UiColor, factor: f32) -> ui_theme::UiColor {
-    ui_theme::UiColor::new(
-        (color.r * factor).clamp(0.0, 1.0),
-        (color.g * factor).clamp(0.0, 1.0),
-        (color.b * factor).clamp(0.0, 1.0),
-        color.a,
-    )
-}
-
-fn darken(color: ui_theme::UiColor, factor: f32) -> ui_theme::UiColor {
-    ui_theme::UiColor::new(
-        (color.r * factor).clamp(0.0, 1.0),
-        (color.g * factor).clamp(0.0, 1.0),
-        (color.b * factor).clamp(0.0, 1.0),
-        color.a,
-    )
-}
-
-fn with_alpha(color: ui_theme::UiColor, alpha_mul: f32) -> ui_theme::UiColor {
-    ui_theme::UiColor::new(
-        color.r,
-        color.g,
-        color.b,
-        (color.a * alpha_mul).clamp(0.0, 1.0),
-    )
-}
-
-fn paint_from_color(color: ui_theme::UiColor) -> UiPaint {
-    UiPaint::rgba(color.r, color.g, color.b, color.a)
-}
-
-fn default_draw_key() -> UiDrawKey {
-    UiDrawKey::new(0, None)
-}
-
-fn sort_key(layer_order: u32, primitive_order: u32) -> UiSortKey {
-    UiSortKey::new(0, layer_order, primitive_order)
 }
 
 #[cfg(test)]
