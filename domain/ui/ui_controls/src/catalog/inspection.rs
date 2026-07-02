@@ -6,6 +6,7 @@ use super::{
 };
 use crate::accessibility::ControlAccessibilityCapabilitySummary;
 use crate::editable_text::ControlEditableTextSupportSummary;
+use crate::generic_text::ControlGenericTextSupportSummary;
 use crate::input::ControlInputCapabilitySummary;
 use crate::interaction::ControlInteractionSupportSummary;
 use crate::overlay::ControlOverlaySupportSummary;
@@ -163,6 +164,96 @@ impl ControlInspectionDescriptor {
             "text_editing.supported",
             bool_string(entry.editable_text_supported),
         );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.supported",
+            bool_string(entry.generic_text_supported),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.roles",
+            &entry.text_roles.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.semantic_roles",
+            &entry.text_semantic_roles.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.wrap",
+            &entry.text_wrap_policies.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.overflow",
+            &entry.text_overflow_policies.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.alignment",
+            &entry.text_alignment_policies.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.inline_spans_supported",
+            bool_string(entry.inline_spans_supported),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.line_metrics_supported",
+            bool_string(entry.line_metrics_supported),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.glyph_evidence_supported",
+            bool_string(entry.glyph_evidence_supported),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.fallback_evidence_supported",
+            bool_string(entry.fallback_evidence_supported),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.renderer_backend_required",
+            bool_string(entry.renderer_backend_required),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.executes_host_commands",
+            bool_string(entry.executes_host_commands),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.mutates_product_state",
+            bool_string(entry.mutates_product_state),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.authored_ui_edits",
+            "false",
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::TextDisplay,
+            "text_display.product_undo_redo",
+            "false",
+        );
         Self {
             package_id: entry.package_id,
             control_kind_id: entry.control_kind_id,
@@ -217,6 +308,17 @@ impl ControlInspectionDescriptor {
             push_fact(
                 &mut self.facts,
                 ControlInspectionSection::TextEditing,
+                &fact.key,
+                &fact.value,
+            );
+        }
+        self
+    }
+    pub fn with_generic_text_summary(mut self, summary: &ControlGenericTextSupportSummary) -> Self {
+        for fact in summary.inspection_facts() {
+            push_fact(
+                &mut self.facts,
+                ControlInspectionSection::TextDisplay,
                 &fact.key,
                 &fact.value,
             );
@@ -282,6 +384,7 @@ pub enum ControlInspectionSection {
     Interaction,
     Layering,
     TextEditing,
+    TextDisplay,
     State,
     Theme,
     Accessibility,

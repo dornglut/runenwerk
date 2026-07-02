@@ -14,6 +14,23 @@ pub struct MsdfFontAtlas {
     pub glyphs: HashMap<char, GlyphMetrics>,
 }
 
+impl Default for MsdfFontAtlas {
+    fn default() -> Self {
+        Self {
+            font_id: FontId(0),
+            texture_width: 0,
+            texture_height: 0,
+            metrics: FontFaceMetrics {
+                ascender: 0.0,
+                descender: 0.0,
+                line_height: 1.0,
+                base_size: 1.0,
+            },
+            glyphs: HashMap::new(),
+        }
+    }
+}
+
 pub trait FontAtlasSource: Send + Sync {
     fn atlas(&self, font_id: FontId) -> Option<&MsdfFontAtlas>;
 }

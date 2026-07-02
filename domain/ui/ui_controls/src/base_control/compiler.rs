@@ -10,8 +10,8 @@ use crate::{
 };
 
 use super::lowering::{
-    accessibility, input, inspection, interaction, layering_support, layout, module, render, state,
-    text_editing_support, theme,
+    accessibility, generic_text_support, input, inspection, interaction, layering_support, layout,
+    module, render, state, text_editing_support, theme,
 };
 use super::{
     CompiledControl, CompiledControlPackage, ControlContribution, ControlInspection, UiControls,
@@ -58,6 +58,12 @@ impl ControlCompiler {
                 control.module.kind.control_kind_id.clone(),
             ) {
                 package = package.with_editable_text_descriptor(descriptor);
+            }
+            if let Some(descriptor) = generic_text_support::lower_generic_text_support(
+                control.contribution.def(),
+                control.module.kind.control_kind_id.clone(),
+            ) {
+                package = package.with_generic_text_descriptor(descriptor);
             }
         }
         let controls = lowered

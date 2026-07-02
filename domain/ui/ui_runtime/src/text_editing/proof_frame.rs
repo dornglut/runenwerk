@@ -3,7 +3,7 @@ use ui_render_data::{
     BorderPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId,
     UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
 };
-use ui_text::{FontId, GlyphRun, PositionedGlyph};
+use ui_text::FontId;
 
 use super::{BASE_CONTROLS_TEXT_EDITING_PROOF_ID, TextEditingReport};
 
@@ -360,9 +360,11 @@ fn panel(primitives: &mut Vec<UiPrimitive>, order: &mut u32, area: UiRect, title
 }
 
 fn label(primitives: &mut Vec<UiPrimitive>, order: &mut u32, x: f32, y: f32, text: &str) {
+    let layout =
+        crate::proof_text::proof_label_layout(text, UiPoint::new(x, y), 250.0, FontId(14), *order);
     primitives.push(
         GlyphRunPrimitive::new(
-            glyph_run(text, UiPoint::new(x, y)),
+            layout,
             Some(UiRect::new(x, y - 12.0, 250.0, 16.0)),
             UiPaint::WHITE,
             UiDrawKey::new(1403, None),
@@ -376,23 +378,4 @@ fn sort_key(order: &mut u32) -> UiSortKey {
     let key = UiSortKey::new(0, 0, *order);
     *order += 1;
     key
-}
-
-fn glyph_run(text: &str, origin: UiPoint) -> GlyphRun {
-    let advance = 7.0;
-    let glyphs = text
-        .chars()
-        .enumerate()
-        .map(|(index, ch)| PositionedGlyph {
-            ch,
-            origin: UiPoint::new(origin.x + index as f32 * advance, origin.y),
-            advance,
-        })
-        .collect();
-    GlyphRun {
-        font_id: FontId(14),
-        font_size: 12.0,
-        size: UiSize::new(text.chars().count() as f32 * advance, 14.0),
-        glyphs,
-    }
 }

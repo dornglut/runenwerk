@@ -5,6 +5,7 @@
 pub mod authoring;
 pub mod descriptor;
 mod editable_text_validation;
+mod generic_text_validation;
 pub mod ids;
 pub mod metadata;
 mod overlay_validation;

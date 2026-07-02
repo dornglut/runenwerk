@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::editable_text::ControlEditableTextSupportSummary;
+use crate::generic_text::ControlGenericTextSupportSummary;
 use crate::interaction::ControlInteractionSupportSummary;
 use crate::overlay::ControlOverlaySupportSummary;
 use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
@@ -76,6 +77,28 @@ pub struct ControlCatalogEntryDescriptor {
     pub editable_text_composition_supported: bool,
     #[serde(default)]
     pub editable_text_host_owned_mutation: bool,
+    #[serde(default)]
+    pub generic_text_supported: bool,
+    #[serde(default)]
+    pub text_roles: Vec<String>,
+    #[serde(default)]
+    pub text_semantic_roles: Vec<String>,
+    #[serde(default)]
+    pub text_wrap_policies: Vec<String>,
+    #[serde(default)]
+    pub text_overflow_policies: Vec<String>,
+    #[serde(default)]
+    pub text_alignment_policies: Vec<String>,
+    #[serde(default)]
+    pub inline_spans_supported: bool,
+    #[serde(default)]
+    pub line_metrics_supported: bool,
+    #[serde(default)]
+    pub glyph_evidence_supported: bool,
+    #[serde(default)]
+    pub fallback_evidence_supported: bool,
+    #[serde(default)]
+    pub renderer_backend_required: bool,
     #[serde(default)]
     pub control_owned_runtime_behavior: bool,
     #[serde(default)]
@@ -184,6 +207,17 @@ impl ControlCatalogEntryDescriptor {
             editable_text_range_selection_supported: false,
             editable_text_composition_supported: false,
             editable_text_host_owned_mutation: false,
+            generic_text_supported: false,
+            text_roles: Vec::new(),
+            text_semantic_roles: Vec::new(),
+            text_wrap_policies: Vec::new(),
+            text_overflow_policies: Vec::new(),
+            text_alignment_policies: Vec::new(),
+            inline_spans_supported: false,
+            line_metrics_supported: false,
+            glyph_evidence_supported: false,
+            fallback_evidence_supported: false,
+            renderer_backend_required: false,
             control_owned_runtime_behavior: false,
             executes_host_commands: false,
             mutates_product_state: false,
@@ -196,6 +230,9 @@ impl ControlCatalogEntryDescriptor {
         }
         if let Some(descriptor) = package.editable_text_descriptor(&kind.control_kind_id) {
             entry = entry.with_editable_text_summary(&descriptor.summary());
+        }
+        if let Some(descriptor) = package.generic_text_descriptor(&kind.control_kind_id) {
+            entry = entry.with_generic_text_summary(&descriptor.summary());
         }
         entry
     }
@@ -237,6 +274,23 @@ impl ControlCatalogEntryDescriptor {
         self.editable_text_range_selection_supported = summary.range_selection_supported;
         self.editable_text_composition_supported = summary.composition_supported;
         self.editable_text_host_owned_mutation = summary.host_owned_mutation;
+        self.executes_host_commands |= summary.executes_host_commands;
+        self.mutates_product_state |= summary.mutates_product_state;
+        self
+    }
+
+    pub fn with_generic_text_summary(mut self, summary: &ControlGenericTextSupportSummary) -> Self {
+        self.generic_text_supported = summary.generic_text_supported;
+        self.text_roles = summary.roles.clone();
+        self.text_semantic_roles = summary.semantic_roles.clone();
+        self.text_wrap_policies = summary.wrap_policies.clone();
+        self.text_overflow_policies = summary.overflow_policies.clone();
+        self.text_alignment_policies = summary.alignment_policies.clone();
+        self.inline_spans_supported = summary.inline_span_support;
+        self.line_metrics_supported = summary.line_metrics_support;
+        self.glyph_evidence_supported = summary.glyph_evidence_support;
+        self.fallback_evidence_supported = summary.fallback_evidence_support;
+        self.renderer_backend_required = summary.renderer_backend_required;
         self.executes_host_commands |= summary.executes_host_commands;
         self.mutates_product_state |= summary.mutates_product_state;
         self

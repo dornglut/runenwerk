@@ -18,7 +18,7 @@ use ui_definition::{
     form_retained_ui, normalize_authored_template,
 };
 use ui_layout::SizePolicy;
-use ui_text::{FontId, TextOverflow};
+use ui_text::FontId;
 use ui_theme::ThemeTokens;
 
 use super::surface_control_polish::{
@@ -267,7 +267,6 @@ fn polish_entity_table(root: &mut UiNode, theme: &ThemeTokens, scope: SurfaceWid
         && let UiNodeKind::Table(table) = &mut table.kind
     {
         table.text_style = theme.body_small_text_style(FontId(1));
-        table.text_style.overflow = TextOverflow::Ellipsis;
         table.header_text_style = theme.body_small_text_style(FontId(1));
     }
 }

@@ -328,75 +328,80 @@ fn flatten_glyph_run(
     atlas_resource: &UiFontAtlasResource,
     instances: &mut Vec<FlattenedUiGlyphInstance>,
 ) {
-    let texture_id = run.draw_key.texture_id.unwrap_or(run.glyph_run.font_id.0);
-    let Some((atlas, _atlas_image)) = atlas_resource.atlas_for_texture_id(texture_id) else {
-        return;
-    };
-    let base_size = atlas.metrics.base_size.max(f32::EPSILON);
-    let scale = run.glyph_run.font_size / base_size;
     let local_clip = run.baseline_origin_clip;
 
-    for glyph in &run.glyph_run.glyphs {
-        let Some(metrics) = atlas
-            .glyphs
-            .get(&glyph.ch)
-            .or_else(|| atlas.glyphs.get(&'?'))
-        else {
+    for visual_run in &run.visual_runs {
+        let texture_id = run.draw_key.texture_id.unwrap_or(visual_run.font_id.0);
+        let Some((atlas, _atlas_image)) = atlas_resource.atlas_for_texture_id(texture_id) else {
             continue;
         };
+        let base_size = atlas.metrics.base_size.max(f32::EPSILON);
+        let scale = visual_run.style.font_size / base_size;
 
-        let width = (metrics.plane_right - metrics.plane_left).abs().max(1.0) * scale;
-        let height = (metrics.plane_top - metrics.plane_bottom).abs().max(1.0) * scale;
-        let glyph_rect = UiRect::new(
-            glyph.origin.x + metrics.plane_left * scale,
-            glyph.origin.y - metrics.plane_top * scale,
-            width,
-            height,
-        );
-        let clip = effective_clip(stack_clip, local_clip, glyph_rect);
-        if glyph_diagnostics_enabled() && glyph_is_diagnostic_target(glyph.ch) {
-            eprintln!(
-                "[glyph] ch='{}' origin=({:.3},{:.3}) plane=({:.3},{:.3},{:.3},{:.3}) rect=({:.3},{:.3},{:.3},{:.3}) clip={:?}",
-                glyph.ch,
-                glyph.origin.x,
-                glyph.origin.y,
-                metrics.plane_left,
-                metrics.plane_top,
-                metrics.plane_right,
-                metrics.plane_bottom,
-                glyph_rect.x,
-                glyph_rect.y,
-                glyph_rect.width,
-                glyph_rect.height,
-                clip,
+        for glyph in &visual_run.glyphs {
+            let preview_char = glyph.source_text_preview.chars().next().unwrap_or('?');
+            let Some(metrics) = atlas
+                .glyphs
+                .get(&preview_char)
+                .or_else(|| atlas.glyphs.get(&'?'))
+            else {
+                continue;
+            };
+
+            let width = (metrics.plane_right - metrics.plane_left).abs().max(1.0) * scale;
+            let height = (metrics.plane_top - metrics.plane_bottom).abs().max(1.0) * scale;
+            let glyph_rect = UiRect::new(
+                glyph.origin.x + metrics.plane_left * scale,
+                glyph.origin.y - metrics.plane_top * scale,
+                width,
+                height,
             );
-        }
+            let clip = effective_clip(stack_clip, local_clip, glyph_rect);
+            if glyph_diagnostics_enabled() && glyph_is_diagnostic_target(preview_char) {
+                eprintln!(
+                    "[glyph] ch='{}' origin=({:.3},{:.3}) plane=({:.3},{:.3},{:.3},{:.3}) rect=({:.3},{:.3},{:.3},{:.3}) clip={:?}",
+                    preview_char,
+                    glyph.origin.x,
+                    glyph.origin.y,
+                    metrics.plane_left,
+                    metrics.plane_top,
+                    metrics.plane_right,
+                    metrics.plane_bottom,
+                    glyph_rect.x,
+                    glyph_rect.y,
+                    glyph_rect.width,
+                    glyph_rect.height,
+                    clip,
+                );
+            }
 
-        if let Some(clip) = clip {
-            instances.push(FlattenedUiGlyphInstance {
-                raw: GlyphInstanceRaw {
-                    rect: [
-                        glyph_rect.x,
-                        glyph_rect.y,
-                        glyph_rect.width,
-                        glyph_rect.height,
-                    ],
-                    uv_rect: [
-                        metrics.atlas_left,
-                        metrics.atlas_top,
-                        (metrics.atlas_right - metrics.atlas_left).max(0.0),
-                        (metrics.atlas_bottom - metrics.atlas_top).max(0.0),
-                    ],
-                    color: [run.tint.r, run.tint.g, run.tint.b, run.tint.a],
-                },
-                clip: clip
-                    .map(|clip_rect| [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height]),
-                texture_id,
-                submission_order,
-                surface_order: run.sort_key.surface_order,
-                layer_order: run.sort_key.layer_order,
-                primitive_order: run.sort_key.primitive_order,
-            });
+            if let Some(clip) = clip {
+                instances.push(FlattenedUiGlyphInstance {
+                    raw: GlyphInstanceRaw {
+                        rect: [
+                            glyph_rect.x,
+                            glyph_rect.y,
+                            glyph_rect.width,
+                            glyph_rect.height,
+                        ],
+                        uv_rect: [
+                            metrics.atlas_left,
+                            metrics.atlas_top,
+                            (metrics.atlas_right - metrics.atlas_left).max(0.0),
+                            (metrics.atlas_bottom - metrics.atlas_top).max(0.0),
+                        ],
+                        color: [run.tint.r, run.tint.g, run.tint.b, run.tint.a],
+                    },
+                    clip: clip.map(|clip_rect| {
+                        [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height]
+                    }),
+                    texture_id,
+                    submission_order,
+                    surface_order: run.sort_key.surface_order,
+                    layer_order: run.sort_key.layer_order,
+                    primitive_order: run.sort_key.primitive_order,
+                });
+            }
         }
     }
 }
@@ -661,8 +666,8 @@ mod tests {
         UiDrawKey, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
     };
     use ui_text::{
-        AtlasTextLayouter, TextAlign, TextLayoutRequest, TextLayouter, TextOverflow, TextStyle,
-        TextWrap,
+        AtlasTextLayouter, TextBlock, TextBlockLayoutRequest, TextDirectionPolicy,
+        TextLayoutPolicy, TextLayouter, TextStyle,
     };
 
     #[test]
@@ -818,33 +823,20 @@ mod tests {
             font_id: DEFAULT_EDITOR_FONT_ID,
             font_size: 14.0,
             color: [1.0, 1.0, 1.0, 1.0],
-            line_height: None,
-            align: TextAlign::Start,
-            vertical_align: ui_text::TextVerticalAlign::LineBoxCenter,
-            wrap: TextWrap::NoWrap,
-            overflow: TextOverflow::Clip,
+            ..TextStyle::default()
         };
-        let glyph_run = AtlasTextLayouter
-            .layout(
-                &atlas,
-                TextLayoutRequest {
-                    text: "Nonge",
-                    style: &style,
-                    max_width: None,
-                },
-            )
-            .expect("expected atlas text layout");
-        let baseline = glyph_run.glyphs[0].origin.y;
+        let glyph_layout = test_text_layout(&atlas, "Nonge", &style);
+        let text_glyphs = text_glyphs(&glyph_layout);
+        let baseline = text_glyphs[0].origin.y;
         assert!(
-            glyph_run
-                .glyphs
+            text_glyphs
                 .iter()
                 .all(|glyph| (glyph.origin.y - baseline).abs() <= f32::EPSILON),
             "all glyph origins in run should share one baseline",
         );
 
         let run = GlyphRunPrimitive::new(
-            glyph_run.clone(),
+            glyph_layout.clone(),
             Some(UiRect::new(0.0, 0.0, 400.0, 64.0)),
             UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
             UiDrawKey::new(0, Some(DEFAULT_EDITOR_FONT_ID.0)),
@@ -852,28 +844,29 @@ mod tests {
         );
         let mut instances = Vec::new();
         flatten_glyph_run(&run, 0, ClipRegion::Unbounded, &atlas, &mut instances);
-        assert_eq!(instances.len(), glyph_run.glyphs.len());
+        assert_eq!(instances.len(), glyph_layout.glyph_count);
 
         let (atlas_metrics, _) = atlas
             .atlas_for_texture_id(DEFAULT_EDITOR_FONT_ID.0)
             .expect("default atlas should be available");
-        let scale = glyph_run.font_size / atlas_metrics.metrics.base_size.max(f32::EPSILON);
-        for (glyph, instance) in glyph_run.glyphs.iter().zip(instances.iter()) {
+        let scale = style.font_size / atlas_metrics.metrics.base_size.max(f32::EPSILON);
+        for (glyph, instance) in text_glyphs.iter().zip(instances.iter()) {
+            let ch = glyph.source_text_preview.chars().next().unwrap_or('?');
             let metrics = atlas_metrics
                 .glyphs
-                .get(&glyph.ch)
+                .get(&ch)
                 .or_else(|| atlas_metrics.glyphs.get(&'?'))
                 .expect("metrics should exist for glyph");
             let expected_top = glyph.origin.y - metrics.plane_top * scale;
             assert!(
                 (instance.raw.rect[1] - expected_top).abs() <= 0.001,
                 "glyph '{}' quad top must match baseline conversion",
-                glyph.ch,
+                ch,
             );
             assert!(
                 instance.clip.is_some(),
                 "glyph '{}' should keep final clip in flattened output",
-                glyph.ch,
+                ch,
             );
         }
     }
@@ -885,30 +878,17 @@ mod tests {
             font_id: DEFAULT_EDITOR_FONT_ID,
             font_size: 14.0,
             color: [1.0, 1.0, 1.0, 1.0],
-            line_height: None,
-            align: TextAlign::Start,
-            vertical_align: ui_text::TextVerticalAlign::LineBoxCenter,
-            wrap: TextWrap::NoWrap,
-            overflow: TextOverflow::Clip,
+            ..TextStyle::default()
         };
-        let glyph_run = AtlasTextLayouter
-            .layout(
-                &atlas,
-                TextLayoutRequest {
-                    text: "Nongepy",
-                    style: &style,
-                    max_width: None,
-                },
-            )
-            .expect("expected atlas text layout");
-        let baseline = glyph_run
-            .glyphs
+        let glyph_layout = test_text_layout(&atlas, "Nongepy", &style);
+        let text_glyphs = text_glyphs(&glyph_layout);
+        let baseline = text_glyphs
             .first()
             .map(|glyph| glyph.origin.y)
             .expect("representative run should contain glyphs");
 
         let run = GlyphRunPrimitive::new(
-            glyph_run.clone(),
+            glyph_layout.clone(),
             Some(UiRect::new(0.0, 0.0, 480.0, 96.0)),
             UiPaint::rgba(1.0, 1.0, 1.0, 1.0),
             UiDrawKey::new(0, Some(DEFAULT_EDITOR_FONT_ID.0)),
@@ -916,11 +896,12 @@ mod tests {
         );
         let mut instances = Vec::new();
         flatten_glyph_run(&run, 0, ClipRegion::Unbounded, &atlas, &mut instances);
-        assert_eq!(instances.len(), glyph_run.glyphs.len());
+        assert_eq!(instances.len(), glyph_layout.glyph_count);
 
         let mut by_char = std::collections::HashMap::new();
-        for (glyph, instance) in glyph_run.glyphs.iter().zip(instances.iter()) {
-            by_char.entry(glyph.ch).or_insert(instance);
+        for (glyph, instance) in text_glyphs.iter().zip(instances.iter()) {
+            let ch = glyph.source_text_preview.chars().next().unwrap_or('?');
+            by_char.entry(ch).or_insert(instance);
         }
 
         for ch in ['g', 'p', 'y'] {
@@ -959,5 +940,27 @@ mod tests {
             top_n + 0.5 < top_g,
             "cap-height glyph 'N' should render above descender glyph 'g'; top_n={top_n} top_g={top_g}",
         );
+    }
+
+    fn test_text_layout(
+        atlas: &UiFontAtlasResource,
+        text: &str,
+        style: &TextStyle,
+    ) -> ui_text::TextBlockLayoutResult {
+        let block = TextBlock::label(text)
+            .with_base_style(style.clone())
+            .with_layout(TextLayoutPolicy {
+                text_direction: TextDirectionPolicy::Ltr,
+                ..TextLayoutPolicy::default()
+            });
+        AtlasTextLayouter.layout(atlas, TextBlockLayoutRequest::new(block))
+    }
+
+    fn text_glyphs(layout: &ui_text::TextBlockLayoutResult) -> Vec<&ui_text::TextGlyph> {
+        layout
+            .visual_runs
+            .iter()
+            .flat_map(|run| run.glyphs.iter())
+            .collect()
     }
 }

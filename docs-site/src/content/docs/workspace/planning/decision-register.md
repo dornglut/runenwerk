@@ -76,6 +76,32 @@ Evidence: Existing `ui_text` owns renderer-independent text contracts. Phase 15 
 
 Follow-up: Review and refine the Generic Text design. Do not implement until active planning is promoted with exact scope, owner files, validation, evidence, and stop conditions.
 
+## Phase 15 generic text implementation closeout decision
+
+Date: 2026-07-02
+
+Decision: Move `PT-UI-COMPONENT-PLATFORM-015` Generic Text out of active planning after local implementation closeout evidence passed on PR #48.
+
+State transition: `active-planning -> active-implementation -> review`
+
+Evidence: PR #48 branch `ui/generic-text-phase-15` at implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680` implements the renderer-neutral Generic Text substrate across `ui_text`, `ui_render_data`, `ui_controls`, `ui_runtime`, and `ui_static_mount`. Evidence covers `TextBlock`, `TextRun`, `TextSpan`, source ranges, semantic roles, layout policy, style, line metrics, visual runs, glyph evidence, overflow evidence, fallback evidence, diagnostics, `TextBlockLayoutRequest`, `TextBlockLayoutResult`, `TextLayouter`, Generic Text package descriptors and validation reasons, catalog projection, separate `TextDisplay` inspection projection, runtime proof report/frame, static mount proof, no-bypass boundary assertions, and migration away from the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path.
+
+Validation: `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check` passed locally on 2026-07-02.
+
+Follow-up: Mark PR #48 ready for review after docs validation remains green, then merge only if GitHub reports the PR mergeable. Record the merge commit after merge.
+
+## Phase 16 Surface2D planning-start decision
+
+Date: 2026-07-02
+
+Decision: Start `PT-UI-COMPONENT-PLATFORM-016` as Surface2D design/planning intake after Phase 15 local closeout evidence was recorded.
+
+State transition: `production-track -> active-planning`
+
+Evidence: Phase 15 Generic Text local closeout evidence is recorded for PR #48 at implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680`. The existing Surface2D design scopes generic renderer-neutral 2D surface identity, content/viewport bounds, world/screen transforms, pan, zoom, fit, selection rectangle, hover coordinate, pointer capture, gesture cancel/commit, overlay/diagnostic layers, grid/background vocabulary, large-content bounds, LOD readiness, and budget evidence.
+
+Follow-up: Review and refine the Surface2D design. Do not implement until active planning is promoted with exact scope, owner files, validation, evidence, and stop conditions.
+
 ## Lifecycle rule
 
 Use `../workflow-lifecycle.md` for state transitions. New entries should include `State transition` when the decision changes lifecycle state.

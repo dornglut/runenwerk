@@ -215,24 +215,20 @@ fn scene_registered_apps_publish_overlay_frame_with_buttons() {
             matches!(
                 primitive,
                 UiPrimitive::GlyphRun(run)
-                    if run
-                        .glyph_run
-                        .glyphs
-                        .iter()
-                        .map(|glyph| glyph.ch)
-                        .collect::<String>()
-                        .contains("Start")
-                        || run
-                            .glyph_run
-                            .glyphs
-                            .iter()
-                            .map(|glyph| glyph.ch)
-                            .collect::<String>()
-                            .contains("Settings")
+                    if glyph_run_text(run).contains("Start")
+                        || glyph_run_text(run).contains("Settings")
             )
         }),
         "overlay frame should include scene-template button labels"
     );
+}
+
+fn glyph_run_text(run: &ui_render_data::GlyphRunPrimitive) -> String {
+    run.visual_runs
+        .iter()
+        .flat_map(|visual_run| visual_run.glyphs.iter())
+        .map(|glyph| glyph.source_text_preview.as_str())
+        .collect()
 }
 
 #[test]

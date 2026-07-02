@@ -11,7 +11,7 @@ use ui_definition::{
     normalize_authored_template,
 };
 use ui_layout::SizePolicy;
-use ui_text::{FontId, TextOverflow};
+use ui_text::FontId;
 use ui_theme::ThemeTokens;
 
 use super::surface_definition_context::{
@@ -85,6 +85,5 @@ fn polish_outliner_tree(root: &mut UiNode, theme: &ThemeTokens, scope: SurfaceWi
         && let UiNodeKind::Tree(tree) = &mut tree.kind
     {
         tree.text_style = theme.body_text_style(FontId(1));
-        tree.text_style.overflow = TextOverflow::Ellipsis;
     }
 }

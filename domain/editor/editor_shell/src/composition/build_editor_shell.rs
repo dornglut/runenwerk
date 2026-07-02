@@ -16,7 +16,7 @@ use ui_definition::{
 };
 use ui_layout::SizePolicy;
 use ui_math::{Axis, UiInsets};
-use ui_text::{FontId, TextVerticalAlign};
+use ui_text::{FontId, TextLineHeightPolicy};
 use ui_theme::{ThemeTokens, UiColor};
 use ui_tree::{OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, PopupSide};
 
@@ -1507,7 +1507,7 @@ fn compass_cell(
     }
     let mut text_style = compact_shell_text_style(theme);
     text_style.font_size *= accessibility.text_scale;
-    text_style.line_height = Some(text_style.font_size * 1.35);
+    text_style.line_height = TextLineHeightPolicy::Absolute(text_style.font_size * 1.35);
     let mut node = button_selected(
         region_compass_cell_widget_id(anchor_widget_id, ordinal),
         target.short_label,
@@ -1560,7 +1560,8 @@ fn build_region_compass_detach(
     if let UiNodeKind::Button(button) = &mut detach.kind {
         button.accessible_label = Some(compass.detach_label.clone());
         button.text_style.font_size *= compass.accessibility.text_scale;
-        button.text_style.line_height = Some(button.text_style.font_size * 1.35);
+        button.text_style.line_height =
+            TextLineHeightPolicy::Absolute(button.text_style.font_size * 1.35);
         button.min_size = UiSize::new(
             132.0 * compass.accessibility.text_scale,
             compass.accessibility.minimum_hit_size.max(44.0),
@@ -1598,15 +1599,11 @@ fn tab_stack_action_menu_item(
 }
 
 fn compact_shell_text_style(theme: &ThemeTokens) -> ui_text::TextStyle {
-    let mut text_style = theme.body_small_text_style(FontId(1));
-    text_style.vertical_align = TextVerticalAlign::CapHeightCenter;
-    text_style
+    theme.body_small_text_style(FontId(1))
 }
 
 fn icon_glyph_text_style(theme: &ThemeTokens) -> ui_text::TextStyle {
-    let mut text_style = theme.body_small_text_style(FontId(1));
-    text_style.vertical_align = TextVerticalAlign::InkBoundsCenter;
-    text_style
+    theme.body_small_text_style(FontId(1))
 }
 
 fn build_tab_insertion_spacer(

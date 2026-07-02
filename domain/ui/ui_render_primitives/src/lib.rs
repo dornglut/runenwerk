@@ -10,8 +10,10 @@ use ui_runtime_view::{
     ButtonRuntimeHostData, ButtonRuntimeView, ButtonRuntimeViewReport, UiRuntimeViewReport,
 };
 use ui_text::{
-    AtlasTextLayouter, FontAtlasSource, FontId, GlyphRun, TextAlign, TextLayoutRequest,
-    TextLayouter, TextOverflow, TextStyle,
+    AtlasTextLayouter, FontAtlasSource, FontId, TextBlock, TextBlockId, TextBlockLayoutRequest,
+    TextBlockLayoutResult, TextDirectionPolicy, TextHeightConstraint, TextHorizontalAlign,
+    TextLayoutPolicy, TextLayouter, TextLineHeightPolicy, TextRun, TextRunId, TextSemanticRole,
+    TextStyle, TextVerticalAlign, TextWhitespacePolicy, TextWidthConstraint, TextWrapPolicy,
 };
 use ui_theme::{ThemeTokens, UiColor};
 
@@ -153,49 +155,51 @@ impl UiRenderPrimitiveReport {
             );
             primitive_order += 1;
 
-            match label_glyph_run(
+            let text_layout = label_text_layout(
                 button,
                 layout.text_bounds,
                 &style.text_style,
                 atlas_source,
                 &layouter,
-            ) {
-                Some(glyph_run) if glyph_run.glyphs.is_empty() => {
-                    diagnostics.push(UiRenderPrimitiveDiagnostic::error(
-                        DIAGNOSTIC_EMPTY_GLYPH_RUN,
-                        format!(
-                            "button {} produced an empty glyph run for label text",
-                            button.control_id
-                        ),
-                        source_map_index,
-                    ));
-                }
-                Some(glyph_run) => {
-                    push_primitive(
-                        &mut layer,
-                        &mut provenance,
-                        0,
-                        source_map_index,
-                        UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
-                            glyph_run,
-                            Some(layout.text_bounds),
-                            paint_from_text_style(&style.text_style),
-                            UiDrawKey::new(0, Some(style.text_style.font_id.0)),
-                            sort_key(primitive_order),
-                        )),
-                    );
-                    primitive_order += 1;
-                }
-                None => {
-                    diagnostics.push(UiRenderPrimitiveDiagnostic::error(
-                        DIAGNOSTIC_TEXT_LAYOUT_FAILED,
-                        format!(
-                            "button {} label could not be shaped with the supplied font atlas",
-                            button.control_id
-                        ),
-                        source_map_index,
-                    ));
-                }
+                TextBlockId(index as u64 + 1),
+            );
+            if text_layout.glyph_count == 0 {
+                diagnostics.push(UiRenderPrimitiveDiagnostic::error(
+                    DIAGNOSTIC_EMPTY_GLYPH_RUN,
+                    format!(
+                        "button {} produced an empty glyph run for label text",
+                        button.control_id
+                    ),
+                    source_map_index,
+                ));
+            } else if text_layout
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == ui_text::TextDiagnosticSeverity::Error)
+            {
+                diagnostics.push(UiRenderPrimitiveDiagnostic::error(
+                    DIAGNOSTIC_TEXT_LAYOUT_FAILED,
+                    format!(
+                        "button {} label could not be shaped with the supplied font atlas",
+                        button.control_id
+                    ),
+                    source_map_index,
+                ));
+            } else {
+                push_primitive(
+                    &mut layer,
+                    &mut provenance,
+                    0,
+                    source_map_index,
+                    UiPrimitive::GlyphRun(GlyphRunPrimitive::new(
+                        text_layout,
+                        Some(layout.text_bounds),
+                        paint_from_text_style(&style.text_style),
+                        UiDrawKey::new(0, Some(style.text_style.font_id.0)),
+                        sort_key(primitive_order),
+                    )),
+                );
+                primitive_order += 1;
             }
         }
 
@@ -334,10 +338,9 @@ impl ResolvedButtonStyle {
         };
 
         let mut text_style = theme.body_text_style(font_id);
-        text_style.align = TextAlign::Center;
-        text_style.overflow = TextOverflow::Ellipsis;
         text_style.font_size = (theme.typography.body * size_factor).max(1.0);
-        text_style.line_height = Some((text_style.font_size * 1.35).max(1.0));
+        text_style.line_height =
+            TextLineHeightPolicy::Absolute((text_style.font_size * 1.35).max(1.0));
 
         let (background, border, text) = button_colors(theme, button);
         text_style.color = [text.r, text.g, text.b, text.a];
@@ -384,78 +387,60 @@ impl ButtonPrimitiveLayout {
     }
 }
 
-fn label_glyph_run(
+fn label_text_layout(
     button: &ButtonRuntimeView,
     bounds: UiRect,
     text_style: &TextStyle,
     atlas_source: &dyn FontAtlasSource,
     layouter: &dyn TextLayouter,
-) -> Option<GlyphRun> {
-    let mut glyph_run = layouter.layout(
-        atlas_source,
-        TextLayoutRequest {
-            text: &button.label,
-            style: text_style,
-            max_width: Some(bounds.width.max(0.0)),
-        },
-    )?;
-    let align_offset = match text_style.align {
-        TextAlign::Start => 0.0,
-        TextAlign::Center => ((bounds.width - glyph_run.size.width) * 0.5).max(0.0),
-        TextAlign::End => (bounds.width - glyph_run.size.width).max(0.0),
-    };
-    let vertical_offset =
-        vertical_alignment_offset(&glyph_run, text_style, bounds.height, atlas_source);
-
-    for glyph in &mut glyph_run.glyphs {
-        glyph.origin.x += bounds.x + align_offset;
-        glyph.origin.y += bounds.y + vertical_offset;
-    }
-
-    Some(glyph_run)
+    block_id: TextBlockId,
+) -> TextBlockLayoutResult {
+    let block = TextBlock::new(block_id, text_style.clone())
+        .with_run(
+            TextRun::new(TextRunId(1), &button.label).with_semantic_role(TextSemanticRole::Label),
+        )
+        .with_semantic_role(TextSemanticRole::Label)
+        .with_layout(TextLayoutPolicy {
+            width_constraint: TextWidthConstraint::Exact(bounds.width.max(0.0)),
+            height_constraint: TextHeightConstraint::Unconstrained,
+            wrap: TextWrapPolicy::NoWrap,
+            whitespace: TextWhitespacePolicy::Preserve,
+            horizontal_align: TextHorizontalAlign::Center,
+            vertical_align: TextVerticalAlign::Start,
+            overflow: ui_text::TextOverflowPolicy::Clip,
+            max_lines: Some(1),
+            text_direction: TextDirectionPolicy::Ltr,
+        });
+    let mut layout = layouter.layout(atlas_source, TextBlockLayoutRequest::new(block));
+    let vertical_offset = ((bounds.height - layout.measured_size.height) * 0.5).max(0.0);
+    translate_text_layout(&mut layout, bounds.x, bounds.y + vertical_offset);
+    layout
 }
 
-fn vertical_alignment_offset(
-    glyph_run: &GlyphRun,
-    text_style: &TextStyle,
-    bounds_height: f32,
-    atlas_source: &dyn FontAtlasSource,
-) -> f32 {
-    match text_style.vertical_align {
-        ui_text::TextVerticalAlign::LineBoxCenter => {
-            ((bounds_height - glyph_run.size.height) * 0.5).max(0.0)
+fn translate_text_layout(layout: &mut TextBlockLayoutResult, dx: f32, dy: f32) {
+    layout.content_bounds.x += dx;
+    layout.content_bounds.y += dy;
+    layout.ink_bounds.x += dx;
+    layout.ink_bounds.y += dy;
+    for line in &mut layout.line_metrics {
+        line.origin.x += dx;
+        line.origin.y += dy;
+        line.baseline_y += dy;
+        line.line_box.x += dx;
+        line.line_box.y += dy;
+        line.ink_bounds.x += dx;
+        line.ink_bounds.y += dy;
+    }
+    for visual_run in &mut layout.visual_runs {
+        visual_run.bounds.x += dx;
+        visual_run.bounds.y += dy;
+        for glyph in &mut visual_run.glyphs {
+            glyph.origin.x += dx;
+            glyph.origin.y += dy;
+            glyph.bounds.x += dx;
+            glyph.bounds.y += dy;
         }
-        ui_text::TextVerticalAlign::InkBoundsCenter
-        | ui_text::TextVerticalAlign::CapHeightCenter => {
-            ink_bounds_vertical_offset(glyph_run, text_style, bounds_height, atlas_source)
-                .unwrap_or_else(|| ((bounds_height - glyph_run.size.height) * 0.5).max(0.0))
-        }
     }
-}
-
-fn ink_bounds_vertical_offset(
-    glyph_run: &GlyphRun,
-    text_style: &TextStyle,
-    bounds_height: f32,
-    atlas_source: &dyn FontAtlasSource,
-) -> Option<f32> {
-    let atlas = atlas_source.atlas(text_style.font_id)?;
-    let scale = text_style.font_size / atlas.metrics.base_size.max(f32::EPSILON);
-    let mut top = f32::INFINITY;
-    let mut bottom = f32::NEG_INFINITY;
-    for glyph in &glyph_run.glyphs {
-        let metrics = atlas
-            .glyphs
-            .get(&glyph.ch)
-            .or_else(|| atlas.glyphs.get(&'?'))?;
-        top = top.min(glyph.origin.y - metrics.plane_top * scale);
-        bottom = bottom.max(glyph.origin.y - metrics.plane_bottom * scale);
-    }
-    if !top.is_finite() || !bottom.is_finite() {
-        return None;
-    }
-
-    Some(bounds_height * 0.5 - (top + bottom) * 0.5)
 }
 
 fn button_colors(theme: &ThemeTokens, button: &ButtonRuntimeView) -> (UiColor, UiColor, UiColor) {

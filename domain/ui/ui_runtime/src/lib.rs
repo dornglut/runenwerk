@@ -1,13 +1,16 @@
 pub use ::ui_tree::*;
 
+pub mod generic_text;
 pub mod input;
 pub mod layout;
 pub mod output;
 pub mod overlay;
+mod proof_text;
 pub mod runtime;
 pub mod state;
 pub mod text_editing;
 
+pub use generic_text::*;
 pub use input::dispatch::UiInputDispatchResult;
 pub use input::generic_interaction::*;
 pub use input::generic_interaction_fixture::*;

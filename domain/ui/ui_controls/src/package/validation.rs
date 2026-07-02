@@ -148,6 +148,7 @@ pub enum ControlPackageValidationReason {
     DuplicateInteractionDescriptor,
     DuplicateOverlayDescriptor,
     DuplicateEditableTextDescriptor,
+    DuplicateGenericTextDescriptor,
     DuplicateRouteRequirement,
     InvalidDeprecation,
     InvalidMigrationVersion,
@@ -157,6 +158,10 @@ pub enum ControlPackageValidationReason {
     InvalidOverlayDescriptor,
     UnresolvedEditableTextDescriptor,
     InvalidEditableTextDescriptor,
+    UnresolvedGenericTextDescriptor,
+    InvalidGenericTextDescriptor,
+    InvalidGenericTextRole,
+    UnsupportedGenericTextLayoutPolicy,
     UnsupportedTargetProfile,
     UnresolvedReference,
     RenderEvidenceMissing,
@@ -188,6 +193,7 @@ impl ControlPackageValidationReason {
             Self::DuplicateInteractionDescriptor => "duplicate_interaction_descriptor",
             Self::DuplicateOverlayDescriptor => "duplicate_overlay_descriptor",
             Self::DuplicateEditableTextDescriptor => "duplicate_editable_text_descriptor",
+            Self::DuplicateGenericTextDescriptor => "duplicate_generic_text_descriptor",
             Self::DuplicateRouteRequirement => "duplicate_route_requirement",
             Self::InvalidDeprecation => "invalid_deprecation",
             Self::InvalidMigrationVersion => "invalid_migration_version",
@@ -197,6 +203,10 @@ impl ControlPackageValidationReason {
             Self::InvalidOverlayDescriptor => "invalid_overlay_descriptor",
             Self::UnresolvedEditableTextDescriptor => "unresolved_editable_text_descriptor",
             Self::InvalidEditableTextDescriptor => "invalid_editable_text_descriptor",
+            Self::UnresolvedGenericTextDescriptor => "unresolved_generic_text_descriptor",
+            Self::InvalidGenericTextDescriptor => "invalid_generic_text_descriptor",
+            Self::InvalidGenericTextRole => "invalid_generic_text_role",
+            Self::UnsupportedGenericTextLayoutPolicy => "unsupported_generic_text_layout_policy",
             Self::UnsupportedTargetProfile => "unsupported_target_profile",
             Self::UnresolvedReference => "unresolved_reference",
             Self::RenderEvidenceMissing => "render_evidence_missing",
@@ -466,6 +476,11 @@ impl ControlPackageDescriptor {
             &control_kind_ids,
             &mut report,
         );
+        super::generic_text_validation::validate_generic_text_descriptors(
+            self,
+            &control_kind_ids,
+            &mut report,
+        );
         report
     }
 }
@@ -583,6 +598,16 @@ fn validate_duplicates(
             .iter()
             .map(|descriptor| descriptor.control_kind_id.as_str().to_owned()),
         ControlPackageValidationReason::DuplicateEditableTextDescriptor,
+    );
+    push_duplicate_package_values(
+        report,
+        &package.package_id,
+        "generic_text_descriptor",
+        package
+            .generic_text_descriptors
+            .iter()
+            .map(|descriptor| descriptor.control_kind_id.as_str().to_owned()),
+        ControlPackageValidationReason::DuplicateGenericTextDescriptor,
     );
 }
 
