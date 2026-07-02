@@ -1,4 +1,6 @@
-use ui_controls::runenwerk_control_package;
+use ui_controls::{
+    package::overlay_validation::ControlOverlayPackageValidationExt, runenwerk_control_package,
+};
 
 #[test]
 fn base_controls_package_exposes_overlay_descriptors_for_all_controls() {
@@ -6,6 +8,7 @@ fn base_controls_package_exposes_overlay_descriptors_for_all_controls() {
     assert_eq!(package.control_kinds.len(), 8);
     assert_eq!(package.overlay_descriptors.len(), 8);
     assert!(package.validate_contract().is_valid());
+    assert!(package.validate_overlay_descriptors().is_valid());
     for kind in &package.control_kinds {
         let descriptor = package
             .overlay_descriptor(&kind.control_kind_id)
