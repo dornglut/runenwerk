@@ -24,18 +24,10 @@ pub(super) fn validate_generic_text_descriptors(
             continue;
         }
         if !descriptor.proof_required {
-            push_invalid(
-                descriptor.control_kind_id.clone(),
-                "generic-text descriptor must require proof evidence",
-                report,
-            );
+            push_invalid(descriptor.control_kind_id.clone(), "generic-text descriptor must require proof evidence", report);
         }
         if descriptor.roles.is_empty() {
-            push_invalid(
-                descriptor.control_kind_id.clone(),
-                "generic-text descriptor must declare at least one text role",
-                report,
-            );
+            push_invalid(descriptor.control_kind_id.clone(), "generic-text descriptor must declare at least one text role", report);
         }
         let mut role_ids = BTreeSet::new();
         for role in &descriptor.roles {
@@ -62,11 +54,7 @@ pub(super) fn validate_generic_text_descriptors(
             }
         }
         if descriptor.layout_support.renderer_backend_required {
-            push_invalid(
-                descriptor.control_kind_id.clone(),
-                "generic-text descriptor must remain renderer-backend neutral",
-                report,
-            );
+            push_invalid(descriptor.control_kind_id.clone(), "generic-text descriptor must remain renderer-backend neutral", report);
         }
         if descriptor.layout_support.wrap_policies.is_empty()
             || descriptor.layout_support.overflow_policies.is_empty()
@@ -78,12 +66,13 @@ pub(super) fn validate_generic_text_descriptors(
                 "generic-text descriptor must declare wrap, overflow, and alignment support",
             ));
         }
-        if descriptor
-            .layout_support
-            .overflow_policies
-            .iter()
-            .any(|policy| matches!(policy, ControlGenericTextOverflowPolicy::StartEllipsisModeled | ControlGenericTextOverflowPolicy::MiddleEllipsisModeled))
-            && !descriptor.layout_support.glyph_evidence
+        if descriptor.layout_support.overflow_policies.iter().any(|policy| {
+            matches!(
+                *policy,
+                ControlGenericTextOverflowPolicy::StartEllipsisModeled
+                    | ControlGenericTextOverflowPolicy::MiddleEllipsisModeled
+            )
+        }) && !descriptor.layout_support.glyph_evidence
         {
             report.push(ControlPackageValidationDiagnostic::kind(
                 descriptor.control_kind_id.clone(),
