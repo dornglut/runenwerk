@@ -619,7 +619,10 @@ fn visual_runs(
             if pending.is_none() {
                 pending = Some(PendingVisualRun::new(line_index as u32, glyph, direction));
             }
-            pending.as_mut().expect("pending visual run").push(text_glyph);
+            pending
+                .as_mut()
+                .expect("pending visual run")
+                .push(text_glyph);
             draw_order += 1;
             pen_x += glyph.advance;
         }

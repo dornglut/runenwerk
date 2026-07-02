@@ -1045,7 +1045,15 @@ mod tests {
         }
         let sources = [
             include_str!("lib.rs"),
-            concat!(include_str!("../../ui_tree/src/tree/node/mod.rs"), include_str!("../../ui_tree/src/tree/node/core.rs"), include_str!("../../ui_tree/src/tree/node/controls.rs"), include_str!("../../ui_tree/src/tree/node/containers.rs"), include_str!("../../ui_tree/src/tree/node/overlay.rs"), include_str!("../../ui_tree/src/tree/node/surface.rs"), include_str!("../../ui_tree/src/tree/node/graph_canvas.rs")),
+            concat!(
+                include_str!("../../ui_tree/src/tree/node/mod.rs"),
+                include_str!("../../ui_tree/src/tree/node/core.rs"),
+                include_str!("../../ui_tree/src/tree/node/controls.rs"),
+                include_str!("../../ui_tree/src/tree/node/containers.rs"),
+                include_str!("../../ui_tree/src/tree/node/overlay.rs"),
+                include_str!("../../ui_tree/src/tree/node/surface.rs"),
+                include_str!("../../ui_tree/src/tree/node/graph_canvas.rs")
+            ),
             include_str!("../../ui_runtime/src/input/pointer.rs"),
             include_str!("../../ui_runtime/src/runtime/ui_runtime.rs"),
             include_str!("../../ui_runtime/src/output/build_ui_frame.rs"),
