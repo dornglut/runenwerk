@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-29
+last_reviewed: 2026-07-01
 related_docs:
   - ../workflow-lifecycle.md
 ---
@@ -245,7 +245,7 @@ Decision: Start `PT-UI-COMPONENT-PLATFORM-012A-PLANNING` as an Executable Intera
 
 State transition: `production-track -> active-planning`
 
-Context: Phase 12 provides contract, replay, report, renderer-neutral visible proof, and static frame mount evidence. That lower-tier evidence is useful, but it does not yet prove live gallery/proof-host interaction where actual pointer/key/focus/text-intent input updates reusable interaction state through the same normalized input and runtime formation path.
+Context: Phase 12 provides contract, replay, report, renderer-neutral visible proof, and static frame evidence. That lower-tier evidence is useful, but it does not yet prove live gallery/proof-host interaction where actual pointer/key/focus/text-intent input updates reusable interaction state through the same normalized input and runtime formation path.
 
 Options considered: Keep static proof as the final interaction standard; add an ad-hoc live Button demo; define a Tier 5 executable story standard with deterministic replay, live proof-host execution, semantic replay/live parity, static frame evidence, and no-bypass assertions.
 
@@ -305,7 +305,7 @@ Decision: Correct PR #43 planning truth: `PT-UI-COMPONENT-PLATFORM-012` and `PT-
 
 State transition: `completed` / `active-implementation` -> `review`
 
-Context: PR #43 contains useful Phase 12 lower-tier generic interaction evidence and Phase 12A executable interaction story evidence, but the branch also introduced flawed 012B/UI Lab proof-surface work that reused provider id `11`, created invalid Workbench provider assignment behavior, and overstated UI Gallery/product exposure. Completion language was premature because PR #43 has not merged.
+Context: PR #43 contains useful Phase 12 lower-tier generic interaction evidence and Phase 12A executable interaction story evidence, but the branch also introduced flawed 012B/UI Lab proof-surface work that reused provider id `11`, created invalid Workbench provider assignment behavior, and overstated UI Gallery/product exposure. Completion language was premature because PR #43 had not merged.
 
 Options considered: Repair the flawed UI Lab surface attempt inside PR #43; keep 012B active and add more provider-registry work; remove 012B from PR #43, keep 012/012A in review, and plan UI Gallery separately.
 
@@ -318,6 +318,86 @@ Evidence: User cleanup instruction on 2026-06-30, restored workbench coverage, d
 Follow-up: Update PR #43 body to remove 012B/UI Lab surface claims, validate the focused Phase 12/12A gate, and merge only after the branch contains no 012B work or planning claims.
 
 Reactivation condition: Create `PT-UI-GALLERY-001` only through a separate active planning entry with owner, scope, validation envelope, evidence expectation, and stop conditions.
+
+## Phase 12 / 12A completion and Phase 13 activation decision
+
+Date: 2026-06-30
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-012` and `PT-UI-COMPONENT-PLATFORM-012A` completed from merged PR #43 evidence and start `PT-UI-COMPONENT-PLATFORM-013` as overlay/popup/layering design intake.
+
+State transition: `review -> completed`; `production-track -> active-planning`
+
+Context: PR #43 is closed and merged into `main` at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. User start condition reports PR #43 validated and merged. The PR body records Phase 12 generic interaction evidence and Phase 12A executable interaction story evidence while excluding overlays, popups, dropdowns, tooltips, modals, layering, product command execution, product/editor/game mutation, full text editing, dynamic plugin loading, and UI Gallery exposure.
+
+Options considered: Leave Phase 12/12A in review because the PR body still contains stale review wording; mark completion using PR metadata plus user validation evidence and correct planning truth; start Phase 13 implementation immediately.
+
+Reason: Planning truth must follow merged repository evidence. The stale PR-body review sentence is superseded by the actual closed/merged PR metadata and the user-reported validation start condition. Phase 13 can begin as design intake only because overlays/layering were explicitly excluded from PR #43 and need their own owner-first contract before code.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, `ui-component-platform-generic-interaction-design.md`, `ui-component-platform-executable-interaction-story-implementation-scope.md`, and `ui-component-platform-overlay-popup-layering-design.md`.
+
+Evidence: PR #43 merged metadata, merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`, user validation/merge start condition, PR #43 proof-path list, durable base-controls naming cleanup, and current planning docs.
+
+Follow-up: Keep Phase 13 in active planning until `ui-component-platform-overlay-popup-layering-design.md` is accepted and a Rust implementation scope records exact owner crates/files, validation commands, proof scenarios, negative scenarios, evidence contracts, no-bypass assertions, and stop conditions.
+
+## Phase 13 overlay / popup / layering design intake decision
+
+Date: 2026-06-30
+
+Decision: Use `ui-component-platform-overlay-popup-layering-design.md` as the active Phase 13 design document for reusable overlay, popup, dropdown, tooltip, focus-containing, and layering semantics.
+
+State transition: `active-planning -> proposed-design`
+
+Context: The existing overlay design was stale activation-vocabulary material. The component platform now has base controls, generic interaction facts, executable interaction stories, and static frame proof. The older editor Interaction V2 design also records popup-stack lessons for anchoring, focus return, outside dismissal, Escape dismissal, scroll ownership, layer order, and viewport arbitration, but those lessons must be extracted without moving editor shell behavior or commands into generic UI.
+
+Options considered: Implement editor popup behavior directly; turn product UI Gallery or UI Designer into the Phase 13 target; create a reusable package-backed overlay/layering design that consumes Phase 12/12A and keeps product behavior outside generic UI.
+
+Reason: Overlay, popup, dropdown, tooltip, menu, and focus-containing behavior are reusable UI platform concerns, but app-specific command execution, product mutation, authored UI editing, and Workbench/provider behavior are not. A design-first owner map prevents a repeat of the removed 012B/UI Lab overreach.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, and `ui-component-platform-overlay-popup-layering-design.md`.
+
+Evidence: Completed Phase 12/12A PR #43 proof, accepted executable interaction story standard, Interaction V2 popup-stack contract, and implemented self-authoring UI design goals that defer product/editor-specific command and authoring behavior.
+
+Follow-up: Review and accept, revise, or reject the Phase 13 design. Do not authorize implementation until the implementation-scope section is accepted.
+
+## Phase 13 implementation activation decision
+
+Date: 2026-07-01
+
+Decision: Continue PR #44 as the full `PT-UI-COMPONENT-PLATFORM-013` implementation PR instead of merging it as a design-only PR.
+
+State transition: `active-planning -> active-implementation`
+
+Context: User correction clarified that one PR should close the whole phase. The accepted overlay/popup/layering design records owner boundaries, validation gate, evidence contract, no-bypass assertions, and stop conditions. The implementation scope must be corrected to place overlay runtime modules under a runtime overlay module, not under `ui_runtime::input`.
+
+Options considered: Merge PR #44 as design intake and open a later implementation PR; continue PR #44 and implement Phase 13 before merge; defer Phase 13 implementation.
+
+Reason: Continuing PR #44 avoids a half-finished phase while preserving the accepted owner-first design. Implementation must still keep input fact ownership separate from overlay runtime orchestration.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, and `ui-component-platform-overlay-popup-layering-design.md`.
+
+Evidence: PR #44 contains implementation-in-progress evidence for `ui_controls` overlay declarations, `ui_runtime` overlay replay/report/session/stack proof, base-controls overlay fixtures/scripts, focused tests, workflow consumption, and static mount proof. Local command validation remains required before completion.
+
+Follow-up: Move overlay runtime implementation out of `ui_runtime::input`, add the report-to-proof-frame path, run the full Phase 13 validation gate from a local checkout, fix compile/test/docs issues, then record completion truth only after PR acceptance or merge.
+
+## Phase 13 review readiness decision
+
+Date: 2026-07-02
+
+Decision: Move `PT-UI-COMPONENT-PLATFORM-013` to review on PR #44 after full local validation passed.
+
+State transition: `active-implementation -> review`
+
+Context: PR #44 now implements the full overlay / popup / layering chain required by the canonical design: package-backed overlay declarations, base-control lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime package-backed replay/report/proof, static mount proof, and no-bypass evidence.
+
+Options considered: Keep Phase 13 in active implementation despite green validation; mark Phase 13 completed before PR acceptance; move the phase to review and keep completion recording blocked until PR #44 is accepted or merged.
+
+Reason: Local validation is green, so implementation is no longer blocked. Completion should still wait for PR acceptance or merge so planning truth follows repository history and does not start the next implementation phase early.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, and the PR #44 body.
+
+Evidence: The full Phase 13 gate passed locally on 2026-07-02: `cargo fmt --all --check`, focused `cargo check`, package/catalog/inspection overlay tests, `ui_input` input tests, runtime overlay layering tests, runtime package-backed tests, static mount tests, docs validation, and `git diff --check`.
+
+Follow-up: Review PR #44 and merge only after explicit instruction. After PR acceptance or merge, record Phase 13 completion truth before opening the next implementation phase.
 
 ## Lifecycle rule
 

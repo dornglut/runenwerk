@@ -4,12 +4,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-29
+last_reviewed: 2026-07-01
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
+  - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
 ---
 
 # Production Tracks
@@ -46,11 +47,11 @@ Milestones:
 007 Theme / state / style — completed by user validation report
 008 Accessibility / focus / inspection — completed by user validation report
 009 Layout / container / virtualization — completed by user validation report through 009A/009B/009C
-010 Render surface / output — completed by user validation report through PR #34
+010 Render surface / output — completed through PR #34 and user validation report
 011 Base control packages — completed through PR #37 and user validation report
-012 Generic interaction — review / pending PR #43 cleanup, validation, and merge
-012A Executable interaction story — review / pending PR #43 cleanup, validation, and merge
-013 Overlay / popup / layering — future
+012 Generic interaction — completed through PR #43 and user validation report
+012A Executable interaction story — completed through PR #43 and user validation report
+013 Overlay / popup / layering — review on PR #44 after local validation gate passed
 014 Minimum text editing — future
 015 Generic text — future
 016 Surface2D — future
@@ -72,8 +73,9 @@ Design gates:
 009C proved ui_controls should bridge owner-crate vocabulary through per-control descriptors and read-only summaries.
 010 proved render/output ownership across ui_render_data, ui_controls, ui_runtime, and engine render.
 011 proved UI-local contribution/preset/lowering authoring for package-quality base controls while keeping full interaction behavior for Phase 12.
-012 has PR #43 implementation evidence for generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, static mount frame evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries. It remains pending cleanup, validation, and merge.
-012A accepted the Tier 5 gate and PR #43 contains implementation evidence for one executable story that supports deterministic replay, live proof-host input, semantic replay/live parity, static frame validation, and no-bypass counters. It remains pending cleanup, validation, and merge.
+012 merged PR #43 implementation evidence for generic reusable interaction semantics, package/catalog/inspection visibility, normalized input replay/report evidence, renderer-neutral visible proof, static mount frame evidence, and focus/keyboard/text-intent seams while preserving existing owner boundaries.
+012A merged PR #43 implementation evidence for one executable story that supports deterministic replay, live proof-host input, semantic replay/live parity, static frame validation, and no-bypass counters.
+013 accepted the overlay/popup/layering design and is implementing package-backed overlay declarations, base-control lowering, package validation, catalog projection, inspection projection, runtime package-backed replay/report/stack/placement/focus/dismissal/suppression proof, proof-frame projection, static mount evidence, and no-bypass assertions without moving product/editor/game behavior into generic UI.
 Each later milestone requires its own owning design or planning update before code.
 ```
 
@@ -91,15 +93,16 @@ Phase 8: user reported the accessibility/focus/inspection validation gate green.
 Phase 9: PR #29 merged 009A ownership realignment, 009B ui_layout layout foundation, 009C ui_controls layout bridge, read-only catalog inspection bridge, and focused tests; user reported the validation gate green.
 Phase 10: PR #34 merged renderer-neutral output evidence, control render bridge, runtime output evidence generation, and engine render submission proof; user reported the validation gate green.
 Phase 11: PR #37 merged the UI-local base-control contribution/preset/lowering proof; user reported the validation gate green.
-Phase 12: PR #43 contains implementation evidence for package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions. The evidence is pending cleanup, validation, and merge before completion can be claimed.
-Phase 12A: PR #43 contains implementation evidence for an Executable UI Interaction Story with replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions. The evidence is pending cleanup, validation, and merge before completion can be claimed.
-Later phases: overlays, text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
+Phase 12: PR #43 merged package-backed generic interaction descriptors, catalog/inspection visibility, normalized input facts, descriptor-driven mounted replay/report, `InteractionVisualProof`/`InteractionProofFrame` visible proof, `InteractionProofRenderFrame`/`UiFrame` static mount proof, negative proof cases, read-only text-intent probe behavior, and no-bypass assertions; user reported the validation gate green before the next phase started.
+Phase 12A: PR #43 merged an Executable UI Interaction Story with replay mode, live proof-host mode, shared normalized input path, semantic replay/live parity, static frame artifact, and zero host-command/product-mutation/overlay/text-edit boundary assertions; user reported the validation gate green before the next phase started.
+Phase 13: PR #44 now contains implementation evidence for package-backed overlay declarations, base-control lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime package-backed replay/report/proof, static mount proof, and no-bypass evidence. Local validation passed on 2026-07-02 with the full Phase 13 cargo/docs/diff gate.
+Later phases: text editing, rendering, adoption, diagnostics, docs evidence, and runtime-proof gates as appropriate.
 ```
 
 Current blocker:
 
 ```text
-PR #43 cleanup, validation, and merge is the current blocker before Phase 12 or Phase 12A completion can be claimed. PR #43 provides lower-tier contract/replay/static frame proof for Phase 12 and Tier 5 executable interaction story evidence for Phase 12A, but that evidence remains in review. UI Gallery exposure is separate future work under `PT-UI-GALLERY-001`.
+Phase 13 has local validation evidence on PR #44. It must not be merged without explicit instruction, and completion truth must be recorded after PR acceptance or merge before the next implementation phase starts.
 ```
 
 Activation condition:
@@ -111,7 +114,7 @@ Each future milestone activates only through an accepted planning/design update 
 Next action:
 
 ```text
-Finish PR #43 cleanup and validation, update PR language to remove 012B/UI Lab proof-surface claims, and merge only after review is accurate. Do not implement UI Gallery exposure, overlay/popup/layering, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of PR #43.
+Review PR #44 and merge only after explicit instruction. After PR acceptance or merge, record Phase 13 completion truth before opening the next implementation phase. Do not implement UI Gallery exposure, full UI Designer, authored UI editing, full text editing, host-specific command behavior, shared plugin framework extraction, generic plugin primitives, or foundation/meta as part of Phase 13.
 ```
 
 ## Track shape
@@ -131,12 +134,3 @@ Current blocker:
 Activation condition:
 Next action:
 ```
-
-## Rules
-
-- Production tracks guide sequencing.
-- Production tracks do not authorize code without an owned implementation scope.
-- Strategic order must be readable without generated views.
-- Legacy structured track files may remain as optional mirrors.
-- Use `../workflow-lifecycle.md` before promoting a track to active planning or active implementation.
-- Do not create a production track for every accepted design. Use a production track only for strategic multi-phase work.

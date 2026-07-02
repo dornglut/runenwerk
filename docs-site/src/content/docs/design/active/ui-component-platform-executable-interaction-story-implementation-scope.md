@@ -1,6 +1,6 @@
 ---
 title: UI Component Platform Executable Interaction Story Implementation Scope
-description: Exact review scope for the Tier 5 executable base-controls interaction story proof-host core slice.
+description: Completed scope reference for the Tier 5 executable base-controls interaction story proof-host core slice merged through PR #43.
 status: active
 owner: ui
 layer: domain
@@ -13,6 +13,7 @@ related_docs:
   - ../../workspace/planning/decision-register.md
   - ./ui-component-platform-executable-interaction-story-design.md
   - ./ui-component-platform-generic-interaction-design.md
+  - ./ui-component-platform-overlay-popup-layering-design.md
   - ./ui-component-platform-story-proof-envelope-design.md
 ---
 
@@ -20,15 +21,17 @@ related_docs:
 
 ## Status
 
-Lifecycle state: `review`.
+Lifecycle state: `completed`.
 
 Planning ID: `PT-UI-COMPONENT-PLATFORM-012A`.
 
-This scope records the current PR #43 evidence and cleanup boundary for the first Tier 5 executable interaction story proof-host core. The implementation must use durable base-controls names for public APIs, stable ids, tests, and current implementation files. Phase or PR labels belong only in planning history, reports, and roadmap state.
+This scope records the merged PR #43 evidence and cleanup boundary for the first Tier 5 executable interaction story proof-host core. PR #43 merged into `main` on 2026-06-30 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. User start condition for Phase 13 reports PR #43 was validated and merged.
 
-Architecture acceptance remains separate from implementation evidence. This scope does not mark Phase 12A complete.
+The implementation uses durable base-controls names for public APIs, stable ids, tests, and implementation files. Phase or PR labels belong only in planning history, reports, and roadmap state.
 
-## Target outcome
+Product-facing Gallery or editor-window exposure remains separate future work under `PT-UI-GALLERY-001`.
+
+## Completed outcome
 
 ```text
 one executable base-controls interaction story
@@ -41,13 +44,13 @@ one executable base-controls interaction story
   -> zero host-command/product-mutation/overlay/text-edit boundary counters
 ```
 
-The implementation must not create product behavior. Product-facing Gallery or editor-window exposure remains separate future work under `PT-UI-GALLERY-001`.
+The implementation did not create product behavior. It did not implement UI Gallery exposure, overlay/popup/layering, full text editing, product command execution, product mutation, shared plugin framework extraction, generic plugin primitives, or `foundation/meta`.
 
-## Authorized files and crates
+## Implemented files and crates
 
 ### `domain/ui/ui_story`
 
-Authorized files:
+Implemented files:
 
 ```text
 domain/ui/ui_story/src/workflow/builtin.rs
@@ -55,15 +58,15 @@ domain/ui/ui_story/src/workflow/mod.rs
 domain/ui/ui_story/tests/executable_interaction_workflow.rs
 ```
 
-Allowed work:
+Completed work:
 
-- Add a built-in executable interaction workflow profile.
-- Keep `ui_story` as workflow/evidence-envelope authority only.
-- Do not make `ui_story` depend on runtime, controls, static mount, editor, or product crates.
+- Added a built-in executable interaction workflow profile.
+- Kept `ui_story` as workflow/evidence-envelope authority only.
+- Did not make `ui_story` depend on runtime, controls, static mount, editor, or product crates.
 
 ### `domain/ui/ui_runtime`
 
-Authorized files:
+Implemented files:
 
 ```text
 domain/ui/ui_runtime/Cargo.toml
@@ -94,7 +97,7 @@ InteractionStoryStepEvidence
 InteractionReplayLiveParityReport
 ```
 
-Forbidden work:
+Boundaries preserved:
 
 - No phase-shaped public aliases or compatibility shims.
 - No host command execution.
@@ -106,7 +109,7 @@ Forbidden work:
 
 ### `domain/ui/ui_input`
 
-Authorized files:
+Implemented files:
 
 ```text
 domain/ui/ui_input/src/facts.rs
@@ -115,15 +118,15 @@ domain/ui/ui_input/src/lib.rs
 domain/ui/ui_input/tests/input_normalized_facts.rs
 ```
 
-Allowed work:
+Completed work:
 
-- Add normalized input facts and minimal conversion helpers.
-- Keep facts as data only.
-- Do not add Button/List/Tree/Table/Inspector semantics to `ui_input`.
+- Added normalized input facts and minimal conversion helpers.
+- Kept facts as data only.
+- Did not add Button/List/Tree/Table/Inspector semantics to `ui_input`.
 
 ### `domain/ui/ui_static_mount`
 
-Authorized files:
+Implemented files:
 
 ```text
 domain/ui/ui_static_mount/src/lib.rs
@@ -132,15 +135,15 @@ domain/ui/ui_static_mount/tests/base_controls_generic_interaction_static_mount.r
 domain/ui/ui_static_mount/tests/base_controls_executable_interaction_story_static_mount.rs
 ```
 
-Allowed work:
+Completed work:
 
-- Reuse `UiStaticMountReport::from_frame`.
-- Validate the base-controls generic/executable interaction proof frames.
-- Do not move story execution or interaction semantics into `ui_static_mount`.
+- Reused `UiStaticMountReport::from_frame`.
+- Validated base-controls generic/executable interaction proof frames.
+- Did not move story execution or interaction semantics into `ui_static_mount`.
 
 ### `apps/runenwerk_editor`
 
-Authorized files:
+Implemented files:
 
 ```text
 apps/runenwerk_editor/Cargo.toml
@@ -155,20 +158,22 @@ Durable editor-side proof-host name:
 BaseControlsInteractionProofHost
 ```
 
-Allowed work:
+Completed work:
 
-- Adapt existing `UiInputEvent` values to normalized samples.
-- Feed samples into `InteractionStorySession`.
-- Expose current proof/frame/report/static-mount evidence for tests and future display.
+- Adapted existing `UiInputEvent` values to normalized samples.
+- Fed samples into `InteractionStorySession`.
+- Exposed current proof/frame/report/static-mount evidence for tests and future display.
 
-Forbidden work:
+Boundaries preserved:
 
 - No editor command execution.
 - No product/editor scene mutation.
 - No overlay, popup, or text editing behavior.
 - No editor shell surface registry changes for product-facing display in PR #43.
 
-## Required validation
+## Validation evidence
+
+Completion evidence is recorded in planning from merged PR #43 plus the user validation report. The focused validation gate for the implementation was:
 
 ```text
 cargo fmt --all --check
@@ -190,16 +195,20 @@ git diff --check
 
 ## Completion criteria
 
-Implementation is complete only when:
+Implementation is complete because planning evidence records that:
 
 - no current public API, stable id, reusable fixture helper, current test file, or active implementation-scope file uses phase-shaped names;
-- no compatibility alias or hidden shim remains;
+- no compatibility alias or hidden shim remains in the completed proof path;
 - replay and live apply share the same runtime path after normalized input;
-- semantic replay/live parity passes;
-- static mount validation passes from the current story frame;
+- semantic replay/live parity passes by user-reported validation;
+- static mount validation passes from the current story frame by user-reported validation;
 - boundary counters remain zero;
-- docs and PR body accurately say product-facing Gallery exposure is separate future work.
+- docs accurately say product-facing Gallery exposure is separate future work.
 
-## Stop conditions
+## Retained stop conditions for later work
 
-Stop and redesign if implementation requires product-facing gallery/shell surface registration, product commands, product mutation, overlays, full text editing, a parallel story runner, shared plugin framework extraction, generic plugin primitives, `foundation/meta`, or pixel-perfect replay/live parity.
+Stop and redesign if later work tries to reopen this scope to add product-facing gallery/shell surface registration, product commands, product mutation, overlays, full text editing, a parallel story runner, shared plugin framework extraction, generic plugin primitives, `foundation/meta`, or pixel-perfect replay/live parity.
+
+## Relationship to Phase 13
+
+Phase 13 overlay/popup/layering design must consume this executable interaction story standard. It must not introduce a parallel live proof host, fake overlay state outside runtime evidence, or bypass normalized input and semantic replay/live parity.

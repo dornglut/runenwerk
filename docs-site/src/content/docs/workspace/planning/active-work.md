@@ -4,12 +4,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-30
+last_reviewed: 2026-07-01
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-generic-interaction-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-design.md
   - ../../design/active/ui-component-platform-executable-interaction-story-implementation-scope.md
+  - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
 ---
 
 # Active Work
@@ -18,27 +19,27 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-ID: `PT-UI-COMPONENT-PLATFORM-012A`
+ID: `PT-UI-COMPONENT-PLATFORM-013`
 
-Title: UI Component Platform Executable Interaction Story Cleanup / Validation
+Title: Overlay / Popup / Layering full implementation
 
-State: review / pending cleanup, validation, and merge
+State: review on PR #44 after local validation gate passed
 
 Lifecycle state: `review`
 
-Owner: `ui_story` remains the workflow profile and evidence-envelope authority. `ui_runtime` owns interaction story session execution, replay/live application, semantic parity reporting, and visible proof formation. `ui_input` owns normalized input facts and conversion helpers. `ui_controls` owns reusable interaction descriptors and read-only declarations. `ui_static_mount` owns static frame validation. `runenwerk_editor` owns only the narrow base-controls proof-host adapter and must not claim UI Gallery product exposure in PR #43.
+Owner: `ui_controls` owns reusable overlay declarations, ergonomic builders, base-control lowering, package descriptors, package validation, catalog projection, and inspection projection. `ui_input` owns normalized input facts only. `ui_runtime` owns package-backed runtime overlay intent formation, overlay session/stack state, placement, layer/focus/dismissal evidence, deterministic replay/report proof, renderer-neutral proof data, proof-frame projection, and no-bypass assertions through `ui_runtime::overlay`, not through `ui_runtime::input`. `ui_static_mount` owns static frame validation.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/documentation-structure.md`, `docs-site/src/content/docs/workspace/authority-model.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/planning/README.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/design/active/ui-component-platform-generic-interaction-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-design.md`, `docs-site/src/content/docs/design/active/ui-component-platform-executable-interaction-story-implementation-scope.md`, and `docs-site/src/content/docs/workspace/planning/decision-register.md`.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/routines/implementation-routine.md`, `ARCHITECTURE.md`, `DEPENDENCY_RULES.md`, `DOMAIN_MAP.md`, `TESTING.md`, `docs-site/src/content/docs/guidelines/programming-principles.md`, `docs-site/src/content/docs/workspace/planning/active-work.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/workspace/planning/completed-work.md`, `docs-site/src/content/docs/workspace/planning/decision-register.md`, and `docs-site/src/content/docs/design/active/ui-component-platform-overlay-popup-layering-design.md`.
 
-Write scope: Cleanup and validation for PR #43 only. Remove flawed 012B/UI Lab surface work and legacy compatibility shims. Keep current evidence scoped to reusable interaction descriptors, base-controls replay/report evidence, executable interaction story proof-host mechanics, semantic replay/live parity, static mount validation, and no-bypass assertions. UI Gallery product exposure is separate future work under `PT-UI-GALLERY-001`.
+Write scope: Continue PR #44 into the full Phase 13 implementation. Implement package-backed reusable overlay / popup / layering: control vocabulary, base-control lowering, package descriptors, package validation, catalog projection, inspection projection, runtime package-backed replay/report/proof, proof-frame projection, and static mount validation. Runtime overlay files must live under `domain/ui/ui_runtime/src/overlay/`. Do not implement UI Gallery, UI Designer, authored UI editing, command execution, product/editor/game mutation, full text editing, generic plugin framework, `foundation/meta`, shared plugin primitives, broad Workbench/provider redesign, backend renderer behavior, or world-space overlays.
 
-Validation expectation: Run and record `cargo fmt --all --check`, `cargo check -p runenwerk_editor`, `cargo test -p runenwerk_editor base_controls_interaction_proof_host`, `cargo check -p ui_controls`, `cargo check -p ui_input`, `cargo check -p ui_runtime`, `cargo check -p ui_static_mount`, `cargo test -p ui_controls control_interaction`, `cargo test -p ui_input input`, `cargo test -p ui_runtime executable_interaction_story`, `cargo test -p ui_runtime --test interaction_replay_report`, `cargo test -p ui_static_mount base_controls`, `python tools/docs/validate_docs.py`, and `git diff --check`.
+Validation expectation: Local validation passed on 2026-07-02 with the full Phase 13 gate from the canonical overlay design: `cargo fmt --all --check`, focused `cargo check`, package/catalog/inspection overlay tests, runtime package-backed overlay tests, static mount tests, docs validation, and `git diff --check`.
 
-Known blockers: PR #43 is not merged. Phase 12 and Phase 12A have implementation evidence on the PR branch, but remain in review until cleanup, validation, and merge complete. The deleted 012B/UI Lab proof-surface path must not be used as evidence. UI Gallery exposure requires a separate future plan.
+Known blockers: No local validation blocker remains. Stop and revise scope if follow-up work requires files outside the canonical expected file list, editor shell surface registration, Workbench provider redesign, command execution in generic UI, product/editor/game mutation in generic UI, app-specific modal lifecycle in generic UI, full text editing, dynamic plugin framework, `foundation/meta`, generic plugin primitives, phase-shaped public API names, compatibility-only aliases/shims, or overlay behavior below `ui_runtime::input`.
 
-Next action: Finish PR #43 cleanup, update the PR body to remove 012B/UI Lab proof-surface claims and legacy/compatibility language, validate the focused gate, and merge only after the review state is accurate.
+Next action: Review PR #44 and merge only after explicit instruction. After PR acceptance or merge, record Phase 13 completion truth before opening the next implementation phase.
 
-Evidence: PR #43 contains Phase 12 lower-tier generic interaction evidence and Phase 12A executable interaction story evidence. User correction on 2026-06-30 split UI Gallery exposure out of PR #43 and required planning truth to mark 012/012A as review/pending merge rather than completed.
+Evidence: PR #43 is closed and merged into `main` at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. User correction on 2026-07-01 requires PR #44 to close the full Phase 13, not merge as design-only or partial implementation. PR #44 now has local green validation evidence for package-backed overlay declarations, base-control lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime package-backed replay/report/proof, static mount proof, and no-bypass evidence.
 
 ## Active-work rules
 

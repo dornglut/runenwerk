@@ -194,7 +194,47 @@ Known gaps: Full runtime interaction remains Phase 12. Overlays, popups, dropdow
 
 Closeout report: `../../reports/closeouts/pt-ui-component-platform-011-base-control-packages-closeout.md`
 
-Follow-up: Phase 12 is in review through PR #43. Do not add it to completed work until cleanup, validation, and merge are complete.
+Follow-up: Phase 12 is completed through PR #43. Proceed to Phase 13 overlay/popup/layering design intake.
+
+## PT-UI-COMPONENT-PLATFORM-012
+
+ID: `PT-UI-COMPONENT-PLATFORM-012`
+
+Title: UI Component Platform Generic Interaction
+
+Lifecycle state: `completed`
+
+Completed on: 2026-06-30 through merged PR #43 and user validation report
+
+Evidence: PR #43 merged the generic interaction proof into `main` at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. Evidence covers reusable interaction descriptors, normalized input facts, descriptor-backed replay/report, renderer-neutral proof frames, static mount validation, durable base-controls proof names, and no-bypass boundary assertions.
+
+Validation: User start condition reports PR #43 validated and merged.
+
+Known gaps: UI Gallery exposure remains separate future work. Overlay/popup/layering remains Phase 13. Full text editing remains later. Product/editor/game command execution and mutation remain out of generic UI.
+
+Closeout report: Not created in this pass; roadmap, production-track, decision-register, and PR #43 metadata hold the completion evidence.
+
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation.
+
+## PT-UI-COMPONENT-PLATFORM-012A
+
+ID: `PT-UI-COMPONENT-PLATFORM-012A`
+
+Title: UI Component Platform Executable Interaction Story
+
+Lifecycle state: `completed`
+
+Completed on: 2026-06-30 through merged PR #43 and user validation report
+
+Evidence: PR #43 merged the executable base-controls interaction story into `main` at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f`. Evidence covers deterministic replay, live proof-host application through the same runtime session path, normalized input logging, semantic replay/live parity, static frame validation, `BaseControlsInteractionProofHost`, durable base-controls proof names, and no-bypass boundary assertions.
+
+Validation: User start condition reports PR #43 validated and merged.
+
+Known gaps: Product-facing editor window/gallery display remains separate future work. UI Lab / 012B surface work was removed from PR #43 scope and is not valid evidence. Overlay/popup/layering remains Phase 13. Full text editing remains later.
+
+Closeout report: Not created in this pass; roadmap, production-track, decision-register, and PR #43 metadata hold the completion evidence.
+
+Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation.
 
 ## Entry shape
 

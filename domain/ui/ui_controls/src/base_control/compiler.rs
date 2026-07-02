@@ -10,7 +10,8 @@ use crate::{
 };
 
 use super::lowering::{
-    accessibility, input, inspection, interaction, layout, module, render, state, theme,
+    accessibility, input, inspection, interaction, layering_support, layout, module, render, state,
+    theme,
 };
 use super::{
     CompiledControl, CompiledControlPackage, ControlContribution, ControlInspection, UiControls,
@@ -46,7 +47,13 @@ impl ControlCompiler {
                 .with_interaction_descriptor(control.interaction.clone());
         }
 
-        let package = package_builder.build();
+        let mut package = package_builder.build();
+        for control in &lowered {
+            package = package.with_overlay_descriptor(layering_support::lower_layering_support(
+                control.contribution.def(),
+                control.module.kind.control_kind_id.clone(),
+            ));
+        }
         let controls = lowered
             .into_iter()
             .map(|control| {

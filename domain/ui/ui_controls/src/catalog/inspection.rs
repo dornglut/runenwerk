@@ -1,20 +1,17 @@
-//! File: domain/ui/ui_controls/src/catalog/inspection.rs
-//! Crate: ui_controls
-
 use serde::{Deserialize, Serialize};
-
-use crate::accessibility::ControlAccessibilityCapabilitySummary;
-use crate::input::ControlInputCapabilitySummary;
-use crate::interaction::ControlInteractionSupportSummary;
-use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
-use crate::package::story_proof::ControlStoryProofSummary;
-use crate::state::ControlStateCapabilitySummary;
-use crate::theme::ControlThemeCapabilitySummary;
 
 use super::{
     ControlCatalogEntryDescriptor, ControlDiagnosticBadge, ControlStoryProofBadge,
     diagnostic_badges,
 };
+use crate::accessibility::ControlAccessibilityCapabilitySummary;
+use crate::input::ControlInputCapabilitySummary;
+use crate::interaction::ControlInteractionSupportSummary;
+use crate::overlay::ControlOverlaySupportSummary;
+use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
+use crate::package::story_proof::ControlStoryProofSummary;
+use crate::state::ControlStateCapabilitySummary;
+use crate::theme::ControlThemeCapabilitySummary;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlInspectionDescriptor {
@@ -26,7 +23,6 @@ pub struct ControlInspectionDescriptor {
     #[serde(default)]
     pub story_proof_badge: Option<ControlStoryProofBadge>,
 }
-
 impl ControlInspectionDescriptor {
     pub fn from_control_kind(
         package: &ControlPackageDescriptor,
@@ -63,18 +59,6 @@ impl ControlInspectionDescriptor {
             ControlInspectionSection::Metadata,
             "tags",
             &entry.tags.join(","),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Metadata,
-            "target_profiles",
-            &entry.target_profiles.join(","),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Compatibility,
-            "supports_story_proof",
-            bool_string(entry.compatibility.supports_story_proof),
         );
         push_fact(
             &mut facts,
@@ -120,27 +104,9 @@ impl ControlInspectionDescriptor {
         );
         push_fact(
             &mut facts,
-            ControlInspectionSection::Kernels,
-            "accessibility",
-            kind.kernels.accessibility.as_str(),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Kernels,
-            "inspection",
-            kind.kernels.inspection.as_str(),
-        );
-        push_fact(
-            &mut facts,
             ControlInspectionSection::Routes,
             "routes",
             &entry.route_ids.join(","),
-        );
-        push_fact(
-            &mut facts,
-            ControlInspectionSection::Routes,
-            "capabilities",
-            &entry.capabilities.join(","),
         );
         push_fact(
             &mut facts,
@@ -156,12 +122,6 @@ impl ControlInspectionDescriptor {
         );
         push_fact(
             &mut facts,
-            ControlInspectionSection::StoryProof,
-            "story_required",
-            bool_string(entry.story_required),
-        );
-        push_fact(
-            &mut facts,
             ControlInspectionSection::Diagnostics,
             "diagnostics",
             &entry.diagnostic_ids.join(","),
@@ -174,11 +134,28 @@ impl ControlInspectionDescriptor {
         );
         push_fact(
             &mut facts,
-            ControlInspectionSection::MountEligibility,
-            "explanation",
-            &entry.mount_explanation,
+            ControlInspectionSection::Layering,
+            "overlay.kinds",
+            &entry.overlay_kinds.join(","),
         );
-
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Layering,
+            "overlay.triggers",
+            &entry.overlay_triggers.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Layering,
+            "overlay.layers",
+            &entry.overlay_layers.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Layering,
+            "overlay.supported",
+            bool_string(entry.overlay_supported),
+        );
         Self {
             package_id: entry.package_id,
             control_kind_id: entry.control_kind_id,
@@ -188,12 +165,10 @@ impl ControlInspectionDescriptor {
             story_proof_badge: None,
         }
     }
-
     pub fn with_story_proof_summary(mut self, summary: &ControlStoryProofSummary) -> Self {
         self.story_proof_badge = Some(ControlStoryProofBadge::from_summary(summary));
         self
     }
-
     pub fn with_input_summary(mut self, summary: &ControlInputCapabilitySummary) -> Self {
         for fact in summary.inspection_facts() {
             push_fact(
@@ -205,7 +180,6 @@ impl ControlInspectionDescriptor {
         }
         self
     }
-
     pub fn with_interaction_summary(mut self, summary: &ControlInteractionSupportSummary) -> Self {
         for fact in summary.inspection_facts() {
             push_fact(
@@ -217,7 +191,17 @@ impl ControlInspectionDescriptor {
         }
         self
     }
-
+    pub fn with_layering_summary(mut self, summary: &ControlOverlaySupportSummary) -> Self {
+        for fact in summary.inspection_facts() {
+            push_fact(
+                &mut self.facts,
+                ControlInspectionSection::Layering,
+                &fact.key,
+                &fact.value,
+            );
+        }
+        self
+    }
     pub fn with_state_summary(mut self, summary: &ControlStateCapabilitySummary) -> Self {
         for fact in summary.inspection_facts() {
             push_fact(
@@ -229,7 +213,6 @@ impl ControlInspectionDescriptor {
         }
         self
     }
-
     pub fn with_theme_summary(mut self, summary: &ControlThemeCapabilitySummary) -> Self {
         for fact in summary.inspection_facts() {
             push_fact(
@@ -241,7 +224,6 @@ impl ControlInspectionDescriptor {
         }
         self
     }
-
     pub fn with_accessibility_summary(
         mut self,
         summary: &ControlAccessibilityCapabilitySummary,
@@ -256,7 +238,6 @@ impl ControlInspectionDescriptor {
         }
         self
     }
-
     pub fn fact(&self, section: ControlInspectionSection, key: &str) -> Option<&str> {
         self.facts
             .iter()
@@ -278,20 +259,19 @@ pub enum ControlInspectionSection {
     StoryProof,
     Input,
     Interaction,
+    Layering,
     State,
     Theme,
     Accessibility,
     Diagnostics,
     MountEligibility,
 }
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControlInspectionFact {
     pub section: ControlInspectionSection,
     pub key: String,
     pub value: String,
 }
-
 fn push_fact(
     facts: &mut Vec<ControlInspectionFact>,
     section: ControlInspectionSection,
@@ -304,11 +284,9 @@ fn push_fact(
         value: value.to_owned(),
     });
 }
-
 fn bool_string(value: bool) -> &'static str {
     if value { "true" } else { "false" }
 }
-
 fn schema_ref(schema: &ui_schema::UiSchemaRef) -> String {
     format!("{}@{}", schema.id.as_str(), schema.version.value())
 }

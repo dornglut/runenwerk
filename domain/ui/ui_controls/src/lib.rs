@@ -16,6 +16,7 @@ pub mod label;
 pub mod layout;
 pub mod list_view;
 pub mod migration;
+pub mod overlay;
 pub mod package;
 pub mod registry;
 pub mod schema;
@@ -37,6 +38,7 @@ pub use kernel::*;
 pub use label::LABEL_CONTROL_KIND_ID;
 pub use list_view::LIST_VIEW_CONTROL_KIND_ID;
 pub use migration::*;
+pub use overlay::*;
 pub use package::*;
 pub use registry::*;
 pub use schema::*;
@@ -70,6 +72,7 @@ mod tests {
         assert_eq!(package.migrations.len(), 8);
         assert_eq!(package.stories.len(), 8);
         assert_eq!(package.interaction_descriptors.len(), 8);
+        assert_eq!(package.overlay_descriptors.len(), 8);
     }
 
     #[test]
