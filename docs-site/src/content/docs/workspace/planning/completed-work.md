@@ -11,6 +11,7 @@ related_docs:
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
+  - ../../design/active/ui-component-platform-surface2d-design.md
 ---
 
 # Completed Work
@@ -26,7 +27,7 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-COMPONENT-PLATFORM-012A` Executable Interaction Story: completed 2026-06-30 through merged PR #43 at merge commit `c8b73dfa95fc335fd2b33c9137cac03a0f35060f` and user validation report.
 - `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation: completed 2026-07-02 through merged PR #44 at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`.
 - `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior: completed 2026-07-02 through merged PR #46 at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
-- `PT-UI-COMPONENT-PLATFORM-015` Generic Text: completed 2026-07-02 through merged PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`.
+- `PT-UI-COMPONENT-PLATFORM-015` Generic Text: completed 2026-07-02 through baseline PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff` and hardening PR #49 at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 
@@ -42,11 +43,13 @@ Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-016` Surface2D as design/plannin
 
 ## PT-UI-COMPONENT-PLATFORM-015 evidence
 
-Evidence: PR #48 branch `ui/generic-text-phase-15` implements the renderer-neutral Generic Text substrate across `ui_text`, `ui_render_data`, `ui_controls`, `ui_runtime`, and `ui_static_mount`. The local closeout keeps text display separate from Phase 14 text editing; removes the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path; keeps `GlyphRunPrimitive` backed by `TextBlockLayoutResult` / `TextVisualRun` evidence; adapts the renderer-neutral frame/extract path to consume `TextVisualRun` / `TextGlyph` evidence without adding a renderer backend; adds package-backed Generic Text descriptors, validation reasons, catalog projection, and `TextDisplay` inspection projection; migrates text-editing proof frames to visual-run evidence; and adds runtime/static-mount proof coverage.
+Baseline evidence: PR #48 implemented the renderer-neutral Generic Text substrate across `ui_text`, `ui_render_data`, `ui_controls`, `ui_runtime`, and `ui_static_mount`. It added Generic Text descriptors, validation, catalog projection, `TextDisplay` inspection projection, runtime proof reporting, static mount proof, renderer-neutral frame/extract adaptation to `TextVisualRun` / `TextGlyph` evidence, and removal of the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path.
 
-PR evidence: PR #48, `ui/generic-text-phase-15`, implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680`, merged into `main` at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`.
+Hardening evidence: PR #49 completed the Phase 15 hardening pass without starting Phase 16. It corrected Generic Text layout evidence, added stable-ID text constructors, added text layout policy helpers, moved button defaults away from role-specific badge vocabulary, segmented visual runs by homogeneous evidence, exposed text direction policy through Generic Text inspection, renamed runtime text helpers to `text_emission`, and split large runtime output emission into focused modules.
 
-Validation: The Phase 15 local validation gate passed on 2026-07-02 with `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_controls`, `cargo test -p ui_runtime`, `cargo test -p ui_static_mount`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`.
+Merge evidence: PR #48 merged at `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. PR #49 merged at `338a8092d534dbb412da89363d50a46cd5efeae9`.
+
+Validation: The final Phase 15 validation gate passed on 2026-07-02 with `cargo test -p ui_text`, `cargo test -p ui_render_data`, `cargo test -p ui_tree`, `cargo test -p ui_runtime`, `cargo test -p ui_controls`, `cargo test -p ui_static_mount`, `cargo test -p ui_render_primitives`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`.
 
 Known non-goals: Renderer backend implementation, GPU atlas upload, OS font discovery, rich/code editor behavior, document buffers, undo/redo, clipboard, LSP/syntax highlighting, app localization policy, product/editor/game mutation, authored UI editing, UI Designer/Gallery product surface, Workbench/provider redesign, dynamic plugin framework, `foundation/meta`, shared plugin primitives, and compatibility-only public API shims remain out of scope.
 
