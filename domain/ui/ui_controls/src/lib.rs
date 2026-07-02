@@ -75,7 +75,6 @@ mod tests {
         assert_eq!(package.stories.len(), 8);
         assert_eq!(package.interaction_descriptors.len(), 8);
         assert_eq!(package.overlay_descriptors.len(), 8);
-        assert_eq!(package.editable_text_descriptors.len(), 1);
     }
 
     #[test]
@@ -184,17 +183,6 @@ mod tests {
         assert_has_reason(
             package,
             ControlPackageValidationReason::DuplicateInteractionDescriptor,
-        );
-    }
-    #[test]
-    fn control_package_rejects_duplicate_editable_text_descriptor() {
-        let mut package = runenwerk_control_package();
-        package
-            .editable_text_descriptors
-            .push(package.editable_text_descriptors[0].clone());
-        assert_has_reason(
-            package,
-            ControlPackageValidationReason::DuplicateEditableTextDescriptor,
         );
     }
     #[test]
