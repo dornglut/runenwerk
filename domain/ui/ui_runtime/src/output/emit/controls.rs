@@ -142,7 +142,7 @@ fn emit_button_label(
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let layout = crate::proof_text::layout_text_in_bounds(
+    let layout = crate::text_emission::layout_text_in_bounds(
         atlas_source,
         layouter,
         TextBlockId(u64::from(*primitive_order) + 1),
@@ -873,7 +873,7 @@ pub(crate) fn emit_label(
     depth: u32,
     primitive_order: &mut u32,
 ) {
-    let layout = crate::proof_text::layout_text_in_bounds(
+    let layout = crate::text_emission::layout_text_in_bounds(
         atlas_source,
         layouter,
         TextBlockId(u64::from(*primitive_order) + 1),

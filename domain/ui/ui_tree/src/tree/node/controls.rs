@@ -67,7 +67,7 @@ impl ButtonNode {
             label: label.into(),
             accessible_label: None,
             text_style,
-            text_layout: TextLayoutPolicy::badge(f32::MAX),
+            text_layout: TextLayoutPolicy::button_label(),
             padding,
             min_size: UiSize::new(
                 (theme.spacing.xl * 2.0).max(32.0),
