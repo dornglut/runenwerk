@@ -7,10 +7,12 @@ canonical: true
 last_reviewed: 2026-07-03
 related_docs:
   - ../workflow-lifecycle.md
+  - ../../design/active/ui-component-platform-spatial-canvas-design.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
   - ../../design/active/ui-component-platform-surface2d-design.md
+  - ../../reports/investigations/phase-17-spatialcanvas-source-investigation.md
 ---
 
 # Roadmap
@@ -79,7 +81,29 @@ Authority: `ui-component-platform-surface2d-design.md`.
 
 Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with `cargo test -p ui_controls surface2d`, `cargo test -p ui_controls control_package`, `cargo test -p ui_runtime surface2d`, `cargo test -p ui_static_mount surface2d`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`. Detailed closeout: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
 
-Next action: Keep as completed dependency. The next named production-track milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas planning intake, but this Phase 16 closeout does not authorize Phase 17 implementation.
+Next action: Keep as completed dependency for `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas. This Phase 16 closeout does not authorize Phase 17 implementation.
+
+### PT-UI-COMPONENT-PLATFORM-017
+
+ID: `PT-UI-COMPONENT-PLATFORM-017`
+
+Title: SpatialCanvas
+
+State: active planning and design intake only
+
+Lifecycle state: `active-planning`
+
+Authority: `ui-component-platform-spatial-canvas-design.md` and `../../reports/investigations/phase-17-spatialcanvas-source-investigation.md`.
+
+Evidence: Phase 16 Surface2D completed through PR #61 after PR #62 workflow hardening. PR #63 closed Phase 16 planning truth, and PR #64 extracted stale Surface2D future-pressure material into `../../reports/investigations/surface2d-future-pressure-branch-review.md`. Current branch and PR inspection for this intake found no open PRs and no `origin/surface2d-phase-16` remote branch. Source investigation inspected the current `ui_controls`, `ui_runtime`, `ui_static_mount`, `ui_render_data`, `ui_render_primitives`, `ui_input`, `ui_surface`, `ui_tree`, `ui_composition`, `ui_graph_editor`, `editor_viewport`, `scene`, `spatial`, and `spatial_index` paths.
+
+Scope: define the reusable positioned-item `SpatialCanvas` planning contract above completed `Surface2D` without duplicating Surface2D coordinate/navigation truth and without taking ownership of renderer backends, camera/projection/scene resources, graph/node/port/timeline/product semantics, product/editor/game mutation, app composition, plugin framework work, new crates, or `foundation/meta`.
+
+Complete investigation gate: complete for planning/design intake. It does not authorize implementation.
+
+Complete design gate: proposed intake only. Implementation remains blocked until active planning records exact owners, exact files, complete implementation contract, allowed files/crates, forbidden files/crates, module decomposition map, principle compliance, validation envelope, evidence expectation, and stop conditions.
+
+Next action: Review the SpatialCanvas design and investigation. Do not implement Phase 17 until explicit promotion to `active-implementation`.
 
 ## Rules
 

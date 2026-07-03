@@ -214,11 +214,21 @@ docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.
 The branch may contain useful future-use-case design pressure, but it also contains stale pre-merge assumptions that conflict with the completed Phase 16 implementation. It should not be deleted or merged during closeout.
 ```
 
+Post-closeout update:
+
+```text
+PR #64 later extracted the useful future-pressure material into
+docs-site/src/content/docs/reports/investigations/surface2d-future-pressure-branch-review.md
+at merge commit 05c51375986cf08e360884ebf44702ec62662c1e.
+Current Phase 17 intake branch inspection no longer lists origin/surface2d-phase-16.
+This does not reopen Phase 16 and is not a Phase 16 product blocker.
+```
+
 ## Known Warnings
 
 No known Phase 16 product blocker remains.
 
-The retained `surface2d-phase-16` branch is a manual-review follow-up only. If useful material remains, extract it later as a focused docs-only patch from `main`.
+The retained `surface2d-phase-16` branch warning above is historical closeout context. PR #64 extracted the useful material, and current Phase 17 intake branch inspection no longer lists the remote branch.
 
 ## Remaining Blockers
 

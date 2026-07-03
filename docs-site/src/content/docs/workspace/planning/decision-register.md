@@ -7,10 +7,13 @@ canonical: true
 last_reviewed: 2026-07-03
 related_docs:
   - ../workflow-lifecycle.md
+  - ../../design/active/ui-component-platform-spatial-canvas-design.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
   - ../../design/active/ui-component-platform-surface2d-design.md
+  - ../../reports/investigations/phase-17-spatialcanvas-source-investigation.md
+  - ../../reports/investigations/surface2d-future-pressure-branch-review.md
   - ../../design/active/runenwerk-typed-app-composition-plugin-framework-design.md
 ---
 
@@ -167,6 +170,48 @@ Affected planning files: `phase-16-surface2d-closeout.md`, `active-work.md`, and
 Evidence: `git log --oneline --decorate origin/main..origin/surface2d-phase-16` showed `7bc6abf1 Add Surface2D future use-case matrix`, `6f571270 Harden Surface2D genericity and hierarchy planning`, and `b5a0cc52 Refine Surface2D planning gate`. `git diff --name-status origin/main...origin/surface2d-phase-16` showed only the Surface2D design document modified.
 
 Follow-up: Review `surface2d-phase-16` manually outside the Phase 16 closeout. If useful material remains, extract a focused docs-only follow-up from `main` without mixing it into completed closeout truth.
+
+## Phase 16 future-pressure extraction decision
+
+Date: 2026-07-03
+
+Decision: Treat the Surface2D future-pressure extraction as completed through merged PR #64 and remove the retained stale branch from active planning blockers.
+
+State transition: none
+
+Context: PR #64 merged `docs-site/src/content/docs/reports/investigations/surface2d-future-pressure-branch-review.md` at merge commit `05c51375986cf08e360884ebf44702ec62662c1e`. The report preserved future Surface2D/Canvas2D/canvas-family pressure as reference material without changing completed Phase 16 truth or starting Phase 17 work.
+
+Options considered: leave the retained-branch warning in active planning; update planning to reflect the extraction and current branch state; reopen Phase 16.
+
+Reason: Current repository state contains the extracted report, GitHub reports no open PRs, and `git branch --all --verbose --no-abbrev` during Phase 17 intake no longer lists `origin/surface2d-phase-16`. The retained branch is no longer an active planning blocker. Phase 16 remains completed and is not reopened.
+
+Affected planning files: `active-work.md`, `production-tracks.md`, and this decision register.
+
+Evidence: PR #64 metadata, current local branch inspection, and `surface2d-future-pressure-branch-review.md`.
+
+Follow-up: Use the extracted future-pressure report only as design-pressure reference for later canvas work.
+
+Supersedes: The branch-retention follow-up in `Phase 16 leftover branch decision`.
+
+## Phase 17 SpatialCanvas planning-start decision
+
+Date: 2026-07-03
+
+Decision: Open `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas as active planning/design intake only.
+
+State transition: `production-track -> active-planning`
+
+Context: Phase 16 Surface2D is completed through PR #61 after PR #62 workflow hardening. PR #63 closed Phase 16 planning truth, and PR #64 extracted stale Surface2D future-pressure reference material. The next named UI Component Platform milestone is SpatialCanvas, but implementation is not authorized.
+
+Options considered: start implementation immediately; defer Phase 17; open planning/design intake only.
+
+Reason: SpatialCanvas is reusable platform work that may affect public API, renderer-neutral contracts, input behavior, inspection/catalog projection, retained UI boundaries, and product/editor/game separation. Source investigation found that `ui_controls`, `ui_runtime`, and `ui_static_mount` are the likely first owners, while `ui_tree`, `ui_render_data`, `ui_render_primitives`, `ui_input`, `ui_surface`, `ui_composition`, `ui_graph_editor`, renderer backends, product/editor/game owners, new crates, plugin framework work, and `foundation/meta` remain non-owners unless later evidence and design explicitly promote them.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `ui-component-platform-spatial-canvas-design.md`, and `phase-17-spatialcanvas-source-investigation.md`.
+
+Evidence: `docs-site/src/content/docs/reports/investigations/phase-17-spatialcanvas-source-investigation.md`, `docs-site/src/content/docs/design/active/ui-component-platform-spatial-canvas-design.md`, completed Surface2D closeout evidence, UI domain ownership docs, and current source inspection.
+
+Follow-up: Review and accept, revise, defer, or reject the SpatialCanvas design. Do not implement until active planning explicitly promotes Phase 17 to `active-implementation` with exact owner files, complete contract, validation envelope, evidence expectation, module decomposition, principle compliance, and stop conditions.
 
 ## Lifecycle rule
 

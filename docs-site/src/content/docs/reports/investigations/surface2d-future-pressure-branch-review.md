@@ -33,6 +33,8 @@ Branch evidence:
 origin/surface2d-phase-16 contains three non-equivalent commits beyond origin/main.
 The branch changes only docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md.
 The branch is reference material only and must not be merged or cherry-picked.
+PR #64 later merged this extraction at 05c51375986cf08e360884ebf44702ec62662c1e.
+Current Phase 17 intake branch inspection no longer lists origin/surface2d-phase-16.
 ```
 
 Current authority remains `main`:
@@ -72,9 +74,8 @@ Do not modify completed Phase 16 truth. Phase 16 Surface2D is completed on
 `main`. This report does not reopen Phase 16, does not start Phase 17 work,
 and does not create a planning contract for any later canvas.
 
-After the extraction PR merges, the stale `surface2d-phase-16` branch can be
-deleted as a remote branch cleanup action, provided no open PR or stacked branch
-still depends on it.
+The extraction PR has merged. Current Phase 17 intake branch inspection no
+longer lists the stale `surface2d-phase-16` remote branch.
 
 ## What Was Extracted
 
@@ -283,13 +284,6 @@ replace the Phase 16 closeout
 
 ## Follow-Up
 
-Merge this report through a docs-only PR from `main`.
-
-After that PR merges:
-
-```text
-git push origin --delete surface2d-phase-16
-```
-
-Branch deletion should remain blocked until the extraction PR is merged and the
-merge-readiness branch cleanup rule is satisfied.
+Use this report only as reference pressure for later canvas-family planning.
+It does not reopen Phase 16, start Phase 17 implementation, or authorize any
+Surface2D API change.
