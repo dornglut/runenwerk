@@ -9,13 +9,13 @@ last_reviewed: 2026-07-03
 related_docs:
   - ./start-here.md
   - ./workflow-lifecycle.md
+  - ./complete-investigation-gate.md
   - ./authority-model.md
   - ./operating-model.md
   - ./planning/README.md
   - ./routines/architecture-governance-review-routine.md
   - ./routines/implementation-routine.md
   - ./routines/pr-review-routine.md
-  - ./routines/roadmap-update-routine.md
   - ../guidelines/programming-principles.md
 ---
 
@@ -29,14 +29,21 @@ Use this gate before planning may authorize implementation for architecture-sens
 
 The gate exists to make implementation execute a complete contract on the first pass. It prevents designs and plans from relying on vague exclusions, hidden assumptions, or post-implementation correction cycles.
 
+## Prerequisite
+
+Use [`complete-investigation-gate.md`](complete-investigation-gate.md) before this gate when the current reality, owner, vocabulary, capability inventory, alternatives, evidence, or confidence level is not already proven.
+
+A design may not convert unknown investigation findings into assumptions. Unknowns remain blockers until investigation records them or resolves them.
+
 ## Core rule
 
 Implementation may start only after the complete target is understood and recorded.
 
 ```text
-Complete design first.
-Complete planning contract second.
-Implementation third.
+Complete investigation first.
+Complete design second.
+Complete planning contract third.
+Implementation fourth.
 Completion only after the declared contract is proven.
 ```
 
@@ -98,7 +105,7 @@ cross-domain dependency
 new crate or shared extraction
 ```
 
-For local bug fixes or behavior-preserving refactors, use the implementation or code-refactor routine. If the work reveals missing ownership, incomplete design, or public API uncertainty, stop and apply this gate before continuing.
+For local bug fixes or behavior-preserving refactors, use the implementation or code-refactor routine. If the work reveals missing ownership, incomplete design, or public API uncertainty, stop and apply the complete investigation gate before continuing.
 
 ## Complete design checklist
 
@@ -109,6 +116,7 @@ Lifecycle:
   current lifecycle state
   intended state transition
   implementation authorization status
+  investigation gate status
 
 Authority:
   owning design, ADR, domain docs, tests, and planning files
@@ -118,7 +126,7 @@ Authority:
 Problem and target:
   problem statement
   complete target capability
-  current reality
+  current reality from investigation
   non-owned responsibilities
   success definition
 
@@ -210,6 +218,7 @@ Title
 State
 Owner
 Authority
+Investigation gate status
 Complete design gate status
 Implementation contract
 Allowed files/crates
@@ -285,6 +294,7 @@ A reviewer must reject implementation authorization if the design or planning re
 A reviewer must reject completion if the implementation does not prove the declared contract.
 
 ```text
+No complete investigation gate when required -> no complete design gate.
 No complete design gate -> no active implementation.
 No complete implementation contract -> no coding task.
 No complete evidence -> no completion claim.
@@ -295,6 +305,7 @@ No complete evidence -> no completion claim.
 Final reports for work using this gate must include:
 
 ```text
+Investigation gate status:
 Complete design gate status:
 Feature support matrix status:
 Future-use-case pressure matrix status:
