@@ -5,12 +5,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-07-03
 related_docs:
   - ./start-here.md
   - ./operating-model.md
   - ./authority-model.md
   - ./documentation-structure.md
+  - ./complete-design-gate.md
   - ./planning/README.md
   - ./routines/architecture-governance-review-routine.md
   - ./routines/implementation-routine.md
@@ -37,8 +38,12 @@ Accepted direction
   means the target shape is approved.
 
 Active implementation
-  requires an exact owner, scope, validation envelope, stop conditions, and active planning entry.
+  requires a complete design gate where applicable, exact owner,
+  exact implementation contract, file/crate scope, validation envelope,
+  evidence expectation, stop conditions, and active planning entry.
 ```
+
+For architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work, use [`complete-design-gate.md`](complete-design-gate.md) before active implementation.
 
 ## Artifact jobs
 
@@ -48,11 +53,11 @@ Every artifact has one primary job.
 |---|---|---|
 | Root summary | Short entrypoint and links | Long design, roadmap, historical evidence |
 | Guideline | Stable doctrine and engineering rules | Current task status |
-| Design | Target architecture, vocabulary, boundaries, tradeoffs | Active task status |
+| Design | Target architecture, vocabulary, boundaries, tradeoffs, complete design gate evidence | Active task status |
 | ADR / decision record | Accepted decision and rationale | Full design exploration |
 | Production track | Strategic multi-phase sequence and gates | Detailed implementation manual |
 | Roadmap entry | Milestone state and next work | Deep architecture rationale |
-| Active work | One current focus | Long historical archive |
+| Active work | One current focus and implementation authorization state | Long historical archive |
 | Deferred work | Postponed work and reactivation condition | Completed work |
 | Completed work | Short completion index | Full closeout detail |
 | Closeout report | Historical evidence | Current planning authority |
@@ -87,7 +92,7 @@ active-planning
   current planning focus, no implementation yet
 
 active-implementation
-  exact implementation scope authorized
+  exact complete implementation contract authorized
 
 review
   PR, patch, or doc change exists and validation/review is pending
@@ -118,7 +123,7 @@ Use the investigation routine. Do not patch during pure investigation unless exp
 
 ### Investigation to proposed design
 
-Promote when the change may affect ownership, dependency direction, durable vocabulary, migration shape, host behavior, app composition, or multiple future implementation slices.
+Promote when the change may affect ownership, dependency direction, durable vocabulary, migration shape, host behavior, app composition, public API ergonomics, reusable platform capability, or multiple implementation contracts.
 
 Output: a proposed design document or review recommendation.
 
@@ -129,8 +134,14 @@ Promote only when the design records:
 ```text
 owner boundaries
 vocabulary
-non-goals
+non-owned responsibilities
 tradeoffs
+complete design gate status when applicable
+complete capability map when applicable
+ergonomics and usability contract when applicable
+feature support matrix when applicable
+future-use-case pressure matrix when applicable
+hierarchy/composition matrix when applicable
 acceptance criteria
 implementation gate
 stop conditions
@@ -153,11 +164,13 @@ Output: active-work entry.
 
 ### Active planning to active implementation
 
-Promote only when exact implementation scope, owner files/crates, validation envelope, and stop conditions are known.
+Promote only when exact implementation contract, owner files/crates, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, and stop conditions are known.
+
+For architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work, the active-planning record must also point to complete design gate evidence.
 
 ### Active implementation or review to completed
 
-Promote only when delivered scope, validation status, evidence, known gaps, and follow-up are recorded.
+Promote only when delivered contract, validation status, evidence, known gaps, and follow-up are recorded.
 
 Detailed evidence belongs in a closeout report when the completion record would become too large.
 
@@ -168,7 +181,7 @@ When a PR, patch, or user validation report completes the current active phase, 
 Required completion truth:
 
 ```text
-delivered scope
+delivered contract
 validation status
 evidence
 known gaps
@@ -183,13 +196,13 @@ closeout report when evidence is too large for completed-work.md
 owning design status update when the design changes from planning/design to completed reference
 ```
 
-The next phase may enter `active-planning` in the same patch only after the completed phase is truthful. That planning entry must state that implementation is not authorized until exact owner files, scope, validation envelope, evidence expectation, and stop conditions are accepted.
+The next phase may enter `active-planning` in the same patch only after the completed phase is truthful. That planning entry must state that implementation is not authorized until exact owner files, implementation contract, validation envelope, evidence expectation, complete design gate evidence where applicable, and stop conditions are accepted.
 
-If completion evidence is incomplete, keep the current phase in `review` or run the phase completion drift check routine. Do not hide drift by starting the next implementation slice.
+If completion evidence is incomplete, keep the current phase in `review` or run the phase completion drift check routine. Do not hide drift by starting the next implementation contract.
 
 ## Design and roadmap placement
 
-A design may contain a short implementation outline.
+A design may contain an implementation contract summary.
 
 A companion roadmap may live next to a proposed design while the design is under review.
 
@@ -202,7 +215,7 @@ workspace/planning/active-work.md
 workspace/planning/decision-register.md
 ```
 
-Keep the long design as architecture direction. Keep planning files as work-state authority.
+Keep the long design as architecture direction and complete design gate evidence. Keep planning files as work-state authority.
 
 ## Generated file classes
 
@@ -251,11 +264,16 @@ Decision summary
 Problem
 Current reality
 Goals
-Non-goals
+Non-owned responsibilities
 Vocabulary
 Owner map
 Target architecture
 Workflows / use cases
+Complete capability map when applicable
+Feature support matrix when applicable
+Future-use-case pressure matrix when applicable
+Hierarchy/composition matrix when applicable
+Ergonomics / usability contract when applicable
 Alternatives considered
 Risks
 Acceptance criteria
@@ -263,6 +281,8 @@ Implementation gate
 Stop conditions
 Relationship to current work
 ```
+
+Use [`complete-design-gate.md`](complete-design-gate.md) for the complete checklist and matrix templates.
 
 The decision summary should fit on the first screen.
 
@@ -283,8 +303,8 @@ ID
 Title
 Completed on
 Owner
-Scope promised
-Scope delivered
+Contract promised
+Contract delivered
 Files changed
 Validation run
 Validation unavailable
@@ -306,6 +326,7 @@ multiple current active focuses without explicit reason
 accepted direction being treated as implementation authorization
 planning files duplicating full design rationale
 completed-work.md becoming a detailed report archive
+complete-design-gate.md duplicating track-specific design decisions
 ```
 
 ## Implementation note
