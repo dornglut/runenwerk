@@ -12,6 +12,8 @@ related_docs:
   - ./workflow-lifecycle.md
   - ./complete-investigation-gate.md
   - ./complete-design-gate.md
+  - ./evidence-quality-taxonomy.md
+  - ./complete-merge-readiness-gate.md
   - ../guidelines/programming-principles.md
 ---
 
@@ -65,6 +67,22 @@ docs-site/src/content/docs/workspace/complete-design-gate.md
 
 Use the complete design gate before implementation authorization for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
 
+The evidence quality taxonomy is:
+
+```text
+docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
+```
+
+Use the evidence quality taxonomy when validation, current behavior, confidence, freshness, CI, generated artifacts, connector inspection, or user-reported validation affects a decision.
+
+The complete merge readiness gate is:
+
+```text
+docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
+```
+
+Use the merge readiness gate before recommending merge, phase merge, branch deletion, or post-merge cleanup.
+
 ## Root documents
 
 The following root files are intentionally kept at repository root:
@@ -104,7 +122,7 @@ docs-site/src/content/docs/
 
 ## Workspace structure
 
-`workspace/` owns repository process, lifecycle, complete investigation gate, complete design gate, structure, planning, status, and maintenance docs.
+`workspace/` owns repository process, lifecycle, complete investigation gate, complete design gate, evidence quality, merge readiness, structure, planning, status, and maintenance docs.
 
 ```text
 workspace/
@@ -116,6 +134,8 @@ workspace/
   workflow-lifecycle.md
   complete-investigation-gate.md
   complete-design-gate.md
+  evidence-quality-taxonomy.md
+  complete-merge-readiness-gate.md
   routines/
   task-cards/
   planning/
@@ -123,7 +143,7 @@ workspace/
 
 ## Folder responsibilities
 
-- `workspace/`: repository process, lifecycle, complete investigation gate, complete design gate, structure, planning, status, and maintenance docs.
+- `workspace/`: repository process, lifecycle, complete investigation gate, complete design gate, evidence quality, merge readiness, structure, planning, status, and maintenance docs.
 - `workspace/routines/`: repeatable human/agent procedures.
 - `workspace/task-cards/`: short reusable task instructions that point to routines.
 - `workspace/planning/`: Markdown-first planning records.
@@ -154,6 +174,12 @@ Complete investigation gate
 
 Complete design gate
   mandatory readiness checklist and matrix templates before implementation authorization
+
+Evidence quality taxonomy
+  evidence classes, confidence, freshness, and validation wording
+
+Complete merge readiness gate
+  merge checklist, branch cleanup, and post-merge truth requirements
 
 Roadmap / production track
   strategic sequence and current planning state
@@ -204,7 +230,7 @@ Use the programming principles when pruning docs:
 - KISS: keep navigation short.
 - DRY: keep one authority for each durable claim.
 - YAGNI: remove unused workflow surfaces.
-- Separation of Concerns: separate entrypoints, lifecycle, complete investigation gates, complete design gates, routines, planning, reports, and tooling.
+- Separation of Concerns: separate entrypoints, lifecycle, complete investigation gates, complete design gates, evidence quality, merge readiness, routines, planning, reports, and tooling.
 
 When moving, merging, or pruning docs, report old path to new path mapping.
 
