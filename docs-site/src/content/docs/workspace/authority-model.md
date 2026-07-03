@@ -13,6 +13,8 @@ related_docs:
   - ./workflow-lifecycle.md
   - ./complete-investigation-gate.md
   - ./complete-design-gate.md
+  - ./evidence-quality-taxonomy.md
+  - ./complete-merge-readiness-gate.md
   - ../guidelines/programming-principles.md
 ---
 
@@ -27,11 +29,13 @@ Every repository artifact has one job.
 3. Workspace authority docs own repository process.
 4. Complete investigation gate docs own mandatory investigation evidence requirements.
 5. Complete design gate docs own mandatory design/planning readiness requirements.
-6. Planning Markdown owns active, deferred, completed, and strategic planning state.
-7. Routines own repeatable work procedure.
-8. Task cards own reusable task wording.
-9. Reports and closeouts own historical evidence.
-10. Generated views and local helpers are convenience only unless a machine contract explicitly says otherwise.
+6. Evidence quality taxonomy owns evidence classes, confidence, freshness, and validation wording.
+7. Complete merge readiness gate owns merge, branch cleanup, and post-merge truth requirements.
+8. Planning Markdown owns active, deferred, completed, and strategic planning state.
+9. Routines own repeatable work procedure.
+10. Task cards own reusable task wording.
+11. Reports and closeouts own historical evidence.
+12. Generated views and local helpers are convenience only unless a machine contract explicitly says otherwise.
 
 ## Lifecycle authority
 
@@ -50,6 +54,18 @@ The gate owns the required investigation dossier shape and investigation matrix 
 Use [`complete-design-gate.md`](complete-design-gate.md) when a work item touches architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary concerns.
 
 The gate owns the required checklist shape and matrix templates. It does not own track-specific architecture decisions, current planning state, or historical closeout evidence.
+
+## Evidence quality authority
+
+Use [`evidence-quality-taxonomy.md`](evidence-quality-taxonomy.md) when a claim depends on validation, current behavior, freshness, confidence, connector inspection, local commands, CI, generated proof artifacts, user-reported validation, or inference.
+
+The taxonomy owns evidence classes and reporting wording. It does not own the underlying code behavior, policy decision, or planning state.
+
+## Merge readiness authority
+
+Use [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md) before recommending merge, branch deletion, phase merge, or post-merge cleanup.
+
+The merge gate owns merge readiness shape. It does not replace PR review, CI, implementation evidence, or phase closeout truth.
 
 ## Generated file classes
 
@@ -78,7 +94,7 @@ In practice:
 - DRY: do not keep the same durable claim authoritative in two places.
 - YAGNI: do not preserve legacy workflow surfaces only because they might be useful someday.
 - SOLID: keep responsibilities and dependencies honest.
-- Separation of Concerns: separate entrypoints, authority docs, lifecycle, complete investigation gates, complete design gates, routines, planning, reports, and tooling.
+- Separation of Concerns: separate entrypoints, authority docs, lifecycle, complete investigation gates, complete design gates, evidence quality, merge readiness, routines, planning, reports, and tooling.
 - Avoid Premature Optimization: do not add generated views or scripts before there is evidence they solve a real problem.
 - Law of Demeter: route through direct owners and explicit contracts.
 
@@ -111,3 +127,4 @@ Examples:
 - Local helper conflicts with a routine: use the routine.
 - Proposed design conflicts with accepted design: use the accepted design until a decision record supersedes it.
 - Implementation authorization lacks complete investigation or design gate evidence where required: update investigation, design, or planning authority before coding.
+- Merge recommendation lacks evidence quality or merge readiness evidence: continue review before recommending merge.
