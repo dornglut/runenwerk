@@ -20,6 +20,7 @@ use crate::kernel::{ControlKernelDescriptor, ControlKernelId, ControlKernelSet};
 use crate::migration::{ControlDeprecationStatus, ControlMigrationHook, ControlMigrationId};
 use crate::overlay::ControlOverlayDescriptor;
 use crate::schema::{ControlSchemaDescriptor, ControlSchemaRole};
+use crate::surface2d::ControlSurface2DDescriptor;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ControlKindDescriptor {
@@ -293,6 +294,8 @@ pub struct ControlPackageDescriptor {
     #[serde(default)]
     pub generic_text_descriptors: Vec<ControlGenericTextDescriptor>,
     #[serde(default)]
+    pub surface2d_descriptors: Vec<ControlSurface2DDescriptor>,
+    #[serde(default)]
     pub mount_eligibility: ControlMountEligibility,
     #[serde(default)]
     pub binding_requirements: Vec<ControlRequirement>,
@@ -340,6 +343,7 @@ impl ControlPackageDescriptor {
             overlay_descriptors: Vec::new(),
             editable_text_descriptors: Vec::new(),
             generic_text_descriptors: Vec::new(),
+            surface2d_descriptors: Vec::new(),
             mount_eligibility: ControlMountEligibility::default(),
             binding_requirements: Vec::new(),
             theme_token_requirements: Vec::new(),
@@ -458,6 +462,10 @@ impl ControlPackageDescriptor {
         self.generic_text_descriptors.push(descriptor);
         self
     }
+    pub fn with_surface2d_descriptor(mut self, descriptor: ControlSurface2DDescriptor) -> Self {
+        self.surface2d_descriptors.push(descriptor);
+        self
+    }
     pub fn control_kind(&self, id: &ControlKindId) -> Option<&ControlKindDescriptor> {
         self.control_kinds
             .iter()
@@ -492,6 +500,14 @@ impl ControlPackageDescriptor {
         control_kind_id: &ControlKindId,
     ) -> Option<&ControlGenericTextDescriptor> {
         self.generic_text_descriptors
+            .iter()
+            .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
+    }
+    pub fn surface2d_descriptor(
+        &self,
+        control_kind_id: &ControlKindId,
+    ) -> Option<&ControlSurface2DDescriptor> {
+        self.surface2d_descriptors
             .iter()
             .find(|descriptor| &descriptor.control_kind_id == control_kind_id)
     }
