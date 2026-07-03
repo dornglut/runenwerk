@@ -9,6 +9,7 @@ last_reviewed: 2026-07-03
 related_docs:
   - ../authority-model.md
   - ../workflow-lifecycle.md
+  - ../complete-investigation-gate.md
   - ../complete-design-gate.md
   - ../routines/roadmap-update-routine.md
 ---
@@ -36,11 +37,15 @@ Legacy YAML and generated Markdown may remain as migration context or optional m
 
 Use [`../workflow-lifecycle.md`](../workflow-lifecycle.md) when a planning change changes state.
 
+Use [`../complete-investigation-gate.md`](../complete-investigation-gate.md) before planning makes design, activation, or implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
+
 Use [`../complete-design-gate.md`](../complete-design-gate.md) before planning authorizes implementation for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
 
 Common state transitions:
 
 ```text
+idea -> investigating
+investigating -> proposed-design
 proposed-design -> accepted-direction
 accepted-direction -> track-candidate
 track-candidate -> production-track
@@ -52,12 +57,13 @@ active-planning -> deferred
 accepted-direction -> superseded
 ```
 
-Architecture acceptance does not authorize implementation. Active implementation requires exact owner, complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, stop conditions, and complete design gate evidence where applicable.
+Architecture acceptance does not authorize implementation. Active implementation requires exact owner, complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, stop conditions, and complete investigation/design gate evidence where applicable.
 
 ## Update checklist
 
 - Active work has one clear current focus or an explicit no-current-focus state.
 - Roadmap entries name state, owner, authority, evidence, known gaps, and next action.
+- Planning decisions point to complete investigation gate evidence where applicable.
 - Active implementation entries point to complete design gate evidence where applicable.
 - Active implementation entries name the complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, and stop conditions.
 - Reusable/platform/public API entries include or link feature support, future-use-case pressure, hierarchy/composition where relevant, and ergonomics/usability evidence.
@@ -77,6 +83,7 @@ Title:
 State:
 Owner:
 Authority:
+Complete investigation gate:
 Complete design gate:
 Implementation contract:
 Allowed files/crates:
