@@ -5,12 +5,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-03
 related_docs:
   - ./operating-model.md
   - ./authority-model.md
   - ./documentation-structure.md
   - ./workflow-lifecycle.md
+  - ./complete-design-gate.md
   - ./routines/README.md
   - ./task-cards/README.md
   - ./planning/README.md
@@ -27,6 +28,7 @@ The workflow must work from GitHub connector, ChatGPT context tooling, Codex-sty
 - Human entrypoint: `README.md`
 - AI agent entrypoint: `AGENTS.md`
 - Workspace router: this file
+- Complete design gate: [`complete-design-gate.md`](complete-design-gate.md)
 
 ## Choose the task shape
 
@@ -64,6 +66,8 @@ archived
 
 Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when a task crosses from design to decision, planning, implementation, or closeout.
 
+Use [`complete-design-gate.md`](complete-design-gate.md) before implementation is authorized for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
+
 ## Read first
 
 For code changes:
@@ -83,6 +87,7 @@ AGENTS.md
 docs-site/src/content/docs/workspace/documentation-structure.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
+docs-site/src/content/docs/workspace/complete-design-gate.md
 ```
 
 For planning changes:
@@ -93,6 +98,7 @@ docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
+docs-site/src/content/docs/workspace/complete-design-gate.md
 ```
 
 For all significant changes, use:
@@ -109,6 +115,7 @@ End with:
 Files changed:
 Exact functions/modules/sections changed:
 Authority files inspected:
+Complete design gate status:
 Manual validation performed:
 Command validation run or unavailable:
 Remaining risks or blockers:
