@@ -8,6 +8,7 @@ last_reviewed: 2026-07-03
 related_docs:
   - ../start-here.md
   - ../workflow-lifecycle.md
+  - ../complete-investigation-gate.md
   - ../complete-design-gate.md
   - ./phase-completion-drift-check-routine.md
   - ../../guidelines/programming-principles.md
@@ -19,7 +20,7 @@ related_docs:
 
 Use this routine for bounded implementation work after the owner, intent, complete implementation contract, and acceptance scope are clear.
 
-For architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work, implementation must not start until the active planning record points to complete design gate evidence from `complete-design-gate.md`.
+For architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work, implementation must not start until the active planning record points to complete investigation gate evidence and complete design gate evidence where required.
 
 ## Authority files to read
 
@@ -29,6 +30,7 @@ For architecture-sensitive, reusable, platform, public API, production-track, wo
 - `DOMAIN_MAP.md`
 - `TESTING.md`
 - `docs-site/src/content/docs/workspace/workflow-lifecycle.md`
+- `docs-site/src/content/docs/workspace/complete-investigation-gate.md`
 - `docs-site/src/content/docs/workspace/complete-design-gate.md`
 - `docs-site/src/content/docs/guidelines/programming-principles.md`
 - the owning design, ADR, planning record, issue, or crate/domain docs
@@ -37,7 +39,7 @@ For phase or production-track implementation, also read the current `active-work
 
 ## Working files to inspect
 
-Inspect the target crate or document, nearby modules, public exports, tests, examples, and docs that define expected behavior.
+Inspect the target crate or document, nearby modules, public exports, tests, examples, docs, complete investigation evidence, and complete design gate evidence that define expected behavior.
 
 For phase completion work, inspect the files that will be used as completion evidence and the planning records that will need closeout updates after merge or acceptance.
 
@@ -46,6 +48,7 @@ For phase completion work, inspect the files that will be used as completion evi
 - owning domain, crate, and subsystem;
 - exact complete implementation contract and non-owned responsibilities;
 - lifecycle state is `active-implementation` or explicitly authorized equivalent;
+- complete investigation gate status where applicable;
 - complete design gate status where applicable;
 - feature support matrix status where applicable;
 - future-use-case pressure matrix status where applicable;
@@ -83,6 +86,7 @@ When the implementation patch is merged or otherwise accepted and it completes a
 - Authority files inspected.
 - Working files inspected by path.
 - Lifecycle state and implementation authorization checked.
+- Complete investigation gate evidence checked where applicable.
 - Complete design gate evidence checked where applicable.
 - Feature support matrix checked where applicable.
 - Future-use-case pressure matrix checked where applicable.
@@ -98,7 +102,7 @@ When the implementation patch is merged or otherwise accepted and it completes a
 
 ## Stop conditions
 
-Stop and redesign if the requested implementation is only backed by accepted direction, has no exact owner/scope, lacks complete design gate evidence where required, violates dependency direction, needs architecture decision first, or requires validation that cannot be reported honestly.
+Stop and redesign if the requested implementation is only backed by accepted direction, has no exact owner/scope, lacks complete investigation gate evidence where required, lacks complete design gate evidence where required, violates dependency direction, needs architecture decision first, or requires validation that cannot be reported honestly.
 
 Stop and redesign if a proof, migration helper, or test fixture starts becoming a durable public API, stable id, reusable platform vocabulary, or product-facing surface without an accepted owner-first design.
 
@@ -106,7 +110,7 @@ Stop and do closeout/planning work instead if the next requested implementation 
 
 ## Evidence to report
 
-Report changed files, exact functions/modules/sections, behavior impact, lifecycle state, complete design gate status where applicable, authority files inspected, validation, remaining risks, phase closeout impact, and next step.
+Report changed files, exact functions/modules/sections, behavior impact, lifecycle state, complete investigation gate status where applicable, complete design gate status where applicable, authority files inspected, validation, remaining risks, phase closeout impact, and next step.
 
 ## Optional local helpers
 
