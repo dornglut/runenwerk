@@ -1,13 +1,14 @@
 ---
 title: Phase 16 Surface2D Source Investigation
-description: Source-level investigation for PT-UI-COMPONENT-PLATFORM-016 before implementation authorization.
-status: active
+description: Historical source-level investigation for completed PT-UI-COMPONENT-PLATFORM-016 Surface2D.
+status: completed
 owner: ui
 layer: domain
 canonical: true
 last_reviewed: 2026-07-03
 related_docs:
   - ../../design/active/ui-component-platform-surface2d-design.md
+  - ../closeouts/phase-16-surface2d-closeout.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/complete-investigation-gate.md
   - ../../workspace/complete-design-gate.md
@@ -18,11 +19,11 @@ related_docs:
 
 ## Status
 
-This report records the source-level investigation for `PT-UI-COMPONENT-PLATFORM-016` Surface2D.
+This report records the source-level investigation that fed completed `PT-UI-COMPONENT-PLATFORM-016` Surface2D.
 
-Lifecycle state: `active-planning`.
+Lifecycle state: `completed`.
 
-Implementation is not authorized by this report alone. It supplies the exact implementation contract input needed for planning promotion.
+Implementation completed through PR #61. This report remains historical evidence for the owner split, validation envelope, and stop conditions that shaped the delivered implementation. Final completion evidence lives in `docs-site/src/content/docs/reports/closeouts/phase-16-surface2d-closeout.md`.
 
 ## Evidence classes
 
@@ -30,9 +31,11 @@ Implementation is not authorized by this report alone. It supplies the exact imp
 E2 connector file inspection
 E2 merged PR metadata / changed-file inspection
 E8 accepted planning and design authority
+E5 post-merge local validation from main
+E9 closeout alignment across source, validation, and planning truth
 ```
 
-Command validation was not run in the connector.
+Command validation was not run in the original connector investigation. Post-merge validation from `main` is recorded in the closeout report.
 
 ## Question
 
@@ -326,7 +329,7 @@ cargo test -p ui_surface            # only if ui_surface changes; should not be 
 
 ## Implementation stop conditions
 
-Stop and redesign if implementation requires:
+Future Surface2D changes must stop and redesign if implementation requires:
 
 ```text
 new crate creation
@@ -343,6 +346,6 @@ static mount proof that does not use the runtime proof frame
 
 ## Recommendation
 
-Phase 16 can move from design intake to implementation planning after this source investigation is reviewed and docs validation passes.
+Phase 16 has completed through PR #61 and is closed by `docs-site/src/content/docs/reports/closeouts/phase-16-surface2d-closeout.md`.
 
-The implementation should be a single complete Phase 16 vertical proof across `ui_controls`, `ui_runtime`, and `ui_static_mount`, with conditional crates untouched unless evidence proves they are required.
+Use this report as historical owner-split evidence. Future changes must start from the completed implementation on `main` and pass their own investigation, design, validation, and merge-readiness gates.

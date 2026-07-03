@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-03
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
@@ -54,7 +54,7 @@ Milestones:
 013 Overlay / popup / layering — completed through PR #44 and local validation report
 014 Text Editing / Editable Text Behavior — completed through PR #46 and local validation report
 015 Generic Text — completed through PR #48 baseline and PR #49 hardening
-016 Surface2D — active-planning
+016 Surface2D — completed through PR #61 after PR #62 workflow hardening
 017 SpatialCanvas — future
 018 NodeCanvas — future
 019 PortGraphCanvas — future
@@ -71,19 +71,19 @@ Evidence gates:
 Phase 13: PR #44 merged into main at merge commit 6f2d3827f315191d7aeaf68a64f523627197cad8. Local validation passed on 2026-07-02 with the full Phase 13 cargo/docs/diff gate.
 Phase 14: PR #46 merged into main at merge commit 6d9bf983c77a32c701681ff55a05e1f9ebcdeed1. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, ui_runtime::text_editing replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, and final proof-frame cleanup. Local validation passed on 2026-07-02 with the recorded Phase 14 cargo/docs/diff gate before merge.
 Phase 15: PR #48 merged into main at merge commit 91cea8b8f0dfc38143de77ba931bc81ffc91dcff. The validated implementation commit 32e402b108d1e72d7cc5b4113af29d8d29626680 covers renderer-neutral `ui_text` block/run/span/layout/style/line/glyph/overflow/fallback/diagnostic contracts, `TextBlockLayoutRequest` / `TextBlockLayoutResult` / `TextLayouter`, package-backed Generic Text descriptors and validation, catalog projection, separate `TextDisplay` inspection projection, runtime proof report/frame, static mount proof, renderer-neutral frame/extract adaptation to `TextVisualRun` / `TextGlyph` evidence, and removal of the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path. PR #49 merged into main at merge commit 338a8092d534dbb412da89363d50a46cd5efeae9 and completed the hardening pass: source-run/cluster evidence correction, height overflow evidence, stable-ID constructors, homogeneous visual-run segmentation, button-label policy cleanup, runtime text-emission naming, Generic Text direction-policy inspection, and large output-emission file splits. Final local validation passed with the recorded cargo workspace/docs/diff gate.
-Phase 16: Surface2D is active planning for reusable renderer-neutral 2D coordinate/navigation proof: surface identity, content and viewport bounds, world/screen transforms, pan, zoom, fit, selection rectangle, hover coordinate, pointer capture, gesture cancel/commit, overlay/diagnostic layers, grid/background vocabulary, large-content bounds, LOD readiness, budget evidence, accessibility/input acceptance, and host-intent/no-mutation boundaries.
+Phase 16: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening into main at merge commit 6cfb82b81aa5478496ff6cbf3fa2eea607777aaf. PR #61 squash-merged Surface2D into main at merge commit 2e803620c91726fb599c5e5c4eee4b3984cd4a9d. Main contains the renderer-neutral Surface2D package/catalog/inspection contract, runtime proof report/frame, and static mount proof across ui_controls, ui_runtime, and ui_static_mount. Post-merge validation from main passed with the focused Surface2D package/runtime/static-mount commands, cargo test --workspace, docs validation, and diff check.
 ```
 
 Current blocker:
 
 ```text
-No Phase 15 implementation blocker remains in local validation. Phase 16 has not been implementation-authorized; planning must first settle exact owner files, implementation scope, validation, evidence expectation, stop conditions, no-mutation boundaries, accessibility/input acceptance, budget evidence, and the current relationship to existing ui_surface vocabulary. Typed App Composition is proposed architecture direction only and does not authorize shared plugin framework work.
+No Phase 16 product blocker remains after PR #61 and post-merge validation from main. The remote branch surface2d-phase-16 is intentionally kept for manual review because it contains three non-equivalent commits with a large Surface2D design-document diff that mixes potentially useful future-use-case pressure with stale pre-merge implementation assumptions. It is not a blocker for the completed Phase 16 product scope.
 ```
 
 Next action:
 
 ```text
-Harden the Phase 16 Surface2D design intake; preserve future order 017+ unchanged.
+Keep Phase 16 as a completed dependency. Perform the next planning intake from the production track; the next named future milestone is 017 SpatialCanvas. Do not start Phase 17 implementation until its investigation and design gates pass.
 ```
 
 ## Track shape
