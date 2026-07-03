@@ -4,12 +4,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-03
 related_docs:
   - ./start-here.md
   - ./operating-model.md
   - ./authority-model.md
   - ./workflow-lifecycle.md
+  - ./complete-design-gate.md
   - ../guidelines/programming-principles.md
 ---
 
@@ -41,11 +42,19 @@ The active workspace workflow starts at:
 docs-site/src/content/docs/workspace/start-here.md
 ```
 
-The lifecycle model for moving work between idea, investigation, design, decision, planning, implementation, review, completion, deferral, supersession, and archive states is:
+The lifecycle model is:
 
 ```text
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
 ```
+
+The complete design gate is:
+
+```text
+docs-site/src/content/docs/workspace/complete-design-gate.md
+```
+
+Use the complete design gate before implementation authorization for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
 
 ## Root documents
 
@@ -84,7 +93,9 @@ docs-site/src/content/docs/
   archive/
 ```
 
-## Active workspace structure
+## Workspace structure
+
+`workspace/` owns repository process, lifecycle, complete design gate, structure, planning, status, and maintenance docs.
 
 ```text
 workspace/
@@ -94,49 +105,15 @@ workspace/
   ai-agent-boundaries.md
   documentation-structure.md
   workflow-lifecycle.md
-
+  complete-design-gate.md
   routines/
-    README.md
-    investigation-routine.md
-    implementation-routine.md
-    architecture-governance-review-routine.md
-    code-refactor-routine.md
-    docs-refactor-routine.md
-    roadmap-update-routine.md
-    phase-completion-drift-check-routine.md
-    pr-review-routine.md
-
   task-cards/
-    README.md
-    github-connector-task.md
-    codex-task.md
-    implementation-task.md
-    docs-cleanup-task.md
-    review-task.md
-
   planning/
-    README.md
-    active-work.md
-    roadmap.md
-    deferred-work.md
-    completed-work.md
-    production-tracks.md
-    decision-register.md
 ```
-
-## Reports structure
-
-```text
-reports/
-  closeouts/
-    README.md
-```
-
-Reports own historical evidence, audits, migrations, closeouts, and benchmarks. Planning files may link to reports, but planning files should not become report archives.
 
 ## Folder responsibilities
 
-- `workspace/`: repository process, lifecycle, structure, planning, status, and maintenance docs.
+- `workspace/`: repository process, lifecycle, complete design gate, structure, planning, status, and maintenance docs.
 - `workspace/routines/`: repeatable human/agent procedures.
 - `workspace/task-cards/`: short reusable task instructions that point to routines.
 - `workspace/planning/`: Markdown-first planning records.
@@ -152,14 +129,15 @@ Reports own historical evidence, audits, migrations, closeouts, and benchmarks. 
 
 Use [`workflow-lifecycle.md`](workflow-lifecycle.md) for state transitions and promotion rules.
 
-In short:
-
 ```text
 Guideline
   stable doctrine and engineering rules
 
 Design
-  target architecture, vocabulary, owner boundaries, tradeoffs, non-goals
+  target architecture, vocabulary, owner boundaries, tradeoffs, non-owned responsibilities
+
+Complete design gate
+  mandatory readiness checklist and matrix templates before implementation authorization
 
 Roadmap / production track
   strategic sequence and current planning state
@@ -174,7 +152,7 @@ Closeout report
   detailed historical evidence
 
 Generated file
-  mirror, evidence, or narrow contract only
+  mirror, evidence, or contract only
 ```
 
 ## Routine shape
@@ -210,7 +188,7 @@ Use the programming principles when pruning docs:
 - KISS: keep navigation short.
 - DRY: keep one authority for each durable claim.
 - YAGNI: remove unused workflow surfaces.
-- Separation of Concerns: separate entrypoints, lifecycle, routines, planning, reports, and tooling.
+- Separation of Concerns: separate entrypoints, lifecycle, complete design gates, routines, planning, reports, and tooling.
 
 When moving, merging, or pruning docs, report old path to new path mapping.
 
