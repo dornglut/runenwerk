@@ -7,6 +7,7 @@ pub mod output;
 pub mod overlay;
 pub mod runtime;
 pub mod state;
+pub mod surface2d;
 pub mod text_editing;
 mod text_emission;
 
@@ -25,4 +26,5 @@ pub use output::*;
 pub use overlay::*;
 pub use runtime::*;
 pub use state::*;
+pub use surface2d::*;
 pub use text_editing::*;
