@@ -11,6 +11,7 @@ related_docs:
   - ./authority-model.md
   - ./documentation-structure.md
   - ./workflow-lifecycle.md
+  - ./complete-investigation-gate.md
   - ./complete-design-gate.md
   - ./routines/README.md
   - ./task-cards/README.md
@@ -44,13 +45,16 @@ Every non-trivial task should identify its lifecycle state before editing.
 
 Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when work moves between investigation, proposed design, accepted direction, production track, active planning, active implementation, review, completion, deferral, or supersession.
 
+Use [`complete-investigation-gate.md`](complete-investigation-gate.md) before design, planning, or implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
+
 Use [`complete-design-gate.md`](complete-design-gate.md) before planning authorizes implementation for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
 
 The key rule is:
 
 ```text
 Architecture acceptance is not implementation authorization.
-Complete design gate evidence is required when the work type needs it.
+Complete investigation gate evidence is required when the decision needs current-reality proof.
+Complete design gate evidence is required when the work type needs full design readiness.
 ```
 
 ## Default workflow
@@ -61,12 +65,13 @@ Complete design gate evidence is required when the work type needs it.
 3. Read the routine's authority files.
 4. Inspect the exact working files.
 5. Classify the lifecycle state and intended state transition.
-6. Verify complete design gate evidence when the task requires it.
-7. Decide the complete owned patch for the authorized contract.
-8. Apply the patch file-by-file.
-9. Run manual validation from the routine.
-10. Report command validation as run, skipped, or unavailable.
-11. List changed files, exact sections/modules, risks, and next steps.
+6. Verify complete investigation gate evidence when the task requires it.
+7. Verify complete design gate evidence when the task requires it.
+8. Decide the complete owned patch for the authorized contract.
+9. Apply the patch file-by-file.
+10. Run manual validation from the routine.
+11. Report command validation as run, skipped, or unavailable.
+12. List changed files, exact sections/modules, risks, and next steps.
 ```
 
 ## Authority rules
@@ -74,6 +79,7 @@ Complete design gate evidence is required when the work type needs it.
 - Code and tests prove current behavior.
 - ADRs, accepted designs, guidelines, and root architecture docs own durable policy.
 - Workspace authority docs own repository process.
+- Complete investigation gate docs own mandatory investigation evidence requirements.
 - Complete design gate docs own mandatory design/planning readiness requirements.
 - Planning Markdown owns active planning state.
 - Routines own repeatable human/agent procedure.
@@ -110,7 +116,7 @@ These commands do not replace manual authority review. If command output and aut
 
 ## Generated files
 
-Generated or machine-readable files can be useful mirrors, evidence, or narrow contracts.
+Generated or machine-readable files can be useful mirrors, evidence, or contracts.
 
 They must not be required for normal workflow comprehension unless an accepted design explicitly classifies a generated file as a contract for a validation scope.
 
@@ -124,6 +130,7 @@ Never finish with only “done.” A final report must include:
 Files changed:
 Exact functions/modules/sections changed:
 Authority files inspected:
+Complete investigation gate status:
 Complete design gate status:
 Manual validation:
 Local command validation:
