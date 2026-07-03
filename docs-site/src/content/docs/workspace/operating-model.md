@@ -5,12 +5,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-03
 related_docs:
   - ./start-here.md
   - ./authority-model.md
   - ./documentation-structure.md
   - ./workflow-lifecycle.md
+  - ./complete-design-gate.md
   - ./routines/README.md
   - ./task-cards/README.md
 ---
@@ -43,10 +44,13 @@ Every non-trivial task should identify its lifecycle state before editing.
 
 Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when work moves between investigation, proposed design, accepted direction, production track, active planning, active implementation, review, completion, deferral, or supersession.
 
+Use [`complete-design-gate.md`](complete-design-gate.md) before planning authorizes implementation for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
+
 The key rule is:
 
 ```text
 Architecture acceptance is not implementation authorization.
+Complete design gate evidence is required when the work type needs it.
 ```
 
 ## Default workflow
@@ -57,11 +61,12 @@ Architecture acceptance is not implementation authorization.
 3. Read the routine's authority files.
 4. Inspect the exact working files.
 5. Classify the lifecycle state and intended state transition.
-6. Decide the smallest coherent patch.
-7. Apply the patch file-by-file.
-8. Run manual validation from the routine.
-9. Report command validation as run, skipped, or unavailable.
-10. List changed files, exact sections/modules, risks, and next steps.
+6. Verify complete design gate evidence when the task requires it.
+7. Decide the complete owned patch for the authorized contract.
+8. Apply the patch file-by-file.
+9. Run manual validation from the routine.
+10. Report command validation as run, skipped, or unavailable.
+11. List changed files, exact sections/modules, risks, and next steps.
 ```
 
 ## Authority rules
@@ -69,6 +74,7 @@ Architecture acceptance is not implementation authorization.
 - Code and tests prove current behavior.
 - ADRs, accepted designs, guidelines, and root architecture docs own durable policy.
 - Workspace authority docs own repository process.
+- Complete design gate docs own mandatory design/planning readiness requirements.
 - Planning Markdown owns active planning state.
 - Routines own repeatable human/agent procedure.
 - Task cards are reusable prompts; they do not own process.
@@ -106,7 +112,7 @@ These commands do not replace manual authority review. If command output and aut
 
 Generated or machine-readable files can be useful mirrors, evidence, or narrow contracts.
 
-They must not be required for normal workflow comprehension unless an accepted design explicitly classifies a generated file as a contract for a narrow validation scope.
+They must not be required for normal workflow comprehension unless an accepted design explicitly classifies a generated file as a contract for a validation scope.
 
 If a generated view is stale or cannot be regenerated, continue from the Markdown planning record and report the generated-view gap.
 
@@ -118,6 +124,7 @@ Never finish with only “done.” A final report must include:
 Files changed:
 Exact functions/modules/sections changed:
 Authority files inspected:
+Complete design gate status:
 Manual validation:
 Local command validation:
 Known gaps:
