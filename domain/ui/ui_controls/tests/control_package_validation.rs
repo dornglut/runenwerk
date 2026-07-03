@@ -159,6 +159,18 @@ fn control_package_rejects_duplicate_generic_text_descriptor() {
 }
 
 #[test]
+fn control_package_rejects_duplicate_surface2d_descriptor() {
+    let mut package = runenwerk_control_package();
+    package
+        .surface2d_descriptors
+        .push(package.surface2d_descriptors[0].clone());
+    assert_has_reason(
+        package,
+        ControlPackageValidationReason::DuplicateSurface2DDescriptor,
+    );
+}
+
+#[test]
 fn runenwerk_control_package_validates() {
     assert!(runenwerk_control_package().validate_contract().is_valid());
 }

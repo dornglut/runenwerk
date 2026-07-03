@@ -3,8 +3,8 @@ use ui_controls::{ControlKindId, ControlPackageValidationReason, runenwerk_contr
 #[test]
 fn base_controls_package_exposes_overlay_descriptors_for_all_controls() {
     let package = runenwerk_control_package();
-    assert_eq!(package.control_kinds.len(), 8);
-    assert_eq!(package.overlay_descriptors.len(), 8);
+    assert_eq!(package.control_kinds.len(), 9);
+    assert_eq!(package.overlay_descriptors.len(), 9);
     assert!(package.validate_contract().is_valid());
     for kind in &package.control_kinds {
         let descriptor = package

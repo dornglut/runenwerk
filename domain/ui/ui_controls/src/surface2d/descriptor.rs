@@ -132,7 +132,10 @@ impl ControlSurface2DSupportSummary {
                 "surface2d.supported",
                 bool_string(self.surface2d_supported),
             ),
-            ControlSurface2DInspectionFact::new("surface2d.input_modes", self.input_modes.join(",")),
+            ControlSurface2DInspectionFact::new(
+                "surface2d.input_modes",
+                self.input_modes.join(","),
+            ),
             ControlSurface2DInspectionFact::new("surface2d.layers", self.layer_kinds.join(",")),
             ControlSurface2DInspectionFact::new(
                 "surface2d.budget_evidence",

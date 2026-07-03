@@ -18,7 +18,7 @@ pub(super) fn validate_surface2d_descriptors(
         if !control_kind_ids.contains(&id) {
             report.push(ControlPackageValidationDiagnostic::kind(
                 descriptor.control_kind_id.clone(),
-                ControlPackageValidationReason::UnresolvedReference,
+                ControlPackageValidationReason::UnresolvedSurface2DDescriptor,
                 "Surface2D descriptor references no control kind in the package",
             ));
             continue;
@@ -188,7 +188,7 @@ fn push_invalid(
 ) {
     report.push(ControlPackageValidationDiagnostic::kind(
         control_kind_id,
-        ControlPackageValidationReason::InvalidGenericTextDescriptor,
+        ControlPackageValidationReason::InvalidSurface2DDescriptor,
         message,
     ));
 }
@@ -200,7 +200,7 @@ fn push_unsupported(
 ) {
     report.push(ControlPackageValidationDiagnostic::kind(
         control_kind_id,
-        ControlPackageValidationReason::UnsupportedGenericTextLayoutPolicy,
+        ControlPackageValidationReason::UnsupportedSurface2DDescriptor,
         message,
     ));
 }

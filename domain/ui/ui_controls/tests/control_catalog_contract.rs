@@ -13,7 +13,7 @@ fn control_catalog_derives_deterministic_entries_from_package() {
     let second = ControlCatalogIndex::from_packages([&package]);
 
     assert_eq!(first, second);
-    assert_eq!(first.entries.len(), 8);
+    assert_eq!(first.entries.len(), 9);
     assert!(first.entry(LABEL_CONTROL_KIND_ID).is_some());
 }
 
@@ -24,7 +24,7 @@ fn control_catalog_filters_by_identity_metadata_target_and_capability() {
 
     let by_package =
         index.query(&ControlCatalogQuery::new().with_package_id(RUNENWERK_CONTROL_PACKAGE_ID));
-    assert_eq!(by_package.entries.len(), 8);
+    assert_eq!(by_package.entries.len(), 9);
 
     let by_kind =
         index.query(&ControlCatalogQuery::new().with_control_kind_id(LABEL_CONTROL_KIND_ID));
@@ -32,7 +32,7 @@ fn control_catalog_filters_by_identity_metadata_target_and_capability() {
     assert_eq!(by_kind.entries[0].display_name, "Label");
 
     let by_category = index.query(&ControlCatalogQuery::new().with_category("base-control"));
-    assert_eq!(by_category.entries.len(), 8);
+    assert_eq!(by_category.entries.len(), 9);
 
     let by_tag = index.query(&ControlCatalogQuery::new().with_tag("label"));
     assert_eq!(by_tag.entries.len(), 1);
@@ -40,7 +40,7 @@ fn control_catalog_filters_by_identity_metadata_target_and_capability() {
 
     let by_target = index
         .query(&ControlCatalogQuery::new().with_target_profile(RUNENWERK_CONTROL_TARGET_EDITOR));
-    assert_eq!(by_target.entries.len(), 8);
+    assert_eq!(by_target.entries.len(), 9);
 
     let by_capability =
         index.query(&ControlCatalogQuery::new().with_capability("runenwerk.ui.controls.read"));
@@ -62,21 +62,21 @@ fn control_catalog_filters_story_diagnostics_and_mount_state() {
             .query(&ControlCatalogQuery::new().with_story_required(true))
             .entries
             .len(),
-        8
+        9
     );
     assert_eq!(
         index
             .query(&ControlCatalogQuery::new().with_has_diagnostics(true))
             .entries
             .len(),
-        8
+        9
     );
     assert_eq!(
         index
             .query(&ControlCatalogQuery::new().with_mount_eligible(false))
             .entries
             .len(),
-        8
+        9
     );
     assert!(
         index

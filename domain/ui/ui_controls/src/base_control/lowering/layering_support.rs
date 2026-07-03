@@ -46,5 +46,10 @@ pub(crate) fn lower_layering_support(
             "anchor.table-view.menu",
             "menu.table-view",
         ),
+        ControlPreset::Surface2D => ControlOverlayDescriptor::tooltip_on_hover(
+            kind_id,
+            "anchor.surface2d.diagnostic",
+            "tooltip.surface2d.diagnostic",
+        ),
     }
 }

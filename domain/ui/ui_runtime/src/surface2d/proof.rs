@@ -68,7 +68,13 @@ pub fn base_controls_surface2d_report() -> Surface2DProofReport {
             .entries
             .iter()
             .filter(|entry| entry.surface2d_supported)
-            .map(|entry| format!("{}:{}", entry.control_kind_id, entry.surface2d_input_modes.len()))
+            .map(|entry| {
+                format!(
+                    "{}:{}",
+                    entry.control_kind_id,
+                    entry.surface2d_input_modes.len()
+                )
+            })
             .collect(),
         inspection_projection_evidence: inspection
             .controls
@@ -76,6 +82,7 @@ pub fn base_controls_surface2d_report() -> Surface2DProofReport {
             .filter_map(|control| {
                 control
                     .fact(ControlInspectionSection::Surface2D, "surface2d.supported")
+                    .filter(|value| *value == "true")
                     .map(|value| format!("{}:{value}", control.control_kind_id))
             })
             .collect(),

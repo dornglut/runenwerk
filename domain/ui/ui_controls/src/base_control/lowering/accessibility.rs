@@ -117,6 +117,23 @@ pub(crate) fn lower_accessibility(
                 ControlAccessibilityRole::Cell,
             ],
         ),
+        ControlPreset::Surface2D => add_keyboard(
+            focusable(add_roles(
+                descriptor,
+                &[
+                    ControlAccessibilityRole::Canvas,
+                    ControlAccessibilityRole::Panel,
+                ],
+            )),
+            &[
+                ControlKeyboardActivation::NavigateNext,
+                ControlKeyboardActivation::NavigatePrevious,
+                ControlKeyboardActivation::Increment,
+                ControlKeyboardActivation::Decrement,
+                ControlKeyboardActivation::Activate,
+                ControlKeyboardActivation::Cancel,
+            ],
+        ),
     }
 }
 

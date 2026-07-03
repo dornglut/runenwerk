@@ -85,6 +85,7 @@ pub(crate) fn lower_layout(
             ),
             &[UiScrollRequirement::AxisX],
         ),
+        ControlPreset::Surface2D => surface2d_layout(kind_id),
     }
 }
 
@@ -157,6 +158,39 @@ fn collection_layout(
             UiVirtualizationRequirement::WindowedRendering,
             UiVirtualizationRequirement::OverscanBudget,
         ],
+    )
+}
+
+fn surface2d_layout(kind_id: ControlKindId) -> crate::ControlLayoutDescriptor {
+    add_content_state(
+        add_scroll_requirements(
+            add_size_constraints(
+                add_container_kinds(
+                    add_layout_roles(
+                        crate::ControlLayoutDescriptor::new(kind_id),
+                        &[UiLayoutRole::Panel, UiLayoutRole::Scroll],
+                    ),
+                    &[UiContainerKind::Viewport, UiContainerKind::ScrollRegion],
+                ),
+                &[
+                    UiSizeConstraintKind::FillWidth,
+                    UiSizeConstraintKind::FillHeight,
+                ],
+            ),
+            &[
+                UiScrollRequirement::Scrollable,
+                UiScrollRequirement::ScrollOwner,
+                UiScrollRequirement::AxisX,
+                UiScrollRequirement::AxisY,
+                UiScrollRequirement::PositionHostOwned,
+            ],
+        )
+        .with_large_content_budget(
+            UiLargeContentBudget::new("surface2d-large-content-budget")
+                .with_estimated_item_count(10_000)
+                .with_overscan_budget_items(64),
+        ),
+        &[UiContentState::Ready, UiContentState::Overflow],
     )
 }
 

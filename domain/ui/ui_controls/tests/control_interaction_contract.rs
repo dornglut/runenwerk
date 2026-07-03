@@ -62,7 +62,7 @@ fn base_control_interaction_lowering_marks_text_intent_as_probe_only() {
 #[test]
 fn interaction_declarations_do_not_upgrade_runtime_mount_eligibility() {
     let package = runenwerk_control_package();
-    assert_eq!(package.interaction_descriptors.len(), 8);
+    assert_eq!(package.interaction_descriptors.len(), 9);
 
     for kind in &package.control_kinds {
         assert!(

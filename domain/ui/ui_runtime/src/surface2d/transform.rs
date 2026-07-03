@@ -13,10 +13,7 @@ impl Surface2DTransform {
     }
 
     pub fn is_valid(self) -> bool {
-        self.zoom.is_finite()
-            && self.zoom > 0.0
-            && self.pan_x.is_finite()
-            && self.pan_y.is_finite()
+        self.zoom.is_finite() && self.zoom > 0.0 && self.pan_x.is_finite() && self.pan_y.is_finite()
     }
 
     pub fn world_to_screen(self, point: UiPoint) -> Option<UiPoint> {

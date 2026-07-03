@@ -17,7 +17,12 @@ fn surface2d_runtime_report_contains_complete_proof_rows() {
     assert_eq!(report.gesture_evidence.len(), 1);
     assert!(report.accessibility_input_evidence.len() >= 8);
     assert!(report.budget_evidence.len() >= 9);
-    assert!(report.diagnostic_evidence.iter().any(|row| row == "invalid-transform:true"));
+    assert!(
+        report
+            .diagnostic_evidence
+            .iter()
+            .any(|row| row == "invalid-transform:true")
+    );
     assert_eq!(report.catalog_projection_evidence.len(), 1);
     assert_eq!(report.inspection_projection_evidence.len(), 1);
     assert!(report.boundary_counters.clean());

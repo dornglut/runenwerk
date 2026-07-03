@@ -10,10 +10,10 @@ fn control_package_artifact_exports_registry_snapshot() {
 
     assert!(artifact.validate_contract().is_valid());
     assert_eq!(artifact.manifest.package_ids, ["runenwerk.ui.controls"]);
-    assert_eq!(artifact.manifest.control_kind_ids.len(), 8);
-    assert_eq!(artifact.manifest.kernel_count, 40);
+    assert_eq!(artifact.manifest.control_kind_ids.len(), 9);
+    assert_eq!(artifact.manifest.kernel_count, 45);
     assert_eq!(artifact.tables.packages.len(), 1);
-    assert_eq!(artifact.tables.control_kinds.len(), 8);
+    assert_eq!(artifact.tables.control_kinds.len(), 9);
 }
 
 #[test]

@@ -116,8 +116,8 @@ fn control_registry_snapshot_is_deterministic() {
 
     assert_eq!(first.package_ids(), second.package_ids());
     assert_eq!(first.kernel_ids(), second.kernel_ids());
-    assert_eq!(first.control_kinds.len(), 8);
-    assert_eq!(first.kernels.len(), 40);
+    assert_eq!(first.control_kinds.len(), 9);
+    assert_eq!(first.kernels.len(), 45);
 }
 
 #[test]

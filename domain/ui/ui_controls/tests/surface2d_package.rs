@@ -1,6 +1,8 @@
 use ui_controls::{
     BaseControlsPlugin, ControlCatalogIndex, ControlInspectionSection, ControlKindId,
-    ControlSurface2DDescriptor, SURFACE2D_CONTROL_KIND_ID, runenwerk_control_package,
+    ControlPackageDescriptor, ControlPackageValidationReason, ControlSurface2DBudgetEvidenceKind,
+    ControlSurface2DDescriptor, ControlSurface2DInputMode, SURFACE2D_CONTROL_KIND_ID,
+    runenwerk_control_package,
 };
 
 #[test]
@@ -31,13 +33,27 @@ fn catalog_projects_surface2d_support_without_product_mutation() {
         .expect("Surface2D catalog entry");
 
     assert!(surface.surface2d_supported);
-    assert!(surface.surface2d_input_modes.contains(&"keyboard-pan".to_owned()));
-    assert!(surface.surface2d_input_modes.contains(&"pointer-capture".to_owned()));
+    assert!(
+        surface
+            .surface2d_input_modes
+            .contains(&"keyboard-pan".to_owned())
+    );
+    assert!(
+        surface
+            .surface2d_input_modes
+            .contains(&"pointer-capture".to_owned())
+    );
     assert!(surface.surface2d_layers.contains(&"grid".to_owned()));
-    assert!(surface.surface2d_layers.contains(&"diagnostic-overlay".to_owned()));
-    assert!(surface
-        .surface2d_budget_evidence
-        .contains(&"primitive-count".to_owned()));
+    assert!(
+        surface
+            .surface2d_layers
+            .contains(&"diagnostic-overlay".to_owned())
+    );
+    assert!(
+        surface
+            .surface2d_budget_evidence
+            .contains(&"primitive-count".to_owned())
+    );
     assert!(surface.surface2d_accessibility_complete);
     assert!(surface.surface2d_interaction_complete);
     assert!(!surface.surface2d_graph_or_timeline_semantics);
@@ -64,7 +80,7 @@ fn inspection_projects_surface2d_as_separate_section() {
             ControlInspectionSection::Surface2D,
             "surface2d.renderer_backend_required"
         ),
-        None
+        Some("false")
     );
     assert_eq!(
         surface.fact(ControlInspectionSection::TextDisplay, "surface2d.supported"),
@@ -74,8 +90,8 @@ fn inspection_projects_surface2d_as_separate_section() {
 
 #[test]
 fn surface2d_descriptor_summary_stays_renderer_and_product_neutral() {
-    let summary = ControlSurface2DDescriptor::new(ControlKindId::new(SURFACE2D_CONTROL_KIND_ID))
-        .summary();
+    let summary =
+        ControlSurface2DDescriptor::new(ControlKindId::new(SURFACE2D_CONTROL_KIND_ID)).summary();
 
     assert!(summary.surface2d_supported);
     assert!(summary.accessibility_complete);
@@ -84,4 +100,81 @@ fn surface2d_descriptor_summary_stays_renderer_and_product_neutral() {
     assert!(!summary.executes_host_commands);
     assert!(!summary.mutates_product_state);
     assert!(!summary.graph_or_timeline_semantics);
+}
+
+#[test]
+fn surface2d_validation_rejects_unresolved_control_kind() {
+    let mut package = runenwerk_control_package();
+    package
+        .surface2d_descriptors
+        .push(ControlSurface2DDescriptor::new(ControlKindId::new(
+            "runenwerk.ui.controls.missing-surface2d",
+        )));
+
+    assert_surface2d_reason(
+        package,
+        ControlPackageValidationReason::UnresolvedSurface2DDescriptor,
+    );
+}
+
+#[test]
+fn surface2d_validation_rejects_renderer_backend_requirement() {
+    let mut package = runenwerk_control_package();
+    package.surface2d_descriptors[0].renderer_backend_required = true;
+
+    assert_surface2d_reason(
+        package,
+        ControlPackageValidationReason::InvalidSurface2DDescriptor,
+    );
+}
+
+#[test]
+fn surface2d_validation_rejects_product_mutation() {
+    let mut package = runenwerk_control_package();
+    package.surface2d_descriptors[0].mutates_product_state = true;
+
+    assert_surface2d_reason(
+        package,
+        ControlPackageValidationReason::InvalidSurface2DDescriptor,
+    );
+}
+
+#[test]
+fn surface2d_validation_rejects_missing_required_input_mode() {
+    let mut package = runenwerk_control_package();
+    package.surface2d_descriptors[0]
+        .input_modes
+        .retain(|mode| *mode != ControlSurface2DInputMode::PointerCapture);
+
+    assert_surface2d_reason(
+        package,
+        ControlPackageValidationReason::UnsupportedSurface2DDescriptor,
+    );
+}
+
+#[test]
+fn surface2d_validation_rejects_missing_budget_evidence() {
+    let mut package = runenwerk_control_package();
+    package.surface2d_descriptors[0]
+        .budget_evidence
+        .retain(|kind| *kind != ControlSurface2DBudgetEvidenceKind::PrimitiveCount);
+
+    assert_surface2d_reason(
+        package,
+        ControlPackageValidationReason::UnsupportedSurface2DDescriptor,
+    );
+}
+
+fn assert_surface2d_reason(
+    package: ControlPackageDescriptor,
+    reason: ControlPackageValidationReason,
+) {
+    let report = package.validate_contract();
+    assert!(!report.is_valid(), "package unexpectedly valid");
+    assert!(
+        report.has_reason(reason),
+        "expected reason {:?}, got {:?}",
+        reason,
+        report.diagnostics
+    );
 }

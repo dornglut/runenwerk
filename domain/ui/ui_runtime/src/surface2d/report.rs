@@ -1,5 +1,3 @@
-use ui_render_data::UiFrame;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Surface2DBoundaryCounters {
     pub side_effect_count: u32,
@@ -32,33 +30,4 @@ pub struct Surface2DProofReport {
     pub inspection_projection_evidence: Vec<String>,
     pub static_mount_expectations: Vec<String>,
     pub boundary_counters: Surface2DBoundaryCounters,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Surface2DProofRenderFrame {
-    pub proof_id: String,
-    pub frame: UiFrame,
-    pub summary: Surface2DProofRenderSummary,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Surface2DProofRenderSummary {
-    pub descriptor_rows: usize,
-    pub transform_rows: usize,
-    pub navigation_rows: usize,
-    pub hover_rows: usize,
-    pub selection_rows: usize,
-    pub pointer_capture_rows: usize,
-    pub gesture_rows: usize,
-    pub accessibility_input_rows: usize,
-    pub budget_rows: usize,
-    pub diagnostic_rows: usize,
-    pub catalog_rows: usize,
-    pub inspection_rows: usize,
-    pub primitive_count: usize,
-    pub has_background: bool,
-    pub has_grid: bool,
-    pub has_selection_outline: bool,
-    pub has_diagnostic_overlay: bool,
-    pub boundary_clean: bool,
 }

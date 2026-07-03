@@ -97,6 +97,24 @@ pub(crate) fn lower_state(def: &ControlDef, kind_id: ControlKindId) -> ControlSt
                 ("table-view.selection", ControlStateBindingKind::Selection),
             ],
         ),
+        ControlPreset::Surface2D => add_bindings(
+            descriptor
+                .with_bucket(
+                    ControlStateBucketRequirement::new(ControlStateBucket::Hover).optional(),
+                )
+                .with_bucket(
+                    ControlStateBucketRequirement::new(ControlStateBucket::Drag).optional(),
+                ),
+            &[
+                ("surface2d.navigation", ControlStateBindingKind::Read),
+                (
+                    "surface2d.hover-coordinate",
+                    ControlStateBindingKind::Option,
+                ),
+                ("surface2d.selection-box", ControlStateBindingKind::Option),
+                ("surface2d.pointer-capture", ControlStateBindingKind::Option),
+            ],
+        ),
     }
 }
 

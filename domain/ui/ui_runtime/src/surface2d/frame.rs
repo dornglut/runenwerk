@@ -4,10 +4,36 @@ use ui_render_data::{
     UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
 };
 
-use super::{
-    base_controls_surface2d_report, Surface2DProofRenderFrame, Surface2DProofRenderSummary,
-    Surface2DProofReport,
-};
+use super::{Surface2DProofReport, base_controls_surface2d_report};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Surface2DProofRenderFrame {
+    pub proof_id: String,
+    pub frame: UiFrame,
+    pub summary: Surface2DProofRenderSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Surface2DProofRenderSummary {
+    pub descriptor_rows: usize,
+    pub transform_rows: usize,
+    pub navigation_rows: usize,
+    pub hover_rows: usize,
+    pub selection_rows: usize,
+    pub pointer_capture_rows: usize,
+    pub gesture_rows: usize,
+    pub accessibility_input_rows: usize,
+    pub budget_rows: usize,
+    pub diagnostic_rows: usize,
+    pub catalog_rows: usize,
+    pub inspection_rows: usize,
+    pub primitive_count: usize,
+    pub has_background: bool,
+    pub has_grid: bool,
+    pub has_selection_outline: bool,
+    pub has_diagnostic_overlay: bool,
+    pub boundary_clean: bool,
+}
 
 pub fn base_controls_surface2d_proof_frame() -> Surface2DProofRenderFrame {
     surface2d_report_to_frame(base_controls_surface2d_report())
@@ -38,7 +64,10 @@ pub fn surface2d_report_to_frame(report: Surface2DProofReport) -> Surface2DProof
     }
 }
 
-fn render_summary(report: &Surface2DProofReport, primitive_count: usize) -> Surface2DProofRenderSummary {
+fn render_summary(
+    report: &Surface2DProofReport,
+    primitive_count: usize,
+) -> Surface2DProofRenderSummary {
     Surface2DProofRenderSummary {
         descriptor_rows: report.descriptor_evidence.len(),
         transform_rows: report.transform_evidence.len(),
@@ -85,7 +114,10 @@ fn grid(rect: UiRect, order: &mut u32) -> Vec<UiPrimitive> {
     ] {
         primitives.push(
             StrokePrimitive::new(
-                [UiPoint::new(x, rect.y), UiPoint::new(x, rect.y + rect.height)],
+                [
+                    UiPoint::new(x, rect.y),
+                    UiPoint::new(x, rect.y + rect.height),
+                ],
                 1.0,
                 UiPaint::rgba(0.18, 0.2, 0.22, 1.0),
                 UiDrawKey::new(1601, None),
@@ -104,7 +136,10 @@ fn grid(rect: UiRect, order: &mut u32) -> Vec<UiPrimitive> {
     ] {
         primitives.push(
             StrokePrimitive::new(
-                [UiPoint::new(rect.x, y), UiPoint::new(rect.x + rect.width, y)],
+                [
+                    UiPoint::new(rect.x, y),
+                    UiPoint::new(rect.x + rect.width, y),
+                ],
                 1.0,
                 UiPaint::rgba(0.18, 0.2, 0.22, 1.0),
                 UiDrawKey::new(1602, None),

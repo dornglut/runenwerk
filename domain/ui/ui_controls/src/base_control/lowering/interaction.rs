@@ -51,6 +51,7 @@ pub(crate) fn lower_interaction(
                 .requiring_focus()
                 .with_outcome(ControlInteractionOutcome::CellOrRowIntent),
         ),
+        ControlPreset::Surface2D => surface2d_interaction(kind_id),
     }
 }
 
@@ -112,4 +113,28 @@ fn focusable(kind_id: ControlKindId) -> ControlInteractionDescriptor {
     ControlInteractionDescriptor::new(kind_id).with_requirement(ControlInteractionRequirement::new(
         ControlInteractionTrigger::Focus,
     ))
+}
+
+fn surface2d_interaction(kind_id: ControlKindId) -> ControlInteractionDescriptor {
+    focusable(kind_id)
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerHover,
+        ))
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerPress,
+        ))
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerRelease,
+        ))
+        .with_requirement(ControlInteractionRequirement::new(
+            ControlInteractionTrigger::PointerCancel,
+        ))
+        .with_requirement(
+            ControlInteractionRequirement::new(ControlInteractionTrigger::KeyboardNavigate)
+                .requiring_focus(),
+        )
+        .with_requirement(
+            ControlInteractionRequirement::new(ControlInteractionTrigger::SemanticAction)
+                .with_outcome(ControlInteractionOutcome::InspectionRequested),
+        )
 }
