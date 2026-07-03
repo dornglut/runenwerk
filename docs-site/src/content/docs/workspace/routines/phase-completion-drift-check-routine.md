@@ -4,9 +4,10 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-07-03
 related_docs:
   - ../workflow-lifecycle.md
+  - ../complete-design-gate.md
   - ../planning/README.md
   - ../planning/active-work.md
   - ../planning/roadmap.md
@@ -26,7 +27,7 @@ Use it whenever code, docs, or a user validation report indicates a phase is don
 
 ## Authority files to read
 
-Read the accepted scope, changed files, tests, docs, planning records, reports, closeout evidence, `workflow-lifecycle.md`, and `programming-principles.md`.
+Read the accepted scope, complete design gate evidence where applicable, changed files, tests, docs, planning records, reports, closeout evidence, `workflow-lifecycle.md`, and `programming-principles.md`.
 
 For production-track phases, read:
 
@@ -36,6 +37,7 @@ workspace/planning/roadmap.md
 workspace/planning/production-tracks.md
 workspace/planning/completed-work.md
 workspace/planning/decision-register.md
+workspace/complete-design-gate.md
 reports/closeouts/README.md
 ```
 
@@ -49,7 +51,7 @@ Also inspect the owning design or ADR when completion changes a design from plan
 
 Decide whether the phase is complete, incomplete, drifted, still risky, deferred, or superseded.
 
-Decide whether the next phase may become active planning, must remain future work, or requires a separate design intake first.
+Decide whether the next phase may become active planning, must remain future work, or requires a complete design gate/design intake first.
 
 ## State transitions produced
 
@@ -66,7 +68,7 @@ Keep `completed-work.md` as a short index. Put detailed evidence in `reports/clo
 When a phase is completed, update the completion truth set:
 
 ```text
-delivered scope
+delivered contract
 validation status
 evidence
 known gaps
@@ -79,21 +81,22 @@ completed-work entry
 decision-register entry for lifecycle changes
 closeout report when evidence is too large for completed-work.md
 owning design status update when the design changes from planning/design to completed reference
+complete design gate status for the next phase when applicable
 ```
 
 The next phase may be opened as active planning in the same patch only after the completed phase is recorded truthfully and the next phase is explicitly not implementation-authorized.
 
 ## Manual validation checklist
 
-Check promised work vs implemented work, code/docs drift, dependency drift, validation status, known gaps, closeout evidence, lifecycle state, active-work state, roadmap state, production-track state, completed-work entry, decision-register transition, and next safe action.
+Check promised work vs implemented work, code/docs drift, dependency drift, validation status, known gaps, closeout evidence, lifecycle state, active-work state, roadmap state, production-track state, completed-work entry, decision-register transition, complete design gate status for the next phase where applicable, and next safe action.
 
 ## Stop conditions
 
-Stop and redesign if completion is claimed without evidence, validation status is unknown and not reported, known gaps are hidden, active planning for the next phase starts before closeout truth is clear, active implementation for the next phase is opened by this routine, or closeout evidence would bloat planning indexes.
+Stop and redesign if completion is claimed without evidence, validation status is unknown and not reported, known gaps are hidden, active planning for the next phase starts before closeout truth is clear, active implementation for the next phase is opened by this routine, required complete design gate evidence is missing, or closeout evidence would bloat planning indexes.
 
 ## Evidence to report
 
-Report completed scope, files changed, evidence inspected, validation status, drift found, gaps, lifecycle state transition, planning files updated, closeout report status, and next action.
+Report completed scope, files changed, evidence inspected, validation status, drift found, gaps, lifecycle state transition, planning files updated, complete design gate status where applicable, closeout report status, and next action.
 
 ## Optional local helpers
 
