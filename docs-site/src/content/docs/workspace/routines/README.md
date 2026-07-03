@@ -11,6 +11,7 @@ related_docs:
   - ../operating-model.md
   - ../authority-model.md
   - ../workflow-lifecycle.md
+  - ../complete-investigation-gate.md
   - ../complete-design-gate.md
   - ../task-cards/README.md
 ---
@@ -20,6 +21,8 @@ related_docs:
 Routines are the active process layer for Runenwerk work.
 
 They must be usable from GitHub connector, ChatGPT context tooling, Codex patching, manual repo browsing, or a local checkout. Commands belong only in optional local helper sections.
+
+Use [`../complete-investigation-gate.md`](../complete-investigation-gate.md) before design, planning, or implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
 
 Use [`../complete-design-gate.md`](../complete-design-gate.md) before implementation is authorized for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
 
@@ -59,7 +62,8 @@ Existing routines may be normalized as they are touched.
 - Routines must identify authority files.
 - Routines must include manual validation.
 - Routines must name lifecycle state when work changes planning or authority.
-- Routines must check complete design gate evidence when the work requires it.
+- Routines must check complete investigation gate evidence when required.
+- Routines must check complete design gate evidence when required.
 - Routines must not require command execution.
 - Routines must preserve unrelated work.
 - Routines must report what changed, what was skipped, what was blocked, and what remains risky.
