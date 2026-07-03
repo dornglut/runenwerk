@@ -1054,8 +1054,28 @@ mod tests {
                 include_str!("../../ui_tree/src/tree/node/surface.rs"),
                 include_str!("../../ui_tree/src/tree/node/graph_canvas.rs")
             ),
-            include_str!("../../ui_runtime/src/input/pointer.rs"),
-            include_str!("../../ui_runtime/src/runtime/ui_runtime.rs"),
+            concat!(
+                include_str!("../../ui_runtime/src/input/pointer/mod.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/dispatch.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/hover.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/press.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/scroll.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/scrollbar.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/middle_pan.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/graph_canvas.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/popup.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/numeric.rs"),
+                include_str!("../../ui_runtime/src/input/pointer/helpers.rs")
+            ),
+            concat!(
+                include_str!("../../ui_runtime/src/runtime/ui_runtime/mod.rs"),
+                include_str!("../../ui_runtime/src/runtime/ui_runtime/entry.rs"),
+                include_str!("../../ui_runtime/src/runtime/ui_runtime/focus.rs"),
+                include_str!("../../ui_runtime/src/runtime/ui_runtime/graph_canvas.rs"),
+                include_str!("../../ui_runtime/src/runtime/ui_runtime/helpers.rs"),
+                include_str!("../../ui_runtime/src/runtime/ui_runtime/popup.rs"),
+                include_str!("../../ui_runtime/src/runtime/ui_runtime/scroll_metrics.rs")
+            ),
             include_str!("../../ui_runtime/src/output/build_ui_frame.rs"),
             include_str!("../../ui_render_data/src/primitives/graph_canvas.rs"),
         ];
