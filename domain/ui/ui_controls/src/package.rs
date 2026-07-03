@@ -13,6 +13,7 @@ mod overlay_validation;
 pub mod render;
 #[path = "story_proof/mod.rs"]
 pub mod story_proof;
+mod surface2d_validation;
 pub mod validation;
 
 pub use crate::catalog::*;
