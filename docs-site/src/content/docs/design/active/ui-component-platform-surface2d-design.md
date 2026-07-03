@@ -14,6 +14,7 @@ related_designs:
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
+  - ../../reports/investigations/phase-16-surface2d-source-investigation.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/production-tracks.md
@@ -40,7 +41,7 @@ Typed App Composition documents remain proposed architecture references only. Th
 
 ## Complete investigation gate status
 
-Status: active, partially satisfied by connector evidence and planning authority. Code-level current reality still needs focused source inspection before implementation authorization.
+Status: source investigation recorded. The implementation contract is ready for planning promotion after this intake branch is reviewed and docs validation passes.
 
 Evidence classes used:
 
@@ -48,6 +49,7 @@ Evidence classes used:
 E2 connector file inspection
 E8 accepted workspace/planning/design authority
 E2 PR metadata inspection for prior Phase 15/16 planning and UI split PRs
+E2 source-level inspection report for exact Phase 16 owner files
 ```
 
 Current evidence inspected:
@@ -61,19 +63,30 @@ docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
 docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md
+docs-site/src/content/docs/reports/investigations/phase-16-surface2d-source-investigation.md
 PR #56 Phase 15 closeout / Phase 16 planning hardening
 PR #57 UI domain split before Phase 16
 ```
 
-Current investigation blockers before implementation:
+Resolved source-investigation outputs:
 
 ```text
-inspect current source paths in ui_controls, ui_runtime, ui_static_mount, ui_render_data, ui_render_primitives, ui_input, and ui_surface
-record exact implementation files
-confirm whether new renderer-neutral primitive data is needed
-confirm current package/catalog/inspection extension points after Phase 15 and PR #57 splits
-confirm current ui_surface symbols and whether Surface2D needs no direct code dependency on them
-confirm focused test names and fixture placement
+exact current source paths inspected for ui_controls, ui_runtime, ui_static_mount, ui_render_data, ui_render_primitives, ui_input, and ui_surface
+exact implementation files recorded in the source investigation report
+new renderer-neutral primitive data is not required for the accepted contract unless implementation evidence proves otherwise
+package/catalog/inspection extension points are confirmed after Phase 15 and PR #57 splits
+ui_surface remains semantic surface vocabulary and Surface2D has no direct Phase 16 dependency on it
+focused test names and fixture/proof placement are recorded
+```
+
+Remaining gates before implementation:
+
+```text
+review this intake branch
+run python tools/docs/validate_docs.py
+run git diff --check
+merge the planning/intake branch
+promote planning to active implementation with the exact file contract from the source investigation report
 ```
 
 ## Complete investigation dossier
@@ -98,19 +111,19 @@ Current branch purpose: investigation/design intake
 | Phase 16 is current active planning | `workspace/planning/active-work.md` | E8 | Active focus is `PT-UI-COMPONENT-PLATFORM-016` Surface2D. | None. |
 | Phase 16 is not implementation-authorized | `active-work.md`, this design | E8 | Planning requires exact owners, scope, validation, evidence, and stop conditions before implementation. | None. |
 | `Surface2D` must not own product/editor/game truth | existing design, UI architecture | E8 | Host/product/editor/game mutation remains outside the reusable UI substrate. | None. |
-| `ui_surface` is existing semantic/compatibility vocabulary | `DOMAIN_MAP.md`, UI architecture | E8 | `ui_surface` owns UI surface semantics and remains live where supersession is incomplete. | Surface2D relationship must be explicit. |
-| No Surface2D implementation exists from Phase 15/PR #57 | PR #49/#57 metadata | E2 | Prior PRs explicitly excluded Phase 16 implementation. | Source inspection still required. |
+| `ui_surface` is existing semantic vocabulary | `DOMAIN_MAP.md`, UI architecture, source investigation | E2/E8 | `ui_surface` owns semantic surface modules and is not a Phase 16 implementation owner. | None. |
+| No Surface2D implementation exists from Phase 15/PR #57 | PR #49/#57 metadata and source investigation | E2 | Prior PRs excluded Phase 16 implementation and no Phase 16 product-code work is present in this branch. | None. |
 | Typed App Composition is only reference direction | existing design/planning | E8 | It does not authorize plugin framework work in Phase 16. | None. |
 
 ### Current-state matrix
 
 | Area | Current repository reality | Current docs/planning reality | Evidence | Gap before implementation |
 |---|---|---|---|---|
-| Active planning | Phase 16 active planning is recorded. | Active work, roadmap, production track all identify Surface2D. | E8 | Update active work with new gate fields after intake. |
-| Existing code | Not fully source-inspected in this intake pass. | Planning says no implementation is authorized. | E2/E8 | Inspect exact crate files before implementation. |
-| `ui_surface` relationship | UI architecture says `ui_surface` remains temporary compatibility input and no new independent mutation path may be added. | Existing design requires relationship decision before implementation. | E8 | Adopt Phase 16 relationship decision below. |
+| Active planning | Phase 16 active planning is recorded. | Active work, roadmap, production track all identify Surface2D. | E8 | Planning promotion still required. |
+| Existing code | Exact owner files and conditional non-owner files are recorded in the source investigation report. | Planning says no implementation is authorized until promotion. | E2/E8 | Run docs validation and promote with exact implementation scope. |
+| `ui_surface` relationship | `ui_surface` owns semantic surface modules and remains separate. | Surface2D sits below `ui_surface` as coordinate/navigation vocabulary. | E2/E8 | None for Phase 16. |
 | Prior validation | Phase 15 and PR #57 validation are recorded in planning/PR metadata. | Phase 16 planning validation remains docs/diff. | E2/E8 | Run current branch docs validation locally. |
-| Future consumers | Future canvases and graph/timeline surfaces are named consumers. | Existing design lists future consumers. | E8 | Convert future consumers into downstream owner matrix. |
+| Future consumers | Downstream canvases and graph/timeline surfaces are named consumers. | This design records downstream owner paths. | E8 | Implementation must not import their semantics into Surface2D. |
 
 ### Owner/dependency matrix
 
@@ -120,10 +133,10 @@ Current branch purpose: investigation/design intake
 | Catalog/inspection projection | `ui_controls` | package descriptor and inspection projection paths | Gallery semantics leak into Surface2D | Inspection reports generic surface facts only. |
 | Runtime navigation/fact replay/report | `ui_runtime` | retained runtime, input facts, proof reports | Runtime mutates product/editor truth | Runtime emits facts/intents only. |
 | Static mount proof | `ui_static_mount` | package-backed declaration and renderer-neutral proof frame | Static proof bypasses catalog/inspection | Static proof consumes the same package contract. |
-| Renderer-neutral frame data | `ui_render_data` | existing UiFrame/primitive contracts | Backend resources leak into domain/ui | Only data facts; no backend handles. |
-| Renderer primitive contracts | `ui_render_primitives` only if needed | primitive data contracts | Primitive expansion becomes renderer feature work | Add only renderer-neutral primitives required by proof. |
-| Input vocabulary | `ui_input` only if needed | pointer/wheel/keyboard facts | Surface2D owns device policy | Reuse existing normalized input where possible. |
-| `ui_surface` semantics | Existing `ui_surface` owner | domain UI surface semantics | Surface2D renames/replaces ui_surface accidentally | Relationship decision below forbids Phase 16 replacement. |
+| Renderer-neutral frame data | conditional `ui_render_data` | existing UiFrame/primitive contracts | Backend resources leak into domain/ui | Existing primitives are sufficient unless implementation evidence proves otherwise. |
+| Renderer primitive contracts | conditional `ui_render_primitives` | primitive data contracts | Primitive expansion becomes renderer feature work | Do not touch for the accepted contract. |
+| Input vocabulary | conditional `ui_input` | pointer/wheel/keyboard facts | Surface2D owns device policy | Reuse existing normalized input where possible. |
+| `ui_surface` semantics | Existing `ui_surface` owner | domain UI surface semantics | Surface2D renames/replaces ui_surface accidentally | Phase 16 has no direct dependency on `ui_surface`. |
 | Product/editor/game mutation | host/editor/game owners | host intent/command paths | Surface2D becomes editor command system | Explicit non-owned responsibility. |
 
 ### Vocabulary decision
@@ -132,7 +145,7 @@ Phase 16 adopts this relationship to existing `ui_surface` vocabulary:
 
 ```text
 Surface2D is lower-level renderer-neutral coordinate/navigation vocabulary.
-It may later be consumed or mapped by ui_surface, but Phase 16 does not rename, replace, remove, or absorb ui_surface contracts.
+It may be consumed or mapped by ui_surface through a separate accepted contract, but Phase 16 does not rename, replace, remove, or absorb ui_surface contracts.
 ```
 
 This selects the safe form of option A from the prior planning gate: `Surface2D` is below `ui_surface`, not a competing semantic surface authority.
@@ -155,8 +168,8 @@ This selects the safe form of option A from the prior planning gate: `Surface2D`
 | Diagnostic overlay fact | Deliver | report/frame evidence | `ui_runtime` |
 | Large-content bounds fact | Deliver | deterministic large-bounds fixture | `ui_runtime` |
 | Budget evidence fact | Deliver | operation/fact-count or p95 report | `ui_runtime` |
-| Graph nodes/links | Named downstream | Graph/NodeCanvas design | future Phase 18/19 owners |
-| Timeline tracks | Named downstream | TrackSurface/Timeline design | future Phase 21 owner |
+| Graph nodes/links | Named downstream contract | Graph/NodeCanvas design | Phase 18/19 owners |
+| Timeline tracks | Named downstream contract | TrackSurface/Timeline design | Phase 21 owner |
 | Product selection mutation | Explicit non-owned responsibility | boundary tests/proof no mutation | host/editor/game owners |
 | Renderer backend resources | Explicit non-owned responsibility | absence of backend handles in domain/ui | engine renderer owner |
 
@@ -164,26 +177,26 @@ This selects the safe form of option A from the prior planning gate: `Surface2D`
 
 | Option | Benefits | Costs | Boundary impact | Long-term fit | Decision |
 |---|---|---|---|---|---|
-| Surface2D below `ui_surface` | Preserves existing semantic surface vocabulary and gives reusable coordinate substrate. | Requires later mapping if `ui_surface` consumes it. | Low boundary risk. | Strong. | Accepted for Phase 16. |
+| Surface2D below `ui_surface` | Preserves existing semantic surface vocabulary and gives reusable coordinate substrate. | Requires a separate mapping contract if `ui_surface` consumes it. | Low boundary risk. | Strong. | Accepted for Phase 16. |
 | Surface2D replaces part of `ui_surface` now | Removes compatibility sooner. | Requires migration proof and risks semantic churn. | High boundary risk. | Not appropriate for Phase 16 intake. | Rejected for Phase 16. |
-| Surface2D stays UI Component Platform-local forever | Avoids current semantic conflict. | Blocks later reuse by surface semantics. | Medium future duplication risk. | Weak as permanent policy. | Rejected as final direction. |
-| Build specialized GraphCanvas first | Directly serves future graph needs. | Skips reusable coordinate/navigation substrate. | High product-semantic leak risk. | Weak. | Rejected. |
+| Surface2D stays UI Component Platform-local permanently | Avoids current semantic conflict. | Blocks reuse by surface semantics. | Medium downstream duplication risk. | Weak. | Rejected as final direction. |
+| Build specialized GraphCanvas first | Directly serves graph needs. | Skips reusable coordinate/navigation substrate. | High product-semantic leak risk. | Weak. | Rejected. |
 
 ### Confidence matrix
 
-| Finding | Confidence | Reason | Missing evidence to improve confidence |
+| Finding | Confidence | Reason | Remaining evidence before implementation |
 |---|---|---|---|
-| Phase 16 should remain active planning, not implementation | High | Planning/design authority agrees. | None. |
-| Surface2D should sit below `ui_surface` for Phase 16 | High | UI architecture preserves `ui_surface` semantics while design needs coordinate substrate. | Source inspection of current `ui_surface` symbols. |
-| Owner split can use existing crates | Medium | Planning points to existing owner crates. | Source inspection of extension points after PR #57 splits. |
-| `ui_render_data` changes may not be required | Medium | Existing UiFrame/primitive data may carry proof facts. | Inspect existing proof-frame and primitive contracts. |
-| No Surface2D implementation exists | Medium | PR metadata excludes it. | Code search/source inspection. |
+| Phase 16 should remain active planning, not implementation | High | Planning/design authority agrees. | Docs validation and planning promotion. |
+| Surface2D should sit below `ui_surface` for Phase 16 | High | Source investigation confirms current `ui_surface` semantic modules and no Phase 16 dependency. | None for Phase 16. |
+| Owner split can use existing crates | High | Source investigation confirms exact extension points in `ui_controls`, `ui_runtime`, and `ui_static_mount`. | Implementation must stay within the accepted file contract. |
+| `ui_render_data` changes are not required by the accepted contract | High | Existing primitives can carry background, outline, grid, axes, clipping, and proof-frame evidence. | Reassess only if implementation proves an evidence gap. |
+| No Surface2D implementation exists in this branch | High | Branch compare shows docs-only changes and the investigation branch carries no product-code files. | None. |
 
 ## Complete design gate status
 
-Status: active design intake, not active implementation.
+Status: source investigation recorded, design intake ready for review.
 
-Phase 16 design acceptance requires resolving the remaining source-inspection blockers and then promoting planning with exact files and validation commands.
+Phase 16 implementation requires planning promotion with exact files and validation commands from the source investigation report.
 
 ## Decision
 
@@ -212,7 +225,7 @@ It does not own product truth, graph truth, timeline truth, editor commands, ren
 
 ## Complete owner split
 
-Phase 16 implementation must use this owner split unless source inspection proves a different split is required and updates this design before implementation.
+Phase 16 implementation must use the exact implementation file contract recorded in `docs-site/src/content/docs/reports/investigations/phase-16-surface2d-source-investigation.md` unless implementation evidence proves a required capability cannot be delivered within it and the design is updated before proceeding.
 
 ```text
 ui_controls:
@@ -229,15 +242,14 @@ ui_static_mount:
   without bypassing package/catalog/inspection contracts.
 
 ui_render_data:
-  renderer-neutral frame data only when existing proof-frame data cannot carry
+  no implementation ownership for the accepted contract unless existing proof-frame data cannot carry
   the delivered Surface2D evidence.
 
 ui_render_primitives:
-  renderer-neutral primitive contracts only when existing primitives cannot express
-  delivered grid/background/diagnostic facts.
+  no implementation ownership for the accepted contract.
 
 ui_input:
-  no new ownership unless existing normalized input lacks a required generic fact.
+  no implementation ownership for the accepted contract unless existing normalized input lacks a required generic fact.
 
 ui_surface:
   remains existing semantic surface vocabulary. Phase 16 does not rename, replace,
@@ -310,13 +322,13 @@ The Phase 16 proof must be visible through package/catalog/inspection projection
 | Capability | Status in Phase 16 | Owner | Evidence required | Downstream owner / activation condition |
 |---|---|---|---|---|
 | Coordinate and navigation substrate | Delivered | `ui_controls`, `ui_runtime`, `ui_static_mount` | descriptors, runtime report, static mount proof | — |
-| Grid/background/diagnostic layers | Delivered as renderer-neutral facts | `ui_runtime`, `ui_render_data` if needed | proof-frame/report evidence | — |
+| Grid/background/diagnostic layers | Delivered as renderer-neutral facts | `ui_runtime`; existing `ui_render_data` primitives | proof-frame/report evidence | — |
 | Large-content and budget evidence | Delivered as deterministic fact/report | `ui_runtime` | deterministic fixture and report | — |
 | Accessibility/input acceptance | Delivered as descriptor/report facts | `ui_controls`, `ui_runtime` | keyboard/pointer/focus inspection facts | — |
-| Specialized spatial item layout | Named downstream contract | future `SpatialCanvas` owner | handoff from Surface2D coordinates | Phase 17 |
-| Nodes/links/ports | Named downstream contract | future `NodeCanvas` / `PortGraphCanvas` owner | graph-specific design | Phase 18/19 |
-| Timeline tracks | Named downstream contract | future `TrackSurface` / `Timeline` owner | timeline-specific design | Phase 21 |
-| Curve/material/SDF/gameplay graphs | Named downstream contracts | future graph owners | domain-specific graph designs | Future phases |
+| Specialized spatial item layout | Named downstream contract | `SpatialCanvas` owner | handoff from Surface2D coordinates | Phase 17 |
+| Nodes/links/ports | Named downstream contract | `NodeCanvas` / `PortGraphCanvas` owner | graph-specific design | Phase 18/19 |
+| Timeline tracks | Named downstream contract | `TrackSurface` / `Timeline` owner | timeline-specific design | Phase 21 |
+| Curve/material/SDF/gameplay graphs | Named downstream contracts | graph owners | domain-specific graph designs | named downstream graph phase |
 | Product/editor/game mutation | Explicit non-owned responsibility | host/editor/game owners | boundary proof/no mutation | Outside Phase 16 |
 | Renderer backend resources | Explicit non-owned responsibility | engine renderer owner | no backend handles in domain/ui | Outside Phase 16 |
 | App recipe/plugin framework | Explicit non-owned responsibility | typed app composition track | accepted separate design | Outside Phase 16 |
@@ -405,13 +417,21 @@ Implementation validation must be set before moving to `active-implementation`. 
 
 ```text
 cargo test -p ui_controls surface2d
+cargo test -p ui_controls control_package
 cargo test -p ui_runtime surface2d
 cargo test -p ui_static_mount surface2d
-cargo test -p ui_render_data    # only if renderer-neutral primitive data changes
-cargo test -p ui_render_primitives # only if primitive contracts change
 cargo test --workspace
 python tools/docs/validate_docs.py
 git diff --check
+```
+
+Conditional validation:
+
+```text
+cargo test -p ui_render_data        # only if ui_render_data changes
+cargo test -p ui_render_primitives  # only if ui_render_primitives changes
+cargo test -p ui_input              # only if ui_input changes
+cargo test -p ui_surface            # only if ui_surface changes
 ```
 
 The exact package list must match the accepted owner split and exact source files selected by the implementation planning gate.
@@ -449,21 +469,18 @@ shared plugin framework extraction
 foundation/meta
 host command execution inside domain/ui
 new crate creation without explicit planning decision
+ui_surface source changes
+ui_render_primitives source changes for backend generation
+ui_input source changes without proven missing normalized fact
 ```
 
 ## Next planning action
 
-Before active implementation, complete a source-inspection pass that records:
+Before active implementation, review and merge this intake branch, then promote planning to active implementation with the source investigation report as the exact implementation contract.
+
+Required planning validation:
 
 ```text
-exact ui_controls files
-exact ui_runtime files
-exact ui_static_mount files
-whether ui_render_data changes are needed
-whether ui_render_primitives changes are needed
-whether ui_input changes are needed
-current ui_surface symbols and proof that Phase 16 does not conflict with them
-focused test names
-fixture/proof names
-exact implementation stop conditions
+python tools/docs/validate_docs.py
+git diff --check
 ```
