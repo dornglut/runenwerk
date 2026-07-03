@@ -5,10 +5,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-03
 related_docs:
   - ../authority-model.md
   - ../workflow-lifecycle.md
+  - ../complete-design-gate.md
   - ../routines/roadmap-update-routine.md
 ---
 
@@ -35,6 +36,8 @@ Legacy YAML and generated Markdown may remain as migration context or optional m
 
 Use [`../workflow-lifecycle.md`](../workflow-lifecycle.md) when a planning change changes state.
 
+Use [`../complete-design-gate.md`](../complete-design-gate.md) before planning authorizes implementation for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
+
 Common state transitions:
 
 ```text
@@ -49,12 +52,15 @@ active-planning -> deferred
 accepted-direction -> superseded
 ```
 
-Architecture acceptance does not authorize implementation. Active implementation requires exact owner, scope, validation envelope, evidence expectation, and stop conditions.
+Architecture acceptance does not authorize implementation. Active implementation requires exact owner, complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, stop conditions, and complete design gate evidence where applicable.
 
 ## Update checklist
 
 - Active work has one clear current focus or an explicit no-current-focus state.
 - Roadmap entries name state, owner, authority, evidence, known gaps, and next action.
+- Active implementation entries point to complete design gate evidence where applicable.
+- Active implementation entries name the complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, and stop conditions.
+- Reusable/platform/public API entries include or link feature support, future-use-case pressure, hierarchy/composition where relevant, and ergonomics/usability evidence.
 - Deferred work names the reason and reactivation condition.
 - Completed work links evidence and remains a short index.
 - Production tracks name strategic order, track type, gates, activation condition, and current blocker.
@@ -71,8 +77,18 @@ Title:
 State:
 Owner:
 Authority:
+Complete design gate:
+Implementation contract:
+Allowed files/crates:
+Forbidden files/crates:
+Feature support matrix:
+Future-use-case pressure matrix:
+Hierarchy/composition matrix:
+Ergonomics/usability:
 Evidence:
+Validation:
 Known gaps:
+Stop conditions:
 Next action:
 ```
 
