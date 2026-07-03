@@ -11,6 +11,7 @@ related_docs:
   - ./operating-model.md
   - ./documentation-structure.md
   - ./workflow-lifecycle.md
+  - ./complete-investigation-gate.md
   - ./complete-design-gate.md
   - ../guidelines/programming-principles.md
 ---
@@ -24,18 +25,25 @@ Every repository artifact has one job.
 1. Code, tests, fixtures, captures, and runtime evidence own current behavior.
 2. Accepted ADRs, accepted designs, guidelines, and root architecture docs own durable architecture direction.
 3. Workspace authority docs own repository process.
-4. Complete design gate docs own mandatory design/planning readiness requirements.
-5. Planning Markdown owns active, deferred, completed, and strategic planning state.
-6. Routines own repeatable work procedure.
-7. Task cards own reusable task wording.
-8. Reports and closeouts own historical evidence.
-9. Generated views and local helpers are convenience only unless a machine contract explicitly says otherwise.
+4. Complete investigation gate docs own mandatory investigation evidence requirements.
+5. Complete design gate docs own mandatory design/planning readiness requirements.
+6. Planning Markdown owns active, deferred, completed, and strategic planning state.
+7. Routines own repeatable work procedure.
+8. Task cards own reusable task wording.
+9. Reports and closeouts own historical evidence.
+10. Generated views and local helpers are convenience only unless a machine contract explicitly says otherwise.
 
 ## Lifecycle authority
 
 Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when resolving whether a work item is an idea, investigation, proposed design, accepted direction, production track, active planning, active implementation, review, completed work, deferred work, rejected work, superseded work, or archive material.
 
-Accepted architecture direction does not authorize implementation by itself. Active implementation requires a planning entry with owner, complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, stop conditions, and complete design gate evidence where applicable.
+Accepted architecture direction does not authorize implementation by itself. Active implementation requires a planning entry with owner, complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, stop conditions, and complete investigation/design gate evidence where applicable.
+
+## Complete investigation gate authority
+
+Use [`complete-investigation-gate.md`](complete-investigation-gate.md) when a work item needs evidence about current reality, authority, ownership, vocabulary, capability inventory, alternatives, confidence, or missing evidence before design/planning/implementation decisions.
+
+The gate owns the required investigation dossier shape and investigation matrix templates. It does not own track-specific architecture decisions, current planning state, or historical closeout evidence.
 
 ## Complete design gate authority
 
@@ -70,7 +78,7 @@ In practice:
 - DRY: do not keep the same durable claim authoritative in two places.
 - YAGNI: do not preserve legacy workflow surfaces only because they might be useful someday.
 - SOLID: keep responsibilities and dependencies honest.
-- Separation of Concerns: separate entrypoints, authority docs, lifecycle, complete design gates, routines, planning, reports, and tooling.
+- Separation of Concerns: separate entrypoints, authority docs, lifecycle, complete investigation gates, complete design gates, routines, planning, reports, and tooling.
 - Avoid Premature Optimization: do not add generated views or scripts before there is evidence they solve a real problem.
 - Law of Demeter: route through direct owners and explicit contracts.
 
@@ -102,4 +110,4 @@ Examples:
 - Task card conflicts with a routine: use the routine.
 - Local helper conflicts with a routine: use the routine.
 - Proposed design conflicts with accepted design: use the accepted design until a decision record supersedes it.
-- Implementation authorization lacks complete design gate evidence where required: update design/planning authority before coding.
+- Implementation authorization lacks complete investigation or design gate evidence where required: update investigation, design, or planning authority before coding.
