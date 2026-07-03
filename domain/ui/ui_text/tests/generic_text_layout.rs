@@ -84,8 +84,9 @@ fn visual_runs_are_homogeneous_style_span_and_font_segments() {
         vec![
             TextSpan::new(TextSpanId(11), TextSourceRange::new(0, 3))
                 .with_style(TextSpanStyle::inherit().with_decoration(TextDecoration::underline())),
-            TextSpan::new(TextSpanId(12), TextSourceRange::new(4, 7))
-                .with_style(TextSpanStyle::inherit().with_font_weight(ui_text::TextFontWeight::Bold)),
+            TextSpan::new(TextSpanId(12), TextSourceRange::new(4, 7)).with_style(
+                TextSpanStyle::inherit().with_font_weight(ui_text::TextFontWeight::Bold),
+            ),
         ],
     ));
 
