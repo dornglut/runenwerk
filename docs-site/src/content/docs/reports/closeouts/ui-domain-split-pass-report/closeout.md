@@ -5,7 +5,7 @@ status: completed
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-03
 related:
   - ../../../domain/ui/README.md
   - ../../../domain/ui/architecture.md
@@ -36,6 +36,7 @@ report-row, or snapshot behavior.
 | PR C | `ui/split-definition-formation` | Local validated commit | Split retained UI definition formation. |
 | PR D | `ui/move-ui-test-support` | Local validated commit | Moved noisy tests/support out of public API files. |
 | PR E | `docs/ui-domain-split-pass-report` | This docs-only report | Recorded residual structural debt and non-goals. |
+| Batch 2 | `ui/split-remaining-large-ui-files` | Local validated commits | Split the remaining listed large UI files before stack merge. |
 
 ## Before And After Counts
 
@@ -79,6 +80,75 @@ report-row, or snapshot behavior.
 | `ui_definition/src/lib.rs` | 80 | 51 |
 | `ui_definition/tests/checked_in_fixtures.rs` | n/a | 25 |
 
+## Batch 2 Counts
+
+| Area | Before | After |
+| --- | ---: | ---: |
+| `ui_runtime/src/input/pointer.rs` | 1449 | removed |
+| `input/pointer/mod.rs` | n/a | 15 |
+| `input/pointer/dispatch.rs` | n/a | 490 |
+| `input/pointer/graph_canvas.rs` | n/a | 275 |
+| `input/pointer/scroll.rs` | n/a | 228 |
+| `input/pointer/scrollbar.rs` | n/a | 126 |
+| `input/pointer/popup.rs` | n/a | 114 |
+| `input/pointer/press.rs` | n/a | 106 |
+| `input/pointer/helpers.rs` | n/a | 105 |
+| `input/pointer/middle_pan.rs` | n/a | 68 |
+| `input/pointer/numeric.rs` | n/a | 29 |
+| `input/pointer/hover.rs` | n/a | 14 |
+| `ui_runtime/src/runtime/ui_runtime.rs` | 3423 | removed |
+| `runtime/ui_runtime/mod.rs` | n/a | 14 |
+| `runtime/ui_runtime/entry.rs` | n/a | 373 |
+| `runtime/ui_runtime/focus.rs` | n/a | 107 |
+| `runtime/ui_runtime/scroll_metrics.rs` | n/a | 67 |
+| `runtime/ui_runtime/graph_canvas.rs` | n/a | 37 |
+| `runtime/ui_runtime/popup.rs` | n/a | 28 |
+| `runtime/ui_runtime/helpers.rs` | n/a | 20 |
+| `ui_theme/src/token/mod.rs` | 1357 | 18 |
+| `ui_theme/src/token/resolve.rs` | n/a | 312 |
+| `ui_theme/src/token/declaration.rs` | n/a | 290 |
+| `ui_theme/src/token/diagnostics.rs` | n/a | 111 |
+| `ui_theme/src/token/packet.rs` | n/a | 74 |
+| `ui_theme/src/token/activation.rs` | n/a | 46 |
+| `ui_theme/src/token/graph.rs` | n/a | 14 |
+| `ui_definition/src/persistence_activation/mod.rs` | 1332 | 18 |
+| `persistence_activation/request.rs` | n/a | 307 |
+| `persistence_activation/tests.rs` | n/a | 272 |
+| `persistence_activation/migration.rs` | n/a | 184 |
+| `persistence_activation/document.rs` | n/a | 169 |
+| `persistence_activation/validation.rs` | n/a | 163 |
+| `persistence_activation/diagnostics.rs` | n/a | 155 |
+| `persistence_activation/diff.rs` | n/a | 151 |
+| `ui_runtime/src/output/build_ui_frame.rs` | 1276 | 51 |
+| `output/traversal.rs` | n/a | 292 |
+| `output/build_ui_frame/tests/layering.rs` | n/a | 265 |
+| `output/build_ui_frame/tests/scrollbars.rs` | n/a | 246 |
+| `output/build_ui_frame/tests/visual_states.rs` | n/a | 231 |
+| `output/build_ui_frame/tests/snapshot.rs` | n/a | 177 |
+| `output/interaction_visual.rs` | n/a | 18 |
+| `output/layer.rs` | n/a | 6 |
+| `ui_definition/src/visual_layout/apply.rs` | 1218 | removed |
+| `visual_layout/apply/mod.rs` | n/a | 113 |
+| `visual_layout/apply/tests.rs` | n/a | 342 |
+| `visual_layout/apply/containers.rs` | n/a | 331 |
+| `visual_layout/apply/context.rs` | n/a | 285 |
+| `visual_layout/apply/controls.rs` | n/a | 72 |
+| `visual_layout/apply/dispatch.rs` | n/a | 60 |
+| `visual_layout/apply/diagnostics.rs` | n/a | 58 |
+| `visual_layout/apply/collections.rs` | n/a | 40 |
+| `ui_definition/src/preview_fixture/mod.rs` | 1166 | 32 |
+| `preview_fixture/tests.rs` | n/a | 299 |
+| `preview_fixture/validation/matrices.rs` | n/a | 186 |
+| `preview_fixture/validation/fixtures.rs` | n/a | 152 |
+| `preview_fixture/validation/diagnostics.rs` | n/a | 139 |
+| `preview_fixture/validation/scenarios.rs` | n/a | 125 |
+| `preview_fixture/validation/mod.rs` | n/a | 110 |
+| `preview_fixture/builders.rs` | n/a | 73 |
+| `preview_fixture/catalog.rs` | n/a | 53 |
+| `preview_fixture/routes.rs` | n/a | 46 |
+| `preview_fixture/surfaces.rs` | n/a | 42 |
+| `preview_fixture/controls.rs` | n/a | 30 |
+
 ## Module Trees Created
 
 ```text
@@ -117,6 +187,108 @@ domain/ui/ui_definition/src/form/
   resolve.rs
 ```
 
+Batch 2 added these module trees:
+
+```text
+domain/ui/ui_runtime/src/input/pointer/
+  mod.rs
+  dispatch.rs
+  hover.rs
+  press.rs
+  scroll.rs
+  scrollbar.rs
+  middle_pan.rs
+  graph_canvas.rs
+  popup.rs
+  numeric.rs
+  helpers.rs
+
+domain/ui/ui_runtime/src/runtime/ui_runtime/
+  mod.rs
+  entry.rs
+  focus.rs
+  graph_canvas.rs
+  helpers.rs
+  popup.rs
+  scroll_metrics.rs
+  tests/
+    mod.rs
+    console_scroll_policy.rs
+    controls.rs
+    graph_canvas_keyboard.rs
+    graph_canvas_pointer.rs
+    keyboard_focus.rs
+    middle_pan.rs
+    popup.rs
+    scroll_overflow.rs
+    scroll_wheel.rs
+    scrollbar.rs
+
+domain/ui/ui_theme/src/token/
+  mod.rs
+  declaration.rs
+  graph.rs
+  resolve.rs
+  packet.rs
+  diagnostics.rs
+  activation.rs
+  tests/
+    mod.rs
+    activation.rs
+    alias.rs
+    diagnostics.rs
+    packet.rs
+    precedence.rs
+    selector.rs
+
+domain/ui/ui_definition/src/persistence_activation/
+  mod.rs
+  document.rs
+  migration.rs
+  diff.rs
+  request.rs
+  validation.rs
+  diagnostics.rs
+  tests.rs
+
+domain/ui/ui_runtime/src/output/
+  build_ui_frame.rs
+  traversal.rs
+  layer.rs
+  interaction_visual.rs
+  build_ui_frame/tests/
+    mod.rs
+    layering.rs
+    scrollbars.rs
+    snapshot.rs
+    visual_states.rs
+
+domain/ui/ui_definition/src/visual_layout/apply/
+  mod.rs
+  context.rs
+  dispatch.rs
+  containers.rs
+  controls.rs
+  collections.rs
+  diagnostics.rs
+  tests.rs
+
+domain/ui/ui_definition/src/preview_fixture/
+  mod.rs
+  builders.rs
+  catalog.rs
+  routes.rs
+  controls.rs
+  surfaces.rs
+  tests.rs
+  validation/
+    mod.rs
+    diagnostics.rs
+    fixtures.rs
+    scenarios.rs
+    matrices.rs
+```
+
 ## Preserved Public APIs
 
 The split kept compatibility re-exports in the existing public module
@@ -133,47 +305,61 @@ locations:
 - `ui_definition::WidgetIdScope`
 - `ui_definition::*` re-exports from `lib.rs`
 - `ui_controls::runenwerk_control_package`
+- `ui_runtime::input::pointer::dispatch_pointer_event`
+- `ui_runtime::runtime::ui_runtime::UiRuntime`
+- `ui_theme::token::*`
+- `ui_definition::persistence_activation::*`
+- `ui_runtime::output::build_ui_frame::*`
+- `ui_definition::apply_visual_layout_operation`
+- `ui_definition::preview_fixture::*`
 
 ## Final Largest UI Files
 
 | Lines | File |
 | ---: | --- |
-| 3423 | `domain/ui/ui_runtime/src/runtime/ui_runtime.rs` |
-| 1449 | `domain/ui/ui_runtime/src/input/pointer.rs` |
-| 1357 | `domain/ui/ui_theme/src/token/mod.rs` |
-| 1332 | `domain/ui/ui_definition/src/persistence_activation/mod.rs` |
-| 1276 | `domain/ui/ui_runtime/src/output/build_ui_frame.rs` |
-| 1218 | `domain/ui/ui_definition/src/visual_layout/apply.rs` |
-| 1166 | `domain/ui/ui_definition/src/preview_fixture/mod.rs` |
 | 1117 | `domain/ui/ui_definition/src/view_binding/mod.rs` |
 | 1115 | `domain/ui/ui_definition/src/production_readiness/mod.rs` |
+| 1096 | `domain/ui/ui_graph_editor/src/lib.rs` |
 | 1069 | `domain/ui/ui_definition/src/component_recipe/mod.rs` |
-| 1068 | `domain/ui/ui_graph_editor/src/lib.rs` |
 | 932 | `domain/ui/ui_runtime/src/output/emit/controls.rs` |
 | 866 | `domain/ui/ui_runtime_view/src/lib.rs` |
 | 832 | `domain/ui/ui_controls/src/package/validation.rs` |
 | 776 | `domain/ui/ui_runtime/src/input/generic_interaction/replay.rs` |
+| 755 | `domain/ui/ui_render_primitives/src/lib.rs` |
+| 730 | `domain/ui/ui_runtime/src/text_editing/replay.rs` |
+| 692 | `domain/ui/ui_text/src/proof_layout.rs` |
+| 689 | `domain/ui/ui_composition/src/transaction/apply.rs` |
+| 656 | `domain/ui/ui_composition/tests/transaction_atomicity.rs` |
+| 650 | `domain/ui/ui_controls/src/overlay.rs` |
+| 641 | `domain/ui/ui_binding/src/lib.rs` |
 
 ## Deferred Refactors
 
-The next structural cleanup candidates are:
+The seven Batch 2 target files were split or reduced to compatibility
+facades. Remaining large files are outside the requested Batch 2 list or are
+existing proof/runtime modules whose split should be separately scoped:
 
-- split `ui_runtime/src/runtime/ui_runtime.rs` by event routing, focus,
-  pointer capture, scroll ownership, graph canvas, popup dismissal, and state
-  mutation coordination;
-- split `ui_runtime/src/input/pointer.rs` by pointer routing, capture,
-  scrollbar drag, graph canvas gestures, viewport routing, and suppression;
-- split `ui_runtime/src/output/build_ui_frame.rs` further only after emission
-  behavior tests are isolated enough to keep snapshot evidence local;
-- split `ui_definition` proof/readiness modules by validation report,
-  evidence collection, and target-profile gates;
-- split `ui_theme/src/token/mod.rs` by token identity, selector matching,
-  resolution, diagnostics, and tests;
-- split `ui_runtime/src/input/generic_interaction/replay.rs` if replay
-  orchestration grows further after Surface2D planning resolves.
+- `ui_definition/src/view_binding/mod.rs`, `production_readiness/mod.rs`, and
+  `component_recipe/mod.rs` are validation/evidence domains and should be
+  split by declaration, diagnostics, report, target-profile gates, and tests.
+- `ui_graph_editor/src/lib.rs` and `ui_runtime_view/src/lib.rs` are crate
+  entrypoint candidates and need owner decisions before public API movement.
+- `ui_runtime/src/output/emit/controls.rs` is render emission code; split only
+  with snapshot evidence preserved.
+- `ui_controls/src/package/validation.rs`, `overlay.rs`, `editable_text.rs`,
+  `accessibility.rs`, `theme.rs`, and `state.rs` are package/control domains
+  and should be split by package validation, authored declarations, and tests.
+- `ui_runtime/src/input/generic_interaction/replay.rs` and
+  `ui_runtime/src/text_editing/replay.rs` are proof replay orchestrators; split
+  only when report row and proof evidence signatures remain exact.
+- `ui_runtime/src/input/pointer/dispatch.rs` remains as the pointer facade
+  dispatcher after Batch 2. It is no longer the original god module, but a
+  follow-up can split event-kind handlers if the team wants every new file
+  under the 400-line review threshold.
 
-These are deferred because this pass intentionally stayed limited to the
-requested highest-risk UI god modules and test-support noise.
+These are deferred because Batch 2 was intentionally constrained to the seven
+listed large files and behavior-preserving movement. No remaining file is left
+large because a listed Batch 2 target was skipped.
 
 ## Validation
 
@@ -193,6 +379,23 @@ Completed validation during the split pass:
 - `cargo test -p ui_runtime`
 - `git diff --check`
 - `git diff --cached --check`
+
+Batch 2 focused validation was run after each grouped split:
+
+- `cargo fmt --all --check`
+- `cargo test -p ui_runtime`
+- `cargo test -p ui_theme`
+- `cargo test -p ui_definition`
+- `git diff --check`
+
+Batch 2 final validation:
+
+- `cargo fmt --all --check`
+- `cargo test --workspace` was attempted first and hit a rustc out-of-memory
+  failure in parallel engine/app compilation.
+- `$env:CARGO_INCREMENTAL='0'; cargo test --workspace -j 1` passed.
+- `python tools/docs/validate_docs.py`
+- `git diff --check`
 
 ## Next Step
 
