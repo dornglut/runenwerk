@@ -11,6 +11,7 @@ related_docs:
   - ./authority-model.md
   - ./documentation-structure.md
   - ./workflow-lifecycle.md
+  - ./complete-investigation-gate.md
   - ./complete-design-gate.md
   - ./routines/README.md
   - ./task-cards/README.md
@@ -28,6 +29,7 @@ The workflow must work from GitHub connector, ChatGPT context tooling, Codex-sty
 - Human entrypoint: `README.md`
 - AI agent entrypoint: `AGENTS.md`
 - Workspace router: this file
+- Complete investigation gate: [`complete-investigation-gate.md`](complete-investigation-gate.md)
 - Complete design gate: [`complete-design-gate.md`](complete-design-gate.md)
 
 ## Choose the task shape
@@ -66,6 +68,8 @@ archived
 
 Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when a task crosses from design to decision, planning, implementation, or closeout.
 
+Use [`complete-investigation-gate.md`](complete-investigation-gate.md) before design/planning/implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
+
 Use [`complete-design-gate.md`](complete-design-gate.md) before implementation is authorized for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
 
 ## Read first
@@ -87,6 +91,7 @@ AGENTS.md
 docs-site/src/content/docs/workspace/documentation-structure.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
+docs-site/src/content/docs/workspace/complete-investigation-gate.md
 docs-site/src/content/docs/workspace/complete-design-gate.md
 ```
 
@@ -98,6 +103,7 @@ docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
+docs-site/src/content/docs/workspace/complete-investigation-gate.md
 docs-site/src/content/docs/workspace/complete-design-gate.md
 ```
 
@@ -115,6 +121,7 @@ End with:
 Files changed:
 Exact functions/modules/sections changed:
 Authority files inspected:
+Complete investigation gate status:
 Complete design gate status:
 Manual validation performed:
 Command validation run or unavailable:
