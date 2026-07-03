@@ -10,6 +10,8 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../complete-investigation-gate.md
   - ../complete-design-gate.md
+  - ../evidence-quality-taxonomy.md
+  - ../complete-merge-readiness-gate.md
   - ../routines/implementation-routine.md
   - ../routines/phase-completion-drift-check-routine.md
 ---
@@ -37,6 +39,8 @@ ergonomics/usability contract
 validation/evidence contract
 ```
 
-Report changed files, exact modules or sections, complete investigation gate status, complete design gate status, validation, risks, and lifecycle impact.
+Classify validation and proof claims with `evidence-quality-taxonomy.md`.
 
-If the patch completes an active phase, include or explicitly schedule the phase closeout/planning handoff before the next implementation contract starts.
+Report changed files, exact modules or sections, evidence classes used, complete investigation gate status, complete design gate status, validation, risks, and lifecycle impact.
+
+If the patch completes an active phase, include or explicitly schedule the phase closeout/planning handoff before the next implementation contract starts. Use `complete-merge-readiness-gate.md` before recommending merge.
