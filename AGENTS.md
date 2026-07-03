@@ -31,6 +31,13 @@ docs-site/src/content/docs/workspace/complete-investigation-gate.md
 docs-site/src/content/docs/workspace/complete-design-gate.md
 ```
 
+For evidence classification and merge decisions, use:
+
+```text
+docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
+docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
+```
+
 ## Operating rule
 
 Runenwerk workflows are repository-readable first.
@@ -40,7 +47,7 @@ Do not assume a full repo export, a clean worktree, command execution, generated
 Default workflow:
 
 ```text
-Read authority files -> inspect working files -> verify complete investigation gate when required -> verify complete design gate when required -> patch exact files -> manually validate evidence -> report changed files and gaps
+Read authority files -> inspect working files -> classify evidence -> verify complete investigation gate when required -> verify complete design gate when required -> patch exact files -> manually validate evidence -> verify merge readiness when relevant -> report changed files and gaps
 ```
 
 ## Authority files
@@ -65,6 +72,8 @@ docs-site/src/content/docs/workspace/documentation-structure.md
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
 docs-site/src/content/docs/workspace/complete-investigation-gate.md
 docs-site/src/content/docs/workspace/complete-design-gate.md
+docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
+docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
 ```
 
 For engineering principles, use:
@@ -85,7 +94,7 @@ Use these principles as a review lens:
 6. Avoid Premature Optimization: prove the bottleneck first.
 7. Law of Demeter: depend on direct contracts.
 
-These principles do not override accepted ADRs, dependency rules, domain ownership, complete investigation gates, complete design gates, or tests. They help identify when a proposed change is overbuilt, duplicated, misplaced, or too coupled.
+These principles do not override accepted ADRs, dependency rules, domain ownership, complete investigation gates, complete design gates, evidence quality rules, merge readiness gates, or tests. They help identify when a proposed change is overbuilt, duplicated, misplaced, or too coupled.
 
 ## Repository conventions
 
@@ -105,8 +114,10 @@ Before editing:
 - reuse local patterns before adding new abstractions;
 - inspect public exports when public API changes;
 - identify the owner, invariant, and boundary before patching;
+- classify evidence using the evidence quality taxonomy when claims matter;
 - verify complete investigation gate evidence when the task requires it;
-- verify complete design gate evidence when the task requires it.
+- verify complete design gate evidence when the task requires it;
+- verify merge readiness before recommending merge.
 
 ## Documentation rules
 
@@ -130,8 +141,10 @@ Every final report must include:
 Files changed:
 Exact functions/modules/sections changed:
 Authority files inspected:
+Evidence classes used:
 Complete investigation gate status:
 Complete design gate status:
+Merge readiness status when relevant:
 Manual validation performed:
 Command validation run or unavailable:
 Remaining risks or blockers:
