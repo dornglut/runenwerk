@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-03
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
@@ -127,6 +127,46 @@ State transition: `production-track -> active-planning`
 Evidence: Phase 15 Generic Text completed through PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff` and PR #49 at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`. The existing Surface2D design scopes generic renderer-neutral 2D surface identity, content/viewport bounds, world/screen transforms, pan, zoom, fit, selection rectangle, hover coordinate, pointer capture, gesture cancel/commit, overlay/diagnostic layers, grid/background vocabulary, large-content bounds, LOD readiness, and budget evidence.
 
 Follow-up: Harden the Surface2D design before implementation. Planning must settle exact owner files, minimum scope, validation envelope, no product/editor/game mutation rule, accessibility/input acceptance, performance/budget evidence, stop conditions, and the relationship to existing `ui_surface` vocabulary. Typed App Composition remains proposed architecture reference only, not implementation authority.
+
+## Phase 16 Surface2D completion decision
+
+Date: 2026-07-03
+
+Decision: Mark `PT-UI-COMPONENT-PLATFORM-016` Surface2D completed through docs-hardening PR #62 and implementation PR #61.
+
+State transition: `review -> completed`
+
+Context: PR #62 merged the generic workflow, principle, decomposition, and merge-readiness hardening before Phase 16 completion. PR #61 then squash-merged the Surface2D implementation into `main`.
+
+Options considered: mark Phase 16 completed; leave Phase 16 in review; reopen implementation for the leftover `surface2d-phase-16` branch.
+
+Reason: `main` contains the delivered Surface2D package/catalog/inspection contract, runtime proof report/frame, and static mount proof. Post-merge validation from `main` passed, and no Phase 16 product blocker remains. The leftover branch was not safe to fold into closeout because it changes only the Surface2D design document and mixes potentially useful future-use-case pressure with stale pre-merge implementation assumptions.
+
+Affected planning files: `active-work.md`, `completed-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `ui-component-platform-surface2d-design.md`, `phase-16-surface2d-source-investigation.md`, and `phase-16-surface2d-closeout.md`.
+
+Evidence: PR #62 merged at `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged at `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with `cargo test -p ui_controls surface2d`, `cargo test -p ui_controls control_package`, `cargo test -p ui_runtime surface2d`, `cargo test -p ui_static_mount surface2d`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`.
+
+Follow-up: Keep Phase 16 as a completed dependency and perform the next production-track planning intake. The next named future milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas, but this decision does not authorize Phase 17 implementation.
+
+## Phase 16 leftover branch decision
+
+Date: 2026-07-03
+
+Decision: Keep remote branch `surface2d-phase-16` for manual review instead of deleting it during closeout.
+
+State transition: none
+
+Context: Cleanup inspection found `surface2d-phase-16` still has commits not patch-equivalent to `origin/main`.
+
+Options considered: delete as obsolete; apply all changes as follow-up; keep for manual review.
+
+Reason: `git cherry -v origin/main origin/surface2d-phase-16` reported three `+` commits. `git diff --stat origin/main...origin/surface2d-phase-16` showed one large design-document diff, `docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md`, with 689 changed lines. The diff contains some potentially useful future-use-case pressure, but it also contains stale pre-implementation assumptions that conflict with the merged Phase 16 implementation, including active-planning language, older implementation owner assumptions, and monolithic file naming.
+
+Affected planning files: `phase-16-surface2d-closeout.md`, `active-work.md`, and `production-tracks.md`.
+
+Evidence: `git log --oneline --decorate origin/main..origin/surface2d-phase-16` showed `7bc6abf1 Add Surface2D future use-case matrix`, `6f571270 Harden Surface2D genericity and hierarchy planning`, and `b5a0cc52 Refine Surface2D planning gate`. `git diff --name-status origin/main...origin/surface2d-phase-16` showed only the Surface2D design document modified.
+
+Follow-up: Review `surface2d-phase-16` manually outside the Phase 16 closeout. If useful material remains, extract a focused docs-only follow-up from `main` without mixing it into completed closeout truth.
 
 ## Lifecycle rule
 

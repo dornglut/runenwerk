@@ -1,7 +1,8 @@
 ---
 title: UI Component Platform Surface2D Design
-description: Complete investigation and design intake for the generic 2D coordinate, navigation, transform, bounds, overlay, input, and large-content primitive for reusable UI surfaces.
+description: Active-folder design reference with completed Phase 16 evidence for the generic 2D coordinate, navigation, transform, bounds, overlay, input, and large-content primitive for reusable UI surfaces.
 status: active
+lifecycle_exception: active_phase_evidence
 owner: ui
 layer: domain
 canonical: true
@@ -14,6 +15,7 @@ related_designs:
 related_docs:
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
+  - ../../reports/closeouts/phase-16-surface2d-closeout.md
   - ../../reports/investigations/phase-16-surface2d-source-investigation.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
@@ -29,27 +31,27 @@ related_docs:
 
 ## Status
 
-This is the active Phase 16 investigation and design-intake document for `PT-UI-COMPONENT-PLATFORM-016` Surface2D.
+This is the completed Phase 16 design reference for `PT-UI-COMPONENT-PLATFORM-016` Surface2D.
 
-Lifecycle state: `active-planning`.
+Lifecycle state: `completed`.
 
-Implementation is not authorized by this document. Implementation requires a planning promotion that records exact owner files, exact implementation contract, validation envelope, evidence expectation, stop conditions, and merge-readiness expectations.
+Implementation completed through PR #61 after PR #62 merged the workflow/principle hardening that supported the final review. The detailed closeout record is `docs-site/src/content/docs/reports/closeouts/phase-16-surface2d-closeout.md`.
 
 `Surface2D` is a reusable renderer-neutral coordinate and navigation substrate. It is not Gallery-specific, not GraphCanvas-specific, not a product editor command system, not app composition, and not a renderer backend.
 
-Typed App Composition documents remain proposed architecture references only. They do not authorize plugin framework work, shared extraction, `foundation/meta`, or app-composition implementation in Phase 16.
+Typed App Composition documents remain proposed architecture references only. They did not authorize plugin framework work, shared extraction, `foundation/meta`, or app-composition implementation in Phase 16.
 
 ## Complete investigation gate status
 
-Status: source investigation recorded. The implementation contract is ready for planning promotion after this intake branch is reviewed and docs validation passes.
+Status: complete. The source investigation, design gate, implementation PR, post-merge validation, and closeout record are aligned.
 
 Evidence classes used:
 
 ```text
-E2 connector file inspection
+E3 current source/history inspection
+E5 post-merge local validation from main
 E8 accepted workspace/planning/design authority
-E2 PR metadata inspection for prior Phase 15/16 planning and UI split PRs
-E2 source-level inspection report for exact Phase 16 owner files
+E9 closeout alignment across source, validation, and planning truth
 ```
 
 Current evidence inspected:
@@ -66,6 +68,8 @@ docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.
 docs-site/src/content/docs/reports/investigations/phase-16-surface2d-source-investigation.md
 PR #56 Phase 15 closeout / Phase 16 planning hardening
 PR #57 UI domain split before Phase 16
+PR #62 docs-only workflow/principle/decomposition hardening
+PR #61 Phase 16 Surface2D implementation
 ```
 
 Resolved source-investigation outputs:
@@ -79,50 +83,49 @@ ui_surface remains semantic surface vocabulary and Surface2D has no direct Phase
 focused test names and fixture/proof placement are recorded
 ```
 
-Remaining gates before implementation:
+Completion evidence:
 
 ```text
-review this intake branch
-run python tools/docs/validate_docs.py
-run git diff --check
-merge the planning/intake branch
-promote planning to active implementation with the exact file contract from the source investigation report
+PR #62 merged at 6cfb82b81aa5478496ff6cbf3fa2eea607777aaf
+PR #61 squash-merged at 2e803620c91726fb599c5e5c4eee4b3984cd4a9d
+post-merge validation from main passed
+Phase 16 closeout recorded
 ```
 
 ## Complete investigation dossier
 
 ### Question
 
-What complete renderer-neutral `Surface2D` contract should Phase 16 deliver, which UI crates own each part, and what evidence must exist before implementation starts?
+What renderer-neutral `Surface2D` contract did Phase 16 deliver, which UI crates own each part, and what evidence closed the phase?
 
 ### Current lifecycle
 
 ```text
 PT-UI-COMPONENT-PLATFORM-016
-Lifecycle state: active-planning
-Implementation authorization: no
-Current branch purpose: investigation/design intake
+Lifecycle state: completed
+Implementation authorization: completed through PR #61
+Current branch purpose: historical design reference
 ```
 
 ### Authority/source matrix
 
 | Claim | Source inspected | Evidence class | Evidence found | Conflict / drift |
 |---|---|---:|---|---|
-| Phase 16 is current active planning | `workspace/planning/active-work.md` | E8 | Active focus is `PT-UI-COMPONENT-PLATFORM-016` Surface2D. | None. |
-| Phase 16 is not implementation-authorized | `active-work.md`, this design | E8 | Planning requires exact owners, scope, validation, evidence, and stop conditions before implementation. | None. |
+| Phase 16 is completed | `workspace/planning/completed-work.md`, closeout report | E8/E9 | Completed through PR #62 and PR #61, with post-merge validation recorded. | None. |
+| No active implementation is authorized by closeout | `active-work.md`, closeout report | E8 | Active work records no current implementation focus after closeout. | None. |
 | `Surface2D` must not own product/editor/game truth | existing design, UI architecture | E8 | Host/product/editor/game mutation remains outside the reusable UI substrate. | None. |
 | `ui_surface` is existing semantic vocabulary | `DOMAIN_MAP.md`, UI architecture, source investigation | E2/E8 | `ui_surface` owns semantic surface modules and is not a Phase 16 implementation owner. | None. |
-| No Surface2D implementation exists from Phase 15/PR #57 | PR #49/#57 metadata and source investigation | E2 | Prior PRs excluded Phase 16 implementation and no Phase 16 product-code work is present in this branch. | None. |
+| Surface2D implementation exists on `main` | PR #61 metadata and source closeout | E3/E5/E9 | Phase 16 implementation is merged and validated post-merge. | None. |
 | Typed App Composition is only reference direction | existing design/planning | E8 | It does not authorize plugin framework work in Phase 16. | None. |
 
 ### Current-state matrix
 
-| Area | Current repository reality | Current docs/planning reality | Evidence | Gap before implementation |
+| Area | Current repository reality | Current docs/planning reality | Evidence | Closeout status |
 |---|---|---|---|---|
-| Active planning | Phase 16 active planning is recorded. | Active work, roadmap, production track all identify Surface2D. | E8 | Planning promotion still required. |
-| Existing code | Exact owner files and conditional non-owner files are recorded in the source investigation report. | Planning says no implementation is authorized until promotion. | E2/E8 | Run docs validation and promote with exact implementation scope. |
+| Active planning | No active implementation focus is selected after closeout. | Active work points to next planning intake only. | E8 | Closed. |
+| Existing code | Surface2D implementation is merged on `main`. | Completed work, roadmap, production track, and closeout identify Phase 16 as completed. | E3/E5/E9 | Closed. |
 | `ui_surface` relationship | `ui_surface` owns semantic surface modules and remains separate. | Surface2D sits below `ui_surface` as coordinate/navigation vocabulary. | E2/E8 | None for Phase 16. |
-| Prior validation | Phase 15 and PR #57 validation are recorded in planning/PR metadata. | Phase 16 planning validation remains docs/diff. | E2/E8 | Run current branch docs validation locally. |
+| Prior validation | Post-merge Phase 16 validation from `main` is recorded. | Closeout records focused Surface2D, workspace, docs, and diff validation. | E5/E9 | Closed. |
 | Future consumers | Downstream canvases and graph/timeline surfaces are named consumers. | This design records downstream owner paths. | E8 | Implementation must not import their semantics into Surface2D. |
 
 ### Owner/dependency matrix
@@ -184,19 +187,18 @@ This selects the safe form of option A from the prior planning gate: `Surface2D`
 
 ### Confidence matrix
 
-| Finding | Confidence | Reason | Remaining evidence before implementation |
+| Finding | Confidence | Reason | Closeout evidence |
 |---|---|---|---|
-| Phase 16 should remain active planning, not implementation | High | Planning/design authority agrees. | Docs validation and planning promotion. |
+| Phase 16 is completed | High | PR #62 and PR #61 are merged, and post-merge validation from `main` passed. | Closeout report. |
 | Surface2D should sit below `ui_surface` for Phase 16 | High | Source investigation confirms current `ui_surface` semantic modules and no Phase 16 dependency. | None for Phase 16. |
-| Owner split can use existing crates | High | Source investigation confirms exact extension points in `ui_controls`, `ui_runtime`, and `ui_static_mount`. | Implementation must stay within the accepted file contract. |
-| `ui_render_data` changes are not required by the accepted contract | High | Existing primitives can carry background, outline, grid, axes, clipping, and proof-frame evidence. | Reassess only if implementation proves an evidence gap. |
-| No Surface2D implementation exists in this branch | High | Branch compare shows docs-only changes and the investigation branch carries no product-code files. | None. |
+| Owner split used existing crates | High | Implementation stayed in `ui_controls`, `ui_runtime`, and `ui_static_mount` for delivered owners. | PR #61 and closeout report. |
+| `ui_render_data` changes were not required by the accepted contract | High | Existing frame/primitive evidence carried the proof without renderer backend ownership. | PR #61 and closeout report. |
 
 ## Complete design gate status
 
-Status: source investigation recorded, design intake ready for review.
+Status: completed.
 
-Phase 16 implementation requires planning promotion with exact files and validation commands from the source investigation report.
+Phase 16 implementation completed through PR #61, and the closeout report records final validation, branch cleanup, principle compliance, and decomposition status.
 
 ## Decision
 
@@ -225,7 +227,7 @@ It does not own product truth, graph truth, timeline truth, editor commands, ren
 
 ## Complete owner split
 
-Phase 16 implementation must use the exact implementation file contract recorded in `docs-site/src/content/docs/reports/investigations/phase-16-surface2d-source-investigation.md` unless implementation evidence proves a required capability cannot be delivered within it and the design is updated before proceeding.
+Phase 16 implementation used the owner split recorded in `docs-site/src/content/docs/reports/investigations/phase-16-surface2d-source-investigation.md` and finalized in `docs-site/src/content/docs/reports/closeouts/phase-16-surface2d-closeout.md`.
 
 ```text
 ui_controls:
@@ -260,7 +262,7 @@ host/product/editor/game layers:
   persistence, project data, renderer resources, and external effects.
 ```
 
-If the owner split would require a new crate, record that as an explicit planning decision before implementation. Do not create a new crate as an incidental implementation detail.
+Future changes that require a new crate must record that as an explicit planning decision before implementation. Do not create a new crate as an incidental implementation detail.
 
 ## Canonical vocabulary
 
@@ -293,7 +295,7 @@ If the owner split would require a new crate, record that as an explicit plannin
 
 ## Phase 16 delivered contract
 
-Phase 16 must deliver the reusable substrate contract:
+Phase 16 delivered the reusable substrate contract:
 
 ```text
 surface id
@@ -315,7 +317,7 @@ budget evidence fact
 invalid transform expected-failure diagnostic
 ```
 
-The Phase 16 proof must be visible through package/catalog/inspection projection, runtime proof/report evidence, and static mount proof.
+The Phase 16 proof is visible through package/catalog/inspection projection, runtime proof/report evidence, and static mount proof.
 
 ## Feature support matrix
 
@@ -368,7 +370,7 @@ The Phase 16 proof must be visible through package/catalog/inspection projection
 
 ## Accessibility and input acceptance
 
-Phase 16 must define and prove acceptance for:
+Phase 16 defined and proved acceptance for:
 
 ```text
 keyboard pan
@@ -384,11 +386,11 @@ touch pan/zoom status explicitly reported
 controller navigation status explicitly reported
 ```
 
-If an input mode is not delivered by the Phase 16 implementation contract, the descriptor/report must say so explicitly with a named downstream owner or activation condition.
+If a future input mode is not delivered by an accepted implementation contract, the descriptor/report must say so explicitly with a named downstream owner or activation condition.
 
 ## Performance and budget evidence
 
-Phase 16 must add a budget-evidence shape before implementation. Exact numbers may be conservative, but the evidence model must cover:
+Phase 16 added a budget-evidence shape. Exact numbers may be conservative, but the evidence model covers:
 
 ```text
 transform projection cost
@@ -402,18 +404,11 @@ static mount report generation cost
 primitive count or fact count budget
 ```
 
-Initial budgets should be recorded as p95 targets for deterministic fixtures where practical. If wall-clock budgets are not useful yet, use deterministic operation/fact-count budgets and record why.
+Future budget expansion should use p95 targets for deterministic fixtures where practical. If wall-clock budgets are not useful, use deterministic operation/fact-count budgets and record why.
 
 ## Validation envelope
 
-Planning validation:
-
-```text
-python tools/docs/validate_docs.py
-git diff --check
-```
-
-Implementation validation must be set before moving to `active-implementation`. Expected shape:
+Post-merge validation from `main`:
 
 ```text
 cargo test -p ui_controls surface2d
@@ -425,7 +420,7 @@ python tools/docs/validate_docs.py
 git diff --check
 ```
 
-Conditional validation:
+Conditional validation rule for future changes:
 
 ```text
 cargo test -p ui_render_data        # only if ui_render_data changes
@@ -434,7 +429,7 @@ cargo test -p ui_input              # only if ui_input changes
 cargo test -p ui_surface            # only if ui_surface changes
 ```
 
-The exact package list must match the accepted owner split and exact source files selected by the implementation planning gate.
+The exact package list for future changes must match the accepted owner split and exact source files selected by that future implementation planning gate.
 
 ## Non-owned responsibilities
 
@@ -456,7 +451,7 @@ shared plugin primitives -> separate accepted architecture decision
 
 ## Stop conditions
 
-Stop and redesign if implementation requires:
+Future changes must stop and redesign if implementation requires:
 
 ```text
 Surface2D mutating product/editor/game truth
@@ -474,11 +469,13 @@ ui_render_primitives source changes for backend generation
 ui_input source changes without proven missing normalized fact
 ```
 
-## Next planning action
+## Closeout And Next Planning Action
 
-Before active implementation, review and merge this intake branch, then promote planning to active implementation with the source investigation report as the exact implementation contract.
+Phase 16 is closed through `docs-site/src/content/docs/reports/closeouts/phase-16-surface2d-closeout.md`.
 
-Required planning validation:
+The next production-track planning step is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas intake. This completed Surface2D design does not authorize Phase 17 implementation.
+
+Required closeout validation:
 
 ```text
 python tools/docs/validate_docs.py

@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-03
 related_docs:
   - ../workflow-lifecycle.md
   - ../../reports/closeouts/README.md
@@ -28,6 +28,7 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full implementation: completed 2026-07-02 through merged PR #44 at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`.
 - `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior: completed 2026-07-02 through merged PR #46 at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
 - `PT-UI-COMPONENT-PLATFORM-015` Generic Text: completed 2026-07-02 through baseline PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff` and hardening PR #49 at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`.
+- `PT-UI-COMPONENT-PLATFORM-016` Surface2D: completed 2026-07-03 through docs-hardening PR #62 at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf` and implementation PR #61 at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Closeout report: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 
@@ -39,7 +40,7 @@ Validation: The full Phase 14 local validation gate passed on 2026-07-02 before 
 
 Known non-goals: Generic Text display/layout has completed as Phase 15. Rich text editor behavior, code editor behavior, product document buffers, undo/redo, clipboard integration, UI Designer, UI Gallery product surface, Workbench/provider redesign, dynamic plugin framework, `foundation/meta`, shared plugin primitives, product/editor/game mutation, authored UI editing, compatibility-only aliases/shims, and phase-shaped public API names remain out of scope.
 
-Follow-up: Proceed to `PT-UI-COMPONENT-PLATFORM-016` Surface2D as design/planning intake only. Do not start implementation until active planning records exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
+Follow-up: Fulfilled by completed `PT-UI-COMPONENT-PLATFORM-016` Surface2D. Keep Phase 14 as a completed dependency.
 
 ## PT-UI-COMPONENT-PLATFORM-015 evidence
 
@@ -53,7 +54,19 @@ Validation: The final Phase 15 validation gate passed on 2026-07-02 with `cargo 
 
 Known non-goals: Renderer backend implementation, GPU atlas upload, OS font discovery, rich/code editor behavior, document buffers, undo/redo, clipboard, LSP/syntax highlighting, app localization policy, product/editor/game mutation, authored UI editing, UI Designer/Gallery product surface, Workbench/provider redesign, dynamic plugin framework, `foundation/meta`, shared plugin primitives, and compatibility-only public API shims remain out of scope.
 
-Follow-up: Proceed with `PT-UI-COMPONENT-PLATFORM-016` Surface2D as planning intake only. Do not start implementation until active planning records exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
+Follow-up: Fulfilled by completed `PT-UI-COMPONENT-PLATFORM-016` Surface2D. Keep Phase 15 as a completed dependency.
+
+## PT-UI-COMPONENT-PLATFORM-016 evidence
+
+Implementation evidence: PR #61 delivered package-backed Surface2D declarations, validation, catalog projection, inspection facts, runtime proof reporting, renderer-neutral proof-frame projection, and static mount proof across `ui_controls`, `ui_runtime`, and `ui_static_mount`. PR #62 preceded and complemented the implementation by merging docs-only workflow, principle, decomposition, and merge-readiness hardening.
+
+Merge evidence: PR #62 merged at `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged at `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`.
+
+Validation: Post-merge validation from `main` passed with `cargo test -p ui_controls surface2d`, `cargo test -p ui_controls control_package`, `cargo test -p ui_runtime surface2d`, `cargo test -p ui_static_mount surface2d`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`.
+
+Known non-goals: Renderer backend ownership, product/editor/game mutation, host command execution inside `domain/ui`, graph/timeline public API semantics, new crates, plugin framework work, `foundation/meta`, and broad workflow rewrites remain out of scope for Phase 16.
+
+Follow-up: Use the completed Surface2D substrate as the dependency for the next production-track planning intake. The next named milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas, but this closeout does not authorize Phase 17 implementation.
 
 ## Historical completed dependencies
 

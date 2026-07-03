@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-03
 related_docs:
   - ../workflow-lifecycle.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
@@ -71,15 +71,15 @@ ID: `PT-UI-COMPONENT-PLATFORM-016`
 
 Title: Surface2D
 
-State: active planning for reusable renderer-neutral 2D coordinate and navigation surface contracts
+State: completed through docs-hardening PR #62 and implementation PR #61
 
-Lifecycle state: `active-planning`
+Lifecycle state: `completed`
 
 Authority: `ui-component-platform-surface2d-design.md`.
 
-Evidence: Phase 15 Generic Text completed through PR #48 baseline and PR #49 hardening. Phase 16 planning starts from the existing Surface2D design, but that design must be refreshed before implementation to settle owner files, minimum implementation scope, validation envelope, no-mutation boundaries, accessibility/input acceptance, performance budget evidence, and the current relationship with existing `ui_surface` vocabulary. Typed App Composition is a proposed architecture reference only and does not authorize Phase 16 implementation.
+Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with `cargo test -p ui_controls surface2d`, `cargo test -p ui_controls control_package`, `cargo test -p ui_runtime surface2d`, `cargo test -p ui_static_mount surface2d`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`. Detailed closeout: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
 
-Next action: Harden the Phase 16 design intake. Do not start implementation until planning records exact owner files, implementation scope, validation, evidence expectation, and stop conditions.
+Next action: Keep as completed dependency. The next named production-track milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas planning intake, but this Phase 16 closeout does not authorize Phase 17 implementation.
 
 ## Rules
 
