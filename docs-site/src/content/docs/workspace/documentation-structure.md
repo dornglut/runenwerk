@@ -10,6 +10,7 @@ related_docs:
   - ./operating-model.md
   - ./authority-model.md
   - ./workflow-lifecycle.md
+  - ./complete-investigation-gate.md
   - ./complete-design-gate.md
   - ../guidelines/programming-principles.md
 ---
@@ -47,6 +48,14 @@ The lifecycle model is:
 ```text
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
 ```
+
+The complete investigation gate is:
+
+```text
+docs-site/src/content/docs/workspace/complete-investigation-gate.md
+```
+
+Use the complete investigation gate before design, planning, or implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
 
 The complete design gate is:
 
@@ -95,7 +104,7 @@ docs-site/src/content/docs/
 
 ## Workspace structure
 
-`workspace/` owns repository process, lifecycle, complete design gate, structure, planning, status, and maintenance docs.
+`workspace/` owns repository process, lifecycle, complete investigation gate, complete design gate, structure, planning, status, and maintenance docs.
 
 ```text
 workspace/
@@ -105,6 +114,7 @@ workspace/
   ai-agent-boundaries.md
   documentation-structure.md
   workflow-lifecycle.md
+  complete-investigation-gate.md
   complete-design-gate.md
   routines/
   task-cards/
@@ -113,7 +123,7 @@ workspace/
 
 ## Folder responsibilities
 
-- `workspace/`: repository process, lifecycle, complete design gate, structure, planning, status, and maintenance docs.
+- `workspace/`: repository process, lifecycle, complete investigation gate, complete design gate, structure, planning, status, and maintenance docs.
 - `workspace/routines/`: repeatable human/agent procedures.
 - `workspace/task-cards/`: short reusable task instructions that point to routines.
 - `workspace/planning/`: Markdown-first planning records.
@@ -133,8 +143,14 @@ Use [`workflow-lifecycle.md`](workflow-lifecycle.md) for state transitions and p
 Guideline
   stable doctrine and engineering rules
 
+Investigation dossier
+  current reality, authority/source evidence, alternatives, confidence, and blockers
+
 Design
   target architecture, vocabulary, owner boundaries, tradeoffs, non-owned responsibilities
+
+Complete investigation gate
+  mandatory investigation checklist and matrix templates before design/planning/implementation decisions
 
 Complete design gate
   mandatory readiness checklist and matrix templates before implementation authorization
@@ -188,7 +204,7 @@ Use the programming principles when pruning docs:
 - KISS: keep navigation short.
 - DRY: keep one authority for each durable claim.
 - YAGNI: remove unused workflow surfaces.
-- Separation of Concerns: separate entrypoints, lifecycle, complete design gates, routines, planning, reports, and tooling.
+- Separation of Concerns: separate entrypoints, lifecycle, complete investigation gates, complete design gates, routines, planning, reports, and tooling.
 
 When moving, merging, or pruning docs, report old path to new path mapping.
 
