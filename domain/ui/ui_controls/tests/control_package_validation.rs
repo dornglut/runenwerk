@@ -7,19 +7,20 @@ fn control_package_complete_contract_validates() {
     let package = runenwerk_control_package();
     let report = package.validate_contract();
     assert!(report.is_valid(), "{:?}", report.diagnostics);
-    assert_eq!(package.control_kinds.len(), 8);
-    assert_eq!(package.property_schemas.len(), 8);
-    assert_eq!(package.state_schemas.len(), 8);
-    assert_eq!(package.event_payload_schemas.len(), 8);
-    assert_eq!(package.kernels.len(), 40);
-    assert_eq!(package.fixtures.len(), 8);
-    assert_eq!(package.diagnostics.len(), 8);
-    assert_eq!(package.migrations.len(), 8);
-    assert_eq!(package.stories.len(), 8);
-    assert_eq!(package.interaction_descriptors.len(), 8);
-    assert_eq!(package.overlay_descriptors.len(), 8);
+    assert_eq!(package.control_kinds.len(), 9);
+    assert_eq!(package.property_schemas.len(), 9);
+    assert_eq!(package.state_schemas.len(), 9);
+    assert_eq!(package.event_payload_schemas.len(), 9);
+    assert_eq!(package.kernels.len(), 45);
+    assert_eq!(package.fixtures.len(), 9);
+    assert_eq!(package.diagnostics.len(), 9);
+    assert_eq!(package.migrations.len(), 9);
+    assert_eq!(package.stories.len(), 9);
+    assert_eq!(package.interaction_descriptors.len(), 9);
+    assert_eq!(package.overlay_descriptors.len(), 9);
     assert_eq!(package.editable_text_descriptors.len(), 1);
     assert_eq!(package.generic_text_descriptors.len(), 7);
+    assert_eq!(package.surface2d_descriptors.len(), 1);
 }
 
 #[test]
