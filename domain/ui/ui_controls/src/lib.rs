@@ -23,6 +23,7 @@ pub mod package;
 pub mod registry;
 pub mod schema;
 pub mod state;
+pub mod surface2d;
 pub mod table_view;
 pub mod theme;
 pub mod tree_view;
@@ -47,6 +48,7 @@ pub use package::*;
 pub use registry::*;
 pub use schema::*;
 pub use state::*;
+pub use surface2d::*;
 pub use table_view::TABLE_VIEW_CONTROL_KIND_ID;
 pub use tree_view::TREE_VIEW_CONTROL_KIND_ID;
 
