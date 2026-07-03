@@ -31,12 +31,12 @@ report-row, or snapshot behavior.
 
 | Slice | Branch | Status | Primary change |
 | --- | --- | --- | --- |
-| PR A | `ui/split-runtime-layout-engine` | Local validated commit | Split runtime layout engine into owner-aligned modules. |
-| PR B | `ui/split-runtime-generic-interaction` | Local validated commit | Split runtime generic interaction proof module. |
-| PR C | `ui/split-definition-formation` | Local validated commit | Split retained UI definition formation. |
-| PR D | `ui/move-ui-test-support` | Local validated commit | Moved noisy tests/support out of public API files. |
-| PR E | `docs/ui-domain-split-pass-report` | This docs-only report | Recorded residual structural debt and non-goals. |
-| Batch 2 | `ui/split-remaining-large-ui-files` | Local validated commits | Split the remaining listed large UI files before stack merge. |
+| Slice A | `ui/split-runtime-layout-engine` | Merged via PR #57 | Split runtime layout engine into owner-aligned modules. |
+| Slice B | `ui/split-runtime-generic-interaction` | Merged via PR #57 | Split runtime generic interaction proof module. |
+| Slice C | `ui/split-definition-formation` | Merged via PR #57 | Split retained UI definition formation. |
+| Slice D | `ui/move-ui-test-support` | Merged via PR #57 | Moved noisy tests/support out of public API files. |
+| Slice E | `docs/ui-domain-split-pass-report` | Merged via PR #57 | Recorded residual structural debt and non-goals. |
+| Batch 2 | `ui/split-remaining-large-ui-files` | Merged via PR #57 | Split the remaining listed large UI files before stack merge. |
 
 ## Before And After Counts
 
@@ -309,7 +309,8 @@ locations:
 - `ui_runtime::runtime::ui_runtime::UiRuntime`
 - `ui_theme::token::*`
 - `ui_definition::persistence_activation::*`
-- `ui_runtime::output::build_ui_frame::*`
+- `ui_runtime::output::{build_ui_frame, InteractionVisualState}`
+- `ui_runtime::output::evidence::*`
 - `ui_definition::apply_visual_layout_operation`
 - `ui_definition::preview_fixture::*`
 
@@ -399,6 +400,7 @@ Batch 2 final validation:
 
 ## Next Step
 
-Phase 16 Surface2D implementation can begin only after the split branches are
-reviewed and merged in order. The split pass preserved current behavior and
-did not settle the separate Surface2D owner-split decision.
+Phase 16 Surface2D implementation can proceed through its separate planning and
+authorization workflow after this closeout is present on `main`. The split pass
+preserved current behavior and did not settle the separate Surface2D owner-split
+decision.
