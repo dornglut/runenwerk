@@ -5,11 +5,14 @@ status: active
 owner: workspace
 layer: guidelines
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-07-03
 related_docs:
   - ../software-development/principles.md
   - ./architecture.md
   - ./code-patterns.md
+  - ../workspace/complete-design-gate.md
+  - ../workspace/complete-merge-readiness-gate.md
+  - ../workspace/routines/implementation-routine.md
 ---
 
 # Runenwerk Programming Principles
@@ -26,7 +29,9 @@ The source list is:
 6. Avoid Premature Optimization
 7. Law of Demeter
 
-Use these principles as a review lens. Do not use them as slogans that override domain ownership, dependency direction, accepted ADRs, or tests.
+Use these principles as gate evidence for non-trivial architecture, reusable platform, public API, production-track, workflow, domain-boundary, and phase implementation work.
+
+The principles do not override domain ownership, dependency direction, accepted ADRs, tests, or validation. They expose risks that must be resolved, explicitly accepted by the owning design, or blocked before merge.
 
 ## 1. KISS: keep the owned path simple
 
@@ -78,6 +83,38 @@ Code, docs, and workflows should talk to their direct owner or explicit contract
 
 Use public APIs, DTOs, commands, ratifiers, schemas, routines, and task cards as boundaries. If a caller needs deep knowledge of another subsystem, the boundary is probably missing a contract.
 
+## Principle compliance matrix
+
+Use this matrix in complete designs, active-implementation planning records, PR reviews, and merge-readiness reports for non-trivial work.
+
+```text
+| Principle | Required evidence | Blocker signal | Accepted resolution |
+|---|---|---|---|
+| KISS | Direct owner, direct path, obvious validation and failure behavior | hidden ceremony, catch-all abstraction, unclear path | simplify or record why complexity is required |
+| DRY | one authority for each durable claim, linked summaries only | duplicated source truth, stale mirror, conflicting docs | remove duplicate or choose canonical owner |
+| YAGNI | every new surface has accepted owner and near-term use | speculative crate/API/registry/workflow layer | delete, defer with owner/activation, or prove need |
+| SOLID | single responsibility, narrow interfaces, legal dependencies | compound module, broad interface, dependency inversion violation | split or redesign boundary |
+| Separation of Concerns | domain/runtime/app/adapter/docs/tests/planning/report responsibilities separated | mixed product/process/runtime/proof concerns | move responsibility to owner module/doc |
+| Avoid Premature Optimization | optimization backed by measured or bounded pressure | optimization for imagined scale or vague performance fear | remove optimization or record evidence/budget |
+| Law of Demeter | callers use direct contracts/re-exports/DTOs/routines | reaching through internals or transitive subsystem knowledge | add/use direct contract or move call to owner |
+```
+
+A principle finding is merge-critical when it affects correctness, ownership, lifecycle, validation, public API, dependency direction, maintainability, or future extensibility of a production-track or reusable platform contract.
+
+## Principle stop conditions
+
+Stop implementation or merge if any of these are true and no accepted design explicitly resolves them:
+
+```text
+KISS: the implementation path cannot be explained as direct owner -> direct contract -> direct evidence.
+DRY: two files claim durable authority for the same behavior, state, roadmap, or validation truth.
+YAGNI: a new public surface, crate, registry, extension point, or workflow layer has no current accepted owner and use.
+SOLID: one file/module/crate has multiple independent reasons to change without a decomposition decision.
+Separation of Concerns: domain meaning, runtime execution, app/product semantics, adapters, tests, reports, or planning are mixed in one owner.
+Avoid Premature Optimization: complexity exists only for imagined scale, performance, or future flexibility without evidence.
+Law of Demeter: code or docs reach through another subsystem's internals instead of using a direct owner contract.
+```
+
 ## Review checklist
 
 Before accepting non-trivial work, check:
@@ -91,3 +128,5 @@ SoC: Are code, docs, plans, reports, and tooling separated by purpose?
 Optimization: Is optimization driven by evidence instead of speculation?
 Demeter: Does the change use direct contracts instead of reaching through internals?
 ```
+
+Report the principle compliance status explicitly. Do not collapse it into a generic “maintainability looks fine” claim.
