@@ -149,6 +149,7 @@ pub enum ControlPackageValidationReason {
     DuplicateOverlayDescriptor,
     DuplicateEditableTextDescriptor,
     DuplicateGenericTextDescriptor,
+    DuplicateSurface2DDescriptor,
     DuplicateRouteRequirement,
     InvalidDeprecation,
     InvalidMigrationVersion,
@@ -162,6 +163,9 @@ pub enum ControlPackageValidationReason {
     InvalidGenericTextDescriptor,
     InvalidGenericTextRole,
     UnsupportedGenericTextLayoutPolicy,
+    UnresolvedSurface2DDescriptor,
+    InvalidSurface2DDescriptor,
+    UnsupportedSurface2DDescriptor,
     UnsupportedTargetProfile,
     UnresolvedReference,
     RenderEvidenceMissing,
@@ -194,6 +198,7 @@ impl ControlPackageValidationReason {
             Self::DuplicateOverlayDescriptor => "duplicate_overlay_descriptor",
             Self::DuplicateEditableTextDescriptor => "duplicate_editable_text_descriptor",
             Self::DuplicateGenericTextDescriptor => "duplicate_generic_text_descriptor",
+            Self::DuplicateSurface2DDescriptor => "duplicate_surface2d_descriptor",
             Self::DuplicateRouteRequirement => "duplicate_route_requirement",
             Self::InvalidDeprecation => "invalid_deprecation",
             Self::InvalidMigrationVersion => "invalid_migration_version",
@@ -207,6 +212,9 @@ impl ControlPackageValidationReason {
             Self::InvalidGenericTextDescriptor => "invalid_generic_text_descriptor",
             Self::InvalidGenericTextRole => "invalid_generic_text_role",
             Self::UnsupportedGenericTextLayoutPolicy => "unsupported_generic_text_layout_policy",
+            Self::UnresolvedSurface2DDescriptor => "unresolved_surface2d_descriptor",
+            Self::InvalidSurface2DDescriptor => "invalid_surface2d_descriptor",
+            Self::UnsupportedSurface2DDescriptor => "unsupported_surface2d_descriptor",
             Self::UnsupportedTargetProfile => "unsupported_target_profile",
             Self::UnresolvedReference => "unresolved_reference",
             Self::RenderEvidenceMissing => "render_evidence_missing",
@@ -481,6 +489,11 @@ impl ControlPackageDescriptor {
             &control_kind_ids,
             &mut report,
         );
+        super::surface2d_validation::validate_surface2d_descriptors(
+            self,
+            &control_kind_ids,
+            &mut report,
+        );
         report
     }
 }
@@ -608,6 +621,16 @@ fn validate_duplicates(
             .iter()
             .map(|descriptor| descriptor.control_kind_id.as_str().to_owned()),
         ControlPackageValidationReason::DuplicateGenericTextDescriptor,
+    );
+    push_duplicate_package_values(
+        report,
+        &package.package_id,
+        "surface2d_descriptor",
+        package
+            .surface2d_descriptors
+            .iter()
+            .map(|descriptor| descriptor.control_kind_id.as_str().to_owned()),
+        ControlPackageValidationReason::DuplicateSurface2DDescriptor,
     );
 }
 

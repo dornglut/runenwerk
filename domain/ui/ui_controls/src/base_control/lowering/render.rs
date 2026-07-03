@@ -66,6 +66,20 @@ pub(crate) fn lower_render(def: &ControlDef, kind_id: ControlKindId) -> ControlR
                 ],
             )
         }
+        ControlPreset::Surface2D => add_render_families(
+            descriptor,
+            &[
+                UiPrimitiveFamily::Rect,
+                UiPrimitiveFamily::Border,
+                UiPrimitiveFamily::Stroke,
+                UiPrimitiveFamily::Clip,
+            ],
+            &[
+                UiExpectedPrimitiveCount::at_least(UiPrimitiveFamily::Rect, 1),
+                UiExpectedPrimitiveCount::at_least(UiPrimitiveFamily::Border, 1),
+                UiExpectedPrimitiveCount::at_least(UiPrimitiveFamily::Stroke, 1),
+            ],
+        ),
     }
 }
 

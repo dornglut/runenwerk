@@ -254,6 +254,66 @@ impl ControlInspectionDescriptor {
             "text_display.product_undo_redo",
             "false",
         );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.supported",
+            bool_string(entry.surface2d_supported),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.input_modes",
+            &entry.surface2d_input_modes.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.layers",
+            &entry.surface2d_layers.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.budget_evidence",
+            &entry.surface2d_budget_evidence.join(","),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.accessibility_complete",
+            bool_string(entry.surface2d_accessibility_complete),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.interaction_complete",
+            bool_string(entry.surface2d_interaction_complete),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.renderer_backend_required",
+            bool_string(entry.renderer_backend_required),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.executes_host_commands",
+            bool_string(entry.executes_host_commands),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.mutates_product_state",
+            bool_string(entry.mutates_product_state),
+        );
+        push_fact(
+            &mut facts,
+            ControlInspectionSection::Surface2D,
+            "surface2d.graph_or_timeline_semantics",
+            bool_string(entry.surface2d_graph_or_timeline_semantics),
+        );
         Self {
             package_id: entry.package_id,
             control_kind_id: entry.control_kind_id,
@@ -385,6 +445,7 @@ pub enum ControlInspectionSection {
     Layering,
     TextEditing,
     TextDisplay,
+    Surface2D,
     State,
     Theme,
     Accessibility,

@@ -55,6 +55,7 @@ fn base_control_definitions_declare_schema_fields_and_presets() {
             ControlPreset::ListView,
             ControlPreset::TreeView,
             ControlPreset::TableView,
+            ControlPreset::Surface2D,
         ]
         .into_iter()
         .collect()

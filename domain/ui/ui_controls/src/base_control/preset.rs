@@ -11,6 +11,7 @@ pub enum ControlPreset {
     ListView,
     TreeView,
     TableView,
+    Surface2D,
 }
 
 impl ControlPreset {
@@ -24,6 +25,7 @@ impl ControlPreset {
             Self::ListView => "list-view",
             Self::TreeView => "tree-view",
             Self::TableView => "table-view",
+            Self::Surface2D => "surface2d",
         }
     }
 }

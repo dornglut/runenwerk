@@ -63,7 +63,7 @@ pub(crate) fn lower_generic_text_support(
                     .with_inline_spans(),
                 )
         }
-        ControlPreset::ColorPicker => return None,
+        ControlPreset::ColorPicker | ControlPreset::Surface2D => return None,
     };
     Some(descriptor)
 }

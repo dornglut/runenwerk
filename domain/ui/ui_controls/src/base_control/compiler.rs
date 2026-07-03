@@ -11,7 +11,7 @@ use crate::{
 
 use super::lowering::{
     accessibility, generic_text_support, input, inspection, interaction, layering_support, layout,
-    module, render, state, text_editing_support, theme,
+    module, render, state, surface2d_support, text_editing_support, theme,
 };
 use super::{
     CompiledControl, CompiledControlPackage, ControlContribution, ControlInspection, UiControls,
@@ -64,6 +64,12 @@ impl ControlCompiler {
                 control.module.kind.control_kind_id.clone(),
             ) {
                 package = package.with_generic_text_descriptor(descriptor);
+            }
+            if let Some(descriptor) = surface2d_support::lower_surface2d_descriptor(
+                control.contribution.def(),
+                control.module.kind.control_kind_id.clone(),
+            ) {
+                package = package.with_surface2d_descriptor(descriptor);
             }
         }
         let controls = lowered

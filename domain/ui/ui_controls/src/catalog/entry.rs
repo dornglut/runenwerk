@@ -9,6 +9,7 @@ use crate::interaction::ControlInteractionSupportSummary;
 use crate::overlay::ControlOverlaySupportSummary;
 use crate::package::descriptor::{ControlKindDescriptor, ControlPackageDescriptor};
 use crate::package::metadata::ControlMountEligibility;
+use crate::surface2d::ControlSurface2DSupportSummary;
 
 use super::{ControlCatalogDeprecationStatus, ControlCompatibilitySummary};
 
@@ -97,6 +98,20 @@ pub struct ControlCatalogEntryDescriptor {
     pub glyph_evidence_supported: bool,
     #[serde(default)]
     pub fallback_evidence_supported: bool,
+    #[serde(default)]
+    pub surface2d_supported: bool,
+    #[serde(default)]
+    pub surface2d_input_modes: Vec<String>,
+    #[serde(default)]
+    pub surface2d_layers: Vec<String>,
+    #[serde(default)]
+    pub surface2d_budget_evidence: Vec<String>,
+    #[serde(default)]
+    pub surface2d_accessibility_complete: bool,
+    #[serde(default)]
+    pub surface2d_interaction_complete: bool,
+    #[serde(default)]
+    pub surface2d_graph_or_timeline_semantics: bool,
     #[serde(default)]
     pub renderer_backend_required: bool,
     #[serde(default)]
@@ -217,6 +232,13 @@ impl ControlCatalogEntryDescriptor {
             line_metrics_supported: false,
             glyph_evidence_supported: false,
             fallback_evidence_supported: false,
+            surface2d_supported: false,
+            surface2d_input_modes: Vec::new(),
+            surface2d_layers: Vec::new(),
+            surface2d_budget_evidence: Vec::new(),
+            surface2d_accessibility_complete: false,
+            surface2d_interaction_complete: false,
+            surface2d_graph_or_timeline_semantics: false,
             renderer_backend_required: false,
             control_owned_runtime_behavior: false,
             executes_host_commands: false,
@@ -233,6 +255,9 @@ impl ControlCatalogEntryDescriptor {
         }
         if let Some(descriptor) = package.generic_text_descriptor(&kind.control_kind_id) {
             entry = entry.with_generic_text_summary(&descriptor.summary());
+        }
+        if let Some(descriptor) = package.surface2d_descriptor(&kind.control_kind_id) {
+            entry = entry.with_surface2d_summary(&descriptor.summary());
         }
         entry
     }
@@ -290,7 +315,21 @@ impl ControlCatalogEntryDescriptor {
         self.line_metrics_supported = summary.line_metrics_support;
         self.glyph_evidence_supported = summary.glyph_evidence_support;
         self.fallback_evidence_supported = summary.fallback_evidence_support;
-        self.renderer_backend_required = summary.renderer_backend_required;
+        self.renderer_backend_required |= summary.renderer_backend_required;
+        self.executes_host_commands |= summary.executes_host_commands;
+        self.mutates_product_state |= summary.mutates_product_state;
+        self
+    }
+
+    pub fn with_surface2d_summary(mut self, summary: &ControlSurface2DSupportSummary) -> Self {
+        self.surface2d_supported = summary.surface2d_supported;
+        self.surface2d_input_modes = summary.input_modes.clone();
+        self.surface2d_layers = summary.layer_kinds.clone();
+        self.surface2d_budget_evidence = summary.budget_evidence.clone();
+        self.surface2d_accessibility_complete = summary.accessibility_complete;
+        self.surface2d_interaction_complete = summary.interaction_complete;
+        self.surface2d_graph_or_timeline_semantics = summary.graph_or_timeline_semantics;
+        self.renderer_backend_required |= summary.renderer_backend_required;
         self.executes_host_commands |= summary.executes_host_commands;
         self.mutates_product_state |= summary.mutates_product_state;
         self
