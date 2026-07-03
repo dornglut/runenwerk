@@ -19,7 +19,7 @@ impl Surface2DTransform {
         Self { pan_x, pan_y, zoom }
     }
 
-    pub const fn is_valid(self) -> bool {
+    pub fn is_valid(self) -> bool {
         self.zoom.is_finite() && self.zoom > 0.0 && self.pan_x.is_finite() && self.pan_y.is_finite()
     }
 
