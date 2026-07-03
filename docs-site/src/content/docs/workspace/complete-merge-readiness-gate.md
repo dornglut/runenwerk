@@ -27,23 +27,25 @@ This document defines the mandatory merge-readiness gate for Runenwerk changes.
 
 Use it before merging a PR, branch, phase slice, docs workflow change, or production-track implementation branch.
 
-The gate exists to prevent merges that are technically clean but workflow-incomplete, validation-unclear, lifecycle-drifted, or branch-cleanup unsafe.
+The gate exists to prevent merges that are technically clean but workflow-incomplete, validation-unclear, lifecycle-drifted, branch-cleanup unsafe, principle-noncompliant, or maintainability-degraded.
 
 ## Core rule
 
-A branch is merge-ready only when code/docs scope, validation, lifecycle, evidence, and post-merge state are all known.
+A branch is merge-ready only when code/docs scope, validation, lifecycle, evidence, programming-principle compliance, maintainability, and post-merge state are all known.
 
 ```text
 Complete investigation where required.
 Complete design where required.
 Complete implementation contract.
+Complete principle compliance check.
+Complete maintainability/decomposition check.
 Complete validation report.
 Complete lifecycle/planning truth.
 Complete post-merge cleanup plan.
 Then merge.
 ```
 
-Do not merge from “looks good,” partial review, stale validation, uninspected planning state, or assumed branch cleanup.
+Do not merge from “looks good,” partial review, stale validation, uninspected planning state, assumed branch cleanup, “we can split it later,” or generic principle claims without evidence.
 
 ## Required when
 
@@ -85,6 +87,23 @@ Authority:
   complete investigation gate status where required
   complete design gate status where required
   evidence taxonomy status
+
+Programming principles:
+  KISS status
+  DRY status
+  YAGNI status
+  SOLID status
+  Separation of Concerns status
+  Avoid Premature Optimization status
+  Law of Demeter status
+  unresolved principle findings absent or owned
+
+Maintainability:
+  module decomposition map status
+  single-responsibility file/module review
+  public re-export/API shape review
+  large or compound file justification if any
+  split follow-up forbidden unless it has an accepted owner and activation condition
 
 Validation:
   command validation run
@@ -136,6 +155,8 @@ Use this matrix for PR reviews and merge decisions.
 | Area | Required evidence | Status | Blocker | Owner / next action |
 |---|---|---|---|---|
 | Scope | changed files + intended contract | <ready/blocked/unknown> | <blocker> | <owner/action> |
+| Principles | KISS/DRY/YAGNI/SOLID/SoC/Optimization/Demeter evidence | <ready/blocked/unknown> | <blocker> | <owner/action> |
+| Maintainability | decomposition map + responsibility review | <ready/blocked/unknown> | <blocker> | <owner/action> |
 | Validation | commands/CI/manual evidence | <ready/blocked/unknown> | <blocker> | <owner/action> |
 | Lifecycle | planning and closeout truth | <ready/blocked/unknown> | <blocker> | <owner/action> |
 | Evidence | evidence classes and confidence | <ready/blocked/unknown> | <blocker> | <owner/action> |
@@ -149,6 +170,8 @@ For phase or production-track PRs, merge readiness also requires:
 ```text
 promised contract vs delivered contract checked
 phase completion claim checked
+programming-principle compliance checked
+maintainability/decomposition checked
 validation envelope checked
 known gaps recorded
 planning state update included or named as pre-next-implementation closeout
@@ -201,8 +224,10 @@ planning state would become misleading
 phase completion is claimed without evidence
 next implementation would start before closeout truth
 complete investigation or design gate evidence is missing where required
+programming-principle compliance evidence is missing for non-trivial work
+maintainability/decomposition evidence is missing for compound work
 branch state, target, or cleanup plan is unclear
-unresolved PR findings affect correctness, ownership, lifecycle, or validation
+unresolved PR findings affect correctness, ownership, lifecycle, programming principles, maintainability, or validation
 ```
 
 ## Reporting requirement
@@ -215,6 +240,8 @@ Scope status:
 Evidence taxonomy status:
 Complete investigation gate status:
 Complete design gate status:
+Programming-principle compliance status:
+Maintainability/decomposition status:
 Validation status:
 Lifecycle/planning status:
 Known blockers:
