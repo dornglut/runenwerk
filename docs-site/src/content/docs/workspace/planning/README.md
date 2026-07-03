@@ -5,10 +5,14 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-03
 related_docs:
   - ../authority-model.md
   - ../workflow-lifecycle.md
+  - ../complete-investigation-gate.md
+  - ../complete-design-gate.md
+  - ../evidence-quality-taxonomy.md
+  - ../complete-merge-readiness-gate.md
   - ../routines/roadmap-update-routine.md
 ---
 
@@ -35,9 +39,19 @@ Legacy YAML and generated Markdown may remain as migration context or optional m
 
 Use [`../workflow-lifecycle.md`](../workflow-lifecycle.md) when a planning change changes state.
 
+Use [`../complete-investigation-gate.md`](../complete-investigation-gate.md) before planning makes design, activation, or implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
+
+Use [`../complete-design-gate.md`](../complete-design-gate.md) before planning authorizes implementation for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
+
+Use [`../evidence-quality-taxonomy.md`](../evidence-quality-taxonomy.md) when planning records depend on validation, current behavior, confidence, or freshness claims.
+
+Use [`../complete-merge-readiness-gate.md`](../complete-merge-readiness-gate.md) before planning marks a PR/branch/phase as merge-ready or completed by merge.
+
 Common state transitions:
 
 ```text
+idea -> investigating
+investigating -> proposed-design
 proposed-design -> accepted-direction
 accepted-direction -> track-candidate
 track-candidate -> production-track
@@ -49,12 +63,17 @@ active-planning -> deferred
 accepted-direction -> superseded
 ```
 
-Architecture acceptance does not authorize implementation. Active implementation requires exact owner, scope, validation envelope, evidence expectation, and stop conditions.
+Architecture acceptance does not authorize implementation. Active implementation requires exact owner, complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, stop conditions, and complete investigation/design gate evidence where applicable.
 
 ## Update checklist
 
 - Active work has one clear current focus or an explicit no-current-focus state.
 - Roadmap entries name state, owner, authority, evidence, known gaps, and next action.
+- Planning decisions point to complete investigation gate evidence where applicable.
+- Active implementation entries point to complete design gate evidence where applicable.
+- Active implementation entries name the complete implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, and stop conditions.
+- Reusable/platform/public API entries include or link feature support, future-use-case pressure, hierarchy/composition where relevant, and ergonomics/usability evidence.
+- Merge/completion entries name evidence classes, validation status, merge readiness status when applicable, and branch cleanup impact when applicable.
 - Deferred work names the reason and reactivation condition.
 - Completed work links evidence and remains a short index.
 - Production tracks name strategic order, track type, gates, activation condition, and current blocker.
@@ -71,9 +90,22 @@ Title:
 State:
 Owner:
 Authority:
+Evidence classes:
+Complete investigation gate:
+Complete design gate:
+Merge readiness:
+Implementation contract:
+Allowed files/crates:
+Forbidden files/crates:
+Feature support matrix:
+Future-use-case pressure matrix:
+Hierarchy/composition matrix:
+Ergonomics/usability:
 Evidence:
+Validation:
 Known gaps:
+Stop conditions:
 Next action:
 ```
 
-Specific files may add fields such as `Track type`, `Validation`, `Reason deferred`, `Reactivation condition`, `Completed on`, or `State transition`.
+Specific files may add fields such as `Track type`, `Validation`, `Reason deferred`, `Reactivation condition`, `Completed on`, `State transition`, `Branch cleanup`, or `Merge readiness`.

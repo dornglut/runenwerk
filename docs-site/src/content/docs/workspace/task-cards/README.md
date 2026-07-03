@@ -5,10 +5,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-03
 related_docs:
   - ../start-here.md
   - ../workflow-lifecycle.md
+  - ../complete-design-gate.md
   - ../routines/README.md
 ---
 
@@ -16,7 +17,7 @@ related_docs:
 
 Task cards are short reusable task instructions. The linked routine owns process.
 
-Task cards remain below routines, lifecycle rules, authority docs, planning records, accepted designs, and validation evidence.
+Task cards remain below routines, lifecycle rules, complete design gate requirements, authority docs, planning records, accepted designs, and validation evidence.
 
 ## Active cards
 

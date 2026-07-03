@@ -1,16 +1,21 @@
 ---
 title: Workflow Lifecycle
-description: Lifecycle model for moving Runenwerk work from idea to investigation, design, decision, planning, implementation, review, and closeout.
+description: Lifecycle model for moving Runenwerk work from idea to investigation, design, decision, planning, implementation, review, merge readiness, and closeout.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-28
+last_reviewed: 2026-07-03
 related_docs:
   - ./start-here.md
   - ./operating-model.md
   - ./authority-model.md
   - ./documentation-structure.md
+  - ./workflow-lifecycle.md
+  - ./complete-investigation-gate.md
+  - ./complete-design-gate.md
+  - ./evidence-quality-taxonomy.md
+  - ./complete-merge-readiness-gate.md
   - ./planning/README.md
   - ./routines/architecture-governance-review-routine.md
   - ./routines/implementation-routine.md
@@ -24,7 +29,7 @@ related_docs:
 
 ## Purpose
 
-This document defines how Runenwerk work moves from idea to investigation, design, decision, planning, implementation, review, and closeout.
+This document defines how Runenwerk work moves from idea to investigation, design, decision, planning, implementation, review, merge readiness, and closeout.
 
 It exists to keep architecture-heavy work scriptless, explicit, and reviewable without adding public-governance overhead.
 
@@ -33,12 +38,29 @@ It exists to keep architecture-heavy work scriptless, explicit, and reviewable w
 Architecture acceptance is not implementation authorization.
 
 ```text
+Investigation
+  means current reality, authority, ownership, alternatives, confidence,
+  and missing evidence are understood before design or planning decisions.
+
 Accepted direction
   means the target shape is approved.
 
 Active implementation
-  requires an exact owner, scope, validation envelope, stop conditions, and active planning entry.
+  requires complete investigation gate evidence where applicable,
+  complete design gate evidence where applicable, exact owner,
+  exact implementation contract, file/crate scope, validation envelope,
+  evidence expectation, stop conditions, and active planning entry.
+
+Merge readiness
+  requires evidence classification, validation status, lifecycle truth,
+  branch state, branch cleanup plan, and post-merge truth.
 ```
+
+For architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work, use [`complete-investigation-gate.md`](complete-investigation-gate.md) before proposed design and [`complete-design-gate.md`](complete-design-gate.md) before active implementation.
+
+Use [`evidence-quality-taxonomy.md`](evidence-quality-taxonomy.md) when claims depend on validation, freshness, confidence, current behavior, CI, generated artifacts, connector inspection, or user-reported validation.
+
+Use [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md) before recommending merge, phase merge, branch deletion, or post-merge cleanup.
 
 ## Artifact jobs
 
@@ -48,17 +70,20 @@ Every artifact has one primary job.
 |---|---|---|
 | Root summary | Short entrypoint and links | Long design, roadmap, historical evidence |
 | Guideline | Stable doctrine and engineering rules | Current task status |
-| Design | Target architecture, vocabulary, boundaries, tradeoffs | Active task status |
+| Investigation dossier | Current reality, authority evidence, alternatives, confidence, blockers | Target architecture or implementation authorization |
+| Design | Target architecture, vocabulary, boundaries, tradeoffs, complete design gate evidence | Active task status |
 | ADR / decision record | Accepted decision and rationale | Full design exploration |
+| Evidence taxonomy | Evidence classes, confidence, freshness, validation wording | Code behavior or planning truth |
+| Merge readiness gate | Merge decision checklist, branch cleanup, post-merge truth | PR implementation details or closeout history |
 | Production track | Strategic multi-phase sequence and gates | Detailed implementation manual |
 | Roadmap entry | Milestone state and next work | Deep architecture rationale |
-| Active work | One current focus | Long historical archive |
+| Active work | One current focus and implementation authorization state | Long historical archive |
 | Deferred work | Postponed work and reactivation condition | Completed work |
 | Completed work | Short completion index | Full closeout detail |
 | Closeout report | Historical evidence | Current planning authority |
 | Routine | Repeatable procedure | Track-specific decision authority |
 | Task card | Reusable prompt or handoff wording | Process authority |
-| Generated file | Mirror, evidence, or narrow contract | Default human workflow authority |
+| Generated file | Mirror, evidence, or contract | Default human workflow authority |
 
 ## Lifecycle states
 
@@ -69,7 +94,7 @@ idea
   raw concept, not authority
 
 investigating
-  authority files and working files are being inspected
+  complete investigation gate is being satisfied before design/planning/implementation decisions
 
 proposed-design
   design exists, not accepted
@@ -87,10 +112,10 @@ active-planning
   current planning focus, no implementation yet
 
 active-implementation
-  exact implementation scope authorized
+  exact complete implementation contract authorized
 
 review
-  PR, patch, or doc change exists and validation/review is pending
+  PR, patch, or doc change exists and validation/review/merge-readiness is pending
 
 completed
   evidence exists and completion is recorded
@@ -112,25 +137,49 @@ archived
 
 ### Idea to investigation
 
-Promote when ownership, current state, risk, or expected change scope is unclear.
+Promote when ownership, current state, risk, current reality, authority, alternatives, or expected change scope is unclear.
 
-Use the investigation routine. Do not patch during pure investigation unless explicitly requested.
+Use the investigation routine and complete investigation gate. Do not patch during pure investigation unless explicitly requested.
 
 ### Investigation to proposed design
 
-Promote when the change may affect ownership, dependency direction, durable vocabulary, migration shape, host behavior, app composition, or multiple future implementation slices.
+Promote when the complete investigation gate records current reality, authority/source evidence, owner/dependency/vocabulary impact, capability inventory where applicable, alternatives, confidence, missing evidence, and a proposed-design recommendation.
 
 Output: a proposed design document or review recommendation.
+
+### Investigation to implementation
+
+Promote directly to implementation only when the complete investigation gate proves all of these:
+
+```text
+work is local
+behavior is already accepted
+owner is clear
+dependency direction is unchanged
+public API is unchanged
+no reusable/platform/domain-boundary concern exists
+validation path is known
+no complete design gate is required
+```
+
+Otherwise, investigation must promote to proposed design, planning update, defer, reject, or supersede.
 
 ### Proposed design to accepted direction
 
 Promote only when the design records:
 
 ```text
+investigation gate status
 owner boundaries
 vocabulary
-non-goals
+non-owned responsibilities
 tradeoffs
+complete design gate status when applicable
+complete capability map when applicable
+ergonomics and usability contract when applicable
+feature support matrix when applicable
+future-use-case pressure matrix when applicable
+hierarchy/composition matrix when applicable
 acceptance criteria
 implementation gate
 stop conditions
@@ -153,11 +202,17 @@ Output: active-work entry.
 
 ### Active planning to active implementation
 
-Promote only when exact implementation scope, owner files/crates, validation envelope, and stop conditions are known.
+Promote only when exact implementation contract, owner files/crates, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, and stop conditions are known.
 
-### Active implementation or review to completed
+For architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work, the active-planning record must also point to complete investigation gate and complete design gate evidence.
 
-Promote only when delivered scope, validation status, evidence, known gaps, and follow-up are recorded.
+### Active implementation to review
+
+Promote when the patch or PR exists and is ready for review. Review must classify evidence quality and must not recommend merge until complete merge readiness is satisfied.
+
+### Review to completed
+
+Promote only when delivered contract, evidence classes, validation status, merge readiness when applicable, lifecycle/planning truth, known gaps, and follow-up are recorded.
 
 Detailed evidence belongs in a closeout report when the completion record would become too large.
 
@@ -168,8 +223,10 @@ When a PR, patch, or user validation report completes the current active phase, 
 Required completion truth:
 
 ```text
-delivered scope
+delivered contract
+evidence classes used
 validation status
+merge readiness status when applicable
 evidence
 known gaps
 follow-up
@@ -183,13 +240,13 @@ closeout report when evidence is too large for completed-work.md
 owning design status update when the design changes from planning/design to completed reference
 ```
 
-The next phase may enter `active-planning` in the same patch only after the completed phase is truthful. That planning entry must state that implementation is not authorized until exact owner files, scope, validation envelope, evidence expectation, and stop conditions are accepted.
+The next phase may enter `active-planning` in the same patch only after the completed phase is truthful. That planning entry must state that implementation is not authorized until exact owner files, implementation contract, validation envelope, evidence expectation, complete investigation gate evidence where applicable, complete design gate evidence where applicable, and stop conditions are accepted.
 
-If completion evidence is incomplete, keep the current phase in `review` or run the phase completion drift check routine. Do not hide drift by starting the next implementation slice.
+If completion evidence is incomplete, keep the current phase in `review` or run the phase completion drift check routine. Do not hide drift by starting the next implementation contract.
 
 ## Design and roadmap placement
 
-A design may contain a short implementation outline.
+A design may contain an implementation contract summary.
 
 A companion roadmap may live next to a proposed design while the design is under review.
 
@@ -202,7 +259,7 @@ workspace/planning/active-work.md
 workspace/planning/decision-register.md
 ```
 
-Keep the long design as architecture direction. Keep planning files as work-state authority.
+Keep the investigation dossier as current-reality evidence, the long design as architecture direction and complete design gate evidence, merge readiness as review evidence, and planning files as work-state authority.
 
 ## Generated file classes
 
@@ -219,7 +276,9 @@ contract
   machine-readable authority only when explicitly authorized by an accepted design
 ```
 
-Generated files are not default workflow authority. They become authoritative only when a narrow accepted design names them as a contract.
+Generated files are not default workflow authority. They become authoritative only when an accepted design names them as a contract.
+
+Use the evidence quality taxonomy before relying on generated evidence.
 
 ## Decision register transition field
 
@@ -232,11 +291,15 @@ State transition:
 Examples:
 
 ```text
+idea -> investigating
+investigating -> proposed-design
+investigating -> active-implementation
 proposed-design -> accepted-direction
 accepted-direction -> production-track
 production-track -> active-planning
 active-planning -> active-implementation
-active-implementation -> completed
+active-implementation -> review
+review -> completed
 active-planning -> deferred
 accepted-direction -> superseded
 ```
@@ -248,14 +311,20 @@ Every long design should include:
 ```text
 Status
 Decision summary
+Investigation gate status
 Problem
 Current reality
 Goals
-Non-goals
+Non-owned responsibilities
 Vocabulary
 Owner map
 Target architecture
 Workflows / use cases
+Complete capability map when applicable
+Feature support matrix when applicable
+Future-use-case pressure matrix when applicable
+Hierarchy/composition matrix when applicable
+Ergonomics / usability contract when applicable
 Alternatives considered
 Risks
 Acceptance criteria
@@ -263,6 +332,8 @@ Implementation gate
 Stop conditions
 Relationship to current work
 ```
+
+Use [`complete-investigation-gate.md`](complete-investigation-gate.md) for investigation evidence, [`complete-design-gate.md`](complete-design-gate.md) for the complete design checklist and matrix templates, [`evidence-quality-taxonomy.md`](evidence-quality-taxonomy.md) for evidence classes, and [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md) for merge readiness.
 
 The decision summary should fit on the first screen.
 
@@ -283,11 +354,13 @@ ID
 Title
 Completed on
 Owner
-Scope promised
-Scope delivered
+Contract promised
+Contract delivered
 Files changed
+Evidence classes used
 Validation run
 Validation unavailable
+Merge readiness status when applicable
 Known gaps
 Drift found
 Follow-up
@@ -306,6 +379,10 @@ multiple current active focuses without explicit reason
 accepted direction being treated as implementation authorization
 planning files duplicating full design rationale
 completed-work.md becoming a detailed report archive
+complete-investigation-gate.md duplicating track-specific findings
+complete-design-gate.md duplicating track-specific design decisions
+evidence-quality-taxonomy.md deciding track-specific truth
+complete-merge-readiness-gate.md replacing implementation review or closeout evidence
 ```
 
 ## Implementation note

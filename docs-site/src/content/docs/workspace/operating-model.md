@@ -5,12 +5,16 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-03
 related_docs:
   - ./start-here.md
   - ./authority-model.md
   - ./documentation-structure.md
   - ./workflow-lifecycle.md
+  - ./complete-investigation-gate.md
+  - ./complete-design-gate.md
+  - ./evidence-quality-taxonomy.md
+  - ./complete-merge-readiness-gate.md
   - ./routines/README.md
   - ./task-cards/README.md
 ---
@@ -41,12 +45,24 @@ Scripts, Taskfile tasks, renderers, validators, prompt generators, and shell com
 
 Every non-trivial task should identify its lifecycle state before editing.
 
-Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when work moves between investigation, proposed design, accepted direction, production track, active planning, active implementation, review, completion, deferral, or supersession.
+Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when work moves between investigation, proposed design, accepted direction, production track, active planning, active implementation, review, merge readiness, completion, deferral, or supersession.
+
+Use [`complete-investigation-gate.md`](complete-investigation-gate.md) before design, planning, or implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
+
+Use [`complete-design-gate.md`](complete-design-gate.md) before planning authorizes implementation for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
+
+Use [`evidence-quality-taxonomy.md`](evidence-quality-taxonomy.md) when reporting validation, confidence, freshness, command output, CI, generated artifacts, user-reported validation, or inference.
+
+Use [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md) before recommending merge, phase merge, branch deletion, or post-merge cleanup.
 
 The key rule is:
 
 ```text
 Architecture acceptance is not implementation authorization.
+Complete investigation gate evidence is required when the decision needs current-reality proof.
+Complete design gate evidence is required when the work type needs full design readiness.
+Evidence quality must be classified before it authorizes a decision.
+Merge readiness must be checked before merge recommendations.
 ```
 
 ## Default workflow
@@ -57,11 +73,15 @@ Architecture acceptance is not implementation authorization.
 3. Read the routine's authority files.
 4. Inspect the exact working files.
 5. Classify the lifecycle state and intended state transition.
-6. Decide the smallest coherent patch.
-7. Apply the patch file-by-file.
-8. Run manual validation from the routine.
-9. Report command validation as run, skipped, or unavailable.
-10. List changed files, exact sections/modules, risks, and next steps.
+6. Classify evidence for important claims.
+7. Verify complete investigation gate evidence when the task requires it.
+8. Verify complete design gate evidence when the task requires it.
+9. Decide the complete owned patch for the authorized contract.
+10. Apply the patch file-by-file.
+11. Run manual validation from the routine.
+12. Report command validation as run, skipped, or unavailable.
+13. Verify merge readiness when recommending merge.
+14. List changed files, exact sections/modules, risks, and next steps.
 ```
 
 ## Authority rules
@@ -69,6 +89,10 @@ Architecture acceptance is not implementation authorization.
 - Code and tests prove current behavior.
 - ADRs, accepted designs, guidelines, and root architecture docs own durable policy.
 - Workspace authority docs own repository process.
+- Complete investigation gate docs own mandatory investigation evidence requirements.
+- Complete design gate docs own mandatory design/planning readiness requirements.
+- Evidence quality taxonomy owns evidence classes and validation wording.
+- Complete merge readiness gate owns merge readiness and branch cleanup requirements.
 - Planning Markdown owns active planning state.
 - Routines own repeatable human/agent procedure.
 - Task cards are reusable prompts; they do not own process.
@@ -104,9 +128,9 @@ These commands do not replace manual authority review. If command output and aut
 
 ## Generated files
 
-Generated or machine-readable files can be useful mirrors, evidence, or narrow contracts.
+Generated or machine-readable files can be useful mirrors, evidence, or contracts.
 
-They must not be required for normal workflow comprehension unless an accepted design explicitly classifies a generated file as a contract for a narrow validation scope.
+They must not be required for normal workflow comprehension unless an accepted design explicitly classifies a generated file as a contract for a validation scope.
 
 If a generated view is stale or cannot be regenerated, continue from the Markdown planning record and report the generated-view gap.
 
@@ -118,6 +142,10 @@ Never finish with only “done.” A final report must include:
 Files changed:
 Exact functions/modules/sections changed:
 Authority files inspected:
+Evidence classes used:
+Complete investigation gate status:
+Complete design gate status:
+Merge readiness status when relevant:
 Manual validation:
 Local command validation:
 Known gaps:

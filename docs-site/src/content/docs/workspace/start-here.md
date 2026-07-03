@@ -5,12 +5,16 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-03
 related_docs:
   - ./operating-model.md
   - ./authority-model.md
   - ./documentation-structure.md
   - ./workflow-lifecycle.md
+  - ./complete-investigation-gate.md
+  - ./complete-design-gate.md
+  - ./evidence-quality-taxonomy.md
+  - ./complete-merge-readiness-gate.md
   - ./routines/README.md
   - ./task-cards/README.md
   - ./planning/README.md
@@ -27,6 +31,10 @@ The workflow must work from GitHub connector, ChatGPT context tooling, Codex-sty
 - Human entrypoint: `README.md`
 - AI agent entrypoint: `AGENTS.md`
 - Workspace router: this file
+- Complete investigation gate: [`complete-investigation-gate.md`](complete-investigation-gate.md)
+- Complete design gate: [`complete-design-gate.md`](complete-design-gate.md)
+- Evidence quality taxonomy: [`evidence-quality-taxonomy.md`](evidence-quality-taxonomy.md)
+- Complete merge readiness gate: [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md)
 
 ## Choose the task shape
 
@@ -39,7 +47,7 @@ The workflow must work from GitHub connector, ChatGPT context tooling, Codex-sty
 | Documentation cleanup | [`routines/docs-refactor-routine.md`](routines/docs-refactor-routine.md) | [`task-cards/docs-cleanup-task.md`](task-cards/docs-cleanup-task.md) |
 | Roadmap or planning update | [`routines/roadmap-update-routine.md`](routines/roadmap-update-routine.md) | [`task-cards/implementation-task.md`](task-cards/implementation-task.md) |
 | Phase closeout | [`routines/phase-completion-drift-check-routine.md`](routines/phase-completion-drift-check-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
-| Pull request review | [`routines/pr-review-routine.md`](routines/pr-review-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
+| Pull request review / merge readiness | [`routines/pr-review-routine.md`](routines/pr-review-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
 
 ## Lifecycle rule
 
@@ -62,7 +70,15 @@ superseded
 archived
 ```
 
-Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when a task crosses from design to decision, planning, implementation, or closeout.
+Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when a task crosses from design to decision, planning, implementation, review, merge readiness, or closeout.
+
+Use [`complete-investigation-gate.md`](complete-investigation-gate.md) before design/planning/implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
+
+Use [`complete-design-gate.md`](complete-design-gate.md) before implementation is authorized for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
+
+Use [`evidence-quality-taxonomy.md`](evidence-quality-taxonomy.md) whenever a decision depends on validation, current behavior, authority, confidence, or freshness claims.
+
+Use [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md) before recommending a merge, branch cleanup, or phase merge.
 
 ## Read first
 
@@ -83,6 +99,10 @@ AGENTS.md
 docs-site/src/content/docs/workspace/documentation-structure.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
+docs-site/src/content/docs/workspace/complete-investigation-gate.md
+docs-site/src/content/docs/workspace/complete-design-gate.md
+docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
+docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
 ```
 
 For planning changes:
@@ -93,6 +113,10 @@ docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/workspace/workflow-lifecycle.md
+docs-site/src/content/docs/workspace/complete-investigation-gate.md
+docs-site/src/content/docs/workspace/complete-design-gate.md
+docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
+docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
 ```
 
 For all significant changes, use:
@@ -109,6 +133,10 @@ End with:
 Files changed:
 Exact functions/modules/sections changed:
 Authority files inspected:
+Evidence classes used:
+Complete investigation gate status:
+Complete design gate status:
+Merge readiness status when relevant:
 Manual validation performed:
 Command validation run or unavailable:
 Remaining risks or blockers:
