@@ -24,6 +24,12 @@ For reusable task handoffs, use:
 docs-site/src/content/docs/workspace/task-cards/
 ```
 
+For architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work, use the complete design gate before implementation:
+
+```text
+docs-site/src/content/docs/workspace/complete-design-gate.md
+```
+
 ## Operating rule
 
 Runenwerk workflows are repository-readable first.
@@ -33,7 +39,7 @@ Do not assume a full repo export, a clean worktree, command execution, generated
 Default workflow:
 
 ```text
-Read authority files -> inspect working files -> patch exact files -> manually validate evidence -> report changed files and gaps
+Read authority files -> inspect working files -> verify complete design gate when required -> patch exact files -> manually validate evidence -> report changed files and gaps
 ```
 
 ## Authority files
@@ -55,6 +61,8 @@ For detailed workflow authority, use:
 docs-site/src/content/docs/workspace/operating-model.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/workspace/documentation-structure.md
+docs-site/src/content/docs/workspace/workflow-lifecycle.md
+docs-site/src/content/docs/workspace/complete-design-gate.md
 ```
 
 For engineering principles, use:
@@ -75,7 +83,7 @@ Use these principles as a review lens:
 6. Avoid Premature Optimization: prove the bottleneck first.
 7. Law of Demeter: depend on direct contracts.
 
-These principles do not override accepted ADRs, dependency rules, domain ownership, or tests. They help identify when a proposed change is overbuilt, duplicated, misplaced, or too coupled.
+These principles do not override accepted ADRs, dependency rules, domain ownership, complete design gates, or tests. They help identify when a proposed change is overbuilt, duplicated, misplaced, or too coupled.
 
 ## Repository conventions
 
@@ -94,7 +102,8 @@ Before editing:
 - inspect existing implementations, helpers, tests, examples, and docs;
 - reuse local patterns before adding new abstractions;
 - inspect public exports when public API changes;
-- identify the owner, invariant, and boundary before patching.
+- identify the owner, invariant, and boundary before patching;
+- verify complete design gate evidence when the task requires it.
 
 ## Documentation rules
 
@@ -118,6 +127,7 @@ Every final report must include:
 Files changed:
 Exact functions/modules/sections changed:
 Authority files inspected:
+Complete design gate status:
 Manual validation performed:
 Command validation run or unavailable:
 Remaining risks or blockers:
