@@ -22,6 +22,7 @@ impl BaseControlsPlugin {
         controls.add(crate::list_view::control_contribution());
         controls.add(crate::tree_view::control_contribution());
         controls.add(crate::table_view::control_contribution());
+        controls.add(crate::surface2d::control_contribution());
     }
 
     pub fn extension(&self) -> UiControls {
