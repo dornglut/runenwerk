@@ -1,0 +1,17 @@
+[package]
+name = "app_program"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+ui_program.workspace = true
+ui_schema.workspace = true
+ui_artifacts.workspace = true
+ui_compiler.workspace = true
+ui_evaluator.workspace = true
+ui_binding.workspace = true
+ui_hosts.workspace = true
+ui_state.workspace = true

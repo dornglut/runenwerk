@@ -37,6 +37,7 @@ This map tracks crate ownership and allowed dependency direction for the active 
 - `domain/material_graph`: authored material graph documents, node catalog boundaries, ratification, lowering, source maps, cache keys, and formed material product descriptors
 - `domain/procgen`: deterministic procgen documents, terrain/material node catalog semantics, planning metadata, ratification, lowering to world operation windows, and product job/publication descriptors
 - `domain/drawing`: drawing document, stroke, brush, paper, layer/composition graph, command, ratification, diagnostic, deterministic ink tile formation, product helper, and tile-lineage contracts
+- `domain/app_program`: typed app-program IDs, model snapshots, actions, route-action mapping, pure reducers, inert effect plans, projections, deterministic replay traces, reports, and proof-local counter semantics
 - `domain/ui/*`: UI geometry, input, layout, text, theme, render-data, surface, graph-editor, definition, tree, runtime, and widget contracts
 - `domain/editor/*`: editor-facing domain logic (inspector, scene editing, viewport)
 

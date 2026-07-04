@@ -20,6 +20,7 @@ members = [
     "domain/material_graph",
     "domain/procgen",
     "domain/drawing",
+    "domain/app_program",
 
     "domain/ui/ui_math",
     "domain/ui/ui_input",
@@ -152,6 +153,7 @@ texture = { path = "domain/texture" }
 material_graph = { path = "domain/material_graph" }
 procgen = { path = "domain/procgen" }
 drawing = { path = "domain/drawing" }
+app_program = { path = "domain/app_program" }
 schema = { path = "foundation/schema" }
 commands = { path = "foundation/commands" }
 resource_ref = { path = "foundation/resource_ref" }

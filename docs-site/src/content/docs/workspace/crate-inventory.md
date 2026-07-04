@@ -54,6 +54,7 @@ This document records active workspace crates and their intended layer. Update i
 | `material_graph` | `domain/material_graph` | domain | Authored material graph documents, catalog boundaries, ratification, lowering, and formed material descriptors. | evolving |
 | `procgen` | `domain/procgen` | domain | Deterministic procgen documents, planning metadata, ratification, lowering, and product outputs. | evolving |
 | `drawing` | `domain/drawing` | domain | Drawing documents, strokes, brushes, composition, commands, ratification, and tile formation contracts. | evolving |
+| `app_program` | `domain/app_program` | domain | Typed app-program IDs, model snapshots, actions, route-action mapping, pure reducers, inert effects, projections, replay traces, reports, and headless counter proof fixtures. | evolving |
 | `scene` | `domain/scene` | domain | Scene transform value contracts and schema descriptors. | evolving |
 | `ui_math` | `domain/ui/ui_math` | domain | UI geometry primitives. | evolving |
 | `ui_input` | `domain/ui/ui_input` | domain | UI input, focus, routing, keyboard, pointer, stylus packets, and shortcut contracts. | evolving |

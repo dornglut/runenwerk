@@ -45,6 +45,7 @@ Texture product descriptors        -> domain/texture
 Material graph semantics           -> domain/material_graph
 Procgen planning/lowering          -> domain/procgen
 Drawing documents/strokes/tiles    -> domain/drawing
+Typed app-program contracts        -> domain/app_program
 Spatial coordinates/indexing       -> domain/spatial, domain/spatial_index
 Chunk streaming policy             -> domain/chunking
 Chunk lifecycle requests/events    -> domain/world_streaming
