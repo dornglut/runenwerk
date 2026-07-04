@@ -4,16 +4,20 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-04
 related_docs:
   - ../workflow-lifecycle.md
   - ../complete-investigation-gate.md
   - ../complete-design-gate.md
+  - ../complete-merge-readiness-gate.md
   - ../evidence-quality-taxonomy.md
   - ../../guidelines/programming-principles.md
-  - ../../design/active/ui-component-platform-surface2d-design.md
-  - ../../reports/closeouts/phase-16-surface2d-closeout.md
-  - ../../reports/investigations/phase-16-surface2d-source-investigation.md
+  - ./typed-app-program-ui-proof-001-planning.md
+  - ../../design/active/typed-app-program-and-ui-proof-design.md
+  - ../../reports/investigations/typed-app-program-current-state-investigation.md
+  - ../../reports/investigations/typed-app-program-engine-pressure-and-design-review.md
+  - ../../reports/investigations/typed-app-program-multiplayer-concurrency-design-review.md
+  - ../../reports/investigations/typed-app-program-cross-cutting-design-review.md
 ---
 
 # Active Work
@@ -22,53 +26,51 @@ This file names the current planning focus for scriptless workflow.
 
 ## Current focus
 
-No active implementation focus is selected after the Phase 16 Surface2D closeout.
+ID: `PT-UI-APP-PROGRAM-001`
 
-ID: none
+Title: `Typed App Program UI Proof 001 — Headless Counter App Proof`
 
-Title: none
+State: implementation-planning intake selected; implementation is not authorized until the planning contract is reviewed and accepted.
 
-State: Phase 16 completed; next work is planning intake selection, not implementation.
+Lifecycle state: `active-planning`
 
-Lifecycle state: none
+Owner: `domain/ui/ui_testing` owns the first proof as a headless proof harness. Workspace planning owns this active-work record. Generic cross-domain app-program ownership remains undecided and blocked until at least one non-UI proof validates repeated domain-neutral structure.
 
-Owner: workspace planning owns the next intake selection. No product crate owns active implementation work from this record.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md`, `docs-site/src/content/docs/workspace/complete-investigation-gate.md`, `docs-site/src/content/docs/workspace/complete-design-gate.md`, `docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md`, `docs-site/src/content/docs/workspace/planning/typed-app-program-ui-proof-001-planning.md`, `docs-site/src/content/docs/design/active/typed-app-program-and-ui-proof-design.md`, `docs-site/src/content/docs/reports/investigations/typed-app-program-current-state-investigation.md`, `docs-site/src/content/docs/reports/investigations/typed-app-program-engine-pressure-and-design-review.md`, `docs-site/src/content/docs/reports/investigations/typed-app-program-multiplayer-concurrency-design-review.md`, and `docs-site/src/content/docs/reports/investigations/typed-app-program-cross-cutting-design-review.md`.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md`, `docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md`, `docs-site/src/content/docs/workspace/planning/roadmap.md`, `docs-site/src/content/docs/workspace/planning/production-tracks.md`, `docs-site/src/content/docs/workspace/planning/decision-register.md`, `docs-site/src/content/docs/workspace/planning/completed-work.md`, `docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md`, `docs-site/src/content/docs/reports/investigations/phase-16-surface2d-source-investigation.md`, and `docs-site/src/content/docs/reports/closeouts/phase-16-surface2d-closeout.md`.
+Evidence classes: `E3` local/source inspection from the current-state investigation, `E8` accepted design/planning authority once PR #66 and this stacked planning PR are merged, and future `E5` validation evidence required before implementation merge.
 
-Evidence classes: `E3` local source/history inspection, `E5` post-merge local validation evidence from `main`, `E8` accepted workspace/planning/design authority, and `E9` combined closeout alignment across source, validation, and planning truth.
+Complete investigation gate: satisfied by `typed-app-program-current-state-investigation.md` after the authority PR merges. This planning PR is stacked on that authority and must not be merged independently without it.
 
-Complete investigation gate: no active implementation focus. Phase 16 investigation is completed as historical evidence. The next non-trivial phase must pass the complete investigation gate before implementation authorization.
+Complete design gate: satisfied by `typed-app-program-and-ui-proof-design.md` plus companion engine/runtime, multiplayer/concurrency, and cross-cutting reviews after the authority PR merges. This planning PR consumes those design-gate artifacts and does not expand scope.
 
-Complete design gate: no active implementation focus. Phase 16 design is completed as historical evidence. The next non-trivial phase must pass the complete design gate, including principle compliance and module decomposition evidence, before implementation authorization.
+Implementation contract: prepared by `typed-app-program-ui-proof-001-planning.md`; implementation is still not authorized by this active-work update alone. A future implementation branch must follow the exact allowed files, validation commands, evidence expectations, and stop conditions recorded in the planning contract.
 
-Implementation contract: none authorized.
+Allowed files/crates: docs/planning files in this PR. For the future implementation proof only, the planning contract limits code changes to `domain/ui/ui_testing/src/lib.rs`, `domain/ui/ui_testing/src/app_program/*`, `domain/ui/ui_testing/tests/typed_app_program_counter.rs`, and only-if-required compiler/test wiring in `domain/ui/ui_testing/Cargo.toml`, `domain/ui/ui_program/src/events/mod.rs`, and `domain/ui/ui_hosts/src/lib.rs`.
 
-Allowed files/crates: docs and planning files required for closeout truth recording only.
+Non-owned files/crates: all product/editor/game behavior, all engine scheduler/runtime/physics/asset-loading/streaming/LOD/render-resource/world-mutation behavior, networking/multiplayer/threading implementations, `foundation/meta`, command execution in `foundation/commands`, generic plugin framework/AppRecipe/PluginSuite behavior, Phase 17 SpatialCanvas implementation files, `ui_definition` callback behavior, `ui_controls` app mutation behavior, `ui_state` generic app model ownership, and `ui_hosts` host effect execution.
 
-Non-owned files/crates: all product code, all Phase 17 implementation files, renderer backends, editor/game/product command owners, graph/timeline implementation owners, new crates, plugin framework work, and `foundation/meta`.
+Principle compliance matrix: recorded in `typed-app-program-ui-proof-001-planning.md`. The first proof must remain one local headless app, reuse existing UI program infrastructure, avoid actors/engine/multiplayer/editor/game/plugin work, separate IDs/model/action/route/reducer/effect/projection/replay/report modules, avoid runtime optimization, and communicate only through explicit snapshots, packets, maps, and reports.
 
-Principle compliance matrix: not active for implementation because no implementation focus is selected. Phase 16 closeout records that KISS, DRY, YAGNI, SOLID, Separation of Concerns, Avoid Premature Optimization, and Law of Demeter passed for the delivered Surface2D scope. Any next phase must record its own principle matrix before implementation.
+Module decomposition map: recorded in `typed-app-program-ui-proof-001-planning.md` as `ids.rs`, `model.rs`, `action.rs`, `route_action.rs`, `reducer.rs`, `effect.rs`, `projection.rs`, `replay.rs`, `report.rs`, `counter_fixture.rs`, and `typed_app_program_counter.rs` tests.
 
-Module decomposition map: not active for implementation because no implementation focus is selected. Phase 16 closeout records the delivered Surface2D decomposition. Any compound next phase must record a module decomposition map before implementation.
+Maintainability review status: planning selected. Maintainability must be reviewed again in the implementation closeout against changed files, module separation, report shape, validation evidence, and non-owned boundary proof.
 
-Maintainability review status: Phase 16 completed. See `docs-site/src/content/docs/reports/closeouts/phase-16-surface2d-closeout.md`.
+Feature support matrix: recorded in `typed-app-program-ui-proof-001-planning.md`; first proof requires model snapshot, action IDs/versions, route-action mapping, reducer trace, NoEffect effect plan, headless compatibility, deterministic replay, missing capability negative case, safe bounded payload summary, stable IDs, local source metadata, and no engine/multiplayer implementation.
 
-Feature support matrix: Phase 16 completed; see `docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md`.
+Future-use-case pressure matrix: covered by the design and companion reviews for engine/runtime, multiplayer/concurrency, and cross-cutting concerns. The implementation proof must consume these as stop conditions, not implement those systems.
 
-Future-use-case pressure matrix: Phase 16 completed; see `docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md`.
+Hierarchy/composition matrix: first proof hierarchy is `AppModelSnapshot -> AppViewProjection -> UiProgram/UiOutput -> UiEventPacket -> RouteActionMap -> AppAction -> AppReducer -> AppEffectPlan -> AppReplayTrace`. AppRecipe/PluginSuite/shared extraction remains blocked.
 
-Hierarchy/composition matrix: Phase 16 completed; see `docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md`.
+Ergonomics/usability: first proof must be reviewable as a clear headless counter app replay and must keep route/action/reducer/effect/report structures inspectable without hidden callbacks or whole-engine execution.
 
-Ergonomics/usability: Phase 16 completed; see `docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md`.
+Validation expectation: this planning PR must pass `python tools/docs/validate_docs.py` and `git diff --check`. The future implementation PR must run `cargo test -p ui_testing typed_app_program_counter`, `cargo test -p ui_testing app_program`, `cargo test -p ui_program event`, `cargo test -p ui_hosts route`, `cargo test -p ui_binding host_data`, `cargo test -p ui_evaluator`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`, or explain equivalent substitutions.
 
-Validation expectation: closeout docs must pass `python tools/docs/validate_docs.py` and `git diff --check`. No cargo validation is expected because this closeout must not touch product code.
+Known blockers: PR #66 must be validated and accepted first because this planning PR is stacked on its investigation/design/review authority. No implementation should start until both authority and planning are accepted.
 
-Known blockers: no Phase 16 product blocker remains. The remote branch `surface2d-phase-16` is intentionally kept for manual review because it contains three non-equivalent commits with a large Surface2D design-document diff that mixes potentially useful future-use-case pressure with stale pre-merge implementation assumptions. That branch is not a Phase 16 product blocker and must not be mixed into closeout.
+Next action: validate this docs-only planning PR, review it as the implementation-planning contract, then open a separate implementation branch for `Typed App Program UI Proof 001 — Headless Counter App Proof` only after planning is accepted.
 
-Next action: perform the next planning intake from the production track. The next named future milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas, but no Phase 17 implementation is authorized by this closeout.
-
-Evidence: PR #62 merged docs-only principle/decomposition/merge-readiness workflow hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged Phase 16 Surface2D at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with `cargo test -p ui_controls surface2d`, `cargo test -p ui_controls control_package`, `cargo test -p ui_runtime surface2d`, `cargo test -p ui_static_mount surface2d`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`. Branch inspection showed `surface2d-phase-16` has three non-equivalent commits and is kept for manual review.
+Evidence: this active-work update is based on the current Typed App Program investigation/design/review authority branch and deliberately keeps implementation in `active-planning`, not `active-implementation`.
 
 ## Active-work rules
 
