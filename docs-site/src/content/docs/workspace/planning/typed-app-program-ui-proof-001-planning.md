@@ -41,7 +41,7 @@ This document prepares implementation authorization. It does not by itself imple
 
 ## Prerequisite Authority
 
-Implementation depends on acceptance of the stacked Typed App Program investigation/design PR that supplies these authority files:
+Implementation planning builds on the merged Typed App Program investigation/design authority from PR #66:
 
 ```text
 docs-site/src/content/docs/reports/investigations/typed-app-program-current-state-investigation.md
@@ -51,7 +51,7 @@ docs-site/src/content/docs/reports/investigations/typed-app-program-multiplayer-
 docs-site/src/content/docs/reports/investigations/typed-app-program-cross-cutting-design-review.md
 ```
 
-If that authority PR changes materially, this planning contract must be reviewed again before implementation.
+If that merged authority changes materially, this planning contract must be reviewed again before implementation.
 
 ## Implementation Scope
 

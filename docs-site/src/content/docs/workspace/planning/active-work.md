@@ -38,11 +38,11 @@ Owner: `domain/ui/ui_testing` owns the first proof as a headless proof harness. 
 
 Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md`, `docs-site/src/content/docs/workspace/complete-investigation-gate.md`, `docs-site/src/content/docs/workspace/complete-design-gate.md`, `docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md`, `docs-site/src/content/docs/workspace/planning/typed-app-program-ui-proof-001-planning.md`, `docs-site/src/content/docs/design/active/typed-app-program-and-ui-proof-design.md`, `docs-site/src/content/docs/reports/investigations/typed-app-program-current-state-investigation.md`, `docs-site/src/content/docs/reports/investigations/typed-app-program-engine-pressure-and-design-review.md`, `docs-site/src/content/docs/reports/investigations/typed-app-program-multiplayer-concurrency-design-review.md`, and `docs-site/src/content/docs/reports/investigations/typed-app-program-cross-cutting-design-review.md`.
 
-Evidence classes: `E3` local/source inspection from the current-state investigation, `E8` accepted design/planning authority once PR #66 and this stacked planning PR are merged, and future `E5` validation evidence required before implementation merge.
+Evidence classes: `E3` local/source inspection from the current-state investigation, `E8` accepted investigation/design authority from merged PR #66 plus planning authority once this PR is merged, and future `E5` validation evidence required before implementation merge.
 
-Complete investigation gate: satisfied by `typed-app-program-current-state-investigation.md` after the authority PR merges. This planning PR is stacked on that authority and must not be merged independently without it.
+Complete investigation gate: satisfied by `typed-app-program-current-state-investigation.md` from merged PR #66. This planning PR builds on that merged authority and must remain planning-only.
 
-Complete design gate: satisfied by `typed-app-program-and-ui-proof-design.md` plus companion engine/runtime, multiplayer/concurrency, and cross-cutting reviews after the authority PR merges. This planning PR consumes those design-gate artifacts and does not expand scope.
+Complete design gate: satisfied by `typed-app-program-and-ui-proof-design.md` plus companion engine/runtime, multiplayer/concurrency, and cross-cutting reviews from merged PR #66. This planning PR consumes those design-gate artifacts and does not expand scope.
 
 Implementation contract: prepared by `typed-app-program-ui-proof-001-planning.md`; implementation is still not authorized by this active-work update alone. A future implementation branch must follow the exact allowed files, validation commands, evidence expectations, and stop conditions recorded in the planning contract.
 
@@ -66,11 +66,11 @@ Ergonomics/usability: first proof must be reviewable as a clear headless counter
 
 Validation expectation: this planning PR must pass `python tools/docs/validate_docs.py` and `git diff --check`. The future implementation PR must run `cargo test -p ui_testing typed_app_program_counter`, `cargo test -p ui_testing app_program`, `cargo test -p ui_program event`, `cargo test -p ui_hosts route`, `cargo test -p ui_binding host_data`, `cargo test -p ui_evaluator`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`, or explain equivalent substitutions.
 
-Known blockers: PR #66 must be validated and accepted first because this planning PR is stacked on its investigation/design/review authority. No implementation should start until both authority and planning are accepted.
+Known blockers: PR #66 is merged, so the remaining blocker is review and acceptance of this planning contract. No implementation should start until this planning PR is accepted.
 
 Next action: validate this docs-only planning PR, review it as the implementation-planning contract, then open a separate implementation branch for `Typed App Program UI Proof 001 — Headless Counter App Proof` only after planning is accepted.
 
-Evidence: this active-work update is based on the current Typed App Program investigation/design/review authority branch and deliberately keeps implementation in `active-planning`, not `active-implementation`.
+Evidence: this active-work update is based on the merged Typed App Program investigation/design/review authority and deliberately keeps implementation in `active-planning`, not `active-implementation`.
 
 ## Active-work rules
 
