@@ -1,7 +1,13 @@
 //! Minimal code-authored source helpers for the proof bridge.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
-use ui_definition::{AuthoredId, UiNodeDefinition, UiRouteSlotRef, UiValueBinding};
+use ui_controls::BUTTON_CONTROL_KIND_ID;
+use ui_definition::{
+    AuthoredControlAccessibilityDefinition, AuthoredControlKindId, AuthoredControlValue,
+    AuthoredId, AuthoredRouteId, UiNodeDefinition, UiRouteSlotRef, UiValueBinding,
+};
 use ui_program::RouteId;
 
 use crate::ids::UiAppScreenId;
@@ -44,7 +50,6 @@ impl UiAppSourceBuilder {
         let label_id = AuthoredId::new("counter.count_label");
         let button_id = AuthoredId::new("counter.increment_button");
         let route_slot_id = AuthoredId::new("counter.increment");
-        let route_slot = UiRouteSlotRef { id: route_slot_id.clone() };
 
         let root = UiNodeDefinition::Column {
             id: root_id.clone(),
@@ -54,13 +59,7 @@ impl UiAppSourceBuilder {
                     label: UiValueBinding::static_text(format!("Clicked {count} / 5")),
                     availability: None,
                 },
-                UiNodeDefinition::Button {
-                    id: button_id.clone(),
-                    label: UiValueBinding::static_text("Click me"),
-                    route: Some(route_slot.clone()),
-                    availability: None,
-                    selected: None,
-                },
+                button_control(button_id.clone(), "Click me", "counter.increment"),
             ],
         };
 
@@ -87,7 +86,6 @@ impl UiAppSourceBuilder {
         let label_id = AuthoredId::new("counter.win_label");
         let button_id = AuthoredId::new("counter.reset_button");
         let route_slot_id = AuthoredId::new("counter.reset");
-        let route_slot = UiRouteSlotRef { id: route_slot_id.clone() };
 
         let root = UiNodeDefinition::Column {
             id: root_id.clone(),
@@ -97,13 +95,7 @@ impl UiAppSourceBuilder {
                     label: UiValueBinding::static_text("You win!"),
                     availability: None,
                 },
-                UiNodeDefinition::Button {
-                    id: button_id.clone(),
-                    label: UiValueBinding::static_text("Reset"),
-                    route: Some(route_slot.clone()),
-                    availability: None,
-                    selected: None,
-                },
+                button_control(button_id.clone(), "Reset", "counter.reset"),
             ],
         };
 
@@ -133,5 +125,26 @@ impl UiAppSourceBuilder {
                 })
             },
         )
+    }
+}
+
+fn button_control(id: AuthoredId, label: &str, route: &str) -> UiNodeDefinition {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "label".to_owned(),
+        AuthoredControlValue::String(label.to_owned()),
+    );
+
+    UiNodeDefinition::Control {
+        id,
+        kind: AuthoredControlKindId::new(BUTTON_CONTROL_KIND_ID),
+        properties,
+        bindings: BTreeMap::new(),
+        route: Some(AuthoredRouteId::new(route)),
+        accessibility: Some(AuthoredControlAccessibilityDefinition {
+            role: "button".to_owned(),
+            label: Some(label.to_owned()),
+        }),
+        children: Vec::new(),
     }
 }
