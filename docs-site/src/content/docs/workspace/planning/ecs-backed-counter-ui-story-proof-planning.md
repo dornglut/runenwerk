@@ -30,7 +30,7 @@ Lifecycle state: `active-planning`.
 
 Implementation authorization: not granted.
 
-This document opens the first proof-planning slice after `UI Framework App Integration Direction Review`. It must remain planning/design intake until reviewed and promoted with exact implementation owners, allowed files, validation commands, evidence expectations, and stop conditions.
+This document opens the first proof-planning slice after `UI Framework App Integration Direction Review`. It selects the long-term owner strategy, but it must remain planning/design intake until exact implementation owners, allowed files, validation commands, evidence expectations, and stop conditions are accepted.
 
 ## Purpose
 
@@ -91,7 +91,7 @@ PT-UI-FRAMEWORK-APP-INTEGRATION-002 — this planning intake
 
 This planning intake may become the implementation contract only after it names exact owner files and passes the complete design gate.
 
-## Core decision to preserve
+## Core direction to preserve
 
 The public framework direction is:
 
@@ -114,6 +114,116 @@ SpatialCanvas as app integration
 callback-first generic UI mutation
 renderer-owned UI semantics
 ```
+
+## Long-term owner decision
+
+Selected long-term owner strategy:
+
+```text
+Option C — a small UI-owned app-integration layer.
+```
+
+Working owner name:
+
+```text
+domain/ui/ui_app_integration
+```
+
+The exact crate/module name is not yet implementation authority. The important decision is ownership shape:
+
+```text
+A UI-owned integration layer owns the bridge between App/ECS-hosted app authoring and the UI source/program/story pipeline.
+```
+
+It should own only:
+
+```text
+screen/action registration contracts
+screen/router proof wiring
+typed action -> route/action lowering policy
+app-state snapshot/binding extraction policy
+route proposal -> typed app-action dispatch policy
+proof facts connecting UI event -> app mutation -> next UI output
+```
+
+It must not own:
+
+```text
+control semantics
+layout semantics
+theme semantics
+UiProgram graph truth
+runtime input semantics
+ECS resources/systems themselves
+app mutation
+engine scheduling
+editor/game commands
+SpatialCanvas semantics
+AppRecipe / PluginSuite / shared plugin framework
+```
+
+## Implementation sequence decision
+
+Use this staged sequence:
+
+```text
+1. C-internal proof slice:
+   Implement the smallest UI-owned app-integration bridge needed for the Counter proof.
+   Keep APIs internal or proof-local until owner and dependency direction are validated.
+
+2. Story/proof harness:
+   Use ui_story / ui_testing as the proof executor, not as the long-term framework owner.
+
+3. B-style ergonomics later:
+   Add AppUiExt-style public registration only after the proof validates the owner boundary.
+
+4. No pure A as architecture:
+   A fixture/story-only proof is allowed only as harness support, not as the framework direction.
+```
+
+This avoids the two failure modes:
+
+```text
+fixture-only proof that never becomes usable framework API
+premature public App extension API before dependency and owner boundaries are proven
+```
+
+## Why pure A is not enough
+
+A fixture/story-only proof is useful as a safety harness, but it does not prove real App/Plugin/ECS authoring ergonomics. It risks producing another proof island that leaves the app-facing framework path unresolved.
+
+Therefore:
+
+```text
+ui_story / ui_testing may execute the proof.
+They must not become the long-term app-integration owner.
+```
+
+## Why pure B is not first
+
+An AppUiExt-style API is the desired eventual ergonomics, but it must not be introduced before the integration owner and dependency direction are proven.
+
+Therefore:
+
+```text
+AppUiExt-style names are reserved target ergonomics.
+They are not accepted implementation names in the first slice.
+```
+
+## Why C is selected
+
+A small UI-owned app-integration layer gives the cleanest boundary:
+
+```text
+engine::App / ECS remains the host/runtime surface
+ui_definition remains authored UI source owner
+ui_program remains semantic UI contract owner
+ui_runtime / ui_evaluator remain runtime output owners
+ui_story / ui_testing remain proof owners
+app/domain owners remain mutation owners
+```
+
+It avoids pushing app integration into `ui_definition`, `ui_program`, `ui_runtime`, or engine core. It also avoids reviving `app_program` as the public framework path.
 
 ## Proof scenario
 
@@ -239,6 +349,7 @@ These snippets define desired ergonomics, not names accepted for implementation.
 |---|---|---|
 | Counter resource and mutation | App/ECS proof host | Generic UI must not mutate it directly. |
 | Counter action type | App proof fixture | Must lower to stable UI route/action evidence. |
+| App-integration bridge | UI-owned integration layer | Own route/action/screen proof wiring only. |
 | Screen declaration | UI app-integration candidate path | Must produce/capture `ui_definition`-compatible source. |
 | UI source validation | `ui_definition` / lowering path | Must not be bypassed. |
 | Interaction contract | `FormedInteractionModel` / `ui_program` path | Must carry route/schema/capability/source evidence. |
@@ -251,84 +362,57 @@ These snippets define desired ergonomics, not names accepted for implementation.
 Implementation may not start until the next revision answers:
 
 ```text
-1. What crate/module owns UI app-integration contracts?
-2. Is a new crate needed, or can this live in an existing UI/engine integration crate?
-3. What exact public API names are accepted?
-4. What does `UiBuilder` output internally: authored template records, normalized records, or a proof fixture format?
-5. How are code-authored source maps/provenance represented?
-6. How are typed actions converted to route IDs and capabilities without manual string maps?
-7. How does ECS/app state become host/binding data for `UiProgram` evaluation?
-8. Which existing `UiStory`/`ui_testing` runner extension is enough for this proof?
-9. Which exact files/crates are allowed to change?
-10. Which exact tests prove the positive and negative paths?
+1. What exact crate/module owns UI app-integration contracts?
+2. Is `domain/ui/ui_app_integration` a new crate, a module in an existing crate, or a proof-local module first?
+3. What exact names are accepted for internal bridge types?
+4. Which public AppUiExt names remain reserved but not implemented in the first slice?
+5. What does `UiBuilder` output internally: authored template records, normalized records, or a proof fixture format?
+6. How are code-authored source maps/provenance represented?
+7. How are typed actions converted to route IDs and capabilities without manual string maps?
+8. How does ECS/app state become host/binding data for `UiProgram` evaluation?
+9. Which existing `UiStory`/`ui_testing` runner extension is enough for this proof?
+10. Which exact files/crates are allowed to change?
+11. Which exact tests prove the positive and negative paths?
+12. How does the implementation prove that no public API was prematurely frozen?
 ```
 
-## Candidate implementation owner options
+## Selected implementation owner strategy
 
-These are options to resolve, not accepted implementation authority:
-
-### Option A — Existing UI testing/story owner only
+Selected strategy:
 
 ```text
-Use ui_testing / ui_story fixtures to simulate the App/ECS host and prove the loop without new public API.
+C-internal first, then B-public later.
 ```
 
-Pros:
+### First implementation slice
+
+The first implementation slice should be:
 
 ```text
-smallest proof
-low implementation risk
-keeps public API deferred
+A small UI-owned app-integration proof bridge plus a Counter story proof.
 ```
 
-Cons:
+It should expose no stable public App extension API unless a follow-up design explicitly accepts names.
+
+It should be allowed to use `ui_story` / `ui_testing` to execute the proof.
+
+It should not be a pure fixture-only proof. The bridge must represent the future app-integration owner boundary, even if its API is internal/proof-local.
+
+### Second implementation slice
+
+Only after the first proof passes and dependency direction is reviewed:
 
 ```text
-may not prove real App/Plugin/ECS authoring ergonomics
-could become another fixture-only proof
+Add AppUiExt-style ergonomic registration.
 ```
 
-### Option B — Engine/App extension trait in a UI integration module
+Candidate future methods remain examples only:
 
 ```text
-Add an AppUiExt-style integration layer that registers UI screens/actions and lowers them into existing UI story/proof machinery.
+add_ui_action
+add_ui_screen
+add_ui_screen_router
 ```
-
-Pros:
-
-```text
-proves the desired framework feel
-uses existing App/Plugin/ECS host surface
-```
-
-Cons:
-
-```text
-requires careful crate boundary and dependency design
-risks premature public API if names are rushed
-```
-
-### Option C — Dedicated ui_app integration crate
-
-```text
-Create a small UI-owned integration crate for App/ECS-hosted UI registration and story proof wiring.
-```
-
-Pros:
-
-```text
-clear owner boundary
-can avoid pushing app integration into ui_definition or engine core
-```
-
-Cons:
-
-```text
-new crate requires explicit architecture decision
-could become a generic app framework if not tightly scoped
-```
-
-Preferred planning direction: Option B or C only if the exact dependency direction is proven safe. Otherwise start with Option A as a non-public proof and follow with an API slice.
 
 ## Allowed work in this planning PR
 
@@ -375,7 +459,7 @@ domain/ui/ui_binding/src/*
 engine/src/app/* or a small integration adapter only if dependency rules permit it
 ```
 
-Potential new owner only if accepted:
+Potential new owner, selected as preferred if dependency review accepts it:
 
 ```text
 domain/ui/ui_app_integration/*
@@ -386,6 +470,7 @@ Potential tests:
 ```text
 domain/ui/ui_testing/tests/ecs_backed_counter_ui_story.rs
 domain/ui/ui_story/tests/ecs_backed_counter_ui_story.rs
+domain/ui/ui_app_integration/tests/counter_ui_story_proof.rs
 ```
 
 ## Non-owned responsibilities
@@ -452,12 +537,10 @@ git diff --check
 
 ## Next action
 
-Review this planning intake and decide the first implementation strategy:
+Revise this planning intake into an implementation contract for:
 
 ```text
-A. fixture/story-only proof first
-B. AppUiExt integration proof first
-C. small ui_app_integration crate proof first
+C-internal first: small UI-owned app-integration proof bridge plus Counter UiStory proof.
 ```
 
-After that decision, write the implementation-planning revision with exact files, public API names, module decomposition, validation commands, and closeout evidence.
+That implementation contract must name exact files, internal type names, dependency rules, tests, validation commands, and closeout evidence. It must explicitly defer public AppUiExt-style API until after the proof.
