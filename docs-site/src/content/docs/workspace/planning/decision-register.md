@@ -7,6 +7,7 @@ canonical: true
 last_reviewed: 2026-07-05
 related_docs:
   - ../workflow-lifecycle.md
+  - ./ecs-backed-counter-ui-story-proof-planning.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
@@ -194,6 +195,32 @@ Reactivation condition: Reactivate `PT-UI-APP-PROGRAM-001` only if a later accep
 Supersedes: `PT-UI-APP-PROGRAM-001` as the next active implementation foundation.
 
 Superseded by: `PT-UI-FRAMEWORK-APP-INTEGRATION-001`.
+
+## ECS-backed Counter UI Story Proof implementation-planning decision
+
+Date: 2026-07-05
+
+Decision: Convert `PT-UI-FRAMEWORK-APP-INTEGRATION-002` from broad proof-planning intake into a conditional implementation contract for a small UI-owned `ui_app_integration` crate and an ECS-backed Counter UiStory-compatible proof.
+
+State transition: `active-planning intake -> active-planning implementation contract`; implementation branch authorized only after this docs PR is reviewed/merged and the implementation stays within the accepted contract.
+
+Context: Source inspection showed the root workspace already contains the relevant UI crates through `ui_story`; `ui_definition` owns authored template/node/slot structures; `ui_program` owns route/event packet contracts; `ui_program_lowering` owns the current source-to-UiProgram formation entrypoint; `ui_controls` owns package registry snapshots; `ui_story` is a V2 proof contract surface; `ui_testing` already depends on the proof/evaluation stack; `ecs` exposes resource/world/system primitives; and `engine::App` exposes resource/system methods while keeping world internals private.
+
+Options considered: pure fixture/story-only proof; immediate public AppUiExt API; small UI-owned integration crate with internal/proof-local APIs first; revive `app_program`; implement SpatialCanvas first.
+
+Reason: The best long-term path is `C-internal first, then B-public later`: create a small UI-owned integration bridge now, prove the Counter loop through internal/proof-local APIs, use `ui_story`/`ui_testing` only as proof harnesses, and defer public AppUiExt-style engine ergonomics until dependency direction and owner boundaries are validated. This avoids both fixture-only proof drift and premature public API freeze.
+
+Affected planning files: `active-work.md`, `decision-register.md`, and `ecs-backed-counter-ui-story-proof-planning.md`.
+
+Evidence: `Cargo.toml` has no `ui_app_integration` member yet; `ui_definition` has `AuthoredUiTemplate`, `UiNodeDefinition`, and route/value slot refs; `ui_program` has `UiEventPacket`, `RouteId`, `RouteSchemaVersion`, and `RouteCapability`; `ui_program_lowering` has `form_ui_program_report_from_node_with_registry_snapshot`; `ui_controls` has `runenwerk_control_package` and `ControlPackageRegistrySnapshot`; `ui_testing` already depends on the full proof/evaluation stack; `engine::App` world state is private, so the first public App extension should be deferred.
+
+Follow-up: After this docs PR is accepted, open an implementation branch that changes only the allowed files: root `Cargo.toml`, new `domain/ui/ui_app_integration` crate files, and focused counter proof tests. Do not add public engine::App extension methods in the first implementation.
+
+Reactivation condition: Reopen the broader planning question only if implementing the exact contract requires engine core dependency inversion, public App extension API, `ui_definition`/`ui_program` dependency on ECS, `app_program` resurrection, or bypassing `ui_definition`, `UiProgram`, or story-compatible reports.
+
+Supersedes: `PT-UI-FRAMEWORK-APP-INTEGRATION-002` broad A/B/C intake state.
+
+Superseded by: none.
 
 ## Lifecycle rule
 
