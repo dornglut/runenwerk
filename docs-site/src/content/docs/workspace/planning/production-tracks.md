@@ -4,9 +4,10 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-05
 related_docs:
   - ../workflow-lifecycle.md
+  - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -77,13 +78,13 @@ Phase 16: PR #62 merged docs-only workflow, principle, decomposition, and merge-
 Current blocker:
 
 ```text
-No Phase 16 product blocker remains after PR #61 and post-merge validation from main. The remote branch surface2d-phase-16 is intentionally kept for manual review because it contains three non-equivalent commits with a large Surface2D design-document diff that mixes potentially useful future-use-case pressure with stale pre-merge implementation assumptions. It is not a blocker for the completed Phase 16 product scope.
+No Phase 16 product blocker remains. The current strategic blocker is framework-direction clarity: `PT-UI-FRAMEWORK-APP-INTEGRATION-001` must decide how real App/Plugin/ECS-hosted code uses ui_definition, UiProgram, UiStory, ui_runtime, ui_hosts, ui_binding, and proof reports before new app-framework or component adoption work claims to be the real UI framework path.
 ```
 
 Next action:
 
 ```text
-Keep Phase 16 as a completed dependency. Perform the next planning intake from the production track; the next named future milestone is 017 SpatialCanvas. Do not start Phase 17 implementation until its investigation and design gates pass.
+Keep Phase 16 as a completed dependency. Keep Phase 17 SpatialCanvas as future planning only. Review `ui-framework-app-integration-direction-review.md`; if accepted, write the implementation-planning contract for `ECS-backed Counter UI Story Proof` before returning to SpatialCanvas implementation or later Component Platform milestones.
 ```
 
 ## Track shape
