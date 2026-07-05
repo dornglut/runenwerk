@@ -9,11 +9,25 @@ use crate::source::UiAppSourceBuildReport;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UiAppProofDiagnostic {
-    SourceMissing { screen: String },
-    FormationFailed { screen: String, diagnostic_count: usize },
-    RouteRejected { diagnostic: UiAppRouteResolutionDiagnostic },
-    MutationMissing { action: String },
-    NextOutputMissing { screen: String },
+    SourceMissing {
+        screen: String,
+    },
+    FormationFailed {
+        screen: String,
+        diagnostic_count: usize,
+    },
+    RouteMissing {
+        route: String,
+    },
+    RouteRejected {
+        diagnostic: UiAppRouteResolutionDiagnostic,
+    },
+    MutationMissing {
+        action: String,
+    },
+    NextOutputMissing {
+        screen: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,10 +75,7 @@ impl UiAppIntegrationStepReport {
     pub fn passed(&self) -> bool {
         self.diagnostics.is_empty()
             && self.formation.passed
-            && self
-                .action
-                .as_ref()
-                .is_none_or(|action| action.resolved)
+            && self.action.as_ref().is_none_or(|action| action.resolved)
     }
 }
 

@@ -58,7 +58,9 @@ impl UiAppActionRegistry {
         let action_key = descriptor.action_id.as_str().to_owned();
         let route_key = descriptor.route.as_str().to_owned();
         if self.actions.contains_key(&action_key) {
-            return Err(UiAppActionRegistryError::DuplicateAction { action_id: action_key });
+            return Err(UiAppActionRegistryError::DuplicateAction {
+                action_id: action_key,
+            });
         }
         if self.routes.contains_key(&route_key) {
             return Err(UiAppActionRegistryError::DuplicateRoute { route: route_key });

@@ -44,12 +44,29 @@ pub enum UiAppRouteResolutionStatus {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UiAppRouteResolutionDiagnostic {
-    UnknownRoute { route: String },
-    WrongSchemaVersion { route: String, expected: u32, actual: u32 },
-    MissingCapability { route: String, capability: String },
-    PayloadSchemaMismatch { route: String, expected: String, actual: String },
-    PayloadDiagnostic { route: String },
-    RouteDiagnostic { route: String },
+    UnknownRoute {
+        route: String,
+    },
+    WrongSchemaVersion {
+        route: String,
+        expected: u32,
+        actual: u32,
+    },
+    MissingCapability {
+        route: String,
+        capability: String,
+    },
+    PayloadSchemaMismatch {
+        route: String,
+        expected: String,
+        actual: String,
+    },
+    PayloadDiagnostic {
+        route: String,
+    },
+    RouteDiagnostic {
+        route: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,14 +122,18 @@ impl UiAppRouteBridge {
 
     pub fn resolve(&self, packet: &UiEventPacket) -> UiAppRouteResolution {
         if !packet.diagnostics.is_empty() {
-            return UiAppRouteResolution::rejected(UiAppRouteResolutionDiagnostic::RouteDiagnostic {
-                route: packet.route.as_str().to_owned(),
-            });
+            return UiAppRouteResolution::rejected(
+                UiAppRouteResolutionDiagnostic::RouteDiagnostic {
+                    route: packet.route.as_str().to_owned(),
+                },
+            );
         }
         if !packet.payload.diagnostics.is_empty() {
-            return UiAppRouteResolution::rejected(UiAppRouteResolutionDiagnostic::PayloadDiagnostic {
-                route: packet.route.as_str().to_owned(),
-            });
+            return UiAppRouteResolution::rejected(
+                UiAppRouteResolutionDiagnostic::PayloadDiagnostic {
+                    route: packet.route.as_str().to_owned(),
+                },
+            );
         }
 
         let Some(binding) = self

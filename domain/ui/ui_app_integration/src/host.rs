@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::bridge::UiAppResolvedAction;
 use crate::ids::UiAppActionId;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,9 +91,9 @@ impl CounterHost {
 
     pub fn apply_resolved_action(
         &mut self,
-        action_id: &UiAppActionId,
+        resolved_action: &UiAppResolvedAction,
     ) -> Option<UiAppHostMutation> {
-        let action = CounterAction::from_action_id(action_id)?;
+        let action = CounterAction::from_action_id(&resolved_action.action_id)?;
         let before = self.snapshot();
         {
             let counter = self
@@ -110,7 +111,7 @@ impl CounterHost {
         }
         let after = self.snapshot();
         Some(UiAppHostMutation {
-            action_id: action_id.clone(),
+            action_id: resolved_action.action_id.clone(),
             before,
             after,
             status: UiAppHostMutationStatus::Applied,

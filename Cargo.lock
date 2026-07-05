@@ -3733,6 +3733,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ui_app_integration"
+version = "0.1.0"
+dependencies = [
+ "ecs",
+ "serde",
+ "ui_artifacts",
+ "ui_binding",
+ "ui_compiler",
+ "ui_controls",
+ "ui_definition",
+ "ui_evaluator",
+ "ui_hosts",
+ "ui_program",
+ "ui_program_lowering",
+ "ui_schema",
+ "ui_story",
+ "ui_testing",
+]
+
+[[package]]
 name = "ui_artifacts"
 version = "0.1.0"
 dependencies = [

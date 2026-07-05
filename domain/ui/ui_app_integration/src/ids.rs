@@ -8,7 +8,8 @@ fn validate_namespaced(kind: &'static str, value: String) -> String {
     assert!(
         value
             .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-')),
+            .all(|character| character.is_ascii_alphanumeric()
+                || matches!(character, '.' | '_' | '-')),
         "{kind} IDs must contain only ASCII alphanumerics, '.', '_' or '-'"
     );
     value

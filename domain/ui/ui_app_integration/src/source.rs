@@ -35,7 +35,16 @@ pub struct UiAppSourceBuildReport {
 
 impl UiAppSourceBuildReport {
     pub fn node_ids(&self) -> Vec<&str> {
-        self.nodes.iter().map(|node| node.node_id.as_str()).collect()
+        self.nodes
+            .iter()
+            .map(|node| node.node_id.as_str())
+            .collect()
+    }
+
+    pub fn output_text_facts(&self) -> Vec<String> {
+        let mut facts = Vec::new();
+        collect_text_facts(&self.root, &mut facts);
+        facts
     }
 }
 
@@ -67,9 +76,15 @@ impl UiAppSourceBuilder {
             screen_id,
             root_node_id: root_id.as_str().to_owned(),
             nodes: vec![
-                UiAppSourceNodeRef { node_id: root_id.as_str().to_owned() },
-                UiAppSourceNodeRef { node_id: label_id.as_str().to_owned() },
-                UiAppSourceNodeRef { node_id: button_id.as_str().to_owned() },
+                UiAppSourceNodeRef {
+                    node_id: root_id.as_str().to_owned(),
+                },
+                UiAppSourceNodeRef {
+                    node_id: label_id.as_str().to_owned(),
+                },
+                UiAppSourceNodeRef {
+                    node_id: button_id.as_str().to_owned(),
+                },
             ],
             routes: vec![UiAppSourceRouteRef {
                 slot_id: route_slot_id.as_str().to_owned(),
@@ -103,9 +118,15 @@ impl UiAppSourceBuilder {
             screen_id,
             root_node_id: root_id.as_str().to_owned(),
             nodes: vec![
-                UiAppSourceNodeRef { node_id: root_id.as_str().to_owned() },
-                UiAppSourceNodeRef { node_id: label_id.as_str().to_owned() },
-                UiAppSourceNodeRef { node_id: button_id.as_str().to_owned() },
+                UiAppSourceNodeRef {
+                    node_id: root_id.as_str().to_owned(),
+                },
+                UiAppSourceNodeRef {
+                    node_id: label_id.as_str().to_owned(),
+                },
+                UiAppSourceNodeRef {
+                    node_id: button_id.as_str().to_owned(),
+                },
             ],
             routes: vec![UiAppSourceRouteRef {
                 slot_id: route_slot_id.as_str().to_owned(),
@@ -120,7 +141,9 @@ impl UiAppSourceBuilder {
             UiAppScreenDescriptor::new(report.screen_id.clone(), report.root.clone()),
             |descriptor, route| {
                 descriptor.with_route(UiAppScreenRoute {
-                    slot: UiRouteSlotRef { id: AuthoredId::new(route.slot_id.clone()) },
+                    slot: UiRouteSlotRef {
+                        id: AuthoredId::new(route.slot_id.clone()),
+                    },
                     route: route.route.clone(),
                 })
             },
@@ -146,5 +169,40 @@ fn button_control(id: AuthoredId, label: &str, route: &str) -> UiNodeDefinition 
             label: Some(label.to_owned()),
         }),
         children: Vec::new(),
+    }
+}
+
+fn collect_text_facts(node: &UiNodeDefinition, facts: &mut Vec<String>) {
+    match node {
+        UiNodeDefinition::Label { label, .. } | UiNodeDefinition::Button { label, .. } => {
+            if let Some(text) = static_text(label) {
+                facts.push(text);
+            }
+        }
+        UiNodeDefinition::Control {
+            properties,
+            children,
+            ..
+        } => {
+            if let Some(AuthoredControlValue::String(label)) = properties.get("label") {
+                facts.push(label.clone());
+            }
+            for child in children {
+                collect_text_facts(child, facts);
+            }
+            return;
+        }
+        _ => {}
+    }
+
+    for child in node.children() {
+        collect_text_facts(child, facts);
+    }
+}
+
+fn static_text(binding: &UiValueBinding) -> Option<String> {
+    match binding {
+        UiValueBinding::Static(value) => Some(value.as_text()),
+        UiValueBinding::Slot(_) => None,
     }
 }
