@@ -29,47 +29,47 @@ ID: `PT-UI-FRAMEWORK-APP-INTEGRATION-002`
 
 Title: `ECS-backed Counter UI Story Proof Planning`
 
-State: proof-planning intake selected; long-term owner strategy selected; implementation is not authorized.
+State: implementation-planning contract drafted; implementation is conditionally authorized only after this docs PR is reviewed/merged and the later code branch stays within the accepted contract.
 
 Lifecycle state: `active-planning`
 
-Owner: `domain/ui` owns UI framework proof planning and reusable UI contracts. The selected long-term owner shape is a small UI-owned app-integration layer, working name `domain/ui/ui_app_integration`, but exact crate/module creation is not authorized yet. `engine::App` / ECS remains the app/runtime host surface to prove. Workspace planning owns this active-work record.
+Owner: `domain/ui` owns UI framework proof planning and reusable UI contracts. The selected implementation owner is a small UI-owned app-integration crate, `domain/ui/ui_app_integration`. `engine::App` / ECS remains the long-term app/runtime host surface, but this first implementation proves ECS-backed state directly and defers public engine::App extension methods.
 
 Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md`, `docs-site/src/content/docs/workspace/complete-investigation-gate.md`, `docs-site/src/content/docs/workspace/complete-design-gate.md`, `docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md`, `docs-site/src/content/docs/workspace/planning/ecs-backed-counter-ui-story-proof-planning.md`, `docs-site/src/content/docs/design/active/ui-framework-app-integration-direction-review.md`, `docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md`, `docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md`, and `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md`.
 
-Evidence classes: `E8` accepted direction authority from PR #70 plus current planning intake evidence; future implementation needs `E3` source inspection of exact owners and `E5` validation evidence before merge.
+Evidence classes: `E8` accepted direction authority from PR #70, `E3` source inspection of current Cargo and crate ownership surfaces, and future `E5` validation evidence before implementation merge.
 
-Complete investigation gate: not complete for implementation. The planning intake names the proof scenario, selected owner strategy, non-owned responsibilities, and stop conditions, but it does not yet inspect exact implementation files deeply enough to authorize code.
+Complete investigation gate: complete enough for the first implementation contract. Source inspection confirmed current workspace membership, `ui_definition` authored template/node/slot ownership, `ui_program` route/event packet ownership, `ui_program_lowering` formation entrypoint, `ui_controls` registry snapshot, `ui_story` V2 proof surface, `ui_testing` proof/evaluation dependencies, `ecs` public Resource/World exports, and `engine::App` public resource/system APIs with private world state.
 
-Complete design gate: not complete for implementation. The planning intake selects `C-internal first, then B-public later`: a small UI-owned app-integration proof bridge first, AppUiExt-style public ergonomics only after the proof validates dependency and owner boundaries. Exact internal type names, crate/module owner, dependency direction, module decomposition, and validation commands remain undecided.
+Complete design gate: complete for the first implementation contract, not for public AppUiExt ergonomics. The contract selects `C-internal first, then B-public later`: create a small UI-owned `ui_app_integration` crate, use internal/proof-local bridge APIs, prove the Counter UI story loop, and defer public engine::App extension methods to a later slice.
 
-Implementation contract: none active. Implementation must not start until a revised planning contract turns the selected strategy into exact files, internal API names, dependency rules, tests, validation commands, and closeout evidence.
+Implementation contract: active after this docs PR is reviewed/merged. The implementation must stay within `ecs-backed-counter-ui-story-proof-planning.md`: exact allowed files, dependency rules, internal type names, tests, validation commands, stop conditions, and closeout evidence are specified there.
 
-Allowed files/crates: docs/planning/design files only in the current intake. No product code, no crate creation, no engine runtime changes, no UI runtime implementation changes, no SpatialCanvas implementation, no `domain/app_program` implementation work.
+Allowed files/crates for the implementation branch: `Cargo.toml`; `domain/ui/ui_app_integration/Cargo.toml`; `domain/ui/ui_app_integration/src/{lib.rs,ids.rs,action.rs,screen.rs,source.rs,bridge.rs,host.rs,report.rs,proof.rs}`; `domain/ui/ui_app_integration/tests/{counter_ui_story_proof.rs,counter_ui_story_fail_closed.rs}`. Only if compile wiring proves necessary: `domain/ui/ui_definition/src/lib.rs`, `domain/ui/ui_program/src/lib.rs`, `domain/ui/ui_hosts/src/lib.rs`, `domain/ui/ui_binding/src/lib.rs`.
 
-Non-owned files/crates: all product/editor/game behavior, engine scheduler/runtime/physics/asset-loading/streaming/LOD/render-resource/world-mutation behavior, networking/multiplayer/threading implementations, `foundation/meta`, command execution in `foundation/commands`, generic plugin framework/AppRecipe/PluginSuite behavior, Phase 17 SpatialCanvas implementation files, raw ECS-owned UI semantic models, `ui_definition` callback behavior, `ui_controls` app mutation behavior, renderer backend resources, and implementation shortcuts that bypass `ui_definition`, `UiProgram`, or `UiStory` proof.
+Non-owned files/crates: all product/editor/game behavior, engine scheduler/runtime/physics/asset-loading/streaming/LOD/render-resource/world-mutation behavior, engine prelude/App extension API, networking/multiplayer/threading implementations, `foundation/meta`, command execution in `foundation/commands`, generic plugin framework/AppRecipe/PluginSuite behavior, Phase 17 SpatialCanvas implementation files, raw ECS-owned UI semantic models, `ui_definition` callback behavior, `ui_controls` app mutation behavior, renderer backend resources, `domain/app_program` resurrection, and implementation shortcuts that bypass `ui_definition`, `UiProgram`, or story-compatible proof reports.
 
-Principle compliance matrix: recorded in `ecs-backed-counter-ui-story-proof-planning.md`. The planning direction favors the smallest proof that demonstrates the real framework loop, avoids duplicating UI semantics in ECS or app_program, defers shared plugin/framework extraction, preserves owner separation, and requires module decomposition before implementation.
+Principle compliance matrix: recorded in `ecs-backed-counter-ui-story-proof-planning.md`. The contract implements the smallest useful proof bridge, avoids duplicating UI semantics in ECS/app_program/engine, defers shared plugin/framework extraction, preserves owner separation, and decomposes the new crate into IDs/actions/screens/source/bridge/host/report/proof modules.
 
-Module decomposition map: deferred until a later implementation-planning revision. Candidate owners are recorded, and the selected preferred owner shape is `domain/ui/ui_app_integration`, but exact files are not accepted yet.
+Module decomposition map: specified in `ecs-backed-counter-ui-story-proof-planning.md` with exact module responsibilities for `ids`, `action`, `screen`, `source`, `bridge`, `host`, `report`, and `proof`.
 
-Maintainability review status: planning intake selected. Maintainability must be reviewed before implementation against exact owner files, public API names, crate boundaries, proof reports, validation envelope, and no-bypass evidence.
+Maintainability review status: implementation contract drafted. Maintainability must be reviewed in the later code PR against the exact file list, dependency rules, no-bypass evidence, report shape, and validation envelope.
 
-Feature support matrix: the first proof must cover Counter app state, UI screen/source declaration, typed UI action lowering, route/event emission, host/app action resolution, app-owned mutation, next UI output, story report, negative route/capability/disabled/missing-data cases, and no callback/direct-mutation bypass.
+Feature support matrix: the first proof must cover Counter app state, UI screen/source declaration, typed UI action lowering, route/event emission, host/app action resolution, app-owned mutation, next UI output, story-compatible report, negative route/capability/disabled/missing-data cases, no callback/direct-mutation bypass, and no public AppUiExt API.
 
-Future-use-case pressure matrix: covered by UI Story, UI Runtime Rendering Pipeline, UI Component Platform, Interaction V2, SpatialCanvas intake, and the superseded Typed App Program pressure archive. The first proof must consume these as boundaries, not implement designer, game HUD, world-space UI, SpatialCanvas, shared plugin framework, or external-template-only workflows.
+Future-use-case pressure matrix: covered by UI Story, UI Runtime Rendering Pipeline, UI Component Platform, Interaction V2, SpatialCanvas intake, and the superseded Typed App Program pressure archive. The first proof consumes these as boundaries and must not implement designer, game HUD, world-space UI, SpatialCanvas, shared plugin framework, external-template-only workflow, or public AppUiExt ergonomics.
 
-Hierarchy/composition matrix: target proof hierarchy is `App/ECS host state -> UI screen/component source -> ui_definition validation/normalization -> FormedInteractionModel -> UiProgram -> runtime artifact/output -> UiEventPacket/route proposal -> typed app action -> app/ECS mutation -> next UI output -> UiStoryRunReport`.
+Hierarchy/composition matrix: target proof hierarchy is `ECS host state -> UI source helper -> ui_definition node/template records -> ui_program_lowering -> UiProgram route/event facts -> route proposal via UiEventPacket -> ui_app_integration bridge -> typed app action -> ECS-backed Counter mutation -> next UI output facts -> UiAppIntegrationReport`.
 
-Ergonomics/usability: the target framework should eventually let app authors register resources, systems, screens, screen routers, and typed UI actions through an App/Plugin extension surface while preserving lowered UI source, source maps, diagnostics, and story proof. This planning slice explicitly defers public AppUiExt-style names until after the internal bridge proof validates owner and dependency direction.
+Ergonomics/usability: the target framework should eventually let app authors register resources, systems, screens, screen routers, and typed UI actions through an App/Plugin extension surface. This implementation explicitly defers those public names. It proves the owner boundary first so future ergonomics are grounded rather than speculative.
 
-Validation expectation: this docs-only planning change should pass `python tools/docs/validate_docs.py` and `git diff --check`. No code validation is claimed from this branch.
+Validation expectation: docs-only PR should pass `python tools/docs/validate_docs.py` and `git diff --check`. Later implementation must pass the validation commands listed in `ecs-backed-counter-ui-story-proof-planning.md`, including `cargo test -p ui_app_integration`, the two focused counter tests, focused UI crate tests, workspace tests, docs validation, and diff check.
 
-Known blockers: implementation is blocked until exact implementation owner, internal API names, dependency rules, validation commands, and closeout evidence are accepted.
+Known blockers: implementation is blocked until this docs PR is reviewed/merged. Public AppUiExt ergonomics remain blocked until the first proof passes and a new design slice accepts exact public API names and engine dependency direction.
 
-Next action: revise `ecs-backed-counter-ui-story-proof-planning.md` into an implementation contract for the selected strategy: C-internal first, small UI-owned app-integration proof bridge plus Counter UiStory proof, with public AppUiExt-style API deferred.
+Next action: after this docs PR is accepted, open the implementation branch for `ui_app_integration` using the exact contract in `ecs-backed-counter-ui-story-proof-planning.md`.
 
-Evidence: this active-work update follows merged PR #70 direction authority and keeps the next step planning-only while selecting the long-term owner strategy.
+Evidence: this active-work update follows merged PR #70 direction authority and the source-inspection pass performed for PR #71.
 
 ## Active-work rules
 
