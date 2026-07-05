@@ -4,9 +4,10 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-05
 related_docs:
   - ../workflow-lifecycle.md
+  - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -167,6 +168,32 @@ Affected planning files: `phase-16-surface2d-closeout.md`, `active-work.md`, and
 Evidence: `git log --oneline --decorate origin/main..origin/surface2d-phase-16` showed `7bc6abf1 Add Surface2D future use-case matrix`, `6f571270 Harden Surface2D genericity and hierarchy planning`, and `b5a0cc52 Refine Surface2D planning gate`. `git diff --name-status origin/main...origin/surface2d-phase-16` showed only the Surface2D design document modified.
 
 Follow-up: Review `surface2d-phase-16` manually outside the Phase 16 closeout. If useful material remains, extract a focused docs-only follow-up from `main` without mixing it into completed closeout truth.
+
+## UI framework app integration direction decision
+
+Date: 2026-07-05
+
+Decision: Replace the active next-work focus from `PT-UI-APP-PROGRAM-001` manual Typed App Program headless counter implementation to `PT-UI-FRAMEWORK-APP-INTEGRATION-001` UI Framework App Integration Direction Review.
+
+State transition: `PT-UI-APP-PROGRAM-001 active-planning/implementation-spike -> superseded`; `PT-UI-FRAMEWORK-APP-INTEGRATION-001 -> active-planning`.
+
+Context: Review of the UI architecture, UI story workflow, runtime rendering pipeline, UI Component Platform roadmap, Interaction V2 ADR, Typed App Program design, PR #69, and Phase 17 SpatialCanvas intake showed that the repository has strong UI substrate but lacks a canonical app-facing framework path. PR #69 follows its prior planning contract, but that contract starts from a manual proof-IR layer rather than the real app-authoring question.
+
+Options considered: merge PR #69 as the app framework foundation; continue raw ECS UI; make external templates the only immediate path; promote SpatialCanvas; select ECS/App/Plugin-hosted UI-definition-backed app integration.
+
+Reason: The best long-term direction is App/ECS-hosted app authoring that lowers UI through `ui_definition`, FormedInteractionModel, `UiProgram`, runtime artifacts, and `UiStory` reports while keeping app mutation in host/app owners. Raw ECS UI would make ECS own UI semantics. The current `app_program` proof would make manual snapshots, route maps, reducers, and projection reports feel like the public framework. SpatialCanvas is a future reusable surface, not the app integration layer.
+
+Affected planning files: `active-work.md`, `decision-register.md`, `typed-app-program-ui-proof-001-planning.md`, and new design file `ui-framework-app-integration-direction-review.md`.
+
+Evidence: Current UI domain roadmap records `ui_definition`, `ui_program`, `ui_program_lowering`, `ui_compiler`, `ui_artifacts`, `ui_binding`, `ui_story`, runtime views, render primitives, and gallery proof as active current truth. The UI Story workflow records the full source-to-mount eligibility pipeline. The UI Runtime Rendering Pipeline forbids visible UI success without the upstream reports. The UI Component Platform roadmap rejects ECS-owned UI semantics and app-only mutation shortcuts. PR #69 is open/draft and implements a manual `app_program` proof crate. PR #65 is open/draft as SpatialCanvas planning-only.
+
+Follow-up: Review and accept, revise, or reject `ui-framework-app-integration-direction-review.md`. If accepted, close or keep PR #69 only as a superseded spike and write a new implementation-planning contract for `ECS-backed Counter UI Story Proof`.
+
+Reactivation condition: Reactivate `PT-UI-APP-PROGRAM-001` only if a later accepted design decides that a dedicated `app_program` crate is required as proof/report vocabulary and is not the public UI framework authoring path.
+
+Supersedes: `PT-UI-APP-PROGRAM-001` as the next active implementation foundation.
+
+Superseded by: `PT-UI-FRAMEWORK-APP-INTEGRATION-001`.
 
 ## Lifecycle rule
 

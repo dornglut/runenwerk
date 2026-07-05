@@ -4,9 +4,10 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-05
 related_docs:
   - ../workflow-lifecycle.md
+  - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -18,6 +19,22 @@ related_docs:
 This is the Markdown-first roadmap record for scriptless workflow.
 
 ## Current entries
+
+### PT-UI-FRAMEWORK-APP-INTEGRATION-001
+
+ID: `PT-UI-FRAMEWORK-APP-INTEGRATION-001`
+
+Title: UI Framework App Integration Direction Review
+
+State: active planning; implementation not authorized
+
+Lifecycle state: `active-planning`
+
+Authority: `ui-framework-app-integration-direction-review.md`.
+
+Evidence: Current UI architecture and roadmap documents show that Runenwerk already has `ui_definition`, `UiProgram`, runtime artifacts/views, `UiStory`, component packages, binding/host data, and retained runtime proof substrate. The active decision is to settle how App/Plugin/ECS-hosted code uses those contracts as a real framework before continuing the manual `app_program` proof or promoting SpatialCanvas implementation.
+
+Next action: Review and accept, revise, or reject the direction review. If accepted, write a separate implementation-planning contract for `ECS-backed Counter UI Story Proof`.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
@@ -79,7 +96,7 @@ Authority: `ui-component-platform-surface2d-design.md`.
 
 Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with `cargo test -p ui_controls surface2d`, `cargo test -p ui_controls control_package`, `cargo test -p ui_runtime surface2d`, `cargo test -p ui_static_mount surface2d`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`. Detailed closeout: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
 
-Next action: Keep as completed dependency. The next named production-track milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas planning intake, but this Phase 16 closeout does not authorize Phase 17 implementation.
+Next action: Keep as completed dependency. The next named production-track milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas planning intake, but this Phase 16 closeout does not authorize Phase 17 implementation. The active framework-direction review must be settled before SpatialCanvas is promoted as part of the real app-facing UI framework path.
 
 ## Rules
 
