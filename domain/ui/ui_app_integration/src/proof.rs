@@ -52,11 +52,13 @@ impl UiAppIntegrationProof {
         let bridge = counter_route_bridge();
 
         for index in 0..5 {
+            let count = host.count();
             let packet = counter_packet("counter.increment", "counter.action.increment");
+            let source = UiAppSourceBuilder::counter_screen(count);
             let step = run_step(
                 format!("increment.{index}"),
                 &mut host,
-                UiAppSourceBuilder::counter_screen(host.count()),
+                source,
                 &bridge,
                 packet,
             );
