@@ -1,17 +1,18 @@
 ---
 title: Typed App Program UI Proof 001 Planning
-description: Implementation-planning contract for the first Typed App Program proof, using a dedicated app_program crate with a UI-backed headless counter example.
-status: active
+description: Superseded implementation-planning contract for the first Typed App Program proof. Preserved as historical pressure evidence; no longer the active implementation foundation.
+status: superseded
 owner: app-program
 layer: workspace
 canonical: false
-last_reviewed: 2026-07-04
+last_reviewed: 2026-07-05
 related_docs:
   - ./active-work.md
   - ../workflow-lifecycle.md
   - ../complete-investigation-gate.md
   - ../complete-design-gate.md
   - ../complete-merge-readiness-gate.md
+  - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/typed-app-program-and-ui-proof-design.md
   - ../../reports/investigations/typed-app-program-current-state-investigation.md
   - ../../reports/investigations/typed-app-program-engine-pressure-and-design-review.md
@@ -21,481 +22,113 @@ related_docs:
 
 # Typed App Program UI Proof 001 Planning
 
-## Purpose
+## Status
 
-Define the implementation-planning contract for the first Typed App Program proof:
+Lifecycle state: `superseded`.
 
-```text
-Typed App Program UI Proof 001 — Headless Counter App Proof
-```
+This planning contract is no longer the active implementation foundation.
 
-The proof demonstrates the full local app-program loop without creating a shared plugin framework, editor integration, game runtime integration, engine subsystem implementation, networking implementation, or `foundation/meta`.
-
-The durable app-program core must be its own crate. UI is the first proving consumer, not the owner of the app-program architecture.
-
-## Lifecycle State
+Superseded by:
 
 ```text
-active-planning
+PT-UI-FRAMEWORK-APP-INTEGRATION-001 — UI Framework App Integration Direction Review
 ```
 
-This document prepares implementation authorization. It does not by itself implement product code. Implementation may begin only after this planning contract is reviewed, accepted, and active-work points to this proof as the active implementation focus.
-
-## Prerequisite Authority
-
-Implementation planning builds on the merged Typed App Program investigation/design authority from PR #66:
+Authority:
 
 ```text
-docs-site/src/content/docs/reports/investigations/typed-app-program-current-state-investigation.md
-docs-site/src/content/docs/design/active/typed-app-program-and-ui-proof-design.md
-docs-site/src/content/docs/reports/investigations/typed-app-program-engine-pressure-and-design-review.md
-docs-site/src/content/docs/reports/investigations/typed-app-program-multiplayer-concurrency-design-review.md
-docs-site/src/content/docs/reports/investigations/typed-app-program-cross-cutting-design-review.md
+docs-site/src/content/docs/design/active/ui-framework-app-integration-direction-review.md
+docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 
-If that merged authority changes materially, this planning contract must be reviewed again before implementation.
+## Supersession reason
 
-## Implementation Scope
+The original plan selected a dedicated `domain/app_program` crate plus a headless counter proof as the first implementation path.
 
-Implement a dedicated, UI-independent app-program core crate plus a UI-backed headless counter proof:
+That was a valid planning slice for the older question:
+
+```text
+Can Runenwerk define local app-program proof vocabulary around model/action/route/reducer/effect/projection/replay/report?
+```
+
+The current strategic question is different:
+
+```text
+How should real app/plugin authors use Runenwerk's UI framework correctly while preserving ui_definition source, UiProgram semantic contracts, UiStory proof, runtime output, host policy, and app-owned mutation?
+```
+
+The better long-term decision is now:
+
+```text
+App / Plugin / ECS-hosted app authoring
+  + ui_definition-backed UI source
+  + FormedInteractionModel / UiProgram semantic contracts
+  + ui_runtime / ui_evaluator runtime output
+  + UiStory proof and mount eligibility
+  + host/app-owned mutation
+```
+
+The manual `app_program` proof-first path risks making normal app authors work directly with:
 
 ```text
 AppModelSnapshot
-  -> AppViewProjection
-  -> UiProgram / UiRuntimeArtifact / UiOutput
-  -> UiEventPacket
-  -> RouteActionMap
-  -> AppAction
-  -> AppReducer
-  -> AppEffectPlan
-  -> AppModelSnapshot revision N+1
-  -> AppReplayTrace / AppProgramReport
-```
-
-Ownership split:
-
-```text
-domain/app_program
-  owns generic local app-program contracts: model, action, route-action mapping, reducer, effect plan, replay, reports.
-
-domain/app_program/examples/headless_counter_ui.rs
-  owns the demonstration of the first UI-backed headless counter proof.
-
-domain/app_program/tests/headless_counter_replay.rs
-  owns validation of the proof behavior.
-
-ui_program / ui_hosts / ui_binding / ui_evaluator / ui_testing
-  are proving consumers or dev/test dependencies, not owners of app-program meaning.
-```
-
-The first proof uses a counter app:
-
-```text
-count = 0 -> counter screen
-counter.increment route -> CounterAction::Increment
-pure reducer increments count
-count >= 5 -> win screen
-counter.reset route -> CounterAction::Reset
-pure reducer resets count to 0
-```
-
-## Required Positive Scenario
-
-The proof must execute and report this scenario:
-
-```text
-1. initial model snapshot: count = 0, screen = counter
-2. project to UI and evaluate first output
-3. resolve counter.increment route to CounterAction::Increment
-4. reducer transitions count 0 -> 1
-5. repeat increments through count 5
-6. projection switches to win screen
-7. resolve counter.reset route to CounterAction::Reset
-8. reducer transitions count 5 -> 0
-9. projection returns to counter screen
-```
-
-## Required Negative Scenarios
-
-The proof must fail closed and report distinct diagnostics for:
-
-```text
-unknown route
-wrong route schema version
-invalid action payload
-missing capability / unauthorized route
-route diagnostic rejection
-reducer diagnostic rejection
-projection diagnostic rejection
-no mutation after rejected action
-```
-
-## Required Reports
-
-Implementation must produce inspectable proof structures equivalent to:
-
-```text
-AppReplayTrace
-AppProgramReport
-RouteActionResolutionReport
-CounterReducerTraceReport
-CounterViewProjectionReport
-CounterEffectPlanReport
-UiProgram build or lowering report
-UiCompilerReport
-UiEvaluation output diagnostics
-Headless reproducibility evidence
-```
-
-Report requirements:
-
-```text
-stable ordering
-distinct diagnostic namespaces
-model revisions before and after each reducer step
-route/action/effect IDs and versions
-local action source metadata or an explicitly reserved source field
-safe bounded payload summary
-no raw private payload assumption
-deterministic pass/fail summary
-```
-
-## Vocabulary Required In Code
-
-The first implementation should introduce generic app-program vocabulary in `domain/app_program`:
-
-```text
-AppProgramId
-AppProgramVersion
-AppModelId
-AppModelVersion
-AppModelSnapshot
-AppModelRevision
-AppActionId
-AppActionVersion
-AppActionPayload
-AppActionCapability
-AppActionSource
 RouteActionMap
-RouteActionMapping
-RouteActionResolution
-AppReducerInput
-AppReducerOutcome
-AppEffectPlan
-AppEffect
-AppReplayScenario
-AppReplayStep
+AppAction decoder
+AppReducer
+AppViewProjection
 AppReplayTrace
 AppProgramReport
-AppViewProjection
-AppViewProjectionReport
 ```
 
-The first implementation may use only:
+Those concepts may remain useful as later proof/report vocabulary, but they are not the selected public framework foundation.
+
+## Preserved pressure from this plan
+
+Future framework integration work should preserve these requirements from the superseded plan:
 
 ```text
-AppActionSource::LocalHeadless
-AppEffectPlan::NoEffect
-single logical event order
-single-threaded deterministic replay
+fail-closed route/action resolution
+distinct diagnostics for unknown route, schema mismatch, bad payload, missing capability, reducer failure, projection failure
+safe bounded payload reports
+stable action and route identity
+no visible localized label as durable identity
+rejected actions must not mutate app/domain state
+UI emits proposals/events; host/app owners decide mutation
+headless deterministic proof before production claims
+no callback-first generic UI behavior
+no renderer-owned product truth
+no editor/game/engine mutation in generic UI
+no shared plugin framework or foundation/meta extraction from the first proof
 ```
 
-The data model must not make those local defaults the only possible future shape.
+## Explicit non-authorizations
 
-## Exact Owner
-
-First proof owner:
+This superseded planning document no longer authorizes or requests:
 
 ```text
-domain/app_program
+creating domain/app_program as the next active foundation
+adding root workspace membership for app_program
+implementing domain/app_program/src/*
+adding domain/app_program/examples/headless_counter_ui.rs
+adding domain/app_program/tests/headless_counter_replay.rs
+merging PR #69 as the framework foundation
+continuing manual AppModelSnapshot / RouteActionMap / reducer / projection implementation as the next framework step
 ```
 
-Reason:
+## PR #69 status expectation
+
+PR #69 may be closed or retained only as a superseded implementation spike. It should not be merged into `main` as the foundation for the Runenwerk UI framework unless a future accepted design explicitly reactivates this plan.
+
+## Reactivation condition
+
+Reactivate this plan only if a later accepted design concludes all of the following:
 
 ```text
-Typed App Program is cross-domain structure, not UI-owned behavior.
-A dedicated crate prevents the first proof from burying durable app-program concepts inside ui_testing.
-UI is the first proving consumer because UiProgram and headless UI proof infrastructure already exist.
-The counter demo belongs in an example/demo surface, not inside production UI crates.
+1. A dedicated app_program crate is required before an ECS-hosted UI integration proof.
+2. app_program is proof/report vocabulary, not the public framework authoring path.
+3. The implementation does not bypass ui_definition, UiProgram, UiStory, or host/app mutation owners.
+4. Exact owner files, allowed files, validation commands, module decomposition, and stop conditions are rewritten from current repository truth.
 ```
 
-Long-term shared plugin/app composition ownership remains undecided and blocked until at least one non-UI proof validates repeated domain-neutral structure. This crate must not become `AppRecipe`, `PluginSuite`, or a universal framework in the first proof.
-
-## Allowed Files And Crates
-
-Allowed implementation files for the first proof:
-
-```text
-Cargo.toml
-domain/app_program/Cargo.toml
-domain/app_program/src/lib.rs
-domain/app_program/src/ids.rs
-domain/app_program/src/model.rs
-domain/app_program/src/action.rs
-domain/app_program/src/route_action.rs
-domain/app_program/src/reducer.rs
-domain/app_program/src/effect.rs
-domain/app_program/src/projection.rs
-domain/app_program/src/replay.rs
-domain/app_program/src/report.rs
-domain/app_program/src/counter.rs
-domain/app_program/examples/headless_counter_ui.rs
-domain/app_program/tests/headless_counter_replay.rs
-```
-
-Allowed only if required by compiler/test wiring:
-
-```text
-domain/ui/ui_program/src/events/mod.rs
-domain/ui/ui_hosts/src/lib.rs
-```
-
-Any change outside this list requires returning to planning/design with a reason.
-
-## Dependency Rules
-
-Production dependency rules for `domain/app_program`:
-
-```text
-The app_program library crate must not depend on UI crates, editor crates, game crates, engine crates, net crates, material_graph, procgen, renderer backends, or foundation/meta.
-It may depend only on low-level foundation crates needed for IDs, diagnostics, schema/value shape, or resource refs if those are required by implementation.
-```
-
-Dev/test/example dependency rules:
-
-```text
-Examples and tests may use ui_program, ui_schema, ui_compiler, ui_artifacts, ui_evaluator, ui_binding, ui_hosts, ui_state, ui_runtime_view, ui_accessibility, ui_geometry, and ui_testing as dev-dependencies to prove UI integration.
-```
-
-Forbidden dependencies:
-
-```text
-app_program production code must not depend on editor_shell, game runtime, renderer backend, engine scheduler, physics, asset loading, streaming, network, material_graph, procgen, ui_testing, or foundation/meta.
-```
-
-## Non-Owned Files And Crates
-
-Implementation must not change:
-
-```text
-foundation/meta
-foundation/commands execution behavior
-engine scheduler/runtime implementation
-engine physics/simulation implementation
-engine asset loading/import implementation
-engine streaming/LOD implementation
-engine renderer/resource implementation
-net engine/networking implementation
-domain/editor/editor_shell command execution
-game runtime/HUD/world-space implementation
-material_graph/procgen implementation
-ui_definition callback or behavior execution
-ui_controls app mutation behavior
-ui_state generic app model ownership
-ui_hosts host effect execution
-AppRecipe / PluginSuite / shared plugin framework files
-Phase 17 SpatialCanvas files
-```
-
-## Demo And Example Placement
-
-The first proof must include a demo/example surface:
-
-```text
-domain/app_program/examples/headless_counter_ui.rs
-```
-
-Example rules:
-
-```text
-The example demonstrates the local counter app replay over UI/UiProgram/headless evaluation.
-The example may use UI crates through dev-dependencies only.
-The example must not be the only validation surface; tests must assert proof behavior.
-The example must not perform windowing, renderer backend work, engine IO, asset loading, networking, or editor/game integration.
-```
-
-## Principle Compliance Matrix
-
-| Principle | Requirement |
-| --- | --- |
-| KISS | One app_program crate, one proof app, one headless host mode, local deterministic replay only. |
-| DRY | Reuse existing UiProgram, UiEventPacket, ui_hosts, ui_binding, ui_evaluator, and ui_testing proof infrastructure from examples/tests; do not duplicate UI program semantics. |
-| YAGNI | Do not implement actors, async workflow, multiplayer, asset loading, streaming, scheduler, editor integration, game integration, hot reload, localization, telemetry, plugin framework, or generic app recipe composition. |
-| SOLID | Separate IDs, model, action, route-action resolution, reducer, effect, projection, replay, report, counter fixture, and UI example. |
-| Separation of Concerns | app_program owns app structure; UI program emits UI facts/events; hosts remain external; domains own meaning. |
-| Avoid Premature Optimization | No parallelism, no streaming, no runtime scheduling, no hot-path optimization. |
-| Law of Demeter | Communicate through packets, snapshots, maps, and reports; do not reach into renderer, engine, editor, game, ECS, IO, or network internals. |
-
-## Module Decomposition Map
-
-```text
-Cargo.toml
-  Adds `domain/app_program` to the workspace and, if used elsewhere, workspace dependency metadata.
-
-domain/app_program/Cargo.toml
-  Defines the app_program crate, low-level production dependencies, and UI/dev dependencies for tests/examples only.
-
-lib.rs
-  Public module exports and crate-level boundary docs.
-
-ids.rs
-  AppProgramId, AppProgramVersion, AppModelId, AppModelVersion, AppActionId, AppActionVersion, AppModelRevision.
-
-model.rs
-  AppModelSnapshot and generic model revision/state envelope.
-
-action.rs
-  AppAction, AppActionPayload, AppActionCapability, AppActionSource.
-
-route_action.rs
-  RouteActionMap, RouteActionMapping, RouteActionResolution, fail-closed diagnostics.
-
-reducer.rs
-  AppReducerInput, AppReducerOutcome, pure reducer contract helpers.
-
-effect.rs
-  AppEffectPlan, AppEffect, NoEffect, future-shape reserved without implementation.
-
-projection.rs
-  AppViewProjection, AppViewProjectionReport, UI-independent projection contract.
-
-replay.rs
-  AppReplayScenario, AppReplayStep, AppReplayTrace, deterministic replay runner.
-
-report.rs
-  AppProgramReport and phase-specific diagnostic/report summaries.
-
-counter.rs
-  Counter proof model/action/reducer/projection fixture used by tests/examples. Counter semantics remain demo-owned, not platform meaning.
-
-examples/headless_counter_ui.rs
-  Demo/example showing the headless counter replay over UI/UiProgram/headless evaluation.
-
-tests/headless_counter_replay.rs
-  Tests asserting the complete proof and negative cases.
-```
-
-## Feature Support Matrix
-
-| Feature | First Proof Requirement | Future Pressure |
-| --- | --- | --- |
-| App model snapshot | Required in app_program | Versioned, serializable, migration-aware. |
-| Action IDs and versions | Required in app_program | Source/authority/causality metadata later. |
-| Route-action mapping | Required in app_program | Host/domain mapping later. |
-| Reducer trace | Required in app_program | Undo/redo/history adapters later. |
-| Effect plan | NoEffect only | Host/domain/network/asset proposals later. |
-| UI proof integration | Required through example/test dev-deps | Other domain proofs later. |
-| Host compatibility | Headless capability facts only | Editor/game/world/network hosts later. |
-| Deterministic replay | Required | Multiplayer rollback/reconciliation pressure later. |
-| Security/permissions | Missing capability negative case only | Policy/authorization owner later. |
-| Privacy/redaction | Safe bounded payload summary only | Redaction policy later. |
-| Accessibility | Preserve UI output/accessibility proof where existing | Full UI accessibility integration later. |
-| Localization | Stable IDs not visible labels | Content/UI localization later. |
-| Multithreading | No shared mutable global state | Thread-safe snapshots/queues later. |
-| Multiplayer | Local source metadata only | Authority/replication/prediction later. |
-| Engine systems | Not implemented | Inert proposals/host facts later. |
-
-## Validation Commands
-
-Required before implementation PR merge:
-
-```bash
-cargo test -p app_program
-cargo test -p app_program --test headless_counter_replay
-cargo test -p app_program --examples
-cargo test -p ui_program event
-cargo test -p ui_hosts route
-cargo test -p ui_binding host_data
-cargo test -p ui_evaluator
-cargo test --workspace
-python tools/docs/validate_docs.py
-git diff --check
-```
-
-If exact test filters differ after implementation, the implementation PR must explain the substitution and show equivalent coverage.
-
-Docs-only planning PR validation:
-
-```bash
-python tools/docs/validate_docs.py
-git diff --check
-```
-
-## Stop Conditions
-
-Stop and return to planning/design if implementation tries to:
-
-```text
-put app-program core types back inside domain/ui/ui_testing
-make app_program production code depend on UI crates
-modify product/editor/game behavior
-modify engine subsystem behavior
-modify network/multiplayer behavior
-modify Phase 17 SpatialCanvas scope
-add callback execution to ui_definition or ui_controls
-make ui_state the generic app model
-make ui_hosts execute effects
-make foundation/commands execute or route commands
-add AppRecipe/PluginSuite/shared plugin framework behavior
-add scheduler, thread pool, or async runtime behavior
-perform asset IO, file IO, streaming, LOD, physics, renderer resource, or world mutation work
-use scheduler order as replay order
-use wall-clock time, unseeded randomness, global mutable state, or hidden callbacks in reducers
-store raw private payloads in reports
-use visible localized labels as durable action identity
-allow rejected actions to mutate model state
-skip distinct diagnostics for route/action/reducer/projection/effect/replay failures
-```
-
-## Closeout Evidence Required
-
-Implementation closeout must record:
-
-```text
-changed files and ownership check
-new crate boundary check
-production dependency check showing app_program is UI-independent
-example/dev-dependency check showing UI usage is test/demo-only
-positive scenario proof summary
-negative scenario proof summary
-report structures produced
-validation commands and results
-proof that no non-owned files/crates changed
-proof that no engine/multiplayer/security/hot-reload/localization subsystem was implemented
-principle compliance review
-module decomposition review
-follow-up decision: next proof, editor integration, or hold
-```
-
-## Open Questions Deferred By This Planning Contract
-
-These are intentionally not solved in the first proof:
-
-```text
-second non-UI proof domain
-shared extraction beyond app_program local contracts
-AppRecipe / PluginSuite integration
-editor/workbench integration
-game HUD integration
-world-space UI integration
-network/multiplayer authority model
-async effect lifecycle implementation
-asset loading/streaming/LOD/physics integration
-persistence and migration implementation
-hot reload implementation
-telemetry implementation
-full localization implementation
-```
-
-Deferring them is acceptable because the design/review artifacts classify their pressure and set stop conditions. The first proof must not close these questions accidentally.
-
-## Next Action After This PR
-
-After this planning PR is reviewed and accepted:
-
-```text
-Open implementation branch for Typed App Program UI Proof 001.
-Create the app_program crate and the headless counter UI example.
-Run the full validation envelope.
-Close out with evidence.
-```
+Until then, use `ui-framework-app-integration-direction-review.md` as the active direction authority.
