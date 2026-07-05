@@ -18,6 +18,7 @@ related_docs:
   - ../../reports/investigations/typed-app-program-engine-pressure-and-design-review.md
   - ../../reports/investigations/typed-app-program-multiplayer-concurrency-design-review.md
   - ../../reports/investigations/typed-app-program-cross-cutting-design-review.md
+  - ../../reports/investigations/typed-app-program-ui-proof-001-superseded-planning-archive.md
 ---
 
 # Typed App Program UI Proof 001 Planning
@@ -40,6 +41,12 @@ Authority:
 docs-site/src/content/docs/design/active/ui-framework-app-integration-direction-review.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
+```
+
+Detailed historical archive:
+
+```text
+docs-site/src/content/docs/reports/investigations/typed-app-program-ui-proof-001-superseded-planning-archive.md
 ```
 
 ## Supersession reason
