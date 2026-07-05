@@ -1,6 +1,6 @@
 ---
 title: ECS-backed Counter UI Story Proof Planning
-description: Planning/design intake for the first real UI framework proof after the UI Framework App Integration Direction Review.
+description: Implementation-planning contract for the first real UI framework proof after the UI Framework App Integration Direction Review.
 status: active
 owner: ui
 layer: workspace
@@ -28,13 +28,15 @@ related_docs:
 
 Lifecycle state: `active-planning`.
 
-Implementation authorization: not granted.
+Implementation authorization after this docs PR: conditional.
 
-This document opens the first proof-planning slice after `UI Framework App Integration Direction Review`. It selects the long-term owner strategy, but it must remain planning/design intake until exact implementation owners, allowed files, validation commands, evidence expectations, and stop conditions are accepted.
+This document is the implementation-planning contract for the first real Runenwerk UI framework proof. It authorizes a later implementation branch only if this document is reviewed/merged and the implementation stays within the exact files, dependencies, tests, and stop conditions below.
+
+This PR remains docs-only.
 
 ## Purpose
 
-Define the first real Runenwerk UI-framework proof:
+Implement the first real UI framework proof:
 
 ```text
 ECS-backed Counter UI Story Proof
@@ -46,17 +48,49 @@ The proof must demonstrate the intended framework loop:
 App/ECS host state
   -> UI screen/component source
   -> ui_definition validation/normalization
-  -> FormedInteractionModel
-  -> UiProgram route/event facts
+  -> FormedInteractionModel / UiProgram route-event facts
   -> runtime artifact/output
   -> UI input/event proposal
   -> typed app action
   -> app/ECS-owned mutation
   -> next UI output
-  -> UiStoryRunReport
+  -> UiStory-style report evidence
 ```
 
 The proof exists to validate framework usage, not to build a product app, game UI, editor feature, SpatialCanvas component, shared plugin framework, or general app-program runtime.
+
+## Current source facts used by this contract
+
+Current workspace facts:
+
+```text
+Cargo.toml already contains UI crates through ui_story.
+No ui_app_integration crate exists yet.
+```
+
+Current UI app-facing substrate facts:
+
+```text
+ui_definition owns AuthoredUiTemplate and NormalizedUiTemplate.
+ui_definition owns UiNodeDefinition variants including Column, Label, Button, and route slots.
+ui_definition owns UiRouteSlotRef and related slot refs.
+ui_program owns UiEventPacket, RouteId, RouteSchemaVersion, RouteCapability, payload, source-control, phase, source-map, and diagnostics.
+ui_program_lowering exposes form_ui_program_report_from_node_with_registry_snapshot(...).
+ui_controls exposes runenwerk_control_package() and ControlPackageRegistry/ControlPackageRegistrySnapshot.
+ui_story is V2 story/proof contract surface and must not regress to old flat-stage APIs.
+ui_testing already depends on ui_program, ui_compiler, ui_evaluator, ui_binding, ui_hosts, ui_accessibility, ui_geometry, ui_input, ui_state, and related proof/evaluation crates.
+engine::App exposes plugin, system, resource, headless App construction, and runtime host methods, but its world is private.
+```
+
+Implications:
+
+```text
+1. Do not make engine depend on ui_app_integration in the first proof.
+2. Do not make ui_definition, ui_program, or ui_runtime depend on engine/ECS.
+3. The first public AppUiExt API is deferred because an external integration crate cannot safely assume engine internals.
+4. The first proof should use ecs directly as the host-state proof substrate and reserve engine::App ergonomics for a later adapter slice.
+5. The new integration layer may depend on lower UI crates and ecs, and may use ui_testing/ui_story as dev/test support.
+```
 
 ## Authority
 
@@ -86,14 +120,12 @@ docs-site/src/content/docs/reports/investigations/typed-app-program-ui-proof-001
 
 ```text
 PT-UI-FRAMEWORK-APP-INTEGRATION-001 — completed direction decision through PR #70
-PT-UI-FRAMEWORK-APP-INTEGRATION-002 — this planning intake
+PT-UI-FRAMEWORK-APP-INTEGRATION-002 — this implementation-planning contract
 ```
-
-This planning intake may become the implementation contract only after it names exact owner files and passes the complete design gate.
 
 ## Core direction to preserve
 
-The public framework direction is:
+The framework direction is:
 
 ```text
 ECS/App/Plugin-hosted app authoring
@@ -103,6 +135,8 @@ ECS/App/Plugin-hosted app authoring
 + UiStory proof and mount eligibility
 + host/app-owned mutation
 ```
+
+The first implementation proves the ECS-hosted part directly. Public App/Plugin extension ergonomics are deferred until after dependency direction and owner boundaries are proven.
 
 This proof must not regress to any rejected direction:
 
@@ -115,166 +149,430 @@ callback-first generic UI mutation
 renderer-owned UI semantics
 ```
 
-## Long-term owner decision
+## Selected implementation strategy
 
-Selected long-term owner strategy:
+Selected strategy:
 
 ```text
-Option C — a small UI-owned app-integration layer.
+C-internal first, then B-public later.
 ```
 
-Working owner name:
+Meaning:
+
+```text
+Create a small UI-owned app-integration crate now.
+Use it to prove an ECS-backed Counter UiStory-style proof through the existing UI source/program/runtime/proof stack.
+Keep all registration/build APIs internal or crate-local for this first proof.
+Do not add public engine::App extension methods in this first implementation.
+After this proof validates boundaries, add an AppUiExt-style public ergonomics slice separately.
+```
+
+## New crate
+
+Add a new workspace crate:
 
 ```text
 domain/ui/ui_app_integration
 ```
 
-The exact crate/module name is not yet implementation authority. The important decision is ownership shape:
+Crate name:
 
 ```text
-A UI-owned integration layer owns the bridge between App/ECS-hosted app authoring and the UI source/program/story pipeline.
+ui_app_integration
 ```
 
-It should own only:
+Crate role:
 
 ```text
-screen/action registration contracts
-screen/router proof wiring
-typed action -> route/action lowering policy
-app-state snapshot/binding extraction policy
-route proposal -> typed app-action dispatch policy
-proof facts connecting UI event -> app mutation -> next UI output
+A UI-owned bridge between ECS-hosted app state/action proof fixtures and the UI source/program/story proof pipeline.
 ```
 
-It must not own:
+The crate must remain small and proof-driven. It must not become a generic app framework, AppRecipe, PluginSuite, or engine subsystem.
+
+## Workspace updates allowed
+
+Allowed root workspace changes:
 
 ```text
-control semantics
-layout semantics
-theme semantics
-UiProgram graph truth
-runtime input semantics
-ECS resources/systems themselves
-app mutation
-engine scheduling
-editor/game commands
-SpatialCanvas semantics
-AppRecipe / PluginSuite / shared plugin framework
+Cargo.toml
 ```
 
-## Implementation sequence decision
-
-Use this staged sequence:
+Required root `members` addition:
 
 ```text
-1. C-internal proof slice:
-   Implement the smallest UI-owned app-integration bridge needed for the Counter proof.
-   Keep APIs internal or proof-local until owner and dependency direction are validated.
-
-2. Story/proof harness:
-   Use ui_story / ui_testing as the proof executor, not as the long-term framework owner.
-
-3. B-style ergonomics later:
-   Add AppUiExt-style public registration only after the proof validates the owner boundary.
-
-4. No pure A as architecture:
-   A fixture/story-only proof is allowed only as harness support, not as the framework direction.
+"domain/ui/ui_app_integration",
 ```
 
-This avoids the two failure modes:
+Recommended placement:
 
 ```text
-fixture-only proof that never becomes usable framework API
-premature public App extension API before dependency and owner boundaries are proven
+after "domain/ui/ui_story"
 ```
 
-## Why pure A is not enough
-
-A fixture/story-only proof is useful as a safety harness, but it does not prove real App/Plugin/ECS authoring ergonomics. It risks producing another proof island that leaves the app-facing framework path unresolved.
-
-Therefore:
+Required `[workspace.dependencies]` addition:
 
 ```text
-ui_story / ui_testing may execute the proof.
-They must not become the long-term app-integration owner.
+ui_app_integration = { path = "domain/ui/ui_app_integration" }
 ```
 
-## Why pure B is not first
-
-An AppUiExt-style API is the desired eventual ergonomics, but it must not be introduced before the integration owner and dependency direction are proven.
-
-Therefore:
+Recommended placement:
 
 ```text
-AppUiExt-style names are reserved target ergonomics.
-They are not accepted implementation names in the first slice.
+after ui_story
 ```
 
-## Why C is selected
+## New crate Cargo contract
 
-A small UI-owned app-integration layer gives the cleanest boundary:
+Create:
 
 ```text
-engine::App / ECS remains the host/runtime surface
-ui_definition remains authored UI source owner
-ui_program remains semantic UI contract owner
-ui_runtime / ui_evaluator remain runtime output owners
-ui_story / ui_testing remain proof owners
-app/domain owners remain mutation owners
+domain/ui/ui_app_integration/Cargo.toml
 ```
 
-It avoids pushing app integration into `ui_definition`, `ui_program`, `ui_runtime`, or engine core. It also avoids reviving `app_program` as the public framework path.
+Package:
 
-## Proof scenario
+```toml
+[package]
+name = "ui_app_integration"
+version = "0.1.0"
+edition = "2024"
+publish = false
+```
 
-The first proof uses a counter app:
+Allowed production dependencies:
+
+```toml
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+ecs.workspace = true
+ui_binding.workspace = true
+ui_controls.workspace = true
+ui_definition.workspace = true
+ui_hosts.workspace = true
+ui_program.workspace = true
+ui_program_lowering.workspace = true
+ui_schema.workspace = true
+```
+
+Allowed dev-dependencies:
+
+```toml
+[dev-dependencies]
+ui_testing.workspace = true
+ui_story.workspace = true
+ui_evaluator.workspace = true
+ui_compiler.workspace = true
+ui_artifacts.workspace = true
+```
+
+Forbidden production dependencies:
 
 ```text
-Counter { count: 0 }
-Counter screen visible while count < 5
-Increment action increases count by 1
-Win screen visible while count >= 5
-Reset action sets count to 0
+engine
+editor_* crates
+game/app crates
+ui_testing
+ui_story
+ui_runtime
+renderer backend crates
+net crates
+material_graph
+procgen
+foundation/meta
+foundation/commands
 ```
 
-Required positive path:
+Rationale:
 
 ```text
-1. App/ECS host initializes Counter resource with count = 0.
-2. Counter screen/router selects Counter screen.
-3. UI source for the Counter screen is emitted through a UI-definition-compatible builder or fixture path.
-4. UI source validates and lowers through the accepted UI pipeline.
-5. Runtime output contains count text and an increment activation affordance.
-6. Pointer or keyboard activation is processed by UI runtime/event machinery.
-7. UI emits a route/event proposal with schema/capability/source evidence.
-8. Bridge resolves route/event to CounterAction::Increment.
-9. App/ECS-owned system mutates Counter from 0 to 1.
-10. Next UI output shows count = 1.
-11. After count reaches 5, the active output switches to Win screen.
-12. Reset activation resolves to CounterAction::Reset.
-13. App/ECS-owned system mutates Counter to 0.
-14. Counter screen becomes active again.
-15. UiStoryRunReport records every stage and pass/fail evidence.
+The bridge may depend on ecs to prove ECS-owned state/mutation without dragging engine::App or engine runtime internals into the UI crate.
+The bridge may depend on ui_definition, ui_program, ui_program_lowering, ui_controls, ui_binding, ui_hosts, and ui_schema because it forms UI source/program/action bridge facts.
+The bridge may use ui_testing/ui_story only in tests because they execute proof, not framework ownership.
 ```
 
-Required negative path:
+## Exact implementation files allowed
+
+Allowed implementation files:
 
 ```text
-unknown route is rejected
-wrong route schema is rejected
-missing capability is rejected
-disabled control emits no activation
-invalid action payload is rejected
-missing host/binding data reports diagnostics
-rejected action does not mutate Counter
-runtime input outside target emits no app action
-callback/direct-mutation bypass is absent
-UiStory report fails if any mandatory stage is missing
+Cargo.toml
+domain/ui/ui_app_integration/Cargo.toml
+domain/ui/ui_app_integration/src/lib.rs
+domain/ui/ui_app_integration/src/ids.rs
+domain/ui/ui_app_integration/src/action.rs
+domain/ui/ui_app_integration/src/screen.rs
+domain/ui/ui_app_integration/src/source.rs
+domain/ui/ui_app_integration/src/bridge.rs
+domain/ui/ui_app_integration/src/host.rs
+domain/ui/ui_app_integration/src/report.rs
+domain/ui/ui_app_integration/src/proof.rs
+domain/ui/ui_app_integration/tests/counter_ui_story_proof.rs
+domain/ui/ui_app_integration/tests/counter_ui_story_fail_closed.rs
 ```
 
-## Required report shape
+Allowed only if compile wiring proves necessary:
 
-The proof report must make these facts inspectable:
+```text
+domain/ui/ui_definition/src/lib.rs
+domain/ui/ui_program/src/lib.rs
+domain/ui/ui_hosts/src/lib.rs
+domain/ui/ui_binding/src/lib.rs
+```
+
+Any change outside these files requires returning to planning unless it is a mechanical Cargo lock/update equivalent required by the chosen toolchain.
+
+## Public API rule
+
+The first implementation must not add public engine::App extension methods.
+
+Forbidden in this first implementation:
+
+```text
+AppUiExt as stable public API
+add_ui_action
+add_ui_screen
+add_ui_screen_router
+engine::App impl block changes
+engine prelude exports for UI app integration
+```
+
+Allowed internal/proof-local API shape:
+
+```text
+UiAppIntegrationProof
+UiAppIntegrationProofBuilder
+UiAppScreenRegistry
+UiAppScreenDescriptor
+UiAppScreenId
+UiAppActionRegistry
+UiAppActionDescriptor
+UiAppActionId
+UiAppRouteBinding
+UiAppRouteResolution
+UiAppRouteResolutionReport
+UiAppHostSnapshot
+UiAppMutationReport
+UiAppIntegrationReport
+```
+
+These names are accepted as internal/proof-layer vocabulary. They do not become long-term user-facing API merely by existing in this proof crate.
+
+## Module contracts
+
+### `src/lib.rs`
+
+Responsibilities:
+
+```text
+crate boundary docs
+module declarations
+minimal exports required by tests
+no public AppUiExt API
+```
+
+Required module declarations:
+
+```rust
+pub mod action;
+pub mod bridge;
+pub mod host;
+pub mod ids;
+pub mod proof;
+pub mod report;
+pub mod screen;
+pub mod source;
+```
+
+### `src/ids.rs`
+
+Owns stable typed ID wrappers:
+
+```text
+UiAppScreenId
+UiAppActionId
+UiAppRouteBindingId
+UiAppProofId
+```
+
+Rules:
+
+```text
+IDs must be non-empty.
+Route/action IDs used for UI route facts must be namespaced.
+Visible labels must not be durable identity.
+Prefer constructor validation mirroring ui_program RouteId namespacing rules where route-facing.
+```
+
+### `src/action.rs`
+
+Owns app-action registry/proof descriptors, not app mutation:
+
+```text
+UiAppActionDescriptor
+UiAppActionRegistry
+UiAppActionRegistryError
+UiAppActionCapabilityRequirement
+```
+
+Rules:
+
+```text
+No callbacks.
+No reducers.
+No direct Counter mutation.
+No engine command execution.
+Map action descriptors to stable route/action facts only.
+```
+
+### `src/screen.rs`
+
+Owns screen registry/proof descriptors:
+
+```text
+UiAppScreenDescriptor
+UiAppScreenRegistry
+UiAppScreenRegistryError
+UiAppScreenRoute
+UiAppScreenSelection
+```
+
+Rules:
+
+```text
+No renderer/window ownership.
+No ECS entity UI source of truth.
+A screen descriptor points to source-builder/proof source functions or produced source records.
+```
+
+### `src/source.rs`
+
+Owns minimal code-authored source helper for the proof:
+
+```text
+UiAppSourceBuilder
+UiAppSourceBuildReport
+UiAppSourceNodeRef
+UiAppSourceRouteRef
+```
+
+Required output:
+
+```text
+ui_definition::UiNodeDefinition or ui_definition::AuthoredUiTemplate
+```
+
+For the counter proof, it must produce equivalent source for:
+
+```text
+Counter screen:
+  Column
+    Label bound/rendered with count text
+    Button with stable increment route slot
+
+Win screen:
+  Column
+    Label "You win!"
+    Button with stable reset route slot
+```
+
+Rules:
+
+```text
+No direct UiProgram graph construction from app code.
+No raw ECS UI entity authoring.
+No runtime widget-only source.
+Source builder must preserve source/provenance facts sufficient for report assertions.
+```
+
+### `src/bridge.rs`
+
+Owns route proposal to typed action resolution:
+
+```text
+UiAppRouteBinding
+UiAppRouteBridge
+UiAppRouteResolution
+UiAppRouteResolutionStatus
+UiAppRouteResolutionDiagnostic
+UiAppResolvedAction
+```
+
+Required behavior:
+
+```text
+known route + valid schema + required capability -> resolved action
+unknown route -> reject
+wrong schema -> reject
+missing capability -> reject
+invalid payload -> reject
+route diagnostic rejection -> reject
+rejected route must not request mutation
+```
+
+Rules:
+
+```text
+Consume ui_program::UiEventPacket for route/event facts.
+Do not invent a parallel event packet.
+Do not store raw private payloads in report output.
+Do not use visible button text as action identity.
+```
+
+### `src/host.rs`
+
+Owns proof-local ECS host snapshot and mutation evidence:
+
+```text
+UiAppHostSnapshot
+UiAppHostMutation
+UiAppHostMutationStatus
+UiAppHostMutationReport
+```
+
+For the counter proof, tests may define local fixture types:
+
+```text
+Counter
+CounterAction
+CounterScreen
+```
+
+Required behavior:
+
+```text
+Counter starts at 0.
+Resolved Increment mutates 0 -> 1.
+Resolved increments reach 5.
+Count >= 5 selects Win screen.
+Resolved Reset mutates to 0.
+Rejected actions do not mutate Counter.
+```
+
+Rules:
+
+```text
+Use ecs Resource/World/Res/ResMut or direct ecs-backed proof host types.
+Do not depend on engine::App in production.
+Do not use wall-clock time or unseeded randomness.
+Do not use scheduler order as proof truth.
+```
+
+### `src/report.rs`
+
+Owns deterministic report structures:
+
+```text
+UiAppIntegrationReport
+UiAppIntegrationStepReport
+UiAppSourceReport
+UiAppFormationReportSummary
+UiAppRuntimeReportSummary
+UiAppActionReport
+UiAppMutationReport
+UiAppProofDiagnostic
+```
+
+Required report facts:
 
 ```text
 source identity
@@ -293,184 +591,241 @@ next-output facts
 pass/fail summary
 ```
 
-The report must preserve the pressure from the superseded app-program proof:
+Rules:
 
 ```text
-stable route/action identity
-safe bounded payload summaries
-distinct diagnostic namespaces
-fail-closed resolution
-no visible label as durable action identity
-no mutation after rejected action
+Stable ordering.
+Distinct diagnostic namespaces.
+Safe bounded payload summaries.
+No raw private payloads.
+No label-as-ID.
+No mutation reported for rejected action.
 ```
 
-## Candidate public ergonomics target
+### `src/proof.rs`
 
-Target feel only; not current API and not implementation authorization:
-
-```rust
-struct CounterPlugin;
-
-impl Plugin for CounterPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<Counter>()
-            .add_ui_action::<CounterAction>()
-            .add_ui_screen(CounterScreen::Counter, counter_screen)
-            .add_ui_screen(CounterScreen::Win, win_screen)
-            .add_ui_screen_router(counter_screen_router)
-            .add_systems(Update, reduce_counter);
-    }
-}
-```
-
-Target screen feel only:
-
-```rust
-fn counter_screen(ui: &mut UiBuilder, counter: Res<Counter>) {
-    ui.column()
-        .text(format!("Clicked {} / 5", counter.count))
-        .button("Click me")
-        .action(CounterAction::Increment);
-}
-
-fn win_screen(ui: &mut UiBuilder) {
-    ui.column()
-        .text("You win!")
-        .button("Reset")
-        .action(CounterAction::Reset);
-}
-```
-
-These snippets define desired ergonomics, not names accepted for implementation. The implementation plan must choose exact crate/module/API names before code starts.
-
-## Owner model to prove
-
-| Responsibility | Owner in this proof | Rule |
-|---|---|---|
-| Counter resource and mutation | App/ECS proof host | Generic UI must not mutate it directly. |
-| Counter action type | App proof fixture | Must lower to stable UI route/action evidence. |
-| App-integration bridge | UI-owned integration layer | Own route/action/screen proof wiring only. |
-| Screen declaration | UI app-integration candidate path | Must produce/capture `ui_definition`-compatible source. |
-| UI source validation | `ui_definition` / lowering path | Must not be bypassed. |
-| Interaction contract | `FormedInteractionModel` / `ui_program` path | Must carry route/schema/capability/source evidence. |
-| Runtime output/input | `ui_runtime` / `ui_evaluator` / existing test host path | Must produce observable output and event facts. |
-| Story proof | `ui_story` / `ui_testing` | Must own the proof envelope. |
-| Mutation commit | App/ECS owner system | Must be absent on rejected actions. |
-
-## Complete design questions before implementation
-
-Implementation may not start until the next revision answers:
+Owns proof orchestration:
 
 ```text
-1. What exact crate/module owns UI app-integration contracts?
-2. Is `domain/ui/ui_app_integration` a new crate, a module in an existing crate, or a proof-local module first?
-3. What exact names are accepted for internal bridge types?
-4. Which public AppUiExt names remain reserved but not implemented in the first slice?
-5. What does `UiBuilder` output internally: authored template records, normalized records, or a proof fixture format?
-6. How are code-authored source maps/provenance represented?
-7. How are typed actions converted to route IDs and capabilities without manual string maps?
-8. How does ECS/app state become host/binding data for `UiProgram` evaluation?
-9. Which existing `UiStory`/`ui_testing` runner extension is enough for this proof?
-10. Which exact files/crates are allowed to change?
-11. Which exact tests prove the positive and negative paths?
-12. How does the implementation prove that no public API was prematurely frozen?
+UiAppIntegrationProof
+UiAppIntegrationProofBuilder
+UiAppIntegrationProofRun
 ```
 
-## Selected implementation owner strategy
-
-Selected strategy:
+Required behavior:
 
 ```text
-C-internal first, then B-public later.
+build source
+validate/lower source through ui_program_lowering
+use runenwerk_control_package registry snapshot
+produce route/event packet for activation proof
+resolve route/event through bridge
+apply ECS-owned mutation only after successful resolution
+rebuild/re-evaluate next source/output evidence
+produce UiAppIntegrationReport
 ```
 
-### First implementation slice
-
-The first implementation slice should be:
+Rules:
 
 ```text
-A small UI-owned app-integration proof bridge plus a Counter story proof.
+Do not call app reducer directly without route/event resolution.
+Do not fake success if formation/runtime/report stages have diagnostics that should fail the proof.
+Do not depend on renderer backend/windowing.
 ```
 
-It should expose no stable public App extension API unless a follow-up design explicitly accepts names.
+## Counter proof tests
 
-It should be allowed to use `ui_story` / `ui_testing` to execute the proof.
+### `tests/counter_ui_story_proof.rs`
 
-It should not be a pure fixture-only proof. The bridge must represent the future app-integration owner boundary, even if its API is internal/proof-local.
-
-### Second implementation slice
-
-Only after the first proof passes and dependency direction is reviewed:
+Must assert positive path:
 
 ```text
-Add AppUiExt-style ergonomic registration.
+initial Counter = 0
+Counter screen output includes count text and increment route evidence
+activation emits or constructs UiEventPacket from route evidence
+bridge resolves increment action
+ECS-backed mutation changes count 0 -> 1
+repeat to count 5
+Win screen selected
+reset route resolves
+ECS-backed mutation resets count to 0
+Counter screen selected again
+report pass/fail summary is pass
+report contains source, formation, route, resolution, mutation, and next-output facts
 ```
 
-Candidate future methods remain examples only:
+### `tests/counter_ui_story_fail_closed.rs`
+
+Must assert negative path:
 
 ```text
-add_ui_action
-add_ui_screen
-add_ui_screen_router
+unknown route rejected
+wrong schema version rejected
+missing capability rejected
+invalid payload rejected
+disabled/unavailable route emits no resolved action
+missing host/binding data reports diagnostics
+rejected action does not mutate Counter
+runtime input outside target emits no app action
+report fails if mandatory source/formation/route/mutation/next-output stage is missing
+no callback/direct mutation bypass exists
 ```
 
-## Allowed work in this planning PR
+Implementation may combine these into one test file only if the test names remain distinct and the planning closeout explains why.
 
-Allowed now:
+## UI source requirements
+
+Counter source must lower through `ui_definition` and `ui_program_lowering`.
+
+Required source facts:
 
 ```text
-docs-site/src/content/docs/workspace/planning/ecs-backed-counter-ui-story-proof-planning.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
+Authored or source-equivalent root node identity
+Counter label node identity
+Increment button node identity
+Increment route slot identity
+Win label node identity
+Reset button node identity
+Reset route slot identity
+source/provenance entries for action controls
 ```
 
-Forbidden now:
+Allowed simplification:
 
 ```text
-product code
-crate creation
-engine runtime changes
-ECS system API changes
-ui_definition implementation
-ui_runtime implementation
-ui_story implementation
-ui_testing implementation
-SpatialCanvas implementation
-app_program implementation
-shared plugin framework
-foundation/meta
+The first proof may use code-authored source helpers instead of external .ron story manifests.
 ```
 
-## Candidate future implementation files
-
-These are candidates only. The implementation contract must replace this list with exact accepted files.
-
-Potential existing owners:
+Forbidden simplification:
 
 ```text
-domain/ui/ui_story/src/*
-domain/ui/ui_testing/src/*
-domain/ui/ui_definition/src/*
-domain/ui/ui_program/src/*
-domain/ui/ui_hosts/src/*
-domain/ui/ui_binding/src/*
-engine/src/app/* or a small integration adapter only if dependency rules permit it
+The first proof must not manually construct final UiProgram graph rows as the normal source path.
 ```
 
-Potential new owner, selected as preferred if dependency review accepts it:
+## Route/action mapping requirements
+
+Required stable route IDs:
 
 ```text
-domain/ui/ui_app_integration/*
+counter.increment
+counter.reset
 ```
 
-Potential tests:
+Required action IDs:
 
 ```text
-domain/ui/ui_testing/tests/ecs_backed_counter_ui_story.rs
-domain/ui/ui_story/tests/ecs_backed_counter_ui_story.rs
-domain/ui/ui_app_integration/tests/counter_ui_story_proof.rs
+counter.increment
+counter.reset
+```
+
+Required schema versions:
+
+```text
+RouteSchemaVersion::new(1)
+```
+
+Required capabilities:
+
+```text
+counter.action.increment
+counter.action.reset
+```
+
+Allowed payload:
+
+```text
+unit/null payload with explicit schema reference
+```
+
+Rules:
+
+```text
+Route IDs must use ui_program::RouteId.
+Schema versions must use ui_program::RouteSchemaVersion.
+Capabilities must use ui_program::RouteCapability.
+Route packets must use ui_program::UiEventPacket.
+```
+
+## Host/ECS requirements
+
+The proof must use ECS-backed state in one of these accepted forms:
+
+```text
+ecs::World with Counter as Resource
+or
+minimal proof host using ecs Resource/World APIs
+```
+
+Forbidden for the first implementation:
+
+```text
+engine::App production dependency
+engine::App extension API
+engine scheduler/runtime changes
+engine prelude changes
+engine world field access or privacy changes
+```
+
+Rationale:
+
+```text
+engine::App currently exposes resource/system methods, but external crates cannot rely on private world internals. A public App integration API should be added only after this proof defines the safe bridge boundary.
+```
+
+## Story/proof requirement
+
+The first implementation may not be able to emit the final future `UiStoryRunReport` shape directly if current ui_story V2 contracts need extension.
+
+Accepted first proof report name:
+
+```text
+UiAppIntegrationReport
+```
+
+Required relationship to story proof:
+
+```text
+The report must be structured as a story-compatible proof envelope.
+The implementation must document which fields are direct UiStory V2 facts and which are integration-layer proof facts.
+The report must not claim full production mount eligibility unless ui_story mount eligibility is actually exercised.
+```
+
+Allowed dev/test usage:
+
+```text
+ui_testing and ui_story may be used in tests to compare/evaluate proof facts.
+```
+
+Forbidden claim:
+
+```text
+Do not claim full UiStory production readiness if the proof produces only UiAppIntegrationReport.
+```
+
+## Validation commands
+
+Required before implementation PR merge:
+
+```bash
+cargo test -p ui_app_integration
+cargo test -p ui_app_integration --test counter_ui_story_proof
+cargo test -p ui_app_integration --test counter_ui_story_fail_closed
+cargo test -p ui_program event
+cargo test -p ui_program_lowering
+cargo test -p ui_definition
+cargo test -p ui_controls control_package
+cargo test --workspace
+python tools/docs/validate_docs.py
+git diff --check
+```
+
+If exact filters differ after implementation, the implementation PR must explain the substitution and show equivalent coverage.
+
+Docs-only planning PR validation:
+
+```bash
+python tools/docs/validate_docs.py
+git diff --check
 ```
 
 ## Non-owned responsibilities
@@ -492,6 +847,7 @@ SpatialCanvas item semantics
 NodeCanvas / PortGraphCanvas semantics
 AppRecipe / PluginSuite / shared plugin framework
 foundation/meta
+foundation/commands execution behavior
 ```
 
 ## Stop conditions
@@ -503,44 +859,68 @@ raw ECS entities as durable UI source
 callback-first mutation from generic UI controls
 bypassing ui_definition validation/normalization
 bypassing UiProgram route/event facts
-bypassing UiStory reports
+bypassing story-compatible proof reports
 new public App extension names without accepted API review
-new crate without accepted owner/dependency decision
-engine core depending on domain/ui in the wrong direction
+engine core depending on ui_app_integration
 ui_definition depending on engine/ECS
 ui_program depending on engine/ECS
 ui_runtime executing app mutation directly
 ui_hosts executing effects directly
 spatial canvas or component-platform scope changes
 reopening PR #69 as implementation foundation
+app_program crate resurrection as framework foundation
+renderer/windowing work
+network/multiplayer work
+async effects
+hot reload
 ```
 
-## Validation expectations for this planning PR
+## Closeout evidence required
 
-Docs-only validation expected before merge:
-
-```bash
-python tools/docs/validate_docs.py
-git diff --check
-```
-
-Implementation validation must be decided later. Expected categories include:
+Implementation closeout must record:
 
 ```text
-focused story/proof test
-focused route/action negative tests
-focused no-bypass test
-cargo test --workspace
-python tools/docs/validate_docs.py
-git diff --check
+changed files and ownership check
+new crate boundary check
+production dependency check for ui_app_integration
+proof that ui_testing/ui_story are dev/test-only if used
+positive counter proof summary
+negative fail-closed proof summary
+report structures produced
+validation commands and results
+proof that no non-owned files/crates changed
+proof that no public AppUiExt-style API was added
+proof that no engine core/prelude/world privacy changes were made
+principle compliance review
+module decomposition review
+follow-up decision: AppUiExt ergonomics slice, story-report integration slice, or hold
 ```
 
-## Next action
+## Future follow-up after this proof
 
-Revise this planning intake into an implementation contract for:
+If this proof succeeds, the next slice may be:
 
 ```text
-C-internal first: small UI-owned app-integration proof bridge plus Counter UiStory proof.
+PT-UI-FRAMEWORK-APP-INTEGRATION-003 — AppUiExt Ergonomics Proof
 ```
 
-That implementation contract must name exact files, internal type names, dependency rules, tests, validation commands, and closeout evidence. It must explicitly defer public AppUiExt-style API until after the proof.
+That future slice may evaluate public methods like:
+
+```text
+add_ui_action
+add_ui_screen
+add_ui_screen_router
+```
+
+It must be a separate design/implementation contract.
+
+## Final implementation decision
+
+Proceed next with:
+
+```text
+Create ui_app_integration as a small UI-owned proof bridge.
+Implement the ECS-backed Counter UiStory-compatible proof through internal/proof-local bridge APIs.
+Do not add public AppUiExt ergonomics yet.
+Do not merge app_program or SpatialCanvas into this proof.
+```
