@@ -162,7 +162,7 @@ Meaning:
 ```text
 Create a small UI-owned app-integration crate now.
 Use it to prove an ECS-backed Counter UiStory-style proof through the existing UI source/program/runtime/proof stack.
-Keep all registration/build APIs internal or crate-local for this first proof.
+Keep all registration/build APIs internal or proof-local for this first proof.
 Do not add public engine::App extension methods in this first implementation.
 After this proof validates boundaries, add an AppUiExt-style public ergonomics slice separately.
 ```
