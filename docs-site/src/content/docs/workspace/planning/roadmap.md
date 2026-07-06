@@ -10,6 +10,8 @@ related_docs:
   - ../../architecture/ui-framework-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
+  - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
+  - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -36,9 +38,7 @@ Authority: `ui-framework-app-integration-direction-review.md`.
 
 Evidence: PR #70 accepted the direction that App/Plugin/ECS-hosted UI must lower through `ui_definition`, `UiProgram`, `UiStory`, runtime/evaluator artifacts, and host-owned mutation instead of continuing the manual `app_program` proof or promoting SpatialCanvas as the app-framework answer.
 
-Next action: Keep as accepted direction authority. The first proof slice,
-`PT-UI-FRAMEWORK-APP-INTEGRATION-002`, is completed and now serves as evidence
-for later intake/design work.
+Next action: Keep as accepted direction authority. The first proof slice, `PT-UI-FRAMEWORK-APP-INTEGRATION-002`, is completed and now serves as evidence for runtime-platform intake/design work.
 
 ### PT-UI-FRAMEWORK-APP-INTEGRATION-002
 
@@ -52,22 +52,9 @@ Lifecycle state: `completed`
 
 Authority: `ecs-backed-counter-ui-story-proof-planning.md`.
 
-Evidence: PR #72 merged the `ui_app_integration` proof into `main` at
-`e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records the new
-`domain/ui/ui_app_integration` crate, code-authored Counter and Win source
-records, lowering through `ui_definition` and `ui_program`, `UiEventPacket`
-route/event evidence, route-missing diagnostics, route-resolved host mutation,
-ECS-backed Counter mutation, next-output text facts, positive proof flow,
-fail-closed route/schema/capability/payload/unformed-route/missing-host-data
-cases, no callback/direct mutation bypass, no public `AppUiExt`, no engine
-`UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas
-world-space implementation, no `foundation/meta`, no `domain/app_program`, and
-no generic plugin framework. Detailed closeout:
-`../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
+Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records the new `domain/ui/ui_app_integration` crate, code-authored Counter and Win source records, lowering through `ui_definition` and `ui_program`, `UiEventPacket` route/event evidence, route-missing diagnostics, route-resolved host mutation, ECS-backed Counter mutation, next-output text facts, positive proof flow, fail-closed route/schema/capability/payload/unformed-route/missing-host-data cases, no callback/direct mutation bypass, no public `AppUiExt`, no engine `UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas world-space implementation, no `foundation/meta`, no `domain/app_program`, and no generic plugin framework. Detailed closeout: `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-Next action: Keep as completed proof evidence. Review/harden the draft PR #74
-intake for `PT-UI-RUNTIME-PLATFORM-001`; do not start Live `UiPlugin` runtime
-implementation.
+Next action: Keep as completed proof evidence. Do not reopen this slice unless future inspection finds the recorded boundary was violated.
 
 ### PT-UI-RUNTIME-PLATFORM-001
 
@@ -75,28 +62,31 @@ ID: `PT-UI-RUNTIME-PLATFORM-001`
 
 Title: Live UiPlugin Runtime and Generic Surface-Frame Rendering
 
-State: draft docs-only intake open as PR #74; implementation not authorized
+State: draft docs-only PR #74 hardens the investigation/design gate; implementation not authorized
 
-Lifecycle state: `active-planning` intake review
+Lifecycle state: `active-planning` design-gate complete / implementation-planning required
 
-Authority: `../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md`
-plus completed `PT-UI-FRAMEWORK-APP-INTEGRATION-002` proof evidence.
+Authority:
 
-Evidence: PR #74 is the draft intake/review branch for the live runtime
-platform. The design intake records the target public shape
-`RenderPlugin + UiPlugin + AppPlugin`, the normal authoring path
-`app.mount_ui(Screen)`, typed `UiScreen` / `UiActionHandler` ergonomics, reuse
-of existing `ui_surface` and `ui_hosts` owners, and the render-boundary
-direction toward generic surface-frame submissions. The PR #75 closeout records
-the PR #72 proof completion and removes the previous closeout blocker but does
-not authorize runtime code, public plugin
-APIs, render adapters, SDF/world-space behavior, SpatialCanvas implementation,
-`foundation/meta`, `domain/app_program`, or a generic plugin framework.
+```text
+../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
+../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
+../../architecture/ui-framework-architecture.md
+../../design/active/ui-framework-app-integration-direction-review.md
+../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
+```
 
-Next action: Review and harden PR #74 intake only. Require complete
-investigation, complete design, exact implementation contract, validation
-envelope, evidence expectation, principle compliance, and stop conditions before
-any implementation branch.
+Evidence: PR #74 records the target public shape `RenderPlugin + UiPlugin + AppPlugin`, `app.mount_ui(Screen)`, typed `UiScreen`, typed `IntoUi`, typed `UiActionHandler` / `TryUiActionHandler`, host-owned mutation, reuse of existing `ui_surface` and `ui_hosts` owners, and staged generic surface-frame render publication. The current-state investigation records `E2` connector metadata/file inspection, `E3` source/test inspection by path, and `E8` accepted architecture/workflow/planning authority. No local command validation is available from this connector-only session.
+
+Gate status:
+
+```text
+Complete investigation gate: complete for PR #74 design-gate hardening.
+Complete design gate: complete for opening a separate implementation-planning PR only.
+Implementation authorization: still forbidden.
+```
+
+Next action: Review PR #74 as docs-only design-gate hardening. After review, open a separate implementation-planning PR that names exact owner modules, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, acceptance criteria, and stop conditions before runtime Rust work starts.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
@@ -124,7 +114,7 @@ Lifecycle state: `completed`
 
 Authority: `ui-component-platform-text-editing-design.md`.
 
-Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Evidence covers package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, final proof-frame cleanup, and full local validation gate passed on 2026-07-02.
+Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, final proof-frame cleanup, and full local validation gate passed on 2026-07-02.
 
 Next action: Keep as completed dependency.
 
@@ -140,7 +130,7 @@ Lifecycle state: `completed`
 
 Authority: `ui-component-platform-generic-text-design.md`.
 
-Evidence: PR #48 merged into `main` at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. Implementation commit `32e402b108d1e72d7cc5b4113af29d8d29626680` contains the renderer-neutral Generic Text substrate, package-backed descriptors and validation, catalog and `TextDisplay` inspection projection, runtime proof report/frame, static mount proof, renderer-neutral frame/extract adaptation to `TextVisualRun` / `TextGlyph` evidence, and the migration away from the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path. PR #49 merged into `main` at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9` and completed the hardening pass: resolved source-run/cluster evidence, height overflow evidence, stable-ID constructors, homogeneous visual-run segmentation, `button_label()` policy cleanup, `text_emission` naming, Generic Text direction-policy inspection, and runtime output-emission splits. Final local validation passed on 2026-07-02 with the full Phase 15 cargo workspace/docs/diff gate.
+Evidence: PR #48 merged into `main` at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. PR #49 merged into `main` at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9` and completed the hardening pass. Final local validation passed on 2026-07-02 with the full package, workspace, docs, and diff gate.
 
 Next action: Keep as completed dependency.
 
@@ -156,22 +146,18 @@ Lifecycle state: `completed`
 
 Authority: `ui-component-platform-surface2d-design.md`.
 
-Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with `cargo test -p ui_controls surface2d`, `cargo test -p ui_controls control_package`, `cargo test -p ui_runtime surface2d`, `cargo test -p ui_static_mount surface2d`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`. Detailed closeout: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
+Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with the recorded Surface2D focused commands, `cargo test --workspace`, docs validation, and diff check. Detailed closeout: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
 
-Next action: Keep as completed dependency. The next named production-track milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas planning intake, but this Phase 16 closeout does not authorize Phase 17 implementation. The active framework-direction review must be settled before SpatialCanvas is promoted as part of the real app-facing UI framework path.
+Next action: Keep as completed dependency. Keep Phase 17 SpatialCanvas as future planning only until runtime platform planning settles its accepted implementation path.
 
 ## Future app-framework follow-ups
 
-These are future planning candidates only. They are not implementation work
-and must wait for their own accepted planning/design contracts.
+These are future planning candidates only. They are not implementation work and must wait for their own accepted planning/design contracts.
 
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-003 - Public AppUiExt Ergonomics`
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-004 - Authoring Frontends and Execution Strategy Model`
 
-`PT-UI-FRAMEWORK-APP-INTEGRATION-003` is superseded/absorbed by
-`PT-UI-RUNTIME-PLATFORM-001` as the broader live runtime platform intake. Do
-not treat standalone public `AppUiExt` ergonomics as the immediate next
-implementation target.
+`PT-UI-FRAMEWORK-APP-INTEGRATION-003` is superseded/absorbed by `PT-UI-RUNTIME-PLATFORM-001` as the broader live runtime platform track. Do not treat standalone public `AppUiExt` ergonomics as the immediate next implementation target.
 
 `PT-UI-FRAMEWORK-APP-INTEGRATION-004` should define how Rust builders, templates, visual designer output, compiler DSLs, immediate-mode adapters, reactive adapters, retained execution, ECS-driven execution, and SDF/world-space targets share source/program/event/story contracts without bypasses.
 
