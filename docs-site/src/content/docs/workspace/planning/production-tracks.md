@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-06
 related_docs:
   - ../workflow-lifecycle.md
   - ../../architecture/ui-framework-architecture.md
@@ -79,15 +79,15 @@ Phase 16: PR #62 merged docs-only workflow, principle, decomposition, and merge-
 Current blocker:
 
 ```text
-No Phase 16 product blocker remains. The current app-framework focus is the bounded ECS-backed app-integration proof.
+No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof has merged through PR #72 and now needs closeout/post-merge truth.
 
-After the ECS-backed app-integration proof, the remaining strategic blocker is public framework ergonomics and authoring/execution strategy clarity: AppUiExt, external templates, DSL/compiler frontends, retained/immediate/reactive strategies, and SDF/game/world-space targets must be positioned without bypassing ui_definition, UiProgram, UiStory, or host-owned mutation.
+After PR #72 closeout, the remaining strategic blocker is public framework ergonomics and authoring/execution strategy clarity: AppUiExt, external templates, DSL/compiler frontends, retained/immediate/reactive strategies, and SDF/game/world-space targets must be positioned without bypassing ui_definition, UiProgram, UiStory, or host-owned mutation.
 ```
 
 Next action:
 
 ```text
-Keep Phase 16 as a completed dependency. Keep Phase 17 SpatialCanvas as future planning only. Review `ui-framework-app-integration-direction-review.md`; if accepted, write the implementation-planning contract for `ECS-backed Counter UI Story Proof` before returning to SpatialCanvas implementation or later Component Platform milestones.
+Keep Phase 16 as a completed dependency. Keep Phase 17 SpatialCanvas as future planning only. Record PR #72 closeout/post-merge truth for the ECS-backed Counter UI Story Proof before returning to SpatialCanvas implementation, public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform milestones.
 ```
 
 ## Track shape

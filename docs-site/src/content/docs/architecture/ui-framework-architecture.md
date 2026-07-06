@@ -333,11 +333,12 @@ Current limitations:
 
 ## Roadmap relationship
 
-This architecture spine is durable architecture authority, not active planning.
+This architecture spine is the canonical top-down architecture summary, not
+active planning.
 
 Workspace planning owns current focus, milestones, production-track blockers,
 and state transitions. Active designs own slice-level tradeoffs. This spine
-should be updated only when the durable architecture changes, not for every
+should be updated only when the canonical top-down model changes, not for every
 phase status update.
 
 The current implementation focus remains the ECS-backed Counter UI Story Proof.
@@ -387,118 +388,8 @@ Stop and redesign if a follow-up tries to:
 
 ## Diagram
 
-Source:
-
-```text
-docs-site/src/content/docs/architecture/diagrams/ui-framework-architecture.puml
-```
-
-```plantuml
-@startuml
-title Runenwerk UI Framework Architecture
-
-skinparam packageStyle rectangle
-
-package "Authoring Frontends" {
-  [Rust UiBuilder]
-  [RON Templates]
-  [Visual Designer]
-  [Compiler DSL]
-  [Immediate Adapter]
-  [Reactive Adapter]
-}
-
-package "UI Source IR" {
-  [AuthoredUiTemplate]
-  [UiNodeDefinition]
-  [Source Maps]
-}
-
-package "Interaction Formation" {
-  [NormalizedUiTemplate]
-  [FormedInteractionModel]
-}
-
-package "Semantic Program" {
-  [UiProgram]
-  [RouteId]
-  [UiEventPacket]
-}
-
-package "Runtime / Evaluation / Proof" {
-  [UiCompiler]
-  [UiRuntimeArtifact]
-  [UiEvaluator]
-  [UiStoryRunReport]
-  [Mount Eligibility]
-}
-
-package "Host Adapters" {
-  [ECS App Host]
-  [Editor Host]
-  [Game HUD Host]
-  [Headless Host]
-  [World Space Host]
-}
-
-package "Render / Projection Targets" {
-  [Backend-neutral UiFrame]
-  [Raster Renderer]
-  [SDF UI Target]
-  [Static Mount]
-  [SpatialCanvas]
-  [World-space Projection]
-}
-
-[Rust UiBuilder] --> [AuthoredUiTemplate]
-[RON Templates] --> [AuthoredUiTemplate]
-[Visual Designer] --> [AuthoredUiTemplate]
-[Compiler DSL] --> [AuthoredUiTemplate]
-[Immediate Adapter] --> [AuthoredUiTemplate]
-[Reactive Adapter] --> [AuthoredUiTemplate]
-
-[AuthoredUiTemplate] --> [UiNodeDefinition]
-[AuthoredUiTemplate] --> [Source Maps]
-[AuthoredUiTemplate] --> [NormalizedUiTemplate]
-[UiNodeDefinition] --> [NormalizedUiTemplate]
-
-[NormalizedUiTemplate] --> [FormedInteractionModel]
-[FormedInteractionModel] --> [UiProgram]
-[UiProgram] --> [RouteId]
-[UiProgram] --> [UiEventPacket]
-
-[UiProgram] --> [UiCompiler]
-[UiCompiler] --> [UiRuntimeArtifact]
-[UiRuntimeArtifact] --> [UiEvaluator]
-[UiEvaluator] --> [UiStoryRunReport]
-[UiStoryRunReport] --> [Mount Eligibility]
-
-[UiEventPacket] --> [ECS App Host]
-[UiEventPacket] --> [Editor Host]
-[UiEventPacket] --> [Game HUD Host]
-[UiEventPacket] --> [Headless Host]
-[UiEventPacket] --> [World Space Host]
-
-[UiEvaluator] --> [Backend-neutral UiFrame]
-[Backend-neutral UiFrame] --> [Raster Renderer]
-[Backend-neutral UiFrame] --> [SDF UI Target]
-[Backend-neutral UiFrame] --> [Static Mount]
-[Backend-neutral UiFrame] --> [SpatialCanvas]
-[Backend-neutral UiFrame] --> [World-space Projection]
-
-note right of [SDF UI Target]
-SDF is a target/backend.
-It does not own UI semantics,
-routes, source identity, or mutation.
-end note
-
-note bottom of [ECS App Host]
-Current ui_app_integration proof is ECS-hosted.
-It is not the final host-neutral app framework.
-end note
-
-@enduml
-```
+Diagram source:
+[ui-framework-architecture.puml](./diagrams/ui-framework-architecture.puml).
 
 ## Related docs
 

@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-06
 related_docs:
   - ../workflow-lifecycle.md
   - ../../architecture/ui-framework-architecture.md
@@ -27,24 +27,31 @@ ID: `PT-UI-FRAMEWORK-APP-INTEGRATION-001`
 
 Title: UI Framework App Integration Direction Review
 
-State: active planning; implementation not authorized
+State: accepted direction; no longer the current implementation focus
 
-Lifecycle state: `active-planning`
+Lifecycle state: `accepted-direction`
 
 Authority: `ui-framework-app-integration-direction-review.md`.
 
-Evidence: Current UI architecture and roadmap documents show that Runenwerk already has `ui_definition`, `UiProgram`, runtime artifacts/views, `UiStory`, component packages, binding/host data, and retained runtime proof substrate. The active decision is to settle how App/Plugin/ECS-hosted code uses those contracts as a real framework before continuing the manual `app_program` proof or promoting SpatialCanvas implementation.
+Evidence: PR #70 accepted the direction that App/Plugin/ECS-hosted UI must lower through `ui_definition`, `UiProgram`, `UiStory`, runtime/evaluator artifacts, and host-owned mutation instead of continuing the manual `app_program` proof or promoting SpatialCanvas as the app-framework answer.
 
-Next action: Review and accept, revise, or reject the direction review. If accepted, write a separate implementation-planning contract for `ECS-backed Counter UI Story Proof`.
+Next action: Keep as accepted direction authority. Current app-framework truth now flows through `PT-UI-FRAMEWORK-APP-INTEGRATION-002` and PR #72 closeout.
 
-Future follow-up after AppUiExt:
+### PT-UI-FRAMEWORK-APP-INTEGRATION-002
 
-- `PT-UI-FRAMEWORK-APP-INTEGRATION-004 - Authoring Frontends and Execution Strategy Model`
+ID: `PT-UI-FRAMEWORK-APP-INTEGRATION-002`
 
-This future phase should define how Rust builders, templates, visual designer
-output, compiler DSLs, immediate-mode adapters, reactive adapters, retained
-execution, ECS-driven execution, and SDF/world-space targets share
-source/program/event/story contracts without bypasses.
+Title: ECS-backed Counter UI Story Proof
+
+State: merged through PR #72; post-merge closeout and planning truth pending
+
+Lifecycle state: `review`
+
+Authority: `ecs-backed-counter-ui-story-proof-planning.md`.
+
+Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1a`. The proof should now be checked against the planning contract for source records, route/event packet flow, ECS-backed host mutation, next-output evidence, fail-closed cases, no public AppUiExt API, and no bypass of `ui_definition`, `UiProgram`, or story-compatible reports.
+
+Next action: Run and record the PR #72 closeout/post-merge truth before opening public AppUiExt ergonomics, authoring frontend, SDF/game/world-space, or execution-strategy follow-ups.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
@@ -107,6 +114,23 @@ Authority: `ui-component-platform-surface2d-design.md`.
 Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with `cargo test -p ui_controls surface2d`, `cargo test -p ui_controls control_package`, `cargo test -p ui_runtime surface2d`, `cargo test -p ui_static_mount surface2d`, `cargo test --workspace`, `python tools/docs/validate_docs.py`, and `git diff --check`. Detailed closeout: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
 
 Next action: Keep as completed dependency. The next named production-track milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas planning intake, but this Phase 16 closeout does not authorize Phase 17 implementation. The active framework-direction review must be settled before SpatialCanvas is promoted as part of the real app-facing UI framework path.
+
+## Future app-framework follow-ups
+
+These are future planning candidates only. They are not active implementation
+and must wait for PR #72 closeout/post-merge truth.
+
+- `PT-UI-FRAMEWORK-APP-INTEGRATION-003 - Public AppUiExt Ergonomics`
+- `PT-UI-FRAMEWORK-APP-INTEGRATION-004 - Authoring Frontends and Execution Strategy Model`
+
+`PT-UI-FRAMEWORK-APP-INTEGRATION-003` should decide public App/Plugin
+ergonomics after the internal `ui_app_integration` proof is closed out.
+
+`PT-UI-FRAMEWORK-APP-INTEGRATION-004` should define how Rust builders,
+templates, visual designer output, compiler DSLs, immediate-mode adapters,
+reactive adapters, retained execution, ECS-driven execution, and
+SDF/world-space targets share source/program/event/story contracts without
+bypasses.
 
 ## Rules
 
