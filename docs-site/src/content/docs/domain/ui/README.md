@@ -28,13 +28,26 @@ Authored UI / editor definitions
 
 Renderer output is derived product data. It is not UI authority.
 
+## Canonical Framework Architecture
+
+Start with:
+
+- [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md)
+
+This is the top-down architecture spine for source-backed UI, authoring
+frontends, interaction formation, UiProgram, runtime/evaluator artifacts, story
+proof, host adapters, and render/SDF targets.
+
+This page remains the UI-domain landing page and current docs router.
+
 ## Source Of Truth Order
 
 1. Accepted ADRs win.
-2. Active UI design docs define target architecture.
-3. `docs/domain/ui/architecture.md` records current code truth.
-4. `docs/domain/ui/roadmap.md` records execution sequencing.
-5. Narrow polish docs are supporting evidence only.
+2. Canonical architecture spine explains the full UI framework.
+3. Active UI design docs define target slices.
+4. `docs/domain/ui/architecture.md` records current code truth.
+5. `docs/domain/ui/roadmap.md` records execution sequencing.
+6. Narrow polish docs are supporting evidence only.
 
 ## Current UI Truth
 

@@ -44,6 +44,16 @@ python3 tools/docs/validate_docs.py
 
 These helpers do not define workflow authority.
 
+For documentation changes, run:
+`python tools/docs/validate_docs.py`
+
+For architecture diagrams, run the repository PUML validation command if available:
+`task puml:validate`
+
+If command execution is unavailable, report command validation as unavailable
+and perform manual validation by inspecting links, frontmatter,
+source-of-truth ownership, and changed-file scope.
+
 ## Minimum rule
 
 Every important invariant should have at least one test, ratification case, or documented manual validation path.

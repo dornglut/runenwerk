@@ -4,6 +4,8 @@
 
 This root document is the short repository-wide architecture summary. Canonical long-form architecture lives under `docs-site/src/content/docs`.
 
+For the UI framework architecture spine, see `docs-site/src/content/docs/architecture/ui-framework-architecture.md`.
+
 ## Layer model
 
 ```text

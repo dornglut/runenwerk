@@ -76,6 +76,9 @@ docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
 docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
 ```
 
+For UI framework architecture work, read:
+`docs-site/src/content/docs/architecture/ui-framework-architecture.md`
+
 For engineering principles, use:
 
 ```text

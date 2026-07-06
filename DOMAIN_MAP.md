@@ -14,6 +14,7 @@ AI agent entrypoint               -> AGENTS.md
 Programming principles            -> docs-site/src/content/docs/guidelines/programming-principles.md
 Architecture boundaries           -> docs-site/src/content/docs/guidelines/architecture.md
 Architecture doctrine             -> docs-site/src/content/docs/guidelines/runenwerk-architecture.md
+UI framework architecture spine   -> docs-site/src/content/docs/architecture/ui-framework-architecture.md
 Dependency direction              -> DEPENDENCY_RULES.md
 Terminology                        -> GLOSSARY.md
 Testing doctrine                   -> TESTING.md
@@ -55,6 +56,8 @@ UI surface semantics               -> domain/ui/ui_surface
 UI story proof orchestration       -> domain/ui/ui_story
 Graph editor contracts             -> domain/ui/ui_graph_editor
 UI definition framework            -> domain/ui/ui_definition
+UI app integration proof bridge    -> domain/ui/ui_app_integration
+SDF UI target/projection evidence  -> docs-site/src/content/docs/architecture/ui-framework-architecture.md plus game-runtime/SDF target docs
 Editor command/session contracts   -> domain/editor/editor_core
 Editor runtime preview protocol    -> domain/editor/editor_preview
 Editor inspector semantics         -> domain/editor/editor_inspector

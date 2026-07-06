@@ -7,6 +7,7 @@ layer: design
 canonical: true
 last_reviewed: 2026-07-05
 related_docs:
+  - ../../architecture/ui-framework-architecture.md
   - ../../domain/ui/architecture.md
   - ../../domain/ui/roadmap.md
   - ./runenwerk-ui-platform-capability-roadmap.md
@@ -34,6 +35,18 @@ Lifecycle state: `active-planning`.
 This document is a direction correction and planning authority candidate. It does not authorize implementation, product code, crate creation, renderer backend work, engine scheduler work, editor/game integration, shared plugin framework extraction, or `foundation/meta` work.
 
 If accepted, this document supersedes the current `PT-UI-APP-PROGRAM-001` implementation direction as the next active UI-framework planning focus. The existing Typed App Program investigation/design remains useful pressure evidence, but the current headless `app_program` implementation PR must not be merged as the foundation for Runenwerk's real UI framework.
+
+## Relationship to canonical architecture
+
+This document selects the app-facing integration direction. It is not the whole
+UI framework architecture.
+
+The whole architecture is summarized in:
+[Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md).
+
+Execution-neutral contracts remain the semantic boundary. The first
+implementation is ECS-hosted because ECS/App/Plugin is the first app host proof
+surface, not because ECS owns UI semantics.
 
 ## Purpose
 
