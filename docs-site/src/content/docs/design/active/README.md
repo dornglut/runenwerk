@@ -112,6 +112,7 @@ Active does not mean wrong or deprecated. It means the design is still part of c
 - [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
+- [UI Framework App Integration Direction Review](ui-framework-app-integration-direction-review.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [UI Program Architecture](ui-program-architecture.md)

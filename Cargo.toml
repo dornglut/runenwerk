@@ -54,6 +54,7 @@ members = [
     "domain/ui/ui_widgets",
     "domain/ui/ui_program_lowering",
     "domain/ui/ui_story",
+    "domain/ui/ui_app_integration",
 
     "domain/editor/editor_core",
     "domain/editor/editor_definition",
@@ -134,6 +135,7 @@ ui_runtime = { path = "domain/ui/ui_runtime" }
 ui_widgets = { path = "domain/ui/ui_widgets" }
 ui_program_lowering = { path = "domain/ui/ui_program_lowering" }
 ui_story = { path = "domain/ui/ui_story" }
+ui_app_integration = { path = "domain/ui/ui_app_integration" }
 
 native_tablet_input = { path = "adapters/native_tablet_input" }
 
