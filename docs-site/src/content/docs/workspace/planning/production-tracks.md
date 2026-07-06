@@ -10,6 +10,7 @@ related_docs:
   - ../../architecture/ui-framework-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
+  - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -72,9 +73,9 @@ Evidence gates:
 
 ```text
 Phase 13: PR #44 merged into main at merge commit 6f2d3827f315191d7aeaf68a64f523627197cad8. Local validation passed on 2026-07-02 with the full Phase 13 cargo/docs/diff gate.
-Phase 14: PR #46 merged into main at merge commit 6d9bf983c77a32c701681ff55a05e1f9ebcdeed1. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, ui_runtime::text_editing replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, and final proof-frame cleanup. Local validation passed on 2026-07-02 with the recorded Phase 14 cargo/docs/diff gate before merge.
-Phase 15: PR #48 merged into main at merge commit 91cea8b8f0dfc38143de77ba931bc81ffc91dcff. The validated implementation commit 32e402b108d1e72d7cc5b4113af29d8d29626680 covers renderer-neutral `ui_text` block/run/span/layout/style/line/glyph/overflow/fallback/diagnostic contracts, `TextBlockLayoutRequest` / `TextBlockLayoutResult` / `TextLayouter`, package-backed Generic Text descriptors and validation, catalog projection, separate `TextDisplay` inspection projection, runtime proof report/frame, static mount proof, renderer-neutral frame/extract adaptation to `TextVisualRun` / `TextGlyph` evidence, and removal of the old `ui_text::GlyphRun` / `PositionedGlyph` compatibility path. PR #49 merged into main at merge commit 338a8092d534dbb412da89363d50a46cd5efeae9 and completed the hardening pass: source-run/cluster evidence correction, height overflow evidence, stable-ID constructors, homogeneous visual-run segmentation, button-label policy cleanup, runtime text-emission naming, Generic Text direction-policy inspection, and large output-emission file splits. Final local validation passed with the recorded cargo workspace/docs/diff gate.
-Phase 16: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening into main at merge commit 6cfb82b81aa5478496ff6cbf3fa2eea607777aaf. PR #61 squash-merged Surface2D into main at merge commit 2e803620c91726fb599c5e5c4eee4b3984cd4a9d. Main contains the renderer-neutral Surface2D package/catalog/inspection contract, runtime proof report/frame, and static mount proof across ui_controls, ui_runtime, and ui_static_mount. Post-merge validation from main passed with the focused Surface2D package/runtime/static-mount commands, cargo test --workspace, docs validation, and diff check.
+Phase 14: PR #46 merged into main at merge commit 6d9bf983c77a32c701681ff55a05e1f9ebcdeed1. Local validation passed on 2026-07-02 with the recorded Phase 14 cargo/docs/diff gate before merge.
+Phase 15: PR #48 merged into main at merge commit 91cea8b8f0dfc38143de77ba931bc81ffc91dcff. PR #49 merged into main at merge commit 338a8092d534dbb412da89363d50a46cd5efeae9. Final local validation passed with the recorded cargo workspace/docs/diff gate.
+Phase 16: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening into main at merge commit 6cfb82b81aa5478496ff6cbf3fa2eea607777aaf. PR #61 squash-merged Surface2D into main at merge commit 2e803620c91726fb599c5e5c4eee4b3984cd4a9d. Post-merge validation from main passed with the recorded focused Surface2D commands, cargo test --workspace, docs validation, and diff check.
 ```
 
 Current blocker:
@@ -82,13 +83,13 @@ Current blocker:
 ```text
 No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-The remaining strategic blocker is PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake review and hardening: Live UiPlugin runtime, generic surface-frame rendering, public plugin/runtime API shape, render-target ownership, AppUiExt pressure, external templates, DSL/compiler frontends, retained/immediate/reactive strategies, and SDF/game/world-space targets must be positioned without bypassing ui_definition, UiProgram, UiStory, or host-owned mutation.
+The remaining strategic blocker is implementation authorization for `PT-UI-RUNTIME-PLATFORM-001`: PR #74 hardens the investigation/design gate, but runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, SDF/world-space/SpatialCanvas work, foundation/meta, domain/app_program, and generic plugin framework work remain blocked until a separate implementation-planning PR records the exact contract.
 ```
 
 Next action:
 
 ```text
-Keep Phase 16 and PT-UI-FRAMEWORK-APP-INTEGRATION-002 as completed dependencies. Keep Phase 17 SpatialCanvas as future planning only. Review and harden PR #74 / PT-UI-RUNTIME-PLATFORM-001 intake before returning to SpatialCanvas implementation, public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform milestones.
+Review PR #74 as docs-only design-gate hardening. Keep Phase 17 SpatialCanvas as future planning. After PR #74 review, open a separate implementation-planning PR for the first runtime slice; do not return to SpatialCanvas implementation, public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform milestones as implementation before the runtime platform contract exists.
 ```
 
 ## PT-UI-RUNTIME-PLATFORM
@@ -99,9 +100,9 @@ Title: Live UiPlugin Runtime Platform
 
 Track type: architecture / runtime platform / public API
 
-State: track candidate / active-planning intake review
+State: track candidate / active-planning design-gate complete
 
-Lifecycle state: `active-planning` intake review; implementation not authorized
+Lifecycle state: `active-planning` design-gate complete / implementation-planning required; implementation not authorized
 
 Goal:
 
@@ -112,7 +113,8 @@ Live UiPlugin runtime and generic surface-frame rendering: app authors install `
 Authority:
 
 ```text
-Primary proposed design: docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
+Current-state investigation: docs-site/src/content/docs/reports/investigations/live-uiplugin-runtime-current-state-investigation.md
+Primary design: docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
 Architecture spine: docs-site/src/content/docs/architecture/ui-framework-architecture.md
 Workflow gates: complete-investigation-gate.md and complete-design-gate.md
 ```
@@ -120,14 +122,14 @@ Workflow gates: complete-investigation-gate.md and complete-design-gate.md
 Milestones:
 
 ```text
-001 Live UiPlugin runtime and generic surface-frame rendering intake — PR #74 intake review/hardening
-002 UiPlugin skeleton and app mounting API — future, blocked until complete design gate and active planning
+001 Live UiPlugin runtime and generic surface-frame rendering investigation/design gate — PR #74 docs-only hardening
+002 UiPlugin skeleton and app mounting API — future implementation-planning PR required
 003 Typed UiScreen / IntoUi / UiActionHandler ergonomics — future
 004 Mounted surface/session runtime using ui_surface — future
 005 Typed event/action dispatch using ui_hosts contracts — future
 006 Runtime/evaluator output to frame — future
 007 UiPlugin render publication — future
-008 Render genericization from UiFrame naming toward SurfaceFrame naming — future
+008 Render genericization from UiFrame naming toward SurfaceFrame naming — future/staged
 009 Counter live app proof — future
 010 Closeout and planning truth — future
 ```
@@ -135,33 +137,33 @@ Milestones:
 Design gates:
 
 ```text
-Complete investigation gate: required and not complete yet.
-Complete design gate: required and not complete yet.
-Implementation authorization: forbidden until accepted PR #74 intake plus active planning names exact implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, principle compliance, module decomposition, and stop conditions.
+Complete investigation gate: complete for PR #74 design-gate hardening.
+Complete design gate: complete for opening a separate implementation-planning PR only.
+Implementation authorization: forbidden until that separate PR records exact owner modules, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, principle compliance, module decomposition, acceptance criteria, and stop conditions.
 ```
 
 Evidence gates:
 
 ```text
-Current evidence is source/design/planning inspection and accepted/workflow authority only. Future implementation must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, and runtime/proof report evidence.
+Current evidence is `E2` connector metadata/file inspection, `E3` source/test inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from the connector-only PR #74 hardening session. Future implementation must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, and runtime/proof report evidence.
 ```
 
 Current blocker:
 
 ```text
-PR #74 remains intake review/hardening only. Complete investigation gate evidence, complete design gate evidence, and an exact implementation contract are still required before runtime implementation, public AppUiExt code, render adapter code, or SurfaceFrame migration code.
+PR #74 remains docs-only gate hardening. Runtime implementation, public AppUiExt code, render adapter code, and SurfaceFrame migration code remain blocked until a separate implementation-planning PR is accepted.
 ```
 
 Activation condition:
 
 ```text
-Promote beyond intake only after accepted PR #74 intake, complete investigation gate evidence, complete design gate evidence, and an exact implementation contract are recorded.
+Promote to active implementation only after a separate implementation-planning PR accepts the exact implementation contract and validation envelope for the first runtime slice.
 ```
 
 Next action:
 
 ```text
-Review and harden the design intake. Do not open runtime implementation yet.
+Review PR #74. Then open the implementation-planning PR; do not write runtime Rust code from this docs-only gate PR.
 ```
 
 ## Track shape
