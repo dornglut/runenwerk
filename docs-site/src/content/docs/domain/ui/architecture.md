@@ -1,5 +1,5 @@
 ---
-title: UI Substrate Architecture
+title: UI Domain Current-State Architecture
 description: Current-state architecture, ownership boundaries, and migration direction for Runenwerk UI.
 status: active
 owner: ui
@@ -8,7 +8,16 @@ canonical: true
 last_reviewed: 2026-06-20
 ---
 
-# UI Substrate Architecture
+# UI Domain Current-State Architecture
+
+This document records current code truth and current UI-domain ownership
+boundaries.
+
+For the top-down target framework architecture, see:
+[Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md).
+
+This file must not duplicate the whole target architecture. It records current
+reality, current crate map, current migration seams, and current known gaps.
 
 ## Purpose
 Establish the factual, current-state architecture for Runenwerk UI, define correct ownership boundaries, and document remaining migration direction from implemented substrate extraction to full editor/runtime convergence.
@@ -374,6 +383,7 @@ authority.
 
 ## Related Architecture and Workspace Docs
 
+- [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md)
 - [Workspace Architecture Boundaries](../../guidelines/architecture.md)
 - [Runenwerk Architecture Doctrine](../../guidelines/runenwerk-architecture.md)
 - [Module Structure Guidelines](../../guidelines/module-structure-guidelines.md)

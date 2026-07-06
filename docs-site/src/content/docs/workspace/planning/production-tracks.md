@@ -7,6 +7,7 @@ canonical: true
 last_reviewed: 2026-07-05
 related_docs:
   - ../workflow-lifecycle.md
+  - ../../architecture/ui-framework-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
@@ -78,7 +79,9 @@ Phase 16: PR #62 merged docs-only workflow, principle, decomposition, and merge-
 Current blocker:
 
 ```text
-No Phase 16 product blocker remains. The current strategic blocker is framework-direction clarity: `PT-UI-FRAMEWORK-APP-INTEGRATION-001` must decide how real App/Plugin/ECS-hosted code uses ui_definition, UiProgram, UiStory, ui_runtime, ui_hosts, ui_binding, and proof reports before new app-framework or component adoption work claims to be the real UI framework path.
+No Phase 16 product blocker remains. The current app-framework focus is the bounded ECS-backed app-integration proof.
+
+After the ECS-backed app-integration proof, the remaining strategic blocker is public framework ergonomics and authoring/execution strategy clarity: AppUiExt, external templates, DSL/compiler frontends, retained/immediate/reactive strategies, and SDF/game/world-space targets must be positioned without bypassing ui_definition, UiProgram, UiStory, or host-owned mutation.
 ```
 
 Next action:

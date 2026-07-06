@@ -7,6 +7,7 @@ canonical: true
 last_reviewed: 2026-07-05
 related_docs:
   - ../workflow-lifecycle.md
+  - ../../architecture/ui-framework-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
@@ -35,6 +36,15 @@ Authority: `ui-framework-app-integration-direction-review.md`.
 Evidence: Current UI architecture and roadmap documents show that Runenwerk already has `ui_definition`, `UiProgram`, runtime artifacts/views, `UiStory`, component packages, binding/host data, and retained runtime proof substrate. The active decision is to settle how App/Plugin/ECS-hosted code uses those contracts as a real framework before continuing the manual `app_program` proof or promoting SpatialCanvas implementation.
 
 Next action: Review and accept, revise, or reject the direction review. If accepted, write a separate implementation-planning contract for `ECS-backed Counter UI Story Proof`.
+
+Future follow-up after AppUiExt:
+
+- `PT-UI-FRAMEWORK-APP-INTEGRATION-004 - Authoring Frontends and Execution Strategy Model`
+
+This future phase should define how Rust builders, templates, visual designer
+output, compiler DSLs, immediate-mode adapters, reactive adapters, retained
+execution, ECS-driven execution, and SDF/world-space targets share
+source/program/event/story contracts without bypasses.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 

@@ -14,6 +14,16 @@ Use this folder for designs that are useful but not yet fully accepted or not ye
 
 Active does not mean wrong or deprecated. It means the design is still part of current planning, implementation, or validation work.
 
+## Architecture spine
+
+For the whole UI framework architecture, start with:
+
+- [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md)
+
+Active design docs below are slice-level authorities, proposals,
+implementation designs, or product-track references. They should not each
+restate the entire UI framework architecture.
+
 ## Current Designs
 
 ### Foundation

@@ -12,6 +12,7 @@ related_docs:
   - ../complete-merge-readiness-gate.md
   - ../evidence-quality-taxonomy.md
   - ../../guidelines/programming-principles.md
+  - ../../architecture/ui-framework-architecture.md
   - ./ecs-backed-counter-ui-story-proof-planning.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
@@ -24,6 +25,11 @@ related_docs:
 This file names the current planning focus for scriptless workflow.
 
 ## Current focus
+
+Architecture reference: the canonical top-down architecture is
+`docs-site/src/content/docs/architecture/ui-framework-architecture.md`; the
+current implementation focus remains the ECS-backed Counter UI Story Proof and
+must not expand into compiler DSLs, SDF UI, SpatialCanvas, or public AppUiExt.
 
 ID: `PT-UI-FRAMEWORK-APP-INTEGRATION-002`
 
