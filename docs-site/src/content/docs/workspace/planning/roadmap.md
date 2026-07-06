@@ -35,7 +35,9 @@ Authority: `ui-framework-app-integration-direction-review.md`.
 
 Evidence: PR #70 accepted the direction that App/Plugin/ECS-hosted UI must lower through `ui_definition`, `UiProgram`, `UiStory`, runtime/evaluator artifacts, and host-owned mutation instead of continuing the manual `app_program` proof or promoting SpatialCanvas as the app-framework answer.
 
-Next action: Keep as accepted direction authority. Current app-framework truth now flows through `PT-UI-FRAMEWORK-APP-INTEGRATION-002` and PR #72 closeout.
+Next action: Keep as accepted direction authority. The first proof slice,
+`PT-UI-FRAMEWORK-APP-INTEGRATION-002`, is completed and now serves as evidence
+for later intake/design work.
 
 ### PT-UI-FRAMEWORK-APP-INTEGRATION-002
 
@@ -43,15 +45,51 @@ ID: `PT-UI-FRAMEWORK-APP-INTEGRATION-002`
 
 Title: ECS-backed Counter UI Story Proof
 
-State: merged through PR #72; post-merge closeout and planning truth pending
+State: completed through PR #72 and closeout truth
 
-Lifecycle state: `review`
+Lifecycle state: `completed`
 
 Authority: `ecs-backed-counter-ui-story-proof-planning.md`.
 
-Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1a`. The proof should now be checked against the planning contract for source records, route/event packet flow, ECS-backed host mutation, next-output evidence, fail-closed cases, no public AppUiExt API, and no bypass of `ui_definition`, `UiProgram`, or story-compatible reports.
+Evidence: PR #72 merged the `ui_app_integration` proof into `main` at
+`e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records the new
+`domain/ui/ui_app_integration` crate, code-authored Counter and Win source
+records, lowering through `ui_definition` and `ui_program`, `UiEventPacket`
+route/event evidence, route-missing diagnostics, route-resolved host mutation,
+ECS-backed Counter mutation, next-output text facts, positive proof flow,
+fail-closed route/schema/capability/payload/unformed-route/missing-host-data
+cases, no callback/direct mutation bypass, no public `AppUiExt`, no engine
+`UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas
+world-space implementation, no `foundation/meta`, no `domain/app_program`, and
+no generic plugin framework. Detailed closeout:
+`../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-Next action: Run and record the PR #72 closeout/post-merge truth before opening public AppUiExt ergonomics, authoring frontend, SDF/game/world-space, or execution-strategy follow-ups.
+Next action: Keep as completed proof evidence. Review/harden the draft PR #74
+intake for `PT-UI-RUNTIME-PLATFORM-001`; do not start Live `UiPlugin` runtime
+implementation.
+
+### PT-UI-RUNTIME-PLATFORM-001
+
+ID: `PT-UI-RUNTIME-PLATFORM-001`
+
+Title: Live UiPlugin Runtime and Generic Surface-Frame Rendering
+
+State: draft docs-only intake open as PR #74; implementation not authorized
+
+Lifecycle state: `active-planning` intake review
+
+Authority: draft PR #74 intake plus completed `PT-UI-FRAMEWORK-APP-INTEGRATION-002` proof evidence.
+
+Evidence: GitHub reports PR #74 as open and draft from
+`docs/live-uiplugin-runtime-intake` to `main`. The PR #72 closeout removes the
+previous closeout blocker but does not authorize runtime code, public plugin
+APIs, render adapters, SDF/world-space behavior, SpatialCanvas implementation,
+`foundation/meta`, `domain/app_program`, or a generic plugin framework.
+
+Next action: Review and harden PR #74 intake only. Require complete
+investigation, complete design, exact implementation contract, validation
+envelope, evidence expectation, principle compliance, and stop conditions before
+any implementation branch.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
@@ -118,7 +156,7 @@ Next action: Keep as completed dependency. The next named production-track miles
 ## Future app-framework follow-ups
 
 These are future planning candidates only. They are not active implementation
-and must wait for PR #72 closeout/post-merge truth.
+and must wait for their own accepted planning/design contracts.
 
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-003 - Public AppUiExt Ergonomics`
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-004 - Authoring Frontends and Execution Strategy Model`

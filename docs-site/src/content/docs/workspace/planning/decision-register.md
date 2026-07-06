@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-06
 related_docs:
   - ../workflow-lifecycle.md
   - ./ecs-backed-counter-ui-story-proof-planning.md
@@ -219,6 +219,58 @@ Follow-up: After this docs PR is accepted, open an implementation branch that ch
 Reactivation condition: Reopen the broader planning question only if implementing the exact contract requires engine core dependency inversion, public App extension API, `ui_definition`/`ui_program` dependency on ECS, `app_program` resurrection, or bypassing `ui_definition`, `UiProgram`, or story-compatible reports.
 
 Supersedes: `PT-UI-FRAMEWORK-APP-INTEGRATION-002` broad A/B/C intake state.
+
+Superseded by: none.
+
+## ECS-backed Counter UI Story Proof closeout decision
+
+Date: 2026-07-06
+
+Decision: Mark `PT-UI-FRAMEWORK-APP-INTEGRATION-002` ECS-backed Counter UI
+Story Proof completed through merged PR #72 and the closeout report.
+
+State transition: `review -> completed`
+
+Context: PR #72 is merged into `main`. Post-merge inspection found the
+implementation proof in `domain/ui/ui_app_integration` and planning truth still
+showed PR #72 closeout as the active blocker.
+
+Options considered: keep PR #72 in review until a later runtime intake; mark
+the proof completed and start runtime implementation; mark the proof completed
+and move the active focus to PR #74 intake review only.
+
+Reason: The delivered PR #72 scope matches the accepted planning contract for
+the bounded proof: new `ui_app_integration` crate, code-authored Counter and Win
+source records, lowering through `ui_definition` / `ui_program_lowering` into
+`UiProgram` route facts, `UiEventPacket` route/event evidence, route-missing
+diagnostic, route-resolved host mutation, ECS-backed Counter mutation,
+next-output text facts, positive proof flow, fail-closed negative cases, no
+callback/direct mutation bypass, and no public `AppUiExt`, engine `UiPlugin`,
+render adapter, SDF/SpatialCanvas/world-space implementation,
+`foundation/meta`, `domain/app_program`, or generic plugin framework.
+
+Affected planning files: `active-work.md`, `completed-work.md`, `roadmap.md`,
+`production-tracks.md`, `decision-register.md`, and closeout report
+`../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
+
+Evidence: GitHub reports PR #72 merged on 2026-07-06 at merge commit
+`e093eb1affdc465b96430200960f8e3cdca0d26b`. Source inspection covered root
+`Cargo.toml`, `Cargo.lock`, `domain/ui/ui_app_integration/Cargo.toml`, all
+crate source modules, both counter proof tests, and the PR #72 docs index link.
+Evidence classes: `E3`, `E5`, `E8`, and GitHub merge metadata.
+
+Follow-up: Review and harden draft PR #74 /
+`PT-UI-RUNTIME-PLATFORM-001` intake. Do not start Live `UiPlugin` runtime
+implementation until complete investigation/design/planning evidence accepts an
+exact implementation contract.
+
+Reactivation condition: Reopen `PT-UI-FRAMEWORK-APP-INTEGRATION-002` only if a
+future inspection finds the merged proof bypasses `ui_definition` or
+`UiProgram`, makes ECS the durable UI semantic model, adds public App/Plugin
+runtime APIs, revives `domain/app_program`, introduces `foundation/meta`, or
+otherwise violates the recorded stop conditions.
+
+Supersedes: PR #72 closeout pending state.
 
 Superseded by: none.
 

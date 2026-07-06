@@ -79,15 +79,15 @@ Phase 16: PR #62 merged docs-only workflow, principle, decomposition, and merge-
 Current blocker:
 
 ```text
-No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof has merged through PR #72 and now needs closeout/post-merge truth.
+No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-After PR #72 closeout, the remaining strategic blocker is public framework ergonomics and authoring/execution strategy clarity: AppUiExt, external templates, DSL/compiler frontends, retained/immediate/reactive strategies, and SDF/game/world-space targets must be positioned without bypassing ui_definition, UiProgram, UiStory, or host-owned mutation.
+The remaining strategic blocker is PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake review and hardening: Live UiPlugin runtime, generic surface-frame rendering, public plugin/runtime API shape, render-target ownership, AppUiExt pressure, external templates, DSL/compiler frontends, retained/immediate/reactive strategies, and SDF/game/world-space targets must be positioned without bypassing ui_definition, UiProgram, UiStory, or host-owned mutation.
 ```
 
 Next action:
 
 ```text
-Keep Phase 16 as a completed dependency. Keep Phase 17 SpatialCanvas as future planning only. Record PR #72 closeout/post-merge truth for the ECS-backed Counter UI Story Proof before returning to SpatialCanvas implementation, public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform milestones.
+Keep Phase 16 and PT-UI-FRAMEWORK-APP-INTEGRATION-002 as completed dependencies. Keep Phase 17 SpatialCanvas as future planning only. Review and harden PR #74 / PT-UI-RUNTIME-PLATFORM-001 intake before returning to SpatialCanvas implementation, public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform milestones.
 ```
 
 ## Track shape
