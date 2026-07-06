@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../../architecture/ui-framework-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
+  - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -88,6 +89,79 @@ Next action:
 
 ```text
 Keep Phase 16 and PT-UI-FRAMEWORK-APP-INTEGRATION-002 as completed dependencies. Keep Phase 17 SpatialCanvas as future planning only. Review and harden PR #74 / PT-UI-RUNTIME-PLATFORM-001 intake before returning to SpatialCanvas implementation, public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform milestones.
+```
+
+## PT-UI-RUNTIME-PLATFORM
+
+Track ID: `PT-UI-RUNTIME-PLATFORM`
+
+Title: Live UiPlugin Runtime Platform
+
+Track type: architecture / runtime platform / public API
+
+State: track candidate / active-planning intake review
+
+Lifecycle state: `active-planning` intake review; implementation not authorized
+
+Goal:
+
+```text
+Live UiPlugin runtime and generic surface-frame rendering: app authors install `RenderPlugin`, `UiPlugin`, and their own app plugin; mount typed UI screens; handle typed actions through host-owned app state; produce source/program/evaluator-backed frames; and publish generic surface-frame submissions that RenderPlugin prepares without owning UI semantics.
+```
+
+Authority:
+
+```text
+Primary proposed design: docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
+Architecture spine: docs-site/src/content/docs/architecture/ui-framework-architecture.md
+Workflow gates: complete-investigation-gate.md and complete-design-gate.md
+```
+
+Milestones:
+
+```text
+001 Live UiPlugin runtime and generic surface-frame rendering intake — PR #74 intake review/hardening
+002 UiPlugin skeleton and app mounting API — future, blocked until complete design gate and active planning
+003 Typed UiScreen / IntoUi / UiActionHandler ergonomics — future
+004 Mounted surface/session runtime using ui_surface — future
+005 Typed event/action dispatch using ui_hosts contracts — future
+006 Runtime/evaluator output to frame — future
+007 UiPlugin render publication — future
+008 Render genericization from UiFrame naming toward SurfaceFrame naming — future
+009 Counter live app proof — future
+010 Closeout and planning truth — future
+```
+
+Design gates:
+
+```text
+Complete investigation gate: required and not complete yet.
+Complete design gate: required and not complete yet.
+Implementation authorization: forbidden until accepted PR #74 intake plus active planning names exact implementation contract, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, principle compliance, module decomposition, and stop conditions.
+```
+
+Evidence gates:
+
+```text
+Current evidence is source/design/planning inspection and accepted/workflow authority only. Future implementation must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, and runtime/proof report evidence.
+```
+
+Current blocker:
+
+```text
+PR #74 remains intake review/hardening only. Complete investigation gate evidence, complete design gate evidence, and an exact implementation contract are still required before runtime implementation, public AppUiExt code, render adapter code, or SurfaceFrame migration code.
+```
+
+Activation condition:
+
+```text
+Promote beyond intake only after accepted PR #74 intake, complete investigation gate evidence, complete design gate evidence, and an exact implementation contract are recorded.
+```
+
+Next action:
+
+```text
+Review and harden the design intake. Do not open runtime implementation yet.
 ```
 
 ## Track shape
