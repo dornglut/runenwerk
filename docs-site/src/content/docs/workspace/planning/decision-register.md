@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ./ecs-backed-counter-ui-story-proof-planning.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
+  - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -64,7 +65,7 @@ Decision: Mark `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behav
 
 State transition: `review -> completed`
 
-Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Post-merge inspection showed `main` identical to that merge commit. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, and final proof-frame cleanup. Local Phase 14 validation passed on 2026-07-02 before merge.
+Evidence: PR #46 merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, and final proof-frame cleanup. Local Phase 14 validation passed on 2026-07-02 before merge.
 
 Follow-up: Keep Phase 14 as completed dependency and use it as the preceding substrate for Generic Text planning.
 
@@ -114,7 +115,7 @@ Decision: Mark the Phase 15 Generic Text hardening pass completed through merged
 
 State transition: `completed -> completed-hardening`
 
-Evidence: PR #49 merged into `main` at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`. It corrected resolved source-run and cluster evidence, added height overflow evidence, added stable-ID text constructors, added generic text layout shape helpers, replaced the remaining button default role-specific text policy, segmented visual runs by homogeneous evidence, exposed text direction policy through Generic Text inspection, renamed runtime text helpers to `text_emission`, and split large runtime output emission files. Final Phase 15 validation passed on 2026-07-02 with the full package, workspace, docs, and diff gate.
+Evidence: PR #49 merged into `main` at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`. It corrected resolved source-run and cluster evidence, added height overflow evidence, added stable-ID text constructors, added generic text layout shape helpers, replaced the remaining button default role-specific text policy, segmented visual runs by homogeneous evidence, exposed text direction policy through Generic Text inspection, renamed runtime text helpers to `text_emission`, and split large runtime output-emission files. Final Phase 15 validation passed on 2026-07-02 with the full package, workspace, docs, and diff gate.
 
 Follow-up: Use PR #48 plus PR #49 as the authoritative Phase 15 completion evidence. Open Phase 16 Surface2D as planning/design hardening only.
 
@@ -128,7 +129,7 @@ State transition: `production-track -> active-planning`
 
 Evidence: Phase 15 Generic Text completed through PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff` and PR #49 at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`. The existing Surface2D design scopes generic renderer-neutral 2D surface identity, content/viewport bounds, world/screen transforms, pan, zoom, fit, selection rectangle, hover coordinate, pointer capture, gesture cancel/commit, overlay/diagnostic layers, grid/background vocabulary, large-content bounds, LOD readiness, and budget evidence.
 
-Follow-up: Harden the Surface2D design before implementation. Planning must settle exact owner files, minimum scope, validation envelope, no product/editor/game mutation rule, accessibility/input acceptance, performance/budget evidence, stop conditions, and the relationship to existing `ui_surface` vocabulary. Typed App Composition remains proposed architecture reference only, not implementation authority.
+Follow-up: Harden the Surface2D design before implementation. Planning must settle exact owner files, validation envelope, no product/editor/game mutation rule, accessibility/input acceptance, performance/budget evidence, stop conditions, and the relationship to existing `ui_surface` vocabulary. Typed App Composition remains proposed architecture reference only, not implementation authority.
 
 ## Phase 16 Surface2D completion decision
 
@@ -271,6 +272,71 @@ runtime APIs, revives `domain/app_program`, introduces `foundation/meta`, or
 otherwise violates the recorded stop conditions.
 
 Supersedes: PR #72 closeout pending state.
+
+Superseded by: none.
+
+## Live UiPlugin runtime and surface-frame rendering intake decision
+
+Date: 2026-07-06
+
+Decision: Create/review `PT-UI-RUNTIME-PLATFORM-001` as the proposed-design /
+active-planning intake for the live public UI runtime platform instead of
+continuing with a narrow public `AppUiExt` ergonomics slice or a broad
+`domain/ui/ui_runtime_platform` crate.
+
+State transition: `idea/investigating -> proposed-design / active-planning
+intake review`; implementation remains not authorized.
+
+Context: PR #75 recorded `PT-UI-FRAMEWORK-APP-INTEGRATION-002` completion truth
+through PR #72 and removed the prior closeout blocker. Review of the UI
+framework architecture spine, workflow gates, completed app-integration proof,
+existing UI domain crates, engine App/Plugin ownership, and render submission
+boundaries showed that the next real platform question is broader than
+`AppUiExt` sugar but should still avoid a generic god crate. The desired user
+shape is `RenderPlugin + UiPlugin + AppPlugin`, with `app.mount_ui(Screen)`,
+typed `UiScreen`, typed `UiActionHandler`, host-owned mutation, and generic
+surface-frame render publication.
+
+Options considered: continue `PT-UI-FRAMEWORK-APP-INTEGRATION-003` as public
+AppUiExt ergonomics; implement a render adapter first; add a broad
+`domain/ui/ui_runtime_platform` crate; grow `ui_app_integration` into the final
+framework; create an engine-owned `UiPlugin` runtime layer that reuses
+`domain/ui` contracts and cleans the render boundary.
+
+Reason: A public AppUiExt-only slice would freeze ergonomics before the runtime
+path is proven. A render-adapter-only slice would not solve mounted sessions,
+typed actions, or host mutation. A broad `domain/ui/ui_runtime_platform` crate
+would duplicate `ui_surface`, `ui_hosts`, `ui_evaluator`, `ui_runtime_view`, and
+render-data ownership. Growing `ui_app_integration` would violate its
+proof-local ECS-specific role. The best long-term path is an engine-owned
+`UiPlugin` runtime layer using existing domain UI contracts and a
+producer-agnostic render surface-frame boundary.
+
+Affected planning files: `active-work.md`, `roadmap.md`,
+`production-tracks.md`, `decision-register.md`, and design file
+`../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md`.
+
+Evidence: Workflow authority requires complete investigation and complete design
+gates for platform/public API/domain-boundary work. The PR #72 closeout records
+`ui_app_integration` as proof-local and ECS-specific, with no public `AppUiExt`,
+no engine `UiPlugin`, and no render adapter implementation. The UI architecture
+spine records that render targets consume derived output only, and the intake
+keeps public AppUiExt ergonomics inside the broader live runtime platform review
+instead of as an immediate standalone implementation target.
+
+Follow-up: Review and harden PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake only.
+Do not open runtime implementation until complete investigation gate evidence,
+complete design gate evidence, and an exact active-planning implementation
+contract are recorded.
+
+Reactivation condition: Reactivate a narrower AppUiExt-only slice only if the
+complete design gate proves the live runtime, host action, surface/session, and
+render publication contracts are already accepted and do not need this platform
+track.
+
+Supersedes: the future roadmap placeholder
+`PT-UI-FRAMEWORK-APP-INTEGRATION-003 - Public AppUiExt Ergonomics` as the next
+app-framework design direction.
 
 Superseded by: none.
 
