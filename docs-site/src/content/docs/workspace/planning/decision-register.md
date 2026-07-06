@@ -65,7 +65,7 @@ Decision: Mark `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behav
 
 State transition: `review -> completed`
 
-Evidence: PR #46 merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, and final proof-frame cleanup. Local Phase 14 validation passed on 2026-07-02 before merge.
+Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, and final proof-frame cleanup. Local Phase 14 validation passed on 2026-07-02 before merge.
 
 Follow-up: Keep Phase 14 as completed dependency and use it as the preceding substrate for Generic Text planning.
 
