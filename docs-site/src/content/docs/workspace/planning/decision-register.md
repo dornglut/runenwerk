@@ -193,7 +193,7 @@ Follow-up: Review and accept, revise, or reject `ui-framework-app-integration-di
 
 Reactivation condition: Reactivate `PT-UI-APP-PROGRAM-001` only if a later accepted design decides that a dedicated `app_program` crate is required as proof/report vocabulary and is not the public UI framework authoring path.
 
-Supersedes: `PT-UI-APP-PROGRAM-001` as the next active implementation foundation.
+Supersedes: `PT-UI-APP-PROGRAM-001` as the prior app-framework foundation candidate.
 
 Superseded by: `PT-UI-FRAMEWORK-APP-INTEGRATION-001`.
 
@@ -271,7 +271,7 @@ future inspection finds the merged proof bypasses `ui_definition` or
 runtime APIs, revives `domain/app_program`, introduces `foundation/meta`, or
 otherwise violates the recorded stop conditions.
 
-Supersedes: PR #72 closeout pending state.
+Supersedes: the former pre-PR #75 closeout-pending state for PR #72.
 
 Superseded by: none.
 

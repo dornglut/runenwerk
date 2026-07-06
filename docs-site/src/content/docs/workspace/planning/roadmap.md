@@ -87,8 +87,9 @@ platform. The design intake records the target public shape
 `RenderPlugin + UiPlugin + AppPlugin`, the normal authoring path
 `app.mount_ui(Screen)`, typed `UiScreen` / `UiActionHandler` ergonomics, reuse
 of existing `ui_surface` and `ui_hosts` owners, and the render-boundary
-direction toward generic surface-frame submissions. The PR #72 closeout removes
-the previous closeout blocker but does not authorize runtime code, public plugin
+direction toward generic surface-frame submissions. The PR #75 closeout records
+the PR #72 proof completion and removes the previous closeout blocker but does
+not authorize runtime code, public plugin
 APIs, render adapters, SDF/world-space behavior, SpatialCanvas implementation,
 `foundation/meta`, `domain/app_program`, or a generic plugin framework.
 
@@ -161,7 +162,7 @@ Next action: Keep as completed dependency. The next named production-track miles
 
 ## Future app-framework follow-ups
 
-These are future planning candidates only. They are not active implementation
+These are future planning candidates only. They are not implementation work
 and must wait for their own accepted planning/design contracts.
 
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-003 - Public AppUiExt Ergonomics`

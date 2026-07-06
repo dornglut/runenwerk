@@ -123,6 +123,7 @@ restate the entire UI framework architecture.
 - [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
 - [UI Framework App Integration Direction Review](ui-framework-app-integration-direction-review.md)
+- [Live UiPlugin Runtime And Surface Frame Rendering](live-uiplugin-runtime-and-surface-frame-rendering-design.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [UI Program Architecture](ui-program-architecture.md)

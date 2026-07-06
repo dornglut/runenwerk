@@ -341,10 +341,12 @@ and state transitions. Active designs own slice-level tradeoffs. This spine
 should be updated only when the canonical top-down model changes, not for every
 phase status update.
 
-The current implementation focus remains the ECS-backed Counter UI Story Proof.
-That work must not expand into compiler DSLs, SDF UI, `SpatialCanvas`, public
-`AppUiExt`, generic plugin framework extraction, or alternate execution
-strategies.
+Current focus is owned by workspace planning. As of the PR #75 closeout, the
+ECS-backed Counter UI Story Proof is completed evidence and the active focus is
+PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake review and hardening. That intake
+does not authorize Live `UiPlugin` runtime implementation, compiler DSLs, SDF
+UI, `SpatialCanvas`, public `AppUiExt` code, generic plugin framework
+extraction, or alternate execution strategies.
 
 ## Folder and crate ownership map
 

@@ -24,17 +24,26 @@ related_docs:
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/production-tracks.md
   - ../../workspace/planning/decision-register.md
+  - ./live-uiplugin-runtime-and-surface-frame-rendering-design.md
+  - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
 ---
 
 # UI Framework App Integration Direction Review
 
 ## Status
 
-Lifecycle state: `active-planning`.
+Lifecycle state: `accepted-direction`.
 
-This document is a direction correction and planning authority candidate. It does not authorize implementation, product code, crate creation, renderer backend work, engine scheduler work, editor/game integration, shared plugin framework extraction, or `foundation/meta` work.
+This document is accepted direction evidence. It does not authorize
+implementation, product code, crate creation, renderer backend work, engine
+scheduler work, editor/game integration, shared plugin framework extraction, or
+`foundation/meta` work.
 
-If accepted, this document supersedes the current `PT-UI-APP-PROGRAM-001` implementation direction as the next active UI-framework planning focus. The existing Typed App Program investigation/design remains useful pressure evidence, but the current headless `app_program` implementation PR must not be merged as the foundation for Runenwerk's real UI framework.
+This document superseded the `PT-UI-APP-PROGRAM-001` implementation direction.
+The ECS-backed Counter UI Story Proof has since completed through
+`PT-UI-FRAMEWORK-APP-INTEGRATION-002` and PR #72/PR #75 closeout truth. The
+current planning focus is PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake review
+and hardening, not runtime implementation.
 
 ## Relationship to canonical architecture
 
@@ -44,9 +53,9 @@ UI framework architecture.
 The whole architecture is summarized in:
 [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md).
 
-Execution-neutral contracts remain the semantic boundary. The first
-implementation is ECS-hosted because ECS/App/Plugin is the first app host proof
-surface, not because ECS owns UI semantics.
+Execution-neutral contracts remain the semantic boundary. The completed proof
+was ECS-hosted because ECS/App/Plugin is the first app host proof surface, not
+because ECS owns UI semantics.
 
 ## Purpose
 
@@ -584,17 +593,20 @@ Lifecycle:
 active-planning
 ```
 
-Activation condition for implementation:
+Completed proof transition:
 
 ```text
-The direction review is accepted, exact owner files/crates are named, public API names are decided, validation envelope is recorded, and the first ECS-backed Counter UI Story Proof implementation plan is created.
+The direction review was accepted, and the first bounded ECS-backed Counter UI
+Story Proof was completed through PT-UI-FRAMEWORK-APP-INTEGRATION-002. That
+completion does not authorize Live UiPlugin runtime implementation.
 ```
 
-## Future implementation outline
+## Completed Proof Evidence And Next Intake
 
-The first implementation after this design must be planning-authorized separately.
+The first proof after this design was planning-authorized separately and is now
+completed evidence.
 
-Candidate name:
+Completed proof:
 
 ```text
 ECS-backed Counter UI Story Proof
@@ -610,7 +622,15 @@ ui_story / ui_testing: proof runner and report envelope
 engine::App / ECS: app state and mutation system proof host
 ```
 
-Exact crate/module names are intentionally not decided by this document. They are part of the next complete design gate.
+Next intake:
+
+```text
+PR #74 / PT-UI-RUNTIME-PLATFORM-001 - Live UiPlugin Runtime and Generic
+Surface-Frame Rendering intake review and hardening.
+```
+
+Exact runtime crate/module names remain intentionally undecided here. They are
+part of the PR #74 complete investigation/design/planning gate work.
 
 ## Stop conditions
 
@@ -655,4 +675,9 @@ UiStory-backed proof and mount eligibility,
 host/app-owned mutation.
 ```
 
-The next work should not continue the manual `app_program` implementation. It should formalize and then implement the first real framework proof: an ECS-backed Counter UI Story Proof through the existing UI pipeline.
+The next work should not continue the manual `app_program` implementation. The
+first ECS-backed proof is complete; the current follow-up is PR #74 intake
+review and hardening for the live `UiPlugin` runtime and generic surface-frame
+rendering path. Runtime implementation remains unauthorized until the complete
+investigation gate, complete design gate, and exact implementation contract are
+accepted.

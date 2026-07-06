@@ -15,6 +15,8 @@ related_docs:
   - ../../architecture/ui-framework-architecture.md
   - ./ecs-backed-counter-ui-story-proof-planning.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
+  - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
+  - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
   - ../../design/active/runenwerk-ui-platform-capability-roadmap.md
@@ -63,7 +65,7 @@ validation envelope, evidence expectation, and stop conditions before any
 runtime work starts.
 
 Implementation contract: not authorized. PR #74 is a docs-only intake and must
-not be promoted to active implementation by this active-work entry.
+not be promoted to the implementation lifecycle state by this active-work entry.
 
 Allowed files/crates: docs-only intake review files in PR #74. No runtime,
 engine, UI crate, render adapter, SDF, SpatialCanvas, `foundation/meta`, or
