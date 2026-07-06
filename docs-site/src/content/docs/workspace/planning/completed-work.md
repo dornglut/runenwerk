@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-06
 related_docs:
   - ../workflow-lifecycle.md
   - ../../reports/closeouts/README.md
@@ -29,6 +29,7 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior: completed 2026-07-02 through merged PR #46 at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
 - `PT-UI-COMPONENT-PLATFORM-015` Generic Text: completed 2026-07-02 through baseline PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff` and hardening PR #49 at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`.
 - `PT-UI-COMPONENT-PLATFORM-016` Surface2D: completed 2026-07-03 through docs-hardening PR #62 at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf` and implementation PR #61 at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Closeout report: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
+- `PT-UI-FRAMEWORK-APP-INTEGRATION-002` ECS-backed Counter UI Story Proof: completed 2026-07-06 through merged PR #72 at merge commit `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout report: `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 
@@ -67,6 +68,34 @@ Validation: Post-merge validation from `main` passed with `cargo test -p ui_cont
 Known non-goals: Renderer backend ownership, product/editor/game mutation, host command execution inside `domain/ui`, graph/timeline public API semantics, new crates, plugin framework work, `foundation/meta`, and broad workflow rewrites remain out of scope for Phase 16.
 
 Follow-up: Use the completed Surface2D substrate as the dependency for the next production-track planning intake. The next named milestone is `PT-UI-COMPONENT-PLATFORM-017` SpatialCanvas, but this closeout does not authorize Phase 17 implementation.
+
+## PT-UI-FRAMEWORK-APP-INTEGRATION-002 evidence
+
+Implementation evidence: PR #72 delivered the new `domain/ui/ui_app_integration`
+crate as a small UI-owned ECS-backed proof bridge. Evidence covers
+code-authored Counter and Win source records, lowering through
+`ui_definition` / `ui_program_lowering` into `UiProgram` route facts,
+`UiEventPacket` route/event resolution, ECS-backed Counter mutation,
+next-output text facts, deterministic proof reports, and fail-closed tests for
+unknown routes, wrong schema, missing capability, payload diagnostics/schema
+mismatch, unformed routes, missing host action data, and rejected no-mutation
+paths.
+
+Merge evidence: PR #72, `UI: implement Counter app integration proof`, merged
+into `main` on 2026-07-06 at merge commit
+`e093eb1affdc465b96430200960f8e3cdca0d26b`.
+
+Validation: Closeout validation ran from the docs-only closeout branch after
+inspection. See `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`
+for the exact command list and results.
+
+Known non-goals: public `AppUiExt`, engine `UiPlugin`, render adapter/runtime
+render proof, SDF, SpatialCanvas, world-space UI, `foundation/meta`,
+`domain/app_program`, and generic plugin framework behavior remain out of
+scope.
+
+Follow-up: Review and harden PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake.
+This completed proof does not authorize Live `UiPlugin` runtime implementation.
 
 ## Historical completed dependencies
 

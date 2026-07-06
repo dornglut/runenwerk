@@ -28,98 +28,100 @@ This file names the current planning focus for scriptless workflow.
 
 Architecture reference: the canonical top-down architecture is
 `docs-site/src/content/docs/architecture/ui-framework-architecture.md`; the
-current post-merge focus is PR #72 closeout and planning truth for the
-ECS-backed Counter UI Story Proof. This closeout must not expand into compiler
-DSLs, SDF UI, SpatialCanvas, or public AppUiExt.
+current focus is reviewing and hardening the draft docs-only intake in PR #74
+for Live `UiPlugin` runtime and generic surface-frame rendering. This focus is
+planning/intake review only. It must not start runtime implementation.
 
-ID: `PT-UI-FRAMEWORK-APP-INTEGRATION-002`
+ID: `PT-UI-RUNTIME-PLATFORM-001`
 
-Title: `ECS-backed Counter UI Story Proof Post-Merge Truth`
+Title: `Live UiPlugin Runtime and Generic Surface-Frame Rendering Intake`
 
-State: PR #72 is merged into `main`; the implementation proof exists in
-`domain/ui/ui_app_integration`; post-merge closeout and planning truth are
-pending before the next app-framework implementation focus.
+State: draft docs-only intake open in PR #74. Review and harden the intake
+before any implementation authorization.
 
-Lifecycle state: `review` pending closeout truth.
+Lifecycle state: `active-planning` intake review. Not `active-implementation`.
 
-Owner: `domain/ui` owns UI framework proof planning and reusable UI contracts.
-The delivered proof owner is the small UI-owned app-integration crate,
-`domain/ui/ui_app_integration`. `engine::App` / ECS remains the long-term
-app/runtime host surface, but PR #72 proves ECS-backed state directly and still
-defers public engine::App extension methods.
+Owner: UI runtime/platform planning owns the intake. Runtime, engine plugin,
+surface-frame rendering, host adapter, SDF/world-space, and public plugin API
+owners remain unimplemented until the intake is accepted and a complete
+implementation contract is recorded.
 
-Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md`, `docs-site/src/content/docs/workspace/complete-investigation-gate.md`, `docs-site/src/content/docs/workspace/complete-design-gate.md`, `docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md`, `docs-site/src/content/docs/workspace/planning/ecs-backed-counter-ui-story-proof-planning.md`, `docs-site/src/content/docs/design/active/ui-framework-app-integration-direction-review.md`, `docs-site/src/content/docs/design/active/runenwerk-ui-story-driven-golden-workflow-design.md`, `docs-site/src/content/docs/design/active/ui-runtime-rendering-pipeline-roadmap.md`, `docs-site/src/content/docs/design/active/runenwerk-ui-platform-capability-roadmap.md`, and PR #72 merge evidence on `origin/main`.
+Authority files: `AGENTS.md`, `docs-site/src/content/docs/workspace/start-here.md`, `docs-site/src/content/docs/workspace/workflow-lifecycle.md`, `docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md`, `docs-site/src/content/docs/workspace/complete-investigation-gate.md`, `docs-site/src/content/docs/workspace/complete-design-gate.md`, `docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md`, `docs-site/src/content/docs/architecture/ui-framework-architecture.md`, completed `PT-UI-FRAMEWORK-APP-INTEGRATION-002` closeout truth, and draft PR #74 intake evidence.
 
-Evidence classes: `E8` accepted direction authority from PR #70 and planning
-authority from PR #71, `E3` source/code inspection of the delivered
-`ui_app_integration` owner surface, and `E5` local git evidence that
-`origin/main` contains PR #72 at `e093eb1a`.
+Evidence classes: `E8` accepted architecture/planning authority, `E3` source
+inspection of the completed `ui_app_integration` proof boundary, and GitHub
+metadata for draft PR #74. Implementation evidence for
+`PT-UI-RUNTIME-PLATFORM-001` is not yet available and must not be inferred.
 
-Complete investigation gate: complete for the first implementation contract and
-now awaiting post-merge truth. Closeout must confirm the delivered PR #72 scope,
-validation, no-bypass evidence, and remaining gaps against
-`ecs-backed-counter-ui-story-proof-planning.md`.
+Complete investigation gate: required for runtime/platform implementation
+authorization. The PR #74 intake may collect and harden investigation evidence,
+but implementation remains forbidden until the complete gate is accepted.
 
-Complete design gate: complete for the first implementation contract, not for
-public AppUiExt ergonomics. The delivered shape remains `C-internal first, then
-B-public later`: a small UI-owned `ui_app_integration` crate, internal/proof-local
-bridge APIs, Counter UI story loop proof, and public engine::App extension
-methods deferred to a later slice.
+Complete design gate: not satisfied for runtime implementation. The intake must
+prove the target owner map, public/private API boundary, module decomposition,
+validation envelope, evidence expectation, and stop conditions before any
+runtime work starts.
 
-Implementation contract: implemented by PR #72. The next required work is
-closeout/post-merge truth, not opening the implementation branch. Use
-`ecs-backed-counter-ui-story-proof-planning.md` as the promised contract and
-PR #72 as delivered-contract evidence.
+Implementation contract: not authorized. PR #74 is a docs-only intake and must
+not be promoted to active implementation by this active-work entry.
 
-Delivered files/crates to verify in closeout: `Cargo.toml`;
-`domain/ui/ui_app_integration/Cargo.toml`;
-`domain/ui/ui_app_integration/src/{lib.rs,ids.rs,action.rs,screen.rs,source.rs,bridge.rs,host.rs,report.rs,proof.rs}`;
-`domain/ui/ui_app_integration/tests/{counter_ui_story_proof.rs,counter_ui_story_fail_closed.rs}`;
-and any narrow compile-wiring edits made by PR #72. This active-work state does
-not authorize new implementation files.
+Allowed files/crates: docs-only intake review files in PR #74. No runtime,
+engine, UI crate, render adapter, SDF, SpatialCanvas, `foundation/meta`, or
+generic plugin framework implementation files are authorized by this focus.
 
-Non-owned files/crates: all product/editor/game behavior, engine scheduler/runtime/physics/asset-loading/streaming/LOD/render-resource/world-mutation behavior, engine prelude/App extension API, networking/multiplayer/threading implementations, `foundation/meta`, command execution in `foundation/commands`, generic plugin framework/AppRecipe/PluginSuite behavior, Phase 17 SpatialCanvas implementation files, raw ECS-owned UI semantic models, `ui_definition` callback behavior, `ui_controls` app mutation behavior, renderer backend resources, `domain/app_program` resurrection, and implementation shortcuts that bypass `ui_definition`, `UiProgram`, or story-compatible proof reports.
+Non-owned files/crates: runtime implementation, engine plugin APIs,
+surface-frame render adapters, SDF/world-space implementation, SpatialCanvas
+implementation, public `AppUiExt`, generic `UiPlugin` execution framework,
+`foundation/meta`, `domain/app_program`, product/editor/game mutation, renderer
+backend ownership, and any shortcut that bypasses `ui_definition`, `UiProgram`,
+or story-compatible proof reports.
 
-Principle compliance matrix: recorded in `ecs-backed-counter-ui-story-proof-planning.md`; closeout must confirm PR #72 preserved the same matrix. The proof bridge should remain small, avoid duplicating UI semantics in ECS/app_program/engine, defer shared plugin/framework extraction, preserve owner separation, and keep the new crate decomposed into IDs/actions/screens/source/bridge/host/report/proof modules.
+Principle compliance matrix: pending for PR #74 intake review. The intake must
+preserve KISS/DRY/YAGNI/SOLID/Separation of Concerns/Avoid Premature
+Optimization/Law of Demeter before implementation can be authorized.
 
-Module decomposition map: specified in `ecs-backed-counter-ui-story-proof-planning.md` with exact module responsibilities for `ids`, `action`, `screen`, `source`, `bridge`, `host`, `report`, and `proof`; closeout must compare PR #72 against that map.
+Module decomposition map: not accepted for runtime implementation yet. PR #74
+must make owner modules and split triggers explicit before implementation.
 
-Maintainability review status: pending post-merge closeout. Review PR #72
-against the exact file list, dependency rules, no-bypass evidence, report
-shape, and validation envelope before marking the proof completed.
+Maintainability review status: pending intake review. Implementation remains
+blocked until decomposition, public API shape, validation, and stop conditions
+are accepted.
 
-Feature support matrix: closeout must confirm PR #72 covers Counter app state,
-UI screen/source declaration, typed UI action lowering, route/event emission,
-host/app action resolution, app-owned mutation, next UI output,
-story-compatible report, negative route/capability/disabled/missing-data cases,
-no callback/direct-mutation bypass, and no public AppUiExt API.
+Feature support matrix: pending intake review. Live `UiPlugin` runtime,
+generic surface-frame rendering, host policy, render target ownership, route
+and mutation boundaries, and proof/mount eligibility must be classified before
+implementation.
 
-Future-use-case pressure matrix: covered by UI Story, UI Runtime Rendering Pipeline, UI Component Platform, Interaction V2, SpatialCanvas intake, and the superseded Typed App Program pressure archive. The first proof consumes these as boundaries and must not implement designer, game HUD, world-space UI, SpatialCanvas, shared plugin framework, external-template-only workflow, or public AppUiExt ergonomics.
+Future-use-case pressure matrix: pending intake review. Public plugin runtime,
+editor/game hosts, SDF/world-space targets, retained/runtime frame output, and
+future App/Plugin ergonomics must be positioned without moving semantics into
+the wrong owner.
 
-Hierarchy/composition matrix: target proof hierarchy is `ECS host state -> UI source helper -> ui_definition node/template records -> ui_program_lowering -> UiProgram route/event facts -> route proposal via UiEventPacket -> ui_app_integration bridge -> typed app action -> ECS-backed Counter mutation -> next UI output facts -> UiAppIntegrationReport`.
+Hierarchy/composition matrix: pending intake review. Runtime surface hierarchy,
+host/plugin hierarchy, render-frame hierarchy, and product/semantic hierarchy
+must remain separate.
 
-Ergonomics/usability: the target framework should eventually let app authors register resources, systems, screens, screen routers, and typed UI actions through an App/Plugin extension surface. PR #72 intentionally defers those public names. The proof exists to ground future ergonomics rather than freeze them prematurely.
+Ergonomics/usability: public runtime/plugin ergonomics remain design pressure,
+not implementation authorization.
 
-Validation expectation: closeout must record the PR #72 validation results from
-the implementation branch, including the focused `ui_app_integration` commands,
-focused UI crate tests, workspace tests, docs validation, and diff check named
-in `ecs-backed-counter-ui-story-proof-planning.md`. Docs-only follow-up changes
-should pass `python tools/docs/validate_docs.py` and `git diff --check`.
+Validation expectation: docs-only intake review should pass
+`python tools/docs/validate_docs.py` and `git diff --check`. Runtime
+implementation validation must be defined by the future accepted contract.
 
-Known blockers: no implementation-opening blocker remains for
-`PT-UI-FRAMEWORK-APP-INTEGRATION-002`; PR #72 is merged. Public AppUiExt
-ergonomics, authoring frontend expansion, SDF/game/world-space target
-positioning, and execution-strategy work remain blocked until closeout records
-the PR #72 truth and a later design slice accepts exact public API names,
-dependency direction, and activation conditions.
+Known blockers: runtime implementation is blocked until the PR #74 intake is
+reviewed/hardened and accepted with complete investigation/design/planning
+evidence. The completed PR #72 proof is now historical evidence, not an active
+blocker.
 
-Next action: run and record PR #72 closeout/post-merge truth, then update
-completed work, roadmap, production-track, and decision-register state as
-needed before opening any next implementation focus.
+Next action: review and harden PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake
+only. Do not start Live `UiPlugin` runtime implementation.
 
-Evidence: this active-work update follows merged PR #70 direction authority,
-PR #71 implementation-planning authority, and local fetch/git inspection showing
-PR #72 merged on `origin/main` as `e093eb1a`.
+Evidence: `PT-UI-FRAMEWORK-APP-INTEGRATION-002` is completed through PR #72 at
+merge commit `e093eb1affdc465b96430200960f8e3cdca0d26b` and closeout report
+`../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
+GitHub reports PR #74 as an open draft docs-only intake,
+`Docs: open Live UiPlugin runtime intake`, from
+`docs/live-uiplugin-runtime-intake` to `main`.
 
 ## Active-work rules
 
