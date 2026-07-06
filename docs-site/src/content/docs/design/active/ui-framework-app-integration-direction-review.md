@@ -165,29 +165,47 @@ UiStory owns proof, diagnostics, inspection, preview, and mount eligibility.
 Host/app/editor/game owners execute mutation and policy decisions.
 ```
 
-The normal app authoring path should eventually feel like this target shape:
+The earlier direction-review ergonomics sketch has been superseded by the
+broader `PT-UI-RUNTIME-PLATFORM-001` intake. This document remains accepted
+authority for the architecture rule:
+
+```text
+App / Plugin / ECS-hosted app authoring
+  -> ui_definition-backed UI source
+  -> FormedInteractionModel / UiProgram semantic contracts
+  -> ui_runtime / ui_evaluator output
+  -> UiStory proof and mount eligibility
+  -> host/app-owned mutation
+```
+
+The current target public API spelling is owned by
+[Live UiPlugin Runtime And Surface Frame Rendering](./live-uiplugin-runtime-and-surface-frame-rendering-design.md).
+
+Current target shape:
 
 ```rust
 struct CounterPlugin;
 
 impl Plugin for CounterPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Counter>()
-            .add_ui_action::<CounterAction>()
-            .add_ui_screen(CounterScreen::Counter, counter_screen)
-            .add_ui_screen(CounterScreen::Win, win_screen)
-            .add_ui_screen_router(counter_screen_router)
-            .add_systems(Update, reduce_counter);
+        app.init_resource::<Counter>();
+        app.mount_ui(CounterScreen);
     }
 }
 ```
 
-This is not current API and is not implementation authorization. It is a target ergonomics example for the direction.
+Normal app authors should work with typed `UiScreen`, `IntoUi`,
+`UiActionHandler`, and `TryUiActionHandler`. They should not be required to use
+manual `add_ui_action`, `add_ui_screen`, `add_ui_screen_router`, manual route
+maps, host adapters, event packets, render submission registries, or
+prepared-frame resources for the common path.
+
+This target shape is not current API and is not implementation authorization.
 
 The important lowering rule is:
 
 ```text
-add_ui_screen(...) / UiBuilder output
+future app mount / typed screen output
   -> AuthoredUiTemplate / UiNodeDefinition / slot records
   -> validation and normalization
   -> FormedInteractionModel
@@ -300,15 +318,18 @@ App / Plugin / ECS-hosted registration plus UI-framework screen/component builde
 Target form:
 
 ```rust
-app.init_resource::<Counter>()
-    .add_ui_action::<CounterAction>()
-    .add_ui_screen(CounterScreen::Counter, counter_screen)
-    .add_ui_screen(CounterScreen::Win, win_screen)
-    .add_ui_screen_router(counter_screen_router)
-    .add_systems(Update, reduce_counter);
+impl Plugin for CounterPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Counter>();
+        app.mount_ui(CounterScreen);
+    }
+}
 ```
 
-This API does not exist today. The next design/implementation must decide exact module/crate ownership and exact names before adding it.
+This future public API spelling is owned by the
+`PT-UI-RUNTIME-PLATFORM-001` intake and does not exist today. The next complete
+investigation/design/planning gate must decide exact module/crate ownership,
+exact names, validation envelope, and implementation contract before adding it.
 
 Rules:
 
