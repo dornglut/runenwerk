@@ -9,6 +9,7 @@ related_docs:
   - ../workflow-lifecycle.md
   - ../../architecture/ui-framework-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
+  - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -78,11 +79,16 @@ State: draft docs-only intake open as PR #74; implementation not authorized
 
 Lifecycle state: `active-planning` intake review
 
-Authority: draft PR #74 intake plus completed `PT-UI-FRAMEWORK-APP-INTEGRATION-002` proof evidence.
+Authority: `../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md`
+plus completed `PT-UI-FRAMEWORK-APP-INTEGRATION-002` proof evidence.
 
-Evidence: GitHub reports PR #74 as open and draft from
-`docs/live-uiplugin-runtime-intake` to `main`. The PR #72 closeout removes the
-previous closeout blocker but does not authorize runtime code, public plugin
+Evidence: PR #74 is the draft intake/review branch for the live runtime
+platform. The design intake records the target public shape
+`RenderPlugin + UiPlugin + AppPlugin`, the normal authoring path
+`app.mount_ui(Screen)`, typed `UiScreen` / `UiActionHandler` ergonomics, reuse
+of existing `ui_surface` and `ui_hosts` owners, and the render-boundary
+direction toward generic surface-frame submissions. The PR #72 closeout removes
+the previous closeout blocker but does not authorize runtime code, public plugin
 APIs, render adapters, SDF/world-space behavior, SpatialCanvas implementation,
 `foundation/meta`, `domain/app_program`, or a generic plugin framework.
 
@@ -161,14 +167,12 @@ and must wait for their own accepted planning/design contracts.
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-003 - Public AppUiExt Ergonomics`
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-004 - Authoring Frontends and Execution Strategy Model`
 
-`PT-UI-FRAMEWORK-APP-INTEGRATION-003` should decide public App/Plugin
-ergonomics after the internal `ui_app_integration` proof is closed out.
+`PT-UI-FRAMEWORK-APP-INTEGRATION-003` is superseded/absorbed by
+`PT-UI-RUNTIME-PLATFORM-001` as the broader live runtime platform intake. Do
+not treat standalone public `AppUiExt` ergonomics as the immediate next
+implementation target.
 
-`PT-UI-FRAMEWORK-APP-INTEGRATION-004` should define how Rust builders,
-templates, visual designer output, compiler DSLs, immediate-mode adapters,
-reactive adapters, retained execution, ECS-driven execution, and
-SDF/world-space targets share source/program/event/story contracts without
-bypasses.
+`PT-UI-FRAMEWORK-APP-INTEGRATION-004` should define how Rust builders, templates, visual designer output, compiler DSLs, immediate-mode adapters, reactive adapters, retained execution, ECS-driven execution, and SDF/world-space targets share source/program/event/story contracts without bypasses.
 
 ## Rules
 
