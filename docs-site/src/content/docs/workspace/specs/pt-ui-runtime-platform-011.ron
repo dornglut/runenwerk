@@ -1,0 +1,141 @@
+// Compact handoff contract for one bounded implementation phase.
+// Markdown authority remains primary; this spec derives from active-work,
+// roadmap, production-tracks, the accepted cutover plan, runtime architecture,
+// and Phase 010 closeout truth.
+
+PhaseImplementationSpec(
+    phase_id: "PT-UI-RUNTIME-PLATFORM-011",
+    title: "Scene/Debug Overlay Producer Migration and Retirement",
+    lifecycle_state: "active-implementation",
+    implementation_authorization_status: "active-implementation-authorized-after-activation-merge",
+    owner: "scene/debug producer-owned publication through SurfaceFrameSubmissionRegistryResource; RenderPlugin remains generic preparation/submission owner",
+
+    authority_docs: [
+        "AGENTS.md",
+        "ARCHITECTURE.md",
+        "DOMAIN_MAP.md",
+        "TESTING.md",
+        "docs-site/src/content/docs/workspace/start-here.md",
+        "docs-site/src/content/docs/workspace/routines/track-orchestration-routine.md",
+        "docs-site/src/content/docs/workspace/routines/implementation-routine.md",
+        "docs-site/src/content/docs/workspace/planning/active-work.md",
+        "docs-site/src/content/docs/workspace/planning/roadmap.md",
+        "docs-site/src/content/docs/workspace/planning/production-tracks.md",
+        "docs-site/src/content/docs/workspace/planning/decision-register.md",
+        "docs-site/src/content/docs/workspace/complete-investigation-gate.md",
+        "docs-site/src/content/docs/workspace/complete-design-gate.md",
+        "docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md",
+        "docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md",
+        "docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-010-closeout.md",
+        "docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md",
+        "docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md",
+        "docs-site/src/content/docs/architecture/ui-framework-architecture.md",
+    ],
+
+    complete_investigation_gate_status: "complete for implementation authorization; current source inspection named the scene overlay and debug metrics producer collection paths, their RenderPlugin schedule/export points, existing frame producers, generic registry, and focused test coverage",
+    complete_design_gate_status: "complete for implementation authorization; accepted cutover plus this activation contract records owner, allowed paths, forbidden paths, validation, evidence, principle checks, module decomposition, and stop conditions",
+    principle_compliance_status: "complete in active-work principle compliance matrix",
+    module_decomposition_status: "complete in active-work module decomposition map",
+    maintainability_review_status: "complete for activation; implementation must keep generation, publication, render preparation, and tests separated",
+
+    allowed_paths: [
+        "engine/src/plugins/render/runtime/ui_submission.rs",
+        "engine/src/plugins/render/runtime/mod.rs",
+        "engine/src/plugins/render/plugin.rs only to remove legacy collection import/schedule/export",
+        "engine/src/plugins/scene/plugin.rs only for scene-owned publication scheduling",
+        "engine/src/plugins/scene/lifecycle/overlay_update.rs only for scene-owned publication attached to existing overlay update",
+        "engine/src/plugins/scene/runtime/overlay_ui.rs only for a narrow scene publication helper that preserves frame generation",
+        "engine/src/plugins/debug_metrics/mod.rs only for debug-owned publication/removal and tests",
+        "engine/src/state.rs only if UiOverlayState debug-frame storage is intentionally retired with evidence; otherwise leave unchanged",
+        "engine/tests/runtime_ui_producer_migration.rs or similarly named focused Phase 011 engine integration test",
+        "engine/tests/runtime_surface_guard.rs only for source-guard assertions",
+        "engine/src/plugins/scene/tests/scene_tests.rs only for focused scene overlay behavior assertions if integration tests cannot prove them",
+    ],
+
+    forbidden_paths: [
+        "apps/ui_counter_runtime/**",
+        "engine/src/plugins/ui/** runtime implementation changes",
+        "engine/src/plugins/render/runtime/frame_prepare.rs",
+        "engine/src/plugins/render/runtime/frame_submit.rs",
+        "engine/src/plugins/render/renderer/**",
+        "engine/src/plugins/render/graph/**",
+        "engine/src/plugins/render/backend/**",
+        "engine/src/plugins/render/shader/**",
+        "domain/ui/ui_render_data/** broad primitive/model rewrites",
+        "foundation/meta/**",
+        "domain/app_program/**",
+        "tools/docs/**",
+    ],
+
+    public_api_surface: [
+        "No new public app-author API.",
+        "No public manual add_ui_* registration chain.",
+        "RenderPlugin public type remains; generic render seam remains SurfaceFrameSubmissionRegistryResource / PreparedUiFrameResource.",
+        "Producer ids for scene overlay and debug metrics may become producer-owned constants only if kept crate-private or otherwise non-public implementation detail.",
+    ],
+
+    invariants: [
+        "Scene overlay frame generation remains scene-owned.",
+        "Debug metrics frame generation remains debug-owned.",
+        "RenderPlugin no longer reads SceneResource or UiOverlayState to collect UI semantic producer frames.",
+        "RenderPlugin consumes only generic producer/surface/frame prepared payloads for UI render features.",
+        "UiPlugin render publication remains independent and continues to publish through the generic seam.",
+        "No parallel prior and target runtime paths remain after merge.",
+        "No compat_*.rs module remains after merge.",
+        "No Phase 012-014 implementation enters this phase.",
+    ],
+
+    acceptance_criteria: [
+        "The hardcoded scene overlay producer path from engine/src/plugins/render/runtime/ui_submission.rs is replaced by scene-owned publication or explicitly retired with evidence.",
+        "The hardcoded debug metrics producer path from engine/src/plugins/render/runtime/ui_submission.rs is replaced by debug-owned publication or explicitly retired with evidence.",
+        "RenderPlugin no longer imports, exports, or schedules collect_runtime_ui_frame_submissions_system.",
+        "engine/src/plugins/render/runtime/ui_submission.rs is deleted or contains no semantic collection path after merge.",
+        "PreparedUiFrameResource receives scene/debug producer contributions through the generic seam when owner plugins run.",
+        "Existing scene/debug overlay behavior is proven by focused tests or any retired behavior is explicitly justified.",
+        "UiPlugin render publication focused tests still pass.",
+        "Forbidden-scope proof shows no product app, source reload/persistence, SDF/SpatialCanvas, backend, graph, shader, source/action/host mutation, broad render-data, generic plugin framework, phase-spec validator, or docs-validator work.",
+    ],
+
+    validation_commands: [
+        "cargo fmt --check",
+        "cargo test -p engine runtime_ui_producer_migration",
+        "cargo test -p engine scene_registered_apps_publish_overlay_frame_with_buttons",
+        "cargo test -p engine debug_metrics_plugin_populates_overlay_draw_state",
+        "cargo test -p engine surface_frame_submission",
+        "cargo test -p engine render_output_proof",
+        "cargo test -p engine runtime_surface_guard",
+        "cargo test -p engine ui_render_publication",
+        "cargo test -p engine --test render_flow_v2",
+        "cargo test -p engine",
+        "python tools/docs/validate_docs.py",
+        "git diff --check",
+        "git diff --check main...HEAD",
+        "git status --short --branch",
+        "git diff --stat main...HEAD",
+    ],
+
+    evidence_expectations: [
+        "Report the two legacy producer paths named by active-work and how each was migrated or retired.",
+        "Report source inspection proving RenderPlugin no longer owns scene/debug UI semantic producer collection.",
+        "Report focused test evidence for scene overlay, debug metrics overlay, generic seam, UiPlugin publication regression, render flow, and surface guard behavior.",
+        "Classify evidence using E3, E5, E6 where available, E8 authority, and E9 when source/test validation and authority align.",
+        "Report any skipped command with exact reason.",
+    ],
+
+    stop_conditions: [
+        "Stop if another hardcoded scene/debug UI producer path is found and not named in planning first.",
+        "Stop if implementation needs files outside allowed_paths.",
+        "Stop if RenderPlugin must keep reading SceneResource or UiOverlayState for UI semantic producer collection.",
+        "Stop if the PR leaves parallel render-owned and producer-owned publication paths.",
+        "Stop if source/program/action semantics, host mutation, route policy, render backend, graph, shader, Counter product, reload/persistence, SDF, SpatialCanvas, broad ui_render_data, generic plugin framework, phase-spec validator, or docs validator work is needed.",
+        "Stop if UiPlugin render publication regresses or the validation envelope cannot be reported honestly.",
+    ],
+
+    closeout_expectations: [
+        "Record delivered contract, changed files, exact modules/functions, evidence classes, validation, forbidden-scope proof, known gaps, merge readiness, and next action.",
+        "Update planning/completed-work/decision-register/closeout truth before Phase 012 implementation starts.",
+        "Open Phase 012 active planning only after Phase 011 is reviewed, merged, and truthfully closed.",
+    ],
+
+    next_phase_activation_condition: "PT-UI-RUNTIME-PLATFORM-012 may enter active planning only after Phase 011 implementation is reviewed, merged, and completion truth is recorded; active implementation still requires separate authorization.",
+)

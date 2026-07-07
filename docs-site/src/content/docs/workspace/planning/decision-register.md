@@ -646,6 +646,32 @@ Reactivation condition: Reopen if PR #101 completion evidence is found inaccurat
 
 Supersedes: Phase 010 UiPlugin Render Publication activation correction decision.
 
+Superseded by: Phase 011 Scene/Debug Overlay Producer Migration and Retirement activation decision.
+
+## Phase 011 Scene/Debug Overlay Producer Migration and Retirement activation decision
+
+Date: 2026-07-07
+
+Decision: Authorize `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` as exactly one bounded active-implementation phase after Phase 010 closeout truth merged.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-011 active-planning -> active-implementation`.
+
+Context: PR #102 merged Phase 010 closeout truth into `main` at `cc0b582ac8ed494ed7a1589f7bdf42101502b0ad`. Active work now has the accepted Phase 011 owner, handoff contract, source/path inventory, allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition map, and stop conditions. Activation-time source inspection found two render-owned legacy producer collection paths in `engine/src/plugins/render/runtime/ui_submission.rs`: scene overlay collection from `SceneResource.manager.overlay_runtime.ui.frame` with producer id 1 and debug metrics overlay collection from `UiOverlayState.debug_frame` with producer id 2. Inspection also found the RenderPlugin schedule/export points, existing scene/debug frame generation owners, the generic `SurfaceFrameSubmissionRegistryResource` seam, and Phase 010 UiPlugin publication tests that must not regress. Architecture inspection found one stale current-fact name in `live-uiplugin-runtime-platform-architecture.md`, so this activation corrects the architecture current-state wording from old `UiFrameSubmission*` names to the Phase 009/010 `SurfaceFrameSubmission*` seam before implementation starts.
+
+Options considered: leave Phase 011 in active planning only; start Phase 011 implementation without updating planning; authorize one bounded Phase 011 implementation PR; stop because of the stale architecture current-fact wording without recording the authorization.
+
+Reason: The track orchestration workflow allows the next implementation phase only after the previous phase is reviewed, merged, and closeout truth is recorded. That condition is now satisfied for Phase 010. The accepted cutover plan and activation-time source inspection provide enough exact scope to authorize Phase 011 implementation without widening into Counter app packaging, source reload/persistence, render backend work, graph/shader changes, source/action/host semantics, or later phases. The stale architecture fact is a narrow authority-doc drift against current code and Phase 009/010 closeouts; correcting it in the activation PR prevents future agents from following an obsolete seam name.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `../../architecture/live-uiplugin-runtime-platform-architecture.md`, and `../specs/pt-ui-runtime-platform-011.ron`.
+
+Evidence: `E3` source/design/planning inspection by path, `E6` PR #102 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 010 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-010-closeout.md`.
+
+Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` implementation PR from current `main`. Keep the PR draft until focused Phase 011 validation and required docs/diff/status commands are clean. Do not start Phase 012 implementation.
+
+Reactivation condition: Reopen if Phase 011 implementation needs scope outside the accepted scene/debug producer migration map, if another hardcoded scene/debug UI producer path is found and not named, if RenderPlugin must keep owning UI semantic producer collection, if parallel prior/target runtime paths remain, if UiPlugin render publication regresses, if Counter product packaging enters the PR, if source/program/action semantics change, or if planning drifts from merged code again.
+
+Supersedes: Phase 010 UiPlugin Render Publication completion and Phase 011 planning decision.
+
 Superseded by: none.
 
 ## Lifecycle rule

@@ -31,9 +31,10 @@ This document owns the app/engine/render architecture diagrams and runtime platf
 | Windowed runtime | Windowed mode uses `winit_runner::run(self.into_windowed_state())`. | `engine/src/app/platform/windowed.rs` |
 | Input/redraw loop | Winit keyboard, mouse, cursor, wheel, and touch events become platform/input events and request redraw on success. `RedrawRequested` runs the engine frame. | `engine/src/runtime/winit_runner.rs` |
 | Frame pacing | Default policy is `ContinuousCapped { target_fps: 60 }`; `OnDemand` exists and has no continuous deadline. | `engine/src/runtime/frame_pacing.rs` |
-| Render plugin ownership today | `RenderPlugin` initializes UI frame submission resources and runs `collect_runtime_ui_frame_submissions_system`, `prepare_ui_feature_resource_system`, frame prepare, and frame submit. | `engine/src/plugins/render/plugin.rs` |
+| Render plugin ownership today | `RenderPlugin` initializes generic surface-frame submission resources and still runs the legacy scene/debug collection system until Phase 011 removes it. It also runs `prepare_ui_feature_resource_system`, frame prepare, and frame submit. | `engine/src/plugins/render/plugin.rs` |
 | Legacy UI producer path today | Render runtime currently collects scene overlay and debug overlay UI frames directly from scene/debug resources. | `engine/src/plugins/render/runtime/ui_submission.rs` |
-| Frame publication today | `UiFrameSubmissionRegistryResource` stores whole `UiFrameSubmission` values keyed by producer/surface; replacement is per producer/surface, not per element. | `engine/src/plugins/render/features/ui/submission.rs` |
+| UiPlugin publication today | `UiPlugin` publishes evaluated runtime frames through `SurfaceFrameSubmissionRegistryResource` with `RenderFrameProducerId` and `RenderSurfaceId`; `RenderPlugin` consumes the prepared packet without querying screens, sources, actions, host mutation, or route policy. | `engine/src/plugins/ui/render_publish.rs` |
+| Frame publication today | `SurfaceFrameSubmissionRegistryResource` stores whole `SurfaceFrameSubmission` values keyed by producer/surface; replacement is per producer/surface, not per element. | `engine/src/plugins/render/features/ui/submission.rs` |
 | Frame preparation today | Frame prepare builds `PreparedRenderFrame` packets per render surface and applies UI contribution per surface. | `engine/src/plugins/render/runtime/frame_prepare.rs` |
 | Frame submit today | Frame submit pulls the prepared frame, selects UI rect shader/font atlas inputs, and calls `gfx.render(...)`. | `engine/src/plugins/render/runtime/frame_submit.rs` |
 | UI render payload today | `UiFrame` contains surfaces, surfaces contain layers, layers contain primitives. | `domain/ui/ui_render_data` |
@@ -47,7 +48,7 @@ The inspected UI primitive model contains raster-style draw primitives: `Rect`, 
 
 SDF exists elsewhere in the render/world stack as render capability and future projection target. It does not currently own UI source, UI routes, UI actions, UI state, or UI primitive generation. The live UiPlugin cutover must keep SDF/world-space UI as a later target/projection consumer unless a separate target contract promotes it.
 
-Current frame cadence is redraw-driven through winit with default continuous capped pacing. Because the default `FramePacingPolicyResource` is 60 FPS continuous, normal windowed runtime can redraw continuously. `OnDemand` mode exists and avoids continuous deadlines, and input events request redraw. The current inspected UI submission seam replaces a whole producer/surface `UiFrameSubmission`; it does not prove element-level incremental rendering.
+Current frame cadence is redraw-driven through winit with default continuous capped pacing. Because the default `FramePacingPolicyResource` is 60 FPS continuous, normal windowed runtime can redraw continuously. `OnDemand` mode exists and avoids continuous deadlines, and input events request redraw. The current inspected surface-frame submission seam replaces a whole producer/surface `SurfaceFrameSubmission`; it does not prove element-level incremental rendering.
 
 Target frame policy for the cutover:
 
