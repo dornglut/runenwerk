@@ -672,9 +672,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-009`
 
 Title: SurfaceFrame Generic Producer Boundary
 
-State: active implementation authorization recorded; implementation PR not yet opened
+State: completed through merged PR #97 and closeout truth
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `completed`
 
 Authority:
 
@@ -769,7 +769,7 @@ Gate status:
 ```text
 Complete investigation gate: complete for active implementation through accepted runtime-platform authority, Phase 008 closeout evidence, and activation-time source inspection of current UI-named render submission contracts, generic RenderFrameProducerId, prepared frame packets, app producer callsites, and render feature preparation path.
 Complete design gate: complete for implementation through the accepted cutover plan, architecture record, Phase 008 closeout evidence, and this activation record.
-Implementation authorization: active for exactly one bounded Phase 009 implementation PR.
+Implementation authorization: completed through PR #97.
 ```
 
 Validation envelope:
@@ -788,9 +788,86 @@ git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Evidence expectation: focused tests and compile checks must prove `RenderFrameProducerId` is the producer identity for SurfaceFrame submissions, `RenderSurfaceId` remains the surface identity, `SurfaceFrameSubmissionRegistryResource` replaces the UI-named registry at the producer-facing seam, prepared UI render-feature payloads are built from generic surface-frame submissions, scene/debug overlay and app producers are named migration inputs that compile against the generic seam, RenderPlugin consumes prepared packets without `UiScreen`, `IntoUi`, actions, host mutation, or route policy, and no hidden parallel UI submission path remains.
+Completion evidence:
 
-Next action: Open exactly one bounded Phase 009 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 009 validation and required docs/diff/status commands are clean.
+```text
+PR #97 merged into main at 50e2dbdf1f9c076f4a76a04543274801d1f1649b.
+Validation: cargo fmt, focused surface_frame_submission and render_output_proof tests, render_flow_v2 integration tests, draw/editor focused tests, cargo test -p engine, docs validation, diff hygiene, branch status, and diff stat passed before merge.
+Closeout report: ../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md.
+```
+
+Next action: Keep Phase 009 as completed evidence. Use the closeout as the prerequisite for `PT-UI-RUNTIME-PLATFORM-010 - UiPlugin Render Publication` planning.
+
+### PT-UI-RUNTIME-PLATFORM-010
+
+ID: `PT-UI-RUNTIME-PLATFORM-010`
+
+Title: UiPlugin Render Publication
+
+State: active planning only; implementation is not yet authorized
+
+Lifecycle state: `active-planning`
+
+Authority:
+
+```text
+../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../architecture/live-uiplugin-runtime-platform-architecture.md
+../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md
+../routines/track-orchestration-routine.md
+../routines/implementation-routine.md
+../complete-investigation-gate.md
+../complete-design-gate.md
+../complete-merge-readiness-gate.md
+../evidence-quality-taxonomy.md
+```
+
+Planning contract from accepted cutover authority:
+
+```text
+UiPlugin publishes frame submission with producer id and surface identity through the generic seam
+RenderPlugin consumes prepared payload without querying UiScreen, IntoUi, actions, host mutation, or route policy
+render contribution is deterministic for the same runtime frame
+missing UiPlugin frame reports a diagnostic instead of silent success
+frame publication trace records producer, surface, frame revision, dirty cause, and publication result
+```
+
+Candidate implementation scope from accepted cutover authority, pending separate activation:
+
+```text
+engine/src/plugins/ui/render_publish.rs
+engine/src/plugins/ui/report.rs
+engine/src/plugins/ui/trace.rs
+existing generic render submission registry/resource paths only where needed
+focused engine/render integration tests
+```
+
+Forbidden files/crates for Phase 010 planning:
+
+```text
+scene/debug overlay migration or retirement implementation
+apps/ui_counter_runtime product packaging
+source reload/persistence implementation
+SDF or SpatialCanvas implementation
+broad render backend rewrite
+graph execution rewrite or shader changes
+source/program/action semantic changes outside publication facts
+foundation/meta
+domain/app_program
+generic plugin framework
+phase spec validator implementation
+any tools/docs validator or script changes
+```
+
+Gate status:
+
+```text
+Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 009 closeout evidence. Implementation investigation remains pending.
+Complete design gate: complete for active planning through accepted cutover/architecture authority and Phase 009 closeout evidence. Implementation design gate remains pending.
+Implementation authorization: blocked pending a separate active-implementation decision.
+```
+
+Next action: Open a separate Phase 010 active-implementation authorization PR from current `main` after this closeout/planning truth merges. Do not start Phase 010 implementation until that authorization is merged.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 

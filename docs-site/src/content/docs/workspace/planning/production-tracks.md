@@ -78,13 +78,13 @@ Current blocker:
 ```text
 No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The `PT-WORKFLOW-TRACK-ORCHESTRATION-001` workflow gate is completed through PR #77 and closeout truth. `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` is completed through PR #79 and closeout truth. `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` is completed through PR #82 and closeout truth. `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` is completed through PR #85 and closeout truth. `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` is completed through PR #88 and closeout truth. `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` is completed through PR #91 and closeout truth. `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` is completed through PR #94 and closeout truth. The active runtime-platform focus is now `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` implementation authorization.
+The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The `PT-WORKFLOW-TRACK-ORCHESTRATION-001` workflow gate is completed through PR #77 and closeout truth. `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` is completed through PR #79 and closeout truth. `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` is completed through PR #82 and closeout truth. `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` is completed through PR #85 and closeout truth. `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` is completed through PR #88 and closeout truth. `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` is completed through PR #91 and closeout truth. `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` is completed through PR #94 and closeout truth. `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` is completed through PR #97 and closeout truth. The active runtime-platform focus is now `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` active planning only.
 ```
 
 Next action:
 
 ```text
-Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` implementation PR after this planning authorization merges. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
+Open a separate `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` active-implementation authorization PR after this closeout/planning truth merges. Do not start Phase 010 implementation until that authorization is merged. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
 ```
 
 ## PT-UI-RUNTIME-PLATFORM
@@ -95,9 +95,9 @@ Title: Live UiPlugin Runtime Platform
 
 Track type: architecture / runtime platform / public API
 
-State: active implementation authorization for Phase 009
+State: active planning for Phase 010
 
-Lifecycle state: `active-implementation` for `PT-UI-RUNTIME-PLATFORM-009` only
+Lifecycle state: `active-planning` for `PT-UI-RUNTIME-PLATFORM-010` only
 
 Goal:
 
@@ -130,8 +130,8 @@ Workflow gate PT-WORKFLOW-TRACK-ORCHESTRATION-001 — completed through merged P
 006 Mounted Surface Session Runtime — completed through PR #88 and closeout truth
 007 Host Action Dispatch and Runtime Trace — completed through PR #91 and closeout truth
 008 Runtime Evaluation, State Snapshot, and Invalidation — completed through PR #94 and closeout truth
-009 SurfaceFrame Generic Producer Boundary — active implementation authorization; implementation PR not yet opened
-010 UiPlugin Render Publication — downstream implementation PR
+009 SurfaceFrame Generic Producer Boundary — completed through PR #97 and closeout truth
+010 UiPlugin Render Publication — active planning only; implementation PR not yet authorized
 011 Scene/Debug Overlay Producer Migration and Retirement — downstream implementation PR
 012 Runtime Counter App Product — downstream implementation/proof PR
 013 Source Reload and Persistence Contract — downstream implementation PR
@@ -143,31 +143,31 @@ Design gates:
 ```text
 Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` added render/app-engine feature mapping, runtime architecture, agent/trace requirements, producer-generic render-boundary ordering, reload/persistence decisions, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements.
 Complete design gate: completed for `PT-UI-RUNTIME-PLATFORM-002` through merged PR #76.
-Implementation authorization: Phase 009 is authorized only for the SurfaceFrame Generic Producer Boundary migration map recorded in `active-work.md` and `roadmap.md`. Phase 010 and later remain forbidden until Phase 009 is reviewed, merged, and completion truth is recorded.
+Implementation authorization: Phase 010 is active planning only. A separate active-implementation authorization must name exact Phase 010 files, focused tests, validation commands, evidence requirements, and stop conditions before any implementation branch opens. Phase 011 and later remain forbidden until Phase 010 is reviewed, merged, and completion truth is recorded.
 ```
 
 Evidence gates:
 
 ```text
-Current evidence is `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 008, `E6` PR #94 and PR #95 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment for Phase 008 closeout. Future implementation phases must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and for Phase 012 recorded human and agent Counter app commands.
+Current evidence is `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 009, `E6` PR #97 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment for Phase 009 closeout. Future implementation phases must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and for Phase 012 recorded human and agent Counter app commands.
 ```
 
 Current blocker:
 
 ```text
-Phase 008 is merged and closed out. Phase 009 implementation is authorized for exactly one bounded SurfaceFrame generic producer boundary PR. No Phase 009 implementation PR has been opened or merged yet. UiPlugin render publication, scene/debug overlay migration, source reload/persistence implementation, runnable Counter product code, and Phases 010-014 implementation remain blocked until Phase 009 is reviewed, merged, and completion truth is recorded.
+Phase 009 is merged and closed out. Phase 010 is active planning only. UiPlugin render publication implementation, scene/debug overlay migration, source reload/persistence implementation, runnable Counter product code, and Phases 010-014 implementation remain blocked until Phase 010 active implementation is separately authorized, then reviewed, merged, and completion truth is recorded.
 ```
 
 Activation condition:
 
 ```text
-Phase 009 may be implemented in one bounded PR using the migration map in `active-work.md` and `roadmap.md`. Phase 010 may move only after Phase 009 is complete, reviewed/merged, and truthfully closed.
+Phase 010 may move from active planning to active implementation only after a separate authorization record confirms exact files, focused tests, validation commands, evidence requirements, stop conditions, principle compliance, and module decomposition from current `main`.
 ```
 
 Next action:
 
 ```text
-Open exactly one bounded Phase 009 implementation PR after this planning authorization merges. Keep it draft until focused tests, relevant cargo validation, docs validation, diff hygiene, branch status, and diff stat are clean. Do not implement multiple runtime phases in one broad PR.
+Open exactly one bounded Phase 010 active-implementation authorization PR after this closeout/planning truth merges. Do not open a Phase 010 implementation PR until that authorization is merged. Do not implement multiple runtime phases in one broad PR.
 ```
 
 ## Track shape

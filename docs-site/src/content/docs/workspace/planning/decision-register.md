@@ -18,6 +18,7 @@ related_docs:
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -540,6 +541,32 @@ Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame
 Reactivation condition: Reopen if Phase 009 implementation needs scope outside the accepted producer-generic SurfaceFrame boundary migration map, if UiPlugin render publication enters the PR, if scene/debug overlay migration or retirement enters the PR, if genericization creates a second runtime path, if compatibility shims become the durable public API instead of the generic seam, or if planning drifts from merged code again.
 
 Supersedes: Phase 008 Runtime Evaluation, State Snapshot, and Invalidation completion and Phase 009 planning decision.
+
+Superseded by: Phase 009 SurfaceFrame Generic Producer Boundary completion and Phase 010 planning decision.
+
+## Phase 009 SurfaceFrame Generic Producer Boundary completion and Phase 010 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` completed through merged PR #97 and open `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-009 review -> completed`; `PT-UI-RUNTIME-PLATFORM-010 production-track -> active-planning`.
+
+Context: PR #97 merged Phase 009 into `main` at `50e2dbdf1f9c076f4a76a04543274801d1f1649b` after focused migration validation, engine validation, docs validation, diff hygiene, PR metadata inspection, and review-thread inspection. The Phase 009 closeout records that `RenderFrameProducerId`, `SurfaceFrameSubmission`, `SurfaceFrameSubmissionRegistryResource`, `PreparedSurfaceFrameSubmission`, and `SurfaceFrameSubmissionRenderOutputProof` now own the accepted producer-generic seam, while UiPlugin render publication remains unimplemented.
+
+Options considered: leave Phase 009 active after merge; mark Phase 009 complete and immediately authorize Phase 010 implementation; mark Phase 009 complete and open Phase 010 active planning only.
+
+Reason: The track orchestration workflow requires completion truth after each implementation PR before the next implementation phase starts. Phase 010 needs its own source inspection, exact allowed/forbidden file list, focused validation envelope, evidence requirements, principle review, and stop conditions before implementation authorization. Opening active planning only preserves the one-phase-per-PR boundary.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 009, `E6` PR #97 merge metadata and no-checks metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment in `../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md`.
+
+Follow-up: Open a separate `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` active-implementation authorization PR from current `main` if authority and source inspection still agree. Do not start Phase 010 implementation until that activation PR is merged.
+
+Reactivation condition: Reopen if PR #97 completion evidence is found inaccurate, if Phase 009 introduced forbidden Phase 010-014 scope, if Phase 010 planning needs authority beyond the accepted cutover plan, or if planning drifts from merged code again.
+
+Supersedes: Phase 009 SurfaceFrame Generic Producer Boundary activation decision.
 
 Superseded by: none.
 
