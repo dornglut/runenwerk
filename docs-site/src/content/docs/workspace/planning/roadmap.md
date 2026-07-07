@@ -843,6 +843,7 @@ extend engine/src/plugins/ui/report.rs with frame publication/presentation repor
 extend engine/src/plugins/ui/trace.rs with UiFramePublished and UiFramePresented trace event facts
 extend engine/src/plugins/ui/diagnostics.rs only for missing-frame or publication-rejected diagnostics
 use existing SurfaceFrameSubmissionRegistryResource, SurfaceFrameSubmission, SurfaceFrameRoute, SurfaceFrameSubmissionOrder, RenderFrameProducerId, and RenderSurfaceId
+adjust RenderPlugin scheduling only so prepare_ui_feature_resource_system runs after UiRuntimeSet::RenderPublication when both plugins are installed
 add focused engine/tests/ui_render_publication.rs tests
 ```
 
@@ -859,6 +860,7 @@ engine/src/plugins/ui/diagnostics.rs only for publication diagnostics
 engine/src/plugins/ui/resources.rs only if publication needs a UiPlugin-owned publication resource or read-only helper access to latest evaluation reports
 engine/src/plugins/render/features/ui/submission.rs only if a small generic-seam API extension is required; no rename or semantic rewrite
 engine/src/plugins/render/features/ui/resource.rs only if tests need prepared payload access that already belongs to the generic seam; no renderer behavior rewrite
+engine/src/plugins/render/plugin.rs only to order prepare_ui_feature_resource_system after UiRuntimeSet::RenderPublication; no resource ownership, collection behavior, frame prepare, frame submit, backend, graph, shader, or renderer behavior rewrite
 engine/tests/ui_render_publication.rs
 engine/tests/ui_runtime_evaluation.rs only if existing helpers or assertions must align with publication facts
 engine/tests/render_flow_v2.rs only if the prepared-frame integration proof needs an assertion against the new UiPlugin producer contribution
@@ -893,6 +895,7 @@ Prepared UI render-feature payloads include the UiPlugin producer contribution a
 Missing evaluation/frame payload records a diagnostic and report instead of silent success
 Trace records UiFramePublished and UiFramePresented facts with producer id, surface id, frame revision, dirty cause, and result
 The same runtime frame publishes deterministically through the same producer/surface key
+Installing RenderPlugin before UiPlugin still publishes and prepares the UiPlugin producer contribution in the same RenderPrepare frame
 Scene/debug overlay producers remain present only as downstream Phase 011 migration inputs
 ```
 
