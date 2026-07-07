@@ -411,6 +411,32 @@ Reactivation condition: Reopen if PR #88 completion evidence is found inaccurate
 
 Supersedes: Phase 006 Mounted Surface Session Runtime activation decision.
 
+Superseded by: Phase 007 Host Action Dispatch and Runtime Trace activation decision.
+
+## Phase 007 Host Action Dispatch and Runtime Trace activation decision
+
+Date: 2026-07-07
+
+Decision: Authorize `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` as exactly one bounded active-implementation phase after Phase 006 completion truth merged.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-007 active-planning -> active-implementation`.
+
+Context: PR #89 merged Phase 006 completion truth into `main` at `0dc7b5337126697d4a445adfa687b30559c44d59`. Active work now has the accepted Phase 007 owner, handoff contract, allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition map, and stop conditions.
+
+Options considered: leave Phase 007 in active planning only; start Phase 007 implementation without updating planning; authorize one bounded Phase 007 implementation PR.
+
+Reason: The track orchestration workflow allows the next implementation phase only after the previous phase is reviewed, merged, and closeout truth is recorded. That condition is now satisfied for Phase 006. The accepted cutover plan and active-work record provide enough exact scope to authorize Phase 007 implementation without widening into Phase 008 or later.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E6` PR #89 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 006 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md`.
+
+Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` implementation PR from current `main`. Keep the PR draft until focused Phase 007 validation and required docs/diff/status commands are clean.
+
+Reactivation condition: Reopen if Phase 007 implementation needs scope outside the accepted host action dispatch/runtime trace contract, if invalid actions can partially mutate host state, if trace records become product-specific or engine-wide framework behavior, if runtime evaluation/render publication enters the PR, or if planning drifts from merged code again.
+
+Supersedes: Phase 006 Mounted Surface Session Runtime completion and Phase 007 planning decision.
+
 Superseded by: none.
 
 ## Lifecycle rule
