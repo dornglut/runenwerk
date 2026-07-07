@@ -594,6 +594,32 @@ Reactivation condition: Reopen if Phase 010 implementation needs scope outside t
 
 Supersedes: Phase 009 SurfaceFrame Generic Producer Boundary completion and Phase 010 planning decision.
 
+Superseded by: Phase 010 UiPlugin Render Publication activation correction decision.
+
+## Phase 010 UiPlugin Render Publication activation correction decision
+
+Date: 2026-07-07
+
+Decision: Correct the `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` active-implementation authorization to allow `engine/src/plugins/render/plugin.rs` only for RenderPrepare ordering between UiPlugin publication and generic UI feature preparation.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-010 active-implementation -> active-implementation`.
+
+Context: Focused Phase 010 implementation validation found that installing `RenderPlugin` before `UiPlugin`, the accepted app composition order, leaves `prepare_ui_feature_resource_system` earlier than UiPlugin publication unless RenderPlugin scheduling is adjusted. The accepted Phase 010 evidence requires prepared UI render-feature payloads to include the UiPlugin producer contribution after RenderPlugin preparation, and the architecture says RenderPlugin consumes producer/surface/frame packets without owning UI semantics. The correction authorizes only schedule ordering, not render ownership, collection behavior, frame prepare, frame submit, backend, graph, shader, or renderer behavior changes.
+
+Options considered: keep the activation unchanged and accept a one-frame-late or unprepared publication path; broaden Phase 010 into render runtime ownership changes; add a narrow scheduling-only allowance for `engine/src/plugins/render/plugin.rs`.
+
+Reason: A one-frame-late or unprepared publication path would not satisfy the accepted Phase 010 handoff contract. A broad render runtime change would violate the phase boundary. The minimal long-term correction is to authorize only the ordering change needed for UiPlugin publication to precede generic UI feature preparation in the same RenderPrepare frame.
+
+Affected planning files: `active-work.md`, `roadmap.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, the Phase 010 focused implementation test failure, `E8` accepted architecture/workflow/planning authority, and Phase 009 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md`.
+
+Follow-up: Continue exactly one bounded `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` implementation PR from current `main`, now including the scheduling-only `engine/src/plugins/render/plugin.rs` allowance. Keep the PR draft until focused Phase 010 validation and required docs/diff/status commands are clean.
+
+Reactivation condition: Reopen if Phase 010 implementation needs any RenderPlugin change beyond ordering `prepare_ui_feature_resource_system` after `UiRuntimeSet::RenderPublication`, if RenderPlugin becomes UI runtime owner, if scene/debug overlay migration or retirement enters the PR, if Counter product packaging enters the PR, if source/program/action semantics change, or if planning drifts from merged code again.
+
+Supersedes: Phase 010 UiPlugin Render Publication activation decision.
+
 Superseded by: none.
 
 ## Lifecycle rule
