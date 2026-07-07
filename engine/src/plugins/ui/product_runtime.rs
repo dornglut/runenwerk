@@ -6,9 +6,7 @@ use ui_render_data::{
     BorderPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId,
     UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
 };
-use ui_runtime_view::{
-    ButtonRuntimeView, ButtonRuntimeViewReport, RuntimeControlView, UiRuntimeView,
-};
+use ui_runtime_view::{ButtonRuntimeView, ButtonRuntimeViewReport, RuntimeControlView, UiRuntimeView};
 use ui_schema::UiSchemaValue;
 use ui_text::{
     AtlasTextLayouter, FontAtlasSource, FontId, TextBlock, TextBlockId, TextBlockLayoutRequest,
@@ -20,10 +18,10 @@ use ui_text::{
 use ui_theme::{ThemeTokens, UiColor};
 
 use super::{
-    IntoUi, UiAction, UiActionDispatchReport, UiActionDispatchReportsResource, UiActionEvent,
-    UiActionHandler, UiHostActionExecutor, UiMountRequestsResource, UiRuntimeDiagnosticsResource,
-    UiRuntimeEvaluationReport, UiRuntimeEvaluationResource, UiRuntimePreparedFrameRecord,
-    UiRuntimePreparedFrameResource, UiRuntimeTraceResource, dispatch_ui_action,
+    dispatch_ui_action, IntoUi, UiAction, UiActionDispatchReport, UiActionDispatchReportsResource,
+    UiActionEvent, UiActionHandler, UiHostActionExecutor, UiMountRequestsResource,
+    UiRuntimeDiagnosticsResource, UiRuntimeEvaluationReport, UiRuntimeEvaluationResource,
+    UiRuntimePreparedFrameRecord, UiRuntimePreparedFrameResource, UiRuntimeTraceResource,
 };
 
 const BUTTON_CONTROL_KIND_ID: &str = "runenwerk.ui.controls.button";
@@ -40,9 +38,11 @@ impl UiPreparedRuntimeScreenReport {
     pub fn evaluation(&self) -> &UiRuntimeEvaluationReport {
         &self.evaluation
     }
+
     pub fn labels(&self) -> &[String] {
         &self.labels
     }
+
     pub fn hit_targets(&self) -> &[UiRenderHitTarget] {
         &self.hit_targets
     }
@@ -76,21 +76,27 @@ impl UiRenderHitTarget {
             enabled,
         }
     }
+
     pub fn control_id(&self) -> &str {
         &self.control_id
     }
+
     pub fn label(&self) -> &str {
         &self.label
     }
+
     pub fn route(&self) -> Option<&str> {
         self.route.as_deref()
     }
+
     pub fn capability(&self) -> Option<&str> {
         self.capability.as_deref()
     }
+
     pub fn bounds(&self) -> UiRect {
         self.bounds
     }
+
     pub fn enabled(&self) -> bool {
         self.enabled
     }
@@ -106,9 +112,11 @@ impl UiRuntimeHitTargetResource {
     pub fn frame_revision(&self) -> Option<u64> {
         self.frame_revision
     }
+
     pub fn targets(&self) -> &[UiRenderHitTarget] {
         &self.targets
     }
+
     pub fn replace_for_evaluation(
         &mut self,
         evaluation: &UiRuntimeEvaluationReport,
@@ -117,10 +125,12 @@ impl UiRuntimeHitTargetResource {
         self.frame_revision = Some(evaluation.frame_payload().frame_revision());
         self.targets = targets.into_iter().collect();
     }
+
     pub fn clear_for_evaluation(&mut self, evaluation: &UiRuntimeEvaluationReport) {
         self.frame_revision = Some(evaluation.frame_payload().frame_revision());
         self.targets.clear();
     }
+
     pub fn hit_test(&self, position: (f32, f32)) -> Option<&UiRenderHitTarget> {
         let point = UiPoint::new(position.0, position.1);
         self.targets
@@ -140,6 +150,7 @@ impl UiPointerActivationResource {
             .hit_test(position)
             .map(|target| target.control_id().to_owned());
     }
+
     pub fn release(
         &mut self,
         targets: &UiRuntimeHitTargetResource,
@@ -149,6 +160,7 @@ impl UiPointerActivationResource {
         let released = targets.hit_test(position)?;
         (released.control_id() == pressed_control_id).then(|| released.clone())
     }
+
     pub fn clear(&mut self) {
         self.pressed_control_id = None;
     }
@@ -186,8 +198,7 @@ where
     let runtime_view_report = UiRuntimeView::from_artifact_report(input.artifact());
     let mounted_session = mounts.mounted_sessions().first();
     let evaluation = runtime.evaluate(&input, mounted_session, context, trace, diagnostics);
-    let prepared =
-        render_runtime_view(&runtime_view_report, viewport, theme, atlas_source, font_id);
+    let prepared = render_runtime_view(&runtime_view_report, viewport, theme, atlas_source, font_id);
 
     if let Some(frame) = prepared.frame.clone() {
         hit_targets.replace_for_evaluation(&evaluation, prepared.hit_targets.iter().cloned());
@@ -233,13 +244,6 @@ fn render_runtime_view(
         };
     }
     let button_report = ButtonRuntimeViewReport::from_runtime_view_report(report);
-    if !button_report.passed() {
-        return PreparedPrimitiveOutput {
-            frame: None,
-            labels: Vec::new(),
-            hit_targets: Vec::new(),
-        };
-    }
 
     let mut layer = UiLayer::new(UiLayerId(0));
     let mut labels = Vec::new();
@@ -464,6 +468,7 @@ fn translate_layout(layout: &mut TextBlockLayoutResult, dx: f32, dy: f32) {
 fn paint(color: UiColor) -> UiPaint {
     UiPaint::rgba(color.r, color.g, color.b, color.a)
 }
+
 fn paint_from_style(style: &TextStyle) -> UiPaint {
     UiPaint::rgba(
         style.color[0],
@@ -472,11 +477,12 @@ fn paint_from_style(style: &TextStyle) -> UiPaint {
         style.color[3],
     )
 }
+
 fn sort(order: u32) -> UiSortKey {
     UiSortKey::new(0, 0, order)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UiRuntimeActionRequest {
     source_control_id: UiEventSourceControlId,
     payload: UiSchemaValue,
@@ -493,13 +499,16 @@ impl UiRuntimeActionRequest {
             surface_instance_id: None,
         }
     }
+
     pub fn from_hit_target(target: &UiRenderHitTarget, payload: UiSchemaValue) -> Self {
         Self::new(UiEventSourceControlId::new(target.control_id()), payload)
     }
+
     pub fn with_route_map_version(mut self, version: HostRouteMapVersion) -> Self {
         self.route_map_version = version;
         self
     }
+
     pub fn with_surface_instance_id(
         mut self,
         surface_instance_id: Option<ui_surface::SurfaceInstanceId>,
