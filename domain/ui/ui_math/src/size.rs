@@ -1,7 +1,9 @@
 //! File: domain/ui/ui_math/src/size.rs
 //! Purpose: Shared 2D size type.
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct UiSize {
     pub width: f32,
     pub height: f32,
