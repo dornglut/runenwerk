@@ -25,7 +25,8 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 ## Recently completed UI Runtime Platform work
 
 - `PT-UI-RUNTIME-PLATFORM-001` Live UiPlugin Runtime and Generic Surface-Frame Rendering intake/design-gate hardening: completed 2026-07-07 through merged PR #74. Runtime implementation remained blocked.
-- `PT-UI-RUNTIME-PLATFORM-002` Live UiPlugin Runtime Full Platform Cutover Plan: completed 2026-07-07 through merged PR #76 at merge commit `1697942c968afd9648872c202972826dc4c406b2`. Evidence lives in `../../design/active/live-uiplugin-runtime-full-cutover-plan.md`, `../../architecture/live-uiplugin-runtime-platform-architecture.md`, and workspace planning records. Runtime implementation remained blocked; next safe action is `PT-WORKFLOW-TRACK-ORCHESTRATION-001` before `PT-UI-RUNTIME-PLATFORM-003`.
+- `PT-UI-RUNTIME-PLATFORM-002` Live UiPlugin Runtime Full Platform Cutover Plan: completed 2026-07-07 through merged PR #76 at merge commit `1697942c968afd9648872c202972826dc4c406b2`. Evidence lives in `../../design/active/live-uiplugin-runtime-full-cutover-plan.md`, `../../architecture/live-uiplugin-runtime-platform-architecture.md`, and workspace planning records. Runtime implementation remained blocked until the workflow gate completed.
+- `PT-WORKFLOW-TRACK-ORCHESTRATION-001` Track Orchestration and Phase Spec Handoff Workflow: completed 2026-07-07 through merged PR #77 at merge commit `8b7a6b558bef79303e66d6a9f329dc71e00a0931`. Closeout report: `../../reports/closeouts/pt-workflow-track-orchestration-001-closeout.md`. Runtime implementation remained out of scope; next safe action is `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as one bounded implementation PR.
 
 ## Recently completed UI Component Platform work
 
@@ -48,7 +49,19 @@ Validation: This completion index records merge evidence and planning truth only
 
 Known non-goals: runtime Rust implementation, engine `UiPlugin`, public `AppUiExt`, `app.mount_ui`, `UiScreen`, `IntoUi`, `UiActionHandler`, render adapters, generic render boundary implementation, `apps/ui_counter_runtime`, source reload/persistence implementation, SDF/world-space/SpatialCanvas implementation, `foundation/meta`, `domain/app_program`, generic plugin framework, and phase-spec validator tooling remained out of scope.
 
-Follow-up: Complete `PT-WORKFLOW-TRACK-ORCHESTRATION-001` as workflow hardening before opening `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as active implementation.
+Follow-up: Fulfilled by completed `PT-WORKFLOW-TRACK-ORCHESTRATION-001`. Use the completed cutover plan as authority for `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation`.
+
+## PT-WORKFLOW-TRACK-ORCHESTRATION-001 evidence
+
+Implementation evidence: PR #77 delivered the track orchestration routine, track manager task card, phase implementation spec docs, RON phase spec template, authority-model links, planning links, and decision-register workflow record needed to manage one production-track goal through bounded phase PRs.
+
+Merge evidence: PR #77, `Docs: add track orchestration and phase spec workflow`, merged into `main` on 2026-07-07 at merge commit `8b7a6b558bef79303e66d6a9f329dc71e00a0931`.
+
+Validation: This completion index records merge evidence and planning truth only. The closeout report records that no cargo validation is required for the workflow-only completion and that the planning-closeout PR must run docs validation and diff hygiene commands.
+
+Known non-goals: runtime Rust implementation, engine `UiPlugin`, public `AppUiExt`, `app.mount_ui`, typed screen/source/action contracts, render adapter work, generic producer boundary implementation, runtime Counter product, source reload/persistence implementation, SDF/world-space/SpatialCanvas implementation, `foundation/meta`, `domain/app_program`, generic plugin framework, validator tooling, and docs validator script changes remained out of scope.
+
+Follow-up: Open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as exactly one bounded implementation PR. Do not start Phase 004 or later until Phase 003 is reviewed, merged, and completion truth is recorded.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 
