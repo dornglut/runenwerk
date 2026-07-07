@@ -81,8 +81,14 @@ A phase implementation spec should include:
 phase id
 title
 lifecycle state
+implementation authorization status
 owner
 authority docs
+complete investigation gate status
+complete design gate status
+principle compliance status
+module decomposition status
+maintainability review status
 allowed paths
 forbidden paths
 public API surface
@@ -111,7 +117,27 @@ evidence expectation
 stop conditions
 complete investigation gate evidence where applicable
 complete design gate evidence where applicable
+principle compliance evidence where applicable
+module decomposition evidence where applicable
+maintainability review evidence where applicable
 ```
+
+## Authorization status rule
+
+Use an explicit implementation authorization status so agents cannot infer permission from accepted direction.
+
+Recommended status values:
+
+```text
+active-planning-only
+active-implementation-authorized
+blocked
+completed
+```
+
+A spec with `active-planning-only` or `blocked` may guide design, planning, review, or prompt generation. It must not be used to start implementation.
+
+A spec with `active-implementation-authorized` is valid only when the corresponding planning record also authorizes active implementation.
 
 ## Scope rule
 
