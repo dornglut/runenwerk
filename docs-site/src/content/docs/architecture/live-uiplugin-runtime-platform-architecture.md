@@ -14,6 +14,7 @@ related_docs:
   - ../design/active/live-uiplugin-runtime-full-cutover-plan.md
   - ../design/active/ui-runtime-rendering-pipeline-roadmap.md
   - ../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
+  - ../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
 ---
 
 # Live UiPlugin Runtime Platform Architecture
@@ -31,8 +32,8 @@ This document owns the app/engine/render architecture diagrams and runtime platf
 | Windowed runtime | Windowed mode uses `winit_runner::run(self.into_windowed_state())`. | `engine/src/app/platform/windowed.rs` |
 | Input/redraw loop | Winit keyboard, mouse, cursor, wheel, and touch events become platform/input events and request redraw on success. `RedrawRequested` runs the engine frame. | `engine/src/runtime/winit_runner.rs` |
 | Frame pacing | Default policy is `ContinuousCapped { target_fps: 60 }`; `OnDemand` exists and has no continuous deadline. | `engine/src/runtime/frame_pacing.rs` |
-| Render plugin ownership today | `RenderPlugin` initializes generic surface-frame submission resources and still runs the legacy scene/debug collection system until Phase 011 removes it. It also runs `prepare_ui_feature_resource_system`, frame prepare, and frame submit. | `engine/src/plugins/render/plugin.rs` |
-| Legacy UI producer path today | Render runtime currently collects scene overlay and debug overlay UI frames directly from scene/debug resources. | `engine/src/plugins/render/runtime/ui_submission.rs` |
+| Render plugin ownership today | `RenderPlugin` initializes generic surface-frame submission resources and runs `prepare_ui_feature_resource_system`, frame prepare, and frame submit. It no longer imports, exports, or schedules a scene/debug UI semantic collector after Phase 011. | `engine/src/plugins/render/plugin.rs` |
+| Scene/debug producer path today | Scene and debug owners publish their overlay UI frames through `SurfaceFrameSubmissionRegistryResource`; the prior render-owned `ui_submission.rs` collector is deleted and guarded by tests. | `engine/src/plugins/scene/lifecycle/overlay_update.rs`, `engine/src/plugins/debug_metrics/mod.rs`, `engine/tests/runtime_surface_guard.rs` |
 | UiPlugin publication today | `UiPlugin` publishes evaluated runtime frames through `SurfaceFrameSubmissionRegistryResource` with `RenderFrameProducerId` and `RenderSurfaceId`; `RenderPlugin` consumes the prepared packet without querying screens, sources, actions, host mutation, or route policy. | `engine/src/plugins/ui/render_publish.rs` |
 | Frame publication today | `SurfaceFrameSubmissionRegistryResource` stores whole `SurfaceFrameSubmission` values keyed by producer/surface; replacement is per producer/surface, not per element. | `engine/src/plugins/render/features/ui/submission.rs` |
 | Frame preparation today | Frame prepare builds `PreparedRenderFrame` packets per render surface and applies UI contribution per surface. | `engine/src/plugins/render/runtime/frame_prepare.rs` |
