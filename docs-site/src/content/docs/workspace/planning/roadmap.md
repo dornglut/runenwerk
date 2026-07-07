@@ -895,9 +895,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-011`
 
 Title: Scene/Debug Overlay Producer Migration and Retirement
 
-State: active implementation authorization for exactly one bounded Phase 011 implementation PR after this authorization record merges
+State: completed through merged PR #104 and closeout truth
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `completed`
 
 Authority:
 
@@ -905,6 +905,7 @@ Authority:
 ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
 ../../architecture/live-uiplugin-runtime-platform-architecture.md
 ../../reports/closeouts/pt-ui-runtime-platform-010-closeout.md
+../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
 ../routines/track-orchestration-routine.md
 ../routines/implementation-routine.md
 ../complete-investigation-gate.md
@@ -913,124 +914,113 @@ Authority:
 ../evidence-quality-taxonomy.md
 ```
 
-Implementation contract:
+Delivered scope:
 
 ```text
-replace the scene overlay producer collection by a scene-owned generic SurfaceFrameSubmission publication path
-replace the debug metrics overlay producer collection by a debug-owned generic SurfaceFrameSubmission publication path
-remove RenderPlugin scheduling/import/export of collect_runtime_ui_frame_submissions_system
-delete or fully retire engine/src/plugins/render/runtime/ui_submission.rs so RenderPlugin no longer owns UI semantic producer collection
-preserve existing producer ids, route, order, shader-id behavior, empty-frame removal behavior, and prepared UI contribution behavior unless a focused test proves intentional retirement
-do not alter UiPlugin render publication, source/program/action semantics, host mutation, route policy, render backend behavior, graph execution, shader code, or Counter product scope
-prove no public manual add_ui_* registration chain is introduced or remains as a compatibility escape hatch
+ScenePlugin/scene-owned runtime code publishes the scene overlay frame through SurfaceFrameSubmissionRegistryResource with producer id 1, screen route, layer 0, priority 0, optional rect shader id lookup, and empty/no-manager removal.
+DebugMetricsPlugin/debug-owned runtime code publishes or removes the debug metrics frame through SurfaceFrameSubmissionRegistryResource with producer id 2, screen route, layer 100, priority 0, and preserved UiOverlayState.debug_frame behavior.
+RenderPlugin no longer imports, exports, or schedules collect_runtime_ui_frame_submissions_system.
+engine/src/plugins/render/runtime/ui_submission.rs is deleted.
+PreparedUiFrameResource receives scene/debug producer contributions through the generic seam when owner plugins run.
+Focused migration and guard tests prove producer-owned publication, RenderPlugin collector retirement, scene/debug overlay preservation, and UiPlugin publication non-regression.
 ```
 
-Source/path inventory:
+Files changed:
 
 ```text
-engine/src/plugins/render/runtime/ui_submission.rs:
-  SCENE_OVERLAY_UI_PRODUCER_ID = RenderFrameProducerId(1)
-  DEBUG_METRICS_UI_PRODUCER_ID = RenderFrameProducerId(2)
-  collect_runtime_ui_frame_submissions_system reads SceneResource.manager.overlay_runtime.ui.frame
-  collect_runtime_ui_frame_submissions_system reads UiOverlayState.debug_frame
-  scene overlay uses route screen and order layer 0 / priority 0
-  debug metrics overlay uses route screen and order layer 100 / priority 0
-
-engine/src/plugins/render/runtime/mod.rs:
-  exports collect_runtime_ui_frame_submissions_system from render runtime.
-
-engine/src/plugins/render/plugin.rs:
-  schedules collect_runtime_ui_frame_submissions_system from RenderPlugin.
-
-engine/src/plugins/scene/lifecycle/overlay_update.rs and engine/src/plugins/scene/runtime/overlay_ui.rs:
-  produce manager.overlay_runtime.ui.frame before RenderPrepare.
-
-engine/src/plugins/debug_metrics/mod.rs:
-  produces UiOverlayState.debug_frame in RenderPrepare.
-
-engine/src/plugins/render/features/ui/submission.rs and resource.rs:
-  own the generic SurfaceFrameSubmissionRegistryResource and preparation seam.
-
-engine/src/plugins/ui/render_publish.rs:
-  proves the independent Phase 010 UiPlugin publication path that must not regress.
-```
-
-Allowed files/crates:
-
-```text
-engine/src/plugins/render/runtime/ui_submission.rs
+engine/src/plugins/debug_metrics/mod.rs
+engine/src/plugins/render/plugin.rs
 engine/src/plugins/render/runtime/mod.rs
-engine/src/plugins/render/plugin.rs only to remove the render-owned legacy collection system import/schedule/export
-engine/src/plugins/scene/plugin.rs only if scene-owned publication needs a RenderPrepare scheduling hook
-engine/src/plugins/scene/lifecycle/overlay_update.rs only if scene-owned publication can be attached to existing scene overlay update without changing scene behavior
-engine/src/plugins/scene/runtime/overlay_ui.rs only if scene-owned publication needs a narrow helper that preserves existing frame generation
-engine/src/plugins/debug_metrics/mod.rs only for debug-owned publication and tests
-engine/src/state.rs only if UiOverlayState debug-frame storage is intentionally retired with evidence; otherwise leave it unchanged
-engine/tests/runtime_ui_producer_migration.rs or a similarly named focused Phase 011 engine integration test
-engine/tests/runtime_surface_guard.rs only to guard overlay substrate use and RenderPlugin semantic-collection retirement
-engine/src/plugins/scene/tests/scene_tests.rs only for focused scene overlay behavior assertions if integration tests cannot prove them
+engine/src/plugins/render/runtime/ui_submission.rs
+engine/src/plugins/scene/lifecycle/overlay_update.rs
+engine/src/plugins/scene/plugin.rs
+engine/tests/runtime_surface_guard.rs
+engine/tests/runtime_ui_producer_migration.rs
 ```
 
-Forbidden files/crates:
+Completion evidence:
 
 ```text
-apps/ui_counter_runtime product packaging
-source reload/persistence implementation
-SDF or SpatialCanvas implementation
-engine/src/plugins/ui/** runtime implementation changes
-engine/src/plugins/render/runtime/frame_prepare.rs
-engine/src/plugins/render/runtime/frame_submit.rs
-engine/src/plugins/render/renderer/**
-engine/src/plugins/render/graph/**
-engine/src/plugins/render/backend/**
-engine/src/plugins/render/shader/**
-render backend rewrite
-graph execution rewrite or shader changes
-source/program/action semantic changes
-host mutation or action-dispatch behavior changes
-broad ui_render_data primitive/model rewrites
-foundation/meta
-domain/app_program
-generic plugin framework
-phase spec validator implementation
-any tools/docs validator or script changes
+PR #104 merged into main at 15e213a08dbf79f65e0851fe5be9f853f157b48b.
+PR head before merge: a6232278e41202cd331051f347d3db892988f38c.
+Diff stat: 8 files changed, 329 insertions, 84 deletions.
+Validation: cargo fmt --check, focused runtime_ui_producer_migration/scene/debug/surface/render-output/guard/UiPlugin publication tests, render_flow_v2 integration tests, cargo test -p engine, docs validation, diff hygiene, branch status, and diff stat passed before merge.
+Closeout report: ../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md.
 ```
 
 Gate status:
 
 ```text
-Complete investigation gate: complete for implementation authorization through accepted runtime-platform authority, Phase 010 closeout evidence, and current source/path inspection recorded in active-work and the Phase 011 spec.
-Complete design gate: complete for implementation authorization through accepted cutover authority, live runtime architecture, active-work contract, Phase 011 spec, principle compliance matrix, module decomposition map, validation envelope, evidence expectations, and stop conditions.
-Implementation authorization: authorized after this activation record merges.
+Complete investigation gate: complete for Phase 011 through accepted runtime-platform authority, Phase 010 closeout evidence, activation source/path inspection, PR #104 changed-file inspection, and validation.
+Complete design gate: complete for Phase 011 through the accepted cutover plan, architecture record, active-work contract, Phase 011 spec, implementation evidence, and closeout evidence.
+Merge readiness: satisfied before merge; no hosted checks were configured/reported.
 ```
 
-Validation envelope:
+Known downstream gaps:
 
 ```text
-cargo fmt --check
-cargo test -p engine runtime_ui_producer_migration
-cargo test -p engine scene_registered_apps_publish_overlay_frame_with_buttons
-cargo test -p engine debug_metrics_plugin_populates_overlay_draw_state
-cargo test -p engine surface_frame_submission
-cargo test -p engine render_output_proof
-cargo test -p engine runtime_surface_guard
-cargo test -p engine ui_render_publication
-cargo test -p engine --test render_flow_v2
-cargo test -p engine
-python tools/docs/validate_docs.py
-git diff --check
-git diff --check main...HEAD
-git status --short --branch
-git diff --stat main...HEAD
+runtime Counter app product remains Phase 012
+source reload and persistence remains Phase 013
+adoption lock remains Phase 014
 ```
 
-Evidence expectation: the implementation PR must prove how the scene overlay producer path and debug metrics producer path were migrated or intentionally retired, prove RenderPlugin no longer owns semantic UI producer collection, prove no public manual registration escape hatch exists, and classify evidence through source inspection, local validation, PR metadata/checks, accepted authority, and authority/code/test alignment.
+Next action: Keep Phase 011 as completed evidence. Use this closeout as the prerequisite for `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` active planning only.
 
-Phase spec: `docs-site/src/content/docs/workspace/specs/pt-ui-runtime-platform-011.ron`.
+### PT-UI-RUNTIME-PLATFORM-012
 
-Stop conditions: stop if the path list proves incomplete, if implementation needs files outside the allowed list, if RenderPlugin keeps owning UI semantic producer collection, if the PR leaves parallel prior/target paths, if unrelated render behavior changes, if a public manual registration escape hatch is introduced, or if UiPlugin render publication regresses.
+ID: `PT-UI-RUNTIME-PLATFORM-012`
 
-Next action: After this activation PR merges, open exactly one bounded Phase 011 implementation PR from current `main`. Keep it draft until focused Phase 011 validation and required docs/diff/status commands are clean. Do not start Phase 012.
+Title: Runtime Counter App Product
+
+State: active planning only; implementation PR not yet authorized
+
+Lifecycle state: `active-planning`
+
+Authority:
+
+```text
+../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../architecture/live-uiplugin-runtime-platform-architecture.md
+../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
+../routines/track-orchestration-routine.md
+../routines/implementation-routine.md
+../complete-investigation-gate.md
+../complete-design-gate.md
+../complete-merge-readiness-gate.md
+../evidence-quality-taxonomy.md
+```
+
+Planning contract from accepted cutover authority:
+
+```text
+cargo run -p ui_counter_runtime starts the human app
+cargo run -p ui_counter_runtime -- --headless --agent-script <script> --trace-jsonl <path> --exit-after-script runs agent mode
+cargo test -p ui_counter_runtime proves the app path
+app installs RenderPlugin, UiPlugin, and CounterPlugin
+CounterPlugin uses app.mount_ui(CounterScreen)
+CounterScreen implements the accepted typed screen/source/action model and the architecture-owned product screen contract
+UI exposes increment, decrement, and reset actions
+human interaction and agent scripts use the same route/capability/payload checks
+user/agent interaction mutates Counter only through host-owned path
+runtime/evaluator output changes after mutation
+UiPlugin publishes through the generic producer/surface-frame seam
+RenderPlugin consumes the submission without UI semantic ownership
+console/history view shows recent generic UI-runtime trace events
+JSONL trace records action, mutation, evaluation, and frame publication facts
+manual run instructions and observed behavior are recorded in the PR
+```
+
+Active-planning investigation map:
+
+```text
+inspect app/product crate existence and workspace member wiring
+inspect app examples and engine plugin composition for RenderPlugin, UiPlugin, and app-owned plugins
+inspect UiPlugin mount, typed screen/source/action, host action dispatch, runtime evaluation, frame publication, and trace APIs
+inspect current headless command and agent-script support requirements
+derive exact allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition, and stop conditions before implementation authorization
+```
+
+Implementation authorization: blocked. Open a separate Phase 012 active-implementation authorization PR after this closeout merges. Do not patch `apps/ui_counter_runtime` or product code before that authorization is merged.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
