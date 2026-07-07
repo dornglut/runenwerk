@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-07-06
+last_reviewed: 2026-07-07
 ---
 
 # Architecture
@@ -18,3 +18,4 @@ lives here and in domain/design docs under `docs-site/src/content/docs`.
 ## Current architecture spines
 
 - [Runenwerk UI Framework Architecture](./ui-framework-architecture.md)
+- [Live UiPlugin Runtime Platform Architecture](./live-uiplugin-runtime-platform-architecture.md)
