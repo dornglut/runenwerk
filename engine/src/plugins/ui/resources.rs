@@ -5,8 +5,15 @@ use ui_surface::{
 
 use super::{
     UiMountRecord, UiMountReport, UiMountRequest, UiMountSource, UiMountedSessionRecord,
-    UiUnmountReport,
+    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeDirtyCause, UiRuntimeDirtyRecord,
+    UiRuntimeEvaluationFailureReason, UiRuntimeEvaluationInput, UiRuntimeEvaluationReport,
+    UiRuntimeFramePayload, UiRuntimeOutputFacts, UiRuntimeSessionSnapshot, UiRuntimeTraceEvent,
+    UiRuntimeTraceResource, UiRuntimeViewFacts, UiUnmountReport,
 };
+use ui_artifacts::UiRuntimeArtifactDiagnosticSeverity;
+use ui_evaluator::{UiEvaluationContext, UiEvaluator};
+use ui_runtime_view::UiRuntimeView;
+use ui_state::UiStateModel;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum UiRuntimeInstallState {
@@ -222,5 +229,225 @@ impl UiMountRequestsResource {
         let id = self.next_session_scope_id;
         self.next_session_scope_id = self.next_session_scope_id.saturating_add(1);
         id
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
+pub struct UiRuntimeEvaluationResource {
+    state: UiStateModel,
+    reports: Vec<UiRuntimeEvaluationReport>,
+    snapshots: Vec<UiRuntimeSessionSnapshot>,
+    dirty_records: Vec<UiRuntimeDirtyRecord>,
+    next_runtime_id: u64,
+    next_frame_revision: u64,
+}
+
+impl UiRuntimeEvaluationResource {
+    pub fn reports(&self) -> &[UiRuntimeEvaluationReport] {
+        &self.reports
+    }
+
+    pub fn latest_report(&self) -> Option<&UiRuntimeEvaluationReport> {
+        self.reports.last()
+    }
+
+    pub fn snapshots(&self) -> &[UiRuntimeSessionSnapshot] {
+        &self.snapshots
+    }
+
+    pub fn dirty_records(&self) -> &[UiRuntimeDirtyRecord] {
+        &self.dirty_records
+    }
+
+    pub fn state(&self) -> &UiStateModel {
+        &self.state
+    }
+
+    pub fn replay_snapshot(
+        &self,
+        runtime_id: &str,
+        source_id: &str,
+    ) -> Option<&UiRuntimeSessionSnapshot> {
+        self.snapshots.iter().rev().find(|snapshot| {
+            snapshot.runtime_id() == runtime_id && snapshot.source_id() == source_id
+        })
+    }
+
+    pub fn evaluate(
+        &mut self,
+        input: &UiRuntimeEvaluationInput,
+        mounted_session: Option<&UiMountedSessionRecord>,
+        context: UiEvaluationContext,
+        trace: &mut UiRuntimeTraceResource,
+        diagnostics: &mut UiRuntimeDiagnosticsResource,
+    ) -> UiRuntimeEvaluationReport {
+        let runtime_id = self.next_runtime_id(input.facts().source_id());
+        trace.record(UiRuntimeTraceEvent::runtime_evaluation(
+            runtime_id.clone(),
+            input.facts(),
+        ));
+
+        let output = UiEvaluator.evaluate_with_context(input.artifact(), &mut self.state, context);
+        let runtime_view_report = UiRuntimeView::from_artifact_report(input.artifact());
+        let runtime_view = UiRuntimeViewFacts::from_report(&runtime_view_report);
+        let output = UiRuntimeOutputFacts::from_output(&output, &self.state);
+        let surface_instance_id = mounted_session.map(UiMountedSessionRecord::surface_instance_id);
+        let session_scope_id = mounted_session.map(|session| session.session().scope_id);
+        let frame_payload = UiRuntimeFramePayload::from_output(
+            self.next_frame_revision(),
+            &output,
+            surface_instance_id,
+        );
+        let snapshot = UiRuntimeSessionSnapshot::new(
+            runtime_id.clone(),
+            input.facts(),
+            surface_instance_id,
+            session_scope_id,
+            &output,
+        );
+        trace.record(UiRuntimeTraceEvent::state_snapshot(
+            runtime_id.clone(),
+            input.facts(),
+        ));
+
+        let dirty_records =
+            self.dirty_records_for_evaluation(&runtime_id, input, mounted_session, &output);
+        for record in &dirty_records {
+            trace.record(UiRuntimeTraceEvent::invalidation(
+                runtime_id.clone(),
+                input.facts(),
+                record.cause(),
+            ));
+        }
+
+        if input
+            .artifact()
+            .manifest
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == UiRuntimeArtifactDiagnosticSeverity::Error)
+        {
+            diagnostics.push(UiRuntimeDiagnostic::runtime_evaluation_rejected(
+                runtime_id.clone(),
+                input.facts().source_id(),
+                input.facts().program_id(),
+                UiRuntimeEvaluationFailureReason::ArtifactDiagnostics,
+            ));
+        } else if !runtime_view.passed() {
+            diagnostics.push(UiRuntimeDiagnostic::runtime_evaluation_rejected(
+                runtime_id.clone(),
+                input.facts().source_id(),
+                input.facts().program_id(),
+                UiRuntimeEvaluationFailureReason::RuntimeViewDiagnostics,
+            ));
+        }
+
+        let report = UiRuntimeEvaluationReport::new(
+            runtime_id,
+            input.facts().clone(),
+            runtime_view,
+            output,
+            frame_payload,
+            snapshot.clone(),
+            dirty_records.clone(),
+        );
+        self.snapshots.push(snapshot);
+        self.dirty_records.extend(dirty_records);
+        self.reports.push(report.clone());
+        report
+    }
+
+    fn dirty_records_for_evaluation(
+        &self,
+        runtime_id: &str,
+        input: &UiRuntimeEvaluationInput,
+        mounted_session: Option<&UiMountedSessionRecord>,
+        output: &UiRuntimeOutputFacts,
+    ) -> Vec<UiRuntimeDirtyRecord> {
+        let source_id = input.facts().source_id();
+        let mut records = vec![UiRuntimeDirtyRecord::new(
+            runtime_id,
+            source_id,
+            UiRuntimeDirtyCause::Source,
+            input.facts().artifact_id(),
+        )];
+
+        if output.dirty_binding_count() > 0 {
+            records.push(UiRuntimeDirtyRecord::new(
+                runtime_id,
+                source_id,
+                UiRuntimeDirtyCause::HostData,
+                format!("{} dirty bindings", output.dirty_binding_count()),
+            ));
+        }
+
+        if let Some(session) = mounted_session {
+            records.push(UiRuntimeDirtyRecord::new(
+                runtime_id,
+                source_id,
+                UiRuntimeDirtyCause::Session,
+                session.session().scope_id.to_string(),
+            ));
+            records.push(UiRuntimeDirtyRecord::new(
+                runtime_id,
+                source_id,
+                UiRuntimeDirtyCause::Surface,
+                session.surface_instance_id().raw().to_string(),
+            ));
+        }
+
+        if output.layout_count() > 0 {
+            records.push(UiRuntimeDirtyRecord::new(
+                runtime_id,
+                source_id,
+                UiRuntimeDirtyCause::Layout,
+                format!("{} layout rows", output.layout_count()),
+            ));
+        }
+        if output.text_layout_request_count() > 0 || output.has_text_value() {
+            records.push(UiRuntimeDirtyRecord::new(
+                runtime_id,
+                source_id,
+                UiRuntimeDirtyCause::Text,
+                format!(
+                    "{} text layout requests",
+                    output.text_layout_request_count()
+                ),
+            ));
+        }
+        if output.visual_operator_count() > 0 {
+            records.push(UiRuntimeDirtyRecord::new(
+                runtime_id,
+                source_id,
+                UiRuntimeDirtyCause::Primitive,
+                format!("{} visual operators", output.visual_operator_count()),
+            ));
+        }
+
+        records.push(UiRuntimeDirtyRecord::new(
+            runtime_id,
+            source_id,
+            UiRuntimeDirtyCause::Theme,
+            format!("{} style rows", output.style_count()),
+        ));
+        records.push(UiRuntimeDirtyRecord::new(
+            runtime_id,
+            source_id,
+            UiRuntimeDirtyCause::RenderPublication,
+            "pending downstream render publication",
+        ));
+        records
+    }
+
+    fn next_runtime_id(&mut self, source_id: &str) -> String {
+        let id = self.next_runtime_id.saturating_add(1);
+        self.next_runtime_id = id;
+        format!("{source_id}.runtime.{id}")
+    }
+
+    fn next_frame_revision(&mut self) -> u64 {
+        let revision = self.next_frame_revision.saturating_add(1);
+        self.next_frame_revision = revision;
+        revision
     }
 }
