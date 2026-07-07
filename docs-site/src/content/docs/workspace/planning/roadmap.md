@@ -53,7 +53,7 @@ Lifecycle state: `completed`
 
 Authority: `ecs-backed-counter-ui-story-proof-planning.md`.
 
-Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records the new `domain/ui/ui_app_integration` crate, code-authored Counter and Win source records, lowering through `ui_definition` and `ui_program`, `UiEventPacket` route/event evidence, route-missing diagnostics, route-resolved host mutation, ECS-backed Counter mutation, next-output text facts, positive proof flow, fail-closed cases, no callback/direct mutation bypass, no public `AppUiExt`, no engine `UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas world-space implementation, no `foundation/meta`, no `domain/app_program`, and no generic plugin framework. Detailed closeout: `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
+Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records the new `domain/ui/ui_app_integration` crate, code-authored Counter and Win source records, lowering through `ui_definition` and `ui_program`, route/event evidence, route-missing diagnostics, route-resolved host mutation, ECS-backed Counter mutation, next-output text facts, positive proof flow, fail-closed cases, no callback/direct mutation bypass, no public `AppUiExt`, no engine `UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas world-space implementation, no `foundation/meta`, no `domain/app_program`, and no generic plugin framework. Detailed closeout: `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
 Next action: Keep as completed proof evidence. Do not reopen this slice unless future inspection finds the recorded boundary was violated.
 
@@ -108,12 +108,12 @@ Authority:
 ../../architecture/ui-framework-architecture.md
 ```
 
-Evidence: This entry corrects the previous “first runtime slice” framing. The platform should be planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch, runtime evaluation to frame, render publication, scene/debug compatibility cutover, SurfaceFrame genericization, live Counter app proof, and closeout/adoption lock.
+Evidence: This entry corrects the previous “first runtime slice” framing. The platform is planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch, runtime evaluation to frame, render publication, old scene/debug overlay migration, SurfaceFrame genericization, runnable Counter app product, and closeout/adoption lock.
 
 Gate status:
 
 ```text
-Complete investigation gate: inherited from PT-UI-RUNTIME-PLATFORM-001.
+Complete investigation gate: inherited from PT-UI-RUNTIME-PLATFORM-001 and extended with render/app-engine feature mapping.
 Complete design gate: in progress for full cutover contract.
 Implementation authorization: forbidden until this planning PR is accepted and the next phase PR opens.
 ```
@@ -130,7 +130,7 @@ State: completed through merged PR #44
 
 Lifecycle state: `completed`
 
-Evidence: PR #44 merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Evidence covers package-backed overlay declarations, base-control overlay lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, `ui_runtime::overlay` replay/report/stack/placement/focus/dismissal/suppression proof, proof-frame projection, static mount proof, no-bypass evidence, and full local validation gate passed on 2026-07-02.
+Evidence: PR #44 merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Evidence covers package-backed overlay declarations, base-control overlay lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime overlay proof, proof-frame projection, static mount proof, no-bypass evidence, and full local validation gate passed on 2026-07-02.
 
 Next action: Keep as completed dependency.
 
@@ -146,7 +146,7 @@ Lifecycle state: `completed`
 
 Authority: `ui-component-platform-text-editing-design.md`.
 
-Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, `ui_runtime::text_editing` replay/report/value/caret/selection/composition/suppression/no-bypass proof, proof-frame projection, static mount validation, focused tests, final proof-frame cleanup, and full local validation gate passed on 2026-07-02.
+Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, runtime text-editing proof, proof-frame projection, static mount validation, focused tests, final proof-frame cleanup, and full local validation gate passed on 2026-07-02.
 
 Next action: Keep as completed dependency.
 
