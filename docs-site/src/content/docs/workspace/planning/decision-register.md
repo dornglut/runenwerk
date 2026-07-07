@@ -33,7 +33,7 @@ Decision: Mark `PT-UI-COMPONENT-PLATFORM-013` Overlay / Popup / Layering full im
 
 State transition: `review -> completed`
 
-Evidence: PR #44 merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`; local validation passed on 2026-07-02; package-backed overlay declarations, runtime overlay proof, proof-frame projection, static mount proof, and no-bypass evidence are present.
+Evidence: PR #44 merged into `main` at `6f2d3827f315191d7aeaf68a64f523627197cad8`; local validation passed on 2026-07-02; package-backed overlay declarations, runtime overlay proof, proof-frame projection, static mount proof, and route-guard evidence are present.
 
 Follow-up: Keep Phase 13 as completed dependency.
 
@@ -45,7 +45,7 @@ Decision: Start, implement, review, and mark `PT-UI-COMPONENT-PLATFORM-014` Text
 
 State transition: `production-track -> active-planning -> active-implementation -> review -> completed`
 
-Evidence: Implementation covered editable-text vocabulary, descriptor wiring, package validation, InspectorField lowering, catalog and inspection projection, normalized edit/composition/selection facts, runtime proof-frame evidence, static mount validation, no-bypass evidence, focused tests, and local validation on 2026-07-02. PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
+Evidence: Implementation covered editable-text vocabulary, descriptor wiring, package validation, InspectorField lowering, catalog and inspection projection, normalized edit/composition/selection facts, runtime proof-frame evidence, static mount validation, route-guard evidence, focused tests, and local validation on 2026-07-02. PR #46 merged into `main` at `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
 
 Follow-up: Keep Phase 14 as completed dependency.
 
@@ -57,7 +57,7 @@ Decision: Start, implement, harden, and mark `PT-UI-COMPONENT-PLATFORM-015` Gene
 
 State transition: `production-track -> active-planning -> active-implementation -> review -> completed -> completed-hardening`
 
-Evidence: PR #48 merged into `main` at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`; PR #49 merged into `main` at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`; final validation passed with the recorded package/workspace/docs/diff gate.
+Evidence: PR #48 merged into `main` at `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`; PR #49 merged into `main` at `338a8092d534dbb412da89363d50a46cd5efeae9`; final validation passed with the recorded package/workspace/docs/diff gate.
 
 Follow-up: Use PR #48 plus PR #49 as authoritative Phase 15 completion evidence.
 
@@ -69,9 +69,9 @@ Decision: Start `PT-UI-COMPONENT-PLATFORM-016` as Surface2D planning, then mark 
 
 State transition: `production-track -> active-planning -> review -> completed`
 
-Evidence: PR #62 merged workflow/principle/decomposition/merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`; PR #61 squash-merged Surface2D at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`; post-merge validation from `main` passed.
+Evidence: PR #62 merged workflow/principle/decomposition/merge-readiness hardening at `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`; PR #61 squash-merged Surface2D at `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`; post-merge validation from `main` passed.
 
-Follow-up: Keep Phase 16 as completed dependency and keep Phase 17 SpatialCanvas future-only until runtime platform work is settled.
+Follow-up: Keep Phase 16 as completed dependency and keep Phase 17 SpatialCanvas downstream-only until runtime platform work is settled.
 
 ## Phase 16 leftover branch decision
 
@@ -81,7 +81,7 @@ Decision: Keep remote branch `surface2d-phase-16` for manual review instead of f
 
 State transition: none
 
-Evidence: Branch comparison showed three extra commits and one large design-document diff with potentially useful future-use-case pressure mixed with stale assumptions.
+Evidence: Branch comparison showed three extra commits and one large design-document diff with potentially useful downstream-use-case pressure mixed with stale assumptions.
 
 Follow-up: Review manually outside Phase 16 closeout and extract only focused useful docs material if needed.
 
@@ -119,9 +119,9 @@ Decision: Mark `PT-UI-FRAMEWORK-APP-INTEGRATION-002` ECS-backed Counter UI Story
 
 State transition: `review -> completed`
 
-Reason: The delivered PR #72 scope matched the accepted planning contract for the bounded proof and preserved recorded non-goals: no public `AppUiExt`, engine `UiPlugin`, render adapter, SDF/SpatialCanvas/world-space implementation, `foundation/meta`, `domain/app_program`, generic plugin framework, callback/direct mutation bypass, or ECS-owned durable UI semantic model.
+Reason: The delivered PR #72 scope matched the accepted planning contract for the bounded proof and preserved recorded non-goals: no public `AppUiExt`, engine `UiPlugin`, render adapter, SDF/SpatialCanvas/world-space implementation, `foundation/meta`, `domain/app_program`, generic plugin framework, callback/direct mutation shortcut, or ECS-owned durable UI semantic model.
 
-Evidence: PR #72 merged on 2026-07-06 at merge commit `e093eb1affdc465b96430200960f8e3cdca0d26b`; source inspection covered the new crate, source modules, tests, and docs index link.
+Evidence: PR #72 merged on 2026-07-06 at `e093eb1affdc465b96430200960f8e3cdca0d26b`; source inspection covered the new crate, source modules, tests, and docs index link.
 
 Follow-up: Use PR #72 only as proof-local evidence for runtime-platform planning.
 
@@ -157,11 +157,11 @@ Decision: Start and harden `PT-UI-RUNTIME-PLATFORM-002` as a full-platform cutov
 
 State transition: `active-planning design-gate complete / implementation-planning required -> active-planning full-platform cutover contract draft`.
 
-Context: Critical review found that the initial PR #76 framing was directionally correct but not handoff-complete. It used compatibility-producer language, did not require a runnable product-grade Counter app, did not make the app agent-controllable, lacked a generic runtime trace/history plan, lacked source reload and persistence decisions, and kept architecture/PlantUML material inside the planning document instead of architecture docs.
+Context: Critical review found that the initial PR #76 framing was directionally correct but not handoff-complete. It used transitional-producer language, did not require a runnable product-grade Counter app, did not make the app agent-controllable, lacked a generic UI-runtime trace/history plan, lacked source reload and persistence decisions, kept architecture/PlantUML material inside the planning document instead of architecture docs, and scheduled render-boundary genericization too late.
 
 Options considered: keep the first-slice-only plan; make one giant implementation PR; create a full cutover plan and execute it through gated phase PRs.
 
-Reason: The correct path is to plan the full platform cutover now while still implementing it through bounded PRs. The accepted runtime direction must include old UI path retirement, render/app-engine feature mapping, generic runtime trace/history, agent-controllable operation, source reload and persistence boundaries, a runnable `apps/ui_counter_runtime` product, architecture-owned PlantUML diagrams, and phase-by-phase gates that a simple implementation agent can follow without inventing architecture.
+Reason: The correct path is to plan the full platform cutover now while still implementing it through bounded PRs. The accepted runtime direction must include prior UI path retirement, producer-generic surface-frame semantics before UiPlugin render publication, render/app-engine feature mapping, generic UI-runtime trace/history, agent-controllable operation, source reload and persistence boundaries, a runnable `apps/ui_counter_runtime` product, SDF UI backend assignment to `PT-UI-RENDER-BACKEND-SDF-001`, phase-spec workflow hardening as downstream work, architecture-owned PlantUML diagrams, and phase-by-phase gates that a simple implementation agent can follow without inventing architecture.
 
 Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `design/active/README.md`, `../../design/active/live-uiplugin-runtime-full-cutover-plan.md`, `../../architecture/live-uiplugin-runtime-platform-architecture.md`, and its PlantUML diagram files.
 
@@ -169,7 +169,7 @@ Evidence: PR #74 merge metadata, accepted PR #74 design/investigation authority,
 
 Follow-up: Review PR #76 as docs-only full cutover planning. If accepted, merge it and open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as the first bounded implementation PR.
 
-Reactivation condition: Reopen this decision if review finds a missing render/app-engine feature, incomplete agent/product acceptance criterion, a preserved old path, incomplete trace/history model, missing source reload/persistence boundary, or a phase that cannot be handed to a simple implementation agent.
+Reactivation condition: Reopen this decision if review finds a missing render/app-engine feature, incomplete agent/product acceptance criterion, a preserved prior path, incomplete trace/history model, missing source reload/persistence boundary, render-boundary genericization scheduled after code depends on non-target ownership names, or a phase that cannot be handed to a simple implementation agent.
 
 Supersedes: the earlier “first runtime slice” framing after PR #74.
 
