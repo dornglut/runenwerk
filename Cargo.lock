@@ -948,6 +948,7 @@ dependencies = [
  "ui_render_data",
  "ui_runtime",
  "ui_schema",
+ "ui_surface",
  "ui_text",
  "ui_theme",
  "wgpu",
