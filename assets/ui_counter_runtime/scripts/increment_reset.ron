@@ -1,0 +1,8 @@
+(
+    actions: [
+        Increment,
+        Increment,
+        Decrement,
+        Reset,
+    ],
+)

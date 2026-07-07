@@ -1,0 +1,22 @@
+[package]
+name = "ui_counter_runtime"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1.0.100"
+ecs.workspace = true
+engine = { path = "../../engine" }
+ron = "0.8.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+ui_binding.workspace = true
+ui_controls.workspace = true
+ui_definition.workspace = true
+ui_evaluator.workspace = true
+ui_hosts.workspace = true
+ui_program.workspace = true
+ui_schema.workspace = true
+ui_surface.workspace = true
+winit = "0.30.9"

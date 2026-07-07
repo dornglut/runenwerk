@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-07-07
 ---
 
 # Domain Map
@@ -70,6 +70,7 @@ Primary plugin modules live under:
 - `apps/runenwerk_editor`: runnable editor app, shell bridge, runtime viewport/render integration, persistence, and authoring workflows
 - `apps/runenwerk_draw`: focused drawing app shell with shared engine/UI/render runtime integration
 - `apps/runenwerk_runtime_preview`: external runtime preview child process and headless preview test harness
+- `apps/ui_counter_runtime`: runtime counter product app for the live `UiPlugin` source/action/evaluation/trace/render-publication path
 - `adapters/godot_chunking_addon`: Godot bridge for chunking/spatial integration
 - `adapters/native_tablet_input`: native tablet packet normalization proof for platform-neutral `ui_input` stylus events
 

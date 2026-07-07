@@ -85,6 +85,7 @@ members = [
     "apps/runenwerk_editor",
     "apps/runenwerk_draw",
     "apps/runenwerk_runtime_preview",
+    "apps/ui_counter_runtime",
 
     "adapters/godot_chunking_addon",
     "adapters/native_tablet_input",

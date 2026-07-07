@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-07-07
 related_docs:
   - ../../../CRATES.md
   - ./crate-docs-status.md
@@ -85,6 +85,7 @@ This document records active workspace crates and their intended layer. Update i
 | `runenwerk_editor` | `apps/runenwerk_editor` | app | Runnable editor app and authoring workflows. | internal/evolving |
 | `runenwerk_draw` | `apps/runenwerk_draw` | app | Focused drawing app shell and shared engine/UI/render runtime integration. | internal/evolving |
 | `runenwerk_runtime_preview` | `apps/runenwerk_runtime_preview` | app | External runtime preview child process and preview/play app shell. | internal/evolving |
+| `ui_counter_runtime` | `apps/ui_counter_runtime` | app | Runtime counter product app proving the live `UiPlugin` source, action, evaluation, trace, and render-publication path. | internal/evolving |
 | `godot_chunking_addon` | `adapters/godot_chunking_addon` | adapter/tool | Godot bridge for chunking/spatial integration. | internal |
 | `native_tablet_input` | `adapters/native_tablet_input` | adapter/tool | Native tablet packet normalization proof for platform-neutral `ui_input` stylus events. | internal/evolving |
 

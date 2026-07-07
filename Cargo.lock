@@ -3824,6 +3824,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ui_counter_runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ecs",
+ "engine",
+ "ron",
+ "serde",
+ "serde_json",
+ "ui_binding",
+ "ui_controls",
+ "ui_definition",
+ "ui_evaluator",
+ "ui_hosts",
+ "ui_program",
+ "ui_schema",
+ "ui_surface",
+ "winit",
+]
+
+[[package]]
 name = "ui_definition"
 version = "0.1.0"
 dependencies = [

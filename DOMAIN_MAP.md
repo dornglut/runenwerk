@@ -76,6 +76,7 @@ Replay/history substrate           -> net/engine_history
 Runnable editor app wiring         -> apps/runenwerk_editor
 Focused drawing app wiring         -> apps/runenwerk_draw
 Runtime preview child app          -> apps/runenwerk_runtime_preview
+UI runtime counter product app     -> apps/ui_counter_runtime
 External host integration          -> adapters/*
 Native tablet packet normalization -> adapters/native_tablet_input
 AI integrations                    -> apps, tools, or adapters
