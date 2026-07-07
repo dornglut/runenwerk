@@ -13,6 +13,7 @@ related_docs:
   - ../evidence-quality-taxonomy.md
   - ../../guidelines/programming-principles.md
   - ../../architecture/ui-framework-architecture.md
+  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
@@ -43,6 +44,7 @@ Authority files:
 
 ```text
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
+docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
 docs-site/src/content/docs/reports/investigations/live-uiplugin-runtime-current-state-investigation.md
 docs-site/src/content/docs/architecture/ui-framework-architecture.md
@@ -52,7 +54,7 @@ docs-site/src/content/docs/reports/closeouts/pt-ui-framework-app-integration-002
 
 Evidence classes: `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session.
 
-Complete investigation gate: inherited complete gate from `PT-UI-RUNTIME-PLATFORM-001`; this full cutover plan adds render/app-engine feature mapping and product acceptance requirements for implementation handoff.
+Complete investigation gate: inherited complete gate from `PT-UI-RUNTIME-PLATFORM-001`; this full cutover plan adds render/app-engine feature mapping, agent operation, trace/history, source reload, persistence, and product acceptance requirements for implementation handoff.
 
 Complete design gate: in progress for the full platform cutover contract. The prior “first runtime slice” framing is corrected: the platform should be planned as a full cutover, then implemented through gated phase PRs.
 
@@ -62,6 +64,9 @@ Allowed files/crates for current focus:
 
 ```text
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
+docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
+docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-platform.puml
+docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-sequence.puml
 docs-site/src/content/docs/design/active/README.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
@@ -80,7 +85,8 @@ UiScreen / IntoUi implementation
 UiActionHandler implementation
 render adapter code
 SurfaceFrame type migration code
-scene/debug overlay migration/deletion implementation code
+scene/debug overlay migration/removal implementation code
+source reload/persistence implementation code
 apps/ui_counter_runtime implementation
 SDF/world-space/SpatialCanvas implementation
 foundation/meta
