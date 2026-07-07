@@ -59,6 +59,38 @@ Target frame policy for the cutover:
 5. Do not rebuild/republish UI frames when no source, host data, input, layout, theme, text, or surface dependency changed, unless continuous animation policy requests it.
 ```
 
+## SDF UI future-backend position
+
+SDF UI is possible, but it is not part of the live UiPlugin runtime cutover. It belongs to a separate render-backend/projection design after the runtime product path is proven.
+
+Recommended future track:
+
+```text
+PT-UI-RENDER-BACKEND-SDF-001 — Analytical SDF UI Primitive Backend
+```
+
+Recommended first SDF scope:
+
+```text
+RectPrimitive -> rounded rectangle SDF shader
+BorderPrimitive -> SDF border / outline
+optional shadow / glow primitive parameters
+current glyph atlas text path retained
+no route/action/source ownership
+no world-space UI ownership
+no source reload or designer ownership
+```
+
+Reasoning:
+
+```text
+SDF is a render strategy for derived primitives, not a UI semantic model.
+The first runtime product must prove source/program/action/host/render-publication ownership before adding another render backend.
+Text fidelity, shaping, accessibility, and source maps are already difficult enough without making the first product proof an SDF backend proof.
+```
+
+Later SDF work may explore MSDF text/icons, world-space panels, holographic UI, glow/soft-edge effects, and animated shader parameters. Those must consume `UiFrame`/SurfaceFrame-style output and must not own UI source, routes, actions, host mutation, or runtime session truth.
+
 ## Authoring, live changes, and hot reload
 
 The canonical source truth remains `ui_definition` / `UiProgram`, not renderer primitives or app state.
@@ -113,36 +145,105 @@ Required modes:
 
 Agent scripts should name semantic actions and optional pointer gestures. They must resolve through the same route/capability/payload validation path as human interaction. They must not call `Counter` mutation directly.
 
+## Counter product screen contract
+
+The Counter product is not allowed to leave the screen shape to implementation guesswork.
+
+Required app identity:
+
+```text
+binary: ui_counter_runtime
+window title: Runenwerk UI Counter Runtime
+mounted screen type: CounterScreen
+host plugin type: CounterPlugin
+host resource: Counter { value: i64 }
+initial value: 0 unless loaded from explicit host-owned state file
+```
+
+Required visible structure:
+
+```text
+root surface: CounterScreen
+root layout: vertical stack or equivalent semantic container
+header label: Runenwerk UI Counter Runtime
+count label: Count: {value}
+action row: Increment, Decrement, Reset
+trace console: last N runtime trace entries, newest last or clearly ordered
+status line: last action result or diagnostic summary
+```
+
+Required semantic actions and routes:
+
+| UI control | Route id | Required capability | Payload | Host mutation |
+|---|---|---|---|---|
+| Increment button | `counter.increment` | `counter.write` | none or unit payload | `Counter.value += 1` |
+| Decrement button | `counter.decrement` | `counter.write` | none or unit payload | `Counter.value -= 1` |
+| Reset button | `counter.reset` | `counter.write` | none or unit payload | `Counter.value = 0` |
+
+Required read capability:
+
+```text
+counter.read permits rendering the current count.
+counter.write permits mutating count through the three actions.
+missing or rejected capability must not mutate Counter.
+```
+
+Required agent script semantics:
+
+```text
+semantic action names resolve to the same route ids as visible controls
+optional scripted pointer activation must hit-test to the same route ids
+agent scripts cannot mutate Counter directly
+JSONL trace is the machine-readable source of action/mutation/evaluation/frame evidence
+```
+
+Required visible behavior:
+
+```text
+Increment updates visible count by +1.
+Decrement updates visible count by -1.
+Reset updates visible count to 0.
+Every accepted action adds a trace console row.
+Every rejected action adds a diagnostic trace row and leaves count unchanged.
+```
+
 ## Runtime trace, history, and console visibility
 
-The platform must have a generic trace/history model, not Counter-specific logging.
+The platform must have a UI-runtime trace/history model, not Counter-specific logging and not a premature engine-wide tracing framework.
 
-Required event families:
+Ownership decision:
+
+```text
+Trace starts in engine::plugins::ui because the first required events are UI-semantic events.
+Do not extract a cross-engine tracing framework during this cutover.
+Counter consumes and displays trace; it does not define the trace model.
+```
+
+Phase 007 minimum event set:
 
 ```text
 UiRuntimeMounted
-UiSourceRevisionLoaded
-UiSourceLowered
-UiProgramFormed
-UiSessionStateRestored
 UiInputObserved
-UiHitTestResolved
 UiRouteProposed
 UiCapabilityChecked
 UiActionDispatched
 UiHostMutationApplied
 UiHostMutationRejected
-UiStateSnapshotWritten
-UiRuntimeEvaluated
-UiFramePublished
-UiFramePresented
 UiRuntimeDiagnostic
 ```
+
+Later phase event additions:
+
+| Phase | Added event families |
+|---|---|
+| Phase 008 | `UiRuntimeEvaluated`, state/invalidation trace facts, optional `UiSessionStateRestored` when session replay is implemented. |
+| Phase 009 | `UiFramePublished`, `UiFramePresented`. |
+| Phase 012 | `UiSourceRevisionLoaded`, `UiSourceLowered`, `UiProgramFormed`, `UiStateSnapshotWritten`. |
 
 Trace requirements:
 
 ```text
-Every event has monotonic sequence, frame index if available, screen id, source id, route id where applicable, capability verdict, host id, result, and diagnostic code.
+Every event has monotonic sequence, frame index if available, screen id, source id where applicable, route id where applicable, capability verdict where applicable, host id where applicable, result, and diagnostic code where applicable.
 Trace is available as an in-memory bounded ring buffer resource.
 Trace can be exported as JSONL for agents and CI.
 Trace has a human-readable console/debug surface in the Counter product.
@@ -150,7 +251,7 @@ Trace must be source-map aware where source identity exists.
 Trace must not expose renderer internals as UI source truth.
 ```
 
-This trace is the basis for both agent use and human debugging. The Counter app should show a small console/history panel or overlay with the last actions and diagnostics.
+This trace is the basis for both agent use and human debugging. The Counter app should show a small console/history panel or overlay with the last actions and diagnostics, but the trace subsystem remains generic UI runtime infrastructure.
 
 ## Architecture diagrams
 
@@ -176,4 +277,5 @@ Counter-specific tracing instead of generic runtime trace events
 state persistence hidden inside generic UI controls
 Rust-code hot reload claims
 per-element incremental rendering claims without dirty-scope proof
+SDF UI backend implementation inside the live runtime cutover
 ```
