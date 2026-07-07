@@ -1,17 +1,17 @@
-use crate::plugins::render::api::ids::UiFrameProducerId;
+use crate::plugins::render::api::ids::RenderFrameProducerId;
 use crate::plugins::render::backend::RenderSurfaceId;
 use std::collections::BTreeMap;
 use ui_render_data::UiFrame;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub enum UiFrameRoute {
+pub enum SurfaceFrameRoute {
     #[default]
     Screen,
     ViewportOverlay,
     WorldProjected,
 }
 
-impl UiFrameRoute {
+impl SurfaceFrameRoute {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Screen => "screen",
@@ -22,40 +22,40 @@ impl UiFrameRoute {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct UiFrameSubmissionOrder {
+pub struct SurfaceFrameSubmissionOrder {
     pub layer: i32,
     pub priority: i32,
 }
 
-impl UiFrameSubmissionOrder {
+impl SurfaceFrameSubmissionOrder {
     pub const fn new(layer: i32, priority: i32) -> Self {
         Self { layer, priority }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct UiFrameSubmission {
-    pub producer_id: UiFrameProducerId,
+pub struct SurfaceFrameSubmission {
+    pub producer_id: RenderFrameProducerId,
     pub render_surface_id: Option<RenderSurfaceId>,
-    pub route: UiFrameRoute,
-    pub order: UiFrameSubmissionOrder,
+    pub route: SurfaceFrameRoute,
+    pub order: SurfaceFrameSubmissionOrder,
     pub frame: UiFrame,
     pub rect_shader_asset_id: Option<String>,
 }
 
-impl UiFrameSubmission {
-    pub fn new(producer_id: impl Into<UiFrameProducerId>) -> Self {
+impl SurfaceFrameSubmission {
+    pub fn new(producer_id: impl Into<RenderFrameProducerId>) -> Self {
         Self {
             producer_id: producer_id.into(),
             render_surface_id: None,
-            route: UiFrameRoute::Screen,
-            order: UiFrameSubmissionOrder::default(),
+            route: SurfaceFrameRoute::Screen,
+            order: SurfaceFrameSubmissionOrder::default(),
             frame: UiFrame::default(),
             rect_shader_asset_id: None,
         }
     }
 
-    pub fn with_route(mut self, route: UiFrameRoute) -> Self {
+    pub fn with_route(mut self, route: SurfaceFrameRoute) -> Self {
         self.route = route;
         self
     }
@@ -65,7 +65,7 @@ impl UiFrameSubmission {
         self
     }
 
-    pub fn with_order(mut self, order: UiFrameSubmissionOrder) -> Self {
+    pub fn with_order(mut self, order: SurfaceFrameSubmissionOrder) -> Self {
         self.order = order;
         self
     }
@@ -103,11 +103,11 @@ impl UiFrameSubmission {
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
-pub struct UiFrameSubmissionRegistryResource {
-    submissions: BTreeMap<(UiFrameProducerId, Option<RenderSurfaceId>), UiFrameSubmission>,
+pub struct SurfaceFrameSubmissionRegistryResource {
+    submissions: BTreeMap<(RenderFrameProducerId, Option<RenderSurfaceId>), SurfaceFrameSubmission>,
 }
 
-impl UiFrameSubmissionRegistryResource {
+impl SurfaceFrameSubmissionRegistryResource {
     pub fn submission_count(&self) -> usize {
         self.submissions.len()
     }
@@ -120,7 +120,10 @@ impl UiFrameSubmissionRegistryResource {
         self.submissions.clear();
     }
 
-    pub fn replace(&mut self, submission: UiFrameSubmission) -> Option<UiFrameSubmission> {
+    pub fn replace(
+        &mut self,
+        submission: SurfaceFrameSubmission,
+    ) -> Option<SurfaceFrameSubmission> {
         self.submissions.insert(
             (submission.producer_id, submission.render_surface_id),
             submission,
@@ -129,9 +132,9 @@ impl UiFrameSubmissionRegistryResource {
 
     pub fn replace_for_producer(
         &mut self,
-        producer_id: impl Into<UiFrameProducerId>,
-        build: impl FnOnce(UiFrameProducerId) -> UiFrameSubmission,
-    ) -> Option<UiFrameSubmission> {
+        producer_id: impl Into<RenderFrameProducerId>,
+        build: impl FnOnce(RenderFrameProducerId) -> SurfaceFrameSubmission,
+    ) -> Option<SurfaceFrameSubmission> {
         let producer_id = producer_id.into();
         let submission = build(producer_id);
         debug_assert_eq!(
@@ -143,10 +146,10 @@ impl UiFrameSubmissionRegistryResource {
 
     pub fn replace_for_surface(
         &mut self,
-        producer_id: impl Into<UiFrameProducerId>,
+        producer_id: impl Into<RenderFrameProducerId>,
         render_surface_id: RenderSurfaceId,
-        build: impl FnOnce(UiFrameProducerId) -> UiFrameSubmission,
-    ) -> Option<UiFrameSubmission> {
+        build: impl FnOnce(RenderFrameProducerId) -> SurfaceFrameSubmission,
+    ) -> Option<SurfaceFrameSubmission> {
         let producer_id = producer_id.into();
         let submission = build(producer_id).with_render_surface(render_surface_id);
         debug_assert_eq!(submission.producer_id, producer_id);
@@ -154,24 +157,27 @@ impl UiFrameSubmissionRegistryResource {
             .insert((producer_id, Some(render_surface_id)), submission)
     }
 
-    pub fn remove(&mut self, producer_id: &UiFrameProducerId) -> Option<UiFrameSubmission> {
+    pub fn remove(
+        &mut self,
+        producer_id: &RenderFrameProducerId,
+    ) -> Option<SurfaceFrameSubmission> {
         self.submissions.remove(&(*producer_id, None))
     }
 
-    pub fn get(&self, producer_id: &UiFrameProducerId) -> Option<&UiFrameSubmission> {
+    pub fn get(&self, producer_id: &RenderFrameProducerId) -> Option<&SurfaceFrameSubmission> {
         self.submissions.get(&(*producer_id, None))
     }
 
     pub fn get_for_surface(
         &self,
-        producer_id: &UiFrameProducerId,
+        producer_id: &RenderFrameProducerId,
         render_surface_id: RenderSurfaceId,
-    ) -> Option<&UiFrameSubmission> {
+    ) -> Option<&SurfaceFrameSubmission> {
         self.submissions
             .get(&(*producer_id, Some(render_surface_id)))
     }
 
-    pub fn ordered_submissions(&self) -> Vec<&UiFrameSubmission> {
+    pub fn ordered_submissions(&self) -> Vec<&SurfaceFrameSubmission> {
         let mut values = self.submissions.values().collect::<Vec<_>>();
         sort_submissions(&mut values);
         values
@@ -180,8 +186,8 @@ impl UiFrameSubmissionRegistryResource {
     pub fn ordered_submissions_for_surface(
         &self,
         render_surface_id: RenderSurfaceId,
-    ) -> Vec<&UiFrameSubmission> {
-        let mut by_producer = BTreeMap::<UiFrameProducerId, &UiFrameSubmission>::new();
+    ) -> Vec<&SurfaceFrameSubmission> {
+        let mut by_producer = BTreeMap::<RenderFrameProducerId, &SurfaceFrameSubmission>::new();
         for submission in self
             .submissions
             .values()
@@ -202,7 +208,7 @@ impl UiFrameSubmissionRegistryResource {
     }
 }
 
-fn sort_submissions(values: &mut Vec<&UiFrameSubmission>) {
+fn sort_submissions(values: &mut Vec<&SurfaceFrameSubmission>) {
     values.sort_by(|left, right| {
         left.route
             .cmp(&right.route)
@@ -217,43 +223,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn replacing_submission_is_keyed_by_producer() {
-        let mut registry = UiFrameSubmissionRegistryResource::default();
+    fn surface_frame_submission_replacement_is_keyed_by_generic_producer() {
+        let mut registry = SurfaceFrameSubmissionRegistryResource::default();
 
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(1).unwrap())
-                .with_order(UiFrameSubmissionOrder::new(10, 0)),
+            SurfaceFrameSubmission::new(RenderFrameProducerId::try_from_raw(1).unwrap())
+                .with_order(SurfaceFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(1).unwrap())
-                .with_order(UiFrameSubmissionOrder::new(20, 0)),
+            SurfaceFrameSubmission::new(RenderFrameProducerId::try_from_raw(1).unwrap())
+                .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
         );
 
         assert_eq!(registry.submission_count(), 1);
         let submission = registry
-            .get(&UiFrameProducerId::try_from_raw(1).unwrap())
+            .get(&RenderFrameProducerId::try_from_raw(1).unwrap())
             .expect("producer submission should exist");
         assert_eq!(submission.order.layer, 20);
     }
 
     #[test]
-    fn ordered_submissions_are_deterministic() {
-        let mut registry = UiFrameSubmissionRegistryResource::default();
+    fn surface_frame_submission_ordering_is_deterministic() {
+        let mut registry = SurfaceFrameSubmissionRegistryResource::default();
 
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(2).unwrap())
-                .with_route(UiFrameRoute::Screen)
-                .with_order(UiFrameSubmissionOrder::new(100, 5)),
+            SurfaceFrameSubmission::new(RenderFrameProducerId::try_from_raw(2).unwrap())
+                .with_route(SurfaceFrameRoute::Screen)
+                .with_order(SurfaceFrameSubmissionOrder::new(100, 5)),
         );
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(1).unwrap())
-                .with_route(UiFrameRoute::Screen)
-                .with_order(UiFrameSubmissionOrder::new(10, 0)),
+            SurfaceFrameSubmission::new(RenderFrameProducerId::try_from_raw(1).unwrap())
+                .with_route(SurfaceFrameRoute::Screen)
+                .with_order(SurfaceFrameSubmissionOrder::new(10, 0)),
         );
         registry.replace(
-            UiFrameSubmission::new(UiFrameProducerId::try_from_raw(3).unwrap())
-                .with_route(UiFrameRoute::ViewportOverlay)
-                .with_order(UiFrameSubmissionOrder::new(0, 0)),
+            SurfaceFrameSubmission::new(RenderFrameProducerId::try_from_raw(3).unwrap())
+                .with_route(SurfaceFrameRoute::ViewportOverlay)
+                .with_order(SurfaceFrameSubmissionOrder::new(0, 0)),
         );
 
         let ordered = registry
@@ -265,23 +271,25 @@ mod tests {
         assert_eq!(
             ordered,
             vec![
-                UiFrameProducerId::try_from_raw(1).unwrap(),
-                UiFrameProducerId::try_from_raw(2).unwrap(),
-                UiFrameProducerId::try_from_raw(3).unwrap(),
+                RenderFrameProducerId::try_from_raw(1).unwrap(),
+                RenderFrameProducerId::try_from_raw(2).unwrap(),
+                RenderFrameProducerId::try_from_raw(3).unwrap(),
             ]
         );
     }
 
     #[test]
-    fn surface_submission_overrides_global_submission_for_same_producer() {
-        let mut registry = UiFrameSubmissionRegistryResource::default();
-        let producer = UiFrameProducerId::try_from_raw(1).unwrap();
+    fn surface_frame_submission_overrides_global_submission_for_same_producer() {
+        let mut registry = SurfaceFrameSubmissionRegistryResource::default();
+        let producer = RenderFrameProducerId::try_from_raw(1).unwrap();
         let primary = RenderSurfaceId::primary();
         registry.replace(
-            UiFrameSubmission::new(producer).with_order(UiFrameSubmissionOrder::new(1, 0)),
+            SurfaceFrameSubmission::new(producer)
+                .with_order(SurfaceFrameSubmissionOrder::new(1, 0)),
         );
         registry.replace_for_surface(producer, primary, |producer_id| {
-            UiFrameSubmission::new(producer_id).with_order(UiFrameSubmissionOrder::new(2, 0))
+            SurfaceFrameSubmission::new(producer_id)
+                .with_order(SurfaceFrameSubmissionOrder::new(2, 0))
         });
 
         let submissions = registry.ordered_submissions_for_surface(primary);

@@ -7,7 +7,7 @@ use super::features::{
     PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedParticleVfxFeatureResource, PreparedProceduralWorldFeatureResource,
     PreparedUiFrameResource, PreparedWindFieldFeatureResource, PreparedWorldFeatureResource,
-    RenderFeatureRegistryResource, UiFontAtlasResource, UiFrameSubmissionRegistryResource,
+    RenderFeatureRegistryResource, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
     ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
     register_particle_vfx_feature_collector, sync_render_feature_registry_system,
     world::{
@@ -57,7 +57,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<PreparedUiFrameResource>();
         app.init_resource::<ViewportSurfaceBindingRegistryResource>();
         app.init_resource::<UiFontAtlasResource>();
-        app.init_resource::<UiFrameSubmissionRegistryResource>();
+        app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
         app.init_resource::<EditorPickingResultResource>();
         app.init_resource::<PreparedDrawFeatureResource>();
         app.init_resource::<PreparedWorldFeatureResource>();

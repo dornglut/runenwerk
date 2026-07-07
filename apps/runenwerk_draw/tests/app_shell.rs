@@ -10,7 +10,7 @@ use engine::plugins::render::{
     FeatureContributionStatus, PreparedRenderFrameRequestResource,
     PreparedRenderProductSelectionResource, PreparedUiFrameResource,
     RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadRegistryResource,
-    UiFrameSubmissionRegistryResource,
+    SurfaceFrameSubmissionRegistryResource,
 };
 use engine::plugins::{InputState, TouchInputPhase};
 use engine::runtime::{
@@ -2800,7 +2800,7 @@ fn headless_runtime_starts_and_submits_canvas_first_frame() {
 
     let submissions = app
         .world()
-        .resource::<UiFrameSubmissionRegistryResource>()
+        .resource::<SurfaceFrameSubmissionRegistryResource>()
         .expect("ui frame submission registry should exist");
     let submission = submissions
         .get(&DRAWING_UI_FRAME_PRODUCER_ID)

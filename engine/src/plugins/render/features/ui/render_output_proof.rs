@@ -1,24 +1,24 @@
 //! File: engine/src/plugins/render/features/ui/render_output_proof.rs
 //! Purpose: Backend-side proof that UI frame submissions can carry renderer-neutral output evidence.
 
-use crate::plugins::render::api::ids::UiFrameProducerId;
+use crate::plugins::render::api::ids::RenderFrameProducerId;
 use ui_render_data::UiRenderOutputEvidence;
 
-use super::{UiFrameRoute, UiFrameSubmission};
+use super::{SurfaceFrameRoute, SurfaceFrameSubmission};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UiFrameSubmissionRenderOutputProof {
-    pub producer_id: UiFrameProducerId,
-    pub route: UiFrameRoute,
+pub struct SurfaceFrameSubmissionRenderOutputProof {
+    pub producer_id: RenderFrameProducerId,
+    pub route: SurfaceFrameRoute,
     pub evidence_id: String,
     pub submitted_primitive_count: u32,
     pub evidenced_primitive_count: u32,
     pub diagnostic_count: u32,
 }
 
-impl UiFrameSubmissionRenderOutputProof {
+impl SurfaceFrameSubmissionRenderOutputProof {
     pub fn from_submission(
-        submission: &UiFrameSubmission,
+        submission: &SurfaceFrameSubmission,
         evidence: &UiRenderOutputEvidence,
     ) -> Self {
         Self {
@@ -62,16 +62,18 @@ mod tests {
                 1,
             )],
         );
-        let submission = UiFrameSubmission::new(UiFrameProducerId::try_from_raw(7).unwrap())
-            .with_route(UiFrameRoute::Screen)
-            .with_frame(frame);
+        let submission =
+            SurfaceFrameSubmission::new(RenderFrameProducerId::try_from_raw(7).unwrap())
+                .with_route(SurfaceFrameRoute::Screen)
+                .with_frame(frame);
 
-        let proof = UiFrameSubmissionRenderOutputProof::from_submission(&submission, &evidence);
+        let proof =
+            SurfaceFrameSubmissionRenderOutputProof::from_submission(&submission, &evidence);
 
         assert!(proof.is_valid(), "{:?}", proof);
         assert_eq!(
             proof.producer_id,
-            UiFrameProducerId::try_from_raw(7).unwrap()
+            RenderFrameProducerId::try_from_raw(7).unwrap()
         );
         assert_eq!(proof.submitted_primitive_count, 1);
         assert_eq!(proof.evidenced_primitive_count, 1);

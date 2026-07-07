@@ -13,8 +13,8 @@ use editor_viewport::{
 };
 use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::{
-    EditorPickingHit, EditorPickingTarget, RenderFlowRegistryResource, UiFrameProducerId,
-    UiFrameSubmissionRegistryResource,
+    EditorPickingHit, EditorPickingTarget, RenderFlowRegistryResource, RenderFrameProducerId,
+    SurfaceFrameSubmissionRegistryResource,
 };
 use runenwerk_editor::runtime::viewport::{
     EDITOR_MAIN_FLOW_ID, MAIN_VIEWPORT_ID, MountedSurfaceRegistryResource,
@@ -28,12 +28,12 @@ use runenwerk_editor::runtime::viewport::{
 };
 use ui_render_data::{UiPrimitive, ViewportSurfaceBindingSource};
 
-const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1001);
+const EDITOR_SHELL_UI_PRODUCER_ID: RenderFrameProducerId = ui_frame_producer_id(1001);
 const TEST_RESOURCE_SCENE_COLOR: &str = "test.viewport.scene_color";
 const TEST_RESOURCE_SCENE_COLOR_B: &str = "test.viewport.scene_color.b";
 
-const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
-    match UiFrameProducerId::try_from_raw(raw) {
+const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
+    match RenderFrameProducerId::try_from_raw(raw) {
         Ok(id) => id,
         Err(_) => panic!("ui frame producer id constants must be non-zero"),
     }
@@ -362,7 +362,7 @@ fn shell_frame_uses_viewport_embed_primitive_instead_of_raw_image_path() {
         .expect("headless editor app should run");
     let submissions = app
         .world()
-        .resource::<UiFrameSubmissionRegistryResource>()
+        .resource::<SurfaceFrameSubmissionRegistryResource>()
         .expect("ui submission registry should exist");
     let submission = submissions
         .get_for_surface(&EDITOR_SHELL_UI_PRODUCER_ID, RenderSurfaceId::primary())

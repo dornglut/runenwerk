@@ -240,7 +240,7 @@ pub fn run_ui_gallery_workbench() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use editor_shell::{EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID};
-    use engine::plugins::render::UiFrameSubmissionRegistryResource;
+    use engine::plugins::render::SurfaceFrameSubmissionRegistryResource;
     use ui_render_data::UiPrimitive;
 
     use crate::runtime::resources::EditorHostResource;
@@ -320,7 +320,7 @@ mod tests {
             .expect("UI gallery resource should exist");
         let submissions = app
             .world()
-            .resource::<UiFrameSubmissionRegistryResource>()
+            .resource::<SurfaceFrameSubmissionRegistryResource>()
             .expect("UI frame submission registry should exist");
         let submission = submissions
             .get(&UI_GALLERY_UI_PRODUCER_ID)

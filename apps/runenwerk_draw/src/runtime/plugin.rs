@@ -2,7 +2,7 @@
 
 use engine::BarrierKind;
 use engine::SystemSetKey;
-use engine::plugins::render::UiFrameSubmissionRegistryResource;
+use engine::plugins::render::SurfaceFrameSubmissionRegistryResource;
 use engine::prelude::*;
 use engine::runtime::{
     CoreSet, IntoSystemSetKey, RuntimeJobExecutorConfig, RuntimeJobExecutorResource,
@@ -55,7 +55,7 @@ impl Plugin for DrawingAppPlugin {
         app.init_resource::<DrawingHostResource>();
         app.init_resource::<DrawingInkUploadTrackerResource>();
         app.init_resource::<DrawingInkGpuValidationReportCursorResource>();
-        app.init_resource::<UiFrameSubmissionRegistryResource>();
+        app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
         app.add_barrier_handler(
             BarrierKind::ProductPublication,
             publish_drawing_ink_products_at_barrier,

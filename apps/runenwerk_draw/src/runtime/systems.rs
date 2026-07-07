@@ -11,8 +11,8 @@ use engine::plugins::render::{
     RenderDynamicTextureUploadDescriptor, RenderDynamicTextureUploadRegistryResource,
     RenderFrameProducerId, RenderProductSurfaceManifest, RenderTextureSampleMode,
     RenderTextureTargetFormat, RenderTextureTargetUsage, RenderTextureUploadAlphaMode,
-    UiFrameProducerId, UiFrameRoute, UiFrameSubmission, UiFrameSubmissionOrder,
-    UiFrameSubmissionRegistryResource,
+    SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
+    SurfaceFrameSubmissionRegistryResource,
 };
 use engine::plugins::{InputState, MouseButtonTransitionSample, MouseMotionSample};
 use engine::runtime::RuntimeJobExecutorResource;
@@ -40,13 +40,13 @@ use crate::runtime::gpu_ink::{DrawingInkGpuFlowResource, prepare_drawing_ink_gpu
 use crate::runtime::ink::process_drawing_preview_ink_jobs;
 use crate::runtime::resources::{DrawingHostResource, DrawingInkUploadTrackerResource};
 
-pub const DRAWING_UI_FRAME_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(4_001);
+pub const DRAWING_UI_FRAME_PRODUCER_ID: RenderFrameProducerId = ui_frame_producer_id(4_001);
 pub const DRAWING_RENDER_FRAME_PRODUCER_ID: RenderFrameProducerId = render_frame_producer_id(4_001);
 pub const NATIVE_CONTACT_FALLBACK_SUPPRESSION_IDLE_FRAME_LIMIT: u32 = 12;
 
 #[derive(ecs::SystemParam)]
 pub struct DrawingFrameSubmissionResources {
-    submissions: ResMut<UiFrameSubmissionRegistryResource>,
+    submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
     dynamic_targets: ResMut<RenderDynamicTextureTargetRequestRegistryResource>,
     texture_uploads: ResMut<RenderDynamicTextureUploadRegistryResource>,
     product_selections: ResMut<PreparedRenderProductSelectionResource>,
@@ -54,8 +54,8 @@ pub struct DrawingFrameSubmissionResources {
     debug_config: ResMut<RenderDebugConfigResource>,
 }
 
-const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
-    match UiFrameProducerId::try_from_raw(raw) {
+const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
+    match RenderFrameProducerId::try_from_raw(raw) {
         Ok(id) => id,
         Err(_) => panic!("ui frame producer id constants must be non-zero"),
     }
@@ -473,9 +473,9 @@ pub fn submit_draw_frame_system(
     }
 
     submissions.replace(
-        UiFrameSubmission::new(DRAWING_UI_FRAME_PRODUCER_ID)
-            .with_route(UiFrameRoute::Screen)
-            .with_order(UiFrameSubmissionOrder::new(10, 0))
+        SurfaceFrameSubmission::new(DRAWING_UI_FRAME_PRODUCER_ID)
+            .with_route(SurfaceFrameRoute::Screen)
+            .with_order(SurfaceFrameSubmissionOrder::new(10, 0))
             .with_frame(frame),
     );
 }
