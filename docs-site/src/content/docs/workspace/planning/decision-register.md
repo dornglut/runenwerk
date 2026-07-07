@@ -47,7 +47,7 @@ Decision: Start, implement, review, and mark `PT-UI-COMPONENT-PLATFORM-014` Text
 
 State transition: `production-track -> active-planning -> active-implementation -> review -> completed`
 
-Evidence: Implementation covered editable-text vocabulary, descriptor wiring, package validation, InspectorField lowering, catalog and inspection projection, normalized edit/composition/selection facts, runtime proof-frame evidence, static mount validation, route-guard evidence, focused tests, and local validation on 2026-07-02. PR #46 merged into `main` at `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
+Evidence: Implementation covered editable-text vocabulary, descriptor wiring, package validation, InspectorField text-editing lowering, catalog and inspection projection, normalized edit/composition/selection facts, runtime proof-frame evidence, static mount validation, route-guard evidence, focused tests, and local validation on 2026-07-02. PR #46 merged into `main` at `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
 
 Follow-up: Keep Phase 14 as completed dependency.
 
@@ -191,7 +191,7 @@ Options considered: start `PT-UI-RUNTIME-PLATFORM-003` immediately using the exi
 
 Reason: The correct next step is to add the workflow layer before runtime implementation. A one-shot track goal is valid as manager intent because it can own the whole destination, phase order, planning truth, PR readiness, and next-phase activation. It is not valid as one implementation PR because active implementation still requires one bounded phase with exact owner, scope, validation, evidence, and stop conditions. Phase specs should be RON handoff contracts derived from accepted Markdown authority, not replacements for Markdown design/process/planning truth. JSONL is reserved for append-only event/log/trace streams such as runtime traces, agent output, validation/proof logs, and a possible future track-manager execution ledger. Validator/tooling is deferred because the spec shape should be reviewed and exercised before scripts harden it.
 
-Affected planning files: `active-work.md`, `decision-register.md`, `../start-here.md`, `../authority-model.md`, `../planning/README.md`, `../routines/README.md`, `../task-cards/README.md`, `../routines/track-orchestration-routine.md`, `../task-cards/track-manager-task.md`, `../specs/README.md`, `../specs/phase-implementation-spec.md`, and `../specs/templates/phase-implementation-spec.ron`.
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, `../start-here.md`, `../authority-model.md`, `../planning/README.md`, `../routines/README.md`, `../task-cards/README.md`, `../routines/track-orchestration-routine.md`, `../task-cards/track-manager-task.md`, `../specs/README.md`, `../specs/phase-implementation-spec.md`, and `../specs/templates/phase-implementation-spec.ron`.
 
 Evidence: `AGENTS.md`, root architecture/domain/testing summaries, workspace operating model, authority model, lifecycle, implementation routine, PR review routine, phase completion drift check, roadmap update routine, planning records, PR #76 merge state, and accepted runtime-platform cutover docs.
 
