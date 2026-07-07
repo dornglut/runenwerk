@@ -18,6 +18,7 @@ related_docs:
   - ../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-010-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -42,7 +43,8 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-RUNTIME-PLATFORM-007` Host Action Dispatch and Runtime Trace: completed 2026-07-07 through merged PR #91 at merge commit `5dd90a2caf1bb7e4d5710830499df1d122fe587f`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation`.
 - `PT-UI-RUNTIME-PLATFORM-008` Runtime Evaluation, State Snapshot, and Invalidation: completed 2026-07-07 through merged PR #94 at merge commit `be5b790e38b7f80ad17092fa0cb75e87eef4d849`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` planning only; implementation remains blocked until separately authorized.
 - `PT-UI-RUNTIME-PLATFORM-009` SurfaceFrame Generic Producer Boundary: completed 2026-07-07 through merged PR #97 at merge commit `50e2dbdf1f9c076f4a76a04543274801d1f1649b`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication`.
-- `PT-UI-RUNTIME-PLATFORM-010` UiPlugin Render Publication: completed 2026-07-07 through merged PR #101 at merge commit `8d6c13146deab870dca5533204067249aa2c1b90`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-010-closeout.md`. Follow-up is fulfilled by the Phase 011 activation record; keep Phase 010 as completed prerequisite evidence.
+- `PT-UI-RUNTIME-PLATFORM-010` UiPlugin Render Publication: completed 2026-07-07 through merged PR #101 at merge commit `8d6c13146deab870dca5533204067249aa2c1b90`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-010-closeout.md`. Follow-up is fulfilled by completed `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement`; keep Phase 010 as completed prerequisite evidence.
+- `PT-UI-RUNTIME-PLATFORM-011` Scene/Debug Overlay Producer Migration and Retirement: completed 2026-07-07 through merged PR #104 at merge commit `15e213a08dbf79f65e0851fe5be9f853f157b48b`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md`. Follow-up is `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` active planning only; implementation remains blocked until separately authorized.
 
 ## Recently completed UI Component Platform work
 

@@ -19,6 +19,7 @@ related_docs:
   - ../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -671,6 +672,32 @@ Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug 
 Reactivation condition: Reopen if Phase 011 implementation needs scope outside the accepted scene/debug producer migration map, if another hardcoded scene/debug UI producer path is found and not named, if RenderPlugin must keep owning UI semantic producer collection, if parallel prior/target runtime paths remain, if UiPlugin render publication regresses, if Counter product packaging enters the PR, if source/program/action semantics change, or if planning drifts from merged code again.
 
 Supersedes: Phase 010 UiPlugin Render Publication completion and Phase 011 planning decision.
+
+Superseded by: Phase 011 Scene/Debug Overlay Producer Migration and Retirement completion and Phase 012 planning decision.
+
+## Phase 011 Scene/Debug Overlay Producer Migration and Retirement completion and Phase 012 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` completed through merged PR #104 and open `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-011 review -> completed`; `PT-UI-RUNTIME-PLATFORM-012 production-track -> active-planning`.
+
+Context: PR #104 merged Phase 011 into `main` at `15e213a08dbf79f65e0851fe5be9f853f157b48b` after focused runtime UI producer migration validation, engine validation, docs validation, diff hygiene, PR metadata inspection, and merge-readiness inspection. The Phase 011 closeout records that scene and debug overlay frame publication now belongs to the owning producers through `SurfaceFrameSubmissionRegistryResource`, while RenderPlugin no longer imports, exports, schedules, or owns the hardcoded scene/debug UI producer collection path.
+
+Options considered: leave Phase 011 active after merge; mark Phase 011 complete and immediately authorize Phase 012 implementation; mark Phase 011 complete and open Phase 012 active planning only.
+
+Reason: The track orchestration workflow requires completion truth after each implementation PR before the next implementation phase starts. Phase 012 needs its own current app/product crate inventory, command/proof plan, exact allowed/forbidden files, focused validation envelope, evidence requirements, principle review, and stop conditions before implementation authorization. Opening active planning only preserves the one-phase-per-PR boundary and prevents Counter product work from being bundled into the completed Phase 011 producer migration.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 011, `E6` PR #104 merge metadata and no-checks metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment in `../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md`.
+
+Follow-up: Open a separate `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` active-implementation authorization PR from current `main` if authority and source inspection still agree. Do not start Phase 012 implementation until that authorization PR is merged.
+
+Reactivation condition: Reopen if PR #104 completion evidence is found inaccurate, if Phase 011 introduced forbidden Phase 012-014 scope, if Phase 012 planning needs authority beyond the accepted cutover plan, if the current app/product path inventory cannot be completed, or if planning drifts from merged code again.
+
+Supersedes: Phase 011 Scene/Debug Overlay Producer Migration and Retirement activation decision.
 
 Superseded by: none.
 
