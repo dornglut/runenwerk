@@ -25,6 +25,7 @@ related_docs:
   - ../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md
   - ./roadmap.md
   - ./production-tracks.md
   - ./completed-work.md
@@ -37,15 +38,15 @@ This file names the current planning focus for scriptless workflow. It stays sho
 
 ## Current focus
 
-ID: `PT-UI-RUNTIME-PLATFORM-008`
+ID: `PT-UI-RUNTIME-PLATFORM-009`
 
-Title: `Runtime Evaluation, State Snapshot, and Invalidation`
+Title: `SurfaceFrame Generic Producer Boundary`
 
-State: active-implementation authorization recorded for one bounded Phase 008 PR. No runtime code is changed by this planning record.
+State: active planning only after Phase 008 completion truth. No Phase 009 implementation PR is authorized by this record.
 
-Lifecycle state: `active-implementation` for Phase 008 only.
+Lifecycle state: `active-planning` for Phase 009 only.
 
-Owner: `engine::plugins::ui` owns the generic runtime evaluation, UI session snapshot, invalidation, reports, diagnostics, and trace records. Existing evaluator/runtime-view/render-data owners remain the source for their contracts. Host/app owners still own app-state mutation. RenderPlugin remains outside runtime evaluation ownership and consumes only downstream published render frames.
+Owner: render frame/submission contracts and `ui_render_data` own the producer-generic surface/frame vocabulary at the accepted seam. `engine::plugins::ui` remains the source/program/evaluation owner and may consume the downstream seam only after the boundary exists. RenderPlugin consumes generic producer/surface/frame packets without owning UI semantics.
 
 Authority files:
 
@@ -78,6 +79,7 @@ docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-004-closeout
 docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-005-closeout.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-006-closeout.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-007-closeout.md
+docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-008-closeout.md
 docs-site/src/content/docs/reports/investigations/live-uiplugin-runtime-current-state-investigation.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
@@ -85,71 +87,64 @@ docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architect
 docs-site/src/content/docs/architecture/ui-framework-architecture.md
 ```
 
-Evidence classes: `E3` source/design/planning inspection by path, `E6` PR #92 merge/check metadata, and `E8` accepted architecture/workflow/planning authority. Phase 007 implementation completion remains backed by `E5` local command validation and `E9` code/test plus validation plus authority alignment in the closeout report.
+Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 008, `E6` PR #94 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment in the closeout report.
 
-Complete investigation gate: complete for opening Phase 008 active implementation. Phase 008 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, Phase 007 closeout evidence, and activation-time source inspection of existing evaluator/runtime-view/render-data contracts.
+Complete investigation gate: complete for Phase 009 active planning through the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and Phase 008 closeout evidence. A separate Phase 009 activation record must map the exact render frame/submission contracts, `ui_render_data` names/types, and migration tests before implementation.
 
-Complete design gate: complete for Phase 008 implementation through the accepted cutover plan, Phase 007 closeout, and this planning authorization record.
+Complete design gate: complete for Phase 009 active planning through the accepted cutover plan, architecture record, and Phase 008 closeout. Implementation remains blocked until a separate active-implementation decision records exact scope, owner checks, validation, evidence expectation, stop conditions, principle compliance, and module decomposition.
 
-Implementation authorization status: `active-implementation-authorized`.
+Implementation authorization status: `not-authorized`; active planning only.
 
-Phase 007 completion truth:
+Phase 008 completion truth:
 
 ```text
-PR #91 merged into main at 5dd90a2caf1bb7e4d5710830499df1d122fe587f.
-Closeout report: docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-007-closeout.md.
+PR #94 merged into main at be5b790e38b7f80ad17092fa0cb75e87eef4d849.
+Closeout report: docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-008-closeout.md.
 Remote phase branch was deleted by the merge command.
 ```
 
-Phase 008 handoff contract from accepted cutover authority:
+Phase 009 handoff contract from accepted cutover authority:
 
 ```text
-engine/src/plugins/ui/source.rs
-engine/src/plugins/ui/resources.rs
-engine/src/plugins/ui/report.rs
-engine/src/plugins/ui/diagnostics.rs
-engine/src/plugins/ui/trace.rs
-engine/Cargo.toml dependencies on ui_artifacts, ui_binding, ui_evaluator, ui_runtime_view, and ui_state; engine already has ui_runtime and ui_render_data
-focused engine tests in engine/tests/ui_runtime_evaluation.rs, named for `cargo test -p engine ui_runtime_evaluation`
+only the render frame/submission contracts named by the phase PR
+only ui_render_data names/types touched by the accepted migration map
+existing render submission registry/resource paths required for the generic producer seam
+focused migration tests and compile checks
 ```
 
-Required Phase 008 evidence from accepted cutover authority:
+Required Phase 009 evidence from accepted cutover authority:
 
 ```text
-mounted screen source/program facts feed evaluator/runtime-view path
-Counter output text changes after host mutation
-frame payload is derived from runtime/evaluator output
-runtime report includes source, program, runtime-view, output, diagnostics, and invalidation facts
-UI session snapshot/replay is stable by source/runtime IDs
-dirty records name source, host-data, session, layout, text, theme, primitive, surface, and render-publication causes
-trace adds runtime evaluation and state/invalidation facts
+migration map lists every renamed type/module/function
+producer-generic names replace UI-specific render ownership at the accepted seam before UiPlugin publishes durable frames
+producer id and surface identity are generic concepts, not UiPlugin concepts
+RenderPlugin consumes generic producer/surface/frame packets
+scene/debug paths remain named as migration inputs, not hidden parallel paths
+external docs no longer imply RenderPlugin owns UI semantics
 ```
 
 Principle compliance matrix:
 
 ```text
-KISS: Phase 008 should add one source/program-to-runtime-evaluation path, one snapshot shape, and one invalidation record path.
-DRY: Phase 008 must reuse existing source, program, trace, evaluator/runtime-view/render-data contracts instead of inventing duplicate UI truth.
-YAGNI: Phase 008 must not add render publication, product app packaging, source reload/persistence, SDF/world-space behavior, or generic frameworks.
-SOLID: source facts, runtime evaluation, snapshots, invalidation causes, diagnostics, reports, and trace facts must remain separately owned.
-Separation of Concerns: UiPlugin owns generic runtime evaluation state; host/app owners own mutation; RenderPlugin remains outside source/program/evaluator ownership.
-Avoid Premature Optimization: no per-element incremental rendering claims without dirty-scope proof.
-Law of Demeter: runtime evaluation should depend on direct source/program/evaluator/runtime-view contracts instead of reaching into renderer primitives or product state.
+KISS: Phase 009 should rename or introduce only the accepted producer-generic seam, not rewrite the renderer backend.
+DRY: Phase 009 must remove duplicate UI-specific render ownership names at the seam instead of adding a parallel path.
+YAGNI: Phase 009 must not publish UiPlugin frames, migrate overlays, package the Counter app, add reload/persistence, or start SDF/world-space work.
+SOLID: producer identity, surface identity, frame packet shape, and runtime UI semantics must remain separately owned.
+Separation of Concerns: RenderPlugin consumes generic frame packets; UiPlugin remains outside Phase 009 publication until Phase 010.
+Avoid Premature Optimization: no backend rewrite or performance claim belongs in the boundary rename/migration phase.
+Law of Demeter: RenderPlugin should depend on generic producer/surface/frame contracts, not `UiScreen`, `IntoUi`, actions, host mutation, or route policy.
 ```
 
 Module decomposition map:
 
 ```text
-engine/src/plugins/ui/source.rs: source/program facts and runtime-evaluation input facts only.
-engine/src/plugins/ui/resources.rs: runtime evaluation state, snapshot, and dirty-record resources only.
-engine/src/plugins/ui/report.rs: runtime evaluation, output, snapshot, and invalidation reporting only.
-engine/src/plugins/ui/diagnostics.rs: stable runtime evaluation/invalidation diagnostics only.
-engine/src/plugins/ui/trace.rs: runtime evaluation and state/invalidation trace facts only.
-engine/Cargo.toml: add only `ui_artifacts`, `ui_binding`, `ui_evaluator`, `ui_runtime_view`, and `ui_state`; keep existing `ui_runtime` and `ui_render_data` usage.
-engine/tests/ui_runtime_evaluation.rs: output facts, Counter text-after-mutation proof, state snapshots, dirty records, and frame payload creation.
+render frame/submission contracts: producer-generic type/module/function names selected by the activation PR only.
+ui_render_data: accepted seam names/types touched by the migration map only.
+existing render submission registry/resource paths: generic producer seam wiring only.
+tests: focused migration tests and compile checks that prove old UI-specific ownership names are not retained at the accepted seam.
 ```
 
-Maintainability review status: complete for Phase 008 authorization. Stop if implementation needs a broader module map than the files named here.
+Maintainability review status: complete for Phase 009 planning. Stop before implementation if activation cannot name the exact seam, migration map, and focused validation without broad render-backend churn.
 
 Feature support matrix:
 
@@ -159,32 +154,33 @@ Public mounting API: completed by Phase 004.
 Typed screen/source/action contracts: completed by Phase 005.
 Mounted sessions: completed by Phase 006.
 Host action dispatch and trace: completed by Phase 007.
-Runtime evaluation/invalidation: active-implementation Phase 008.
-Render boundary/publication: downstream Phases 009-010.
+Runtime evaluation/invalidation: completed by Phase 008.
+SurfaceFrame generic producer boundary: active-planning Phase 009.
+UiPlugin render publication: downstream Phase 010.
 Scene/debug overlay migration: downstream Phase 011.
 Runtime Counter product: downstream Phase 012.
 Reload/persistence: downstream Phase 013.
 Closeout/adoption lock: downstream Phase 014.
 ```
 
-Phase 008 validation envelope from cutover and workflow authority:
+Phase 009 validation envelope from cutover and workflow authority:
 
 ```text
-cargo test -p engine ui_runtime_evaluation
-cargo test -p engine
+cargo test <focused Phase 009 migration filter selected by activation PR>
+cargo test <relevant crate/package command selected by activation PR>
 python tools/docs/validate_docs.py
 git diff --check
 git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Evidence expectation: focused engine tests must prove mounted screen source/program facts feed `UiRuntimeArtifact`, `UiEvaluator`, and `UiRuntimeView`; Counter output text changes after host mutation through `UiEvaluationContext` host data, not direct product mutation; frame payloads derive from runtime/evaluator output through existing `ui_runtime`/`ui_render_data` contracts; session snapshot/replay is stable by source/runtime IDs; dirty records name the required causes; runtime reports include source/program/runtime-view/output/diagnostics/invalidation facts; and trace records runtime evaluation plus state/invalidation facts.
+Evidence expectation: the activation PR must inspect current render frame/submission contracts and publish a migration map before implementation. Focused Phase 009 tests must prove producer-generic names at the accepted seam, generic producer id and surface identity, RenderPlugin consumption of generic packets, and named scene/debug migration inputs without hidden parallel paths.
 
-Stop conditions: stop if frame output skips source/program/evaluator evidence, a new execution strategy is invented without accepted design, renderer primitives become UI source truth, per-element incremental rendering is claimed without dirty-scope proof, render publication/source reload/persistence enters the PR, `apps/ui_counter_runtime` product packaging enters the PR, or Phase 009+ files become necessary.
+Stop conditions: stop if the rename becomes broad or unreviewable, source/program/action semantics change, the phase becomes a render backend rewrite, genericization creates a second runtime path, UiPlugin render publication enters the PR, scene/debug overlay migration enters the PR, or Phase 010+ files become necessary.
 
-Known blockers: no Phase 008 implementation branch has been opened or merged yet. Phase 009 and later remain blocked until Phase 008 is reviewed, merged, and completion truth is recorded.
+Known blockers: no Phase 009 implementation branch is authorized yet. The exact render seam, `ui_render_data` migration map, focused tests, and relevant cargo command must be confirmed by a separate activation PR after this closeout/planning truth merges. Phase 010 and later remain blocked until Phase 009 is reviewed, merged, and completion truth is recorded.
 
-Next action: create exactly one bounded `PT-UI-RUNTIME-PLATFORM-008 - Runtime Evaluation, State Snapshot, and Invalidation` implementation branch/PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 008 validation and the required docs/diff/status commands are clean.
+Next action: create a separate `PT-UI-RUNTIME-PLATFORM-009 - SurfaceFrame Generic Producer Boundary` activation branch/PR after this closeout/planning truth merges. Keep Phase 009 implementation blocked until that activation record is merged.
 
 ## Active-work rules
 

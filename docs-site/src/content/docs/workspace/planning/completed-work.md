@@ -14,6 +14,8 @@ related_docs:
   - ../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -34,8 +36,9 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-RUNTIME-PLATFORM-003` UiPlugin Foundation: completed 2026-07-07 through merged PR #79 at merge commit `0135850277e904b4be2c336e3ef6507b3fc88b72`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API`.
 - `PT-UI-RUNTIME-PLATFORM-004` App Mounting API: completed 2026-07-07 through merged PR #82 at merge commit `9fb86f0d426385be7e425ff943c7a9d5450e1edb`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts`.
 - `PT-UI-RUNTIME-PLATFORM-005` Typed Screen / Source / Action Contracts: completed 2026-07-07 through merged PR #85 at merge commit `6226470defa7a72a567fc03c1bc3783e63e2c2c8`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime`.
-- `PT-UI-RUNTIME-PLATFORM-006` Mounted Surface Session Runtime: completed 2026-07-07 through merged PR #88 at merge commit `82d6f00326cf2823eb91d3f655a730b962b355f6`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` planning only; implementation remains blocked until separately authorized.
-- `PT-UI-RUNTIME-PLATFORM-007` Host Action Dispatch and Runtime Trace: completed 2026-07-07 through merged PR #91 at merge commit `5dd90a2caf1bb7e4d5710830499df1d122fe587f`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` planning only; implementation remains blocked until separately authorized.
+- `PT-UI-RUNTIME-PLATFORM-006` Mounted Surface Session Runtime: completed 2026-07-07 through merged PR #88 at merge commit `82d6f00326cf2823eb91d3f655a730b962b355f6`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace`.
+- `PT-UI-RUNTIME-PLATFORM-007` Host Action Dispatch and Runtime Trace: completed 2026-07-07 through merged PR #91 at merge commit `5dd90a2caf1bb7e4d5710830499df1d122fe587f`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation`.
+- `PT-UI-RUNTIME-PLATFORM-008` Runtime Evaluation, State Snapshot, and Invalidation: completed 2026-07-07 through merged PR #94 at merge commit `be5b790e38b7f80ad17092fa0cb75e87eef4d849`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` planning only; implementation remains blocked until separately authorized.
 
 ## Recently completed UI Component Platform work
 

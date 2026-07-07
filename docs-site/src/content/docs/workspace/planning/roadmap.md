@@ -574,9 +574,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-008`
 
 Title: Runtime Evaluation, State Snapshot, and Invalidation
 
-State: active implementation authorization recorded; implementation PR not yet opened
+State: completed through merged PR #94 and closeout truth
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `completed`
 
 Authority:
 
@@ -604,7 +604,7 @@ dirty records name source, host-data, session, layout, text, theme, primitive, s
 trace adds runtime evaluation and state/invalidation facts
 ```
 
-Allowed files/crates for the Phase 008 implementation authorization:
+Delivered files/crates for the Phase 008 implementation:
 
 ```text
 engine/src/plugins/ui/source.rs
@@ -642,7 +642,7 @@ Gate status:
 ```text
 Complete investigation gate: complete for active implementation through accepted runtime-platform authority, Phase 007 closeout evidence, and activation-time source inspection of existing evaluator/runtime-view/render-data contracts.
 Complete design gate: complete for implementation through the accepted cutover plan and Phase 007 closeout evidence.
-Implementation authorization: active for exactly one bounded Phase 008 implementation PR.
+Implementation authorization: completed through merged PR #94. No further Phase 008 implementation PR is authorized.
 ```
 
 Validation envelope:
@@ -656,7 +656,98 @@ git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Next action: Open exactly one bounded Phase 008 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 008 validation and required docs/diff/status commands are clean.
+Completion evidence:
+
+```text
+PR #94 merged into main at be5b790e38b7f80ad17092fa0cb75e87eef4d849.
+Validation: cargo test -p engine ui_runtime_evaluation, cargo test -p engine, cargo fmt, docs validation, diff hygiene, branch status, and diff stat passed before merge.
+Closeout report: ../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md.
+```
+
+Next action: Keep Phase 008 as completed evidence. Use the closeout as the prerequisite for `PT-UI-RUNTIME-PLATFORM-009 - SurfaceFrame Generic Producer Boundary` planning.
+
+### PT-UI-RUNTIME-PLATFORM-009
+
+ID: `PT-UI-RUNTIME-PLATFORM-009`
+
+Title: SurfaceFrame Generic Producer Boundary
+
+State: active planning only; implementation is not authorized by this record
+
+Lifecycle state: `active-planning`
+
+Authority:
+
+```text
+../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../architecture/live-uiplugin-runtime-platform-architecture.md
+../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md
+../routines/track-orchestration-routine.md
+../routines/implementation-routine.md
+../complete-investigation-gate.md
+../complete-design-gate.md
+../complete-merge-readiness-gate.md
+../evidence-quality-taxonomy.md
+```
+
+Planning contract from accepted cutover authority:
+
+```text
+migration map lists every renamed type/module/function
+producer-generic names replace UI-specific render ownership at the accepted seam before UiPlugin publishes durable frames
+producer id and surface identity are generic concepts, not UiPlugin concepts
+RenderPlugin consumes generic producer/surface/frame packets
+scene/debug paths remain named as migration inputs, not hidden parallel paths
+external docs no longer imply RenderPlugin owns UI semantics
+```
+
+Allowed files/crates for the Phase 009 planning state:
+
+```text
+only the render frame/submission contracts named by the future Phase 009 activation PR
+only ui_render_data names/types touched by the future accepted migration map
+existing render submission registry/resource paths required for the generic producer seam
+focused migration tests and compile checks
+```
+
+Forbidden files/crates:
+
+```text
+UiPlugin render publication implementation
+scene/debug overlay producer migration implementation
+source reload/persistence implementation
+apps/ui_counter_runtime product packaging
+SDF or SpatialCanvas implementation
+source/program/action semantic changes
+broad render backend rewrite
+second runtime path
+foundation/meta
+domain/app_program
+generic plugin framework
+phase spec validator implementation
+any tools/docs validator or script changes
+```
+
+Gate status:
+
+```text
+Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 008 closeout evidence. A separate activation PR must inspect and name the exact render frame/submission seam, migration map, owner boundaries, focused tests, and cargo validation before implementation.
+Complete design gate: complete for active planning through the accepted cutover plan, architecture record, and Phase 008 closeout. Implementation remains blocked until a separate active-implementation decision records exact scope.
+Implementation authorization: not authorized; active planning only.
+```
+
+Validation envelope:
+
+```text
+cargo test <focused Phase 009 migration filter selected by activation PR>
+cargo test <relevant crate/package command selected by activation PR>
+python tools/docs/validate_docs.py
+git diff --check
+git status --short --branch
+git diff --stat main...HEAD
+```
+
+Next action: Open a separate Phase 009 activation branch/PR after this closeout/planning truth merges. Keep Phase 009 implementation blocked until that activation record is merged.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 

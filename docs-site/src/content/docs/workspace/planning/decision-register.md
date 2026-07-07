@@ -489,6 +489,32 @@ Reactivation condition: Reopen if Phase 008 implementation needs scope outside t
 
 Supersedes: Phase 007 Host Action Dispatch and Runtime Trace completion and Phase 008 planning decision.
 
+Superseded by: Phase 008 Runtime Evaluation, State Snapshot, and Invalidation completion and Phase 009 planning decision.
+
+## Phase 008 Runtime Evaluation, State Snapshot, and Invalidation completion and Phase 009 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` completed through merged PR #94 and open `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-008 review -> completed`; `PT-UI-RUNTIME-PLATFORM-009 production-track -> active-planning`.
+
+Context: PR #94 merged the bounded Phase 008 implementation into `main` at `be5b790e38b7f80ad17092fa0cb75e87eef4d849`. The track orchestration routine, workflow lifecycle, and phase completion drift check require completion truth before the next implementation phase starts.
+
+Options considered: leave Phase 008 as active implementation after merge; start Phase 009 implementation immediately from the cutover plan; record Phase 008 completion truth and open Phase 009 as planning only.
+
+Reason: Phase 008 delivered the authorized runtime evaluation, state snapshot, invalidation, diagnostics, reporting, trace, and focused engine tests while preserving SurfaceFrame generic producer boundary, UiPlugin render publication, scene/debug overlay migration, source reload/persistence, and Counter product scope for downstream phases. The correct next state is to record completion truth, then prepare Phase 009 separately. The phase completion drift check does not authorize Phase 009 implementation from the closeout patch.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E5` local command validation recorded for PR #94, `E6` PR #94 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 008 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md`.
+
+Follow-up: Open a separate Phase 009 active-implementation decision after this closeout/planning truth merges. Do not start Phase 009 implementation until active implementation is separately authorized.
+
+Reactivation condition: Reopen if PR #94 completion evidence is found inaccurate, if Phase 008 introduced forbidden Phase 009-014 scope, if Phase 009 planning needs authority beyond the accepted cutover plan, or if planning drifts from merged code again.
+
+Supersedes: Phase 008 Runtime Evaluation, State Snapshot, and Invalidation activation decision.
+
 Superseded by: none.
 
 ## Lifecycle rule
