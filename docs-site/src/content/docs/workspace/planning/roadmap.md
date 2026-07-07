@@ -7,6 +7,8 @@ canonical: true
 last_reviewed: 2026-07-07
 related_docs:
   - ../workflow-lifecycle.md
+  - ../routines/track-orchestration-routine.md
+  - ../specs/phase-implementation-spec.md
   - ../../architecture/ui-framework-architecture.md
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
@@ -66,7 +68,7 @@ Title: Live UiPlugin Runtime and Generic Surface-Frame Rendering
 
 State: completed design-gate hardening through merged PR #74; implementation not authorized by this entry
 
-Lifecycle state: `active-planning` design-gate complete / superseded by full cutover-plan focus
+Lifecycle state: `completed` design-gate hardening / superseded by full cutover-plan authority
 
 Authority:
 
@@ -88,7 +90,7 @@ Complete design gate: complete for opening implementation planning.
 Implementation authorization: still forbidden by this entry.
 ```
 
-Next action: Use as authority for `PT-UI-RUNTIME-PLATFORM-002`, the full platform cutover plan.
+Next action: Use as authority for `PT-UI-RUNTIME-PLATFORM-002`, the completed full platform cutover plan.
 
 ### PT-UI-RUNTIME-PLATFORM-002
 
@@ -96,9 +98,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-002`
 
 Title: Live UiPlugin Runtime Full Platform Cutover Plan
 
-State: draft docs-only implementation-planning PR in progress
+State: completed / accepted full-platform cutover planning through merged PR #76
 
-Lifecycle state: `active-planning` full-platform cutover contract draft
+Lifecycle state: `completed` docs-only planning; implementation not authorized by this entry
 
 Authority:
 
@@ -110,17 +112,51 @@ Authority:
 ../../architecture/ui-framework-architecture.md
 ```
 
-Evidence: This entry corrects the previous first-runtime-slice framing. The platform is planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch with UI-runtime trace, runtime evaluation with state snapshot and invalidation, producer-generic surface-frame boundary, UiPlugin render publication, scene/debug overlay producer migration/retirement, runnable human/agent Counter app product, source reload and persistence contract, and closeout/adoption lock. SDF UI backend work is assigned to downstream `PT-UI-RENDER-BACKEND-SDF-001`; phase implementation specs are downstream workflow hardening, not part of this planning PR.
+Evidence: PR #76 merged the full cutover-plan docs into `main` at merge commit `1697942c968afd9648872c202972826dc4c406b2`. The platform is planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch with UI-runtime trace, runtime evaluation with state snapshot and invalidation, producer-generic surface-frame boundary, UiPlugin render publication, scene/debug overlay producer migration/retirement, runnable human/agent Counter app product, source reload and persistence contract, and closeout/adoption lock. SDF UI backend work is assigned to downstream `PT-UI-RENDER-BACKEND-SDF-001`.
 
 Gate status:
 
 ```text
 Complete investigation gate: inherited from PT-UI-RUNTIME-PLATFORM-001 and extended with render/app-engine feature mapping.
-Complete design gate: in progress for full cutover contract.
-Implementation authorization: forbidden until this planning PR is accepted and the next phase PR opens.
+Complete design gate: accepted for the full cutover contract through PR #76.
+Implementation authorization: forbidden until the next phase opens separately with exact active-implementation scope.
 ```
 
-Next action: Review the full cutover plan. If accepted, merge it and open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as the first bounded implementation phase.
+Next action: Insert `PT-WORKFLOW-TRACK-ORCHESTRATION-001` as the workflow hardening gate before opening `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation`.
+
+### PT-WORKFLOW-TRACK-ORCHESTRATION-001
+
+ID: `PT-WORKFLOW-TRACK-ORCHESTRATION-001`
+
+Title: Track Orchestration and Phase Spec Handoff Workflow
+
+State: active docs-only workflow-hardening PR before runtime implementation
+
+Lifecycle state: `active-planning` / draft PR review; not runtime `active-implementation`
+
+Authority:
+
+```text
+../routines/track-orchestration-routine.md
+../task-cards/track-manager-task.md
+../specs/phase-implementation-spec.md
+../specs/templates/phase-implementation-spec.ron
+../authority-model.md
+../planning/active-work.md
+../planning/decision-register.md
+```
+
+Evidence: PR #77 adds the missing track-manager workflow layer. It formalizes that a one-shot track goal is valid as manager intent, but each implementation agent receives exactly one bounded phase. It also defines RON phase specs as structured handoff contracts derived from accepted Markdown authority and reserves JSONL for append-only trace/log streams.
+
+Gate status:
+
+```text
+Complete investigation gate: satisfied by workflow authority inspection for docs-only process hardening.
+Complete design gate: applies and is bounded to workflow docs/spec handoff docs. Runtime implementation remains forbidden.
+Implementation authorization: forbidden for runtime code. This PR only hardens workflow before Phase 003.
+```
+
+Next action: Review PR #77, run docs validation/diff checks, and merge if clean. Then open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as a separate active-implementation PR.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
