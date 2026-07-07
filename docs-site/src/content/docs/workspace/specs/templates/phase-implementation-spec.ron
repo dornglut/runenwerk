@@ -6,6 +6,7 @@ PhaseImplementationSpec(
     phase_id: "PT-EXAMPLE-000",
     title: "Example Phase Title",
     lifecycle_state: "active-planning",
+    implementation_authorization_status: "active-planning-only",
     owner: "workspace-or-subsystem-owner",
 
     authority_docs: [
@@ -15,6 +16,12 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/complete-design-gate.md",
         "docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md",
     ],
+
+    complete_investigation_gate_status: "required|not_required|complete|blocked",
+    complete_design_gate_status: "required|not_required|complete|blocked",
+    principle_compliance_status: "pending|complete|blocked",
+    module_decomposition_status: "pending|complete|blocked",
+    maintainability_review_status: "pending|complete|blocked",
 
     allowed_paths: [
         "path/to/allowed/file_or_directory/**",
