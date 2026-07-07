@@ -8,6 +8,7 @@ last_reviewed: 2026-07-07
 related_docs:
   - ../workflow-lifecycle.md
   - ../../architecture/ui-framework-architecture.md
+  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
@@ -75,7 +76,7 @@ Current blocker:
 ```text
 No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-The remaining strategic blocker is the full implementation-planning contract for `PT-UI-RUNTIME-PLATFORM-002`. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, old scene/debug overlay migration work, runnable Counter product code, SDF/world-space/SpatialCanvas work, foundation/meta, domain/app_program, and generic plugin framework work remain blocked until the full cutover plan is accepted.
+The remaining strategic blocker is the full implementation-planning contract for `PT-UI-RUNTIME-PLATFORM-002`. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, old scene/debug overlay migration work, runnable Counter product code, source-reload/persistence code, SDF/world-space/SpatialCanvas work, foundation/meta, domain/app_program, and generic plugin framework work remain blocked until the full cutover plan is accepted.
 ```
 
 Next action:
@@ -99,13 +100,14 @@ Lifecycle state: `active-planning`; implementation not authorized until the full
 Goal:
 
 ```text
-Live UiPlugin runtime and generic surface-frame rendering: app authors install `RenderPlugin`, `UiPlugin`, and their own app plugin; mount typed UI screens; handle typed actions through host-owned app state; produce source/program/evaluator-backed frames; publish generic surface-frame submissions that RenderPlugin prepares without owning UI semantics; retire old render-owned UI producer paths; and ship a runnable Counter app product.
+Live UiPlugin runtime and generic surface-frame rendering: app authors install `RenderPlugin`, `UiPlugin`, and their own app plugin; mount typed UI screens; handle typed actions through host-owned app state; produce source/program/evaluator-backed frames; publish generic surface-frame submissions that RenderPlugin prepares without owning UI semantics; retire old render-owned UI producer paths; provide generic trace/history and agent operation; support source-reload/persistence contracts; and ship a runnable Counter app product.
 ```
 
 Authority:
 
 ```text
 Current-state investigation: docs-site/src/content/docs/reports/investigations/live-uiplugin-runtime-current-state-investigation.md
+Runtime architecture: docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
 Design-gate authority: docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
 Full cutover plan: docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
 Architecture spine: docs-site/src/content/docs/architecture/ui-framework-architecture.md
@@ -121,19 +123,20 @@ Milestones:
 004 App Mounting API — future implementation PR
 005 Typed Screen / Source / Action Contracts — future implementation PR
 006 Mounted Surface Session Runtime — future implementation PR
-007 Host Action Dispatch — future implementation PR
-008 Runtime Evaluation to Frame — future implementation PR
+007 Host Action Dispatch and Runtime Trace — future implementation PR
+008 Runtime Evaluation, State Snapshot, and Invalidation — future implementation PR
 009 UiPlugin Render Publication — future implementation PR
-010 Legacy Scene/Debug Overlay Migration — future implementation PR with no permanent old path
+010 Legacy Scene/Debug Overlay Migration and Removal — future implementation PR with no permanent old path
 011 SurfaceFrame Genericization Cutover — future staged migration PR
-012 Runtime Counter App Product — future implementation/proof PR
-013 Closeout and Adoption Lock — future closeout PR
+012 Source Reload and Persistence Contract — future implementation PR
+013 Runtime Counter App Product — future implementation/proof PR
+014 Closeout and Adoption Lock — future closeout PR
 ```
 
 Design gates:
 
 ```text
-Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` adds render/app-engine feature mapping and product acceptance requirements.
+Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` adds render/app-engine feature mapping, runtime architecture, agent/trace requirements, reload/persistence decisions, and product acceptance requirements.
 Complete design gate: in progress for `PT-UI-RUNTIME-PLATFORM-002` full cutover plan.
 Implementation authorization: forbidden until the full cutover plan is accepted and the next phase PR records exact scope, owner modules, allowed files/crates, validation envelope, evidence expectation, principle compliance, acceptance criteria, and stop conditions.
 ```
@@ -141,13 +144,13 @@ Implementation authorization: forbidden until the full cutover plan is accepted 
 Evidence gates:
 
 ```text
-Current evidence is `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session. Future implementation phases must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and for Phase 012 a recorded `cargo run -p ui_counter_runtime` result.
+Current evidence is `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session. Future implementation phases must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and for Phase 013 recorded human and agent Counter app commands.
 ```
 
 Current blocker:
 
 ```text
-The full platform cutover plan is not yet accepted. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, old overlay migration work, and runnable Counter product code remain blocked until `PT-UI-RUNTIME-PLATFORM-002` is reviewed and merged.
+The full platform cutover plan is not yet accepted. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, old overlay migration work, source reload/persistence implementation, and runnable Counter product code remain blocked until `PT-UI-RUNTIME-PLATFORM-002` is reviewed and merged.
 ```
 
 Activation condition:
