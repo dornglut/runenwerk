@@ -61,14 +61,14 @@ Milestones:
 014 Text Editing / Editable Text Behavior — completed through PR #46 and local validation report
 015 Generic Text — completed through PR #48 baseline and PR #49 hardening
 016 Surface2D — completed through PR #61 after PR #62 workflow hardening
-017 SpatialCanvas — future, blocked behind runtime platform cutover
-018 NodeCanvas — future
-019 PortGraphCanvas — future
-020 ProgressionTreeView — future; may be reframed as a generic tree/hierarchical graph package before implementation
-021 TrackSurface / Timeline — future
-022 Transitions / effects — future
-023 Adoption gates — future final hardening, not the first adoption proof
-024 Runtime-proven closeout — future
+017 SpatialCanvas — downstream, blocked behind runtime platform cutover
+018 NodeCanvas — downstream
+019 PortGraphCanvas — downstream
+020 ProgressionTreeView — downstream; may be reframed as a generic tree/hierarchical graph package before implementation
+021 TrackSurface / Timeline — downstream
+022 Transitions / effects — downstream
+023 Adoption gates — downstream final hardening, not the first adoption proof
+024 Runtime-proven closeout — downstream
 ```
 
 Current blocker:
@@ -76,7 +76,7 @@ Current blocker:
 ```text
 No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-The remaining strategic blocker is the full implementation-planning contract for `PT-UI-RUNTIME-PLATFORM-002`. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, old scene/debug overlay migration work, runnable Counter product code, source-reload/persistence code, SDF/world-space/SpatialCanvas work, foundation/meta, domain/app_program, and generic plugin framework work remain blocked until the full cutover plan is accepted.
+The remaining strategic blocker is the full implementation-planning contract for `PT-UI-RUNTIME-PLATFORM-002`. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, scene/debug overlay migration work, runnable Counter product code, source-reload/persistence code, SDF/world-space/SpatialCanvas work, foundation/meta, domain/app_program, and generic plugin framework work remain blocked until the full cutover plan is accepted.
 ```
 
 Next action:
@@ -100,7 +100,7 @@ Lifecycle state: `active-planning`; implementation not authorized until the full
 Goal:
 
 ```text
-Live UiPlugin runtime and generic surface-frame rendering: app authors install `RenderPlugin`, `UiPlugin`, and their own app plugin; mount typed UI screens; handle typed actions through host-owned app state; produce source/program/evaluator-backed frames; publish generic surface-frame submissions that RenderPlugin prepares without owning UI semantics; retire old render-owned UI producer paths; provide generic trace/history and agent operation; support source-reload/persistence contracts; and ship a runnable Counter app product.
+Live UiPlugin runtime and generic surface-frame rendering: app authors install `RenderPlugin`, `UiPlugin`, and their own app plugin; mount typed UI screens; handle typed actions through host-owned app state; produce source/program/evaluator-backed frames; publish through a producer-generic surface-frame seam that RenderPlugin prepares without owning UI semantics; retire prior render-owned UI producer paths; provide generic UI-runtime trace/history and agent operation; support source-reload/persistence contracts; and ship a runnable Counter app product.
 ```
 
 Authority:
@@ -119,24 +119,24 @@ Milestones:
 ```text
 001 Live UiPlugin runtime and generic surface-frame rendering investigation/design gate — completed through merged PR #74 docs-only hardening
 002 Full platform cutover plan — active docs-only planning PR
-003 UiPlugin Foundation — future implementation PR
-004 App Mounting API — future implementation PR
-005 Typed Screen / Source / Action Contracts — future implementation PR
-006 Mounted Surface Session Runtime — future implementation PR
-007 Host Action Dispatch and Runtime Trace — future implementation PR
-008 Runtime Evaluation, State Snapshot, and Invalidation — future implementation PR
-009 UiPlugin Render Publication — future implementation PR
-010 Legacy Scene/Debug Overlay Migration and Removal — future implementation PR with no permanent old path
-011 SurfaceFrame Genericization Cutover — future staged migration PR
-012 Source Reload and Persistence Contract — future implementation PR
-013 Runtime Counter App Product — future implementation/proof PR
-014 Closeout and Adoption Lock — future closeout PR
+003 UiPlugin Foundation — downstream implementation PR
+004 App Mounting API — downstream implementation PR
+005 Typed Screen / Source / Action Contracts — downstream implementation PR
+006 Mounted Surface Session Runtime — downstream implementation PR
+007 Host Action Dispatch and Runtime Trace — downstream implementation PR
+008 Runtime Evaluation, State Snapshot, and Invalidation — downstream implementation PR
+009 SurfaceFrame Generic Producer Boundary — downstream implementation PR before UiPlugin render publication
+010 UiPlugin Render Publication — downstream implementation PR
+011 Scene/Debug Overlay Producer Migration and Retirement — downstream implementation PR
+012 Runtime Counter App Product — downstream implementation/proof PR
+013 Source Reload and Persistence Contract — downstream implementation PR
+014 Closeout and Adoption Lock — downstream closeout PR
 ```
 
 Design gates:
 
 ```text
-Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` adds render/app-engine feature mapping, runtime architecture, agent/trace requirements, reload/persistence decisions, and product acceptance requirements.
+Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` adds render/app-engine feature mapping, runtime architecture, agent/trace requirements, producer-generic render-boundary ordering, reload/persistence decisions, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements.
 Complete design gate: in progress for `PT-UI-RUNTIME-PLATFORM-002` full cutover plan.
 Implementation authorization: forbidden until the full cutover plan is accepted and the next phase PR records exact scope, owner modules, allowed files/crates, validation envelope, evidence expectation, principle compliance, acceptance criteria, and stop conditions.
 ```
@@ -144,13 +144,13 @@ Implementation authorization: forbidden until the full cutover plan is accepted 
 Evidence gates:
 
 ```text
-Current evidence is `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session. Future implementation phases must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and for Phase 013 recorded human and agent Counter app commands.
+Current evidence is `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session. Future implementation phases must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and for Phase 012 recorded human and agent Counter app commands.
 ```
 
 Current blocker:
 
 ```text
-The full platform cutover plan is not yet accepted. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, old overlay migration work, source reload/persistence implementation, and runnable Counter product code remain blocked until `PT-UI-RUNTIME-PLATFORM-002` is reviewed and merged.
+The full platform cutover plan is not yet accepted. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame generic producer boundary work, overlay producer migration work, source reload/persistence implementation, and runnable Counter product code remain blocked until `PT-UI-RUNTIME-PLATFORM-002` is reviewed and merged.
 ```
 
 Activation condition:
