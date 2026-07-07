@@ -485,9 +485,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-007`
 
 Title: Host Action Dispatch and Runtime Trace
 
-State: active implementation authorization recorded; implementation PR not yet opened
+State: completed through merged PR #91 and closeout truth
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `completed`
 
 Authority:
 
@@ -495,6 +495,7 @@ Authority:
 ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
 ../../architecture/live-uiplugin-runtime-platform-architecture.md
 ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
+../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md
 ../routines/track-orchestration-routine.md
 ../routines/implementation-routine.md
 ../complete-investigation-gate.md
@@ -516,7 +517,7 @@ action report records route/action/host/failure reason
 generic UI-runtime trace records mounted/input/route/capability/dispatch/mutation/rejection/diagnostic events
 ```
 
-Allowed files/crates for the Phase 007 implementation authorization:
+Delivered files/crates:
 
 ```text
 engine/src/plugins/ui/events.rs
@@ -525,8 +526,7 @@ engine/src/plugins/ui/host.rs
 engine/src/plugins/ui/report.rs
 engine/src/plugins/ui/diagnostics.rs
 engine/src/plugins/ui/trace.rs
-engine/Cargo.toml dependency on ui_hosts if not already present; engine already has ui_hosts from Phase 005
-focused positive and negative engine tests, named for `cargo test -p engine ui_action`
+focused positive and negative engine tests in engine/tests/ui_action_dispatch.rs
 ```
 
 Forbidden files/crates:
@@ -553,15 +553,102 @@ any tools/docs validator or script changes
 Gate status:
 
 ```text
-Complete investigation gate: complete for active implementation through accepted runtime-platform authority and Phase 006 closeout evidence.
-Complete design gate: complete for implementation through the accepted cutover plan and Phase 006 closeout evidence.
-Implementation authorization: active for exactly one bounded Phase 007 implementation PR.
+Complete investigation gate: completed for Phase 007 through accepted runtime-platform authority and closeout evidence.
+Complete design gate: completed for Phase 007 through the accepted cutover plan and closeout evidence.
+Implementation authorization: completed; no further Phase 007 implementation PR is open.
 ```
 
-Validation envelope:
+Completion evidence:
 
 ```text
-cargo test -p engine ui_action
+PR #91 merged into main at 5dd90a2caf1bb7e4d5710830499df1d122fe587f.
+Validation: cargo test -p engine ui_action, cargo test -p engine, docs validation, diff hygiene, branch status, and diff stat passed before merge.
+Closeout report: ../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md.
+```
+
+Next action: Keep Phase 007 as completed evidence. Use the closeout as the prerequisite for `PT-UI-RUNTIME-PLATFORM-008 - Runtime Evaluation, State Snapshot, and Invalidation` planning.
+
+### PT-UI-RUNTIME-PLATFORM-008
+
+ID: `PT-UI-RUNTIME-PLATFORM-008`
+
+Title: Runtime Evaluation, State Snapshot, and Invalidation
+
+State: active planning only; implementation PR not yet authorized
+
+Lifecycle state: `active-planning`
+
+Authority:
+
+```text
+../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../architecture/live-uiplugin-runtime-platform-architecture.md
+../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md
+../routines/track-orchestration-routine.md
+../routines/implementation-routine.md
+../complete-investigation-gate.md
+../complete-design-gate.md
+../complete-merge-readiness-gate.md
+../evidence-quality-taxonomy.md
+```
+
+Planning contract from accepted cutover authority:
+
+```text
+mounted screen source/program facts feed evaluator/runtime-view path
+Counter output text changes after host mutation
+frame payload is derived from runtime/evaluator output
+runtime report includes source, program, runtime-view, output, diagnostics, and invalidation facts
+UI session snapshot/replay is stable by source/runtime IDs
+dirty records name source, host-data, session, layout, text, theme, primitive, surface, and render-publication causes
+trace adds runtime evaluation and state/invalidation facts
+```
+
+Allowed files/crates for future Phase 008 activation:
+
+```text
+engine/src/plugins/ui/source.rs
+engine/src/plugins/ui/resources.rs
+engine/src/plugins/ui/report.rs
+engine/src/plugins/ui/diagnostics.rs
+engine/src/plugins/ui/trace.rs
+engine/Cargo.toml dependencies on selected evaluator/runtime-view/render-data crates
+focused engine tests for output facts, state snapshots, dirty records, and frame payload creation
+```
+
+Forbidden files/crates:
+
+```text
+render publication or render adapter code
+SurfaceFrame generic producer boundary implementation code
+scene/debug overlay producer migration implementation code
+source reload/persistence implementation code
+apps/ui_counter_runtime product packaging
+world-space UI implementation
+SDF or SpatialCanvas implementation
+product/editor/game semantics in generic UI
+renderer primitives as UI source truth
+new execution strategy without accepted design
+per-element incremental rendering claims without dirty-scope proof
+foundation/meta
+domain/app_program
+generic plugin framework
+phase spec validator implementation
+any tools/docs validator or script changes
+```
+
+Gate status:
+
+```text
+Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 007 closeout evidence.
+Complete design gate: complete for active planning through the accepted cutover plan and Phase 007 closeout evidence.
+Implementation authorization: not authorized; requires a separate Phase 008 activation decision.
+```
+
+Validation envelope for future activation/implementation:
+
+```text
+cargo test -p engine <Phase 008 focused runtime-evaluation filter selected by activation PR>
 cargo test -p engine
 python tools/docs/validate_docs.py
 git diff --check
@@ -569,7 +656,7 @@ git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Next action: Open exactly one bounded Phase 007 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 007 validation and required docs/diff/status commands are clean.
+Next action: Open a separate Phase 008 activation branch/PR after this closeout/planning truth merges. Do not start Phase 008 implementation until active implementation is separately authorized.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 

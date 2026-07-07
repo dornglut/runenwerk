@@ -437,6 +437,32 @@ Reactivation condition: Reopen if Phase 007 implementation needs scope outside t
 
 Supersedes: Phase 006 Mounted Surface Session Runtime completion and Phase 007 planning decision.
 
+Superseded by: Phase 007 Host Action Dispatch and Runtime Trace completion and Phase 008 planning decision.
+
+## Phase 007 Host Action Dispatch and Runtime Trace completion and Phase 008 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` completed through merged PR #91 and open `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-007 review -> completed`; `PT-UI-RUNTIME-PLATFORM-008 production-track -> active-planning`.
+
+Context: PR #91 merged the bounded Phase 007 implementation into `main` at `5dd90a2caf1bb7e4d5710830499df1d122fe587f`. The track orchestration routine, workflow lifecycle, and phase completion drift check require completion truth before the next implementation phase starts.
+
+Options considered: leave Phase 007 as active implementation after merge; start Phase 008 implementation immediately from the cutover plan; record Phase 007 completion truth and open Phase 008 as planning only.
+
+Reason: Phase 007 delivered the authorized host action dispatch and generic UI-runtime trace path while preserving runtime evaluation, state snapshot, invalidation, and all later runtime scope for downstream phases. The correct next state is to record completion truth, then prepare Phase 008 separately. The phase completion drift check does not authorize Phase 008 implementation from the closeout patch.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E5` local command validation recorded for PR #91, `E6` PR #91 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 007 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md`.
+
+Follow-up: Open a separate Phase 008 active-implementation decision after this closeout/planning truth merges. Do not start Phase 008 implementation until active implementation is separately authorized.
+
+Reactivation condition: Reopen if PR #91 completion evidence is found inaccurate, if Phase 007 introduced forbidden Phase 008-014 scope, if Phase 008 planning needs authority beyond the accepted cutover plan, or if planning drifts from merged code again.
+
+Supersedes: Phase 007 Host Action Dispatch and Runtime Trace activation decision.
+
 Superseded by: none.
 
 ## Lifecycle rule
