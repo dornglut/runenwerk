@@ -274,11 +274,37 @@ Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`,
 
 Evidence: `E3` source/design/planning inspection by path, `E6` PR #80 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 003 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md`.
 
-Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` implementation PR from current `main`. Keep the PR draft until focused Phase 004 validation and required docs/diff/status commands are clean.
+Follow-up: Fulfilled by the Phase 004 App Mounting API completion and Phase 005 planning decision below.
 
 Reactivation condition: Reopen if Phase 004 implementation needs scope outside the accepted App Mounting API contract, if private App internals are required without accepted API adjustment, if typed screen/source/action contracts enter the PR, or if planning drifts from merged code again.
 
 Supersedes: none.
+
+Superseded by: Phase 004 App Mounting API completion and Phase 005 planning decision.
+
+## Phase 004 App Mounting API completion and Phase 005 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` completed through merged PR #82 and open `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-004 review -> completed`; `PT-UI-RUNTIME-PLATFORM-005 production-track -> active-planning`.
+
+Context: PR #82 merged the bounded Phase 004 implementation into `main` at `9fb86f0d426385be7e425ff943c7a9d5450e1edb`. The track orchestration routine, workflow lifecycle, and phase completion drift check require completion truth before the next implementation phase starts.
+
+Options considered: leave Phase 004 as active implementation after merge; start Phase 005 implementation immediately from the cutover plan; record Phase 004 completion truth and open Phase 005 as planning only.
+
+Reason: Phase 004 delivered the authorized App Mounting API while preserving typed screen/source/action contracts and all later runtime scope for downstream phases. The correct next state is to record completion truth, then prepare Phase 005 separately. The phase completion drift check does not authorize Phase 005 implementation from the closeout patch.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, and `../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md`.
+
+Evidence: `E3` source/test inspection by path, `E5` local command validation on PR #82 head, `E6` PR #82 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment. PR #82 had no unresolved comments, reviews, review requests, or hosted checks when inspected before merge.
+
+Follow-up: Review and merge the Phase 004 closeout/planning branch. Then decide whether to authorize exactly one bounded `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` implementation PR.
+
+Reactivation condition: Reopen if PR #82 completion evidence is found inaccurate, if Phase 004 introduced forbidden Phase 005-014 scope, if Phase 005 planning needs authority beyond the accepted cutover plan, or if planning drifts from merged code again.
+
+Supersedes: Phase 004 App Mounting API activation decision.
 
 Superseded by: none.
 
