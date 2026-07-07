@@ -22,6 +22,7 @@ related_docs:
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ./roadmap.md
   - ./production-tracks.md
+  - ./completed-work.md
   - ./decision-register.md
 ---
 
@@ -64,6 +65,7 @@ docs-site/src/content/docs/workspace/planning/README.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/completed-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
 docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
@@ -91,6 +93,9 @@ docs-site/src/content/docs/workspace/task-cards/README.md
 docs-site/src/content/docs/workspace/authority-model.md
 docs-site/src/content/docs/workspace/planning/README.md
 docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/roadmap.md
+docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/completed-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 
