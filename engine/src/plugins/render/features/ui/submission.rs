@@ -164,6 +164,15 @@ impl SurfaceFrameSubmissionRegistryResource {
         self.submissions.remove(&(*producer_id, None))
     }
 
+    pub fn remove_for_surface(
+        &mut self,
+        producer_id: &RenderFrameProducerId,
+        render_surface_id: RenderSurfaceId,
+    ) -> Option<SurfaceFrameSubmission> {
+        self.submissions
+            .remove(&(*producer_id, Some(render_surface_id)))
+    }
+
     pub fn get(&self, producer_id: &RenderFrameProducerId) -> Option<&SurfaceFrameSubmission> {
         self.submissions.get(&(*producer_id, None))
     }
@@ -296,5 +305,19 @@ mod tests {
         assert_eq!(submissions.len(), 1);
         assert_eq!(submissions[0].order.layer, 2);
         assert_eq!(submissions[0].render_surface_id, Some(primary));
+    }
+
+    #[test]
+    fn surface_frame_submission_removes_surface_scoped_submission() {
+        let mut registry = SurfaceFrameSubmissionRegistryResource::default();
+        let producer = RenderFrameProducerId::try_from_raw(1).unwrap();
+        let primary = RenderSurfaceId::primary();
+        registry.replace_for_surface(producer, primary, SurfaceFrameSubmission::new);
+
+        let removed = registry.remove_for_surface(&producer, primary);
+
+        assert!(removed.is_some());
+        assert!(registry.get_for_surface(&producer, primary).is_none());
+        assert!(registry.is_empty());
     }
 }

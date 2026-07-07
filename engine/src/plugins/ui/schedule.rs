@@ -6,6 +6,7 @@ use scheduler::label::SystemSetKey;
 pub enum UiRuntimeSet {
     Foundation,
     Report,
+    RenderPublication,
 }
 
 impl IntoSystemSetKey for UiRuntimeSet {
@@ -13,6 +14,9 @@ impl IntoSystemSetKey for UiRuntimeSet {
         match self {
             Self::Foundation => SystemSetKey::of::<UiRuntimeSet>("UiRuntimeSet::Foundation"),
             Self::Report => SystemSetKey::of::<UiRuntimeSet>("UiRuntimeSet::Report"),
+            Self::RenderPublication => {
+                SystemSetKey::of::<UiRuntimeSet>("UiRuntimeSet::RenderPublication")
+            }
         }
     }
 }

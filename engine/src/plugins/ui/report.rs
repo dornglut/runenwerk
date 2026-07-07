@@ -1,6 +1,8 @@
 use super::UiRuntimeInstallState;
 use super::{UiHostMutationReceipt, UiRuntimeSourceProgramFacts, UiTypedActionId};
 
+use crate::plugins::render::RenderFrameProducerId;
+use crate::plugins::render::backend::RenderSurfaceId;
 use ui_evaluator::UiOutput;
 use ui_hosts::{DomainCommand, HostCommand, HostKind};
 use ui_program::RouteId;
@@ -458,6 +460,134 @@ impl UiRuntimeFramePayload {
 
     pub fn visual_operator_count(&self) -> usize {
         self.visual_operator_count
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiRuntimeFramePublicationStatus {
+    Published,
+    MissingRuntimeEvaluation,
+}
+
+impl UiRuntimeFramePublicationStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Published => "published",
+            Self::MissingRuntimeEvaluation => "missing-runtime-evaluation",
+        }
+    }
+
+    pub const fn is_published(self) -> bool {
+        matches!(self, Self::Published)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiRuntimeFramePublicationReport {
+    runtime_id: Option<String>,
+    source_id: Option<String>,
+    program_id: Option<String>,
+    producer_id: RenderFrameProducerId,
+    render_surface_id: RenderSurfaceId,
+    frame_revision: Option<u64>,
+    dirty_causes: Vec<UiRuntimeDirtyCause>,
+    primitive_count: usize,
+    status: UiRuntimeFramePublicationStatus,
+}
+
+impl UiRuntimeFramePublicationReport {
+    pub fn published(
+        evaluation: &UiRuntimeEvaluationReport,
+        producer_id: RenderFrameProducerId,
+        render_surface_id: RenderSurfaceId,
+    ) -> Self {
+        Self {
+            runtime_id: Some(evaluation.runtime_id().to_owned()),
+            source_id: Some(evaluation.source().source_id().to_owned()),
+            program_id: Some(evaluation.source().program_id().to_owned()),
+            producer_id,
+            render_surface_id,
+            frame_revision: Some(evaluation.frame_payload().frame_revision()),
+            dirty_causes: evaluation.dirty_causes().collect(),
+            primitive_count: evaluation.frame_payload().primitive_count(),
+            status: UiRuntimeFramePublicationStatus::Published,
+        }
+    }
+
+    pub fn missing_runtime_evaluation(
+        producer_id: RenderFrameProducerId,
+        render_surface_id: RenderSurfaceId,
+    ) -> Self {
+        Self {
+            runtime_id: None,
+            source_id: None,
+            program_id: None,
+            producer_id,
+            render_surface_id,
+            frame_revision: None,
+            dirty_causes: Vec::new(),
+            primitive_count: 0,
+            status: UiRuntimeFramePublicationStatus::MissingRuntimeEvaluation,
+        }
+    }
+
+    pub fn runtime_id(&self) -> Option<&str> {
+        self.runtime_id.as_deref()
+    }
+
+    pub fn source_id(&self) -> Option<&str> {
+        self.source_id.as_deref()
+    }
+
+    pub fn program_id(&self) -> Option<&str> {
+        self.program_id.as_deref()
+    }
+
+    pub fn producer_id(&self) -> RenderFrameProducerId {
+        self.producer_id
+    }
+
+    pub fn render_surface_id(&self) -> RenderSurfaceId {
+        self.render_surface_id
+    }
+
+    pub fn frame_revision(&self) -> Option<u64> {
+        self.frame_revision
+    }
+
+    pub fn dirty_causes(&self) -> &[UiRuntimeDirtyCause] {
+        &self.dirty_causes
+    }
+
+    pub fn primitive_count(&self) -> usize {
+        self.primitive_count
+    }
+
+    pub fn status(&self) -> UiRuntimeFramePublicationStatus {
+        self.status
+    }
+
+    pub fn is_published(&self) -> bool {
+        self.status.is_published()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, ecs::Resource)]
+pub struct UiRuntimeFramePublicationResource {
+    reports: Vec<UiRuntimeFramePublicationReport>,
+}
+
+impl UiRuntimeFramePublicationResource {
+    pub fn reports(&self) -> &[UiRuntimeFramePublicationReport] {
+        &self.reports
+    }
+
+    pub fn latest_report(&self) -> Option<&UiRuntimeFramePublicationReport> {
+        self.reports.last()
+    }
+
+    pub fn record(&mut self, report: UiRuntimeFramePublicationReport) {
+        self.reports.push(report);
     }
 }
 

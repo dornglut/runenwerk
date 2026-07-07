@@ -2,9 +2,13 @@ use ui_hosts::HostKind;
 use ui_program::RouteId;
 use ui_surface::SurfaceInstanceId;
 
+use crate::plugins::render::RenderFrameProducerId;
+use crate::plugins::render::backend::RenderSurfaceId;
+
 use super::{
     UiActionDispatchFailureReason, UiRuntimeDiagnosticCode, UiRuntimeDirtyCause,
-    UiRuntimeSourceProgramFacts, UiTypedActionDescriptor, UiTypedActionId,
+    UiRuntimeFramePublicationReport, UiRuntimeFramePublicationStatus, UiRuntimeSourceProgramFacts,
+    UiTypedActionDescriptor, UiTypedActionId,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -20,6 +24,8 @@ pub enum UiRuntimeTraceEventKind {
     RuntimeEvaluation,
     StateSnapshot,
     Invalidation,
+    UiFramePublished,
+    UiFramePresented,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +41,10 @@ pub struct UiRuntimeTraceEvent {
     source_id: Option<String>,
     program_id: Option<String>,
     dirty_cause: Option<UiRuntimeDirtyCause>,
+    render_producer_id: Option<RenderFrameProducerId>,
+    render_surface_id: Option<RenderSurfaceId>,
+    frame_revision: Option<u64>,
+    frame_publication_status: Option<UiRuntimeFramePublicationStatus>,
 }
 
 impl UiRuntimeTraceEvent {
@@ -164,6 +174,10 @@ impl UiRuntimeTraceEvent {
             source_id: None,
             program_id: None,
             dirty_cause: None,
+            render_producer_id: None,
+            render_surface_id: None,
+            frame_revision: None,
+            frame_publication_status: None,
         }
     }
 
@@ -222,6 +236,41 @@ impl UiRuntimeTraceEvent {
             source_id: Some(facts.source_id().to_owned()),
             program_id: Some(facts.program_id().to_owned()),
             dirty_cause,
+            render_producer_id: None,
+            render_surface_id: None,
+            frame_revision: None,
+            frame_publication_status: None,
+        }
+    }
+
+    pub fn frame_published(report: &UiRuntimeFramePublicationReport) -> Self {
+        Self::frame_event(UiRuntimeTraceEventKind::UiFramePublished, report)
+    }
+
+    pub fn frame_presented(report: &UiRuntimeFramePublicationReport) -> Self {
+        Self::frame_event(UiRuntimeTraceEventKind::UiFramePresented, report)
+    }
+
+    fn frame_event(
+        kind: UiRuntimeTraceEventKind,
+        report: &UiRuntimeFramePublicationReport,
+    ) -> Self {
+        Self {
+            kind,
+            action_id: None,
+            route: None,
+            host: None,
+            surface_instance_id: None,
+            failure_reason: None,
+            diagnostic_code: None,
+            runtime_id: report.runtime_id().map(str::to_owned),
+            source_id: report.source_id().map(str::to_owned),
+            program_id: report.program_id().map(str::to_owned),
+            dirty_cause: report.dirty_causes().first().copied(),
+            render_producer_id: Some(report.producer_id()),
+            render_surface_id: Some(report.render_surface_id()),
+            frame_revision: report.frame_revision(),
+            frame_publication_status: Some(report.status()),
         }
     }
 
@@ -277,6 +326,22 @@ impl UiRuntimeTraceEvent {
 
     pub fn dirty_cause(&self) -> Option<UiRuntimeDirtyCause> {
         self.dirty_cause
+    }
+
+    pub fn render_producer_id(&self) -> Option<RenderFrameProducerId> {
+        self.render_producer_id
+    }
+
+    pub fn render_surface_id(&self) -> Option<RenderSurfaceId> {
+        self.render_surface_id
+    }
+
+    pub fn frame_revision(&self) -> Option<u64> {
+        self.frame_revision
+    }
+
+    pub fn frame_publication_status(&self) -> Option<UiRuntimeFramePublicationStatus> {
+        self.frame_publication_status
     }
 }
 
