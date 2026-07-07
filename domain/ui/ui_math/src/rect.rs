@@ -2,8 +2,9 @@
 //! Purpose: Shared rectangle type and helpers.
 
 use crate::{UiInsets, UiPoint, UiSize};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct UiRect {
     pub x: f32,
     pub y: f32,
