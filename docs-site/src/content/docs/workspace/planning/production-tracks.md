@@ -78,13 +78,13 @@ Current blocker:
 ```text
 No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The `PT-WORKFLOW-TRACK-ORCHESTRATION-001` workflow gate is completed through PR #77 and closeout truth. `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` is completed through PR #79 and closeout truth. `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` is completed through PR #82 and closeout truth. `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` is completed through PR #85 and closeout truth. `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` is completed through PR #88 and closeout truth. `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` is completed through PR #91 and closeout truth. `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` is completed through PR #94 and closeout truth. `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` is completed through PR #97 and closeout truth. `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` is completed through PR #101 and closeout truth. The active runtime-platform focus is now `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` active planning only.
+The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The `PT-WORKFLOW-TRACK-ORCHESTRATION-001` workflow gate is completed through PR #77 and closeout truth. `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` is completed through PR #79 and closeout truth. `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` is completed through PR #82 and closeout truth. `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` is completed through PR #85 and closeout truth. `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` is completed through PR #88 and closeout truth. `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` is completed through PR #91 and closeout truth. `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` is completed through PR #94 and closeout truth. `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` is completed through PR #97 and closeout truth. `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` is completed through PR #101 and closeout truth. The active runtime-platform focus is now `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` active implementation authorization after the Phase 011 activation record merges.
 ```
 
 Next action:
 
 ```text
-Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` active-implementation authorization PR after Phase 010 closeout merges. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
+After the Phase 011 activation record merges, open exactly one bounded `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` implementation PR from current `main`. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
 ```
 
 ## PT-UI-RUNTIME-PLATFORM
@@ -95,9 +95,9 @@ Title: Live UiPlugin Runtime Platform
 
 Track type: architecture / runtime platform / public API
 
-State: active planning for Phase 011
+State: active implementation authorization for Phase 011
 
-Lifecycle state: `active-planning` for `PT-UI-RUNTIME-PLATFORM-011` only
+Lifecycle state: `active-implementation` for `PT-UI-RUNTIME-PLATFORM-011` only
 
 Goal:
 
@@ -132,7 +132,7 @@ Workflow gate PT-WORKFLOW-TRACK-ORCHESTRATION-001 — completed through merged P
 008 Runtime Evaluation, State Snapshot, and Invalidation — completed through PR #94 and closeout truth
 009 SurfaceFrame Generic Producer Boundary — completed through PR #97 and closeout truth
 010 UiPlugin Render Publication — completed through PR #101 and closeout truth
-011 Scene/Debug Overlay Producer Migration and Retirement — active planning only; implementation PR not yet authorized
+011 Scene/Debug Overlay Producer Migration and Retirement — active implementation authorized after Phase 011 activation merges
 012 Runtime Counter App Product — downstream implementation/proof PR
 013 Source Reload and Persistence Contract — downstream implementation PR
 014 Closeout and Adoption Lock — downstream closeout PR
@@ -143,7 +143,7 @@ Design gates:
 ```text
 Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` added render/app-engine feature mapping, runtime architecture, agent/trace requirements, producer-generic render-boundary ordering, reload/persistence decisions, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements.
 Complete design gate: completed for `PT-UI-RUNTIME-PLATFORM-002` through merged PR #76.
-Implementation authorization: none active. Phase 011 is active planning only until a separate authorization records exact owner files/crates, validation, evidence, principle checks, module decomposition, and stop conditions. Phase 012 and later remain forbidden until Phase 011 is reviewed, merged, and completion truth is recorded.
+Implementation authorization: Phase 011 is authorized after the Phase 011 activation record merges. The authorized contract names exact owner files/crates, validation, evidence, principle checks, module decomposition, and stop conditions. Phase 012 and later remain forbidden until Phase 011 is reviewed, merged, and completion truth is recorded.
 ```
 
 Evidence gates:
@@ -155,19 +155,19 @@ Current evidence is `E3` source/design/planning inspection by path, `E5` local c
 Current blocker:
 
 ```text
-Phase 010 is merged and closed out. Phase 011 is active planning only and not implementation-authorized. Source reload/persistence implementation, runnable Counter product code, and Phases 012-014 implementation remain blocked until Phase 011 is reviewed, merged, and completion truth is recorded.
+Phase 010 is merged and closed out. Phase 011 implementation is authorized only by the bounded activation contract and must stay inside scene/debug producer migration and retirement. Source reload/persistence implementation, runnable Counter product code, and Phases 012-014 implementation remain blocked until Phase 011 is reviewed, merged, and completion truth is recorded.
 ```
 
 Activation condition:
 
 ```text
-Phase 011 may move to active implementation only after a separate authorization records the named scene/debug producer path inventory, exact allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition, and stop conditions. Phase 012 may move only after Phase 011 is complete, reviewed/merged, and truthfully closed.
+Phase 011 may proceed only through the separately authorized implementation PR that uses the named scene/debug producer path inventory, exact allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition, and stop conditions recorded in active-work and the Phase 011 spec. Phase 012 may move only after Phase 011 is complete, reviewed/merged, and truthfully closed.
 ```
 
 Next action:
 
 ```text
-Open exactly one bounded Phase 011 active-implementation authorization PR after this Phase 010 closeout merges. Do not patch Phase 011 runtime code until that authorization is merged. Do not implement multiple runtime phases in one broad PR.
+After the Phase 011 activation record merges, open exactly one bounded Phase 011 implementation PR from current `main`. Keep it draft until focused validation is clean. Do not implement multiple runtime phases in one broad PR.
 ```
 
 ## Track shape
