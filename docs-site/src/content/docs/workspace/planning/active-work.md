@@ -23,6 +23,7 @@ related_docs:
   - ../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
   - ./roadmap.md
   - ./production-tracks.md
   - ./completed-work.md
@@ -35,15 +36,15 @@ This file names the current planning focus for scriptless workflow. It stays sho
 
 ## Current focus
 
-ID: `PT-UI-RUNTIME-PLATFORM-006`
+ID: `PT-UI-RUNTIME-PLATFORM-007`
 
-Title: `Mounted Surface Session Runtime`
+Title: `Host Action Dispatch and Runtime Trace`
 
-State: active-implementation authorization recorded for one bounded Phase 006 PR. No runtime code is changed by this planning record.
+State: active planning only after Phase 006 completion truth. No Phase 007 implementation authorization is recorded by this closeout/planning record.
 
-Lifecycle state: `active-implementation` for Phase 006 only.
+Lifecycle state: `active-planning` for Phase 007 only.
 
-Owner: `engine::plugins::ui` owns the engine-facing mounted-session registry and reports. `ui_surface` owns surface definition, mounted instance, session-retention, validation, and diagnostic semantics; RenderPlugin owns render preparation/submission consumption only.
+Owner: `engine::plugins::ui` owns generic UI action dispatch resources, reports, diagnostics, and trace records. Host/app owners own mutation of app state. `ui_hosts` owns host-facing capability/intent semantics if a Phase 007 implementation needs that existing contract. RenderPlugin owns render preparation/submission consumption only.
 
 Authority files:
 
@@ -74,6 +75,7 @@ docs-site/src/content/docs/reports/closeouts/pt-workflow-track-orchestration-001
 docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-003-closeout.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-004-closeout.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-005-closeout.md
+docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-006-closeout.md
 docs-site/src/content/docs/reports/investigations/live-uiplugin-runtime-current-state-investigation.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
@@ -81,56 +83,74 @@ docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architect
 docs-site/src/content/docs/architecture/ui-framework-architecture.md
 ```
 
-Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 005, `E6` PR merge/check metadata for PR #85, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment for Phase 005 closeout.
+Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 006, `E6` PR merge/check metadata for PR #88, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment for Phase 006 closeout.
 
-Complete investigation gate: complete for opening Phase 006 active implementation. Phase 006 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and the Phase 005 closeout evidence.
+Complete investigation gate: complete for opening Phase 007 active planning. Phase 007 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and the Phase 006 closeout evidence.
 
-Complete design gate: complete for Phase 006 implementation through the accepted cutover plan, Phase 005 closeout, and this planning authorization record.
+Complete design gate: complete for Phase 007 planning through the accepted cutover plan, Phase 006 closeout, and this planning record. Implementation authorization still requires a separate active-implementation decision.
 
-Implementation authorization status: `active-implementation-authorized`.
+Implementation authorization status: `not-authorized`; active planning only.
 
-Phase 005 completion truth:
+Phase 006 completion truth:
 
 ```text
-PR #85 merged into main at 6226470defa7a72a567fc03c1bc3783e63e2c2c8.
-Closeout report: docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-005-closeout.md.
+PR #88 merged into main at 82d6f00326cf2823eb91d3f655a730b962b355f6.
+Closeout report: docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-006-closeout.md.
 Remote phase branch was deleted by the merge command.
 ```
 
-Phase 006 handoff contract from accepted cutover authority:
+Phase 007 planning contract from accepted cutover authority:
 
 ```text
-engine/src/plugins/ui/resources.rs
-engine/src/plugins/ui/mount.rs
+engine/src/plugins/ui/events.rs
+engine/src/plugins/ui/action.rs
+engine/src/plugins/ui/host.rs
 engine/src/plugins/ui/report.rs
-engine/Cargo.toml dependency on ui_surface if not already present
-focused engine tests for mount/unmount/generation/session reports
+engine/src/plugins/ui/diagnostics.rs
+engine/src/plugins/ui/trace.rs
+engine/Cargo.toml dependency on ui_hosts if not already present
+focused positive and negative engine tests
+```
+
+Required Phase 007 evidence from accepted cutover authority:
+
+```text
+known action mutates only through app/host owner
+unknown route does not mutate
+schema mismatch does not mutate
+capability mismatch does not mutate
+payload mismatch does not mutate
+missing host data does not mutate
+action report records route/action/host/failure reason
+generic UI-runtime trace records mounted/input/route/capability/dispatch/mutation/rejection/diagnostic events
 ```
 
 Principle compliance matrix:
 
 ```text
-KISS: Phase 006 must adapt Phase 004 mount requests into `ui_surface` mounted-instance/session records without inventing a second surface semantic model.
-DRY: Phase 006 must reuse `ui_surface` mounted-surface/session/validation contracts instead of duplicating them in engine.
-YAGNI: Phase 006 must not add host action dispatch, runtime trace, render publication, product app, source reload/persistence, SDF, or generic frameworks.
-SOLID: mount resources, mount behavior, reports, diagnostics, and focused tests must remain separately owned.
-Separation of Concerns: mounted session state belongs to UiPlugin resources using `ui_surface` semantics, not RenderPlugin or product/editor/game domains.
-Avoid Premature Optimization: no runtime evaluation, dirty tracking, or render publication belongs in Phase 006.
-Law of Demeter: public callers should keep using mount APIs while engine records session facts through direct `ui_surface` contracts.
+KISS: Phase 007 should route typed UI action attempts through one clear dispatch/report/trace path.
+DRY: Phase 007 must reuse existing typed action and host contracts instead of inventing a second action or capability model.
+YAGNI: Phase 007 must not add runtime evaluation, render publication, product app behavior, reload/persistence, SDF, or generic frameworks.
+SOLID: event input, action dispatch, host mutation boundary, reports, diagnostics, and trace facts must remain separately owned.
+Separation of Concerns: generic UI dispatch belongs to UiPlugin; actual app mutation belongs to host/app owners; RenderPlugin remains outside action semantics.
+Avoid Premature Optimization: no broad replay framework or engine-wide tracing substrate belongs in Phase 007.
+Law of Demeter: dispatch should depend on direct typed action/host contracts and report stable failure reasons instead of reaching into product/editor/game state.
 ```
 
 Module decomposition map:
 
 ```text
-engine/src/plugins/ui/resources.rs: mounted-session resource storage only.
-engine/src/plugins/ui/mount.rs: mount/unmount/session behavior only.
-engine/src/plugins/ui/report.rs: mounted-session reporting only.
-engine/src/plugins/ui/diagnostics.rs: mounted-session diagnostics only if needed.
-engine/Cargo.toml: `ui_surface` dependency only if not already present.
-focused engine tests: mount/unmount/generation/session report evidence.
+engine/src/plugins/ui/events.rs: generic UI input/action event envelope only.
+engine/src/plugins/ui/action.rs: action dispatch contract extensions only.
+engine/src/plugins/ui/host.rs: host-owned mutation boundary only.
+engine/src/plugins/ui/report.rs: action dispatch reporting only if a shared report module is needed.
+engine/src/plugins/ui/diagnostics.rs: stable action/dispatch failure diagnostics only.
+engine/src/plugins/ui/trace.rs: first generic UI-runtime trace subset only.
+engine/Cargo.toml: `ui_hosts` dependency only if not already present.
+focused engine tests: positive dispatch and fail-closed negative cases.
 ```
 
-Maintainability review status: complete for Phase 006 authorization. Stop if implementation needs a broader module map than the files named here.
+Maintainability review status: complete for Phase 007 planning only. Stop before implementation authorization if Phase 007 needs a broader module map than the files named here.
 
 Feature support matrix:
 
@@ -138,8 +158,8 @@ Feature support matrix:
 UiPlugin install/resource shell: completed by Phase 003.
 Public mounting API: completed by Phase 004.
 Typed screen/source/action contracts: completed by Phase 005.
-Mounted sessions: active-implementation Phase 006.
-Host action dispatch and trace: downstream Phase 007.
+Mounted sessions: completed by Phase 006.
+Host action dispatch and trace: active-planning Phase 007.
 Runtime evaluation/invalidation: downstream Phase 008.
 Render boundary/publication: downstream Phases 009-010.
 Scene/debug overlay migration: downstream Phase 011.
@@ -148,10 +168,10 @@ Reload/persistence: downstream Phase 013.
 Closeout/adoption lock: downstream Phase 014.
 ```
 
-Phase 006 validation envelope from cutover and workflow authority:
+Phase 007 validation envelope to confirm during active-implementation authorization:
 
 ```text
-cargo test -p engine ui_mount
+focused positive and negative engine tests for action dispatch and trace records
 cargo test -p engine
 python tools/docs/validate_docs.py
 git diff --check
@@ -159,13 +179,13 @@ git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Evidence expectation: focused engine tests must prove mount creates a `MountedSurfaceInstance`-compatible record, session identity, host identity, generation, retention, and diagnostics are recorded, unmount/remount behavior is deterministic, multiple mounted screens/surfaces do not collide, and engine does not invent duplicate surface/session semantics.
+Evidence expectation: focused engine tests must prove a known action mutates only through app/host ownership, each rejected path does not mutate, action reports name route/action/host/failure reason, and generic UI-runtime trace records mounted/input/route/capability/dispatch/mutation/rejection/diagnostic events without becoming Counter-specific.
 
-Stop conditions: stop if Phase 006 requires world-space UI, SDF, SpatialCanvas, product/editor/game semantics in domain UI, replacing `ui_surface` instead of adapting to it, host action dispatch, runtime trace, render publication, source reload/persistence, `apps/ui_counter_runtime`, `foundation/meta`, `domain/app_program`, a generic plugin framework, or a render backend rewrite.
+Stop conditions: stop if errors become silent, partial mutation is possible on invalid input, product/editor/game semantics move into generic UI, trace is Counter-specific, trace extraction becomes an engine-wide framework, runtime evaluation/render publication/source reload/persistence enters the PR, `apps/ui_counter_runtime` enters the PR, or Phase 008+ files become necessary.
 
-Known blockers: no Phase 006 implementation branch has been opened or merged yet. Phase 007 and later remain blocked until Phase 006 is reviewed, merged, and completion truth is recorded.
+Known blockers: Phase 007 implementation is not authorized by this closeout/planning PR. Phase 008 and later remain blocked until Phase 007 is separately authorized, reviewed, merged, and completion truth is recorded.
 
-Next action: create exactly one bounded `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` implementation branch/PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 006 validation and the required docs/diff/status commands are clean.
+Next action: merge this Phase 006 closeout/planning truth, then open a separate active-implementation authorization for exactly one bounded `PT-UI-RUNTIME-PLATFORM-007 - Host Action Dispatch and Runtime Trace` PR from current `main`. Keep any future Phase 007 implementation PR draft until focused Phase 007 validation and the required docs/diff/status commands are clean.
 
 ## Active-work rules
 

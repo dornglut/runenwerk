@@ -17,6 +17,7 @@ related_docs:
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -383,6 +384,32 @@ Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surf
 Reactivation condition: Reopen if Phase 006 implementation needs scope outside the accepted mounted surface session runtime contract, if engine duplicates `ui_surface` semantics, if world-space UI/SDF/SpatialCanvas enters the PR, if host action dispatch/runtime trace/render publication enters the PR, or if planning drifts from merged code again.
 
 Supersedes: Phase 005 Typed Screen / Source / Action Contracts completion and Phase 006 planning decision.
+
+Superseded by: Phase 006 Mounted Surface Session Runtime completion and Phase 007 planning decision.
+
+## Phase 006 Mounted Surface Session Runtime completion and Phase 007 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` completed through merged PR #88 and open `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-006 review -> completed`; `PT-UI-RUNTIME-PLATFORM-007 production-track -> active-planning`.
+
+Context: PR #88 merged the bounded Phase 006 implementation into `main` at `82d6f00326cf2823eb91d3f655a730b962b355f6`. The track orchestration routine, workflow lifecycle, and phase completion drift check require completion truth before the next implementation phase starts.
+
+Options considered: leave Phase 006 as active implementation after merge; start Phase 007 implementation immediately from the cutover plan; record Phase 006 completion truth and open Phase 007 as planning only.
+
+Reason: Phase 006 delivered the authorized mounted surface/session runtime while preserving host action dispatch, runtime trace, and all later runtime scope for downstream phases. The correct next state is to record completion truth, then prepare Phase 007 separately. The phase completion drift check does not authorize Phase 007 implementation from the closeout patch.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, and `../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md`.
+
+Evidence: `E3` source/test inspection by path, `E5` local command validation on PR #88 head, `E6` PR #88 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment. PR #88 had no unresolved comments, reviews, review requests, or hosted checks when inspected before merge.
+
+Follow-up: Open a separate Phase 007 active-implementation decision after this closeout/planning truth merges. Do not start Phase 007 implementation until active implementation is separately authorized.
+
+Reactivation condition: Reopen if PR #88 completion evidence is found inaccurate, if Phase 006 introduced forbidden Phase 007-014 scope, if Phase 007 planning needs authority beyond the accepted cutover plan, or if planning drifts from merged code again.
+
+Supersedes: Phase 006 Mounted Surface Session Runtime activation decision.
 
 Superseded by: none.
 

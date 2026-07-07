@@ -401,9 +401,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-006`
 
 Title: Mounted Surface Session Runtime
 
-State: active implementation authorization recorded; implementation PR not yet opened
+State: completed through PR #88 and closeout truth
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `completed`
 
 Authority:
 
@@ -411,6 +411,7 @@ Authority:
 ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
 ../../architecture/live-uiplugin-runtime-platform-architecture.md
 ../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md
+../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
 ../routines/track-orchestration-routine.md
 ../routines/implementation-routine.md
 ../complete-investigation-gate.md
@@ -429,14 +430,14 @@ multiple mounted screens/surfaces do not collide
 no duplicate surface/session semantic model is invented inside engine
 ```
 
-Allowed files/crates for the Phase 006 implementation authorization:
+Delivered files:
 
 ```text
+Cargo.lock
+engine/Cargo.toml
 engine/src/plugins/ui/resources.rs
 engine/src/plugins/ui/mount.rs
-engine/src/plugins/ui/report.rs
-engine/Cargo.toml dependency on ui_surface if not already present
-focused engine tests for mount/unmount/generation/session reports
+engine/tests/ui_mount_api.rs
 ```
 
 Forbidden files/crates:
@@ -463,12 +464,101 @@ any tools/docs validator or script changes
 Gate status:
 
 ```text
-Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 005 closeout evidence.
-Complete design gate: complete for implementation through the accepted cutover plan and Phase 005 closeout evidence.
-Implementation authorization: active for exactly one bounded Phase 006 implementation PR.
+Complete investigation gate: complete through accepted runtime-platform authority and Phase 006 closeout evidence.
+Complete design gate: complete for Phase 006 through the accepted full cutover plan and Phase 006 closeout evidence.
+Merge readiness: satisfied before PR #88 merged; no hosted checks were reported for the branch.
 ```
 
-Next action: Open exactly one bounded Phase 006 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 006 validation and required docs/diff/status commands are clean.
+Completion evidence:
+
+```text
+PR #88 merged into main at 82d6f00326cf2823eb91d3f655a730b962b355f6.
+Validation: cargo test -p engine ui_mount, cargo test -p engine, docs validation, diff hygiene, branch status, and diff stat passed before merge.
+Closeout report: ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md.
+```
+
+Next action: Keep Phase 006 as completed evidence. Use the closeout as the prerequisite for `PT-UI-RUNTIME-PLATFORM-007 - Host Action Dispatch and Runtime Trace` planning.
+
+### PT-UI-RUNTIME-PLATFORM-007
+
+ID: `PT-UI-RUNTIME-PLATFORM-007`
+
+Title: Host Action Dispatch and Runtime Trace
+
+State: active planning only after Phase 006 closeout truth
+
+Lifecycle state: `active-planning`
+
+Authority:
+
+```text
+../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../architecture/live-uiplugin-runtime-platform-architecture.md
+../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
+../routines/track-orchestration-routine.md
+../routines/implementation-routine.md
+../complete-investigation-gate.md
+../complete-design-gate.md
+../complete-merge-readiness-gate.md
+../evidence-quality-taxonomy.md
+```
+
+Planning contract from accepted cutover authority:
+
+```text
+known action mutates only through app/host owner
+unknown route does not mutate
+schema mismatch does not mutate
+capability mismatch does not mutate
+payload mismatch does not mutate
+missing host data does not mutate
+action report records route/action/host/failure reason
+generic UI-runtime trace records mounted/input/route/capability/dispatch/mutation/rejection/diagnostic events
+```
+
+Allowed files/crates for a future Phase 007 implementation authorization:
+
+```text
+engine/src/plugins/ui/events.rs
+engine/src/plugins/ui/action.rs
+engine/src/plugins/ui/host.rs
+engine/src/plugins/ui/report.rs
+engine/src/plugins/ui/diagnostics.rs
+engine/src/plugins/ui/trace.rs
+engine/Cargo.toml dependency on ui_hosts if not already present
+focused positive and negative engine tests
+```
+
+Forbidden files/crates:
+
+```text
+runtime evaluation/state snapshot/invalidation implementation
+render publication or render adapter code
+SurfaceFrame generic producer boundary implementation code
+scene/debug overlay producer migration implementation code
+source reload/persistence implementation code
+apps/ui_counter_runtime implementation
+world-space UI implementation
+SDF or SpatialCanvas implementation
+product/editor/game semantics in generic UI
+Counter-specific trace model
+engine-wide trace framework
+foundation/meta
+domain/app_program
+generic plugin framework
+phase spec validator implementation
+any tools/docs validator or script changes
+```
+
+Gate status:
+
+```text
+Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 006 closeout evidence.
+Complete design gate: complete for planning through the accepted cutover plan and Phase 006 closeout evidence.
+Implementation authorization: not recorded by this closeout. Phase 007 needs a separate active-implementation decision before code changes.
+```
+
+Next action: Open a separate Phase 007 active-implementation authorization branch/PR after this closeout/planning truth merges. Do not start Phase 007 implementation from this closeout PR.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
