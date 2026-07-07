@@ -39,9 +39,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-006`
 
 Title: `Mounted Surface Session Runtime`
 
-State: active planning only after Phase 005 completion truth. No Phase 006 implementation is authorized by this planning record.
+State: active-implementation authorization recorded for one bounded Phase 006 PR. No runtime code is changed by this planning record.
 
-Lifecycle state: `active-planning` for Phase 006 only.
+Lifecycle state: `active-implementation` for Phase 006 only.
 
 Owner: `engine::plugins::ui` owns the engine-facing mounted-session registry and reports. `ui_surface` owns surface definition, mounted instance, session-retention, validation, and diagnostic semantics; RenderPlugin owns render preparation/submission consumption only.
 
@@ -83,11 +83,11 @@ docs-site/src/content/docs/architecture/ui-framework-architecture.md
 
 Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 005, `E6` PR merge/check metadata for PR #85, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment for Phase 005 closeout.
 
-Complete investigation gate: complete for opening Phase 006 active planning. Phase 006 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and the Phase 005 closeout evidence.
+Complete investigation gate: complete for opening Phase 006 active implementation. Phase 006 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and the Phase 005 closeout evidence.
 
-Complete design gate: complete for Phase 006 active planning through the accepted cutover plan and Phase 005 closeout. Phase 006 implementation remains blocked until a separate active-implementation authorization records the exact contract.
+Complete design gate: complete for Phase 006 implementation through the accepted cutover plan, Phase 005 closeout, and this planning authorization record.
 
-Implementation authorization status: `blocked-pending-active-implementation-authorization`.
+Implementation authorization status: `active-implementation-authorized`.
 
 Phase 005 completion truth:
 
@@ -110,13 +110,13 @@ focused engine tests for mount/unmount/generation/session reports
 Principle compliance matrix:
 
 ```text
-KISS: planning-only; Phase 006 must adapt Phase 004 mount requests into `ui_surface` mounted-instance/session records without inventing a second surface semantic model.
-DRY: planning-only; Phase 006 must reuse `ui_surface` mounted-surface/session/validation contracts instead of duplicating them in engine.
-YAGNI: planning-only; Phase 006 must not add host action dispatch, runtime trace, render publication, product app, source reload/persistence, SDF, or generic frameworks.
-SOLID: planning-only; mount resources, mount behavior, reports, diagnostics, and focused tests must remain separately owned.
-Separation of Concerns: planning-only; mounted session state belongs to UiPlugin resources using `ui_surface` semantics, not RenderPlugin or product/editor/game domains.
-Avoid Premature Optimization: planning-only; no runtime evaluation, dirty tracking, or render publication belongs in Phase 006.
-Law of Demeter: planning-only; public callers should keep using mount APIs while engine records session facts through direct `ui_surface` contracts.
+KISS: Phase 006 must adapt Phase 004 mount requests into `ui_surface` mounted-instance/session records without inventing a second surface semantic model.
+DRY: Phase 006 must reuse `ui_surface` mounted-surface/session/validation contracts instead of duplicating them in engine.
+YAGNI: Phase 006 must not add host action dispatch, runtime trace, render publication, product app, source reload/persistence, SDF, or generic frameworks.
+SOLID: mount resources, mount behavior, reports, diagnostics, and focused tests must remain separately owned.
+Separation of Concerns: mounted session state belongs to UiPlugin resources using `ui_surface` semantics, not RenderPlugin or product/editor/game domains.
+Avoid Premature Optimization: no runtime evaluation, dirty tracking, or render publication belongs in Phase 006.
+Law of Demeter: public callers should keep using mount APIs while engine records session facts through direct `ui_surface` contracts.
 ```
 
 Module decomposition map:
@@ -130,7 +130,7 @@ engine/Cargo.toml: `ui_surface` dependency only if not already present.
 focused engine tests: mount/unmount/generation/session report evidence.
 ```
 
-Maintainability review status: complete for Phase 006 active planning. Stop before implementation if a broader module map is needed.
+Maintainability review status: complete for Phase 006 authorization. Stop if implementation needs a broader module map than the files named here.
 
 Feature support matrix:
 
@@ -138,7 +138,7 @@ Feature support matrix:
 UiPlugin install/resource shell: completed by Phase 003.
 Public mounting API: completed by Phase 004.
 Typed screen/source/action contracts: completed by Phase 005.
-Mounted sessions: active-planning Phase 006.
+Mounted sessions: active-implementation Phase 006.
 Host action dispatch and trace: downstream Phase 007.
 Runtime evaluation/invalidation: downstream Phase 008.
 Render boundary/publication: downstream Phases 009-010.
@@ -163,9 +163,9 @@ Evidence expectation: focused engine tests must prove mount creates a `MountedSu
 
 Stop conditions: stop if Phase 006 requires world-space UI, SDF, SpatialCanvas, product/editor/game semantics in domain UI, replacing `ui_surface` instead of adapting to it, host action dispatch, runtime trace, render publication, source reload/persistence, `apps/ui_counter_runtime`, `foundation/meta`, `domain/app_program`, a generic plugin framework, or a render backend rewrite.
 
-Known blockers: no Phase 006 implementation branch is authorized. Phase 007 and later remain blocked until Phase 006 is separately authorized, reviewed, merged, and completion truth is recorded.
+Known blockers: no Phase 006 implementation branch has been opened or merged yet. Phase 007 and later remain blocked until Phase 006 is reviewed, merged, and completion truth is recorded.
 
-Next action: after this closeout/planning truth merges, create a separate Phase 006 activation PR that either authorizes exactly one bounded implementation PR or reports an authority conflict. Do not start Phase 006 implementation from this closeout branch.
+Next action: create exactly one bounded `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` implementation branch/PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 006 validation and the required docs/diff/status commands are clean.
 
 ## Active-work rules
 
