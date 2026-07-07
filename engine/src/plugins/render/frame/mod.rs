@@ -8,7 +8,7 @@ pub mod product_surface;
 pub mod view;
 
 pub use crate::plugins::render::features::ui::{
-    PreparedUiFrameContribution, PreparedUiFrameSubmission,
+    PreparedSurfaceFrameSubmission, PreparedUiFrameContribution,
 };
 pub use context::*;
 pub use contribution_diagnostics::*;

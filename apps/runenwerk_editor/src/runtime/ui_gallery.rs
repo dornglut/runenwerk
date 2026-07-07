@@ -1,8 +1,8 @@
 //! Standalone artifact-backed UI gallery host.
 
 use engine::plugins::render::{
-    UiFontAtlasResource, UiFrameProducerId, UiFrameRoute, UiFrameSubmission,
-    UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
+    RenderFrameProducerId, SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
+    SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
 };
 use engine::prelude::*;
 use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
@@ -27,10 +27,10 @@ pub use super::ui_gallery_diagnostics::{
 };
 pub use super::ui_gallery_execution::UiGalleryStoryExecution;
 
-pub const UI_GALLERY_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(5_101);
+pub const UI_GALLERY_UI_PRODUCER_ID: RenderFrameProducerId = ui_frame_producer_id(5_101);
 
-const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
-    match UiFrameProducerId::try_from_raw(raw) {
+const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
+    match RenderFrameProducerId::try_from_raw(raw) {
         Ok(id) => id,
         Err(_) => panic!("ui frame producer id constants must be non-zero"),
     }
@@ -276,7 +276,7 @@ pub fn submit_ui_gallery_frame_system(
     window: Res<WindowState>,
     atlas: Res<UiFontAtlasResource>,
     mut gallery: ResMut<UiGalleryResource>,
-    mut submissions: ResMut<UiFrameSubmissionRegistryResource>,
+    mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
 ) {
     let size = UiSize::new(window.size_px.0 as f32, window.size_px.1 as f32);
     gallery.prepare_frame_if_needed(size, &ThemeTokens::default(), &atlas);
@@ -284,9 +284,9 @@ pub fn submit_ui_gallery_frame_system(
 
     if let Some(frame) = gallery.frame().cloned() {
         submissions.replace(
-            UiFrameSubmission::new(UI_GALLERY_UI_PRODUCER_ID)
-                .with_route(UiFrameRoute::Screen)
-                .with_order(UiFrameSubmissionOrder::new(10, 0))
+            SurfaceFrameSubmission::new(UI_GALLERY_UI_PRODUCER_ID)
+                .with_route(SurfaceFrameRoute::Screen)
+                .with_order(SurfaceFrameSubmissionOrder::new(10, 0))
                 .with_frame(frame),
         );
     } else {

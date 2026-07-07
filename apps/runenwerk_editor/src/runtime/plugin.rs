@@ -3,7 +3,7 @@ use engine::plugins::render::backend::RenderSurfaceRegistryResource;
 use engine::plugins::render::{
     PreparedRenderProductSelectionResource, RenderDynamicTextureTargetRequestRegistryResource,
     RenderDynamicTextureUploadRegistryResource, RenderGpuResidencyBudgetResource,
-    RenderGpuResidencyResource, RenderRuntimeSet, UiFrameSubmissionRegistryResource,
+    RenderGpuResidencyResource, RenderRuntimeSet, SurfaceFrameSubmissionRegistryResource,
 };
 use engine::prelude::*;
 use engine::runtime::ProductPublicationRuntimeResource;
@@ -148,7 +148,7 @@ impl Plugin for EditorAppPlugin {
         app.init_resource::<MountedSurfaceRegistryResource>();
         app.init_resource::<ViewportSurfaceSetResource>();
         app.init_resource::<ViewportPickingResultsResource>();
-        app.init_resource::<UiFrameSubmissionRegistryResource>();
+        app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
         app.init_resource::<RenderDynamicTextureUploadRegistryResource>();
         app.init_resource::<PreparedRenderProductSelectionResource>();

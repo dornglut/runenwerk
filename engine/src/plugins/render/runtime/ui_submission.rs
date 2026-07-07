@@ -4,18 +4,19 @@ use crate::plugins::scene::ui::UiRenderShaderConfig;
 use crate::runtime::WorldMut;
 use crate::state::UiOverlayState;
 
-const SCENE_OVERLAY_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1);
-const DEBUG_METRICS_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(2);
+const SCENE_OVERLAY_UI_PRODUCER_ID: RenderFrameProducerId = ui_frame_producer_id(1);
+const DEBUG_METRICS_UI_PRODUCER_ID: RenderFrameProducerId = ui_frame_producer_id(2);
 
-const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
-    match UiFrameProducerId::try_from_raw(raw) {
+const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
+    match RenderFrameProducerId::try_from_raw(raw) {
         Ok(id) => id,
         Err(_) => panic!("ui frame producer id constants must be non-zero"),
     }
 }
 
 pub(crate) fn collect_runtime_ui_frame_submissions_system(mut world: WorldMut) {
-    let Some(mut submissions) = world.remove_resource::<UiFrameSubmissionRegistryResource>() else {
+    let Some(mut submissions) = world.remove_resource::<SurfaceFrameSubmissionRegistryResource>()
+    else {
         return;
     };
 
@@ -40,9 +41,9 @@ pub(crate) fn collect_runtime_ui_frame_submissions_system(mut world: WorldMut) {
     match scene_submission {
         Some((frame, rect_shader_asset_id)) if !frame.is_empty() => {
             submissions.replace(
-                UiFrameSubmission::new(SCENE_OVERLAY_UI_PRODUCER_ID)
-                    .with_route(UiFrameRoute::Screen)
-                    .with_order(UiFrameSubmissionOrder::new(0, 0))
+                SurfaceFrameSubmission::new(SCENE_OVERLAY_UI_PRODUCER_ID)
+                    .with_route(SurfaceFrameRoute::Screen)
+                    .with_order(SurfaceFrameSubmissionOrder::new(0, 0))
                     .with_frame(frame)
                     .with_rect_shader_asset_id(rect_shader_asset_id),
             );
@@ -62,9 +63,9 @@ pub(crate) fn collect_runtime_ui_frame_submissions_system(mut world: WorldMut) {
         submissions.remove(&DEBUG_METRICS_UI_PRODUCER_ID);
     } else {
         submissions.replace(
-            UiFrameSubmission::new(DEBUG_METRICS_UI_PRODUCER_ID)
-                .with_route(UiFrameRoute::Screen)
-                .with_order(UiFrameSubmissionOrder::new(100, 0))
+            SurfaceFrameSubmission::new(DEBUG_METRICS_UI_PRODUCER_ID)
+                .with_route(SurfaceFrameRoute::Screen)
+                .with_order(SurfaceFrameSubmissionOrder::new(100, 0))
                 .with_frame(debug_frame),
         );
     }

@@ -1,7 +1,7 @@
 use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::features::{
-    FeatureContributionStatus, FeatureFallbackPolicy, PreparedUiFrameContribution,
-    PreparedUiFrameSubmission, UiFrameSubmissionRegistryResource,
+    FeatureContributionStatus, FeatureFallbackPolicy, PreparedSurfaceFrameSubmission,
+    PreparedUiFrameContribution, SurfaceFrameSubmissionRegistryResource,
 };
 use crate::runtime::{Res, ResMut};
 use rusttype::{Font, Scale, point};
@@ -248,7 +248,7 @@ impl PreparedUiFrameResource {
 }
 
 pub fn prepare_ui_feature_resource_system(
-    submissions: Res<UiFrameSubmissionRegistryResource>,
+    submissions: Res<SurfaceFrameSubmissionRegistryResource>,
     surfaces: Res<RenderSurfaceRegistryResource>,
     mut prepared: ResMut<PreparedUiFrameResource>,
 ) {
@@ -272,7 +272,7 @@ pub fn prepare_ui_feature_resource_system(
 }
 
 fn prepare_submissions(
-    submissions: Vec<&crate::plugins::render::features::UiFrameSubmission>,
+    submissions: Vec<&crate::plugins::render::features::SurfaceFrameSubmission>,
 ) -> (FeatureContributionStatus, PreparedUiFrameContribution) {
     let status = if submissions.is_empty() {
         FeatureContributionStatus::Missing
@@ -282,7 +282,7 @@ fn prepare_submissions(
     let payload = PreparedUiFrameContribution {
         submissions: submissions
             .into_iter()
-            .map(|submission| PreparedUiFrameSubmission {
+            .map(|submission| PreparedSurfaceFrameSubmission {
                 producer_id: submission.producer_id,
                 route: submission.route.as_str().to_string(),
                 layer: submission.order.layer,

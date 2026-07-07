@@ -2,8 +2,8 @@ use editor_shell::{ComputedLayoutMap, UiNode, UiNodeKind, viewport_embed_slot_fo
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::WindowState;
 use engine::plugins::render::{
-    EditorPickingTarget, UiFontAtlasResource, UiFrameProducerId, UiFrameRoute, UiFrameSubmission,
-    UiFrameSubmissionOrder, UiFrameSubmissionRegistryResource,
+    EditorPickingTarget, RenderFrameProducerId, SurfaceFrameRoute, SurfaceFrameSubmission,
+    SurfaceFrameSubmissionOrder, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
 };
 use engine::runtime::{Res, ResMut, WindowStateRegistryResource};
 use scene::LocalTransform;
@@ -27,14 +27,14 @@ use crate::runtime::viewport::{
 };
 use crate::shell::RunenwerkEditorShellState;
 
-const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1001);
+const EDITOR_SHELL_UI_PRODUCER_ID: RenderFrameProducerId = ui_frame_producer_id(1001);
 const DEBUG_HARDCODED_UI_FRAME_ENV: &str = "RUNENWERK_EDITOR_DEBUG_UI_FRAME";
 const VIEWPORT_DEBUG_STAGE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_DEBUG_STAGE";
 const VIEWPORT_ROOT_OPAQUE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_ROOT_OPAQUE";
 const VIEWPORT_BRANCH_TRACE_ENV: &str = "RUNENWERK_EDITOR_VIEWPORT_BRANCH_TRACE";
 
-const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
-    match UiFrameProducerId::try_from_raw(raw) {
+const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
+    match RenderFrameProducerId::try_from_raw(raw) {
         Ok(id) => id,
         Err(_) => panic!("ui frame producer id constants must be non-zero"),
     }
@@ -54,7 +54,7 @@ pub fn submit_editor_frame_system(
     atlas: Res<UiFontAtlasResource>,
     viewport_picking_results: Res<ViewportPickingResultsResource>,
     window_registry: Res<WindowStateRegistryResource>,
-    mut submissions: ResMut<UiFrameSubmissionRegistryResource>,
+    mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
 ) {
     let bounds = window_bounds(&window);
     let shell_scale = effective_shell_scale(window.scale_factor);
@@ -284,9 +284,9 @@ pub fn submit_editor_frame_system(
         EDITOR_SHELL_UI_PRODUCER_ID,
         primary_surface_id,
         |producer_id| {
-            UiFrameSubmission::new(producer_id)
-                .with_route(UiFrameRoute::Screen)
-                .with_order(UiFrameSubmissionOrder::new(10, 0))
+            SurfaceFrameSubmission::new(producer_id)
+                .with_route(SurfaceFrameRoute::Screen)
+                .with_order(SurfaceFrameSubmissionOrder::new(10, 0))
                 .with_frame(frame)
         },
     );
@@ -295,9 +295,9 @@ pub fn submit_editor_frame_system(
             EDITOR_SHELL_UI_PRODUCER_ID,
             render_surface_id,
             |producer_id| {
-                UiFrameSubmission::new(producer_id)
-                    .with_route(UiFrameRoute::Screen)
-                    .with_order(UiFrameSubmissionOrder::new(10, 0))
+                SurfaceFrameSubmission::new(producer_id)
+                    .with_route(SurfaceFrameRoute::Screen)
+                    .with_order(SurfaceFrameSubmissionOrder::new(10, 0))
                     .with_frame(frame)
             },
         );

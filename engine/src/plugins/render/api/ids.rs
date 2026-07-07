@@ -14,6 +14,3 @@ pub struct RenderFeatureId;
 
 #[id]
 pub struct RenderFrameProducerId;
-
-#[id]
-pub struct UiFrameProducerId;

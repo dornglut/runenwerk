@@ -2,8 +2,8 @@ use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::{
-    CompiledPassExecutionPlan, RenderFlowRegistryResource, UiFrameProducerId,
-    UiFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
+    CompiledPassExecutionPlan, RenderFlowRegistryResource, RenderFrameProducerId,
+    SurfaceFrameSubmissionRegistryResource, ViewportSurfaceBindingRegistryResource,
 };
 use runenwerk_editor::runtime::resources::{EditorHostResource, EditorViewportDebugStage};
 use runenwerk_editor::runtime::viewport::{
@@ -19,11 +19,11 @@ const SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.scene";
 const PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
 const OVERLAY_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.overlay";
 const VIEWPORT_BOUNDS_EPSILON: f32 = 0.75;
-const EDITOR_SHELL_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1001);
-const SCENE_OVERLAY_UI_PRODUCER_ID: UiFrameProducerId = ui_frame_producer_id(1);
+const EDITOR_SHELL_UI_PRODUCER_ID: RenderFrameProducerId = ui_frame_producer_id(1001);
+const SCENE_OVERLAY_UI_PRODUCER_ID: RenderFrameProducerId = ui_frame_producer_id(1);
 
-const fn ui_frame_producer_id(raw: u64) -> UiFrameProducerId {
-    match UiFrameProducerId::try_from_raw(raw) {
+const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
+    match RenderFrameProducerId::try_from_raw(raw) {
         Ok(id) => id,
         Err(_) => panic!("ui frame producer id constants must be non-zero"),
     }
@@ -37,7 +37,7 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
 
     let submissions = app
         .world()
-        .resource::<UiFrameSubmissionRegistryResource>()
+        .resource::<SurfaceFrameSubmissionRegistryResource>()
         .expect("ui submission registry should exist");
     let flow_registry = app
         .world()
@@ -323,7 +323,7 @@ fn static_composition_keeps_viewport_product_sized_without_structural_mutation()
 fn primary_viewport_embeds(app: &engine::App) -> Vec<ViewportSurfaceEmbedPrimitive> {
     let submissions = app
         .world()
-        .resource::<UiFrameSubmissionRegistryResource>()
+        .resource::<SurfaceFrameSubmissionRegistryResource>()
         .expect("ui submission registry should exist");
     let submission = submissions
         .get_for_surface(&EDITOR_SHELL_UI_PRODUCER_ID, RenderSurfaceId::primary())
