@@ -8,6 +8,7 @@ last_reviewed: 2026-07-07
 related_docs:
   - ../workflow-lifecycle.md
   - ./ecs-backed-counter-ui-story-proof-planning.md
+  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
@@ -36,29 +37,17 @@ Evidence: PR #44 merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f
 
 Follow-up: Keep Phase 13 as completed dependency.
 
-## Phase 14 text editing planning decision
+## Phase 14 text editing planning and completion decisions
 
 Date: 2026-07-02
 
-Decision: Start `PT-UI-COMPONENT-PLATFORM-014` as Text Editing / Editable Text Behavior design/planning intake.
+Decision: Start, implement, review, and mark `PT-UI-COMPONENT-PLATFORM-014` Text Editing / Editable Text Behavior completed through merged PR #46.
 
-State transition: `production-track -> active-planning`
-
-Evidence: Phase 13 completed overlay/layering, and Phase 14 planning scope required package-backed editable text behavior without moving product/editor/game ownership into generic UI.
-
-Follow-up: Review and refine the Text Editing design before implementation.
-
-## Phase 14 implementation and completion decisions
-
-Date: 2026-07-02
-
-Decision: Promote `PT-UI-COMPONENT-PLATFORM-014` from planning to local implementation/review, then mark it completed through merged PR #46.
-
-State transition: `active-planning -> active-implementation -> review -> completed`
+State transition: `production-track -> active-planning -> active-implementation -> review -> completed`
 
 Evidence: Implementation covered editable-text vocabulary, descriptor wiring, package validation, InspectorField lowering, catalog and inspection projection, normalized edit/composition/selection facts, runtime proof-frame evidence, static mount validation, no-bypass evidence, focused tests, and local validation on 2026-07-02. PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`.
 
-Follow-up: Keep Phase 14 as completed dependency and use it as the preceding substrate for Generic Text planning.
+Follow-up: Keep Phase 14 as completed dependency.
 
 ## Phase 15 generic text decisions
 
@@ -104,10 +93,6 @@ Decision: Replace the active next-work focus from `PT-UI-APP-PROGRAM-001` manual
 
 State transition: `PT-UI-APP-PROGRAM-001 active-planning/implementation-spike -> superseded`; `PT-UI-FRAMEWORK-APP-INTEGRATION-001 -> active-planning`.
 
-Context: Review of the UI architecture, UI story workflow, runtime rendering pipeline, UI Component Platform roadmap, Interaction V2 ADR, Typed App Program design, PR #69, and Phase 17 SpatialCanvas intake showed that the repository has strong UI substrate but lacks a canonical app-facing framework path.
-
-Options considered: merge PR #69 as the app framework foundation; continue raw ECS UI; make external templates the only immediate path; promote SpatialCanvas; select ECS/App/Plugin-hosted UI-definition-backed app integration.
-
 Reason: The best long-term direction is App/ECS-hosted app authoring that lowers UI through `ui_definition`, FormedInteractionModel, `UiProgram`, runtime artifacts, and `UiStory` reports while keeping app mutation in host/app owners.
 
 Follow-up: Keep `ui-framework-app-integration-direction-review.md` as accepted direction authority.
@@ -148,8 +133,6 @@ Decision: Create/review `PT-UI-RUNTIME-PLATFORM-001` as the proposed-design / ac
 
 State transition: `idea/investigating -> proposed-design / active-planning intake review`; implementation remains not authorized.
 
-Options considered: continue `PT-UI-FRAMEWORK-APP-INTEGRATION-003` as public AppUiExt ergonomics; implement a render adapter first; add a broad `domain/ui/ui_runtime_platform` crate; grow `ui_app_integration` into the final framework; create an engine-owned `UiPlugin` runtime layer that reuses `domain/ui` contracts and cleans the render boundary.
-
 Reason: The best long-term path is an engine-owned `UiPlugin` runtime layer using existing domain UI contracts and a producer-agnostic render surface-frame boundary. A public AppUiExt-only slice would freeze ergonomics before the runtime path is proven; render-adapter-only work would not solve mounted sessions, typed actions, or host mutation.
 
 Follow-up: Harden PR #74 / `PT-UI-RUNTIME-PLATFORM-001` intake before implementation.
@@ -162,8 +145,6 @@ Decision: Mark `PT-UI-RUNTIME-PLATFORM-001` complete investigation/design gate h
 
 State transition: `active-planning intake review -> active-planning design-gate complete / implementation-planning required`.
 
-Reason: PR #74 needed explicit authority/source matrix, current-state inventory, gap matrix, alternatives matrix, dependency-direction review, render-boundary review, ergonomics review, module decomposition map, allowed/forbidden files/crates, validation envelope, evidence expectation, principle compliance, feature/future/hierarchy matrices, implementation sequencing, acceptance criteria, and stop conditions.
-
 Evidence: `E2` connector metadata/file inspection, `E3` source/test inspection by path, and `E8` accepted architecture/workflow/planning authority. Local command validation was unavailable in the connector-only session.
 
 Follow-up: Open implementation planning after PR #74 review/merge.
@@ -172,23 +153,23 @@ Follow-up: Open implementation planning after PR #74 review/merge.
 
 Date: 2026-07-07
 
-Decision: Start `PT-UI-RUNTIME-PLATFORM-002` as a full-platform cutover-planning PR instead of a narrow first-slice planning PR.
+Decision: Start and harden `PT-UI-RUNTIME-PLATFORM-002` as a full-platform cutover-planning PR instead of a narrow first-slice planning PR.
 
 State transition: `active-planning design-gate complete / implementation-planning required -> active-planning full-platform cutover contract draft`.
 
-Context: Critical review found that the initial PR #76 framing was directionally correct but not handoff-complete. It still used compatibility-producer language, did not require a runnable product-grade Counter app, lacked a render/app-engine feature matrix, and did not include PlantUML handoff diagrams.
+Context: Critical review found that the initial PR #76 framing was directionally correct but not handoff-complete. It used compatibility-producer language, did not require a runnable product-grade Counter app, did not make the app agent-controllable, lacked a generic runtime trace/history plan, lacked source reload and persistence decisions, and kept architecture/PlantUML material inside the planning document instead of architecture docs.
 
 Options considered: keep the first-slice-only plan; make one giant implementation PR; create a full cutover plan and execute it through gated phase PRs.
 
-Reason: The correct path is to plan the full platform cutover now while still implementing it through bounded PRs. The accepted runtime direction must include old UI path retirement, render/app-engine feature mapping, a runnable `apps/ui_counter_runtime` product, and phase-by-phase gates that a simple implementation agent can follow without inventing architecture.
+Reason: The correct path is to plan the full platform cutover now while still implementing it through bounded PRs. The accepted runtime direction must include old UI path retirement, render/app-engine feature mapping, generic runtime trace/history, agent-controllable operation, source reload and persistence boundaries, a runnable `apps/ui_counter_runtime` product, architecture-owned PlantUML diagrams, and phase-by-phase gates that a simple implementation agent can follow without inventing architecture.
 
-Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `design/active/README.md`, and `../../design/active/live-uiplugin-runtime-full-cutover-plan.md`.
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `design/active/README.md`, `../../design/active/live-uiplugin-runtime-full-cutover-plan.md`, `../../architecture/live-uiplugin-runtime-platform-architecture.md`, and its PlantUML diagram files.
 
-Evidence: PR #74 merge metadata, the accepted PR #74 design/investigation authority, PR #72 proof-local closeout, connector inspection of PR #76, and the uploaded docs-structure note that root/docs workflow drift must stay explicit instead of implicit.
+Evidence: PR #74 merge metadata, accepted PR #74 design/investigation authority, PR #72 proof-local closeout, connector inspection of current engine app/render code, and connector inspection of PR #76.
 
 Follow-up: Review PR #76 as docs-only full cutover planning. If accepted, merge it and open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as the first bounded implementation PR.
 
-Reactivation condition: Reopen this decision if review finds a missing render/app-engine feature, incomplete product acceptance criterion, a legacy path preserved as final architecture, or a phase that cannot be handed to a simple implementation agent.
+Reactivation condition: Reopen this decision if review finds a missing render/app-engine feature, incomplete agent/product acceptance criterion, a preserved old path, incomplete trace/history model, missing source reload/persistence boundary, or a phase that cannot be handed to a simple implementation agent.
 
 Supersedes: the earlier “first runtime slice” framing after PR #74.
 
