@@ -1,0 +1,18 @@
+use crate::runtime::IntoSystemSetKey;
+use scheduler::label::SystemSetKey;
+
+/// Stable system labels reserved for the engine-owned UI runtime.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiRuntimeSet {
+    Foundation,
+    Report,
+}
+
+impl IntoSystemSetKey for UiRuntimeSet {
+    fn system_set_key(&self) -> SystemSetKey {
+        match self {
+            Self::Foundation => SystemSetKey::of::<UiRuntimeSet>("UiRuntimeSet::Foundation"),
+            Self::Report => SystemSetKey::of::<UiRuntimeSet>("UiRuntimeSet::Report"),
+        }
+    }
+}
