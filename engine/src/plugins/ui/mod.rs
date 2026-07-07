@@ -6,6 +6,7 @@
 pub mod action;
 pub mod app_ext;
 pub mod diagnostics;
+pub mod events;
 pub mod host;
 pub mod mount;
 pub mod plugin;
@@ -14,10 +15,12 @@ pub mod resources;
 pub mod schedule;
 pub mod screen;
 pub mod source;
+pub mod trace;
 
 pub use action::*;
 pub use app_ext::*;
 pub use diagnostics::*;
+pub use events::*;
 pub use host::*;
 pub use mount::*;
 pub use plugin::UiPlugin;
@@ -26,3 +29,4 @@ pub use resources::*;
 pub use schedule::*;
 pub use screen::*;
 pub use source::*;
+pub use trace::*;
