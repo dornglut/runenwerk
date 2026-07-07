@@ -4,10 +4,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-06
+last_reviewed: 2026-07-07
 related_docs:
   - ../workflow-lifecycle.md
   - ../../reports/closeouts/README.md
+  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
+  - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -20,6 +22,11 @@ Use this file for completed planning work.
 
 This file is a short completion index. Detailed evidence belongs in `../../reports/closeouts/` when a completion record would become too large.
 
+## Recently completed UI Runtime Platform work
+
+- `PT-UI-RUNTIME-PLATFORM-001` Live UiPlugin Runtime and Generic Surface-Frame Rendering intake/design-gate hardening: completed 2026-07-07 through merged PR #74. Runtime implementation remained blocked.
+- `PT-UI-RUNTIME-PLATFORM-002` Live UiPlugin Runtime Full Platform Cutover Plan: completed 2026-07-07 through merged PR #76 at merge commit `1697942c968afd9648872c202972826dc4c406b2`. Evidence lives in `../../design/active/live-uiplugin-runtime-full-cutover-plan.md`, `../../architecture/live-uiplugin-runtime-platform-architecture.md`, and workspace planning records. Runtime implementation remained blocked; next safe action is `PT-WORKFLOW-TRACK-ORCHESTRATION-001` before `PT-UI-RUNTIME-PLATFORM-003`.
+
 ## Recently completed UI Component Platform work
 
 - `PT-UI-COMPONENT-PLATFORM-011` Base Control Packages: completed 2026-06-28 through merged PR #37 and user validation report. Closeout report: `../../reports/closeouts/pt-ui-component-platform-011-base-control-packages-closeout.md`.
@@ -30,6 +37,18 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-COMPONENT-PLATFORM-015` Generic Text: completed 2026-07-02 through baseline PR #48 at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff` and hardening PR #49 at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9`.
 - `PT-UI-COMPONENT-PLATFORM-016` Surface2D: completed 2026-07-03 through docs-hardening PR #62 at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf` and implementation PR #61 at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Closeout report: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-002` ECS-backed Counter UI Story Proof: completed 2026-07-06 through merged PR #72 at merge commit `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout report: `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
+
+## PT-UI-RUNTIME-PLATFORM-002 evidence
+
+Implementation evidence: PR #76 was docs-only. It completed the full-platform cutover planning contract after PR #74 investigation/design-gate hardening. It added the accepted phase order from `003 UiPlugin Foundation` through `014 Closeout and Adoption Lock`, architecture-owned runtime diagrams, producer-generic render-boundary ordering before UiPlugin render publication, human and agent Counter product acceptance requirements, phased UI-runtime trace/history, source reload and persistence boundaries, and SDF UI backend deferral to downstream render-backend work.
+
+Merge evidence: PR #76, `Docs: plan Live UiPlugin runtime full cutover`, merged into `main` on 2026-07-07 at merge commit `1697942c968afd9648872c202972826dc4c406b2`.
+
+Validation: This completion index records merge evidence and planning truth only. The PR body recorded connector-only validation limits before merge. Do not infer cargo/runtime validation from this docs-only planning completion.
+
+Known non-goals: runtime Rust implementation, engine `UiPlugin`, public `AppUiExt`, `app.mount_ui`, `UiScreen`, `IntoUi`, `UiActionHandler`, render adapters, generic render boundary implementation, `apps/ui_counter_runtime`, source reload/persistence implementation, SDF/world-space/SpatialCanvas implementation, `foundation/meta`, `domain/app_program`, generic plugin framework, and phase-spec validator tooling remained out of scope.
+
+Follow-up: Complete `PT-WORKFLOW-TRACK-ORCHESTRATION-001` as workflow hardening before opening `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as active implementation.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 

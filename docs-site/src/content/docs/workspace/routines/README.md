@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-07
 related_docs:
   - ../start-here.md
   - ../operating-model.md
@@ -14,6 +14,7 @@ related_docs:
   - ../complete-investigation-gate.md
   - ../complete-design-gate.md
   - ../task-cards/README.md
+  - ./track-orchestration-routine.md
 ---
 
 # Workspace Routines
@@ -30,6 +31,7 @@ Use [`../complete-design-gate.md`](../complete-design-gate.md) before implementa
 
 - [Investigation Routine](investigation-routine.md)
 - [Implementation Routine](implementation-routine.md)
+- [Track Orchestration Routine](track-orchestration-routine.md)
 - [Architecture Governance Review Routine](architecture-governance-review-routine.md)
 - [Code Refactor Routine](code-refactor-routine.md)
 - [Documentation Refactor Routine](docs-refactor-routine.md)

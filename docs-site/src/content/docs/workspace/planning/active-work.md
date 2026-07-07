@@ -11,16 +11,18 @@ related_docs:
   - ../complete-design-gate.md
   - ../complete-merge-readiness-gate.md
   - ../evidence-quality-taxonomy.md
+  - ../routines/track-orchestration-routine.md
+  - ../specs/phase-implementation-spec.md
   - ../../guidelines/programming-principles.md
   - ../../architecture/ui-framework-architecture.md
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
-  - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ./roadmap.md
   - ./production-tracks.md
+  - ./completed-work.md
   - ./decision-register.md
 ---
 
@@ -30,47 +32,70 @@ This file names the current planning focus for scriptless workflow. It stays sho
 
 ## Current focus
 
-ID: `PT-UI-RUNTIME-PLATFORM-002`
+ID: `PT-WORKFLOW-TRACK-ORCHESTRATION-001`
 
-Title: `Live UiPlugin Runtime Full Platform Cutover Plan`
+Title: `Track Orchestration and Phase Spec Handoff Workflow`
 
-State: draft docs-only implementation-planning PR in progress.
+State: docs-only workflow hardening PR in progress before runtime implementation.
 
-Lifecycle state: `active-planning` full-platform cutover contract draft. Not `active-implementation`.
+Lifecycle state: `active-planning` workflow-hardening contract draft. Not `active-implementation` for runtime code.
 
-Owner: UI runtime/platform planning owns the full cutover contract. Future implementation phases will each name their own engine/UI owner and exact file scope.
+Owner: Workspace workflow owns the orchestration routine, task card, phase-spec handoff docs, and planning-state updates. Runtime UI/platform implementation remains owned by the future `PT-UI-RUNTIME-PLATFORM-003` phase and is not authorized by this work.
 
 Authority files:
 
 ```text
+AGENTS.md
+ARCHITECTURE.md
+DOMAIN_MAP.md
+TESTING.md
+docs-site/src/content/docs/workspace/start-here.md
+docs-site/src/content/docs/workspace/operating-model.md
+docs-site/src/content/docs/workspace/authority-model.md
+docs-site/src/content/docs/workspace/workflow-lifecycle.md
+docs-site/src/content/docs/workspace/complete-investigation-gate.md
+docs-site/src/content/docs/workspace/complete-design-gate.md
+docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
+docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
+docs-site/src/content/docs/workspace/routines/implementation-routine.md
+docs-site/src/content/docs/workspace/routines/pr-review-routine.md
+docs-site/src/content/docs/workspace/routines/phase-completion-drift-check-routine.md
+docs-site/src/content/docs/workspace/routines/roadmap-update-routine.md
+docs-site/src/content/docs/workspace/planning/README.md
+docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/roadmap.md
+docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/completed-work.md
+docs-site/src/content/docs/workspace/planning/decision-register.md
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
 docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
-docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
-docs-site/src/content/docs/reports/investigations/live-uiplugin-runtime-current-state-investigation.md
-docs-site/src/content/docs/architecture/ui-framework-architecture.md
-docs-site/src/content/docs/design/active/ui-framework-app-integration-direction-review.md
-docs-site/src/content/docs/reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
 ```
 
-Evidence classes: `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session.
+Evidence classes: `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session until a local agent runs the docs validation commands.
 
-Complete investigation gate: inherited complete gate from `PT-UI-RUNTIME-PLATFORM-001`; this full cutover plan adds render/app-engine feature mapping, producer-generic render-boundary ordering before UiPlugin render publication, agent operation, phased UI-runtime trace/history, source reload, persistence, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements for implementation handoff.
+Complete investigation gate: satisfied by existing workflow authority inspection for a docs-only process hardening PR. The current gap is known: the repo has routines for implementation, PR review, roadmap updates, and phase completion, but no explicit track-manager routine that formalizes one production-track goal executed through multiple bounded phase PRs.
 
-Complete design gate: in progress for the full platform cutover contract. The prior first-runtime-slice framing is corrected: the platform should be planned as a full cutover, then implemented through gated phase PRs.
+Complete design gate: applies because this changes workflow authority. The design contract is bounded to docs-only workflow hardening: add track orchestration routine, track manager task card, phase implementation spec docs/template, and authority/planning links. No validator, script, runtime implementation, or phase implementation is authorized.
 
-Implementation contract: not yet authorized. This active work records the full implementation program only. Runtime Rust code remains blocked until this planning PR is reviewed/merged and the next phase PR opens with exact scope.
+Implementation contract: docs-only workflow hardening. Add or update only workspace routine/task/spec/planning files named below. Runtime Rust implementation remains blocked until this workflow PR merges and `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` is separately opened with exact active-implementation authorization.
 
 Allowed files/crates for current focus:
 
 ```text
-docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
-docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
-docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-platform.puml
-docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-sequence.puml
-docs-site/src/content/docs/design/active/README.md
+docs-site/src/content/docs/workspace/routines/track-orchestration-routine.md
+docs-site/src/content/docs/workspace/task-cards/track-manager-task.md
+docs-site/src/content/docs/workspace/specs/README.md
+docs-site/src/content/docs/workspace/specs/phase-implementation-spec.md
+docs-site/src/content/docs/workspace/specs/templates/phase-implementation-spec.ron
+docs-site/src/content/docs/workspace/start-here.md
+docs-site/src/content/docs/workspace/routines/README.md
+docs-site/src/content/docs/workspace/task-cards/README.md
+docs-site/src/content/docs/workspace/authority-model.md
+docs-site/src/content/docs/workspace/planning/README.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/completed-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 
@@ -93,11 +118,12 @@ foundation/meta
 domain/app_program
 generic plugin framework
 phase spec validator implementation
+any tools/docs validator or script changes
 ```
 
-Known blockers: implementation cannot start until this full cutover plan is reviewed/merged and the next phase, `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation`, opens as a bounded implementation PR.
+Known blockers: `PT-UI-RUNTIME-PLATFORM-003` implementation cannot start until this workflow-hardening PR is reviewed/merged or explicitly deferred, and then Phase 003 is opened separately as active implementation with exact owner files, implementation contract, validation envelope, evidence expectation, and stop conditions.
 
-Next action: review the full cutover-plan PR. If accepted, merge it and open `PT-UI-RUNTIME-PLATFORM-003` for the first implementation phase inside the recorded boundaries.
+Next action: review this docs-only workflow-hardening PR. If accepted, merge it and then open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` using the new track orchestration routine and phase spec handoff contract.
 
 ## Active-work rules
 

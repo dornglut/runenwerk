@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-07
 related_docs:
   - ./operating-model.md
   - ./authority-model.md
@@ -16,7 +16,10 @@ related_docs:
   - ./evidence-quality-taxonomy.md
   - ./complete-merge-readiness-gate.md
   - ./routines/README.md
+  - ./routines/track-orchestration-routine.md
   - ./task-cards/README.md
+  - ./task-cards/track-manager-task.md
+  - ./specs/README.md
   - ./planning/README.md
 ---
 
@@ -42,6 +45,7 @@ The workflow must work from GitHub connector, ChatGPT context tooling, Codex-sty
 |---|---|---|
 | Investigation | [`routines/investigation-routine.md`](routines/investigation-routine.md) | [`task-cards/github-connector-task.md`](task-cards/github-connector-task.md) |
 | Implementation | [`routines/implementation-routine.md`](routines/implementation-routine.md) | [`task-cards/implementation-task.md`](task-cards/implementation-task.md) |
+| Track orchestration / manager handoff | [`routines/track-orchestration-routine.md`](routines/track-orchestration-routine.md) | [`task-cards/track-manager-task.md`](task-cards/track-manager-task.md) |
 | Architecture review | [`routines/architecture-governance-review-routine.md`](routines/architecture-governance-review-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
 | Code refactor | [`routines/code-refactor-routine.md`](routines/code-refactor-routine.md) | [`task-cards/implementation-task.md`](task-cards/implementation-task.md) |
 | Documentation cleanup | [`routines/docs-refactor-routine.md`](routines/docs-refactor-routine.md) | [`task-cards/docs-cleanup-task.md`](task-cards/docs-cleanup-task.md) |
@@ -117,6 +121,18 @@ docs-site/src/content/docs/workspace/complete-investigation-gate.md
 docs-site/src/content/docs/workspace/complete-design-gate.md
 docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
 docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
+```
+
+For track orchestration:
+
+```text
+docs-site/src/content/docs/workspace/routines/track-orchestration-routine.md
+docs-site/src/content/docs/workspace/task-cards/track-manager-task.md
+docs-site/src/content/docs/workspace/planning/active-work.md
+docs-site/src/content/docs/workspace/planning/roadmap.md
+docs-site/src/content/docs/workspace/planning/production-tracks.md
+docs-site/src/content/docs/workspace/planning/decision-register.md
+docs-site/src/content/docs/workspace/specs/phase-implementation-spec.md
 ```
 
 For all significant changes, use:
