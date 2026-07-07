@@ -318,9 +318,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-005`
 
 Title: Typed Screen / Source / Action Contracts
 
-State: active planning only after Phase 004 completion truth
+State: active implementation authorization recorded; implementation PR not yet opened
 
-Lifecycle state: `active-planning`
+Lifecycle state: `active-implementation`
 
 Authority:
 
@@ -381,11 +381,11 @@ Gate status:
 
 ```text
 Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 004 closeout evidence.
-Complete design gate: complete for active planning through the accepted cutover plan.
-Implementation authorization: not yet active; requires a separate active-implementation authorization after this closeout/planning branch merges.
+Complete design gate: complete for implementation through the accepted cutover plan and Phase 004 closeout evidence.
+Implementation authorization: active for exactly one bounded Phase 005 implementation PR.
 ```
 
-Next action: Review and merge the Phase 004 closeout/planning branch. Then decide whether to authorize exactly one bounded Phase 005 implementation PR.
+Next action: Open exactly one bounded Phase 005 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 005 validation and required docs/diff/status commands are clean.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
