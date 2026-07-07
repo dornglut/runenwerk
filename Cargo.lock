@@ -4004,6 +4004,7 @@ dependencies = [
  "ui_program_lowering",
  "ui_render_data",
  "ui_runtime_view",
+ "ui_schema",
  "ui_text",
  "ui_theme",
 ]

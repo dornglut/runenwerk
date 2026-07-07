@@ -1,0 +1,12 @@
+# Optimize for disk usage on Windows while keeping debugging functional.
+
+[build]
+incremental = false
+
+[profile.dev]
+split-debuginfo = "packed"
+debug = 1
+
+[profile.release]
+lto = true
+strip = "symbols"
