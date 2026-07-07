@@ -29,8 +29,20 @@ const SUBSTRATE_OVERLAY_PATHS: &[&str] = &[
     "src/plugins/scene/runtime/overlay_ui.rs",
 ];
 
+const RETIRED_RENDER_UI_COLLECTION_PATTERNS: &[(&str, &str)] = &[
+    (
+        "src/plugins/render/plugin.rs",
+        "collect_runtime_ui_frame_submissions_system",
+    ),
+    (
+        "src/plugins/render/runtime/mod.rs",
+        "collect_runtime_ui_frame_submissions_system",
+    ),
+    ("src/plugins/render/runtime/mod.rs", "ui_submission"),
+];
+
 #[test]
-fn runtime_surface_stays_free_of_legacy_runtime_imports() {
+fn runtime_surface_guard_stays_free_of_legacy_runtime_imports() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut offenders = Vec::new();
 
@@ -75,7 +87,7 @@ fn collect_offenders(path: &Path, root: &Path, offenders: &mut Vec<String>) {
 }
 
 #[test]
-fn overlay_runtime_paths_route_through_ui_substrate_frame_builder() {
+fn runtime_surface_guard_overlay_runtime_paths_route_through_ui_substrate_frame_builder() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut missing_substrate_calls = Vec::new();
     let mut banned_manual_primitives = Vec::new();
@@ -105,5 +117,32 @@ fn overlay_runtime_paths_route_through_ui_substrate_frame_builder() {
         banned_manual_primitives.is_empty(),
         "expected overlay runtime paths to avoid ad-hoc primitive assembly:\n{}",
         banned_manual_primitives.join("\n")
+    );
+}
+
+#[test]
+fn runtime_surface_guard_render_plugin_no_longer_owns_scene_or_debug_ui_submission_collection() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let legacy_collector_path = manifest_dir.join("src/plugins/render/runtime/ui_submission.rs");
+    assert!(
+        !legacy_collector_path.exists(),
+        "legacy RenderPlugin UI collector should stay retired: {}",
+        legacy_collector_path.display()
+    );
+
+    let mut offenders = Vec::new();
+    for (relative_path, pattern) in RETIRED_RENDER_UI_COLLECTION_PATTERNS {
+        let path = manifest_dir.join(relative_path);
+        let contents = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+        if contents.contains(pattern) {
+            offenders.push(format!("{relative_path} contains `{pattern}`"));
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "RenderPlugin must not reintroduce scene/debug UI producer collection:\n{}",
+        offenders.join("\n")
     );
 }

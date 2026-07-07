@@ -5,8 +5,13 @@ use crate::plugin::Plugin;
 use crate::plugins::InputState;
 use crate::plugins::render::features::{DEFAULT_EDITOR_FONT_ID, UiFontAtlasResource};
 use crate::plugins::render::inspect::{RenderDebugTimingsState, WorldRuntimeInspectorSnapshot};
+use crate::plugins::render::{
+    RenderFrameProducerId, SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
+    SurfaceFrameSubmissionRegistryResource,
+};
 use crate::plugins::time::domain::Time;
-use crate::runtime::{RenderPrepare, Res, ResMut, Startup};
+use crate::plugins::ui::UiRuntimeSet;
+use crate::runtime::{RenderPrepare, Res, ResMut, Startup, SystemConfigExt};
 use crate::state::{
     DebugMetricsState, SceneRuntimeState, StartupPhase, StartupState, UiOverlayState,
 };
@@ -22,6 +27,14 @@ use winit::keyboard::KeyCode;
 pub struct DebugMetricsPlugin;
 
 const ACTION_TOGGLE_METRICS: &str = "debug.metrics.toggle";
+const DEBUG_METRICS_FRAME_PRODUCER_ID: RenderFrameProducerId = render_frame_producer_id(2);
+
+const fn render_frame_producer_id(raw: u64) -> RenderFrameProducerId {
+    match RenderFrameProducerId::try_from_raw(raw) {
+        Ok(id) => id,
+        Err(_) => panic!("render frame producer id constants must be non-zero"),
+    }
+}
 
 impl Plugin for DebugMetricsPlugin {
     fn build(&self, app: &mut App) {
@@ -29,10 +42,14 @@ impl Plugin for DebugMetricsPlugin {
         app.init_resource::<StartupState>();
         app.init_resource::<SceneRuntimeState>();
         app.init_resource::<UiOverlayState>();
+        app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
         app.init_resource::<WorldRuntimeInspectorSnapshot>();
         app.init_resource::<RenderDebugTimingsState>();
         app.add_systems(Startup, setup_debug_metrics_input_binding);
-        app.add_systems(RenderPrepare, debug_metrics_overlay_system);
+        app.add_systems(
+            RenderPrepare,
+            debug_metrics_overlay_system.in_set(UiRuntimeSet::RenderPublication),
+        );
     }
 }
 
@@ -50,6 +67,7 @@ fn debug_metrics_overlay_system(
     render_debug_timings: Res<RenderDebugTimingsState>,
     mut debug_metrics: ResMut<DebugMetricsState>,
     mut ui: ResMut<UiOverlayState>,
+    mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
 ) {
     if input.action_pressed(ACTION_TOGGLE_METRICS) {
         debug_metrics.visible = !debug_metrics.visible;
@@ -59,6 +77,7 @@ fn debug_metrics_overlay_system(
     ui.debug_frame = ui_render_data::UiFrame::default();
 
     if !debug_metrics.visible {
+        publish_debug_metrics_frame(&ui.debug_frame, &mut submissions);
         return;
     }
 
@@ -186,6 +205,24 @@ fn debug_metrics_overlay_system(
     ));
 
     ui.debug_frame = build_debug_metrics_frame((screen_w, screen_h), x, y, w, h, scale, &lines);
+    publish_debug_metrics_frame(&ui.debug_frame, &mut submissions);
+}
+
+fn publish_debug_metrics_frame(
+    frame: &ui_render_data::UiFrame,
+    submissions: &mut SurfaceFrameSubmissionRegistryResource,
+) {
+    if frame.is_empty() {
+        submissions.remove(&DEBUG_METRICS_FRAME_PRODUCER_ID);
+        return;
+    }
+
+    submissions.replace(
+        SurfaceFrameSubmission::new(DEBUG_METRICS_FRAME_PRODUCER_ID)
+            .with_route(SurfaceFrameRoute::Screen)
+            .with_order(SurfaceFrameSubmissionOrder::new(100, 0))
+            .with_frame(frame.clone()),
+    );
 }
 
 fn build_debug_metrics_frame(
