@@ -54,9 +54,9 @@ docs-site/src/content/docs/reports/closeouts/pt-ui-framework-app-integration-002
 
 Evidence classes: `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session.
 
-Complete investigation gate: inherited complete gate from `PT-UI-RUNTIME-PLATFORM-001`; this full cutover plan adds render/app-engine feature mapping, agent operation, trace/history, source reload, persistence, and product acceptance requirements for implementation handoff.
+Complete investigation gate: inherited complete gate from `PT-UI-RUNTIME-PLATFORM-001`; this full cutover plan adds render/app-engine feature mapping, producer-generic render-boundary ordering before UiPlugin render publication, agent operation, phased UI-runtime trace/history, source reload, persistence, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements for implementation handoff.
 
-Complete design gate: in progress for the full platform cutover contract. The prior “first runtime slice” framing is corrected: the platform should be planned as a full cutover, then implemented through gated phase PRs.
+Complete design gate: in progress for the full platform cutover contract. The prior first-runtime-slice framing is corrected: the platform should be planned as a full cutover, then implemented through gated phase PRs.
 
 Implementation contract: not yet authorized. This active work records the full implementation program only. Runtime Rust code remains blocked until this planning PR is reviewed/merged and the next phase PR opens with exact scope.
 
@@ -84,14 +84,15 @@ app.mount_ui implementation
 UiScreen / IntoUi implementation
 UiActionHandler implementation
 render adapter code
-SurfaceFrame type migration code
-scene/debug overlay migration/removal implementation code
+SurfaceFrame generic producer boundary implementation code
+scene/debug overlay producer migration implementation code
 source reload/persistence implementation code
 apps/ui_counter_runtime implementation
 SDF/world-space/SpatialCanvas implementation
 foundation/meta
 domain/app_program
 generic plugin framework
+phase spec validator implementation
 ```
 
 Known blockers: implementation cannot start until this full cutover plan is reviewed/merged and the next phase, `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation`, opens as a bounded implementation PR.
@@ -104,7 +105,7 @@ Next action: review the full cutover-plan PR. If accepted, merge it and open `PT
 - If no current focus exists, say that explicitly.
 - Do not promote deferred work without recording the reason.
 - Do not mark work completed without evidence.
-- If legacy generated views disagree, report them as stale mirrors.
+- If generated views disagree, report them as stale mirrors.
 - Use `../workflow-lifecycle.md` before changing active work state.
 - Architecture acceptance does not authorize implementation. Use `active-implementation` only when exact scope, owner, validation, evidence expectation, stop conditions, principle compliance status, and module decomposition status are known.
 
