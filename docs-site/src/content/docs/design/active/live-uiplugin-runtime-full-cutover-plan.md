@@ -7,6 +7,9 @@ layer: design
 canonical: true
 last_reviewed: 2026-07-07
 related_docs:
+  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
+  - ../../architecture/diagrams/live-uiplugin-runtime-platform.puml
+  - ../../architecture/diagrams/live-uiplugin-runtime-sequence.puml
   - ./live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ./ui-framework-app-integration-direction-review.md
   - ../../architecture/ui-framework-architecture.md
@@ -45,35 +48,48 @@ Do not start runtime Rust work from this docs-only planning PR.
 
 ## Critical review result for this PR
 
-The first draft of this plan was directionally correct but not handoff-complete. This hardened version makes the following corrections:
+This hardened plan makes these corrections:
 
 ```text
-1. Replace legacy/compatibility-producer language with a complete legacy migration and deletion requirement.
-2. Require a runnable runtime Counter app product, not only an abstract proof.
-3. Add an engine/render feature matrix so missing platform features are visible before implementation.
-4. Add PlantUML architecture and sequence diagrams for implementation handoff.
-5. State the implementation-documentation authorities checked by this plan.
-6. Make each phase decision-complete enough for a simple implementation agent to follow without inventing architecture.
+1. Replace legacy/compatibility-producer language with complete old-path migration/removal requirements.
+2. Remove short-term wording such as “required path for Counter first”; Counter must exercise the canonical long-term path.
+3. Require a runnable runtime Counter app product, not only an abstract proof.
+4. Require agent-controllable and machine-testable operation, not only human clicking.
+5. Require generic trace/history/console evidence for actions, route checks, host mutation, state snapshots, and frame publication.
+6. Add render/app-engine feature mapping and move architecture/PlantUML diagrams into architecture docs.
+7. State authoring, reload, and persistence decisions instead of leaving them implicit.
+8. Make each phase decision-complete enough for a simple implementation agent to follow without inventing architecture.
 ```
 
-## Implementation-documentation authorities checked
+## Architecture ownership
 
-This plan is bound by the workspace workflow and architecture docs below. If a future implementation phase contradicts one of them, stop and update the planning record before writing more code.
+Architecture and PlantUML diagrams live in architecture docs, not only in this planning file:
+
+```text
+docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
+docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-platform.puml
+docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-sequence.puml
+```
+
+This planning file owns phase sequencing and gates. The architecture doc owns current rendering facts, app/engine flow, agent operation, tracing/history, authoring, live reload, state persistence, and diagram source.
+
+## Implementation-documentation authorities checked
 
 | Authority | How this plan uses it |
 |---|---|
 | `workspace/workflow-lifecycle.md` | Keeps this PR in planning, not implementation. |
-| `workspace/complete-investigation-gate.md` | Inherits the PR #74 investigation and adds render/app-engine feature matrices for handoff. |
+| `workspace/complete-investigation-gate.md` | Inherits PR #74 investigation and adds render/app-engine feature mapping. |
 | `workspace/complete-design-gate.md` | Requires owner, dependency, validation, stop-condition, and acceptance criteria before implementation. |
 | `workspace/complete-merge-readiness-gate.md` | Defines the report shape every implementation PR must satisfy. |
 | `workspace/evidence-quality-taxonomy.md` | Separates connector/source/planning evidence from local command validation. |
 | `guidelines/programming-principles.md` | Enforces KISS/DRY/YAGNI/SOLID/separation constraints in every phase. |
 | `architecture/ui-framework-architecture.md` | Keeps source/program/runtime/render ownership separated. |
+| `architecture/live-uiplugin-runtime-platform-architecture.md` | Owns the runtime-specific architecture, diagrams, rendering answers, agent/trace model, reload, and persistence decisions. |
 | `design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md` | Supplies the accepted target API and runtime/render boundary. |
 | `reports/investigations/live-uiplugin-runtime-current-state-investigation.md` | Supplies current-state source facts and gaps. |
 | `reports/closeouts/pt-ui-framework-app-integration-002-closeout.md` | Keeps `ui_app_integration` proof-local, not the final framework owner. |
 
-Local command validation was not run in this connector-only planning session. The implementation plan therefore must not claim local validation until an agent runs it.
+Local command validation was not run in this connector-only planning session. Do not claim local validation until an agent runs it.
 
 ## Accepted basis
 
@@ -92,7 +108,7 @@ RenderPlugin consumes producer frame data without owning UI semantics
 surface-frame genericization after the live runtime path is proven
 ```
 
-This plan decomposes that accepted direction into implementation phases, evidence gates, validation, and stop conditions.
+Counter is the first product proof of that canonical path. It is not allowed to use a short-term bypass.
 
 ## No legacy runtime policy
 
@@ -103,7 +119,7 @@ Allowed during implementation:
 ```text
 short-lived migration code inside a branch before merge
 comparison tests that prove old behavior was replaced
-explicit deletion of old hardcoded render-owned UI producer paths
+explicit replacement/removal of old hardcoded render-owned UI producer paths
 ```
 
 Not allowed in merged phase results:
@@ -113,7 +129,7 @@ engine/src/plugins/ui/compat_*.rs
 public legacy APIs for old manual add_ui_* registration chains
 parallel old and new UI runtime paths
 RenderPlugin-owned UI semantic producer collection
-permanent aliases without a deletion phase
+permanent aliases without a removal phase
 ```
 
 If replacing an old path requires temporary scaffolding, that scaffolding must be removed before the phase merges or the PR must stay draft.
@@ -127,105 +143,13 @@ If replacing an old path requires temporary scaffolding, that scaffolding must b
 | App/host owns mutation | Generic UI controls, renderer code, and domain UI contracts must not mutate app state directly. |
 | Render consumes output | RenderPlugin may consume producer/surface/frame facts; it must not own `UiScreen`, `IntoUi`, action routing, host mutation, or source/program semantics. |
 | Public API stays ergonomic | Normal app authors use `app.mount_ui(Screen)` and typed handlers, not route maps, event packets, host adapters, or render registries. |
-| Legacy paths are removed | Old scene/debug/render-owned UI collection must be migrated into the new producer model or deleted. |
-| Genericization is real | `SurfaceFrame` vocabulary is completed only when UI-specific render ownership is removed and producer-generic naming is validated. |
-| Counter app is runnable | The cutover is not complete until `cargo run -p ui_counter_runtime` starts an interactive app. |
+| Agent and human use the same route path | Agent scripts and human input must both pass through route, capability, payload, and host checks. |
+| Trace is generic | Action history must be a generic runtime trace, not Counter-specific print statements. |
+| Old paths are removed | Old scene/debug/render-owned UI collection must be migrated into the new producer model or removed. |
+| Genericization is real | `SurfaceFrame` vocabulary is complete only when UI-specific render ownership is removed and producer-generic naming is validated. |
+| Counter app is runnable | The cutover is not complete until `cargo run -p ui_counter_runtime` starts an interactive app and an agent can drive the same semantics headlessly. |
 
-## Architecture diagram
-
-```plantuml
-@startuml
-skinparam componentStyle rectangle
-
-package "engine" {
-  [App] as App
-  [Plugin] as Plugin
-  [RenderPlugin] as Render
-  [UiPlugin] as UiPlugin
-  [ui_counter_runtime app] as CounterApp
-}
-
-package "engine::plugins::ui" {
-  [App Mount API] as MountApi
-  [Ui Runtime Resources] as RuntimeResources
-  [Action Dispatch] as Dispatch
-  [Render Publisher] as Publisher
-}
-
-package "domain/ui" {
-  [ui_definition] as Definition
-  [ui_program] as Program
-  [ui_surface] as Surface
-  [ui_hosts] as Hosts
-  [ui_evaluator] as Evaluator
-  [ui_runtime_view] as RuntimeView
-  [ui_render_data] as RenderData
-}
-
-CounterApp --> App
-CounterApp --> Plugin
-Plugin --> MountApi
-App --> UiPlugin
-UiPlugin --> MountApi
-UiPlugin --> RuntimeResources
-MountApi --> Definition
-MountApi --> Program
-RuntimeResources --> Surface
-Dispatch --> Hosts
-UiPlugin --> Evaluator
-Evaluator --> RuntimeView
-RuntimeView --> RenderData
-UiPlugin --> Publisher
-Publisher --> Render
-Render --> RenderData
-
-Definition -down-> Program
-Program -down-> Evaluator
-Surface -down-> RuntimeResources
-Hosts -down-> Dispatch
-
-note right of Render
-Render consumes frame/surface facts only.
-It does not own UI source, action,
-host mutation, or screen lifecycle.
-end note
-
-@enduml
-```
-
-## Runtime sequence diagram
-
-```plantuml
-@startuml
-actor User
-participant "ui_counter_runtime" as AppBin
-participant "App" as App
-participant "UiPlugin" as Ui
-participant "CounterPlugin" as CounterPlugin
-participant "CounterScreen" as Screen
-participant "ui_definition/ui_program" as Program
-participant "ui_hosts" as Host
-participant "ui_evaluator/runtime_view" as Eval
-participant "RenderPlugin" as Render
-
-AppBin -> App: App::new().add_plugins((RenderPlugin, UiPlugin, CounterPlugin))
-CounterPlugin -> App: app.mount_ui(CounterScreen)
-App -> Ui: record typed mount
-Ui -> Screen: IntoUi
-Screen -> Program: source + routes + action ids
-User -> Ui: pointer/keyboard input
-Ui -> Host: resolve typed action
-Host -> CounterPlugin: mutate Counter resource through host owner
-Ui -> Eval: evaluate updated source/program/runtime state
-Eval -> Ui: frame payload + report facts
-Ui -> Render: publish producer surface-frame
-Render -> User: draw updated counter UI
-@enduml
-```
-
-## Engine/render feature matrix
-
-This matrix maps what the implementation program must prove. Unknowns must be investigated in the owning phase before code is merged.
+## Render/app-engine feature matrix
 
 | Area | Required platform feature | Current known source/authority | Missing / implementation work |
 |---|---|---|---|
@@ -234,56 +158,90 @@ This matrix maps what the implementation program must prove. Unknowns must be in
 | Typed source | `UiScreen` / `IntoUi` lower to source/program facts | `ui_definition`, `ui_program`, `ui_program_lowering` authority | Implement engine-facing facade without duplicating domain semantics. |
 | Typed actions | `UiActionHandler` / `TryUiActionHandler` mutate host-owned state | `ui_hosts`, `ui_app_integration` proof evidence | Implement typed dispatch, failure taxonomy, no-mutation negatives. |
 | Mounted sessions | Surface/session identity, host identity, generation, retention | `ui_surface` authority | Wrap in engine resources without inventing another surface model. |
-| Input to action | Pointer/keyboard events reach mounted UI and dispatch actions | Existing input/runtime docs and proof crates require inspection during Phase 007 | Implement only required path for Counter first; do not bypass route/capability checks. |
+| Input to action | Pointer, keyboard, and agent-script events reach mounted UI through the same route/capability path | Current engine input and winit path exist; route integration is missing | Implement the canonical runtime event-to-action pipeline, with Counter as first proof and no bypass. |
+| Runtime trace | Route, capability, action, mutation, evaluation, frame publication history | Render diagnostics/tracing exist; UI runtime trace does not | Add generic `UiRuntimeTrace` resource, JSONL export, and console view. |
 | Runtime output | Source/program/evaluator facts produce runtime-view output | `ui_evaluator`, `ui_runtime_view` | Wire mounted screen evaluation and report output facts. |
+| Invalidation | Redraw only when dirty for non-animated UI; continuous policy remains for animation | Current frame pacing supports continuous and on-demand; current UI submission replaces whole producer/surface frame | Add generic dirty/invalidation records before claiming optimized redraw. |
 | Frame data | Runtime output becomes renderable frame payload | `ui_render_data::UiFrame` current payload | Publish through UiPlugin first; rename later only after producer path works. |
 | Render publication | Render consumes producer/surface frame facts | Existing render submission resources | Move UI semantics out of RenderPlugin; RenderPlugin must not query screens/actions/host state. |
-| Legacy render UI producers | Hardcoded scene/debug overlay collection | Current render runtime investigation from PR #74 | Replace/delete legacy hardcoded producer path; no permanent compatibility module. |
-| Runnable product | User can start and interact with Counter app | Target product not present yet | Add `apps/ui_counter_runtime` with launch command and human-visible interaction. |
+| Old render UI producers | Hardcoded scene/debug overlay collection | Current render runtime investigation from PR #74 | Replace/remove old hardcoded producer path; no permanent compatibility module. |
+| Runnable product | User can start and interact with Counter app | Target product not present yet | Add `apps/ui_counter_runtime` with human and agent operation. |
+| Source reload | Data-backed UI source revisions can reload without a second runtime architecture | Rust/RON/designer source model exists architecturally; live reload is not proven | Add source revision/reload policy for RON/designer/source IR; do not claim Rust hot reload. |
+| State persistence | Host/app state and UI session state persist through explicit owner hooks | App resources and replay APIs exist; no generic UI persistence contract yet | Add host-owned state snapshot/load and UI session snapshot/replay rules. |
 | Product proof | Automated evidence proves app path | `ui_app_integration` proof-local tests | Add live runtime proof through public API, not proof-local bridge. |
-| Docs/diagrams | Architecture and sequence diagrams exist | PR #73 architecture spine pattern | Keep PlantUML diagrams and update docs truth on closeout. |
 
-## Product target: runtime Counter app
+## Authoring, reload, and persistence decisions
 
-The runtime platform is incomplete until it ships a runnable demo product, not only tests.
-
-Required product crate:
+Authoring decisions:
 
 ```text
-apps/ui_counter_runtime/Cargo.toml
-apps/ui_counter_runtime/src/main.rs
-root Cargo.toml workspace member entry
+Counter product primary authoring path: Rust typed `UiScreen` / `IntoUi` through app.mount_ui.
+Source truth: everything still lowers to ui_definition / UiProgram facts.
+RON/template source: supported as data-backed source frontend and future live-reload target.
+Visual designer output: future source IR producer, not a renderer-primitive producer.
+Rust hot reload: not claimed.
 ```
 
-Required launch command:
+Reload decision:
+
+```text
+Live UI changes are data-source revision changes, not dynamic Rust code reload.
+A reload must revalidate, re-lower, recompile/evaluate, and preserve session state only by stable source/runtime IDs.
+Reload failures are diagnostic-bearing and must not leave stale UI success claims.
+```
+
+Persistence decision:
+
+```text
+App/domain state is host-owned and persists only through explicit host snapshot/load hooks.
+UI session state may be snapshotted/replayed for tests and restored by stable IDs.
+Render cache state is not user/application persistence.
+Counter product must demonstrate explicit host-owned state-file save/load if the implementation phase enables persistence.
+```
+
+## Runtime trace, agent operation, and console
+
+Agent operation is a first-class product requirement.
+
+Required command shapes:
 
 ```text
 cargo run -p ui_counter_runtime
+cargo run -p ui_counter_runtime -- --headless --agent-script assets/ui_counter_runtime/scripts/increment_reset.ron --trace-jsonl target/ui_counter_runtime/trace.jsonl --exit-after-script
+cargo test -p ui_counter_runtime
 ```
 
-Required runtime behavior:
+Required generic trace event families:
 
 ```text
-opens a native app/window through the engine runtime path
-installs RenderPlugin, UiPlugin, and CounterPlugin
-CounterPlugin initializes Counter resource
-CounterPlugin calls app.mount_ui(CounterScreen)
-CounterScreen displays current count
-user can increment the count through UI interaction
-user can decrement the count through UI interaction
-user can reset the count through UI interaction
-keyboard shortcuts are supported if the engine input path already supports them cleanly; otherwise pointer interaction is the minimum required path
-rendered text updates after each action
-app exits cleanly
+UiRuntimeMounted
+UiSourceRevisionLoaded
+UiSourceLowered
+UiProgramFormed
+UiSessionStateRestored
+UiInputObserved
+UiHitTestResolved
+UiRouteProposed
+UiCapabilityChecked
+UiActionDispatched
+UiHostMutationApplied
+UiHostMutationRejected
+UiStateSnapshotWritten
+UiRuntimeEvaluated
+UiFramePublished
+UiFramePresented
+UiRuntimeDiagnostic
 ```
 
-Required proof behavior:
+Trace requirements:
 
 ```text
-headless or integration test proves source/program/runtime/action/mutation/render facts
-manual run instructions are documented in the PR
-failure modes are fail-closed and report diagnostics
-proof does not use ui_app_integration as the public runtime owner
+bounded in-memory ring buffer resource
+machine-readable JSONL export
+human-readable console/debug surface in the Counter product
+source-map awareness where source identity exists
+same trace path for human and agent input
+no direct Counter mutation by agent scripts
 ```
 
 ## Phase map
@@ -295,13 +253,14 @@ proof does not use ui_app_integration as the public runtime owner
 | 004 | `PT-UI-RUNTIME-PLATFORM-004` | App Mounting API | `app.mount_ui(Screen)` and `app.ui().mount(Screen)` record typed mount requests. |
 | 005 | `PT-UI-RUNTIME-PLATFORM-005` | Typed Screen / Source / Action Contracts | `UiScreen`, `IntoUi`, `UiActionHandler`, and `TryUiActionHandler` lower into existing domain contracts. |
 | 006 | `PT-UI-RUNTIME-PLATFORM-006` | Mounted Surface Session Runtime | Live mount/session registry using `ui_surface` contracts. |
-| 007 | `PT-UI-RUNTIME-PLATFORM-007` | Host Action Dispatch | Typed event/action queue, host-owned mutation, fail-closed diagnostics. |
-| 008 | `PT-UI-RUNTIME-PLATFORM-008` | Runtime Evaluation to Frame | Mounted screens produce evaluator/runtime-view-backed frame output. |
+| 007 | `PT-UI-RUNTIME-PLATFORM-007` | Host Action Dispatch and Runtime Trace | Typed event/action queue, host-owned mutation, fail-closed diagnostics, generic trace/history. |
+| 008 | `PT-UI-RUNTIME-PLATFORM-008` | Runtime Evaluation, State Snapshot, and Invalidation | Runtime/evaluator output, UI session state snapshots, dirty/invalidation records. |
 | 009 | `PT-UI-RUNTIME-PLATFORM-009` | UiPlugin Render Publication | UiPlugin publishes frame submissions; RenderPlugin consumes without owning UI semantics. |
-| 010 | `PT-UI-RUNTIME-PLATFORM-010` | Legacy Scene/Debug Overlay Migration and Deletion | Old hardcoded render-owned UI producer paths are replaced or deleted; no permanent compatibility path remains. |
+| 010 | `PT-UI-RUNTIME-PLATFORM-010` | Legacy Scene/Debug Overlay Migration and Removal | Old hardcoded render-owned UI producer paths are replaced or removed; no permanent compatibility path remains. |
 | 011 | `PT-UI-RUNTIME-PLATFORM-011` | SurfaceFrame Genericization Cutover | Producer-generic surface-frame vocabulary replaces UI-specific render ownership where scoped. |
-| 012 | `PT-UI-RUNTIME-PLATFORM-012` | Runtime Counter App Product | Runnable `ui_counter_runtime` app plus public-path proof. |
-| 013 | `PT-UI-RUNTIME-PLATFORM-013` | Closeout and Adoption Lock | Validation truth, merge readiness, remaining gaps, and next-track activation rules. |
+| 012 | `PT-UI-RUNTIME-PLATFORM-012` | Source Reload and Persistence Contract | Data-backed source revision reload, host-owned state persistence hooks, session restore rules. |
+| 013 | `PT-UI-RUNTIME-PLATFORM-013` | Runtime Counter App Product | Runnable human and agent-controllable `ui_counter_runtime` app plus public-path proof. |
+| 014 | `PT-UI-RUNTIME-PLATFORM-014` | Closeout and Adoption Lock | Validation truth, merge readiness, remaining gaps, and next-track activation rules. |
 
 ## Per-phase contracts
 
@@ -406,7 +365,7 @@ no duplicate surface/session semantic model is invented inside engine
 
 Stop if this requires world-space UI, SDF, SpatialCanvas, product/editor/game semantics in domain UI, or replacing `ui_surface` instead of adapting to it.
 
-### Phase 007 — Host Action Dispatch
+### Phase 007 — Host Action Dispatch and Runtime Trace
 
 Allowed scope:
 
@@ -416,6 +375,7 @@ engine/src/plugins/ui/action.rs
 engine/src/plugins/ui/host.rs
 engine/src/plugins/ui/report.rs
 engine/src/plugins/ui/diagnostics.rs
+engine/src/plugins/ui/trace.rs
 engine/Cargo.toml dependency on ui_hosts if not already present
 focused positive and negative engine tests
 ```
@@ -430,11 +390,12 @@ capability mismatch does not mutate
 payload mismatch does not mutate
 missing host data does not mutate
 action report records route/action/host/failure reason
+generic trace records input, route proposal, capability verdict, dispatch, host mutation/rejection, and diagnostic events
 ```
 
-Stop if errors become silent, partial mutation is possible on invalid input, or product/editor/game semantics move into generic UI.
+Stop if errors become silent, partial mutation is possible on invalid input, product/editor/game semantics move into generic UI, or trace is Counter-specific instead of generic.
 
-### Phase 008 — Runtime Evaluation to Frame
+### Phase 008 — Runtime Evaluation, State Snapshot, and Invalidation
 
 Allowed scope:
 
@@ -443,8 +404,9 @@ engine/src/plugins/ui/source.rs
 engine/src/plugins/ui/resources.rs
 engine/src/plugins/ui/report.rs
 engine/src/plugins/ui/diagnostics.rs
+engine/src/plugins/ui/trace.rs
 engine/Cargo.toml dependencies on selected evaluator/runtime-view/render-data crates
-focused engine tests for output facts and frame payload creation
+focused engine tests for output facts, state snapshots, dirty records, and frame payload creation
 ```
 
 Required evidence:
@@ -453,11 +415,12 @@ Required evidence:
 mounted screen source/program facts feed evaluator/runtime-view path
 Counter output text changes after host mutation
 frame payload is derived from runtime/evaluator output
-runtime report includes source, program, runtime-view, output, and diagnostics facts
-visible output is not reported as success without upstream facts
+runtime report includes source, program, runtime-view, output, diagnostics, and invalidation facts
+UI session snapshot/replay is stable by source/runtime IDs
+dirty records name source, host-data, session, layout, text, theme, primitive, surface, and render-publication causes
 ```
 
-Stop if frame output skips source/program/evaluator evidence, if a new execution strategy is invented without accepted design, or if renderer primitives become UI source truth.
+Stop if frame output skips source/program/evaluator evidence, a new execution strategy is invented without accepted design, renderer primitives become UI source truth, or per-element incremental rendering is claimed without dirty-scope proof.
 
 ### Phase 009 — UiPlugin Render Publication
 
@@ -466,6 +429,7 @@ Allowed scope:
 ```text
 engine/src/plugins/ui/render_publish.rs
 engine/src/plugins/ui/report.rs
+engine/src/plugins/ui/trace.rs
 existing render submission registry/resource paths only where needed
 focused engine/render integration tests
 ```
@@ -477,25 +441,26 @@ UiPlugin publishes frame submission with producer id and surface identity
 RenderPlugin consumes prepared payload without querying UiScreen, IntoUi, actions, host mutation, or route policy
 render contribution is deterministic for the same runtime frame
 missing UiPlugin frame reports a diagnostic instead of silent success
+frame publication trace records producer, surface, frame revision, dirty cause, and publication result
 ```
 
 Stop if RenderPlugin becomes the UI runtime owner, pulls from app host state directly, or needs a broad backend rewrite.
 
-### Phase 010 — Legacy Scene/Debug Overlay Migration and Deletion
+### Phase 010 — Legacy Scene/Debug Overlay Migration and Removal
 
 Allowed scope:
 
 ```text
 specific existing render collection paths identified by the phase investigation
 engine/src/plugins/ui/** only if the new UiPlugin producer path needs migration helpers that are removed before merge
-focused tests proving existing scene/debug overlay behavior through the new producer path or proving intentional deletion
+focused tests proving existing scene/debug overlay behavior through the new producer path or proving intentional removal
 ```
 
 Required evidence:
 
 ```text
 every old hardcoded scene/debug UI producer path is named
-replacement path is named or deletion is justified
+replacement path is named or removal is justified
 no compat_*.rs modules remain after merge
 no old manual UI registration path remains public
 RenderPlugin no longer owns UI semantic producer collection
@@ -519,13 +484,38 @@ Required evidence:
 migration map lists every renamed type/module/function
 producer-generic names replace UI-specific render ownership at the accepted seam
 UiPlugin remains one producer, not the generic surface-frame owner
-scene/debug migrated/deleted paths still work or are intentionally gone
+old scene/debug paths still work through the new model or are intentionally gone
 external docs no longer imply RenderPlugin owns UI semantics
 ```
 
 Stop if the rename becomes broad/unreviewable or source/program/action semantics must change.
 
-### Phase 012 — Runtime Counter App Product
+### Phase 012 — Source Reload and Persistence Contract
+
+Allowed scope:
+
+```text
+engine/src/plugins/ui/source.rs
+engine/src/plugins/ui/resources.rs
+engine/src/plugins/ui/report.rs
+engine/src/plugins/ui/trace.rs
+focused tests for source revision reload and session restore
+optional product fixture files for RON/source-IR reload proof if accepted
+```
+
+Required evidence:
+
+```text
+source revision IDs are stable and traceable
+RON/template or source-IR reload revalidates and re-lowers through ui_definition / UiProgram
+reload failure leaves prior valid runtime state or reports deterministic failure without stale success
+UI session state restores only by stable IDs and reports dropped state
+host-owned app state persistence hooks are explicit and not owned by generic UI controls
+```
+
+Stop if Rust code hot reload is claimed, reload bypasses source/program validation, or generic UI silently persists app/domain state.
+
+### Phase 013 — Runtime Counter App Product
 
 Allowed scope:
 
@@ -540,22 +530,26 @@ planning docs and proof report fixtures
 Required evidence:
 
 ```text
-cargo run -p ui_counter_runtime starts the app
+cargo run -p ui_counter_runtime starts the human app
+cargo run -p ui_counter_runtime -- --headless --agent-script <script> --trace-jsonl <path> --exit-after-script runs agent mode
+cargo test -p ui_counter_runtime proves the app path
 app installs RenderPlugin, UiPlugin, and CounterPlugin
 CounterPlugin uses app.mount_ui(CounterScreen)
 CounterScreen implements the accepted typed screen/source/action model
 UI exposes increment, decrement, and reset actions
-user interaction mutates Counter only through host-owned path
+human interaction and agent scripts use the same route/capability/payload checks
+user/agent interaction mutates Counter only through host-owned path
 runtime/evaluator output changes after mutation
 UiPlugin publishes render submission
 RenderPlugin consumes the submission without UI semantic ownership
-positive proof and fail-closed negative proof are both present
+console/history view shows recent generic trace events
+JSONL trace records action, mutation, state, evaluation, and frame publication facts
 manual run instructions and observed behavior are recorded in the PR
 ```
 
-Stop if the proof cannot show source/program/runtime/action/mutation/render facts, if it needs proof-local `ui_app_integration` as the public runtime owner, or if the product cannot be launched by command.
+Stop if the proof cannot show source/program/runtime/action/mutation/render facts, if it needs proof-local `ui_app_integration` as the public runtime owner, if agent mode mutates host state directly, or if the product cannot be launched by command.
 
-### Phase 013 — Closeout and Adoption Lock
+### Phase 014 — Closeout and Adoption Lock
 
 Allowed scope:
 
@@ -575,43 +569,37 @@ all implementation phase PRs and merge commits are recorded
 final validation commands and results are recorded
 remaining gaps are explicit
 next-track activation is explicit
-legacy paths are gone or explicitly documented as intentionally removed
+old paths are gone or explicitly documented as intentionally removed
+agent/human Counter product evidence is recorded
 ```
 
 Stop if final validation cannot be proven, planning truth disagrees with merged code, or next implementation starts before closeout truth is recorded.
 
 ## Cross-phase dependency graph
 
-```plantuml
-@startuml
-rectangle "002 Full cutover plan" as P002
-rectangle "003 UiPlugin foundation" as P003
-rectangle "004 App mounting API" as P004
-rectangle "005 Typed screen/source/action" as P005
-rectangle "006 Mounted surface/session" as P006
-rectangle "007 Host action dispatch" as P007
-rectangle "008 Runtime evaluation to frame" as P008
-rectangle "009 UiPlugin render publication" as P009
-rectangle "010 Legacy migration/deletion" as P010
-rectangle "011 SurfaceFrame cutover" as P011
-rectangle "012 Runtime Counter app" as P012
-rectangle "013 Closeout/adoption lock" as P013
+The dependency graph is maintained as PlantUML in:
 
-P002 --> P003
-P003 --> P004
-P004 --> P005
-P005 --> P006
-P006 --> P007
-P007 --> P008
-P008 --> P009
-P009 --> P010
-P010 --> P011
-P011 --> P012
-P012 --> P013
-@enduml
+```text
+docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-platform.puml
+docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-sequence.puml
 ```
 
-`010` must not preserve permanent legacy code. `011` must not start before `009` proves the live producer path and `010` has either removed or migrated the old render-owned producer path. `012` may accumulate evidence from earlier phases but must not be declared complete until launch, interaction, render publication, and fail-closed action dispatch are proven through the public app-facing path.
+Execution order:
+
+```text
+003 UiPlugin foundation
+  -> 004 App mounting API
+  -> 005 Typed screen/source/action contracts
+  -> 006 Mounted surface/session runtime
+  -> 007 Host action dispatch and runtime trace
+  -> 008 Runtime evaluation, state snapshot, and invalidation
+  -> 009 UiPlugin render publication
+  -> 010 Legacy scene/debug overlay migration/removal
+  -> 011 SurfaceFrame genericization cutover
+  -> 012 Source reload and persistence contract
+  -> 013 Runtime Counter app product
+  -> 014 Closeout and adoption lock
+```
 
 ## Validation envelope
 
@@ -627,10 +615,12 @@ git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Phase 012 must additionally record the result of:
+Phase 013 must additionally record:
 
 ```text
 cargo run -p ui_counter_runtime
+cargo run -p ui_counter_runtime -- --headless --agent-script <script> --trace-jsonl <path> --exit-after-script
+cargo test -p ui_counter_runtime
 ```
 
 Do not claim validation that was not run.
@@ -646,7 +636,8 @@ exact files changed
 exact modules/functions/sections changed
 validation commands run and results
 proof/evidence artifacts added
-legacy/removal status where relevant
+trace/history evidence where relevant
+old-path migration/removal status where relevant
 stop conditions checked
 known blockers and deferrals
 next phase recommendation
@@ -668,7 +659,7 @@ stop conditions
 instruction to stop rather than widen scope
 ```
 
-The agent must not decide to add a generic plugin framework, revive `domain/app_program`, preserve old legacy UI runtime paths, or implement SDF/world-space/SpatialCanvas as part of this runtime-platform cutover.
+The agent must not decide to add a generic plugin framework, revive `domain/app_program`, preserve old UI runtime paths, bypass route/capability checks, invent Counter-specific tracing, claim Rust UI hot reload, or implement SDF/world-space/SpatialCanvas as part of this runtime-platform cutover.
 
 ## Current planning PR acceptance criteria
 
@@ -680,9 +671,11 @@ per-phase purpose, allowed files/crates, evidence, validation, and stop conditio
 global invariants
 render/app-engine feature matrix
 runnable Counter product requirement
-legacy deletion policy
-PlantUML architecture and sequence diagrams
-cross-phase dependency graph
+agent/headless operation requirement
+generic runtime trace/history/console requirement
+source reload and persistence decisions
+old-path migration/removal policy
+architecture docs and PlantUML sources outside this planning doc
 explicit correction from first-slice-only planning to full-platform cutover planning
 planning-file state transition to PT-UI-RUNTIME-PLATFORM-002
 no runtime implementation
