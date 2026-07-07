@@ -2,8 +2,9 @@
 //! Purpose: Shared 2D point type.
 
 use crate::UiVector;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct UiPoint {
     pub x: f32,
     pub y: f32,
