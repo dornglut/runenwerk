@@ -1,4 +1,8 @@
-use super::{UiMountFailureReason, UiMountSource, UiTypedIdentityError};
+use super::{
+    UiActionDispatchFailureReason, UiMountFailureReason, UiMountSource, UiTypedIdentityError,
+};
+
+use ui_hosts::HostKind;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum UiRuntimeDiagnosticSeverity {
@@ -13,6 +17,7 @@ pub enum UiRuntimeDiagnosticCode {
     ResourceInitialization,
     MountRequestRejected,
     TypedContractRejected,
+    ActionDispatchRejected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,12 +62,21 @@ pub struct UiTypedContractDiagnostic {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiActionDispatchDiagnostic {
+    pub action_id: String,
+    pub route: String,
+    pub host: HostKind,
+    pub failure_reason: UiActionDispatchFailureReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiRuntimeDiagnostic {
     pub code: UiRuntimeDiagnosticCode,
     pub severity: UiRuntimeDiagnosticSeverity,
     pub message: &'static str,
     pub mount: Option<UiMountDiagnostic>,
     pub typed_contract: Option<UiTypedContractDiagnostic>,
+    pub action_dispatch: Option<UiActionDispatchDiagnostic>,
 }
 
 impl UiRuntimeDiagnostic {
@@ -77,6 +91,7 @@ impl UiRuntimeDiagnostic {
             message,
             mount: None,
             typed_contract: None,
+            action_dispatch: None,
         }
     }
 
@@ -95,6 +110,7 @@ impl UiRuntimeDiagnostic {
                 failure_reason,
             }),
             typed_contract: None,
+            action_dispatch: None,
         }
     }
 
@@ -111,6 +127,28 @@ impl UiRuntimeDiagnostic {
             typed_contract: Some(UiTypedContractDiagnostic {
                 contract,
                 identity: identity.into(),
+                failure_reason,
+            }),
+            action_dispatch: None,
+        }
+    }
+
+    pub fn action_dispatch_rejected(
+        action_id: impl Into<String>,
+        route: impl Into<String>,
+        host: HostKind,
+        failure_reason: UiActionDispatchFailureReason,
+    ) -> Self {
+        Self {
+            code: UiRuntimeDiagnosticCode::ActionDispatchRejected,
+            severity: UiRuntimeDiagnosticSeverity::Error,
+            message: failure_reason.message(),
+            mount: None,
+            typed_contract: None,
+            action_dispatch: Some(UiActionDispatchDiagnostic {
+                action_id: action_id.into(),
+                route: route.into(),
+                host,
                 failure_reason,
             }),
         }

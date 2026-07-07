@@ -1,7 +1,7 @@
 use super::action::{UiAction, UiTypedActionDescriptor};
 
 use ui_hosts::{DomainCommand, HostCommand, HostRouteMapVersion, HostRouteMapping};
-use ui_program::RouteCapability;
+use ui_program::{RouteCapability, UiEventPacket};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UiHostMutationIntent {
@@ -76,4 +76,65 @@ where
     A: UiAction,
 {
     fn host_intent(&self, action: &A) -> UiHostMutationIntent;
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiHostMutationFailureReason {
+    MissingHostData,
+    RejectedByHost,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiHostMutationRejection {
+    failure_reason: UiHostMutationFailureReason,
+}
+
+impl UiHostMutationRejection {
+    pub fn new(failure_reason: UiHostMutationFailureReason) -> Self {
+        Self { failure_reason }
+    }
+
+    pub fn missing_host_data() -> Self {
+        Self::new(UiHostMutationFailureReason::MissingHostData)
+    }
+
+    pub fn rejected_by_host() -> Self {
+        Self::new(UiHostMutationFailureReason::RejectedByHost)
+    }
+
+    pub fn failure_reason(&self) -> UiHostMutationFailureReason {
+        self.failure_reason
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiHostMutationReceipt {
+    host_command: HostCommand,
+    domain_command: Option<DomainCommand>,
+}
+
+impl UiHostMutationReceipt {
+    pub fn from_intent(intent: &UiHostMutationIntent) -> Self {
+        Self {
+            host_command: intent.host_command().clone(),
+            domain_command: intent.domain_command().cloned(),
+        }
+    }
+
+    pub fn host_command(&self) -> &HostCommand {
+        &self.host_command
+    }
+
+    pub fn domain_command(&self) -> Option<&DomainCommand> {
+        self.domain_command.as_ref()
+    }
+}
+
+pub trait UiHostActionExecutor {
+    fn apply(
+        &mut self,
+        intent: &UiHostMutationIntent,
+        packet: &UiEventPacket,
+        mapping: &HostRouteMapping,
+    ) -> Result<UiHostMutationReceipt, UiHostMutationRejection>;
 }
