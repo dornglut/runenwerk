@@ -74,6 +74,7 @@ criterion = "0.5.1"
 trybuild = "1.0.114"
 ui_app_integration = { workspace = true }
 ui_binding = { workspace = true }
+ui_render_primitives = { workspace = true }
 
 [[example]]
 name = "game_of_life_sdf"

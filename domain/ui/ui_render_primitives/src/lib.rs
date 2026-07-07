@@ -148,7 +148,8 @@ impl UiRenderPrimitiveReport {
             match control {
                 ControlPrimitiveView::Label(label) => {
                     labels.push(label.text.clone());
-                    let layout = LabelPrimitiveLayout::for_stack_index(stack_index, viewport, &label_style);
+                    let layout =
+                        LabelPrimitiveLayout::for_stack_index(stack_index, viewport, &label_style);
                     let text_layout = text_layout_for_string(
                         &label.text,
                         layout.bounds,
@@ -174,7 +175,8 @@ impl UiRenderPrimitiveReport {
                 ControlPrimitiveView::Button(button) => {
                     labels.push(button.label.clone());
                     let style = ResolvedButtonStyle::from_button(theme, button, font_id);
-                    let layout = ButtonPrimitiveLayout::for_stack_index(stack_index, viewport, &style);
+                    let layout =
+                        ButtonPrimitiveLayout::for_stack_index(stack_index, viewport, &style);
                     let source_map_index = button
                         .source_map_indexes
                         .property
@@ -454,7 +456,9 @@ impl<'a> ControlPrimitiveView<'a> {
     }
 }
 
-fn label_views_from_runtime_view_report(report: &UiRuntimeViewReport) -> Vec<LabelRuntimePrimitiveView> {
+fn label_views_from_runtime_view_report(
+    report: &UiRuntimeViewReport,
+) -> Vec<LabelRuntimePrimitiveView> {
     report
         .view
         .controls()
@@ -488,7 +492,9 @@ fn label_view_from_control(
     Some(LabelRuntimePrimitiveView {
         control_id: control.control_id().as_str().to_owned(),
         text,
-        source_map_index: property.source_map_index.or(control.control.source_map_index),
+        source_map_index: property
+            .source_map_index
+            .or(control.control.source_map_index),
         ordinal,
     })
 }
@@ -606,7 +612,10 @@ impl ButtonPrimitiveLayout {
             (bounds.width - style.horizontal_padding * 2.0).max(0.0),
             bounds.height,
         );
-        Self { bounds, text_bounds }
+        Self {
+            bounds,
+            text_bounds,
+        }
     }
 }
 
@@ -759,7 +768,12 @@ fn paint_from_color(color: UiColor) -> UiPaint {
 }
 
 fn paint_from_text_style(style: &TextStyle) -> UiPaint {
-    UiPaint::rgba(style.color[0], style.color[1], style.color[2], style.color[3])
+    UiPaint::rgba(
+        style.color[0],
+        style.color[1],
+        style.color[2],
+        style.color[3],
+    )
 }
 
 fn sort_key(primitive_order: u32) -> UiSortKey {
@@ -811,7 +825,11 @@ fn primitive_diagnostics_from_button_report(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::{BTreeMap, HashMap}, fs, path::PathBuf};
+    use std::{
+        collections::{BTreeMap, HashMap},
+        fs,
+        path::PathBuf,
+    };
 
     use super::*;
     use ui_artifacts::{UiRuntimeArtifact, UiRuntimeArtifactDiagnostic};
@@ -842,9 +860,18 @@ mod tests {
         );
 
         let frame = report.frame().expect("render primitive frame should exist");
-        assert!(has_primitive(frame, |primitive| matches!(primitive, UiPrimitive::Rect(_))));
-        assert!(has_primitive(frame, |primitive| matches!(primitive, UiPrimitive::Border(_))));
-        assert!(has_primitive(frame, |primitive| matches!(primitive, UiPrimitive::GlyphRun(_))));
+        assert!(has_primitive(frame, |primitive| matches!(
+            primitive,
+            UiPrimitive::Rect(_)
+        )));
+        assert!(has_primitive(frame, |primitive| matches!(
+            primitive,
+            UiPrimitive::Border(_)
+        )));
+        assert!(has_primitive(frame, |primitive| matches!(
+            primitive,
+            UiPrimitive::GlyphRun(_)
+        )));
         assert_eq!(frame.surfaces[0].size, UiSize::new(320.0, 200.0));
         assert_eq!(primitive_count(frame), report.provenance().len());
         assert_eq!(report.hit_targets().len(), 1);
@@ -855,19 +882,36 @@ mod tests {
     fn mixed_label_and_button_screen_emits_label_glyphs_button_primitives_and_hit_targets() {
         let report = primitive_report_for_node(UiNodeDefinition::Column {
             id: AuthoredId::new("mixed.root"),
-            children: vec![label_control("mixed.title", "Runenwerk UI Counter Runtime"), button_control("mixed.increment", "Increment", "counter.increment")],
+            children: vec![
+                label_control("mixed.title", "Runenwerk UI Counter Runtime"),
+                button_control("mixed.increment", "Increment", "counter.increment"),
+            ],
         });
 
         assert!(report.passed(), "{:?}", report.diagnostics());
-        assert!(report.labels().iter().any(|label| label == "Runenwerk UI Counter Runtime"));
+        assert!(
+            report
+                .labels()
+                .iter()
+                .any(|label| label == "Runenwerk UI Counter Runtime")
+        );
         assert!(report.labels().iter().any(|label| label == "Increment"));
         assert_eq!(report.button_report().buttons.len(), 1);
         assert_eq!(report.hit_targets().len(), 1);
         assert_eq!(report.hit_targets()[0].route(), Some("counter.increment"));
         let frame = report.frame().expect("mixed screen should produce frame");
-        assert!(has_primitive(frame, |primitive| matches!(primitive, UiPrimitive::GlyphRun(_))));
-        assert!(has_primitive(frame, |primitive| matches!(primitive, UiPrimitive::Rect(_))));
-        assert!(has_primitive(frame, |primitive| matches!(primitive, UiPrimitive::Border(_))));
+        assert!(has_primitive(frame, |primitive| matches!(
+            primitive,
+            UiPrimitive::GlyphRun(_)
+        )));
+        assert!(has_primitive(frame, |primitive| matches!(
+            primitive,
+            UiPrimitive::Rect(_)
+        )));
+        assert!(has_primitive(frame, |primitive| matches!(
+            primitive,
+            UiPrimitive::Border(_)
+        )));
         assert!(report.hit_targets()[0].bounds().width > 1.0);
         assert!(report.hit_targets()[0].bounds().height > 1.0);
     }
@@ -889,10 +933,12 @@ mod tests {
     #[test]
     fn render_primitives_fail_closed_when_runtime_view_fails() {
         let mut artifact = compiled_button_artifact("assets/ui_gallery/button/selected.ron");
-        artifact.manifest.push_diagnostic(UiRuntimeArtifactDiagnostic::error(
-            "fixture.artifact.error",
-            "fixture artifact error",
-        ));
+        artifact
+            .manifest
+            .push_diagnostic(UiRuntimeArtifactDiagnostic::error(
+                "fixture.artifact.error",
+                "fixture artifact error",
+            ));
         let runtime_report = UiRuntimeView::from_artifact_report(&artifact);
         let report = UiRenderPrimitiveReport::from_runtime_view_report_with_host_data(
             &runtime_report,
@@ -912,7 +958,11 @@ mod tests {
     fn selected_button_render_primitive_report() -> UiRenderPrimitiveReport {
         let artifact = compiled_button_artifact("assets/ui_gallery/button/selected.ron");
         let runtime_report = UiRuntimeView::from_artifact_report(&artifact);
-        assert!(runtime_report.passed(), "{:?}", runtime_report.view.diagnostics);
+        assert!(
+            runtime_report.passed(),
+            "{:?}",
+            runtime_report.view.diagnostics
+        );
         UiRenderPrimitiveReport::from_runtime_view_report_with_host_data(
             &runtime_report,
             UiSize::new(320.0, 200.0),
@@ -926,7 +976,11 @@ mod tests {
     fn primitive_report_for_node(node: UiNodeDefinition) -> UiRenderPrimitiveReport {
         let artifact = compiled_artifact_from_node("mixed.screen", "mixed.source", &node);
         let runtime_report = UiRuntimeView::from_artifact_report(&artifact);
-        assert!(runtime_report.passed(), "{:?}", runtime_report.view.diagnostics);
+        assert!(
+            runtime_report.passed(),
+            "{:?}",
+            runtime_report.view.diagnostics
+        );
         UiRenderPrimitiveReport::from_runtime_view_report(
             &runtime_report,
             UiSize::new(320.0, 200.0),
@@ -938,7 +992,10 @@ mod tests {
 
     fn label_control(id: &str, text: &str) -> UiNodeDefinition {
         let mut properties = BTreeMap::new();
-        properties.insert("text".to_owned(), AuthoredControlValue::String(text.to_owned()));
+        properties.insert(
+            "text".to_owned(),
+            AuthoredControlValue::String(text.to_owned()),
+        );
         UiNodeDefinition::Control {
             id: AuthoredId::new(id),
             kind: AuthoredControlKindId::new(TEST_LABEL_CONTROL_KIND_ID),
@@ -955,7 +1012,10 @@ mod tests {
 
     fn button_control(id: &str, label: &str, route: &str) -> UiNodeDefinition {
         let mut properties = BTreeMap::new();
-        properties.insert("label".to_owned(), AuthoredControlValue::String(label.to_owned()));
+        properties.insert(
+            "label".to_owned(),
+            AuthoredControlValue::String(label.to_owned()),
+        );
         UiNodeDefinition::Control {
             id: AuthoredId::new(id),
             kind: AuthoredControlKindId::new(TEST_BUTTON_CONTROL_KIND_ID),
@@ -972,7 +1032,11 @@ mod tests {
 
     fn compiled_button_artifact(relative_repo_path: &str) -> UiRuntimeArtifact {
         let node = load_node(relative_repo_path);
-        compiled_artifact_from_node("ui_gallery.button.selected", "assets.ui_gallery.button.selected", &node)
+        compiled_artifact_from_node(
+            "ui_gallery.button.selected",
+            "assets.ui_gallery.button.selected",
+            &node,
+        )
     }
 
     fn compiled_artifact_from_node(
@@ -990,10 +1054,18 @@ mod tests {
             node,
             &registry.snapshot(),
         );
-        assert!(formation_report.passed(), "{:?}", formation_report.diagnostics);
+        assert!(
+            formation_report.passed(),
+            "{:?}",
+            formation_report.diagnostics
+        );
 
         let report = UiCompiler.compile_report(&formation_report.program);
-        assert!(report.passed(), "{:?}", report.artifact.manifest.diagnostics);
+        assert!(
+            report.passed(),
+            "{:?}",
+            report.artifact.manifest.diagnostics
+        );
         report.artifact
     }
 
@@ -1017,7 +1089,10 @@ mod tests {
 
     fn assert_has_diagnostic(report: &UiRenderPrimitiveReport, code: &str) {
         assert!(
-            report.diagnostics().iter().any(|diagnostic| diagnostic.code == code),
+            report
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == code),
             "{:?}",
             report.diagnostics()
         );

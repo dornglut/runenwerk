@@ -949,6 +949,7 @@ dependencies = [
  "ui_program",
  "ui_program_lowering",
  "ui_render_data",
+ "ui_render_primitives",
  "ui_runtime",
  "ui_runtime_view",
  "ui_schema",
@@ -3957,6 +3958,9 @@ dependencies = [
 [[package]]
 name = "ui_math"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "ui_program"

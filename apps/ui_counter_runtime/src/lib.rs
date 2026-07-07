@@ -1,17 +1,40 @@
-use std::{collections::BTreeMap, fs, path::{Path, PathBuf}};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use engine::plugins::ScenePlugin;
-use engine::plugins::render::{DEFAULT_EDITOR_FONT_ID, RenderFlow, RenderPlugin, UiFontAtlasResource};
-use engine::plugins::ui::{dispatch_ui_runtime_action_request, evaluate_and_prepare_mounted_ui_screen, IntoUi, UiAction, UiActionDispatchReportsResource, UiActionHandler, UiHostActionExecutor, UiHostMutationIntent, UiHostMutationReceipt, UiHostMutationRejection, UiMountRequest, UiMountRequestsResource, UiPlugin, UiPointerActivationResource, UiRuntimeActionRequest, UiRuntimeDiagnosticsResource, UiRuntimeFramePublicationStatus, UiRuntimeHitTargetResource, UiRuntimePreparedFrameResource, UiRuntimeSet, UiRuntimeTraceEvent, UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen, UiTypedActionDescriptor, UiTypedActionId, UiTypedScreenId, UiTypedSource};
-use engine::prelude::{default_plugins, App, AppUiExt, InputState, Plugin, RenderPrepare, Res, ResMut, SystemConfigExt, Update, WindowState};
+use engine::plugins::render::{
+    DEFAULT_EDITOR_FONT_ID, RenderFlow, RenderPlugin, UiFontAtlasResource,
+};
+use engine::plugins::ui::{
+    IntoUi, UiAction, UiActionDispatchReportsResource, UiActionHandler, UiHostActionExecutor,
+    UiHostMutationIntent, UiHostMutationReceipt, UiHostMutationRejection, UiMountRequest,
+    UiMountRequestsResource, UiPlugin, UiPointerActivationResource, UiRuntimeActionRequest,
+    UiRuntimeDiagnosticsResource, UiRuntimeFramePublicationStatus, UiRuntimeHitTargetResource,
+    UiRuntimePreparedFrameResource, UiRuntimeSet, UiRuntimeTraceEvent, UiRuntimeTraceEventKind,
+    UiRuntimeTraceResource, UiScreen, UiTypedActionDescriptor, UiTypedActionId, UiTypedScreenId,
+    UiTypedSource, dispatch_ui_runtime_action_request, evaluate_and_prepare_mounted_ui_screen,
+};
+use engine::prelude::{
+    App, AppUiExt, InputState, Plugin, RenderPrepare, Res, ResMut, SystemConfigExt, Update,
+    WindowState, default_plugins,
+};
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 use ui_binding::HostDataSnapshot;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, LABEL_CONTROL_KIND_ID};
-use ui_definition::{AuthoredBindingRef, AuthoredControlAccessibilityDefinition, AuthoredControlKindId, AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition};
+use ui_definition::{
+    AuthoredBindingRef, AuthoredControlAccessibilityDefinition, AuthoredControlKindId,
+    AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition,
+};
 use ui_evaluator::UiEvaluationContext;
 use ui_hosts::{DomainCommand, HostCommand, HostKind};
 use ui_math::UiSize;
-use ui_program::{RouteCapability, RouteId, RouteSchemaVersion, UiEventPacket, UiEventSourceControlId, UiProgramSourceId};
+use ui_program::{
+    RouteCapability, RouteId, RouteSchemaVersion, UiEventPacket, UiEventSourceControlId,
+    UiProgramSourceId,
+};
 use ui_schema::{UiSchemaRef, UiSchemaValue};
 use ui_theme::ThemeTokens;
 use winit::keyboard::KeyCode;
@@ -31,87 +54,870 @@ const COUNTER_SURFACE_CLEAR_PASS_ID: &str = "runenwerk.counter.surface.clear";
 const COUNTER_UI_PASS_ID: &str = "runenwerk.counter.main.ui";
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CounterActionKind { Increment, Decrement, Reset }
-impl CounterActionKind { pub const fn all() -> [Self; 3] { [Self::Increment, Self::Decrement, Self::Reset] } pub const fn route(self) -> &'static str { match self { Self::Increment => "counter.increment", Self::Decrement => "counter.decrement", Self::Reset => "counter.reset" } } pub const fn domain_command(self) -> &'static str { match self { Self::Increment => "increment", Self::Decrement => "decrement", Self::Reset => "reset" } } pub const fn label(self) -> &'static str { match self { Self::Increment => "Increment", Self::Decrement => "Decrement", Self::Reset => "Reset" } } pub const fn input_action(self) -> &'static str { self.route() } pub fn capability(self) -> RouteCapability { RouteCapability::new(COUNTER_WRITE_CAPABILITY) } pub fn from_route(route: &str) -> Option<Self> { Self::all().into_iter().find(|kind| kind.route() == route) } }
+pub enum CounterActionKind {
+    Increment,
+    Decrement,
+    Reset,
+}
+impl CounterActionKind {
+    pub const fn all() -> [Self; 3] {
+        [Self::Increment, Self::Decrement, Self::Reset]
+    }
+    pub const fn route(self) -> &'static str {
+        match self {
+            Self::Increment => "counter.increment",
+            Self::Decrement => "counter.decrement",
+            Self::Reset => "counter.reset",
+        }
+    }
+    pub const fn domain_command(self) -> &'static str {
+        match self {
+            Self::Increment => "increment",
+            Self::Decrement => "decrement",
+            Self::Reset => "reset",
+        }
+    }
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Increment => "Increment",
+            Self::Decrement => "Decrement",
+            Self::Reset => "Reset",
+        }
+    }
+    pub const fn input_action(self) -> &'static str {
+        self.route()
+    }
+    pub fn capability(self) -> RouteCapability {
+        RouteCapability::new(COUNTER_WRITE_CAPABILITY)
+    }
+    pub fn from_route(route: &str) -> Option<Self> {
+        Self::all().into_iter().find(|kind| kind.route() == route)
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CounterActionSource { HumanKeyboard, HumanPointer, AgentScript }
-impl CounterActionSource { fn source_control_id(self, kind: CounterActionKind) -> UiEventSourceControlId { let source = match self { Self::HumanKeyboard => "keyboard", Self::HumanPointer => "pointer", Self::AgentScript => "agent-script" }; UiEventSourceControlId::new(format!("{source}.{}", kind.domain_command())) } fn payload_label(self) -> &'static str { match self { Self::HumanKeyboard => "human_keyboard", Self::HumanPointer => "human_pointer", Self::AgentScript => "agent_script" } } }
+pub enum CounterActionSource {
+    HumanKeyboard,
+    HumanPointer,
+    AgentScript,
+}
+impl CounterActionSource {
+    fn source_control_id(self, kind: CounterActionKind) -> UiEventSourceControlId {
+        let source = match self {
+            Self::HumanKeyboard => "keyboard",
+            Self::HumanPointer => "pointer",
+            Self::AgentScript => "agent-script",
+        };
+        UiEventSourceControlId::new(format!("{source}.{}", kind.domain_command()))
+    }
+    fn payload_label(self) -> &'static str {
+        match self {
+            Self::HumanKeyboard => "human_keyboard",
+            Self::HumanPointer => "human_pointer",
+            Self::AgentScript => "agent_script",
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ecs::Resource)]
-pub struct Counter { value: i64, revision: u64 }
-impl Default for Counter { fn default() -> Self { Self { value: 0, revision: 1 } } }
-impl Counter { pub fn value(&self) -> i64 { self.value } pub fn revision(&self) -> u64 { self.revision } fn display_text(&self) -> String { format!("Count: {}", self.value) } fn apply(&mut self, kind: CounterActionKind) -> (i64, i64) { let before = self.value; match kind { CounterActionKind::Increment => self.value = self.value.saturating_add(1), CounterActionKind::Decrement => self.value = self.value.saturating_sub(1), CounterActionKind::Reset => self.value = 0 } if self.value != before || matches!(kind, CounterActionKind::Reset) { self.revision = self.revision.saturating_add(1); } (before, self.value) } }
+pub struct Counter {
+    value: i64,
+    revision: u64,
+}
+impl Default for Counter {
+    fn default() -> Self {
+        Self {
+            value: 0,
+            revision: 1,
+        }
+    }
+}
+impl Counter {
+    pub fn value(&self) -> i64 {
+        self.value
+    }
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+    fn display_text(&self) -> String {
+        format!("Count: {}", self.value)
+    }
+    fn apply(&mut self, kind: CounterActionKind) -> (i64, i64) {
+        let before = self.value;
+        match kind {
+            CounterActionKind::Increment => self.value = self.value.saturating_add(1),
+            CounterActionKind::Decrement => self.value = self.value.saturating_sub(1),
+            CounterActionKind::Reset => self.value = 0,
+        }
+        if self.value != before || matches!(kind, CounterActionKind::Reset) {
+            self.revision = self.revision.saturating_add(1);
+        }
+        (before, self.value)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, ecs::Resource)]
-pub struct CounterRuntimeStatus { line: String }
-impl Default for CounterRuntimeStatus { fn default() -> Self { Self { line: "Ready for counter input".to_owned() } } }
-impl CounterRuntimeStatus { pub fn line(&self) -> &str { &self.line } fn record(&mut self, source: CounterActionSource, kind: CounterActionKind, before: i64, after: i64) { self.line = format!("{:?} {}: {} -> {}", source, kind.label(), before, after); } }
+pub struct CounterRuntimeStatus {
+    line: String,
+}
+impl Default for CounterRuntimeStatus {
+    fn default() -> Self {
+        Self {
+            line: "Ready for counter input".to_owned(),
+        }
+    }
+}
+impl CounterRuntimeStatus {
+    pub fn line(&self) -> &str {
+        &self.line
+    }
+    fn record(
+        &mut self,
+        source: CounterActionSource,
+        kind: CounterActionKind,
+        before: i64,
+        after: i64,
+    ) {
+        self.line = format!("{:?} {}: {} -> {}", source, kind.label(), before, after);
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct CounterAgentScript { #[serde(default)] pub actions: Vec<CounterActionKind> }
-impl CounterAgentScript { pub fn new(actions: impl IntoIterator<Item = CounterActionKind>) -> Self { Self { actions: actions.into_iter().collect() } } pub fn from_ron_file(path: impl AsRef<Path>) -> Result<Self> { let path = path.as_ref(); let source = fs::read_to_string(path).with_context(|| format!("failed to read counter agent script {}", path.display()))?; ron::from_str(&source).with_context(|| format!("failed to parse counter agent script {}", path.display())) } }
+pub struct CounterAgentScript {
+    #[serde(default)]
+    pub actions: Vec<CounterActionKind>,
+}
+impl CounterAgentScript {
+    pub fn new(actions: impl IntoIterator<Item = CounterActionKind>) -> Self {
+        Self {
+            actions: actions.into_iter().collect(),
+        }
+    }
+    pub fn from_ron_file(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let source = fs::read_to_string(path)
+            .with_context(|| format!("failed to read counter agent script {}", path.display()))?;
+        ron::from_str(&source)
+            .with_context(|| format!("failed to parse counter agent script {}", path.display()))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, ecs::Resource)]
-struct CounterAgentScriptResource { script: CounterAgentScript, next_action: usize }
-impl CounterAgentScriptResource { fn new(script: CounterAgentScript) -> Self { Self { script, next_action: 0 } } fn drain_pending_invocations(&mut self) -> Vec<CounterActionInvocation> { let mut invocations = Vec::new(); while let Some(action) = self.script.actions.get(self.next_action).copied() { invocations.push(CounterActionInvocation::new(CounterActionSource::AgentScript, action)); self.next_action = self.next_action.saturating_add(1); } invocations } }
+struct CounterAgentScriptResource {
+    script: CounterAgentScript,
+    next_action: usize,
+}
+impl CounterAgentScriptResource {
+    fn new(script: CounterAgentScript) -> Self {
+        Self {
+            script,
+            next_action: 0,
+        }
+    }
+    fn drain_pending_invocations(&mut self) -> Vec<CounterActionInvocation> {
+        let mut invocations = Vec::new();
+        while let Some(action) = self.script.actions.get(self.next_action).copied() {
+            invocations.push(CounterActionInvocation::new(
+                CounterActionSource::AgentScript,
+                action,
+            ));
+            self.next_action = self.next_action.saturating_add(1);
+        }
+        invocations
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct CounterActionInvocation { source: CounterActionSource, action: CounterActionKind, source_control_id: UiEventSourceControlId }
-impl CounterActionInvocation { fn new(source: CounterActionSource, action: CounterActionKind) -> Self { Self { source, action, source_control_id: source.source_control_id(action) } } fn from_pointer_target(control_id: &str, action: CounterActionKind) -> Self { Self { source: CounterActionSource::HumanPointer, action, source_control_id: UiEventSourceControlId::new(control_id) } } }
+struct CounterActionInvocation {
+    source: CounterActionSource,
+    action: CounterActionKind,
+    source_control_id: UiEventSourceControlId,
+}
+impl CounterActionInvocation {
+    fn new(source: CounterActionSource, action: CounterActionKind) -> Self {
+        Self {
+            source,
+            action,
+            source_control_id: source.source_control_id(action),
+        }
+    }
+    fn from_pointer_target(control_id: &str, action: CounterActionKind) -> Self {
+        Self {
+            source: CounterActionSource::HumanPointer,
+            action,
+            source_control_id: UiEventSourceControlId::new(control_id),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CounterRuntimeOptions { pub headless: bool, pub agent_script: CounterAgentScript }
-impl CounterRuntimeOptions { pub fn headless() -> Self { Self { headless: true, agent_script: CounterAgentScript::default() } } pub fn windowed() -> Self { Self { headless: false, agent_script: CounterAgentScript::default() } } pub fn with_agent_script(mut self, script: CounterAgentScript) -> Self { self.agent_script = script; self } }
+pub struct CounterRuntimeOptions {
+    pub headless: bool,
+    pub agent_script: CounterAgentScript,
+}
+impl CounterRuntimeOptions {
+    pub fn headless() -> Self {
+        Self {
+            headless: true,
+            agent_script: CounterAgentScript::default(),
+        }
+    }
+    pub fn windowed() -> Self {
+        Self {
+            headless: false,
+            agent_script: CounterAgentScript::default(),
+        }
+    }
+    pub fn with_agent_script(mut self, script: CounterAgentScript) -> Self {
+        self.agent_script = script;
+        self
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CounterRuntimeCliOptions { pub runtime: CounterRuntimeOptions, pub trace_jsonl_path: Option<PathBuf> }
-impl CounterRuntimeCliOptions { pub fn from_env() -> Result<Self> { Self::parse(std::env::args().skip(1)) } pub fn parse<I, S>(args: I) -> Result<Self> where I: IntoIterator<Item = S>, S: Into<String> { let mut headless = false; let mut script_path = None; let mut trace_jsonl_path = None; let mut exit_after_script = false; let mut args = args.into_iter().map(Into::into).peekable(); while let Some(arg) = args.next() { match arg.as_str() { "--headless" => headless = true, "--agent-script" => { let Some(path) = args.next() else { bail!("--agent-script requires a path"); }; script_path = Some(PathBuf::from(path)); }, "--trace-jsonl" => { let Some(path) = args.next() else { bail!("--trace-jsonl requires a path"); }; trace_jsonl_path = Some(PathBuf::from(path)); }, "--exit-after-script" => exit_after_script = true, "--help" | "-h" => { println!("{}", counter_runtime_usage()); std::process::exit(0); }, unknown => bail!("unknown ui_counter_runtime argument {unknown}"), } } if trace_jsonl_path.is_some() && !headless { bail!("--trace-jsonl requires --headless so the completed app state can be inspected"); } if exit_after_script && !headless { bail!("--exit-after-script requires --headless"); } let agent_script = match script_path { Some(path) => CounterAgentScript::from_ron_file(path)?, None => CounterAgentScript::default() }; Ok(Self { runtime: CounterRuntimeOptions { headless, agent_script }, trace_jsonl_path }) } }
-pub fn counter_runtime_usage() -> &'static str { "Usage: ui_counter_runtime [--headless] [--agent-script PATH] [--trace-jsonl PATH] [--exit-after-script]" }
+pub struct CounterRuntimeCliOptions {
+    pub runtime: CounterRuntimeOptions,
+    pub trace_jsonl_path: Option<PathBuf>,
+}
+impl CounterRuntimeCliOptions {
+    pub fn from_env() -> Result<Self> {
+        Self::parse(std::env::args().skip(1))
+    }
+    pub fn parse<I, S>(args: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let mut headless = false;
+        let mut script_path = None;
+        let mut trace_jsonl_path = None;
+        let mut exit_after_script = false;
+        let mut args = args.into_iter().map(Into::into).peekable();
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--headless" => headless = true,
+                "--agent-script" => {
+                    let Some(path) = args.next() else {
+                        bail!("--agent-script requires a path");
+                    };
+                    script_path = Some(PathBuf::from(path));
+                }
+                "--trace-jsonl" => {
+                    let Some(path) = args.next() else {
+                        bail!("--trace-jsonl requires a path");
+                    };
+                    trace_jsonl_path = Some(PathBuf::from(path));
+                }
+                "--exit-after-script" => exit_after_script = true,
+                "--help" | "-h" => {
+                    println!("{}", counter_runtime_usage());
+                    std::process::exit(0);
+                }
+                unknown => bail!("unknown ui_counter_runtime argument {unknown}"),
+            }
+        }
+        if trace_jsonl_path.is_some() && !headless {
+            bail!("--trace-jsonl requires --headless so the completed app state can be inspected");
+        }
+        if exit_after_script && !headless {
+            bail!("--exit-after-script requires --headless");
+        }
+        let agent_script = match script_path {
+            Some(path) => CounterAgentScript::from_ron_file(path)?,
+            None => CounterAgentScript::default(),
+        };
+        Ok(Self {
+            runtime: CounterRuntimeOptions {
+                headless,
+                agent_script,
+            },
+            trace_jsonl_path,
+        })
+    }
+}
+pub fn counter_runtime_usage() -> &'static str {
+    "Usage: ui_counter_runtime [--headless] [--agent-script PATH] [--trace-jsonl PATH] [--exit-after-script]"
+}
 
-pub fn run_counter_runtime(options: CounterRuntimeCliOptions) -> Result<()> { let trace_jsonl_path = options.trace_jsonl_path.clone(); let app = build_counter_app(options.runtime)?; if trace_jsonl_path.is_some() { let app = app.run_for_frames(1)?; let trace = app.world().resource::<UiRuntimeTraceResource>().context("UiRuntimeTraceResource should be installed by UiPlugin")?; write_trace_jsonl(trace, trace_jsonl_path.expect("trace path checked above"))?; return Ok(()); } if app_is_headless(&app) { app.run_for_frames(1)?; } else { app.run()?; } Ok(()) }
-fn app_is_headless(app: &App) -> bool { app.world().resource::<CounterRuntimeModeResource>().map(|mode| mode.headless).unwrap_or(false) }
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)] struct CounterRuntimeModeResource { headless: bool }
+pub fn run_counter_runtime(options: CounterRuntimeCliOptions) -> Result<()> {
+    let trace_jsonl_path = options.trace_jsonl_path.clone();
+    let app = build_counter_app(options.runtime)?;
+    if trace_jsonl_path.is_some() {
+        let app = app.run_for_frames(1)?;
+        let trace = app
+            .world()
+            .resource::<UiRuntimeTraceResource>()
+            .context("UiRuntimeTraceResource should be installed by UiPlugin")?;
+        write_trace_jsonl(trace, trace_jsonl_path.expect("trace path checked above"))?;
+        return Ok(());
+    }
+    if app_is_headless(&app) {
+        app.run_for_frames(1)?;
+    } else {
+        app.run()?;
+    }
+    Ok(())
+}
+fn app_is_headless(app: &App) -> bool {
+    app.world()
+        .resource::<CounterRuntimeModeResource>()
+        .map(|mode| mode.headless)
+        .unwrap_or(false)
+}
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ecs::Resource)]
+struct CounterRuntimeModeResource {
+    headless: bool,
+}
 
-pub fn build_counter_app(options: CounterRuntimeOptions) -> Result<App> { let mut app = if options.headless { App::headless() } else { App::new() }; app.set_title(WINDOW_TITLE); app.insert_resource(CounterRuntimeModeResource { headless: options.headless }); app.add_plugins(default_plugins()); app.add_plugin(ScenePlugin); app.add_plugin(RenderPlugin); register_counter_render_flow(&mut app); app.add_plugin(UiPlugin); app.add_plugin(CounterPlugin::new(options.agent_script)); Ok(app) }
-fn register_counter_render_flow(app: &mut App) { let flow = RenderFlow::new(COUNTER_MAIN_FLOW_ID).with_surface_color().fullscreen_pass(COUNTER_SURFACE_CLEAR_PASS_ID).main_surface_only().write_surface_color().finish().builtin_ui_composite_pass(COUNTER_UI_PASS_ID).main_surface_only().depends_on(COUNTER_SURFACE_CLEAR_PASS_ID).finish().validate().expect("counter render flow should validate"); app.add_render_flow(flow); }
+pub fn build_counter_app(options: CounterRuntimeOptions) -> Result<App> {
+    let mut app = if options.headless {
+        App::headless()
+    } else {
+        App::new()
+    };
+    app.set_title(WINDOW_TITLE);
+    app.insert_resource(CounterRuntimeModeResource {
+        headless: options.headless,
+    });
+    app.add_plugins(default_plugins());
+    app.add_plugin(ScenePlugin);
+    app.add_plugin(RenderPlugin);
+    register_counter_render_flow(&mut app);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(CounterPlugin::new(options.agent_script));
+    Ok(app)
+}
+fn register_counter_render_flow(app: &mut App) {
+    let flow = RenderFlow::new(COUNTER_MAIN_FLOW_ID)
+        .with_surface_color()
+        .fullscreen_pass(COUNTER_SURFACE_CLEAR_PASS_ID)
+        .main_surface_only()
+        .write_surface_color()
+        .finish()
+        .builtin_ui_composite_pass(COUNTER_UI_PASS_ID)
+        .main_surface_only()
+        .depends_on(COUNTER_SURFACE_CLEAR_PASS_ID)
+        .finish()
+        .validate()
+        .expect("counter render flow should validate");
+    app.add_render_flow(flow);
+}
 
-#[derive(Debug, Clone, PartialEq, Eq)] pub struct CounterPlugin { agent_script: CounterAgentScript }
-impl CounterPlugin { pub fn new(agent_script: CounterAgentScript) -> Self { Self { agent_script } } }
-impl Plugin for CounterPlugin { fn build(&self, app: &mut App) { app.init_resource::<Counter>(); app.init_resource::<CounterRuntimeStatus>(); app.init_resource::<UiActionDispatchReportsResource>(); app.insert_resource(CounterAgentScriptResource::new(self.agent_script.clone())); app.mount_ui(CounterScreen::default()); app.add_input_bindings([(CounterActionKind::Increment.input_action(), KeyCode::ArrowUp), (CounterActionKind::Decrement.input_action(), KeyCode::ArrowDown), (CounterActionKind::Reset.input_action(), KeyCode::KeyR)]); app.add_systems(Update, dispatch_counter_actions_system); app.add_systems(RenderPrepare, evaluate_counter_screen_system.before(UiRuntimeSet::RenderPublication)); } }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CounterPlugin {
+    agent_script: CounterAgentScript,
+}
+impl CounterPlugin {
+    pub fn new(agent_script: CounterAgentScript) -> Self {
+        Self { agent_script }
+    }
+}
+impl Plugin for CounterPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Counter>();
+        app.init_resource::<CounterRuntimeStatus>();
+        app.init_resource::<UiActionDispatchReportsResource>();
+        app.insert_resource(CounterAgentScriptResource::new(self.agent_script.clone()));
+        app.mount_ui(CounterScreen::default());
+        app.add_input_bindings([
+            (
+                CounterActionKind::Increment.input_action(),
+                KeyCode::ArrowUp,
+            ),
+            (
+                CounterActionKind::Decrement.input_action(),
+                KeyCode::ArrowDown,
+            ),
+            (CounterActionKind::Reset.input_action(), KeyCode::KeyR),
+        ]);
+        app.add_systems(Update, dispatch_counter_actions_system);
+        app.add_systems(
+            RenderPrepare,
+            evaluate_counter_screen_system.before(UiRuntimeSet::RenderPublication),
+        );
+    }
+}
 
-fn dispatch_counter_actions_system(input: Res<InputState>, hit_targets: Res<UiRuntimeHitTargetResource>, mut pointer_activation: ResMut<UiPointerActivationResource>, mut counter: ResMut<Counter>, mut status: ResMut<CounterRuntimeStatus>, mut script: ResMut<CounterAgentScriptResource>, mut reports: ResMut<UiActionDispatchReportsResource>, mut trace: ResMut<UiRuntimeTraceResource>, mut diagnostics: ResMut<UiRuntimeDiagnosticsResource>, mounts: Res<UiMountRequestsResource>) { let mut invocations = script.drain_pending_invocations(); invocations.extend(CounterActionKind::all().into_iter().filter(|kind| input.action_pressed(kind.input_action())).map(|action| CounterActionInvocation::new(CounterActionSource::HumanKeyboard, action))); if let Some(pointer_press) = input.left_mouse_pressed_transition() { pointer_activation.press(&hit_targets, pointer_press.position); } if let Some(pointer_release) = input.left_mouse_released_transition() { if let Some(target) = pointer_activation.release(&hit_targets, pointer_release.position) { if let Some(action) = target.route().and_then(CounterActionKind::from_route) { invocations.push(CounterActionInvocation::from_pointer_target(target.control_id(), action)); } } } let surface_instance_id = mounts.mounted_sessions().first().map(|session| session.surface_instance_id()); for invocation in invocations { dispatch_counter_invocation(invocation, surface_instance_id, &mut counter, &mut status, &mut reports, &mut trace, &mut diagnostics); } }
-fn dispatch_counter_invocation(invocation: CounterActionInvocation, surface_instance_id: Option<ui_surface::SurfaceInstanceId>, counter: &mut Counter, status: &mut CounterRuntimeStatus, reports: &mut UiActionDispatchReportsResource, trace: &mut UiRuntimeTraceResource, diagnostics: &mut UiRuntimeDiagnosticsResource) { let action = CounterAction { kind: invocation.action }; let handler = CounterActionHandler; let mut executor = CounterHostExecutor { source: invocation.source, counter, status }; let request = UiRuntimeActionRequest::new(invocation.source_control_id, counter_action_payload(invocation.source, invocation.action)).with_surface_instance_id(surface_instance_id); dispatch_ui_runtime_action_request(&request, &action, &handler, &mut executor, reports, trace, diagnostics); }
-fn counter_action_payload(source: CounterActionSource, action: CounterActionKind) -> UiSchemaValue { UiSchemaValue::object([("action", UiSchemaValue::string(action.domain_command())), ("source", UiSchemaValue::string(source.payload_label()))]) }
+fn dispatch_counter_actions_system(
+    input: Res<InputState>,
+    hit_targets: Res<UiRuntimeHitTargetResource>,
+    mut pointer_activation: ResMut<UiPointerActivationResource>,
+    mut counter: ResMut<Counter>,
+    mut status: ResMut<CounterRuntimeStatus>,
+    mut script: ResMut<CounterAgentScriptResource>,
+    mut reports: ResMut<UiActionDispatchReportsResource>,
+    mut trace: ResMut<UiRuntimeTraceResource>,
+    mut diagnostics: ResMut<UiRuntimeDiagnosticsResource>,
+    mounts: Res<UiMountRequestsResource>,
+) {
+    let mut invocations = script.drain_pending_invocations();
+    invocations.extend(
+        CounterActionKind::all()
+            .into_iter()
+            .filter(|kind| input.action_pressed(kind.input_action()))
+            .map(|action| CounterActionInvocation::new(CounterActionSource::HumanKeyboard, action)),
+    );
+    if let Some(pointer_press) = input.left_mouse_pressed_transition() {
+        pointer_activation.press(&hit_targets, pointer_press.position);
+    }
+    if let Some(pointer_release) = input.left_mouse_released_transition() {
+        if let Some(target) = pointer_activation.release(&hit_targets, pointer_release.position) {
+            if let Some(action) = target.route().and_then(CounterActionKind::from_route) {
+                invocations.push(CounterActionInvocation::from_pointer_target(
+                    target.control_id(),
+                    action,
+                ));
+            }
+        }
+    }
+    let surface_instance_id = mounts
+        .mounted_sessions()
+        .first()
+        .map(|session| session.surface_instance_id());
+    for invocation in invocations {
+        dispatch_counter_invocation(
+            invocation,
+            surface_instance_id,
+            &mut counter,
+            &mut status,
+            &mut reports,
+            &mut trace,
+            &mut diagnostics,
+        );
+    }
+}
+fn dispatch_counter_invocation(
+    invocation: CounterActionInvocation,
+    surface_instance_id: Option<ui_surface::SurfaceInstanceId>,
+    counter: &mut Counter,
+    status: &mut CounterRuntimeStatus,
+    reports: &mut UiActionDispatchReportsResource,
+    trace: &mut UiRuntimeTraceResource,
+    diagnostics: &mut UiRuntimeDiagnosticsResource,
+) {
+    let action = CounterAction {
+        kind: invocation.action,
+    };
+    let handler = CounterActionHandler;
+    let mut executor = CounterHostExecutor {
+        source: invocation.source,
+        counter,
+        status,
+    };
+    let request = UiRuntimeActionRequest::new(
+        invocation.source_control_id,
+        counter_action_payload(invocation.source, invocation.action),
+    )
+    .with_surface_instance_id(surface_instance_id);
+    dispatch_ui_runtime_action_request(
+        &request,
+        &action,
+        &handler,
+        &mut executor,
+        reports,
+        trace,
+        diagnostics,
+    );
+}
+fn counter_action_payload(source: CounterActionSource, action: CounterActionKind) -> UiSchemaValue {
+    UiSchemaValue::object([
+        ("action", UiSchemaValue::string(action.domain_command())),
+        ("source", UiSchemaValue::string(source.payload_label())),
+    ])
+}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)] struct CounterAction { kind: CounterActionKind }
-impl UiAction for CounterAction { fn action_descriptor(&self) -> UiTypedActionDescriptor { UiTypedActionDescriptor::new(UiTypedActionId::new(self.kind.route()), RouteId::new(self.kind.route()), ACTION_SCHEMA_VERSION, counter_payload_schema(), self.kind.capability()) } }
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct CounterAction {
+    kind: CounterActionKind,
+}
+impl UiAction for CounterAction {
+    fn action_descriptor(&self) -> UiTypedActionDescriptor {
+        UiTypedActionDescriptor::new(
+            UiTypedActionId::new(self.kind.route()),
+            RouteId::new(self.kind.route()),
+            ACTION_SCHEMA_VERSION,
+            counter_payload_schema(),
+            self.kind.capability(),
+        )
+    }
+}
 struct CounterActionHandler;
-impl UiActionHandler<CounterAction> for CounterActionHandler { fn host_intent(&self, action: &CounterAction) -> UiHostMutationIntent { UiHostMutationIntent::new(action.action_descriptor(), HostCommand::new(HostKind::Game, action.kind.route())).with_domain_command(DomainCommand::new("counter", action.kind.domain_command())) } }
-struct CounterHostExecutor<'a> { source: CounterActionSource, counter: &'a mut Counter, status: &'a mut CounterRuntimeStatus }
-impl UiHostActionExecutor for CounterHostExecutor<'_> { fn apply(&mut self, intent: &UiHostMutationIntent, packet: &UiEventPacket, mapping: &ui_hosts::HostRouteMapping) -> std::result::Result<UiHostMutationReceipt, UiHostMutationRejection> { let Some(kind) = CounterActionKind::from_route(packet.route.as_str()) else { return Err(UiHostMutationRejection::rejected_by_host()); }; if mapping.host_command.host != HostKind::Game || intent.host_command().host != HostKind::Game { return Err(UiHostMutationRejection::rejected_by_host()); } let (before, after) = self.counter.apply(kind); self.status.record(self.source, kind, before, after); Ok(UiHostMutationReceipt::from_intent(intent)) } }
-fn counter_payload_schema() -> UiSchemaRef { UiSchemaRef::new(COUNTER_ACTION_PAYLOAD_SCHEMA_ID, ACTION_SCHEMA_VERSION.value()) }
+impl UiActionHandler<CounterAction> for CounterActionHandler {
+    fn host_intent(&self, action: &CounterAction) -> UiHostMutationIntent {
+        UiHostMutationIntent::new(
+            action.action_descriptor(),
+            HostCommand::new(HostKind::Game, action.kind.route()),
+        )
+        .with_domain_command(DomainCommand::new("counter", action.kind.domain_command()))
+    }
+}
+struct CounterHostExecutor<'a> {
+    source: CounterActionSource,
+    counter: &'a mut Counter,
+    status: &'a mut CounterRuntimeStatus,
+}
+impl UiHostActionExecutor for CounterHostExecutor<'_> {
+    fn apply(
+        &mut self,
+        intent: &UiHostMutationIntent,
+        packet: &UiEventPacket,
+        mapping: &ui_hosts::HostRouteMapping,
+    ) -> std::result::Result<UiHostMutationReceipt, UiHostMutationRejection> {
+        let Some(kind) = CounterActionKind::from_route(packet.route.as_str()) else {
+            return Err(UiHostMutationRejection::rejected_by_host());
+        };
+        if mapping.host_command.host != HostKind::Game
+            || intent.host_command().host != HostKind::Game
+        {
+            return Err(UiHostMutationRejection::rejected_by_host());
+        }
+        let (before, after) = self.counter.apply(kind);
+        self.status.record(self.source, kind, before, after);
+        Ok(UiHostMutationReceipt::from_intent(intent))
+    }
+}
+fn counter_payload_schema() -> UiSchemaRef {
+    UiSchemaRef::new(
+        COUNTER_ACTION_PAYLOAD_SCHEMA_ID,
+        ACTION_SCHEMA_VERSION.value(),
+    )
+}
 
-fn evaluate_counter_screen_system(counter: Res<Counter>, status: Res<CounterRuntimeStatus>, mounts: Res<UiMountRequestsResource>, window: Res<WindowState>, font_atlas: Res<UiFontAtlasResource>, mut runtime: ResMut<engine::plugins::ui::UiRuntimeEvaluationResource>, mut prepared_frames: ResMut<UiRuntimePreparedFrameResource>, mut hit_targets: ResMut<UiRuntimeHitTargetResource>, mut trace: ResMut<UiRuntimeTraceResource>, mut diagnostics: ResMut<UiRuntimeDiagnosticsResource>) { let screen = CounterScreen::from_state(&counter, &status, &trace); evaluate_and_prepare_mounted_ui_screen(screen, counter_evaluation_context(&counter, &status), counter_viewport(&window), &ThemeTokens::default(), &*font_atlas, DEFAULT_EDITOR_FONT_ID, &mounts, &mut runtime, &mut prepared_frames, &mut hit_targets, &mut trace, &mut diagnostics); }
-fn counter_evaluation_context(counter: &Counter, status: &CounterRuntimeStatus) -> UiEvaluationContext { UiEvaluationContext::default().with_host_data(HostDataSnapshot::new(COUNTER_VALUE_ENDPOINT, UiSchemaValue::string(counter.display_text()), counter.revision())).with_host_data(HostDataSnapshot::new(TRACE_STATUS_ENDPOINT, UiSchemaValue::string(status.line()), counter.revision())) }
-fn counter_viewport(window: &WindowState) -> UiSize { UiSize::new(window.size_px.0.max(320) as f32, window.size_px.1.max(240) as f32) }
+fn evaluate_counter_screen_system(
+    counter: Res<Counter>,
+    status: Res<CounterRuntimeStatus>,
+    mounts: Res<UiMountRequestsResource>,
+    window: Res<WindowState>,
+    font_atlas: Res<UiFontAtlasResource>,
+    mut runtime: ResMut<engine::plugins::ui::UiRuntimeEvaluationResource>,
+    mut prepared_frames: ResMut<UiRuntimePreparedFrameResource>,
+    mut hit_targets: ResMut<UiRuntimeHitTargetResource>,
+    mut trace: ResMut<UiRuntimeTraceResource>,
+    mut diagnostics: ResMut<UiRuntimeDiagnosticsResource>,
+) {
+    let screen = CounterScreen::from_state(&counter, &status, &trace);
+    evaluate_and_prepare_mounted_ui_screen(
+        screen,
+        counter_evaluation_context(&counter, &status),
+        counter_viewport(&window),
+        &ThemeTokens::default(),
+        &*font_atlas,
+        DEFAULT_EDITOR_FONT_ID,
+        &mounts,
+        &mut runtime,
+        &mut prepared_frames,
+        &mut hit_targets,
+        &mut trace,
+        &mut diagnostics,
+    );
+}
+fn counter_evaluation_context(
+    counter: &Counter,
+    status: &CounterRuntimeStatus,
+) -> UiEvaluationContext {
+    UiEvaluationContext::default()
+        .with_host_data(HostDataSnapshot::new(
+            COUNTER_VALUE_ENDPOINT,
+            UiSchemaValue::string(counter.display_text()),
+            counter.revision(),
+        ))
+        .with_host_data(HostDataSnapshot::new(
+            TRACE_STATUS_ENDPOINT,
+            UiSchemaValue::string(status.line()),
+            counter.revision(),
+        ))
+}
+fn counter_viewport(window: &WindowState) -> UiSize {
+    UiSize::new(
+        window.size_px.0.max(320) as f32,
+        window.size_px.1.max(240) as f32,
+    )
+}
 
-#[derive(Debug, Clone, PartialEq, Eq)] pub struct CounterScreen { value_text: String, status: String, trace_lines: Vec<String> }
-impl Default for CounterScreen { fn default() -> Self { Self { value_text: Counter::default().display_text(), status: CounterRuntimeStatus::default().line, trace_lines: vec!["Trace empty".to_owned()] } } }
-impl CounterScreen { fn from_state(counter: &Counter, status: &CounterRuntimeStatus, trace: &UiRuntimeTraceResource) -> Self { Self { value_text: counter.display_text(), status: status.line().to_owned(), trace_lines: trace_lines_from_runtime_trace(trace) } } }
-impl From<CounterScreen> for UiMountRequest { fn from(_screen: CounterScreen) -> Self { UiMountRequest::new(COUNTER_SCREEN_ID).with_report_label(WINDOW_TITLE) } }
-impl UiScreen for CounterScreen { fn screen_id(&self) -> UiTypedScreenId { UiTypedScreenId::new(COUNTER_SCREEN_ID) } fn build_source(&self) -> UiTypedSource { let trace_children = self.trace_lines.iter().enumerate().map(|(index, line)| label_control(format!("counter.trace.line.{index}"), line, "Counter runtime trace entry")).collect::<Vec<_>>(); UiTypedSource::new(self.screen_id(), UiProgramSourceId::new(COUNTER_SOURCE_ID), UiNodeDefinition::Column { id: AuthoredId::new("counter.root"), children: vec![label_control("counter.title", WINDOW_TITLE, "Counter screen title"), label_control("counter.value", &self.value_text, "Current counter value"), state_label_control("counter.value.bound", &self.value_text, COUNTER_VALUE_ENDPOINT, "Counter value"), UiNodeDefinition::Row { id: AuthoredId::new("counter.actions"), children: CounterActionKind::all().into_iter().map(counter_action_control).collect() }, label_control("counter.status", &self.status, "Counter runtime status"), state_label_control("counter.status.bound", &self.status, TRACE_STATUS_ENDPOINT, "Counter runtime status"), label_control("counter.trace.title", "Trace", "Trace history"), UiNodeDefinition::Column { id: AuthoredId::new("counter.trace"), children: trace_children }] }) } }
-fn label_control(id: impl Into<String>, text: impl Into<String>, accessibility_label: impl Into<String>) -> UiNodeDefinition { let mut properties = BTreeMap::new(); properties.insert("text".to_owned(), AuthoredControlValue::String(text.into())); UiNodeDefinition::Control { id: AuthoredId::new(id), kind: AuthoredControlKindId::new(LABEL_CONTROL_KIND_ID), properties, bindings: BTreeMap::new(), route: None, accessibility: Some(AuthoredControlAccessibilityDefinition { role: "label".to_owned(), label: Some(accessibility_label.into()) }), children: Vec::new() } }
-fn state_label_control(id: impl Into<String>, text: &str, endpoint: &str, accessibility_label: &str) -> UiNodeDefinition { let mut properties = BTreeMap::new(); properties.insert("text".to_owned(), AuthoredControlValue::String(text.to_owned())); let mut bindings = BTreeMap::new(); bindings.insert("text".to_owned(), AuthoredBindingRef::new(endpoint)); UiNodeDefinition::Control { id: AuthoredId::new(id), kind: AuthoredControlKindId::new(LABEL_CONTROL_KIND_ID), properties, bindings, route: None, accessibility: Some(AuthoredControlAccessibilityDefinition { role: "label".to_owned(), label: Some(accessibility_label.to_owned()) }), children: Vec::new() } }
-fn counter_action_control(kind: CounterActionKind) -> UiNodeDefinition { let mut properties = BTreeMap::new(); properties.insert("label".to_owned(), AuthoredControlValue::String(kind.label().to_owned())); properties.insert("variant".to_owned(), AuthoredControlValue::String("primary".to_owned())); properties.insert("tone".to_owned(), AuthoredControlValue::String("accent".to_owned())); UiNodeDefinition::Control { id: AuthoredId::new(format!("counter.action.{}", kind.domain_command())), kind: AuthoredControlKindId::new(BUTTON_CONTROL_KIND_ID), properties, bindings: BTreeMap::new(), route: Some(AuthoredRouteId::new(kind.route())), accessibility: Some(AuthoredControlAccessibilityDefinition { role: "button".to_owned(), label: Some(kind.label().to_owned()) }), children: Vec::new() } }
-fn trace_lines_from_runtime_trace(trace: &UiRuntimeTraceResource) -> Vec<String> { if trace.events().is_empty() { return vec!["Trace empty".to_owned()]; } trace.events().iter().rev().take(5).map(|event| { let mut parts = vec![format!("{:?}", event.kind())]; if let Some(route) = event.route() { parts.push(route.as_str().to_owned()); } if let Some(reason) = event.failure_reason() { parts.push(reason.as_str().to_owned()); } if let Some(status) = event.frame_publication_status() { parts.push(status.as_str().to_owned()); } parts.join(" ") }).collect() }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CounterScreen {
+    value_text: String,
+    status: String,
+    trace_lines: Vec<String>,
+}
+impl Default for CounterScreen {
+    fn default() -> Self {
+        Self {
+            value_text: Counter::default().display_text(),
+            status: CounterRuntimeStatus::default().line,
+            trace_lines: vec!["Trace empty".to_owned()],
+        }
+    }
+}
+impl CounterScreen {
+    fn from_state(
+        counter: &Counter,
+        status: &CounterRuntimeStatus,
+        trace: &UiRuntimeTraceResource,
+    ) -> Self {
+        Self {
+            value_text: counter.display_text(),
+            status: status.line().to_owned(),
+            trace_lines: trace_lines_from_runtime_trace(trace),
+        }
+    }
+}
+impl From<CounterScreen> for UiMountRequest {
+    fn from(_screen: CounterScreen) -> Self {
+        UiMountRequest::new(COUNTER_SCREEN_ID).with_report_label(WINDOW_TITLE)
+    }
+}
+impl UiScreen for CounterScreen {
+    fn screen_id(&self) -> UiTypedScreenId {
+        UiTypedScreenId::new(COUNTER_SCREEN_ID)
+    }
+    fn build_source(&self) -> UiTypedSource {
+        let trace_children = self
+            .trace_lines
+            .iter()
+            .enumerate()
+            .map(|(index, line)| {
+                label_control(
+                    format!("counter.trace.line.{index}"),
+                    line,
+                    "Counter runtime trace entry",
+                )
+            })
+            .collect::<Vec<_>>();
+        UiTypedSource::new(
+            self.screen_id(),
+            UiProgramSourceId::new(COUNTER_SOURCE_ID),
+            UiNodeDefinition::Column {
+                id: AuthoredId::new("counter.root"),
+                children: vec![
+                    label_control("counter.title", WINDOW_TITLE, "Counter screen title"),
+                    label_control("counter.value", &self.value_text, "Current counter value"),
+                    state_label_control(
+                        "counter.value.bound",
+                        &self.value_text,
+                        COUNTER_VALUE_ENDPOINT,
+                        "Counter value",
+                    ),
+                    UiNodeDefinition::Row {
+                        id: AuthoredId::new("counter.actions"),
+                        children: CounterActionKind::all()
+                            .into_iter()
+                            .map(counter_action_control)
+                            .collect(),
+                    },
+                    label_control("counter.status", &self.status, "Counter runtime status"),
+                    state_label_control(
+                        "counter.status.bound",
+                        &self.status,
+                        TRACE_STATUS_ENDPOINT,
+                        "Counter runtime status",
+                    ),
+                    label_control("counter.trace.title", "Trace", "Trace history"),
+                    UiNodeDefinition::Column {
+                        id: AuthoredId::new("counter.trace"),
+                        children: trace_children,
+                    },
+                ],
+            },
+        )
+    }
+}
+fn label_control(
+    id: impl Into<String>,
+    text: impl Into<String>,
+    accessibility_label: impl Into<String>,
+) -> UiNodeDefinition {
+    let mut properties = BTreeMap::new();
+    properties.insert("text".to_owned(), AuthoredControlValue::String(text.into()));
+    UiNodeDefinition::Control {
+        id: AuthoredId::new(id),
+        kind: AuthoredControlKindId::new(LABEL_CONTROL_KIND_ID),
+        properties,
+        bindings: BTreeMap::new(),
+        route: None,
+        accessibility: Some(AuthoredControlAccessibilityDefinition {
+            role: "label".to_owned(),
+            label: Some(accessibility_label.into()),
+        }),
+        children: Vec::new(),
+    }
+}
+fn state_label_control(
+    id: impl Into<String>,
+    text: &str,
+    endpoint: &str,
+    accessibility_label: &str,
+) -> UiNodeDefinition {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "text".to_owned(),
+        AuthoredControlValue::String(text.to_owned()),
+    );
+    let mut bindings = BTreeMap::new();
+    bindings.insert("text".to_owned(), AuthoredBindingRef::new(endpoint));
+    UiNodeDefinition::Control {
+        id: AuthoredId::new(id),
+        kind: AuthoredControlKindId::new(LABEL_CONTROL_KIND_ID),
+        properties,
+        bindings,
+        route: None,
+        accessibility: Some(AuthoredControlAccessibilityDefinition {
+            role: "label".to_owned(),
+            label: Some(accessibility_label.to_owned()),
+        }),
+        children: Vec::new(),
+    }
+}
+fn counter_action_control(kind: CounterActionKind) -> UiNodeDefinition {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "label".to_owned(),
+        AuthoredControlValue::String(kind.label().to_owned()),
+    );
+    properties.insert(
+        "variant".to_owned(),
+        AuthoredControlValue::String("primary".to_owned()),
+    );
+    properties.insert(
+        "tone".to_owned(),
+        AuthoredControlValue::String("accent".to_owned()),
+    );
+    UiNodeDefinition::Control {
+        id: AuthoredId::new(format!("counter.action.{}", kind.domain_command())),
+        kind: AuthoredControlKindId::new(BUTTON_CONTROL_KIND_ID),
+        properties,
+        bindings: BTreeMap::new(),
+        route: Some(AuthoredRouteId::new(kind.route())),
+        accessibility: Some(AuthoredControlAccessibilityDefinition {
+            role: "button".to_owned(),
+            label: Some(kind.label().to_owned()),
+        }),
+        children: Vec::new(),
+    }
+}
+fn trace_lines_from_runtime_trace(trace: &UiRuntimeTraceResource) -> Vec<String> {
+    if trace.events().is_empty() {
+        return vec!["Trace empty".to_owned()];
+    }
+    trace
+        .events()
+        .iter()
+        .rev()
+        .take(5)
+        .map(|event| {
+            let mut parts = vec![format!("{:?}", event.kind())];
+            if let Some(route) = event.route() {
+                parts.push(route.as_str().to_owned());
+            }
+            if let Some(reason) = event.failure_reason() {
+                parts.push(reason.as_str().to_owned());
+            }
+            if let Some(status) = event.frame_publication_status() {
+                parts.push(status.as_str().to_owned());
+            }
+            parts.join(" ")
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct CounterTraceJsonLine { sequence: usize, kind: &'static str, action_id: Option<String>, route: Option<String>, host: Option<String>, surface_instance_id: Option<String>, failure_reason: Option<String>, diagnostic_code: Option<String>, runtime_id: Option<String>, source_id: Option<String>, program_id: Option<String>, dirty_cause: Option<String>, render_producer_id: Option<String>, render_surface_id: Option<String>, frame_revision: Option<u64>, frame_publication_status: Option<String> }
-impl CounterTraceJsonLine { fn from_event(sequence: usize, event: &UiRuntimeTraceEvent) -> Self { Self { sequence, kind: trace_kind_name(event.kind()), action_id: event.action_id().map(|id| id.as_str().to_owned()), route: event.route().map(|route| route.as_str().to_owned()), host: event.host().map(|host| format!("{host:?}")), surface_instance_id: event.surface_instance_id().map(|surface| surface.raw().to_string()), failure_reason: event.failure_reason().map(|reason| reason.as_str().to_owned()), diagnostic_code: event.diagnostic_code().map(|code| format!("{code:?}")), runtime_id: event.runtime_id().map(str::to_owned), source_id: event.source_id().map(str::to_owned), program_id: event.program_id().map(str::to_owned), dirty_cause: event.dirty_cause().map(|cause| cause.as_str().to_owned()), render_producer_id: event.render_producer_id().map(|producer| format!("{producer:?}")), render_surface_id: event.render_surface_id().map(|surface| format!("{surface:?}")), frame_revision: event.frame_revision(), frame_publication_status: event.frame_publication_status().map(frame_publication_status_name).map(str::to_owned) } } }
-pub fn trace_events_to_jsonl(trace: &UiRuntimeTraceResource) -> Result<String> { let mut jsonl = String::new(); for (sequence, event) in trace.events().iter().enumerate() { let line = CounterTraceJsonLine::from_event(sequence, event); jsonl.push_str(&serde_json::to_string(&line)?); jsonl.push('\n'); } Ok(jsonl) }
-pub fn write_trace_jsonl(trace: &UiRuntimeTraceResource, path: impl AsRef<Path>) -> Result<()> { let path = path.as_ref(); if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) { fs::create_dir_all(parent).with_context(|| format!("failed to create trace directory {}", parent.display()))?; } fs::write(path, trace_events_to_jsonl(trace)?).with_context(|| format!("failed to write trace jsonl {}", path.display())) }
-fn trace_kind_name(kind: UiRuntimeTraceEventKind) -> &'static str { match kind { UiRuntimeTraceEventKind::Mounted => "mounted", UiRuntimeTraceEventKind::Input => "input", UiRuntimeTraceEventKind::Route => "route", UiRuntimeTraceEventKind::Capability => "capability", UiRuntimeTraceEventKind::Dispatch => "dispatch", UiRuntimeTraceEventKind::Mutation => "mutation", UiRuntimeTraceEventKind::Rejection => "rejection", UiRuntimeTraceEventKind::Diagnostic => "diagnostic", UiRuntimeTraceEventKind::RuntimeEvaluation => "runtime_evaluation", UiRuntimeTraceEventKind::StateSnapshot => "state_snapshot", UiRuntimeTraceEventKind::Invalidation => "invalidation", UiRuntimeTraceEventKind::UiFramePublished => "ui_frame_published", UiRuntimeTraceEventKind::UiFramePresented => "ui_frame_presented" } }
-fn frame_publication_status_name(status: UiRuntimeFramePublicationStatus) -> &'static str { match status { UiRuntimeFramePublicationStatus::Published => "published", UiRuntimeFramePublicationStatus::MissingRuntimeEvaluation => "missing_runtime_evaluation", UiRuntimeFramePublicationStatus::MissingPreparedFrame => "missing_prepared_frame" } }
-pub fn counter_write_capability() -> &'static str { COUNTER_WRITE_CAPABILITY }
+pub struct CounterTraceJsonLine {
+    sequence: usize,
+    kind: &'static str,
+    action_id: Option<String>,
+    route: Option<String>,
+    host: Option<String>,
+    surface_instance_id: Option<String>,
+    failure_reason: Option<String>,
+    diagnostic_code: Option<String>,
+    runtime_id: Option<String>,
+    source_id: Option<String>,
+    program_id: Option<String>,
+    dirty_cause: Option<String>,
+    render_producer_id: Option<String>,
+    render_surface_id: Option<String>,
+    frame_revision: Option<u64>,
+    frame_publication_status: Option<String>,
+}
+impl CounterTraceJsonLine {
+    fn from_event(sequence: usize, event: &UiRuntimeTraceEvent) -> Self {
+        Self {
+            sequence,
+            kind: trace_kind_name(event.kind()),
+            action_id: event.action_id().map(|id| id.as_str().to_owned()),
+            route: event.route().map(|route| route.as_str().to_owned()),
+            host: event.host().map(|host| format!("{host:?}")),
+            surface_instance_id: event
+                .surface_instance_id()
+                .map(|surface| surface.raw().to_string()),
+            failure_reason: event
+                .failure_reason()
+                .map(|reason| reason.as_str().to_owned()),
+            diagnostic_code: event.diagnostic_code().map(|code| format!("{code:?}")),
+            runtime_id: event.runtime_id().map(str::to_owned),
+            source_id: event.source_id().map(str::to_owned),
+            program_id: event.program_id().map(str::to_owned),
+            dirty_cause: event.dirty_cause().map(|cause| cause.as_str().to_owned()),
+            render_producer_id: event
+                .render_producer_id()
+                .map(|producer| format!("{producer:?}")),
+            render_surface_id: event
+                .render_surface_id()
+                .map(|surface| format!("{surface:?}")),
+            frame_revision: event.frame_revision(),
+            frame_publication_status: event
+                .frame_publication_status()
+                .map(frame_publication_status_name)
+                .map(str::to_owned),
+        }
+    }
+}
+pub fn trace_events_to_jsonl(trace: &UiRuntimeTraceResource) -> Result<String> {
+    let mut jsonl = String::new();
+    for (sequence, event) in trace.events().iter().enumerate() {
+        let line = CounterTraceJsonLine::from_event(sequence, event);
+        jsonl.push_str(&serde_json::to_string(&line)?);
+        jsonl.push('\n');
+    }
+    Ok(jsonl)
+}
+pub fn write_trace_jsonl(trace: &UiRuntimeTraceResource, path: impl AsRef<Path>) -> Result<()> {
+    let path = path.as_ref();
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create trace directory {}", parent.display()))?;
+    }
+    fs::write(path, trace_events_to_jsonl(trace)?)
+        .with_context(|| format!("failed to write trace jsonl {}", path.display()))
+}
+fn trace_kind_name(kind: UiRuntimeTraceEventKind) -> &'static str {
+    match kind {
+        UiRuntimeTraceEventKind::Mounted => "mounted",
+        UiRuntimeTraceEventKind::Input => "input",
+        UiRuntimeTraceEventKind::Route => "route",
+        UiRuntimeTraceEventKind::Capability => "capability",
+        UiRuntimeTraceEventKind::Dispatch => "dispatch",
+        UiRuntimeTraceEventKind::Mutation => "mutation",
+        UiRuntimeTraceEventKind::Rejection => "rejection",
+        UiRuntimeTraceEventKind::Diagnostic => "diagnostic",
+        UiRuntimeTraceEventKind::RuntimeEvaluation => "runtime_evaluation",
+        UiRuntimeTraceEventKind::StateSnapshot => "state_snapshot",
+        UiRuntimeTraceEventKind::Invalidation => "invalidation",
+        UiRuntimeTraceEventKind::UiFramePublished => "ui_frame_published",
+        UiRuntimeTraceEventKind::UiFramePresented => "ui_frame_presented",
+    }
+}
+fn frame_publication_status_name(status: UiRuntimeFramePublicationStatus) -> &'static str {
+    match status {
+        UiRuntimeFramePublicationStatus::Published => "published",
+        UiRuntimeFramePublicationStatus::MissingRuntimeEvaluation => "missing_runtime_evaluation",
+        UiRuntimeFramePublicationStatus::MissingPreparedFrame => "missing_prepared_frame",
+    }
+}
+pub fn counter_write_capability() -> &'static str {
+    COUNTER_WRITE_CAPABILITY
+}
