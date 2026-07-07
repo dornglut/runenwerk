@@ -7,6 +7,8 @@ canonical: true
 last_reviewed: 2026-07-07
 related_docs:
   - ../workflow-lifecycle.md
+  - ../routines/track-orchestration-routine.md
+  - ../specs/phase-implementation-spec.md
   - ../../architecture/ui-framework-architecture.md
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
@@ -76,13 +78,13 @@ Current blocker:
 ```text
 No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-The remaining strategic blocker is the full implementation-planning contract for `PT-UI-RUNTIME-PLATFORM-002`. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame migration code, scene/debug overlay migration work, runnable Counter product code, source-reload/persistence code, SDF/world-space/SpatialCanvas work, foundation/meta, domain/app_program, and generic plugin framework work remain blocked until the full cutover plan is accepted.
+The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The active blocker before returning to SpatialCanvas, standalone public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform implementation is `PT-WORKFLOW-TRACK-ORCHESTRATION-001`, which hardens track-manager and phase-spec handoff workflow before runtime implementation starts.
 ```
 
 Next action:
 
 ```text
-Review the `PT-UI-RUNTIME-PLATFORM-002` full cutover-plan PR. Do not return to SpatialCanvas implementation, standalone public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform milestones as implementation before the runtime platform cutover contract exists.
+Review and merge `PT-WORKFLOW-TRACK-ORCHESTRATION-001` if validation is clean. Then start `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as the first bounded runtime implementation phase. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
 ```
 
 ## PT-UI-RUNTIME-PLATFORM
@@ -93,9 +95,9 @@ Title: Live UiPlugin Runtime Platform
 
 Track type: architecture / runtime platform / public API
 
-State: active-planning full cutover contract
+State: active-planning workflow hardening gate before first implementation phase
 
-Lifecycle state: `active-planning`; implementation not authorized until the full cutover-plan PR is accepted
+Lifecycle state: `active-planning`; runtime implementation not authorized until `PT-WORKFLOW-TRACK-ORCHESTRATION-001` is accepted or explicitly deferred and `PT-UI-RUNTIME-PLATFORM-003` opens separately as active implementation
 
 Goal:
 
@@ -110,6 +112,8 @@ Current-state investigation: docs-site/src/content/docs/reports/investigations/l
 Runtime architecture: docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
 Design-gate authority: docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
 Full cutover plan: docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
+Track orchestration routine: docs-site/src/content/docs/workspace/routines/track-orchestration-routine.md
+Phase implementation spec: docs-site/src/content/docs/workspace/specs/phase-implementation-spec.md
 Architecture spine: docs-site/src/content/docs/architecture/ui-framework-architecture.md
 Workflow gates: complete-investigation-gate.md, complete-design-gate.md, complete-merge-readiness-gate.md
 ```
@@ -118,8 +122,9 @@ Milestones:
 
 ```text
 001 Live UiPlugin runtime and generic surface-frame rendering investigation/design gate — completed through merged PR #74 docs-only hardening
-002 Full platform cutover plan — active docs-only planning PR
-003 UiPlugin Foundation — downstream implementation PR
+002 Full platform cutover plan — completed through merged PR #76 docs-only planning
+Workflow gate PT-WORKFLOW-TRACK-ORCHESTRATION-001 — active docs-only hardening before Phase 003
+003 UiPlugin Foundation — downstream implementation PR after workflow gate
 004 App Mounting API — downstream implementation PR
 005 Typed Screen / Source / Action Contracts — downstream implementation PR
 006 Mounted Surface Session Runtime — downstream implementation PR
@@ -136,9 +141,9 @@ Milestones:
 Design gates:
 
 ```text
-Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` adds render/app-engine feature mapping, runtime architecture, agent/trace requirements, producer-generic render-boundary ordering, reload/persistence decisions, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements.
-Complete design gate: in progress for `PT-UI-RUNTIME-PLATFORM-002` full cutover plan.
-Implementation authorization: forbidden until the full cutover plan is accepted and the next phase PR records exact scope, owner modules, allowed files/crates, validation envelope, evidence expectation, principle compliance, acceptance criteria, and stop conditions.
+Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` added render/app-engine feature mapping, runtime architecture, agent/trace requirements, producer-generic render-boundary ordering, reload/persistence decisions, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements.
+Complete design gate: completed for `PT-UI-RUNTIME-PLATFORM-002` through merged PR #76.
+Implementation authorization: forbidden until the workflow gate is accepted or explicitly deferred and `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` records exact scope, owner modules, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, principle compliance, acceptance criteria, and stop conditions.
 ```
 
 Evidence gates:
@@ -150,19 +155,19 @@ Current evidence is `E2` connector metadata/file inspection, `E3` source/design/
 Current blocker:
 
 ```text
-The full platform cutover plan is not yet accepted. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame generic producer boundary work, overlay producer migration work, source reload/persistence implementation, and runnable Counter product code remain blocked until `PT-UI-RUNTIME-PLATFORM-002` is reviewed and merged.
+`PT-WORKFLOW-TRACK-ORCHESTRATION-001` is the active docs-only workflow-hardening gate. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame generic producer boundary work, overlay producer migration work, source reload/persistence implementation, and runnable Counter product code remain blocked until this gate is accepted or explicitly deferred and Phase 003 opens separately.
 ```
 
 Activation condition:
 
 ```text
-Promote to active implementation only after `PT-UI-RUNTIME-PLATFORM-002` is accepted and `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` opens as a bounded implementation PR.
+Promote to active implementation only after `PT-WORKFLOW-TRACK-ORCHESTRATION-001` is accepted or explicitly deferred and `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` opens as a bounded implementation PR with a phase handoff contract.
 ```
 
 Next action:
 
 ```text
-Review the full cutover-plan PR. If accepted, merge it and open Phase 003. Do not implement multiple runtime phases in one broad PR.
+Review PR #77, run docs validation/diff checks, and merge if clean. Then open Phase 003 as a separate implementation PR. Do not implement multiple runtime phases in one broad PR.
 ```
 
 ## Track shape
