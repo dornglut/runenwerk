@@ -1,6 +1,7 @@
 use super::{SceneResource, lifecycle::install_scene_runtime_systems};
 use crate::app::App;
 use crate::plugin::Plugin;
+use crate::plugins::render::SurfaceFrameSubmissionRegistryResource;
 use crate::state::{GameplayRuntimeConfig, SceneRuntimeState, UiOverlayState};
 
 pub struct ScenePlugin;
@@ -12,6 +13,7 @@ impl Plugin for ScenePlugin {
         app.init_resource::<SceneRuntimeState>();
         app.init_resource::<GameplayRuntimeConfig>();
         app.init_resource::<UiOverlayState>();
+        app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
         install_scene_runtime_systems(app);
     }
 }
