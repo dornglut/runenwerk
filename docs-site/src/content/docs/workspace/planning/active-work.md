@@ -40,9 +40,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-007`
 
 Title: `Host Action Dispatch and Runtime Trace`
 
-State: active planning only after Phase 006 completion truth. No Phase 007 implementation authorization is recorded by this closeout/planning record.
+State: active-implementation authorization recorded for one bounded Phase 007 PR. No runtime code is changed by this planning record.
 
-Lifecycle state: `active-planning` for Phase 007 only.
+Lifecycle state: `active-implementation` for Phase 007 only.
 
 Owner: `engine::plugins::ui` owns generic UI action dispatch resources, reports, diagnostics, and trace records. Host/app owners own mutation of app state. `ui_hosts` owns host-facing capability/intent semantics if a Phase 007 implementation needs that existing contract. RenderPlugin owns render preparation/submission consumption only.
 
@@ -83,13 +83,13 @@ docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architect
 docs-site/src/content/docs/architecture/ui-framework-architecture.md
 ```
 
-Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 006, `E6` PR merge/check metadata for PR #88, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment for Phase 006 closeout.
+Evidence classes: `E3` source/design/planning inspection by path, `E6` PR merge/check metadata for PR #89, and `E8` accepted architecture/workflow/planning authority. Phase 006 implementation completion remains backed by `E5` local command validation and `E9` code/test plus validation plus authority alignment in the closeout report.
 
-Complete investigation gate: complete for opening Phase 007 active planning. Phase 007 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and the Phase 006 closeout evidence.
+Complete investigation gate: complete for opening Phase 007 active implementation. Phase 007 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and the Phase 006 closeout evidence.
 
-Complete design gate: complete for Phase 007 planning through the accepted cutover plan, Phase 006 closeout, and this planning record. Implementation authorization still requires a separate active-implementation decision.
+Complete design gate: complete for Phase 007 implementation through the accepted cutover plan, Phase 006 closeout, and this planning authorization record.
 
-Implementation authorization status: `not-authorized`; active planning only.
+Implementation authorization status: `active-implementation-authorized`.
 
 Phase 006 completion truth:
 
@@ -99,7 +99,7 @@ Closeout report: docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-plat
 Remote phase branch was deleted by the merge command.
 ```
 
-Phase 007 planning contract from accepted cutover authority:
+Phase 007 handoff contract from accepted cutover authority:
 
 ```text
 engine/src/plugins/ui/events.rs
@@ -108,8 +108,8 @@ engine/src/plugins/ui/host.rs
 engine/src/plugins/ui/report.rs
 engine/src/plugins/ui/diagnostics.rs
 engine/src/plugins/ui/trace.rs
-engine/Cargo.toml dependency on ui_hosts if not already present
-focused positive and negative engine tests
+engine/Cargo.toml dependency on ui_hosts if not already present; engine already has ui_hosts from Phase 005
+focused positive and negative engine tests, named for `cargo test -p engine ui_action`
 ```
 
 Required Phase 007 evidence from accepted cutover authority:
@@ -150,7 +150,7 @@ engine/Cargo.toml: `ui_hosts` dependency only if not already present.
 focused engine tests: positive dispatch and fail-closed negative cases.
 ```
 
-Maintainability review status: complete for Phase 007 planning only. Stop before implementation authorization if Phase 007 needs a broader module map than the files named here.
+Maintainability review status: complete for Phase 007 authorization. Stop if implementation needs a broader module map than the files named here.
 
 Feature support matrix:
 
@@ -159,7 +159,7 @@ UiPlugin install/resource shell: completed by Phase 003.
 Public mounting API: completed by Phase 004.
 Typed screen/source/action contracts: completed by Phase 005.
 Mounted sessions: completed by Phase 006.
-Host action dispatch and trace: active-planning Phase 007.
+Host action dispatch and trace: active-implementation Phase 007.
 Runtime evaluation/invalidation: downstream Phase 008.
 Render boundary/publication: downstream Phases 009-010.
 Scene/debug overlay migration: downstream Phase 011.
@@ -168,10 +168,10 @@ Reload/persistence: downstream Phase 013.
 Closeout/adoption lock: downstream Phase 014.
 ```
 
-Phase 007 validation envelope to confirm during active-implementation authorization:
+Phase 007 validation envelope from cutover and workflow authority:
 
 ```text
-focused positive and negative engine tests for action dispatch and trace records
+cargo test -p engine ui_action
 cargo test -p engine
 python tools/docs/validate_docs.py
 git diff --check
@@ -183,9 +183,9 @@ Evidence expectation: focused engine tests must prove a known action mutates onl
 
 Stop conditions: stop if errors become silent, partial mutation is possible on invalid input, product/editor/game semantics move into generic UI, trace is Counter-specific, trace extraction becomes an engine-wide framework, runtime evaluation/render publication/source reload/persistence enters the PR, `apps/ui_counter_runtime` enters the PR, or Phase 008+ files become necessary.
 
-Known blockers: Phase 007 implementation is not authorized by this closeout/planning PR. Phase 008 and later remain blocked until Phase 007 is separately authorized, reviewed, merged, and completion truth is recorded.
+Known blockers: no Phase 007 implementation branch has been opened or merged yet. Phase 008 and later remain blocked until Phase 007 is reviewed, merged, and completion truth is recorded.
 
-Next action: merge this Phase 006 closeout/planning truth, then open a separate active-implementation authorization for exactly one bounded `PT-UI-RUNTIME-PLATFORM-007 - Host Action Dispatch and Runtime Trace` PR from current `main`. Keep any future Phase 007 implementation PR draft until focused Phase 007 validation and the required docs/diff/status commands are clean.
+Next action: create exactly one bounded `PT-UI-RUNTIME-PLATFORM-007 - Host Action Dispatch and Runtime Trace` implementation branch/PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 007 validation and the required docs/diff/status commands are clean.
 
 ## Active-work rules
 

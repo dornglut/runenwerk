@@ -485,9 +485,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-007`
 
 Title: Host Action Dispatch and Runtime Trace
 
-State: active planning only after Phase 006 closeout truth
+State: active implementation authorization recorded; implementation PR not yet opened
 
-Lifecycle state: `active-planning`
+Lifecycle state: `active-implementation`
 
 Authority:
 
@@ -516,7 +516,7 @@ action report records route/action/host/failure reason
 generic UI-runtime trace records mounted/input/route/capability/dispatch/mutation/rejection/diagnostic events
 ```
 
-Allowed files/crates for a future Phase 007 implementation authorization:
+Allowed files/crates for the Phase 007 implementation authorization:
 
 ```text
 engine/src/plugins/ui/events.rs
@@ -525,8 +525,8 @@ engine/src/plugins/ui/host.rs
 engine/src/plugins/ui/report.rs
 engine/src/plugins/ui/diagnostics.rs
 engine/src/plugins/ui/trace.rs
-engine/Cargo.toml dependency on ui_hosts if not already present
-focused positive and negative engine tests
+engine/Cargo.toml dependency on ui_hosts if not already present; engine already has ui_hosts from Phase 005
+focused positive and negative engine tests, named for `cargo test -p engine ui_action`
 ```
 
 Forbidden files/crates:
@@ -553,12 +553,23 @@ any tools/docs validator or script changes
 Gate status:
 
 ```text
-Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 006 closeout evidence.
-Complete design gate: complete for planning through the accepted cutover plan and Phase 006 closeout evidence.
-Implementation authorization: not recorded by this closeout. Phase 007 needs a separate active-implementation decision before code changes.
+Complete investigation gate: complete for active implementation through accepted runtime-platform authority and Phase 006 closeout evidence.
+Complete design gate: complete for implementation through the accepted cutover plan and Phase 006 closeout evidence.
+Implementation authorization: active for exactly one bounded Phase 007 implementation PR.
 ```
 
-Next action: Open a separate Phase 007 active-implementation authorization branch/PR after this closeout/planning truth merges. Do not start Phase 007 implementation from this closeout PR.
+Validation envelope:
+
+```text
+cargo test -p engine ui_action
+cargo test -p engine
+python tools/docs/validate_docs.py
+git diff --check
+git status --short --branch
+git diff --stat main...HEAD
+```
+
+Next action: Open exactly one bounded Phase 007 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 007 validation and required docs/diff/status commands are clean.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
