@@ -568,6 +568,32 @@ Reactivation condition: Reopen if PR #97 completion evidence is found inaccurate
 
 Supersedes: Phase 009 SurfaceFrame Generic Producer Boundary activation decision.
 
+Superseded by: Phase 010 UiPlugin Render Publication activation decision.
+
+## Phase 010 UiPlugin Render Publication activation decision
+
+Date: 2026-07-07
+
+Decision: Authorize `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` as exactly one bounded active-implementation phase after Phase 009 completion truth merged.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-010 active-planning -> active-implementation`.
+
+Context: PR #98 merged Phase 009 completion truth into `main` at `1b29eb58cdbea4d3c351403702373d013772d541`. Active work now has the accepted Phase 010 owner, handoff contract, activation-time implementation map, allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition map, and stop conditions. Activation-time source inspection confirmed the current UiPlugin runtime evaluation path, frame payload facts, trace resource, generic `SurfaceFrameSubmissionRegistryResource`, `RenderFrameProducerId`, `RenderSurfaceId`, and focused UI/render test coverage that Phase 010 must extend.
+
+Options considered: leave Phase 010 in active planning only; start Phase 010 implementation without updating planning; authorize one bounded Phase 010 implementation PR.
+
+Reason: The track orchestration workflow allows the next implementation phase only after the previous phase is reviewed, merged, and closeout truth is recorded. That condition is now satisfied for Phase 009. The accepted cutover plan, architecture trace requirements, and source inspection provide enough exact scope to authorize Phase 010 implementation without widening into scene/debug overlay migration, Counter app packaging, source reload/persistence, or later phases.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E6` PR #98 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 009 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-009-closeout.md`.
+
+Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` implementation PR from current `main`. Keep the PR draft until focused Phase 010 validation and required docs/diff/status commands are clean.
+
+Reactivation condition: Reopen if Phase 010 implementation needs scope outside the accepted UiPlugin render publication map, if RenderPlugin becomes UI runtime owner, if scene/debug overlay migration or retirement enters the PR, if Counter product packaging enters the PR, if source/program/action semantics change, if publication cannot map to an explicit render surface, or if planning drifts from merged code again.
+
+Supersedes: Phase 009 SurfaceFrame Generic Producer Boundary completion and Phase 010 planning decision.
+
 Superseded by: none.
 
 ## Lifecycle rule

@@ -804,9 +804,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-010`
 
 Title: UiPlugin Render Publication
 
-State: active planning only; implementation is not yet authorized
+State: active implementation authorization recorded; implementation PR not yet opened
 
-Lifecycle state: `active-planning`
+Lifecycle state: `active-implementation`
 
 Authority:
 
@@ -832,17 +832,39 @@ missing UiPlugin frame reports a diagnostic instead of silent success
 frame publication trace records producer, surface, frame revision, dirty cause, and publication result
 ```
 
-Candidate implementation scope from accepted cutover authority, pending separate activation:
+Activation-time implementation map:
+
+```text
+add engine/src/plugins/ui/render_publish.rs for UiPlugin-owned publication target, result/report helpers, and the system/function that writes SurfaceFrameSubmission records
+extend engine/src/plugins/ui/mod.rs exports for the publication API
+extend engine/src/plugins/ui/plugin.rs only for publication resource initialization and RenderPrepare scheduling
+extend engine/src/plugins/ui/schedule.rs with a RenderPublication set label
+extend engine/src/plugins/ui/report.rs with frame publication/presentation report facts
+extend engine/src/plugins/ui/trace.rs with UiFramePublished and UiFramePresented trace event facts
+extend engine/src/plugins/ui/diagnostics.rs only for missing-frame or publication-rejected diagnostics
+use existing SurfaceFrameSubmissionRegistryResource, SurfaceFrameSubmission, SurfaceFrameRoute, SurfaceFrameSubmissionOrder, RenderFrameProducerId, and RenderSurfaceId
+add focused engine/tests/ui_render_publication.rs tests
+```
+
+Allowed files/crates for the Phase 010 implementation authorization:
 
 ```text
 engine/src/plugins/ui/render_publish.rs
+engine/src/plugins/ui/mod.rs
+engine/src/plugins/ui/plugin.rs
+engine/src/plugins/ui/schedule.rs
 engine/src/plugins/ui/report.rs
 engine/src/plugins/ui/trace.rs
-existing generic render submission registry/resource paths only where needed
-focused engine/render integration tests
+engine/src/plugins/ui/diagnostics.rs only for publication diagnostics
+engine/src/plugins/ui/resources.rs only if publication needs a UiPlugin-owned publication resource or read-only helper access to latest evaluation reports
+engine/src/plugins/render/features/ui/submission.rs only if a small generic-seam API extension is required; no rename or semantic rewrite
+engine/src/plugins/render/features/ui/resource.rs only if tests need prepared payload access that already belongs to the generic seam; no renderer behavior rewrite
+engine/tests/ui_render_publication.rs
+engine/tests/ui_runtime_evaluation.rs only if existing helpers or assertions must align with publication facts
+engine/tests/render_flow_v2.rs only if the prepared-frame integration proof needs an assertion against the new UiPlugin producer contribution
 ```
 
-Forbidden files/crates for Phase 010 planning:
+Forbidden files/crates:
 
 ```text
 scene/debug overlay migration or retirement implementation
@@ -852,6 +874,8 @@ SDF or SpatialCanvas implementation
 broad render backend rewrite
 graph execution rewrite or shader changes
 source/program/action semantic changes outside publication facts
+host mutation or action-dispatch behavior changes
+broad ui_render_data primitive/model rewrites
 foundation/meta
 domain/app_program
 generic plugin framework
@@ -859,15 +883,48 @@ phase spec validator implementation
 any tools/docs validator or script changes
 ```
 
+Acceptance criteria:
+
+```text
+UiPlugin publication uses a stable non-zero RenderFrameProducerId owned by UiPlugin render publication
+UiPlugin publication writes through SurfaceFrameSubmissionRegistryResource and includes an explicit RenderSurfaceId target
+Publication derives from the latest UiRuntimeEvaluationReport and UiRuntimeFramePayload, not directly from UiScreen, IntoUi, actions, or host mutation
+Prepared UI render-feature payloads include the UiPlugin producer contribution after RenderPlugin preparation
+Missing evaluation/frame payload records a diagnostic and report instead of silent success
+Trace records UiFramePublished and UiFramePresented facts with producer id, surface id, frame revision, dirty cause, and result
+The same runtime frame publishes deterministically through the same producer/surface key
+Scene/debug overlay producers remain present only as downstream Phase 011 migration inputs
+```
+
 Gate status:
 
 ```text
-Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 009 closeout evidence. Implementation investigation remains pending.
-Complete design gate: complete for active planning through accepted cutover/architecture authority and Phase 009 closeout evidence. Implementation design gate remains pending.
-Implementation authorization: blocked pending a separate active-implementation decision.
+Complete investigation gate: complete for active implementation through accepted runtime-platform authority, Phase 009 closeout evidence, and activation-time source inspection of current UiRuntimeEvaluationResource, UiRuntimeEvaluationReport, UiRuntimeFramePayload, UiRuntimeTraceResource, UiPlugin wiring, generic SurfaceFrameSubmissionRegistryResource, RenderFrameProducerId, RenderSurfaceId, and focused UI/render tests.
+Complete design gate: complete for implementation through the accepted cutover plan, architecture record, Phase 009 closeout evidence, and this activation record.
+Implementation authorization: active for exactly one bounded Phase 010 implementation PR.
 ```
 
-Next action: Open a separate Phase 010 active-implementation authorization PR from current `main` after this closeout/planning truth merges. Do not start Phase 010 implementation until that authorization is merged.
+Validation envelope:
+
+```text
+cargo test -p engine ui_render_publication
+cargo test -p engine ui_runtime_evaluation
+cargo test -p engine surface_frame_submission
+cargo test -p engine render_output_proof
+cargo test -p engine --test render_flow_v2
+cargo test -p engine
+python tools/docs/validate_docs.py
+git diff --check
+git diff --check main...HEAD
+git status --short --branch
+git diff --stat main...HEAD
+```
+
+Evidence expectation: focused tests and compile checks must prove UiPlugin publishes through the generic `SurfaceFrameSubmissionRegistryResource`, uses `RenderFrameProducerId` and `RenderSurfaceId`, records deterministic publication/presentation facts, preserves renderer ownership boundaries, and reports diagnostics on missing runtime frame payloads.
+
+Stop conditions: stop if RenderPlugin becomes the UI runtime owner, pulls from app host state directly, requires a broad backend rewrite, requires scene/debug overlay retirement, creates a second UI runtime path, changes source/program/action semantics, cannot map publication to an explicit render surface, or needs files outside the allowed set.
+
+Next action: Open exactly one bounded Phase 010 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 010 validation and required docs/diff/status commands are clean.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
