@@ -1,4 +1,4 @@
-use super::{UiMountFailureReason, UiMountSource};
+use super::{UiMountFailureReason, UiMountSource, UiTypedIdentityError};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum UiRuntimeDiagnosticSeverity {
@@ -12,6 +12,7 @@ pub enum UiRuntimeDiagnosticCode {
     PluginInstall,
     ResourceInitialization,
     MountRequestRejected,
+    TypedContractRejected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,12 +22,47 @@ pub struct UiMountDiagnostic {
     pub failure_reason: UiMountFailureReason,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiTypedContractKind {
+    Screen,
+    Source,
+    Action,
+    HostIntent,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UiTypedContractFailureReason {
+    InvalidIdentity(UiTypedIdentityError),
+    MissingSourceFact,
+    MissingActionCapability,
+    HostIntentRejected,
+}
+
+impl UiTypedContractFailureReason {
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::InvalidIdentity(_) => "typed UI contract identity is invalid",
+            Self::MissingSourceFact => "typed UI source did not produce required source facts",
+            Self::MissingActionCapability => "typed UI action did not declare a route capability",
+            Self::HostIntentRejected => "typed UI host intent was rejected",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiTypedContractDiagnostic {
+    pub contract: UiTypedContractKind,
+    pub identity: String,
+    pub failure_reason: UiTypedContractFailureReason,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiRuntimeDiagnostic {
     pub code: UiRuntimeDiagnosticCode,
     pub severity: UiRuntimeDiagnosticSeverity,
     pub message: &'static str,
     pub mount: Option<UiMountDiagnostic>,
+    pub typed_contract: Option<UiTypedContractDiagnostic>,
 }
 
 impl UiRuntimeDiagnostic {
@@ -40,6 +76,7 @@ impl UiRuntimeDiagnostic {
             severity,
             message,
             mount: None,
+            typed_contract: None,
         }
     }
 
@@ -55,6 +92,25 @@ impl UiRuntimeDiagnostic {
             mount: Some(UiMountDiagnostic {
                 screen_identity: screen_identity.into(),
                 mount_source,
+                failure_reason,
+            }),
+            typed_contract: None,
+        }
+    }
+
+    pub fn typed_contract_rejected(
+        contract: UiTypedContractKind,
+        identity: impl Into<String>,
+        failure_reason: UiTypedContractFailureReason,
+    ) -> Self {
+        Self {
+            code: UiRuntimeDiagnosticCode::TypedContractRejected,
+            severity: UiRuntimeDiagnosticSeverity::Error,
+            message: failure_reason.message(),
+            mount: None,
+            typed_contract: Some(UiTypedContractDiagnostic {
+                contract,
+                identity: identity.into(),
                 failure_reason,
             }),
         }
