@@ -110,7 +110,7 @@ Authority:
 ../../architecture/ui-framework-architecture.md
 ```
 
-Evidence: This entry corrects the previous “first runtime slice” framing. The platform is planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch with generic runtime trace, runtime evaluation with state snapshot and invalidation, render publication, old scene/debug overlay migration/removal, SurfaceFrame genericization, source reload and persistence contract, runnable human/agent Counter app product, and closeout/adoption lock.
+Evidence: This entry corrects the previous first-runtime-slice framing. The platform is planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch with UI-runtime trace, runtime evaluation with state snapshot and invalidation, producer-generic surface-frame boundary, UiPlugin render publication, scene/debug overlay producer migration/retirement, runnable human/agent Counter app product, source reload and persistence contract, and closeout/adoption lock. SDF UI backend work is assigned to downstream `PT-UI-RENDER-BACKEND-SDF-001`; phase implementation specs are downstream workflow hardening, not part of this planning PR.
 
 Gate status:
 
@@ -132,7 +132,7 @@ State: completed through merged PR #44
 
 Lifecycle state: `completed`
 
-Evidence: PR #44 merged into `main` at merge commit `6f2d3827f315191d7aeaf68a64f523627197cad8`. Evidence covers package-backed overlay declarations, base-control overlay lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime overlay proof, proof-frame projection, static mount proof, no-bypass evidence, and full local validation gate passed on 2026-07-02.
+Evidence: PR #44 merged into `main` at `6f2d3827f315191d7aeaf68a64f523627197cad8`. Evidence covers package-backed overlay declarations, base-control overlay lowering, main-path package validation, catalog projection, inspection projection, normalized input fact consumption, runtime overlay proof, proof-frame projection, static mount proof, route-guard evidence, and full local validation gate passed on 2026-07-02.
 
 Next action: Keep as completed dependency.
 
@@ -148,7 +148,7 @@ Lifecycle state: `completed`
 
 Authority: `ui-component-platform-text-editing-design.md`.
 
-Evidence: PR #46 merged into `main` at merge commit `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, runtime text-editing proof, proof-frame projection, static mount validation, focused tests, final proof-frame cleanup, and full local validation gate passed on 2026-07-02.
+Evidence: PR #46 merged into `main` at `6d9bf983c77a32c701681ff55a05e1f9ebcdeed1`. Main contains package-backed editable-text declarations, InspectorField text-editing lowering, package descriptor wiring, package validation, catalog projection, inspection projection, normalized text edit/composition/selection facts, runtime text-editing proof, proof-frame projection, static mount validation, focused tests, final proof-frame cleanup, and full local validation gate passed on 2026-07-02.
 
 Next action: Keep as completed dependency.
 
@@ -164,7 +164,7 @@ Lifecycle state: `completed`
 
 Authority: `ui-component-platform-generic-text-design.md`.
 
-Evidence: PR #48 merged into `main` at merge commit `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. PR #49 merged into `main` at merge commit `338a8092d534dbb412da89363d50a46cd5efeae9` and completed the hardening pass. Final local validation passed on 2026-07-02 with the full package, workspace, docs, and diff gate.
+Evidence: PR #48 merged into `main` at `91cea8b8f0dfc38143de77ba931bc81ffc91dcff`. PR #49 merged into `main` at `338a8092d534dbb412da89363d50a46cd5efeae9` and completed the hardening pass. Final validation passed with the recorded package/workspace/docs/diff gate.
 
 Next action: Keep as completed dependency.
 
@@ -180,20 +180,20 @@ Lifecycle state: `completed`
 
 Authority: `ui-component-platform-surface2d-design.md`.
 
-Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with the recorded Surface2D focused commands, `cargo test --workspace`, docs validation, and diff check.
+Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with the recorded Surface2D focused commands, workspace tests, docs validation, and diff check.
 
-Next action: Keep as completed dependency. Keep Phase 17 SpatialCanvas as future planning only until runtime platform planning settles its accepted implementation path.
+Next action: Keep as completed dependency. Keep Phase 17 SpatialCanvas as downstream planning only until runtime platform planning settles its accepted implementation path.
 
 ## Future app-framework follow-ups
 
-These are future planning candidates only. They are not implementation work and must wait for their own accepted planning/design contracts.
+These are downstream planning candidates only. They are not implementation work and must wait for their own accepted planning/design contracts.
 
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-003 - Public AppUiExt Ergonomics`
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-004 - Authoring Frontends and Execution Strategy Model`
 
 `PT-UI-FRAMEWORK-APP-INTEGRATION-003` is superseded/absorbed by `PT-UI-RUNTIME-PLATFORM-001` and `PT-UI-RUNTIME-PLATFORM-002` as the broader live runtime platform track. Do not treat standalone public `AppUiExt` ergonomics as the immediate next implementation target.
 
-`PT-UI-FRAMEWORK-APP-INTEGRATION-004` should define how Rust builders, templates, visual designer output, compiler DSLs, immediate-mode adapters, reactive adapters, retained execution, ECS-driven execution, and SDF/world-space targets share source/program/event/story contracts without bypasses.
+`PT-UI-FRAMEWORK-APP-INTEGRATION-004` should define how Rust builders, templates, visual designer output, compiler DSLs, immediate-mode adapters, reactive adapters, retained execution, ECS-driven execution, and SDF/world-space targets share source/program/event/story contracts through the accepted route and proof model.
 
 ## Rules
 
