@@ -13,6 +13,7 @@ related_docs:
   - ../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md
   - ../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -32,7 +33,8 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-WORKFLOW-TRACK-ORCHESTRATION-001` Track Orchestration and Phase Spec Handoff Workflow: completed 2026-07-07 through merged PR #77 at merge commit `8b7a6b558bef79303e66d6a9f329dc71e00a0931`. Closeout report: `../../reports/closeouts/pt-workflow-track-orchestration-001-closeout.md`. Runtime implementation remained out of scope; its Phase 003 follow-up is fulfilled by PR #79.
 - `PT-UI-RUNTIME-PLATFORM-003` UiPlugin Foundation: completed 2026-07-07 through merged PR #79 at merge commit `0135850277e904b4be2c336e3ef6507b3fc88b72`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API`.
 - `PT-UI-RUNTIME-PLATFORM-004` App Mounting API: completed 2026-07-07 through merged PR #82 at merge commit `9fb86f0d426385be7e425ff943c7a9d5450e1edb`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts`.
-- `PT-UI-RUNTIME-PLATFORM-005` Typed Screen / Source / Action Contracts: completed 2026-07-07 through merged PR #85 at merge commit `6226470defa7a72a567fc03c1bc3783e63e2c2c8`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` planning only; implementation remains blocked until separately authorized.
+- `PT-UI-RUNTIME-PLATFORM-005` Typed Screen / Source / Action Contracts: completed 2026-07-07 through merged PR #85 at merge commit `6226470defa7a72a567fc03c1bc3783e63e2c2c8`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime`.
+- `PT-UI-RUNTIME-PLATFORM-006` Mounted Surface Session Runtime: completed 2026-07-07 through merged PR #88 at merge commit `82d6f00326cf2823eb91d3f655a730b962b355f6`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` planning only; implementation remains blocked until separately authorized.
 
 ## Recently completed UI Component Platform work
 
@@ -151,10 +153,40 @@ scene/debug overlay migration, source reload/persistence,
 `domain/app_program`, generic plugin framework, phase spec validator, and
 tools/docs validator changes remained out of scope.
 
+Follow-up: Fulfilled by completed `PT-UI-RUNTIME-PLATFORM-006 — Mounted
+Surface Session Runtime` through PR #88 and closeout truth. Use Phase 007
+planning as the next runtime-platform state.
+
+## PT-UI-RUNTIME-PLATFORM-006 evidence
+
+Implementation evidence: PR #88 delivered the engine-owned Mounted Surface
+Session Runtime. Evidence covers the `ui_surface` dependency, mounted session
+records backed by `MountedSurfaceInstance` and `SessionScopeHandle`,
+retention-class mount configuration, mounted-surface/session report evidence,
+deterministic unmount/remount reports, active `MountedSurfaceRegistry` backed
+storage, and focused `ui_mount_*` engine tests for generation, retention,
+unmount/remount, and non-colliding multiple mounts.
+
+Merge evidence: PR #88, `PT-UI-RUNTIME-PLATFORM-006 mounted sessions`,
+squash-merged into `main` on 2026-07-07 at merge commit
+`82d6f00326cf2823eb91d3f655a730b962b355f6`.
+
+Validation: Before merge, `cargo test -p engine ui_mount`, `cargo test -p
+engine`, `python tools/docs/validate_docs.py`, `git diff --check`, `git diff
+--check main...HEAD`, `git status --short --branch`, and `git diff --stat
+main...HEAD` passed. GitHub reported no checks for the branch.
+
+Known non-goals: host action dispatch, runtime trace, runtime
+evaluation/invalidation, render adapters, SurfaceFrame generic
+producer-boundary implementation, scene/debug overlay migration, source
+reload/persistence, `apps/ui_counter_runtime`, SDF/world-space/SpatialCanvas,
+`foundation/meta`, `domain/app_program`, generic plugin framework, phase spec
+validator, and tools/docs validator changes remained out of scope.
+
 Follow-up: Use the closeout report as the prerequisite for
-`PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` active planning.
-Do not start Phase 006 implementation until this closeout/planning truth is
-merged and Phase 006 active implementation is separately authorized.
+`PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` active
+planning. Do not start Phase 007 implementation until this closeout/planning
+truth is merged and Phase 007 active implementation is separately authorized.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 
