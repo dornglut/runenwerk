@@ -14,6 +14,7 @@ pub mod scene;
 pub mod scheduler_diagnostics;
 pub(crate) mod shared;
 pub mod time;
+pub mod ui;
 pub mod world;
 pub use debug_metrics::*;
 pub use diagnostics::{
@@ -31,6 +32,11 @@ pub use scene::runtime::controls::*;
 pub use scene::types::*;
 pub use scheduler_diagnostics::*;
 pub use time::TimePlugin;
+pub use ui::{
+    UiPlugin, UiRuntimeDiagnostic, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticSeverity,
+    UiRuntimeDiagnosticsResource, UiRuntimeInstallState, UiRuntimeReport, UiRuntimeReportResource,
+    UiRuntimeResource, UiRuntimeSet,
+};
 pub use world::plugin::{
     WorldAuthorityState, WorldPlugin, WorldRuntimeConfig, WorldRuntimeMode, WorldRuntimeSet,
     WorldRuntimeState,
