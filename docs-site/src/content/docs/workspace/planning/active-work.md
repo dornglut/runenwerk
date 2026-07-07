@@ -52,7 +52,7 @@ docs-site/src/content/docs/reports/closeouts/pt-ui-framework-app-integration-002
 
 Evidence classes: `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session.
 
-Complete investigation gate: inherited complete gate from `PT-UI-RUNTIME-PLATFORM-001`; no new source investigation is required for this docs-only cutover-plan PR unless review finds a missing authority.
+Complete investigation gate: inherited complete gate from `PT-UI-RUNTIME-PLATFORM-001`; this full cutover plan adds render/app-engine feature mapping and product acceptance requirements for implementation handoff.
 
 Complete design gate: in progress for the full platform cutover contract. The prior “first runtime slice” framing is corrected: the platform should be planned as a full cutover, then implemented through gated phase PRs.
 
@@ -80,7 +80,8 @@ UiScreen / IntoUi implementation
 UiActionHandler implementation
 render adapter code
 SurfaceFrame type migration code
-scene/debug overlay compatibility code
+scene/debug overlay migration/deletion implementation code
+apps/ui_counter_runtime implementation
 SDF/world-space/SpatialCanvas implementation
 foundation/meta
 domain/app_program
