@@ -228,7 +228,7 @@ Reactivation condition: Reopen if Phase 003 needs scope outside the authorized f
 
 Supersedes: none.
 
-Superseded by: none.
+Superseded by: UiPlugin Foundation completion and Phase 004 planning decision.
 
 ## UiPlugin Foundation completion and Phase 004 planning decision
 
@@ -331,6 +331,32 @@ Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen
 Reactivation condition: Reopen if Phase 005 implementation needs scope outside the accepted typed screen/source/action contract, if source/program facts are skipped, if generic controls mutate app state directly, if mounted session/runtime trace/render publication enters the PR, or if planning drifts from merged code again.
 
 Supersedes: Phase 004 App Mounting API completion and Phase 005 planning decision.
+
+Superseded by: Phase 005 Typed Screen / Source / Action Contracts completion and Phase 006 planning decision.
+
+## Phase 005 Typed Screen / Source / Action Contracts completion and Phase 006 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` completed through merged PR #85 and open `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-005 review -> completed`; `PT-UI-RUNTIME-PLATFORM-006 production-track -> active-planning`.
+
+Context: PR #85 merged the bounded Phase 005 implementation into `main` at `6226470defa7a72a567fc03c1bc3783e63e2c2c8`. The track orchestration routine, workflow lifecycle, and phase completion drift check require completion truth before the next implementation phase starts.
+
+Options considered: leave Phase 005 as active implementation after merge; start Phase 006 implementation immediately from the cutover plan; record Phase 005 completion truth and open Phase 006 as planning only.
+
+Reason: Phase 005 delivered the authorized Typed Screen / Source / Action Contracts while preserving mounted sessions and all later runtime scope for downstream phases. The correct next state is to record completion truth, then prepare Phase 006 separately. The phase completion drift check does not authorize Phase 006 implementation from the closeout patch.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, and `../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md`.
+
+Evidence: `E3` source/test inspection by path, `E5` local command validation on PR #85 head, `E6` PR #85 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment. PR #85 had no unresolved comments, reviews, review requests, or hosted checks when inspected before merge.
+
+Follow-up: Open a separate Phase 006 activation decision after this closeout/planning truth merges. Do not start Phase 006 implementation until active implementation is separately authorized.
+
+Reactivation condition: Reopen if PR #85 completion evidence is found inaccurate, if Phase 005 introduced forbidden Phase 006-014 scope, if Phase 006 planning needs authority beyond the accepted cutover plan, or if planning drifts from merged code again.
+
+Supersedes: Phase 005 Typed Screen / Source / Action Contracts activation decision.
 
 Superseded by: none.
 

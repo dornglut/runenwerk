@@ -318,9 +318,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-005`
 
 Title: Typed Screen / Source / Action Contracts
 
-State: active implementation authorization recorded; implementation PR not yet opened
+State: completed through PR #85 and closeout truth
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `completed`
 
 Authority:
 
@@ -377,15 +377,98 @@ phase spec validator implementation
 any tools/docs validator or script changes
 ```
 
+Completion evidence:
+
+```text
+PR #85 merged into main at 6226470defa7a72a567fc03c1bc3783e63e2c2c8.
+Validation: cargo test -p engine ui_typed, cargo test -p engine, docs validation, diff hygiene, branch status, and diff stat passed before merge.
+Closeout report: ../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md.
+```
+
 Gate status:
 
 ```text
-Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 004 closeout evidence.
-Complete design gate: complete for implementation through the accepted cutover plan and Phase 004 closeout evidence.
-Implementation authorization: active for exactly one bounded Phase 005 implementation PR.
+Complete investigation gate: complete through accepted runtime-platform authority and Phase 005 closeout evidence.
+Complete design gate: complete for Phase 005 through the accepted full cutover plan and Phase 005 contract.
+Merge readiness: satisfied before PR #85 merged; no hosted checks were reported for the branch.
 ```
 
-Next action: Open exactly one bounded Phase 005 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 005 validation and required docs/diff/status commands are clean.
+Next action: Keep Phase 005 as completed evidence. Use the closeout as the prerequisite for `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` planning.
+
+### PT-UI-RUNTIME-PLATFORM-006
+
+ID: `PT-UI-RUNTIME-PLATFORM-006`
+
+Title: Mounted Surface Session Runtime
+
+State: active planning only; implementation not yet authorized
+
+Lifecycle state: `active-planning`
+
+Authority:
+
+```text
+../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../architecture/live-uiplugin-runtime-platform-architecture.md
+../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md
+../routines/track-orchestration-routine.md
+../routines/implementation-routine.md
+../complete-investigation-gate.md
+../complete-design-gate.md
+../complete-merge-readiness-gate.md
+../evidence-quality-taxonomy.md
+```
+
+Planning contract from accepted cutover authority:
+
+```text
+mount creates a MountedSurfaceInstance-compatible record
+session identity, host identity, generation, retention, and diagnostics are recorded
+unmount/remount behavior is deterministic
+multiple mounted screens/surfaces do not collide
+no duplicate surface/session semantic model is invented inside engine
+```
+
+Allowed files/crates for a future Phase 006 implementation authorization:
+
+```text
+engine/src/plugins/ui/resources.rs
+engine/src/plugins/ui/mount.rs
+engine/src/plugins/ui/report.rs
+engine/Cargo.toml dependency on ui_surface if not already present
+focused engine tests for mount/unmount/generation/session reports
+```
+
+Forbidden files/crates:
+
+```text
+world-space UI implementation
+SDF or SpatialCanvas implementation
+product/editor/game semantics in domain UI
+replacing ui_surface instead of adapting to it
+host action dispatch runtime
+runtime trace implementation
+render publication or render adapter code
+SurfaceFrame generic producer boundary implementation code
+scene/debug overlay producer migration implementation code
+source reload/persistence implementation code
+apps/ui_counter_runtime implementation
+foundation/meta
+domain/app_program
+generic plugin framework
+phase spec validator implementation
+any tools/docs validator or script changes
+```
+
+Gate status:
+
+```text
+Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 005 closeout evidence.
+Complete design gate: complete for active planning through the accepted cutover plan and Phase 005 closeout evidence.
+Implementation authorization: blocked until a separate Phase 006 activation decision records exact scope, validation, evidence expectation, and stop conditions.
+```
+
+Next action: Open a separate Phase 006 activation branch/PR after this closeout/planning truth merges. Do not implement Phase 006 from this closeout branch.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
