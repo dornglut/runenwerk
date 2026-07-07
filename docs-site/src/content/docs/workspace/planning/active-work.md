@@ -42,9 +42,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-009`
 
 Title: `SurfaceFrame Generic Producer Boundary`
 
-State: active planning only after Phase 008 completion truth. No Phase 009 implementation PR is authorized by this record.
+State: active-implementation authorization recorded for one bounded Phase 009 PR. No runtime code is changed by this planning record.
 
-Lifecycle state: `active-planning` for Phase 009 only.
+Lifecycle state: `active-implementation` for Phase 009 only.
 
 Owner: render frame/submission contracts and `ui_render_data` own the producer-generic surface/frame vocabulary at the accepted seam. `engine::plugins::ui` remains the source/program/evaluation owner and may consume the downstream seam only after the boundary exists. RenderPlugin consumes generic producer/surface/frame packets without owning UI semantics.
 
@@ -87,13 +87,13 @@ docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architect
 docs-site/src/content/docs/architecture/ui-framework-architecture.md
 ```
 
-Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 008, `E6` PR #94 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment in the closeout report.
+Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 008, `E6` PR #95 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment in the closeout report.
 
-Complete investigation gate: complete for Phase 009 active planning through the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and Phase 008 closeout evidence. A separate Phase 009 activation record must map the exact render frame/submission contracts, `ui_render_data` names/types, and migration tests before implementation.
+Complete investigation gate: complete for opening Phase 009 active implementation. Phase 009 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, Phase 008 closeout evidence, and activation-time source inspection of the current UI-named render submission seam, generic `RenderFrameProducerId`, prepared frame packets, app producer callsites, and render feature preparation path.
 
-Complete design gate: complete for Phase 009 active planning through the accepted cutover plan, architecture record, and Phase 008 closeout. Implementation remains blocked until a separate active-implementation decision records exact scope, owner checks, validation, evidence expectation, stop conditions, principle compliance, and module decomposition.
+Complete design gate: complete for Phase 009 implementation through the accepted cutover plan, architecture record, Phase 008 closeout, and this planning authorization record.
 
-Implementation authorization status: `not-authorized`; active planning only.
+Implementation authorization status: `active-implementation-authorized`.
 
 Phase 008 completion truth:
 
@@ -106,10 +106,12 @@ Remote phase branch was deleted by the merge command.
 Phase 009 handoff contract from accepted cutover authority:
 
 ```text
-only the render frame/submission contracts named by the phase PR
-only ui_render_data names/types touched by the accepted migration map
-existing render submission registry/resource paths required for the generic producer seam
-focused migration tests and compile checks
+rename the producer-facing UI frame submission seam to generic SurfaceFrame submission names
+use existing generic RenderFrameProducerId for producer identity; remove UiFrameProducerId from the accepted seam
+keep UiFrame as the renderer-neutral UI payload type from ui_render_data, not as producer ownership truth
+preserve existing render surface identity through RenderSurfaceId
+keep scene/debug overlay submission as named migration input only; do not retire or redesign it
+focused migration tests and compile checks prove the generic seam and downstream callsites
 ```
 
 Required Phase 009 evidence from accepted cutover authority:
@@ -121,6 +123,22 @@ producer id and surface identity are generic concepts, not UiPlugin concepts
 RenderPlugin consumes generic producer/surface/frame packets
 scene/debug paths remain named as migration inputs, not hidden parallel paths
 external docs no longer imply RenderPlugin owns UI semantics
+```
+
+Activation-time migration map:
+
+```text
+UiFrameProducerId -> RenderFrameProducerId
+UiFrameSubmission -> SurfaceFrameSubmission
+UiFrameSubmissionOrder -> SurfaceFrameSubmissionOrder
+UiFrameSubmissionRegistryResource -> SurfaceFrameSubmissionRegistryResource
+UiFrameRoute -> SurfaceFrameRoute
+PreparedUiFrameSubmission -> PreparedSurfaceFrameSubmission
+PreparedUiFrameContribution stays named as the UI render-feature payload because it contains ui_render_data::UiFrame primitives and is not producer ownership truth
+PreparedUiFrameResource stays named as the prepared UI render-feature resource
+UiFrameSubmissionRenderOutputProof -> SurfaceFrameSubmissionRenderOutputProof
+prepare_ui_feature_resource_system keeps its name but consumes SurfaceFrameSubmissionRegistryResource
+collect_runtime_ui_frame_submissions_system keeps its name because scene/debug overlay migration is Phase 011; it must write through SurfaceFrameSubmissionRegistryResource
 ```
 
 Principle compliance matrix:
@@ -135,16 +153,53 @@ Avoid Premature Optimization: no backend rewrite or performance claim belongs in
 Law of Demeter: RenderPlugin should depend on generic producer/surface/frame contracts, not `UiScreen`, `IntoUi`, actions, host mutation, or route policy.
 ```
 
-Module decomposition map:
+Allowed files and crates for the Phase 009 implementation authorization:
 
 ```text
-render frame/submission contracts: producer-generic type/module/function names selected by the activation PR only.
-ui_render_data: accepted seam names/types touched by the migration map only.
-existing render submission registry/resource paths: generic producer seam wiring only.
-tests: focused migration tests and compile checks that prove old UI-specific ownership names are not retained at the accepted seam.
+engine/src/plugins/render/api/ids.rs
+engine/src/plugins/render/features/ui/submission.rs
+engine/src/plugins/render/features/ui/prepared.rs
+engine/src/plugins/render/features/ui/resource.rs
+engine/src/plugins/render/features/ui/render_output_proof.rs
+engine/src/plugins/render/features/ui/mod.rs only if public exports need adjustment
+engine/src/plugins/render/frame/mod.rs
+engine/src/plugins/render/frame/contributions.rs only for renamed prepared submission payload references
+engine/src/plugins/render/frame/packet.rs only for renamed prepared submission payload references
+engine/src/plugins/render/plugin.rs
+engine/src/plugins/render/runtime/ui_submission.rs
+engine/src/plugins/render/runtime/frame_prepare.rs only if renamed resource/type references require adjustment
+engine/src/plugins/render/renderer/prepare.rs only if renamed prepared payload references require adjustment
+apps/runenwerk_draw/src/runtime/plugin.rs
+apps/runenwerk_draw/src/runtime/systems.rs
+apps/runenwerk_draw/tests/app_shell.rs
+apps/runenwerk_editor/src/runtime/app.rs
+apps/runenwerk_editor/src/runtime/plugin.rs
+apps/runenwerk_editor/src/runtime/systems/frame_submit.rs
+apps/runenwerk_editor/src/runtime/ui_gallery.rs
+apps/runenwerk_editor/tests/startup_render_smoke.rs
+apps/runenwerk_editor/tests/viewport_architecture_guards.rs
+engine tests or focused render-feature tests needed to prove the migration map
 ```
 
-Maintainability review status: complete for Phase 009 planning. Stop before implementation if activation cannot name the exact seam, migration map, and focused validation without broad render-backend churn.
+Forbidden files and crates:
+
+```text
+engine/src/plugins/ui/** except future Phase 010 publication integration
+apps/ui_counter_runtime product packaging
+scene/debug overlay retirement or behavioral migration
+source reload/persistence implementation
+SDF or SpatialCanvas implementation
+render backend rewrite, graph execution rewrite, or shader changes
+domain/ui/ui_render_data primitive/model rewrites beyond import/type reference adjustments required by the migration map
+source/program/action semantics
+foundation/meta
+domain/app_program
+generic plugin framework
+phase spec validator implementation
+any tools/docs validator or script changes
+```
+
+Maintainability review status: complete for Phase 009 authorization. Stop if implementation needs files outside this migration map or cannot preserve existing behavior while renaming the accepted seam.
 
 Feature support matrix:
 
@@ -155,7 +210,7 @@ Typed screen/source/action contracts: completed by Phase 005.
 Mounted sessions: completed by Phase 006.
 Host action dispatch and trace: completed by Phase 007.
 Runtime evaluation/invalidation: completed by Phase 008.
-SurfaceFrame generic producer boundary: active-planning Phase 009.
+SurfaceFrame generic producer boundary: active-implementation Phase 009.
 UiPlugin render publication: downstream Phase 010.
 Scene/debug overlay migration: downstream Phase 011.
 Runtime Counter product: downstream Phase 012.
@@ -166,21 +221,26 @@ Closeout/adoption lock: downstream Phase 014.
 Phase 009 validation envelope from cutover and workflow authority:
 
 ```text
-cargo test <focused Phase 009 migration filter selected by activation PR>
-cargo test <relevant crate/package command selected by activation PR>
+cargo test -p engine surface_frame_submission
+cargo test -p engine render_output_proof
+cargo test -p engine render_flow_v2
+cargo test -p runenwerk_draw app_shell
+cargo test -p runenwerk_editor startup_render_smoke
+cargo test -p runenwerk_editor viewport_architecture_guards
 python tools/docs/validate_docs.py
 git diff --check
+git diff --check main...HEAD
 git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Evidence expectation: the activation PR must inspect current render frame/submission contracts and publish a migration map before implementation. Focused Phase 009 tests must prove producer-generic names at the accepted seam, generic producer id and surface identity, RenderPlugin consumption of generic packets, and named scene/debug migration inputs without hidden parallel paths.
+Evidence expectation: focused tests and compile checks must prove `RenderFrameProducerId` is the producer identity for SurfaceFrame submissions, `RenderSurfaceId` remains the surface identity, `SurfaceFrameSubmissionRegistryResource` replaces the UI-named registry at the producer-facing seam, prepared UI render-feature payloads are built from generic surface-frame submissions, scene/debug overlay and app producers are named migration inputs that compile against the generic seam, RenderPlugin consumes prepared packets without `UiScreen`, `IntoUi`, actions, host mutation, or route policy, and no hidden parallel UI submission path remains.
 
-Stop conditions: stop if the rename becomes broad or unreviewable, source/program/action semantics change, the phase becomes a render backend rewrite, genericization creates a second runtime path, UiPlugin render publication enters the PR, scene/debug overlay migration enters the PR, or Phase 010+ files become necessary.
+Stop conditions: stop if the rename becomes broad or unreviewable, source/program/action semantics change, the phase becomes a render backend rewrite, genericization creates a second runtime path, compatibility shims become the durable public API instead of the generic seam, UiPlugin render publication enters the PR, scene/debug overlay migration/retirement enters the PR, or Phase 010+ files become necessary.
 
-Known blockers: no Phase 009 implementation branch is authorized yet. The exact render seam, `ui_render_data` migration map, focused tests, and relevant cargo command must be confirmed by a separate activation PR after this closeout/planning truth merges. Phase 010 and later remain blocked until Phase 009 is reviewed, merged, and completion truth is recorded.
+Known blockers: no Phase 009 implementation branch has been opened or merged yet. Phase 010 and later remain blocked until Phase 009 is reviewed, merged, and completion truth is recorded.
 
-Next action: create a separate `PT-UI-RUNTIME-PLATFORM-009 - SurfaceFrame Generic Producer Boundary` activation branch/PR after this closeout/planning truth merges. Keep Phase 009 implementation blocked until that activation record is merged.
+Next action: create exactly one bounded `PT-UI-RUNTIME-PLATFORM-009 - SurfaceFrame Generic Producer Boundary` implementation branch/PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 009 validation and the required docs/diff/status commands are clean.
 
 ## Active-work rules
 
