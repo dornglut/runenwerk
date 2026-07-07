@@ -401,9 +401,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-006`
 
 Title: Mounted Surface Session Runtime
 
-State: active planning only; implementation not yet authorized
+State: active implementation authorization recorded; implementation PR not yet opened
 
-Lifecycle state: `active-planning`
+Lifecycle state: `active-implementation`
 
 Authority:
 
@@ -429,7 +429,7 @@ multiple mounted screens/surfaces do not collide
 no duplicate surface/session semantic model is invented inside engine
 ```
 
-Allowed files/crates for a future Phase 006 implementation authorization:
+Allowed files/crates for the Phase 006 implementation authorization:
 
 ```text
 engine/src/plugins/ui/resources.rs
@@ -464,11 +464,11 @@ Gate status:
 
 ```text
 Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 005 closeout evidence.
-Complete design gate: complete for active planning through the accepted cutover plan and Phase 005 closeout evidence.
-Implementation authorization: blocked until a separate Phase 006 activation decision records exact scope, validation, evidence expectation, and stop conditions.
+Complete design gate: complete for implementation through the accepted cutover plan and Phase 005 closeout evidence.
+Implementation authorization: active for exactly one bounded Phase 006 implementation PR.
 ```
 
-Next action: Open a separate Phase 006 activation branch/PR after this closeout/planning truth merges. Do not implement Phase 006 from this closeout branch.
+Next action: Open exactly one bounded Phase 006 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 006 validation and required docs/diff/status commands are clean.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 

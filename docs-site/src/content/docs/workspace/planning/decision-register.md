@@ -202,7 +202,7 @@ Reactivation condition: Reopen if the workflow creates a second authority source
 
 Supersedes: none.
 
-Superseded by: none.
+Superseded by: Track orchestration closeout and Phase 003 activation decision.
 
 ## Track orchestration closeout and Phase 003 activation decision
 
@@ -357,6 +357,32 @@ Follow-up: Open a separate Phase 006 activation decision after this closeout/pla
 Reactivation condition: Reopen if PR #85 completion evidence is found inaccurate, if Phase 005 introduced forbidden Phase 006-014 scope, if Phase 006 planning needs authority beyond the accepted cutover plan, or if planning drifts from merged code again.
 
 Supersedes: Phase 005 Typed Screen / Source / Action Contracts activation decision.
+
+Superseded by: Phase 006 Mounted Surface Session Runtime activation decision.
+
+## Phase 006 Mounted Surface Session Runtime activation decision
+
+Date: 2026-07-07
+
+Decision: Authorize `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` as exactly one bounded active-implementation phase after Phase 005 completion truth merged.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-006 active-planning -> active-implementation`.
+
+Context: PR #86 merged Phase 005 completion truth into `main` at `cd18029d7a8943af114b6eabe5f4ebc82d537249`. Active work now has the accepted Phase 006 owner, handoff contract, allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition map, and stop conditions.
+
+Options considered: leave Phase 006 in active planning only; start Phase 006 implementation without updating planning; authorize one bounded Phase 006 implementation PR.
+
+Reason: The track orchestration workflow allows the next implementation phase only after the previous phase is reviewed, merged, and closeout truth is recorded. That condition is now satisfied for Phase 005. The accepted cutover plan and active-work record provide enough exact scope to authorize Phase 006 implementation without widening into Phase 007 or later.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E6` PR #86 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 005 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md`.
+
+Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` implementation PR from current `main`. Keep the PR draft until focused Phase 006 validation and required docs/diff/status commands are clean.
+
+Reactivation condition: Reopen if Phase 006 implementation needs scope outside the accepted mounted surface session runtime contract, if engine duplicates `ui_surface` semantics, if world-space UI/SDF/SpatialCanvas enters the PR, if host action dispatch/runtime trace/render publication enters the PR, or if planning drifts from merged code again.
+
+Supersedes: Phase 005 Typed Screen / Source / Action Contracts completion and Phase 006 planning decision.
 
 Superseded by: none.
 
