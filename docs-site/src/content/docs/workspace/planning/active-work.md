@@ -13,6 +13,7 @@ related_docs:
   - ../evidence-quality-taxonomy.md
   - ../routines/track-orchestration-routine.md
   - ../specs/phase-implementation-spec.md
+  - ../specs/pt-ui-runtime-platform-012.ron
   - ../../guidelines/programming-principles.md
   - ../../architecture/ui-framework-architecture.md
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
@@ -45,9 +46,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-012`
 
 Title: `Runtime Counter App Product`
 
-State: active planning after completed Phase 011 closeout truth. No Phase 012 runtime implementation is authorized by this closeout record.
+State: active implementation authorization for exactly one bounded Phase 012 implementation PR after this authorization record merges.
 
-Lifecycle state: `active-planning` for Phase 012 only.
+Lifecycle state: `active-implementation` for Phase 012 only.
 
 Owner: the app/product layer must provide a runnable `ui_counter_runtime` app that installs `RenderPlugin`, `UiPlugin`, and `CounterPlugin`, mounts `CounterScreen`, drives typed actions through host-owned mutation, publishes frames through the generic seam, and exposes human and agent proof paths.
 
@@ -78,18 +79,21 @@ docs-site/src/content/docs/workspace/planning/completed-work.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-010-closeout.md
 docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-011-closeout.md
+docs-site/src/content/docs/workspace/specs/pt-ui-runtime-platform-012.ron
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
 docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
 docs-site/src/content/docs/architecture/ui-framework-architecture.md
 ```
 
-Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 011, `E6` PR #104 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` Phase 011 code/test plus validation plus authority alignment from the closeout report.
+Evidence classes: `E3` current source/design/planning inspection by path, `E5` local command validation for completed Phase 011 and this activation PR docs validation, `E6` PR #104 implementation merge metadata and PR #105 closeout merge metadata, `E8` accepted architecture/workflow/planning authority, and `E9` Phase 011 code/test plus validation plus authority alignment from the closeout report.
 
-Complete investigation gate: complete for opening Phase 012 active planning through accepted runtime-platform authority and Phase 011 closeout evidence. Not yet complete for implementation authorization until the current Counter app/product path, required app crate/workspace wiring, command behavior, trace output, public-path proof, and product validation envelope are inspected and recorded.
+Complete investigation gate: complete for Phase 012 implementation authorization. Current source inspection found no `apps/ui_counter_runtime` crate, found root workspace membership for existing apps only, inspected `App::run`, `App::headless`, `run_for_frames`, existing app crate patterns, `UiPlugin` mount/source/action/evaluation/trace/frame-publication APIs, current focused engine tests, and the proof-local `ui_app_integration` crate boundary.
 
-Complete design gate: accepted cutover authority and runtime architecture define the Phase 012 target. Active implementation still requires a separate activation record with exact owner, files/crates, validation, evidence, principle checks, module decomposition, and stop conditions.
+Complete design gate: complete for Phase 012 implementation authorization through the accepted cutover plan, runtime architecture, Phase 011 closeout evidence, this active-work contract, the Phase 012 phase spec, principle compliance matrix, module decomposition map, validation envelope, evidence expectations, and stop conditions.
 
-Implementation authorization status: blocked. This closeout opens active planning only.
+Implementation authorization status: authorized after this activation record merges. The next implementation PR must stay inside this Phase 012 contract and must not include Phase 013, Phase 014, source reload/persistence, SDF, SpatialCanvas, render backend, graph, shader, or generic framework work.
+
+Phase spec: `docs-site/src/content/docs/workspace/specs/pt-ui-runtime-platform-012.ron`.
 
 Phase 011 completion truth:
 
@@ -97,6 +101,7 @@ Phase 011 completion truth:
 PR #104 merged into main at 15e213a08dbf79f65e0851fe5be9f853f157b48b.
 PR head before merge: a6232278e41202cd331051f347d3db892988f38c.
 Closeout report: docs-site/src/content/docs/reports/closeouts/pt-ui-runtime-platform-011-closeout.md.
+Closeout PR #105 merged into main at 29966360b8ef7f49d5cb324d41bc61d18d23f8cd.
 ```
 
 Phase 012 product contract from accepted cutover authority:
@@ -109,30 +114,90 @@ host plugin type: CounterPlugin
 host resource: Counter { value: i64 }
 visible structure: header, count label, Increment / Decrement / Reset actions, trace console, status line
 routes: counter.increment, counter.decrement, counter.reset, counter.read
+capabilities: counter.write for mutations, counter.read for rendering count
 normal app authors must not see route maps, event packets, host adapters, or render registries
 ```
 
-Active-planning investigation map:
+Phase 012 source/path inventory:
 
 ```text
-inspect whether apps/ui_counter_runtime already exists and how workspace members are declared
-inspect existing app examples for RenderPlugin / UiPlugin / product plugin composition patterns
-inspect UiPlugin public mounting, typed screen/source/action, host action dispatch, runtime evaluation, frame publication, and trace APIs that the product must consume
-inspect how current input/headless runtime commands can support human and agent paths
-derive exact allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition, and stop conditions before implementation authorization
+Cargo.toml:
+  workspace members include apps/runenwerk_editor, apps/runenwerk_draw, and apps/runenwerk_runtime_preview
+  apps/ui_counter_runtime is absent and must be added as a new workspace member
+
+apps/runenwerk_runtime_preview/src/main.rs:
+  existing app command pattern parses --headless and uses App::headless / App::run_for_frames for headless operation
+
+engine/src/app/domain/app.rs and engine/src/app/runtime/lifecycle.rs:
+  App::new, App::headless, add_plugin, insert_resource, set_title, world/world_mut, run, run_for_frames, and run_for_ticks are public composition hooks
+
+engine/src/plugins/ui/app_ext.rs and mount.rs:
+  app.mount_ui and app.ui().mount record mounted sessions but only store screen identity today
+
+engine/src/plugins/ui/screen.rs and source.rs:
+  UiScreen, IntoUi, UiTypedSource, lowering, and UiRuntimeEvaluationInput provide the typed source/program path
+
+engine/src/plugins/ui/action.rs, host.rs, events.rs, report.rs, resources.rs, trace.rs:
+  dispatch_ui_action, UiActionHandler, UiHostActionExecutor, UiRuntimeEvaluationResource, UiRuntimeTraceResource, and reports provide the typed action/mutation/evaluation/trace path
+
+engine/src/plugins/ui/render_publish.rs:
+  UiPlugin publishes evaluated frames through SurfaceFrameSubmissionRegistryResource for RenderPlugin to consume generically
+
+engine/tests/ui_mount_api.rs, ui_typed_contracts.rs, ui_action_dispatch.rs, ui_runtime_evaluation.rs, ui_render_publication.rs:
+  current focused tests prove each piece separately but do not provide a runnable product crate
+
+domain/ui/ui_app_integration:
+  proof-local ECS-backed counter evidence exists, but crate docs state it must not become the public runtime owner
+
+docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md:
+  current-facts table still named the retired render-owned scene/debug collector; this activation corrects that stale authority fact using Phase 011 closeout evidence before authorizing implementation
 ```
 
-Preliminary Phase 012 implementation scope from accepted cutover authority, not yet authorized:
+Phase 012 handoff contract:
 
 ```text
-apps/ui_counter_runtime/**
-root Cargo.toml workspace member entry
-focused engine tests/examples for Counter app
-engine/src/plugins/ui/** fixes only if required by product proof and scoped
-planning docs and proof report fixtures
+create the ui_counter_runtime app crate and add it to the workspace
+provide a ui_counter_runtime binary whose default window title is Runenwerk UI Counter Runtime
+install RenderPlugin, UiPlugin, and a product-owned CounterPlugin
+CounterPlugin owns Counter { value: i64 }, action descriptors, host intents, host-owned mutation, source/evaluation systems, and product trace/JSONL export wiring
+CounterPlugin must mount CounterScreen through app.mount_ui(CounterScreen)
+CounterScreen must implement UiScreen/IntoUi through accepted typed source/program contracts and expose header, count, Increment, Decrement, Reset, trace console, and status line
+agent script mode must resolve semantic actions through the same route/capability/payload/host dispatch path as human interaction
+human interaction must use the same dispatch path; if pointer/window integration cannot be implemented inside allowed scope, stop and update authority before widening
+runtime/evaluator output must change after accepted host mutation
+UiPlugin must publish the evaluated frame through the existing generic surface-frame seam and RenderPlugin must consume it without UI semantic ownership
+JSONL trace output must record action, mutation, evaluation, and frame publication facts
+manual human and agent run commands plus observed behavior must be recorded in the PR
+do not use ui_app_integration as the product runtime owner or app runtime dependency
 ```
 
-Forbidden files and crates until a separate active-implementation authorization narrows them:
+Allowed files/crates:
+
+```text
+Cargo.toml only to add apps/ui_counter_runtime as a workspace member and workspace dependency entries only if strictly required
+apps/ui_counter_runtime/Cargo.toml
+apps/ui_counter_runtime/src/**
+apps/ui_counter_runtime/tests/**
+assets/ui_counter_runtime/scripts/increment_reset.ron
+engine/src/plugins/ui/action.rs only for narrow public-path fixes required by the Counter product proof
+engine/src/plugins/ui/app_ext.rs only for narrow mounting ergonomics required by CounterScreen
+engine/src/plugins/ui/diagnostics.rs only for narrow diagnostics required by product proof
+engine/src/plugins/ui/events.rs only for narrow event-to-action product proof wiring
+engine/src/plugins/ui/host.rs only for narrow host-owned mutation proof fixes
+engine/src/plugins/ui/mod.rs only for exports required by the product crate
+engine/src/plugins/ui/plugin.rs only for scheduling/resource wiring required by product proof
+engine/src/plugins/ui/render_publish.rs only for narrow publication evidence fixes, not render ownership changes
+engine/src/plugins/ui/report.rs only for narrow report accessors needed by JSONL/proof output
+engine/src/plugins/ui/resources.rs only for mounted source/evaluation/trace product wiring
+engine/src/plugins/ui/schedule.rs only for a named UiRuntimeSet if needed by product systems
+engine/src/plugins/ui/screen.rs only for narrow typed screen contract fixes
+engine/src/plugins/ui/source.rs only for narrow typed source/evaluation contract fixes
+engine/src/plugins/ui/trace.rs only for generic UI runtime trace JSONL/proof accessors
+engine/tests/ui_counter_runtime_product.rs or similarly named focused engine test only if an engine UI public-path gap cannot be proven in the app crate
+docs-site/src/content/docs/reports/proofs/pt-ui-runtime-platform-012-*.md only if the implementation PR records durable proof artifacts in docs
+```
+
+Forbidden files/crates:
 
 ```text
 source reload/persistence implementation
@@ -143,6 +208,13 @@ source/program/action semantic rewrites
 host mutation or action-dispatch semantic rewrites
 scene/debug overlay producer migration work
 broad render-data primitive/model rewrites
+domain/ui/ui_app_integration/** changes
+ui_app_integration runtime dependency from apps/ui_counter_runtime
+engine/src/runtime/** window runner changes
+engine/src/plugins/input/** input system changes
+apps/runenwerk_editor/**
+apps/runenwerk_draw/**
+apps/runenwerk_runtime_preview/**
 foundation/meta
 domain/app_program
 generic plugin framework
@@ -170,9 +242,10 @@ JSONL trace records action, mutation, evaluation, and frame publication facts
 manual run instructions and observed behavior are recorded in the PR
 ```
 
-Validation envelope to define during Phase 012 activation:
+Validation envelope:
 
 ```text
+cargo fmt --check
 cargo run -p ui_counter_runtime
 cargo run -p ui_counter_runtime -- --headless --agent-script <script> --trace-jsonl <path> --exit-after-script
 cargo test -p ui_counter_runtime
@@ -185,13 +258,35 @@ git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Evidence expectation: Phase 012 activation must prove the current app/product surface and command path inventory, define human and agent proof artifacts, and identify focused tests that prove source/program/action/mutation/evaluation/render/trace facts without direct host mutation shortcuts.
+Evidence expectation: the implementation PR must include current source inspection, focused command validation, PR metadata/check evidence, forbidden-scope proof, human and agent command output, JSONL trace artifact evidence, and explicit proof that app authors use `RenderPlugin`, `UiPlugin`, `CounterPlugin`, and `app.mount_ui(CounterScreen)` without route maps, event packets, host adapters, or render registries. Highest expected evidence class before merge is `E9` when source/test/runtime proof, local validation, and accepted authority align.
 
-Stop conditions: stop if the product cannot be launched by command, if proof-local `ui_app_integration` becomes the public runtime owner, if agent mode mutates host state directly, if source/program/runtime/action/mutation/render facts cannot be proven, if unrelated render/backend/source-reload/persistence behavior is needed, or if exact allowed/forbidden files cannot be recorded before implementation.
+Principle compliance matrix:
 
-Known blockers: Phase 012 is not implementation-authorized. Phase 013 and Phase 014 remain blocked until Phase 012 is reviewed, merged, and completion truth is recorded.
+| Principle | Required Phase 012 evidence | Stop signal |
+|---|---|---|
+| KISS | One product crate composes existing engine/UI APIs and a narrow CounterPlugin. | A new framework, second runtime, or generic app platform enters the PR. |
+| DRY | Counter action descriptors, routes, and capabilities have one product-owned source of truth. | Separate human and agent route/action definitions diverge. |
+| YAGNI | Only Counter product, proof commands, and generic UI trace access needed by the product are added. | Source reload, persistence, SDF, backend, graph, shader, or broad renderer work appears. |
+| SOLID | App/plugin owns Counter state and mutation; UiPlugin owns generic UI runtime; RenderPlugin consumes generic frames. | Generic controls, renderer, or agent scripts mutate Counter directly. |
+| Separation of Concerns | Product app, engine UI runtime fixes, assets/scripts, and tests stay in their owning files. | Product behavior is embedded in engine runtime or proof-local ui_app_integration owns public runtime. |
+| Avoid Premature Optimization | Whole-frame publication and existing evaluation are enough for product proof. | Incremental redraw/cache claims are added without Phase 013 authority. |
+| Law of Demeter | Product uses direct public APIs; normal app code does not reach into render registries or host route maps. | App authors must manually edit registries, route maps, event packets, or render submissions. |
 
-Next action: create exactly one bounded Phase 012 active-implementation authorization branch/PR from current `main` after this closeout merges. Do not patch `apps/ui_counter_runtime` or product runtime code until that authorization records exact allowed files, forbidden files, validation, evidence, and stop conditions.
+Module decomposition map:
+
+| Module / file | Responsibility | Public API exported | Tests proving it | Split trigger |
+|---|---|---|---|---|
+| `apps/ui_counter_runtime/src/main.rs` | CLI mode selection, human/headless command entry, trace output path handling. | Binary only. | `cargo run -p ui_counter_runtime`, app crate tests. | CLI parsing becomes reusable framework or persistence enters. |
+| `apps/ui_counter_runtime/src/lib.rs` and product modules | CounterPlugin, Counter resource, CounterScreen, actions, script runner, proof helpers. | App crate API only as needed for tests. | `cargo test -p ui_counter_runtime`. | Product code starts duplicating engine UiPlugin contracts. |
+| `assets/ui_counter_runtime/scripts/increment_reset.ron` | Canonical agent script fixture. | None. | Headless run command and app tests. | Multiple script languages or persistence fixtures appear. |
+| `engine/src/plugins/ui/**` allowed files | Narrow generic runtime access/wiring needed to make public product path real. | Only direct UiPlugin/public-path additions required by Counter app. | Focused engine tests plus app crate tests. | Changes touch input/runtime/render ownership outside UiPlugin. |
+| `docs-site/src/content/docs/reports/proofs/**` optional | Durable human/agent proof report if PR body is insufficient. | Docs only. | Docs validation. | It becomes planning authority or closeout content before merge. |
+
+Stop conditions: stop if the product cannot launch by command; if implementation needs `engine/src/runtime/**`, `engine/src/plugins/input/**`, render backend/graph/shader, source reload/persistence, SDF, SpatialCanvas, or generic framework work; if `ui_app_integration` becomes the product runtime owner; if human and agent paths use different route/capability/payload/host checks; if agent mode mutates Counter directly; if normal app authors must see route maps/event packets/host adapters/render registries; if source/program/runtime/action/mutation/render facts cannot be proven; or if validation cannot be reported honestly.
+
+Known blockers: Phase 013 and Phase 014 remain blocked until Phase 012 is implemented, reviewed, merged, and completion truth is recorded.
+
+Next action: after this activation PR merges, create exactly one bounded `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` implementation branch/PR from current `main`. Keep it draft until the Phase 012 validation and required docs/diff/status commands are clean. Do not start Phase 013.
 
 ## Active-work rules
 

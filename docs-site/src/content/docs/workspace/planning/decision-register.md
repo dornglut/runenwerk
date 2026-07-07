@@ -699,6 +699,32 @@ Reactivation condition: Reopen if PR #104 completion evidence is found inaccurat
 
 Supersedes: Phase 011 Scene/Debug Overlay Producer Migration and Retirement activation decision.
 
+Superseded by: Phase 012 Runtime Counter App Product activation decision.
+
+## Phase 012 Runtime Counter App Product activation decision
+
+Date: 2026-07-07
+
+Decision: Authorize `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` as exactly one bounded active-implementation phase after Phase 011 implementation and closeout truth merged.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-012 active-planning -> active-implementation`.
+
+Context: PR #105 merged Phase 011 closeout truth into `main` at `29966360b8ef7f49d5cb324d41bc61d18d23f8cd`. Activation-time source inspection found no `apps/ui_counter_runtime` crate, found the current app workspace members, inspected existing app command patterns, inspected `App` windowed/headless runtime APIs, inspected UiPlugin mount/source/action/evaluation/trace/frame-publication APIs, inspected focused engine tests that prove the pieces separately, and confirmed that `domain/ui/ui_app_integration` is proof-local and must not become the public product runtime owner. Architecture inspection found stale current-fact rows that still described the retired render-owned scene/debug collector; this activation corrects those rows using Phase 011 closeout evidence before authorizing Phase 012 implementation.
+
+Options considered: leave Phase 012 in active planning only; start Phase 012 implementation without updating planning; authorize one bounded Phase 012 implementation PR; stop permanently because the architecture current-facts table still named the retired scene/debug collector.
+
+Reason: The track orchestration workflow allows the next implementation phase only after the previous implementation is reviewed, merged, and closeout truth is recorded. That condition is satisfied for Phase 011 through PR #104 and PR #105. The accepted cutover plan, runtime architecture, Phase 011 closeout, and activation-time source inspection provide enough exact scope to authorize Phase 012 implementation without widening into source reload/persistence, SDF, SpatialCanvas, render backend, graph/shader, generic framework, or later phases. Correcting the architecture drift in this activation prevents future agents from following the obsolete render-owned collector fact.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `decision-register.md`, `../../architecture/live-uiplugin-runtime-platform-architecture.md`, and `../specs/pt-ui-runtime-platform-012.ron`.
+
+Evidence: `E3` source/design/planning inspection by path, `E6` PR #104 implementation merge metadata and PR #105 closeout merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 011 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-011-closeout.md`.
+
+Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` implementation PR from current `main` after this activation PR merges. Keep the PR draft until focused Phase 012 validation and required docs/diff/status commands are clean. Do not start Phase 013 implementation.
+
+Reactivation condition: Reopen if Phase 012 implementation needs scope outside the accepted app/product and narrow UiPlugin path map, if human and agent action paths cannot share route/capability/payload/host checks, if `ui_app_integration` becomes the product runtime owner, if implementation needs `engine/src/runtime/**` or `engine/src/plugins/input/**`, if source reload/persistence, SDF, SpatialCanvas, render backend, graph, shader, or generic framework work enters the PR, or if planning drifts from merged code again.
+
+Supersedes: Phase 011 Scene/Debug Overlay Producer Migration and Retirement completion and Phase 012 planning decision.
+
 Superseded by: none.
 
 ## Lifecycle rule
