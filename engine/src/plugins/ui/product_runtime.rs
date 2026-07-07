@@ -1,6 +1,6 @@
 use ui_evaluator::UiEvaluationContext;
 use ui_hosts::{GameHost, HostRouteMapVersion};
-use ui_math::{UiPoint, UiRect, UiSize};
+use ui_math::{UiPoint, UiSize};
 use ui_program::{RouteId, UiEventPacket, UiEventSourceControlId};
 use ui_render_primitives::{UiRenderHitTarget, UiRenderPrimitiveReport};
 use ui_schema::UiSchemaValue;
@@ -8,10 +8,10 @@ use ui_text::{FontAtlasSource, FontId};
 use ui_theme::ThemeTokens;
 
 use super::{
-    dispatch_ui_action, IntoUi, UiAction, UiActionDispatchReport, UiActionDispatchReportsResource,
-    UiActionEvent, UiActionHandler, UiHostActionExecutor, UiMountRequestsResource,
-    UiRuntimeDiagnosticsResource, UiRuntimeEvaluationReport, UiRuntimeEvaluationResource,
-    UiRuntimePreparedFrameRecord, UiRuntimePreparedFrameResource, UiRuntimeTraceResource,
+    IntoUi, UiAction, UiActionDispatchReport, UiActionDispatchReportsResource, UiActionEvent,
+    UiActionHandler, UiHostActionExecutor, UiMountRequestsResource, UiRuntimeDiagnosticsResource,
+    UiRuntimeEvaluationReport, UiRuntimeEvaluationResource, UiRuntimePreparedFrameRecord,
+    UiRuntimePreparedFrameResource, UiRuntimeTraceResource, dispatch_ui_action,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -184,6 +184,10 @@ impl UiRuntimeActionRequest {
             route_map_version: HostRouteMapVersion::new(1),
             surface_instance_id: None,
         }
+    }
+
+    pub fn from_hit_target(target: &UiRenderHitTarget, payload: UiSchemaValue) -> Self {
+        Self::new(UiEventSourceControlId::new(target.control_id()), payload)
     }
 
     pub fn with_route_map_version(mut self, version: HostRouteMapVersion) -> Self {
