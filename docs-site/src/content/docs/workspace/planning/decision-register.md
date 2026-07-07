@@ -620,6 +620,32 @@ Reactivation condition: Reopen if Phase 010 implementation needs any RenderPlugi
 
 Supersedes: Phase 010 UiPlugin Render Publication activation decision.
 
+Superseded by: Phase 010 UiPlugin Render Publication completion and Phase 011 planning decision.
+
+## Phase 010 UiPlugin Render Publication completion and Phase 011 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` completed through merged PR #101 and open `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-010 review -> completed`; `PT-UI-RUNTIME-PLATFORM-011 production-track -> active-planning`.
+
+Context: PR #101 merged Phase 010 into `main` at `8d6c13146deab870dca5533204067249aa2c1b90` after focused UiPlugin render publication validation, engine validation, docs validation, diff hygiene, PR metadata inspection, and review-thread inspection. The Phase 010 closeout records that UiPlugin now publishes evaluated runtime frame payloads through `SurfaceFrameSubmissionRegistryResource` with `RenderFrameProducerId` and `RenderSurfaceId`, records publication diagnostics and trace facts, removes stale surface-scoped submissions on missing evaluation, and keeps RenderPlugin limited to generic packet consumption plus one scheduling edge.
+
+Options considered: leave Phase 010 active after merge; mark Phase 010 complete and immediately authorize Phase 011 implementation; mark Phase 010 complete and open Phase 011 active planning only.
+
+Reason: The track orchestration workflow requires completion truth after each implementation PR before the next implementation phase starts. Phase 011 needs its own current source inspection and exact inventory of scene/debug UI producer paths before implementation authorization. Opening active planning only preserves the one-phase-per-PR boundary and prevents scene/debug migration from being bundled into the completed Phase 010 publication work.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 010, `E6` PR #101 merge metadata and no-checks metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment in `../../reports/closeouts/pt-ui-runtime-platform-010-closeout.md`.
+
+Follow-up: Open a separate `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` active-implementation authorization PR from current `main` if authority and source inspection still agree. Do not start Phase 011 implementation until that activation PR is merged.
+
+Reactivation condition: Reopen if PR #101 completion evidence is found inaccurate, if Phase 010 introduced forbidden Phase 011-014 scope, if Phase 011 planning needs authority beyond the accepted cutover plan, if the current scene/debug producer path inventory cannot be completed, or if planning drifts from merged code again.
+
+Supersedes: Phase 010 UiPlugin Render Publication activation correction decision.
+
 Superseded by: none.
 
 ## Lifecycle rule
