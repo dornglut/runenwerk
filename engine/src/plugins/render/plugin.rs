@@ -42,6 +42,7 @@ use super::shader::ShaderRegistryResource;
 use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::scene::SceneResource;
+use crate::plugins::ui::UiRuntimeSet;
 use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt};
 use crate::state::{DebugMetricsState, StartupState};
 
@@ -117,7 +118,12 @@ impl Plugin for RenderPlugin {
         app.add_systems(RenderPrepare, sync_render_flow_registry_system);
         app.add_systems(RenderPrepare, sync_render_feature_registry_system);
         app.add_systems(RenderPrepare, collect_runtime_ui_frame_submissions_system);
-        app.add_systems(RenderPrepare, prepare_ui_feature_resource_system);
+        app.add_systems(
+            RenderPrepare,
+            prepare_ui_feature_resource_system
+                .after(UiRuntimeSet::RenderPublication)
+                .before(RenderRuntimeSet::FramePrepare),
+        );
         app.add_systems(
             RenderPrepare,
             derive_render_gpu_residency_system
