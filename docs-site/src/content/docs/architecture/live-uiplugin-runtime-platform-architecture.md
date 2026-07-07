@@ -59,6 +59,36 @@ Target frame policy for the cutover:
 5. Do not rebuild/republish UI frames when no source, host data, input, layout, theme, text, or surface dependency changed, unless continuous animation policy requests it.
 ```
 
+## Render-boundary generalization decision
+
+The generic render submission boundary must be corrected before UiPlugin publishes durable runtime frames.
+
+Decision:
+
+```text
+Move producer-generic surface-frame semantics before UiPlugin render publication.
+Do not let new UiPlugin runtime code stabilize on UI-specific render ownership names if those names are already known to be wrong.
+RenderPlugin consumes producer/surface/frame packets; UiPlugin is one producer, not the render-frame owner.
+```
+
+Required boundary shape:
+
+| Concept | Long-term owner | Rule |
+|---|---|---|
+| Source/program/action/session semantics | `domain/ui` plus `engine::plugins::ui` integration | Must not move into render. |
+| Producer identity | Engine/runtime producer contract | UI, debug overlays, scene overlays, product surfaces, and future producers publish as producers. |
+| Surface/frame packet | Render-facing producer-generic contract | Must not encode `UiPlugin` as the owner of the generic frame model. |
+| Render preparation/submission | `RenderPlugin` | Consumes packets; does not query screens, source, route, host state, or actions. |
+
+Implementation implication:
+
+```text
+The cutover order should create the generic producer/surface-frame seam before the UiPlugin render-publication phase.
+Old scene/debug overlay migration then targets the generic producer path instead of a UI-specific transitional path.
+```
+
+This is a long-term cleanup decision, not a broad render rewrite authorization. The genericization phase may touch only the render frame/submission seams named by its phase contract and must not alter source/program/action semantics.
+
 ## SDF UI future-backend position
 
 SDF UI is possible, but it is not part of the live UiPlugin runtime cutover. It belongs to a separate render-backend/projection design after the runtime product path is proven.
@@ -125,7 +155,7 @@ State persistence is split by ownership:
 | Source state, such as templates or designer output | UI source owner / product authoring owner | Persist as source IR, RON/template, or designer project output. |
 | Render state | Render backend owner | Cache/pipeline state is not UI state and must not become user-state persistence. |
 
-The runtime Counter product should demonstrate host-owned persistence with a small explicit state file option, not hidden automatic UI persistence:
+The runtime Counter product should demonstrate host-owned persistence with a small explicit state file option only after the persistence phase is accepted, not as hidden automatic UI persistence:
 
 ```text
 cargo run -p ui_counter_runtime -- --state-file target/ui_counter_runtime/counter.state.ron
@@ -145,6 +175,14 @@ Required modes:
 
 Agent scripts should name semantic actions and optional pointer gestures. They must resolve through the same route/capability/payload validation path as human interaction. They must not call `Counter` mutation directly.
 
+Agent script format decision:
+
+```text
+RON is acceptable for the first repo-native fixture format because Runenwerk already uses RON-style fixtures.
+JSONL remains the required trace output format for agents and CI.
+Support for JSONL agent input may be added later if cross-tool agent integration needs it, but the first Counter product must not block on dual input formats.
+```
+
 ## Counter product screen contract
 
 The Counter product is not allowed to leave the screen shape to implementation guesswork.
@@ -157,7 +195,7 @@ window title: Runenwerk UI Counter Runtime
 mounted screen type: CounterScreen
 host plugin type: CounterPlugin
 host resource: Counter { value: i64 }
-initial value: 0 unless loaded from explicit host-owned state file
+initial value: 0 unless loaded from explicit host-owned state file after the persistence phase exists
 ```
 
 Required visible structure:
@@ -237,8 +275,8 @@ Later phase event additions:
 | Phase | Added event families |
 |---|---|
 | Phase 008 | `UiRuntimeEvaluated`, state/invalidation trace facts, optional `UiSessionStateRestored` when session replay is implemented. |
-| Phase 009 | `UiFramePublished`, `UiFramePresented`. |
-| Phase 012 | `UiSourceRevisionLoaded`, `UiSourceLowered`, `UiProgramFormed`, `UiStateSnapshotWritten`. |
+| Phase 010 | `UiFramePublished`, `UiFramePresented`. |
+| Phase 013 | `UiSourceRevisionLoaded`, `UiSourceLowered`, `UiProgramFormed`, `UiStateSnapshotWritten`. |
 
 Trace requirements:
 
@@ -252,6 +290,50 @@ Trace must not expose renderer internals as UI source truth.
 ```
 
 This trace is the basis for both agent use and human debugging. The Counter app should show a small console/history panel or overlay with the last actions and diagnostics, but the trace subsystem remains generic UI runtime infrastructure.
+
+## Phase implementation spec decision
+
+Runenwerk should adopt lightweight phase implementation specs, but not as a blocking requirement for this planning PR.
+
+Decision:
+
+```text
+Use human-readable Markdown for design rationale and architecture.
+Use a compact machine-checkable phase spec later as the compiled implementation handoff contract.
+Prefer RON for repo-native phase specs unless later tooling proves JSON is better.
+Keep JSONL for runtime traces and CI/agent output.
+Do not make specs a parallel authority; specs are generated or maintained from accepted design/planning truth.
+```
+
+Recommended future location:
+
+```text
+docs-site/src/content/docs/specs/ui-runtime-platform/PT-UI-RUNTIME-PLATFORM-003.uiplatform-spec.ron
+```
+
+A future phase-spec record should contain:
+
+```text
+phase id and title
+lifecycle state
+owning subsystem
+accepted authority docs
+allowed paths
+forbidden paths
+public API surface
+invariants
+acceptance criteria
+validation commands
+stop conditions
+```
+
+Professional workflow role:
+
+```text
+Investigation dossier -> architecture/design doc -> decision-register entry -> phase spec -> Codex prompt -> tests/proofs -> closeout.
+```
+
+Spec adoption should be planned as a separate workflow hardening item after PR #76 or as part of the first implementation prompt template. It should not delay the runtime platform cutover unless the first implementation agent cannot follow the Markdown contract safely.
 
 ## Architecture diagrams
 
@@ -278,4 +360,6 @@ state persistence hidden inside generic UI controls
 Rust-code hot reload claims
 per-element incremental rendering claims without dirty-scope proof
 SDF UI backend implementation inside the live runtime cutover
+new UiPlugin runtime code publishing to known-wrong UI-specific render ownership names
+phase spec becoming a second source of truth separate from accepted docs
 ```
