@@ -1,3 +1,5 @@
+use super::{UiMountFailureReason, UiMountSource};
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum UiRuntimeDiagnosticSeverity {
     Info,
@@ -9,6 +11,14 @@ pub enum UiRuntimeDiagnosticSeverity {
 pub enum UiRuntimeDiagnosticCode {
     PluginInstall,
     ResourceInitialization,
+    MountRequestRejected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiMountDiagnostic {
+    pub screen_identity: String,
+    pub mount_source: UiMountSource,
+    pub failure_reason: UiMountFailureReason,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +26,7 @@ pub struct UiRuntimeDiagnostic {
     pub code: UiRuntimeDiagnosticCode,
     pub severity: UiRuntimeDiagnosticSeverity,
     pub message: &'static str,
+    pub mount: Option<UiMountDiagnostic>,
 }
 
 impl UiRuntimeDiagnostic {
@@ -28,6 +39,24 @@ impl UiRuntimeDiagnostic {
             code,
             severity,
             message,
+            mount: None,
+        }
+    }
+
+    pub fn mount_rejected(
+        screen_identity: impl Into<String>,
+        mount_source: UiMountSource,
+        failure_reason: UiMountFailureReason,
+    ) -> Self {
+        Self {
+            code: UiRuntimeDiagnosticCode::MountRequestRejected,
+            severity: UiRuntimeDiagnosticSeverity::Error,
+            message: failure_reason.message(),
+            mount: Some(UiMountDiagnostic {
+                screen_identity: screen_identity.into(),
+                mount_source,
+                failure_reason,
+            }),
         }
     }
 }
