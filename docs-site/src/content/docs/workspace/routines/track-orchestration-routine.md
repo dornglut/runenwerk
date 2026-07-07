@@ -155,7 +155,7 @@ It must not open the next phase as active implementation unless the planning rec
 - Use `pr-review-routine.md` and `complete-merge-readiness-gate.md` before recommending merge.
 - Use `phase-completion-drift-check-routine.md` before starting the next implementation phase after a phase completes.
 - Use `roadmap-update-routine.md` when active-work, roadmap, production-track, completed-work, deferred-work, or decision-register state must change.
-- Use `phase-implementation-spec.md` when a phase handoff needs a compact machine-checkable contract derived from accepted docs.
+- Use `phase-implementation-spec.md` when a phase handoff needs a compact structured contract derived from accepted docs.
 
 ## Phase handoff requirements
 
