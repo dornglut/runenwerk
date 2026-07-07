@@ -4,10 +4,10 @@ use crate::plugins::render::{RenderRuntimeSet, SurfaceFrameSubmissionRegistryRes
 use crate::runtime::{RenderPrepare, SystemConfigExt};
 
 use super::{
-    UiMountRequestsResource, UiRuntimeDiagnosticsResource, UiRuntimeEvaluationResource,
-    UiRuntimeFramePublicationResource, UiRuntimeFramePublicationTarget,
-    UiRuntimePreparedFrameResource, UiRuntimeReportResource, UiRuntimeResource, UiRuntimeSet,
-    UiRuntimeTraceResource, publish_ui_runtime_frame_system,
+    UiMountRequestsResource, UiPointerActivationResource, UiRuntimeDiagnosticsResource,
+    UiRuntimeEvaluationResource, UiRuntimeFramePublicationResource, UiRuntimeFramePublicationTarget,
+    UiRuntimeHitTargetResource, UiRuntimePreparedFrameResource, UiRuntimeReportResource,
+    UiRuntimeResource, UiRuntimeSet, UiRuntimeTraceResource, publish_ui_runtime_frame_system,
 };
 
 /// Installs the engine-owned UI runtime foundation resources.
@@ -23,6 +23,8 @@ impl Plugin for UiPlugin {
         app.init_resource::<UiRuntimeTraceResource>();
         app.init_resource::<UiRuntimeFramePublicationTarget>();
         app.init_resource::<UiRuntimePreparedFrameResource>();
+        app.init_resource::<UiRuntimeHitTargetResource>();
+        app.init_resource::<UiPointerActivationResource>();
         app.init_resource::<UiRuntimeFramePublicationResource>();
         app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
 
