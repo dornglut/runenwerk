@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-30
+last_reviewed: 2026-07-07
 ---
 
 # Active Designs
@@ -124,6 +124,7 @@ restate the entire UI framework architecture.
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
 - [UI Framework App Integration Direction Review](ui-framework-app-integration-direction-review.md)
 - [Live UiPlugin Runtime And Surface Frame Rendering](live-uiplugin-runtime-and-surface-frame-rendering-design.md)
+- [Live UiPlugin Runtime Full Platform Cutover Plan](live-uiplugin-runtime-full-cutover-plan.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [UI Program Architecture](ui-program-architecture.md)

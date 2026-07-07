@@ -1,0 +1,51 @@
+@startuml
+title Live UiPlugin Runtime Product Sequence
+
+actor Human
+actor Agent
+participant "ui_counter_runtime" as AppBin
+participant "App" as App
+participant "UiPlugin" as Ui
+participant "CounterPlugin" as CounterPlugin
+participant "CounterScreen" as Screen
+participant "ui_definition / ui_program" as Program
+participant "ui_hosts" as Host
+participant "Trace / History" as Trace
+participant "ui_evaluator / runtime_view" as Eval
+participant "Render Publisher" as Publisher
+participant "RenderPlugin" as Render
+participant "Console / JSONL" as Console
+
+AppBin -> App: App::new().add_plugins((RenderPlugin, UiPlugin, CounterPlugin))
+CounterPlugin -> App: app.mount_ui(CounterScreen)
+App -> Ui: record mount request
+Ui -> Screen: IntoUi
+Screen -> Program: source + routes + capability facts
+Ui -> Trace: UiSourceLowered / UiProgramFormed
+
+alt human pointer or keyboard input
+  Human -> Ui: input event from window runtime
+else agent script
+  Agent -> Ui: semantic action or scripted pointer event
+end
+
+Ui -> Host: route + capability + payload validation
+Host -> Trace: UiCapabilityChecked
+alt accepted
+  Host -> CounterPlugin: mutate Counter resource
+  Host -> Trace: UiHostMutationApplied
+else rejected
+  Host -> Trace: UiHostMutationRejected
+end
+
+Ui -> Eval: evaluate source/program/session/host snapshot
+Eval -> Trace: UiRuntimeEvaluated
+Eval -> Publisher: frame payload + report facts
+Publisher -> Trace: UiFramePublished
+Publisher -> Render: producer surface-frame submission
+Render -> Trace: UiFramePresented
+Trace -> Console: bounded history + JSONL export
+Render -> Human: visible updated UI
+Agent -> Console: read JSONL / assert state and frame facts
+
+@enduml
