@@ -515,6 +515,32 @@ Reactivation condition: Reopen if PR #94 completion evidence is found inaccurate
 
 Supersedes: Phase 008 Runtime Evaluation, State Snapshot, and Invalidation activation decision.
 
+Superseded by: Phase 009 SurfaceFrame Generic Producer Boundary activation decision.
+
+## Phase 009 SurfaceFrame Generic Producer Boundary activation decision
+
+Date: 2026-07-07
+
+Decision: Authorize `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` as exactly one bounded active-implementation phase after Phase 008 completion truth merged.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-009 active-planning -> active-implementation`.
+
+Context: PR #95 merged Phase 008 completion truth into `main` at `f83d9eb6536749cd80d9df05b18a182380aac116`. Active work now has the accepted Phase 009 owner, handoff contract, activation-time migration map, allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition map, and stop conditions. Activation-time source inspection confirmed that the current producer-facing seam is UI-named through `UiFrameProducerId`, `UiFrameSubmission`, `UiFrameSubmissionRegistryResource`, and `PreparedUiFrameSubmission`, while the renderer already has generic `RenderFrameProducerId`, `RenderSurfaceId`, and prepared render-frame packets.
+
+Options considered: leave Phase 009 in active planning only; start Phase 009 implementation without updating planning; authorize one bounded Phase 009 implementation PR.
+
+Reason: The track orchestration workflow allows the next implementation phase only after the previous phase is reviewed, merged, and closeout truth is recorded. That condition is now satisfied for Phase 008. The accepted cutover plan and source inspection provide enough exact scope to authorize Phase 009 implementation without widening into UiPlugin render publication, scene/debug overlay migration, or later phases.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E6` PR #95 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 008 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-008-closeout.md`.
+
+Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` implementation PR from current `main`. Keep the PR draft until focused Phase 009 validation and required docs/diff/status commands are clean.
+
+Reactivation condition: Reopen if Phase 009 implementation needs scope outside the accepted producer-generic SurfaceFrame boundary migration map, if UiPlugin render publication enters the PR, if scene/debug overlay migration or retirement enters the PR, if genericization creates a second runtime path, if compatibility shims become the durable public API instead of the generic seam, or if planning drifts from merged code again.
+
+Supersedes: Phase 008 Runtime Evaluation, State Snapshot, and Invalidation completion and Phase 009 planning decision.
+
 Superseded by: none.
 
 ## Lifecycle rule
