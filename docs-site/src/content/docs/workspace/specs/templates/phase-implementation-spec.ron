@@ -1,0 +1,59 @@
+// Template for one bounded implementation phase.
+// Markdown remains the primary design/process authority unless an accepted design grants
+// this spec contract status for the named scope.
+
+PhaseImplementationSpec(
+    phase_id: "PT-EXAMPLE-000",
+    title: "Example Phase Title",
+    lifecycle_state: "active-planning",
+    owner: "workspace-or-subsystem-owner",
+
+    authority_docs: [
+        "docs-site/src/content/docs/workspace/start-here.md",
+        "docs-site/src/content/docs/workspace/workflow-lifecycle.md",
+        "docs-site/src/content/docs/workspace/complete-investigation-gate.md",
+        "docs-site/src/content/docs/workspace/complete-design-gate.md",
+        "docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md",
+    ],
+
+    allowed_paths: [
+        "path/to/allowed/file_or_directory/**",
+    ],
+
+    forbidden_paths: [
+        "path/to/forbidden/file_or_directory/**",
+    ],
+
+    public_api_surface: [
+        "No public API change unless this list names the accepted API shape.",
+    ],
+
+    invariants: [
+        "State every invariant this phase must preserve or prove.",
+    ],
+
+    acceptance_criteria: [
+        "State the concrete acceptance criteria for this phase.",
+    ],
+
+    validation_commands: [
+        "python tools/docs/validate_docs.py",
+        "git diff --check",
+        "git status --short --branch",
+    ],
+
+    evidence_expectations: [
+        "Report manual inspection evidence and command validation honestly.",
+    ],
+
+    stop_conditions: [
+        "Stop if the phase needs files, crates, or ownership outside this contract.",
+        "Stop if implementation authorization is missing or only inferred from accepted direction.",
+    ],
+
+    closeout_expectations: [
+        "Record delivered contract, validation, evidence classes, known gaps, and next action.",
+    ],
+
+    next_phase_activation_condition: "Next phase may enter active planning only after this phase has truthful completion or explicit closeout scheduling; active implementation requires separate authorization.",
+)
