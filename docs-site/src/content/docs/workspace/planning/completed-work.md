@@ -35,6 +35,7 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 - `PT-UI-RUNTIME-PLATFORM-004` App Mounting API: completed 2026-07-07 through merged PR #82 at merge commit `9fb86f0d426385be7e425ff943c7a9d5450e1edb`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts`.
 - `PT-UI-RUNTIME-PLATFORM-005` Typed Screen / Source / Action Contracts: completed 2026-07-07 through merged PR #85 at merge commit `6226470defa7a72a567fc03c1bc3783e63e2c2c8`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-005-closeout.md`. Follow-up fulfilled by completed `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime`.
 - `PT-UI-RUNTIME-PLATFORM-006` Mounted Surface Session Runtime: completed 2026-07-07 through merged PR #88 at merge commit `82d6f00326cf2823eb91d3f655a730b962b355f6`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-006-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` planning only; implementation remains blocked until separately authorized.
+- `PT-UI-RUNTIME-PLATFORM-007` Host Action Dispatch and Runtime Trace: completed 2026-07-07 through merged PR #91 at merge commit `5dd90a2caf1bb7e4d5710830499df1d122fe587f`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` planning only; implementation remains blocked until separately authorized.
 
 ## Recently completed UI Component Platform work
 
@@ -187,6 +188,37 @@ Follow-up: Use the closeout report as the prerequisite for
 `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` active
 planning. Do not start Phase 007 implementation until this closeout/planning
 truth is merged and Phase 007 active implementation is separately authorized.
+
+## PT-UI-RUNTIME-PLATFORM-007 evidence
+
+Implementation evidence: PR #91 delivered the engine-owned Host Action Dispatch
+and Runtime Trace phase. Evidence covers `UiActionEvent`, host-owned action
+execution, fail-closed route/schema/capability/payload/host-data rejection,
+mutation receipts, action dispatch reports, action dispatch diagnostics,
+generic UI-runtime trace events, and focused `ui_action_*` engine tests for
+positive mutation and negative no-mutation cases.
+
+Merge evidence: PR #91, `PT-UI-RUNTIME-PLATFORM-007 action dispatch and trace`,
+squash-merged into `main` on 2026-07-07 at merge commit
+`5dd90a2caf1bb7e4d5710830499df1d122fe587f`.
+
+Validation: Before merge, `cargo test -p engine ui_action`, `cargo test -p
+engine`, `python tools/docs/validate_docs.py`, `git diff --check`, `git diff
+--check main...HEAD`, `git status --short --branch`, and `git diff --stat
+main...HEAD` passed. GitHub reported no checks for the branch.
+
+Known non-goals: runtime evaluation/invalidation, render adapters,
+SurfaceFrame generic producer-boundary implementation, scene/debug overlay
+producer migration, source reload/persistence, `apps/ui_counter_runtime`,
+SDF/world-space/SpatialCanvas, `foundation/meta`, `domain/app_program`,
+generic plugin framework, phase spec validator, and tools/docs validator
+changes remained out of scope.
+
+Follow-up: Use the closeout report as the prerequisite for
+`PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and
+Invalidation` active planning. Do not start Phase 008 implementation until this
+closeout/planning truth is merged and Phase 008 active implementation is
+separately authorized.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 
