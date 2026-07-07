@@ -1,11 +1,11 @@
 ---
 title: Authority Model
-description: Authority model for resolving Runenwerk code, docs, planning, report, generated-view, and tooling conflicts.
+description: Authority model for resolving Runenwerk code, docs, planning, report, generated-view, spec, and tooling conflicts.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-07
 related_docs:
   - ./start-here.md
   - ./operating-model.md
@@ -15,6 +15,9 @@ related_docs:
   - ./complete-design-gate.md
   - ./evidence-quality-taxonomy.md
   - ./complete-merge-readiness-gate.md
+  - ./routines/track-orchestration-routine.md
+  - ./specs/README.md
+  - ./specs/phase-implementation-spec.md
   - ../guidelines/programming-principles.md
 ---
 
@@ -35,7 +38,8 @@ Every repository artifact has one job.
 9. Routines own repeatable work procedure.
 10. Task cards own reusable task wording.
 11. Reports and closeouts own historical evidence.
-12. Generated views and local helpers are convenience only unless a machine contract explicitly says otherwise.
+12. Specs own compact handoff contracts only when derived from accepted Markdown authority and explicitly scoped.
+13. Generated views and local helpers are convenience only unless a machine contract explicitly says otherwise.
 
 ## Lifecycle authority
 
@@ -67,6 +71,33 @@ Use [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md) befor
 
 The merge gate owns merge readiness shape. It does not replace PR review, CI, implementation evidence, or phase closeout truth.
 
+## Track orchestration authority
+
+Use [`routines/track-orchestration-routine.md`](routines/track-orchestration-routine.md) when one goal owns a full production track or multi-phase milestone.
+
+A track manager owns sequencing, planning truth, PR readiness, closeout sequencing, and next-phase activation. It does not own runtime implementation details for every phase and must not collapse a production track into one implementation PR.
+
+When track orchestration and implementation instructions disagree, use the orchestration routine for sequencing and the implementation routine for the currently authorized single phase.
+
+## Spec authority
+
+Use [`specs/phase-implementation-spec.md`](specs/phase-implementation-spec.md) when a phase needs a compact handoff contract derived from accepted docs.
+
+A phase implementation spec:
+
+```text
+is scoped to one phase
+is derived from accepted Markdown authority
+may help agents avoid prompt drift
+must not replace design, planning, investigation, design-gate, merge-readiness, or closeout authority
+```
+
+Specs are handoff contracts, not independent architecture decisions. If a spec and Markdown authority disagree, update or supersede the owning Markdown authority first, then align the spec.
+
+RON is the preferred format for phase implementation specs. JSONL is reserved for append-only streams such as runtime traces, agent output, validation/proof logs, and any future track-manager execution ledger.
+
+Validator or script support is downstream work and has no authority unless an accepted design grants it an explicit contract role.
+
 ## Generated file classes
 
 Generated or machine-readable files may have one of three roles:
@@ -94,8 +125,8 @@ In practice:
 - DRY: do not keep the same durable claim authoritative in two places.
 - YAGNI: do not preserve legacy workflow surfaces only because they might be useful someday.
 - SOLID: keep responsibilities and dependencies honest.
-- Separation of Concerns: separate entrypoints, authority docs, lifecycle, complete investigation gates, complete design gates, evidence quality, merge readiness, routines, planning, reports, and tooling.
-- Avoid Premature Optimization: do not add generated views or scripts before there is evidence they solve a real problem.
+- Separation of Concerns: separate entrypoints, authority docs, lifecycle, complete investigation gates, complete design gates, evidence quality, merge readiness, routines, planning, reports, specs, and tooling.
+- Avoid Premature Optimization: do not add generated views, validators, or scripts before there is evidence they solve a real problem.
 - Law of Demeter: route through direct owners and explicit contracts.
 
 ## Planning files
@@ -124,6 +155,7 @@ Examples:
 - Code conflicts with accepted design: decide whether code drifted or the design needs intentional revision.
 - Planning Markdown conflicts with a generated view: use Planning Markdown and report the generated view as stale.
 - Task card conflicts with a routine: use the routine.
+- Phase spec conflicts with accepted Markdown authority: update or supersede the owning Markdown authority first, then align the spec.
 - Local helper conflicts with a routine: use the routine.
 - Proposed design conflicts with accepted design: use the accepted design until a decision record supersedes it.
 - Implementation authorization lacks complete investigation or design gate evidence where required: update investigation, design, or planning authority before coding.
