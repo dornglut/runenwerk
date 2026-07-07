@@ -130,9 +130,9 @@ ID: `PT-WORKFLOW-TRACK-ORCHESTRATION-001`
 
 Title: Track Orchestration and Phase Spec Handoff Workflow
 
-State: active docs-only workflow-hardening PR before runtime implementation
+State: draft docs-only workflow-hardening PR before runtime implementation
 
-Lifecycle state: `active-planning` / draft PR review; not runtime `active-implementation`
+Lifecycle state: `active-planning` with draft PR review in progress; not runtime `active-implementation`
 
 Authority:
 
