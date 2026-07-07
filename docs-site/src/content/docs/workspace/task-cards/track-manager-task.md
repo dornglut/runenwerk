@@ -38,6 +38,8 @@ Track:
 Current phase:
 Current branch/PR:
 Lifecycle state:
+Files changed:
+Exact sections changed:
 Planning files inspected:
 Authority files inspected:
 Evidence classes used:
@@ -46,7 +48,9 @@ Complete design gate status:
 Merge-readiness status:
 Closeout state:
 Phase spec status:
-Validation run or unavailable:
+Manual validation performed:
+Command validation run or unavailable:
 Implementation authorization:
+Remaining risks or blockers:
 Next safe action:
 ```
