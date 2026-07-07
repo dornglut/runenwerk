@@ -10,6 +10,7 @@ related_docs:
   - ../../reports/closeouts/README.md
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -26,7 +27,8 @@ This file is a short completion index. Detailed evidence belongs in `../../repor
 
 - `PT-UI-RUNTIME-PLATFORM-001` Live UiPlugin Runtime and Generic Surface-Frame Rendering intake/design-gate hardening: completed 2026-07-07 through merged PR #74. Runtime implementation remained blocked.
 - `PT-UI-RUNTIME-PLATFORM-002` Live UiPlugin Runtime Full Platform Cutover Plan: completed 2026-07-07 through merged PR #76 at merge commit `1697942c968afd9648872c202972826dc4c406b2`. Evidence lives in `../../design/active/live-uiplugin-runtime-full-cutover-plan.md`, `../../architecture/live-uiplugin-runtime-platform-architecture.md`, and workspace planning records. Runtime implementation remained blocked until the workflow gate completed.
-- `PT-WORKFLOW-TRACK-ORCHESTRATION-001` Track Orchestration and Phase Spec Handoff Workflow: completed 2026-07-07 through merged PR #77 at merge commit `8b7a6b558bef79303e66d6a9f329dc71e00a0931`. Closeout report: `../../reports/closeouts/pt-workflow-track-orchestration-001-closeout.md`. Runtime implementation remained out of scope; next safe action is `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as one bounded implementation PR.
+- `PT-WORKFLOW-TRACK-ORCHESTRATION-001` Track Orchestration and Phase Spec Handoff Workflow: completed 2026-07-07 through merged PR #77 at merge commit `8b7a6b558bef79303e66d6a9f329dc71e00a0931`. Closeout report: `../../reports/closeouts/pt-workflow-track-orchestration-001-closeout.md`. Runtime implementation remained out of scope; its Phase 003 follow-up is fulfilled by PR #79.
+- `PT-UI-RUNTIME-PLATFORM-003` UiPlugin Foundation: completed 2026-07-07 through merged PR #79 at merge commit `0135850277e904b4be2c336e3ef6507b3fc88b72`. Closeout report: `../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md`. Next safe action is `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` planning only; implementation remains blocked until separately authorized.
 
 ## Recently completed UI Component Platform work
 
@@ -61,7 +63,35 @@ Validation: This completion index records merge evidence and planning truth only
 
 Known non-goals: runtime Rust implementation, engine `UiPlugin`, public `AppUiExt`, `app.mount_ui`, typed screen/source/action contracts, render adapter work, generic producer boundary implementation, runtime Counter product, source reload/persistence implementation, SDF/world-space/SpatialCanvas implementation, `foundation/meta`, `domain/app_program`, generic plugin framework, validator tooling, and docs validator script changes remained out of scope.
 
-Follow-up: Open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as exactly one bounded implementation PR. Do not start Phase 004 or later until Phase 003 is reviewed, merged, and completion truth is recorded.
+Follow-up: Fulfilled by completed `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` through PR #79 and closeout truth. Use Phase 004 planning as the next runtime-platform state.
+
+## PT-UI-RUNTIME-PLATFORM-003 evidence
+
+Implementation evidence: PR #79 delivered the engine-owned `engine::plugins::ui`
+foundation shell. Evidence covers the module root, `UiPlugin` install/build
+behavior, `UiRuntimeSet` schedule labels, `UiRuntimeResource`,
+`UiRuntimeReportResource`, `UiRuntimeDiagnosticsResource`, explicit plugin
+export wiring, and focused `ui_plugin_*` engine tests.
+
+Merge evidence: PR #79, `Add UiPlugin foundation`, squash-merged into `main`
+on 2026-07-07 at merge commit `0135850277e904b4be2c336e3ef6507b3fc88b72`.
+
+Validation: Before merge, `cargo test -p engine ui_plugin`, `cargo test -p
+engine`, `python tools/docs/validate_docs.py`, `git diff --check`, `git diff
+--check main...HEAD`, `git status --short --branch`, and `git diff --stat
+main...HEAD` passed. GitHub reported no checks for the branch.
+
+Known non-goals: public `AppUiExt`, `app.mount_ui`, `UiScreen`, `IntoUi`,
+`UiActionHandler`, render adapters, SurfaceFrame generic producer-boundary
+implementation, scene/debug overlay migration, source reload/persistence,
+`apps/ui_counter_runtime`, SDF/world-space/SpatialCanvas, `foundation/meta`,
+`domain/app_program`, generic plugin framework, phase spec validator, and
+tools/docs validator changes remained out of scope.
+
+Follow-up: Use the closeout report as the prerequisite for
+`PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` active planning. Do not start
+Phase 004 implementation until this closeout/planning truth is merged and
+Phase 004 active implementation is separately authorized.
 
 ## PT-UI-COMPONENT-PLATFORM-014 evidence
 

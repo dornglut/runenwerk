@@ -16,6 +16,7 @@ related_docs:
   - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
+  - ../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
   - ../../design/active/ui-component-platform-text-editing-design.md
   - ../../design/active/ui-component-platform-generic-text-design.md
@@ -221,9 +222,35 @@ Affected files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `complet
 
 Evidence: `E3` source/design/planning/tooling inspection by path, `E5` local docs/diff/status validation for this planning-closeout PR when recorded by the PR report, and `E8` accepted architecture/workflow/planning authority. PR #77 merge evidence is commit `8b7a6b558bef79303e66d6a9f329dc71e00a0931`. The docs validator stale-pattern update aligns optional helper behavior with accepted runtime-platform docs; it does not create workflow authority.
 
-Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` implementation PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 003 validation and the required docs/diff/status commands are clean.
+Follow-up: Fulfilled by completed `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` through PR #79 and closeout truth. Use Phase 004 planning as the next runtime-platform state.
 
 Reactivation condition: Reopen if Phase 003 needs scope outside the authorized foundation shell, if planning drifts from merged branch truth again, if the workflow gate closeout evidence is found inaccurate, or if Phase 003 implementation tries to include Phase 004 or later work.
+
+Supersedes: none.
+
+Superseded by: none.
+
+## UiPlugin Foundation completion and Phase 004 planning decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` completed through merged PR #79 and open `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` as active planning only.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-003 review -> completed`; `PT-UI-RUNTIME-PLATFORM-004 production-track -> active-planning`.
+
+Context: PR #79 merged the bounded Phase 003 implementation into `main` at `0135850277e904b4be2c336e3ef6507b3fc88b72`. The track orchestration routine, workflow lifecycle, and phase completion drift check require completion truth before the next implementation phase starts.
+
+Options considered: leave Phase 003 as active implementation after merge; start Phase 004 implementation immediately from the cutover plan; record Phase 003 completion truth and open Phase 004 as planning only.
+
+Reason: Phase 003 delivered exactly the authorized UiPlugin foundation shell and preserved all later-phase boundaries. The correct next state is to record completion truth, then prepare Phase 004 separately. The phase completion drift check does not authorize Phase 004 implementation from the closeout patch.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, and `../../reports/closeouts/pt-ui-runtime-platform-003-closeout.md`.
+
+Evidence: `E3` source/test inspection by path, `E5` local command validation on PR #79 head, `E6` PR #79 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment. PR #79 had no unresolved comments, reviews, review requests, or hosted checks when inspected before merge.
+
+Follow-up: Review and merge the Phase 003 closeout/planning branch. Then decide whether to authorize exactly one bounded `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` implementation PR.
+
+Reactivation condition: Reopen if PR #79 completion evidence is found inaccurate, if Phase 003 introduced forbidden Phase 004-014 scope, if Phase 004 planning needs authority beyond the accepted cutover plan, or if planning drifts from merged code again.
 
 Supersedes: none.
 
