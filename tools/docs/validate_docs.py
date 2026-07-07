@@ -36,8 +36,6 @@ STALE_PATTERNS = {
     "engine/src/plugins/README.md": "engine plugin docs moved under docs-site/src/content/docs/engine/plugins/README.md",
     "engine/examples/README.md": "engine examples docs moved under docs-site/src/content/docs/engine/examples/overview.md",
     "engine/tests/README.md": "engine tests docs moved under docs-site/src/content/docs/engine/tests/README.md",
-    "engine/src/plugins/ui": "engine has no standalone ui plugin; use domain/ui docs and scene/render integration docs",
-    "src/plugins/ui/": "engine has no standalone ui plugin; use domain/ui docs and scene/render integration docs",
     "plugins/ui/README.md": "engine has no standalone ui plugin docs",
     "foundation/ids": "the current identity crate is foundation/id",
     "docs/design/": "design docs live under docs-site/src/content/docs/design",

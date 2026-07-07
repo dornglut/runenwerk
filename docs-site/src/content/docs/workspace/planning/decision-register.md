@@ -195,9 +195,35 @@ Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`,
 
 Evidence: `AGENTS.md`, root architecture/domain/testing summaries, workspace operating model, authority model, lifecycle, implementation routine, PR review routine, phase completion drift check, roadmap update routine, planning records, PR #76 merge state, accepted runtime-platform cutover docs, and the completion/planning alignment updates in roadmap, production-tracks, completed-work, active-work, and decision-register.
 
-Follow-up: Review and merge this docs-only workflow PR. After it merges, open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as a separate active-implementation PR using the new track orchestration routine and phase spec handoff rules.
+Follow-up: Fulfilled by merged PR #77 and closeout truth. Open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as a separate active-implementation PR using the new track orchestration routine and phase spec handoff rules.
 
 Reactivation condition: Reopen if the workflow creates a second authority source, encourages one broad implementation PR, makes phase specs replace Markdown authority, selects JSONL as the primary phase spec format, starts validator/tooling before the spec shape is accepted, or omits implementation-authorization fields needed for phase handoff.
+
+Supersedes: none.
+
+Superseded by: none.
+
+## Track orchestration closeout and Phase 003 activation decision
+
+Date: 2026-07-07
+
+Decision: Mark `PT-WORKFLOW-TRACK-ORCHESTRATION-001` completed through merged PR #77 and open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as the only active runtime-platform implementation phase.
+
+State transition: `PT-WORKFLOW-TRACK-ORCHESTRATION-001 review -> completed`; `PT-UI-RUNTIME-PLATFORM-003 production-track -> active-implementation`.
+
+Context: Current `main` contains merge commit `8b7a6b558bef79303e66d6a9f329dc71e00a0931` for PR #77, but planning still described the workflow gate as the active blocker before runtime implementation. The track orchestration routine and workflow lifecycle require completion truth before the next implementation phase starts.
+
+Options considered: start Phase 003 runtime code immediately from stale planning; stop with the conflict only; record workflow-gate completion truth and activate Phase 003 with exact scope before implementation.
+
+Reason: The correct long-term path is to fix planning truth first, then create one bounded Phase 003 implementation PR. Phase 003 is authorized only for the UiPlugin foundation shell: `engine::plugins::ui` module root, plugin install/build behavior, schedule labels, default resources, report shell, diagnostics shell, export wiring, and focused engine tests. Public mounting, typed screen/source/action contracts, sessions, host dispatch, trace, render publication, scene/debug migration, Counter product, reload/persistence, SDF/world-space work, `foundation/meta`, `domain/app_program`, generic plugin framework, validator tooling, and later phases remain blocked.
+
+Affected files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, `../../reports/closeouts/pt-workflow-track-orchestration-001-closeout.md`, and `tools/docs/validate_docs.py`.
+
+Evidence: `E3` source/design/planning/tooling inspection by path, `E5` local docs/diff/status validation for this planning-closeout PR when recorded by the PR report, and `E8` accepted architecture/workflow/planning authority. PR #77 merge evidence is commit `8b7a6b558bef79303e66d6a9f329dc71e00a0931`. The docs validator stale-pattern update aligns optional helper behavior with accepted runtime-platform docs; it does not create workflow authority.
+
+Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` implementation PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 003 validation and the required docs/diff/status commands are clean.
+
+Reactivation condition: Reopen if Phase 003 needs scope outside the authorized foundation shell, if planning drifts from merged branch truth again, if the workflow gate closeout evidence is found inaccurate, or if Phase 003 implementation tries to include Phase 004 or later work.
 
 Supersedes: none.
 

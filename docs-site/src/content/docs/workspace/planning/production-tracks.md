@@ -78,13 +78,13 @@ Current blocker:
 ```text
 No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The active blocker before returning to SpatialCanvas, standalone public AppUiExt ergonomics, authoring/execution strategy work, or later Component Platform implementation is `PT-WORKFLOW-TRACK-ORCHESTRATION-001`, which hardens track-manager and phase-spec handoff workflow before runtime implementation starts.
+The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The `PT-WORKFLOW-TRACK-ORCHESTRATION-001` workflow gate is completed through PR #77 and closeout truth. The active runtime-platform phase is now `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation`.
 ```
 
 Next action:
 
 ```text
-Review and merge `PT-WORKFLOW-TRACK-ORCHESTRATION-001` if validation is clean. Then start `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as the first bounded runtime implementation phase. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
+Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` implementation PR. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
 ```
 
 ## PT-UI-RUNTIME-PLATFORM
@@ -95,9 +95,9 @@ Title: Live UiPlugin Runtime Platform
 
 Track type: architecture / runtime platform / public API
 
-State: active-planning workflow hardening gate before first implementation phase
+State: active implementation authorization for Phase 003
 
-Lifecycle state: `active-planning`; runtime implementation not authorized until `PT-WORKFLOW-TRACK-ORCHESTRATION-001` is accepted or explicitly deferred and `PT-UI-RUNTIME-PLATFORM-003` opens separately as active implementation
+Lifecycle state: `active-implementation` for `PT-UI-RUNTIME-PLATFORM-003` only
 
 Goal:
 
@@ -123,8 +123,8 @@ Milestones:
 ```text
 001 Live UiPlugin runtime and generic surface-frame rendering investigation/design gate — completed through merged PR #74 docs-only hardening
 002 Full platform cutover plan — completed through merged PR #76 docs-only planning
-Workflow gate PT-WORKFLOW-TRACK-ORCHESTRATION-001 — active docs-only hardening before Phase 003
-003 UiPlugin Foundation — downstream implementation PR after workflow gate
+Workflow gate PT-WORKFLOW-TRACK-ORCHESTRATION-001 — completed through merged PR #77 and closeout truth
+003 UiPlugin Foundation — active implementation authorization; implementation PR not yet opened
 004 App Mounting API — downstream implementation PR
 005 Typed Screen / Source / Action Contracts — downstream implementation PR
 006 Mounted Surface Session Runtime — downstream implementation PR
@@ -143,31 +143,31 @@ Design gates:
 ```text
 Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` added render/app-engine feature mapping, runtime architecture, agent/trace requirements, producer-generic render-boundary ordering, reload/persistence decisions, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements.
 Complete design gate: completed for `PT-UI-RUNTIME-PLATFORM-002` through merged PR #76.
-Implementation authorization: forbidden until the workflow gate is accepted or explicitly deferred and `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` records exact scope, owner modules, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, principle compliance, acceptance criteria, and stop conditions.
+Implementation authorization: Phase 003 is authorized only for the UiPlugin foundation shell recorded in `active-work.md` and `roadmap.md`. Phase 004 and later remain forbidden until Phase 003 is reviewed, merged, and completion truth is recorded.
 ```
 
 Evidence gates:
 
 ```text
-Current evidence is `E2` connector metadata/file inspection, `E3` source/design/planning inspection by path, and `E8` accepted architecture/workflow/planning authority. No `E5` local command validation is available from this connector-only planning session. Future implementation phases must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and for Phase 012 recorded human and agent Counter app commands.
+Current evidence is `E3` source/design/planning inspection by path, `E5` local command validation when recorded by the planning closeout PR, and `E8` accepted architecture/workflow/planning authority. Future implementation phases must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and for Phase 012 recorded human and agent Counter app commands.
 ```
 
 Current blocker:
 
 ```text
-`PT-WORKFLOW-TRACK-ORCHESTRATION-001` is the active docs-only workflow-hardening gate. Runtime implementation, public AppUiExt code, render adapter code, SurfaceFrame generic producer boundary work, overlay producer migration work, source reload/persistence implementation, and runnable Counter product code remain blocked until this gate is accepted or explicitly deferred and Phase 003 opens separately.
+No Phase 003 implementation PR has been opened or merged yet. Public AppUiExt code, app.mount_ui, typed screens/actions, render adapter code, SurfaceFrame generic producer boundary work, overlay producer migration work, source reload/persistence implementation, runnable Counter product code, and Phases 004-014 remain blocked until Phase 003 is reviewed, merged, and completion truth is recorded.
 ```
 
 Activation condition:
 
 ```text
-Promote to active implementation only after `PT-WORKFLOW-TRACK-ORCHESTRATION-001` is accepted or explicitly deferred and `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` opens as a bounded implementation PR with a phase handoff contract.
+Phase 003 may be implemented in one bounded PR using the handoff contract in `active-work.md` and `roadmap.md`. Phase 004 may move only after Phase 003 is complete, reviewed/merged, and truthfully closed.
 ```
 
 Next action:
 
 ```text
-Review PR #77, run docs validation/diff checks, and merge if clean. Then open Phase 003 as a separate implementation PR. Do not implement multiple runtime phases in one broad PR.
+Open exactly one bounded Phase 003 implementation PR. Keep it draft until focused tests, relevant cargo validation, docs validation, diff hygiene, branch status, and diff stat are clean. Do not implement multiple runtime phases in one broad PR.
 ```
 
 ## Track shape
