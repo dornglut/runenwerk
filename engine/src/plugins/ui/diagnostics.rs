@@ -99,6 +99,7 @@ pub struct UiRuntimeEvaluationDiagnostic {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum UiRuntimeFramePublicationFailureReason {
     MissingRuntimeEvaluation,
+    MissingPreparedFrame,
 }
 
 impl UiRuntimeFramePublicationFailureReason {
@@ -106,6 +107,9 @@ impl UiRuntimeFramePublicationFailureReason {
         match self {
             Self::MissingRuntimeEvaluation => {
                 "UI runtime frame publication has no evaluated frame payload"
+            }
+            Self::MissingPreparedFrame => {
+                "UI runtime frame publication has no prepared frame for the latest evaluation"
             }
         }
     }

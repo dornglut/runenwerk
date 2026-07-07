@@ -18,10 +18,10 @@ related_docs:
 
 It proves the app-facing runtime path with a bounded counter product:
 
-- the app installs engine default plugins, `RenderPlugin`, `UiPlugin`, and a product-owned `CounterPlugin`;
+- the app installs engine default plugins, `ScenePlugin`, `RenderPlugin`, `UiPlugin`, and a product-owned `CounterPlugin`;
 - `CounterPlugin` mounts `CounterScreen` through `app.mount_ui(CounterScreen)`;
-- `CounterScreen` implements the typed UI screen/source contract and exposes a header, count, increment/decrement/reset actions, a trace console, and a status line;
-- human keyboard input and agent scripts both enter through the same route, capability, payload, host mapping, and `dispatch_ui_action` path;
+- `CounterScreen` implements the typed UI screen/source contract and exposes a header, count, increment/decrement/reset controls, a trace console, and a status line;
+- human pointer controls, human keyboard input, and agent scripts all enter through the same route, capability, payload, host mapping, and `dispatch_ui_action` path;
 - `Counter` mutates only through the product host executor after accepted UI action dispatch;
 - the evaluated UI frame is published by `UiPlugin` through the generic surface-frame seam and consumed by `RenderPlugin`.
 

@@ -4,21 +4,16 @@ use crate::plugins::render::{
     SurfaceFrameSubmissionRegistryResource,
 };
 use crate::runtime::{Res, ResMut};
-use ui_math::{UiRect, UiSize};
-use ui_render_data::{
-    RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
-    UiSurface, UiSurfaceId,
-};
 
 use super::{
     UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeEvaluationResource,
-    UiRuntimeFramePayload, UiRuntimeFramePublicationFailureReason, UiRuntimeFramePublicationReport,
-    UiRuntimeFramePublicationResource, UiRuntimeTraceEvent, UiRuntimeTraceResource,
+    UiRuntimeFramePublicationFailureReason, UiRuntimeFramePublicationReport,
+    UiRuntimeFramePublicationResource, UiRuntimePreparedFrameResource, UiRuntimeTraceEvent,
+    UiRuntimeTraceResource,
 };
 
 pub const UI_RUNTIME_FRAME_PRODUCER_ID: RenderFrameProducerId =
     ui_runtime_frame_producer_id(10_000);
-const UI_RUNTIME_FRAME_DRAW_KEY: UiDrawKey = UiDrawKey::new(10_000, None);
 
 const fn ui_runtime_frame_producer_id(raw: u64) -> RenderFrameProducerId {
     match RenderFrameProducerId::try_from_raw(raw) {
@@ -85,6 +80,7 @@ impl UiRuntimeFramePublicationTarget {
 pub fn publish_ui_runtime_frame_system(
     runtime: Res<UiRuntimeEvaluationResource>,
     target: Res<UiRuntimeFramePublicationTarget>,
+    prepared_frames: Res<UiRuntimePreparedFrameResource>,
     mut submissions: ResMut<SurfaceFrameSubmissionRegistryResource>,
     mut publications: ResMut<UiRuntimeFramePublicationResource>,
     mut trace: ResMut<UiRuntimeTraceResource>,
@@ -93,6 +89,7 @@ pub fn publish_ui_runtime_frame_system(
     publish_latest_ui_runtime_frame(
         &runtime,
         &target,
+        &prepared_frames,
         &mut submissions,
         &mut publications,
         &mut trace,
@@ -103,6 +100,7 @@ pub fn publish_ui_runtime_frame_system(
 pub fn publish_latest_ui_runtime_frame(
     runtime: &UiRuntimeEvaluationResource,
     target: &UiRuntimeFramePublicationTarget,
+    prepared_frames: &UiRuntimePreparedFrameResource,
     submissions: &mut SurfaceFrameSubmissionRegistryResource,
     publications: &mut UiRuntimeFramePublicationResource,
     trace: &mut UiRuntimeTraceResource,
@@ -126,7 +124,26 @@ pub fn publish_latest_ui_runtime_frame(
         return report;
     };
 
-    let frame = frame_from_payload(evaluation.frame_payload());
+    let Some(prepared_frame) = prepared_frames.latest_for_evaluation(evaluation) else {
+        let producer_id = target.producer_id();
+        let render_surface_id = target.render_surface_id();
+        submissions.remove_for_surface(&producer_id, render_surface_id);
+        let report = UiRuntimeFramePublicationReport::missing_prepared_frame(
+            evaluation,
+            producer_id,
+            render_surface_id,
+        );
+        diagnostics.push(UiRuntimeDiagnostic::frame_publication_rejected(
+            producer_id,
+            render_surface_id,
+            UiRuntimeFramePublicationFailureReason::MissingPreparedFrame,
+        ));
+        trace.record(UiRuntimeTraceEvent::frame_published(&report));
+        publications.record(report.clone());
+        return report;
+    };
+
+    let frame = prepared_frame.frame().clone();
     submissions.replace_for_surface(
         target.producer_id(),
         target.render_surface_id(),
@@ -142,35 +159,10 @@ pub fn publish_latest_ui_runtime_frame(
         evaluation,
         target.producer_id(),
         target.render_surface_id(),
+        prepared_frame.primitive_count(),
     );
     trace.record(UiRuntimeTraceEvent::frame_published(&report));
     trace.record(UiRuntimeTraceEvent::frame_presented(&report));
     publications.record(report.clone());
     report
-}
-
-fn frame_from_payload(payload: &UiRuntimeFramePayload) -> UiFrame {
-    let primitive_count = payload.primitive_count();
-    if primitive_count == 0 {
-        return UiFrame::new();
-    }
-
-    let primitives = (0..primitive_count)
-        .map(|index| {
-            let order = index.min(u32::MAX as usize) as u32;
-            UiPrimitive::Rect(RectPrimitive::new(
-                UiRect::new(index as f32, 0.0, 1.0, 1.0),
-                0.0,
-                UiPaint::rgba(0.16, 0.22, 0.28, 1.0),
-                UI_RUNTIME_FRAME_DRAW_KEY,
-                UiSortKey::new(0, 0, order),
-            ))
-        })
-        .collect::<Vec<_>>();
-
-    UiFrame::with_surfaces(vec![UiSurface::with_layers(
-        UiSurfaceId(0),
-        UiSize::new(primitive_count as f32, 1.0),
-        vec![UiLayer::with_primitives(UiLayerId(0), primitives)],
-    )])
 }

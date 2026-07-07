@@ -3838,9 +3838,14 @@ dependencies = [
  "ui_definition",
  "ui_evaluator",
  "ui_hosts",
+ "ui_math",
  "ui_program",
+ "ui_render_data",
+ "ui_render_primitives",
+ "ui_runtime_view",
  "ui_schema",
  "ui_surface",
+ "ui_theme",
  "winit",
 ]
 

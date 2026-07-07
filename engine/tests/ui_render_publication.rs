@@ -10,8 +10,9 @@ use engine::plugins::ui::{
     UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource, UiRuntimeEvaluationInput,
     UiRuntimeEvaluationResource, UiRuntimeFramePublicationFailureReason,
     UiRuntimeFramePublicationResource, UiRuntimeFramePublicationStatus,
-    UiRuntimeFramePublicationTarget, UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen,
-    UiTypedScreenId, UiTypedSource, publish_latest_ui_runtime_frame,
+    UiRuntimeFramePublicationTarget, UiRuntimePreparedFrameRecord, UiRuntimePreparedFrameResource,
+    UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen, UiTypedScreenId, UiTypedSource,
+    publish_latest_ui_runtime_frame,
 };
 use engine::prelude::{App, AppUiExt};
 use ui_binding::HostDataSnapshot;
@@ -21,7 +22,12 @@ use ui_definition::{
     AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition, UiValueBinding,
 };
 use ui_evaluator::UiEvaluationContext;
+use ui_math::{UiRect, UiSize};
 use ui_program::UiProgramSourceId;
+use ui_render_data::{
+    RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId, UiPaint, UiPrimitive, UiSortKey,
+    UiSurface, UiSurfaceId,
+};
 use ui_schema::UiSchemaValue;
 
 const COUNTER_TEXT_KEY: &str = "state.counter.output.selected";
@@ -29,6 +35,7 @@ const COUNTER_TEXT_KEY: &str = "state.counter.output.selected";
 #[test]
 fn ui_render_publication_writes_surface_frame_submission_and_trace() {
     let runtime = evaluated_counter_runtime("Clicked 2 / 5", 2);
+    let prepared_frames = prepared_frames_for_runtime(&runtime);
     let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
     let mut publications = UiRuntimeFramePublicationResource::default();
     let mut trace = UiRuntimeTraceResource::default();
@@ -43,6 +50,7 @@ fn ui_render_publication_writes_surface_frame_submission_and_trace() {
     let report = publish_latest_ui_runtime_frame(
         &runtime,
         &target,
+        &prepared_frames,
         &mut submissions,
         &mut publications,
         &mut trace,
@@ -57,7 +65,13 @@ fn ui_render_publication_writes_surface_frame_submission_and_trace() {
         report.frame_revision(),
         Some(expected_payload.frame_revision())
     );
-    assert_eq!(report.primitive_count(), expected_payload.primitive_count());
+    assert_eq!(
+        report.primitive_count(),
+        prepared_frames
+            .latest_record()
+            .expect("prepared frame should be recorded")
+            .primitive_count()
+    );
     assert!(diagnostics.is_empty());
     assert_eq!(publications.latest_report(), Some(&report));
 
@@ -71,7 +85,10 @@ fn ui_render_publication_writes_surface_frame_submission_and_trace() {
     );
     assert_eq!(
         submission.primitive_count_hint(),
-        expected_payload.primitive_count()
+        prepared_frames
+            .latest_record()
+            .expect("prepared frame should be recorded")
+            .primitive_count()
     );
 
     assert_frame_trace_contains(&trace, UiRuntimeTraceEventKind::UiFramePublished, &report);
@@ -90,7 +107,9 @@ fn ui_render_publication_writes_surface_frame_submission_and_trace() {
 #[test]
 fn ui_render_publication_missing_evaluation_records_report_and_diagnostic() {
     let previous_runtime = evaluated_counter_runtime("Clicked 1 / 5", 1);
+    let previous_prepared_frames = prepared_frames_for_runtime(&previous_runtime);
     let runtime = UiRuntimeEvaluationResource::default();
+    let prepared_frames = UiRuntimePreparedFrameResource::default();
     let target = UiRuntimeFramePublicationTarget::default();
     let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
     let mut publications = UiRuntimeFramePublicationResource::default();
@@ -99,6 +118,7 @@ fn ui_render_publication_missing_evaluation_records_report_and_diagnostic() {
     let previous_report = publish_latest_ui_runtime_frame(
         &previous_runtime,
         &target,
+        &previous_prepared_frames,
         &mut submissions,
         &mut publications,
         &mut trace,
@@ -114,6 +134,7 @@ fn ui_render_publication_missing_evaluation_records_report_and_diagnostic() {
     let report = publish_latest_ui_runtime_frame(
         &runtime,
         &target,
+        &prepared_frames,
         &mut submissions,
         &mut publications,
         &mut trace,
@@ -156,11 +177,60 @@ fn ui_render_publication_missing_evaluation_records_report_and_diagnostic() {
 }
 
 #[test]
+fn ui_render_publication_missing_prepared_frame_records_report_and_diagnostic() {
+    let runtime = evaluated_counter_runtime("Clicked 2 / 5", 2);
+    let prepared_frames = UiRuntimePreparedFrameResource::default();
+    let target = UiRuntimeFramePublicationTarget::default();
+    let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
+    let mut publications = UiRuntimeFramePublicationResource::default();
+    let mut trace = UiRuntimeTraceResource::default();
+    let mut diagnostics = UiRuntimeDiagnosticsResource::default();
+
+    let report = publish_latest_ui_runtime_frame(
+        &runtime,
+        &target,
+        &prepared_frames,
+        &mut submissions,
+        &mut publications,
+        &mut trace,
+        &mut diagnostics,
+    );
+
+    assert!(!report.is_published());
+    assert_eq!(
+        report.status(),
+        UiRuntimeFramePublicationStatus::MissingPreparedFrame
+    );
+    assert_eq!(report.primitive_count(), 0);
+    assert!(submissions.is_empty());
+    assert_eq!(publications.latest_report(), Some(&report));
+    assert_eq!(diagnostics.len(), 1);
+
+    let diagnostic = &diagnostics.entries()[0];
+    assert_eq!(
+        diagnostic.code,
+        UiRuntimeDiagnosticCode::FramePublicationRejected
+    );
+    let frame_publication = diagnostic
+        .frame_publication
+        .as_ref()
+        .expect("missing prepared frame should record publication diagnostic facts");
+    assert_eq!(
+        frame_publication.failure_reason,
+        UiRuntimeFramePublicationFailureReason::MissingPreparedFrame
+    );
+    assert_frame_trace_contains(&trace, UiRuntimeTraceEventKind::UiFramePublished, &report);
+}
+
+#[test]
 fn ui_render_publication_prepares_payload_when_plugins_run_render_prepare() {
     let mut app = App::headless();
     app.add_plugin(RenderPlugin);
     app.add_plugin(UiPlugin);
-    app.insert_resource(evaluated_counter_runtime("Clicked 3 / 5", 3));
+    let runtime = evaluated_counter_runtime("Clicked 3 / 5", 3);
+    let prepared_frames = prepared_frames_for_runtime(&runtime);
+    app.insert_resource(runtime);
+    app.insert_resource(prepared_frames);
 
     let app = app
         .run_for_frames(1)
@@ -202,6 +272,7 @@ fn ui_render_publication_prepares_payload_when_plugins_run_render_prepare() {
 #[test]
 fn ui_render_publication_can_feed_prepare_resource_directly() {
     let runtime = evaluated_counter_runtime("Clicked 4 / 5", 4);
+    let prepared_frames = prepared_frames_for_runtime(&runtime);
     let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
     let mut publications = UiRuntimeFramePublicationResource::default();
     let mut trace = UiRuntimeTraceResource::default();
@@ -211,6 +282,7 @@ fn ui_render_publication_can_feed_prepare_resource_directly() {
     let report = publish_latest_ui_runtime_frame(
         &runtime,
         &target,
+        &prepared_frames,
         &mut submissions,
         &mut publications,
         &mut trace,
@@ -257,6 +329,37 @@ fn evaluated_counter_runtime(text: &str, revision: u64) -> UiRuntimeEvaluationRe
     assert!(report.frame_payload().primitive_count() > 0);
     assert!(diagnostics.is_empty(), "{:?}", diagnostics.entries());
     runtime
+}
+
+fn prepared_frames_for_runtime(
+    runtime: &UiRuntimeEvaluationResource,
+) -> UiRuntimePreparedFrameResource {
+    let evaluation = runtime
+        .latest_report()
+        .expect("evaluation should produce report");
+    let mut prepared_frames = UiRuntimePreparedFrameResource::default();
+    prepared_frames.record_frame(
+        UiRuntimePreparedFrameRecord::new(evaluation, publication_test_frame())
+            .with_content_evidence(["Counter output"], ["counter.increment"]),
+    );
+    prepared_frames
+}
+
+fn publication_test_frame() -> UiFrame {
+    UiFrame::with_surfaces(vec![UiSurface::with_layers(
+        UiSurfaceId(0),
+        UiSize::new(320.0, 200.0),
+        vec![UiLayer::with_primitives(
+            UiLayerId(0),
+            vec![UiPrimitive::Rect(RectPrimitive::new(
+                UiRect::new(12.0, 16.0, 96.0, 32.0),
+                2.0,
+                UiPaint::rgba(0.2, 0.3, 0.4, 1.0),
+                UiDrawKey::new(99, None),
+                UiSortKey::new(0, 0, 7),
+            ))],
+        )],
+    )])
 }
 
 fn counter_evaluation_input() -> UiRuntimeEvaluationInput {

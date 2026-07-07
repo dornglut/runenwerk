@@ -3,6 +3,8 @@ use ui_surface::{
     SurfaceHostInstanceId, SurfaceInstanceId,
 };
 
+use ui_render_data::{UiFrame, UiFrameOutputSummary};
+
 use super::{
     UiMountRecord, UiMountReport, UiMountRequest, UiMountSource, UiMountedSessionRecord,
     UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeDirtyCause, UiRuntimeDirtyRecord,
@@ -229,6 +231,116 @@ impl UiMountRequestsResource {
         let id = self.next_session_scope_id;
         self.next_session_scope_id = self.next_session_scope_id.saturating_add(1);
         id
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UiRuntimePreparedFrameRecord {
+    runtime_id: String,
+    source_id: String,
+    program_id: String,
+    frame_revision: u64,
+    frame: UiFrame,
+    frame_summary: UiFrameOutputSummary,
+    content_labels: Vec<String>,
+    interactive_routes: Vec<String>,
+}
+
+impl UiRuntimePreparedFrameRecord {
+    pub fn new(evaluation: &UiRuntimeEvaluationReport, frame: UiFrame) -> Self {
+        let frame_summary = UiFrameOutputSummary::from_frame(&frame);
+        Self {
+            runtime_id: evaluation.runtime_id().to_owned(),
+            source_id: evaluation.source().source_id().to_owned(),
+            program_id: evaluation.source().program_id().to_owned(),
+            frame_revision: evaluation.frame_payload().frame_revision(),
+            frame,
+            frame_summary,
+            content_labels: Vec::new(),
+            interactive_routes: Vec::new(),
+        }
+    }
+
+    pub fn with_content_evidence(
+        mut self,
+        labels: impl IntoIterator<Item = impl Into<String>>,
+        routes: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.content_labels = labels.into_iter().map(Into::into).collect();
+        self.interactive_routes = routes.into_iter().map(Into::into).collect();
+        self
+    }
+
+    pub fn runtime_id(&self) -> &str {
+        &self.runtime_id
+    }
+
+    pub fn source_id(&self) -> &str {
+        &self.source_id
+    }
+
+    pub fn program_id(&self) -> &str {
+        &self.program_id
+    }
+
+    pub fn frame_revision(&self) -> u64 {
+        self.frame_revision
+    }
+
+    pub fn frame(&self) -> &UiFrame {
+        &self.frame
+    }
+
+    pub fn frame_summary(&self) -> &UiFrameOutputSummary {
+        &self.frame_summary
+    }
+
+    pub fn primitive_count(&self) -> usize {
+        self.frame_summary.primitive_count as usize
+    }
+
+    pub fn content_labels(&self) -> &[String] {
+        &self.content_labels
+    }
+
+    pub fn interactive_routes(&self) -> &[String] {
+        &self.interactive_routes
+    }
+
+    fn matches_evaluation(&self, evaluation: &UiRuntimeEvaluationReport) -> bool {
+        self.runtime_id == evaluation.runtime_id()
+            && self.source_id == evaluation.source().source_id()
+            && self.program_id == evaluation.source().program_id()
+            && self.frame_revision == evaluation.frame_payload().frame_revision()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
+pub struct UiRuntimePreparedFrameResource {
+    records: Vec<UiRuntimePreparedFrameRecord>,
+}
+
+impl UiRuntimePreparedFrameResource {
+    pub fn records(&self) -> &[UiRuntimePreparedFrameRecord] {
+        &self.records
+    }
+
+    pub fn latest_record(&self) -> Option<&UiRuntimePreparedFrameRecord> {
+        self.records.last()
+    }
+
+    pub fn latest_for_evaluation(
+        &self,
+        evaluation: &UiRuntimeEvaluationReport,
+    ) -> Option<&UiRuntimePreparedFrameRecord> {
+        self.records
+            .iter()
+            .rev()
+            .find(|record| record.matches_evaluation(evaluation))
+    }
+
+    pub fn record_frame(&mut self, record: UiRuntimePreparedFrameRecord) {
+        self.records.push(record);
     }
 }
 

@@ -3,47 +3,62 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use engine::plugins::render::RenderPlugin;
+use engine::plugins::ScenePlugin;
+use engine::plugins::render::{
+    DEFAULT_EDITOR_FONT_ID, RenderFlow, RenderPlugin, UiFontAtlasResource,
+};
 use engine::plugins::ui::{
     IntoUi, UiAction, UiActionDispatchReportsResource, UiActionEvent, UiActionHandler,
     UiHostActionExecutor, UiHostMutationIntent, UiHostMutationReceipt, UiHostMutationRejection,
     UiMountRequest, UiMountRequestsResource, UiPlugin, UiRuntimeDiagnosticsResource,
     UiRuntimeEvaluationInput, UiRuntimeEvaluationResource, UiRuntimeFramePublicationStatus,
-    UiRuntimeSet, UiRuntimeTraceEvent, UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen,
+    UiRuntimePreparedFrameRecord, UiRuntimePreparedFrameResource, UiRuntimeSet,
+    UiRuntimeTraceEvent, UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen,
     UiTypedActionDescriptor, UiTypedActionId, UiTypedScreenId, UiTypedSource, dispatch_ui_action,
 };
 use engine::prelude::{
     App, AppUiExt, InputState, Plugin, RenderPrepare, Res, ResMut, SystemConfigExt, Update,
-    default_plugins,
+    WindowState, default_plugins,
 };
 use serde::{Deserialize, Serialize};
 use ui_binding::HostDataSnapshot;
-use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistry, runenwerk_control_package};
+use ui_controls::{
+    BUTTON_CONTROL_KIND_ID, ControlPackageRegistry, LABEL_CONTROL_KIND_ID,
+    runenwerk_control_package,
+};
 use ui_definition::{
     AuthoredBindingRef, AuthoredControlAccessibilityDefinition, AuthoredControlKindId,
-    AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition, UiValueBinding,
+    AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition,
 };
 use ui_evaluator::UiEvaluationContext;
 use ui_hosts::{DomainCommand, GameHost, HostCommand, HostKind, HostRouteMapVersion};
+use ui_math::{UiPoint, UiRect, UiSize};
 use ui_program::{
     RouteCapability, RouteId, RouteSchemaVersion, UiEventPacket, UiEventSourceControlId,
     UiProgramSourceId,
 };
+use ui_render_data::{UiFrameOutputSummary, UiPrimitive};
+use ui_render_primitives::UiRenderPrimitiveReport;
+use ui_runtime_view::{ButtonRuntimeHostData, UiRuntimeView};
 use ui_schema::{UiSchemaRef, UiSchemaValue};
+use ui_theme::ThemeTokens;
 use winit::keyboard::KeyCode;
 
 pub const WINDOW_TITLE: &str = "Runenwerk UI Counter Runtime";
 pub const COUNTER_SCREEN_ID: &str = "counter.runtime.screen";
 pub const COUNTER_SOURCE_ID: &str = "counter.runtime.screen.source";
 pub const COUNTER_VALUE_ENDPOINT: &str = "counter.value.text";
-pub const COUNTER_VALUE_STATE_KEY: &str = "state.counter.value.selected";
+pub const COUNTER_VALUE_STATE_KEY: &str = "state.counter.value.text";
 pub const TRACE_STATUS_ENDPOINT: &str = "counter.trace.status";
-pub const TRACE_STATUS_STATE_KEY: &str = "state.counter.trace.status.selected";
+pub const TRACE_STATUS_STATE_KEY: &str = "state.counter.trace.status.text";
 
 const ROUTE_MAP_VERSION: HostRouteMapVersion = HostRouteMapVersion::new(1);
 const ACTION_SCHEMA_VERSION: RouteSchemaVersion = RouteSchemaVersion::new(1);
 const COUNTER_ACTION_PAYLOAD_SCHEMA_ID: &str = "counter.action.payload";
 const COUNTER_ACTION_CAPABILITY_PREFIX: &str = "counter.action";
+const COUNTER_MAIN_FLOW_ID: &str = "runenwerk.counter.main";
+const COUNTER_SURFACE_CLEAR_PASS_ID: &str = "runenwerk.counter.surface.clear";
+const COUNTER_UI_PASS_ID: &str = "runenwerk.counter.main.ui";
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CounterActionKind {
@@ -81,6 +96,14 @@ impl CounterActionKind {
         }
     }
 
+    pub const fn trace_label(self) -> &'static str {
+        match self {
+            Self::Increment => "+",
+            Self::Decrement => "-",
+            Self::Reset => "Reset",
+        }
+    }
+
     pub const fn input_action(self) -> &'static str {
         match self {
             Self::Increment => "counter.increment",
@@ -105,6 +128,7 @@ impl CounterActionKind {
 #[serde(rename_all = "snake_case")]
 pub enum CounterActionSource {
     HumanKeyboard,
+    HumanPointer,
     AgentScript,
 }
 
@@ -112,9 +136,18 @@ impl CounterActionSource {
     fn source_control_id(self, kind: CounterActionKind) -> UiEventSourceControlId {
         let source = match self {
             Self::HumanKeyboard => "keyboard",
+            Self::HumanPointer => "pointer",
             Self::AgentScript => "agent-script",
         };
         UiEventSourceControlId::new(format!("{source}.{}", kind.domain_command()))
+    }
+
+    fn trace_label(self) -> &'static str {
+        match self {
+            Self::HumanKeyboard => "Key",
+            Self::HumanPointer => "Pointer",
+            Self::AgentScript => "Agent",
+        }
     }
 }
 
@@ -258,9 +291,16 @@ impl CounterRuntimeState {
         self.action_history.push(record);
     }
 
+    fn visible_status_line(&self) -> String {
+        let Some(record) = self.action_history.last() else {
+            return "Status: Ready".to_owned();
+        };
+        format!("Status: {}", record.action.trace_label())
+    }
+
     fn trace_lines(&self) -> Vec<String> {
         if self.action_history.is_empty() {
-            return vec!["No counter actions yet".to_owned()];
+            return vec!["Trace empty".to_owned()];
         }
 
         self.action_history
@@ -269,9 +309,9 @@ impl CounterRuntimeState {
             .take(4)
             .map(|record| {
                 format!(
-                    "{:?} {} {} -> {}",
-                    record.source,
-                    record.action.label(),
+                    "{} {} {}>{}",
+                    record.source.trace_label(),
+                    record.action.trace_label(),
                     record.before,
                     record.after
                 )
@@ -333,6 +373,139 @@ impl Default for CounterAgentScriptResource {
     fn default() -> Self {
         Self::new(CounterAgentScript::default())
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CounterVisibleControl {
+    control_id: String,
+    label: String,
+    route: Option<String>,
+    action: Option<CounterActionKind>,
+    bounds: UiRect,
+}
+
+impl CounterVisibleControl {
+    pub fn control_id(&self) -> &str {
+        &self.control_id
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn route(&self) -> Option<&str> {
+        self.route.as_deref()
+    }
+
+    pub fn action(&self) -> Option<CounterActionKind> {
+        self.action
+    }
+
+    pub fn bounds(&self) -> UiRect {
+        self.bounds
+    }
+
+    pub fn center_point(&self) -> (f32, f32) {
+        (
+            self.bounds.x + self.bounds.width * 0.5,
+            self.bounds.y + self.bounds.height * 0.5,
+        )
+    }
+
+    fn contains(&self, position: (f32, f32)) -> bool {
+        self.bounds.contains(UiPoint::new(position.0, position.1))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, ecs::Resource)]
+pub struct CounterVisibleUiResource {
+    frame_revision: Option<u64>,
+    frame_summary: Option<UiFrameOutputSummary>,
+    labels: Vec<String>,
+    controls: Vec<CounterVisibleControl>,
+    render_diagnostics: Vec<String>,
+}
+
+impl CounterVisibleUiResource {
+    pub fn frame_revision(&self) -> Option<u64> {
+        self.frame_revision
+    }
+
+    pub fn frame_summary(&self) -> Option<&UiFrameOutputSummary> {
+        self.frame_summary.as_ref()
+    }
+
+    pub fn labels(&self) -> &[String] {
+        &self.labels
+    }
+
+    pub fn controls(&self) -> &[CounterVisibleControl] {
+        &self.controls
+    }
+
+    pub fn render_diagnostics(&self) -> &[String] {
+        &self.render_diagnostics
+    }
+
+    pub fn control_for_action(&self, action: CounterActionKind) -> Option<&CounterVisibleControl> {
+        self.controls
+            .iter()
+            .find(|control| control.action == Some(action))
+    }
+
+    fn hit_test(&self, position: (f32, f32)) -> Option<&CounterVisibleControl> {
+        self.controls
+            .iter()
+            .find(|control| control.action.is_some() && control.contains(position))
+    }
+
+    fn replace_with_render_report(
+        &mut self,
+        evaluation: &engine::plugins::ui::UiRuntimeEvaluationReport,
+        report: &UiRenderPrimitiveReport,
+    ) {
+        let frame_summary = report.frame().map(UiFrameOutputSummary::from_frame);
+        self.frame_revision = Some(evaluation.frame_payload().frame_revision());
+        self.frame_summary = frame_summary;
+        self.labels = report
+            .button_report()
+            .buttons
+            .iter()
+            .map(|button| button.label.clone())
+            .collect();
+        self.controls = controls_from_render_report(report);
+        self.render_diagnostics = report
+            .diagnostics()
+            .iter()
+            .map(|diagnostic| format!("{}: {}", diagnostic.code, diagnostic.message))
+            .collect();
+    }
+
+    fn record_render_failure(
+        &mut self,
+        evaluation: &engine::plugins::ui::UiRuntimeEvaluationReport,
+        report: &UiRenderPrimitiveReport,
+    ) {
+        self.frame_revision = Some(evaluation.frame_payload().frame_revision());
+        self.frame_summary = None;
+        self.labels = report
+            .button_report()
+            .buttons
+            .iter()
+            .map(|button| button.label.clone())
+            .collect();
+        self.controls.clear();
+        self.render_diagnostics = report
+            .diagnostics()
+            .iter()
+            .map(|diagnostic| format!("{}: {}", diagnostic.code, diagnostic.message))
+            .collect();
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, ecs::Resource)]
+struct CounterPointerPressResource {
+    pressed_action: Option<CounterActionKind>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -485,10 +658,28 @@ pub fn build_counter_app(options: CounterRuntimeOptions) -> Result<App> {
         headless: options.headless,
     });
     app.add_plugins(default_plugins());
+    app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
+    register_counter_render_flow(&mut app);
     app.add_plugin(UiPlugin);
     app.add_plugin(CounterPlugin::new(options.agent_script));
     Ok(app)
+}
+
+fn register_counter_render_flow(app: &mut App) {
+    let flow = RenderFlow::new(COUNTER_MAIN_FLOW_ID)
+        .with_surface_color()
+        .fullscreen_pass(COUNTER_SURFACE_CLEAR_PASS_ID)
+        .main_surface_only()
+        .write_surface_color()
+        .finish()
+        .builtin_ui_composite_pass(COUNTER_UI_PASS_ID)
+        .main_surface_only()
+        .depends_on(COUNTER_SURFACE_CLEAR_PASS_ID)
+        .finish()
+        .validate()
+        .expect("counter render flow should validate");
+    app.add_render_flow(flow);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -506,6 +697,8 @@ impl Plugin for CounterPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Counter>();
         app.init_resource::<CounterRuntimeState>();
+        app.init_resource::<CounterVisibleUiResource>();
+        app.init_resource::<CounterPointerPressResource>();
         app.init_resource::<UiActionDispatchReportsResource>();
         app.insert_resource(CounterAgentScriptResource::new(self.agent_script.clone()));
         app.mount_ui(CounterScreen::default());
@@ -530,6 +723,8 @@ impl Plugin for CounterPlugin {
 
 fn dispatch_counter_actions_system(
     input: Res<InputState>,
+    visible_ui: Res<CounterVisibleUiResource>,
+    mut pointer_press: ResMut<CounterPointerPressResource>,
     mut counter: ResMut<Counter>,
     mut runtime_state: ResMut<CounterRuntimeState>,
     mut script: ResMut<CounterAgentScriptResource>,
@@ -548,6 +743,23 @@ fn dispatch_counter_actions_system(
                 action,
             }),
     );
+    if let Some(pointer_press_transition) = input.left_mouse_pressed_transition() {
+        pointer_press.pressed_action = visible_ui
+            .hit_test(pointer_press_transition.position)
+            .and_then(CounterVisibleControl::action);
+    }
+    if let Some(pointer_release) = input.left_mouse_released_transition() {
+        let released_action = visible_ui
+            .hit_test(pointer_release.position)
+            .and_then(CounterVisibleControl::action);
+        if released_action.is_some() && released_action == pointer_press.pressed_action {
+            invocations.push(CounterActionInvocation {
+                source: CounterActionSource::HumanPointer,
+                action: released_action.expect("action checked above"),
+            });
+        }
+        pointer_press.pressed_action = None;
+    }
 
     let surface_instance_id = mounts
         .mounted_sessions()
@@ -627,6 +839,7 @@ fn counter_event_packet(invocation: CounterActionInvocation) -> UiEventPacket {
                 "source",
                 UiSchemaValue::string(match invocation.source {
                     CounterActionSource::HumanKeyboard => "human_keyboard",
+                    CounterActionSource::HumanPointer => "human_pointer",
                     CounterActionSource::AgentScript => "agent_script",
                 }),
             ),
@@ -717,19 +930,47 @@ fn evaluate_counter_screen_system(
     counter: Res<Counter>,
     runtime_state: Res<CounterRuntimeState>,
     mounts: Res<UiMountRequestsResource>,
+    window: Res<WindowState>,
+    font_atlas: Res<UiFontAtlasResource>,
     mut runtime: ResMut<UiRuntimeEvaluationResource>,
+    mut prepared_frames: ResMut<UiRuntimePreparedFrameResource>,
+    mut visible_ui: ResMut<CounterVisibleUiResource>,
     mut trace: ResMut<UiRuntimeTraceResource>,
     mut diagnostics: ResMut<UiRuntimeDiagnosticsResource>,
 ) {
     let input = counter_evaluation_input(&*counter, &*runtime_state);
+    let runtime_view_report = UiRuntimeView::from_artifact_report(input.artifact());
     let mounted_session = mounts.mounted_sessions().first();
-    runtime.evaluate(
+    let evaluation = runtime.evaluate(
         &input,
         mounted_session,
         counter_evaluation_context(&*counter, &*runtime_state),
         &mut *trace,
         &mut *diagnostics,
     );
+
+    let render_report = UiRenderPrimitiveReport::from_runtime_view_report_with_host_data(
+        &runtime_view_report,
+        counter_viewport(&window),
+        &ThemeTokens::default(),
+        &*font_atlas,
+        DEFAULT_EDITOR_FONT_ID,
+        &ButtonRuntimeHostData::default(),
+    );
+    if let Some(frame) = render_report.frame().cloned() {
+        visible_ui.replace_with_render_report(&evaluation, &render_report);
+        prepared_frames.record_frame(
+            UiRuntimePreparedFrameRecord::new(&evaluation, frame).with_content_evidence(
+                visible_ui.labels().iter().cloned(),
+                visible_ui
+                    .controls()
+                    .iter()
+                    .filter_map(|control| control.route().map(str::to_owned)),
+            ),
+        );
+    } else {
+        visible_ui.record_render_failure(&evaluation, &render_report);
+    }
 }
 
 pub fn counter_evaluation_input(
@@ -763,6 +1004,13 @@ fn counter_evaluation_context(
         ))
 }
 
+fn counter_viewport(window: &WindowState) -> UiSize {
+    UiSize::new(
+        window.size_px.0.max(320) as f32,
+        window.size_px.1.max(240) as f32,
+    )
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CounterScreen {
     value_text: String,
@@ -772,10 +1020,11 @@ pub struct CounterScreen {
 
 impl Default for CounterScreen {
     fn default() -> Self {
+        let runtime_state = CounterRuntimeState::default();
         Self {
             value_text: Counter::default().display_text(),
-            status: CounterRuntimeState::default().status,
-            trace_lines: CounterRuntimeState::default().trace_lines(),
+            status: runtime_state.visible_status_line(),
+            trace_lines: runtime_state.trace_lines(),
         }
     }
 }
@@ -784,7 +1033,7 @@ impl CounterScreen {
     fn from_state(counter: &Counter, runtime_state: &CounterRuntimeState) -> Self {
         Self {
             value_text: counter.display_text(),
-            status: runtime_state.status().to_owned(),
+            status: runtime_state.visible_status_line(),
             trace_lines: runtime_state.trace_lines(),
         }
     }
@@ -806,10 +1055,12 @@ impl UiScreen for CounterScreen {
             .trace_lines
             .iter()
             .enumerate()
-            .map(|(index, line)| UiNodeDefinition::Label {
-                id: AuthoredId::new(format!("counter.trace.line.{index}")),
-                label: UiValueBinding::static_text(line),
-                availability: None,
+            .map(|(index, line)| {
+                visible_text_control(
+                    format!("counter.trace.line.{index}.visible"),
+                    line,
+                    "Counter trace history line",
+                )
             })
             .collect::<Vec<_>>();
 
@@ -819,17 +1070,22 @@ impl UiScreen for CounterScreen {
             UiNodeDefinition::Column {
                 id: AuthoredId::new("counter.root"),
                 children: vec![
-                    UiNodeDefinition::Label {
-                        id: AuthoredId::new("counter.title"),
-                        label: UiValueBinding::static_text(WINDOW_TITLE),
-                        availability: None,
-                    },
-                    UiNodeDefinition::Label {
-                        id: AuthoredId::new("counter.value.label"),
-                        label: UiValueBinding::static_text(&self.value_text),
-                        availability: None,
-                    },
-                    counter_output_control(),
+                    visible_text_control(
+                        "counter.title.visible",
+                        "Runenwerk Counter",
+                        "Counter screen title",
+                    ),
+                    visible_text_control(
+                        "counter.runtime.visible",
+                        "Runtime UI",
+                        "Counter runtime path label",
+                    ),
+                    visible_text_control(
+                        "counter.value.visible",
+                        &self.value_text,
+                        "Current counter value",
+                    ),
+                    counter_output_state_control(&self.value_text),
                     UiNodeDefinition::Row {
                         id: AuthoredId::new("counter.actions"),
                         children: CounterActionKind::all()
@@ -837,12 +1093,13 @@ impl UiScreen for CounterScreen {
                             .map(counter_action_control)
                             .collect(),
                     },
-                    UiNodeDefinition::Label {
-                        id: AuthoredId::new("counter.status.label"),
-                        label: UiValueBinding::static_text(&self.status),
-                        availability: None,
-                    },
-                    counter_status_control(),
+                    visible_text_control(
+                        "counter.status.visible",
+                        &self.status,
+                        "Counter runtime status",
+                    ),
+                    counter_status_state_control(&self.status),
+                    visible_text_control("counter.trace.title.visible", "Trace", "Trace history"),
                     UiNodeDefinition::Column {
                         id: AuthoredId::new("counter.trace"),
                         children: trace_children,
@@ -853,54 +1110,95 @@ impl UiScreen for CounterScreen {
     }
 }
 
-fn counter_output_control() -> UiNodeDefinition {
+fn visible_text_control(
+    id: impl Into<String>,
+    label: impl Into<String>,
+    accessibility_label: impl Into<String>,
+) -> UiNodeDefinition {
     let mut properties = BTreeMap::new();
     properties.insert(
         "label".to_owned(),
-        AuthoredControlValue::String("Counter value".to_owned()),
+        AuthoredControlValue::String(label.into()),
+    );
+    properties.insert(
+        "density".to_owned(),
+        AuthoredControlValue::String("spacious".to_owned()),
+    );
+    properties.insert(
+        "size".to_owned(),
+        AuthoredControlValue::String("xs".to_owned()),
+    );
+    properties.insert(
+        "variant".to_owned(),
+        AuthoredControlValue::String("primary".to_owned()),
+    );
+    properties.insert(
+        "tone".to_owned(),
+        AuthoredControlValue::String("accent".to_owned()),
+    );
+
+    UiNodeDefinition::Control {
+        id: AuthoredId::new(id),
+        kind: AuthoredControlKindId::new(BUTTON_CONTROL_KIND_ID),
+        properties,
+        bindings: BTreeMap::new(),
+        route: None,
+        accessibility: Some(AuthoredControlAccessibilityDefinition {
+            role: "label".to_owned(),
+            label: Some(accessibility_label.into()),
+        }),
+        children: Vec::new(),
+    }
+}
+
+fn counter_output_state_control(text: &str) -> UiNodeDefinition {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "text".to_owned(),
+        AuthoredControlValue::String(text.to_owned()),
     );
 
     let mut bindings = BTreeMap::new();
     bindings.insert(
-        "selected".to_owned(),
+        "text".to_owned(),
         AuthoredBindingRef::new(COUNTER_VALUE_ENDPOINT),
     );
 
     UiNodeDefinition::Control {
         id: AuthoredId::new("counter.value"),
-        kind: AuthoredControlKindId::new(BUTTON_CONTROL_KIND_ID),
+        kind: AuthoredControlKindId::new(LABEL_CONTROL_KIND_ID),
         properties,
         bindings,
         route: None,
         accessibility: Some(AuthoredControlAccessibilityDefinition {
-            role: "button".to_owned(),
+            role: "label".to_owned(),
             label: Some("Counter value".to_owned()),
         }),
         children: Vec::new(),
     }
 }
 
-fn counter_status_control() -> UiNodeDefinition {
+fn counter_status_state_control(text: &str) -> UiNodeDefinition {
     let mut properties = BTreeMap::new();
     properties.insert(
-        "label".to_owned(),
-        AuthoredControlValue::String("Counter status".to_owned()),
+        "text".to_owned(),
+        AuthoredControlValue::String(text.to_owned()),
     );
 
     let mut bindings = BTreeMap::new();
     bindings.insert(
-        "selected".to_owned(),
+        "text".to_owned(),
         AuthoredBindingRef::new(TRACE_STATUS_ENDPOINT),
     );
 
     UiNodeDefinition::Control {
         id: AuthoredId::new("counter.trace.status"),
-        kind: AuthoredControlKindId::new(BUTTON_CONTROL_KIND_ID),
+        kind: AuthoredControlKindId::new(LABEL_CONTROL_KIND_ID),
         properties,
         bindings,
         route: None,
         accessibility: Some(AuthoredControlAccessibilityDefinition {
-            role: "button".to_owned(),
+            role: "label".to_owned(),
             label: Some("Counter runtime status".to_owned()),
         }),
         children: Vec::new(),
@@ -912,6 +1210,18 @@ fn counter_action_control(kind: CounterActionKind) -> UiNodeDefinition {
     properties.insert(
         "label".to_owned(),
         AuthoredControlValue::String(kind.label().to_owned()),
+    );
+    properties.insert(
+        "density".to_owned(),
+        AuthoredControlValue::String("spacious".to_owned()),
+    );
+    properties.insert(
+        "variant".to_owned(),
+        AuthoredControlValue::String("primary".to_owned()),
+    );
+    properties.insert(
+        "tone".to_owned(),
+        AuthoredControlValue::String("accent".to_owned()),
     );
 
     UiNodeDefinition::Control {
@@ -926,6 +1236,42 @@ fn counter_action_control(kind: CounterActionKind) -> UiNodeDefinition {
         }),
         children: Vec::new(),
     }
+}
+
+fn controls_from_render_report(report: &UiRenderPrimitiveReport) -> Vec<CounterVisibleControl> {
+    let Some(frame) = report.frame() else {
+        return Vec::new();
+    };
+    let Some(surface) = frame.surfaces.first() else {
+        return Vec::new();
+    };
+    let Some(layer) = surface.layers.first() else {
+        return Vec::new();
+    };
+
+    report
+        .button_report()
+        .buttons
+        .iter()
+        .enumerate()
+        .filter_map(|(index, button)| {
+            let rect_index = index.saturating_mul(3);
+            let Some(UiPrimitive::Rect(rect)) = layer.primitives.get(rect_index) else {
+                return None;
+            };
+            let action = button
+                .route
+                .as_deref()
+                .and_then(CounterActionKind::from_route);
+            Some(CounterVisibleControl {
+                control_id: button.control_id.clone(),
+                label: button.label.clone(),
+                route: button.route.clone(),
+                action,
+                bounds: rect.rect,
+            })
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1027,5 +1373,6 @@ fn frame_publication_status_name(status: UiRuntimeFramePublicationStatus) -> &'s
     match status {
         UiRuntimeFramePublicationStatus::Published => "published",
         UiRuntimeFramePublicationStatus::MissingRuntimeEvaluation => "missing_runtime_evaluation",
+        UiRuntimeFramePublicationStatus::MissingPreparedFrame => "missing_prepared_frame",
     }
 }

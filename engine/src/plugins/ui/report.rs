@@ -467,6 +467,7 @@ impl UiRuntimeFramePayload {
 pub enum UiRuntimeFramePublicationStatus {
     Published,
     MissingRuntimeEvaluation,
+    MissingPreparedFrame,
 }
 
 impl UiRuntimeFramePublicationStatus {
@@ -474,6 +475,7 @@ impl UiRuntimeFramePublicationStatus {
         match self {
             Self::Published => "published",
             Self::MissingRuntimeEvaluation => "missing-runtime-evaluation",
+            Self::MissingPreparedFrame => "missing-prepared-frame",
         }
     }
 
@@ -500,6 +502,7 @@ impl UiRuntimeFramePublicationReport {
         evaluation: &UiRuntimeEvaluationReport,
         producer_id: RenderFrameProducerId,
         render_surface_id: RenderSurfaceId,
+        primitive_count: usize,
     ) -> Self {
         Self {
             runtime_id: Some(evaluation.runtime_id().to_owned()),
@@ -509,7 +512,7 @@ impl UiRuntimeFramePublicationReport {
             render_surface_id,
             frame_revision: Some(evaluation.frame_payload().frame_revision()),
             dirty_causes: evaluation.dirty_causes().collect(),
-            primitive_count: evaluation.frame_payload().primitive_count(),
+            primitive_count,
             status: UiRuntimeFramePublicationStatus::Published,
         }
     }
@@ -528,6 +531,24 @@ impl UiRuntimeFramePublicationReport {
             dirty_causes: Vec::new(),
             primitive_count: 0,
             status: UiRuntimeFramePublicationStatus::MissingRuntimeEvaluation,
+        }
+    }
+
+    pub fn missing_prepared_frame(
+        evaluation: &UiRuntimeEvaluationReport,
+        producer_id: RenderFrameProducerId,
+        render_surface_id: RenderSurfaceId,
+    ) -> Self {
+        Self {
+            runtime_id: Some(evaluation.runtime_id().to_owned()),
+            source_id: Some(evaluation.source().source_id().to_owned()),
+            program_id: Some(evaluation.source().program_id().to_owned()),
+            producer_id,
+            render_surface_id,
+            frame_revision: Some(evaluation.frame_payload().frame_revision()),
+            dirty_causes: evaluation.dirty_causes().collect(),
+            primitive_count: 0,
+            status: UiRuntimeFramePublicationStatus::MissingPreparedFrame,
         }
     }
 
