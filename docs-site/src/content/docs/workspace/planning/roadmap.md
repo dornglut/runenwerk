@@ -8,6 +8,7 @@ last_reviewed: 2026-07-07
 related_docs:
   - ../workflow-lifecycle.md
   - ../../architecture/ui-framework-architecture.md
+  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
@@ -53,7 +54,7 @@ Lifecycle state: `completed`
 
 Authority: `ecs-backed-counter-ui-story-proof-planning.md`.
 
-Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records the new `domain/ui/ui_app_integration` crate, code-authored Counter and Win source records, lowering through `ui_definition` and `ui_program`, route/event evidence, route-missing diagnostics, route-resolved host mutation, ECS-backed Counter mutation, next-output text facts, positive proof flow, fail-closed cases, no callback/direct mutation bypass, no public `AppUiExt`, no engine `UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas world-space implementation, no `foundation/meta`, no `domain/app_program`, and no generic plugin framework. Detailed closeout: `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
+Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records code-authored Counter and Win source records, lowering through `ui_definition` and `ui_program`, route/event evidence, route-missing diagnostics, route-resolved host mutation, ECS-backed Counter mutation, positive proof flow, fail-closed cases, no public `AppUiExt`, no engine `UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas world-space implementation, no `foundation/meta`, no `domain/app_program`, and no generic plugin framework.
 
 Next action: Keep as completed proof evidence. Do not reopen this slice unless future inspection finds the recorded boundary was violated.
 
@@ -103,12 +104,13 @@ Authority:
 
 ```text
 ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../architecture/live-uiplugin-runtime-platform-architecture.md
 ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
 ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
 ../../architecture/ui-framework-architecture.md
 ```
 
-Evidence: This entry corrects the previous “first runtime slice” framing. The platform is planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch, runtime evaluation to frame, render publication, old scene/debug overlay migration, SurfaceFrame genericization, runnable Counter app product, and closeout/adoption lock.
+Evidence: This entry corrects the previous “first runtime slice” framing. The platform is planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch with generic runtime trace, runtime evaluation with state snapshot and invalidation, render publication, old scene/debug overlay migration/removal, SurfaceFrame genericization, source reload and persistence contract, runnable human/agent Counter app product, and closeout/adoption lock.
 
 Gate status:
 
@@ -178,7 +180,7 @@ Lifecycle state: `completed`
 
 Authority: `ui-component-platform-surface2d-design.md`.
 
-Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with the recorded Surface2D focused commands, `cargo test --workspace`, docs validation, and diff check. Detailed closeout: `../../reports/closeouts/phase-16-surface2d-closeout.md`.
+Evidence: PR #62 merged docs-only workflow, principle, decomposition, and merge-readiness hardening at merge commit `6cfb82b81aa5478496ff6cbf3fa2eea607777aaf`. PR #61 squash-merged the Phase 16 Surface2D implementation at merge commit `2e803620c91726fb599c5e5c4eee4b3984cd4a9d`. Post-merge validation from `main` passed with the recorded Surface2D focused commands, `cargo test --workspace`, docs validation, and diff check.
 
 Next action: Keep as completed dependency. Keep Phase 17 SpatialCanvas as future planning only until runtime platform planning settles its accepted implementation path.
 
