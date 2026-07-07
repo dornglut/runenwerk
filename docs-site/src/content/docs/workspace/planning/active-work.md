@@ -37,9 +37,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-005`
 
 Title: `Typed Screen / Source / Action Contracts`
 
-State: active planning only after Phase 004 completion truth. No Phase 005 implementation is authorized by this closeout record.
+State: active-implementation authorization recorded for one bounded Phase 005 PR. No runtime code is changed by this planning record.
 
-Lifecycle state: `active-planning`.
+Lifecycle state: `active-implementation` for Phase 005 only.
 
 Owner: `engine::plugins::ui` owns the engine-facing typed screen/source/action facade. Existing domain UI crates continue to own UI source, program, lowering, host, and evaluator semantics; RenderPlugin owns render preparation/submission consumption only.
 
@@ -82,9 +82,9 @@ Evidence classes: `E3` source/design/planning inspection by path, `E5` local com
 
 Complete investigation gate: complete for opening Phase 005 active planning. Phase 005 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and the Phase 004 closeout evidence.
 
-Complete design gate: complete for Phase 005 planning through the accepted cutover plan. Active implementation still requires a separate authorization record after this closeout branch merges.
+Complete design gate: complete for Phase 005 implementation through the accepted cutover plan, Phase 004 closeout, and this planning authorization record.
 
-Implementation authorization status: `active-planning-only`.
+Implementation authorization status: `active-implementation-authorized`.
 
 Phase 004 completion truth:
 
@@ -130,7 +130,7 @@ engine/Cargo.toml: selected domain/ui crate dependency additions only if justifi
 focused engine tests/examples: typed screen/source/action compile, lowering, identity, and no-mutation evidence.
 ```
 
-Maintainability review status: active-planning only. Phase 005 implementation must confirm this map before opening a branch.
+Maintainability review status: complete for Phase 005 authorization. Stop if implementation needs a broader module map than the files named here.
 
 Feature support matrix:
 
@@ -148,11 +148,10 @@ Reload/persistence: downstream Phase 013.
 Closeout/adoption lock: downstream Phase 014.
 ```
 
-Phase 005 validation expectation to finalize before implementation authorization:
+Phase 005 validation envelope from cutover and workflow authority:
 
 ```text
-focused engine tests for ui_screen / ui_source / ui_action / ui_host contracts
-comparison evidence from ui_app_integration where useful
+cargo test -p engine ui_typed
 cargo test -p engine
 python tools/docs/validate_docs.py
 git diff --check
@@ -164,9 +163,9 @@ Evidence expectation: focused engine tests/examples must prove typed screens low
 
 Stop conditions: stop if typed UI skips source/program facts, if generic controls mutate app state directly, if a new broad runtime-platform domain crate becomes necessary, or if Phase 005 requires mounted session runtime, host action dispatch, runtime trace, render publication, source reload/persistence, `apps/ui_counter_runtime`, SDF/world-space/SpatialCanvas, `foundation/meta`, `domain/app_program`, a generic plugin framework, or a render backend rewrite.
 
-Known blockers: Phase 005 implementation is not authorized until this closeout/planning branch merges and a separate active-implementation authorization confirms exact scope from accepted Markdown authority. Phase 006 and later remain blocked.
+Known blockers: no Phase 005 implementation branch has been opened or merged yet. Phase 006 and later remain blocked until Phase 005 is reviewed, merged, and completion truth is recorded.
 
-Next action: review and merge this Phase 004 closeout/planning branch. After it merges, decide whether to authorize exactly one bounded `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` implementation branch/PR. Do not write Phase 005 runtime code from this closeout branch.
+Next action: create exactly one bounded `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` implementation branch/PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 005 validation and the required docs/diff/status commands are clean.
 
 ## Active-work rules
 

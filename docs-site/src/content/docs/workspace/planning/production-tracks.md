@@ -78,13 +78,13 @@ Current blocker:
 ```text
 No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
-The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The `PT-WORKFLOW-TRACK-ORCHESTRATION-001` workflow gate is completed through PR #77 and closeout truth. `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` is completed through PR #79 and closeout truth. `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` is completed through PR #82 and closeout truth. The active runtime-platform focus is now `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` planning only.
+The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The `PT-WORKFLOW-TRACK-ORCHESTRATION-001` workflow gate is completed through PR #77 and closeout truth. `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` is completed through PR #79 and closeout truth. `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` is completed through PR #82 and closeout truth. The active runtime-platform focus is now `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` implementation authorization.
 ```
 
 Next action:
 
 ```text
-Review and merge the Phase 004 closeout/planning branch, then decide whether to authorize exactly one bounded `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` implementation PR. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
+Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` implementation PR after this planning authorization merges. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
 ```
 
 ## PT-UI-RUNTIME-PLATFORM
@@ -95,9 +95,9 @@ Title: Live UiPlugin Runtime Platform
 
 Track type: architecture / runtime platform / public API
 
-State: active planning for Phase 005
+State: active implementation authorization for Phase 005
 
-Lifecycle state: `active-planning` for `PT-UI-RUNTIME-PLATFORM-005` only
+Lifecycle state: `active-implementation` for `PT-UI-RUNTIME-PLATFORM-005` only
 
 Goal:
 
@@ -126,7 +126,7 @@ Milestones:
 Workflow gate PT-WORKFLOW-TRACK-ORCHESTRATION-001 — completed through merged PR #77 and closeout truth
 003 UiPlugin Foundation — completed through merged PR #79 and closeout truth
 004 App Mounting API — completed through merged PR #82 and closeout truth
-005 Typed Screen / Source / Action Contracts — active planning only; implementation not yet authorized
+005 Typed Screen / Source / Action Contracts — active implementation authorization; implementation PR not yet opened
 006 Mounted Surface Session Runtime — downstream implementation PR
 007 Host Action Dispatch and Runtime Trace — downstream implementation PR
 008 Runtime Evaluation, State Snapshot, and Invalidation — downstream implementation PR
@@ -143,7 +143,7 @@ Design gates:
 ```text
 Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` added render/app-engine feature mapping, runtime architecture, agent/trace requirements, producer-generic render-boundary ordering, reload/persistence decisions, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements.
 Complete design gate: completed for `PT-UI-RUNTIME-PLATFORM-002` through merged PR #76.
-Implementation authorization: Phase 005 is active-planning only in this closeout. Phase 005 implementation remains forbidden until this closeout truth merges and a separate active-implementation authorization records the exact Phase 005 scope.
+Implementation authorization: Phase 005 is authorized only for the Typed Screen / Source / Action Contracts scope recorded in `active-work.md` and `roadmap.md`. Phase 006 and later remain forbidden until Phase 005 is reviewed, merged, and completion truth is recorded.
 ```
 
 Evidence gates:
@@ -155,19 +155,19 @@ Current evidence is `E3` source/design/planning inspection by path, `E5` local c
 Current blocker:
 
 ```text
-Phase 004 is merged and closed out. Phase 005 implementation has not been authorized. Mounted sessions, host action dispatch/runtime trace, render adapter code, SurfaceFrame generic producer boundary work, overlay producer migration work, source reload/persistence implementation, runnable Counter product code, and Phases 006-014 implementation remain blocked until Phase 005 is separately authorized, reviewed, merged, and completion truth is recorded.
+Phase 004 is merged and closed out. No Phase 005 implementation PR has been opened or merged yet. Mounted sessions, host action dispatch/runtime trace, render adapter code, SurfaceFrame generic producer boundary work, overlay producer migration work, source reload/persistence implementation, runnable Counter product code, and Phases 006-014 implementation remain blocked until Phase 005 is reviewed, merged, and completion truth is recorded.
 ```
 
 Activation condition:
 
 ```text
-Phase 005 may be authorized for one bounded implementation PR only after this Phase 004 closeout/planning truth merges and the active implementation record confirms the accepted Phase 005 owner, allowed files, forbidden files, validation envelope, evidence expectation, and stop conditions.
+Phase 005 may be implemented in one bounded PR using the handoff contract in `active-work.md` and `roadmap.md`. Phase 006 may move only after Phase 005 is complete, reviewed/merged, and truthfully closed.
 ```
 
 Next action:
 
 ```text
-Review and merge the Phase 004 closeout/planning branch. Then decide whether to authorize exactly one bounded Phase 005 implementation PR. Do not implement Phase 005 or later runtime code from the closeout branch.
+Open exactly one bounded Phase 005 implementation PR after this planning authorization merges. Keep it draft until focused tests, relevant cargo validation, docs validation, diff hygiene, branch status, and diff stat are clean. Do not implement multiple runtime phases in one broad PR.
 ```
 
 ## Track shape
