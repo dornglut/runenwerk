@@ -3,8 +3,8 @@ use ui_program::RouteId;
 use ui_surface::SurfaceInstanceId;
 
 use super::{
-    UiActionDispatchFailureReason, UiRuntimeDiagnosticCode, UiTypedActionDescriptor,
-    UiTypedActionId,
+    UiActionDispatchFailureReason, UiRuntimeDiagnosticCode, UiRuntimeDirtyCause,
+    UiRuntimeSourceProgramFacts, UiTypedActionDescriptor, UiTypedActionId,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -17,17 +17,24 @@ pub enum UiRuntimeTraceEventKind {
     Mutation,
     Rejection,
     Diagnostic,
+    RuntimeEvaluation,
+    StateSnapshot,
+    Invalidation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiRuntimeTraceEvent {
     kind: UiRuntimeTraceEventKind,
-    action_id: UiTypedActionId,
-    route: RouteId,
-    host: HostKind,
+    action_id: Option<UiTypedActionId>,
+    route: Option<RouteId>,
+    host: Option<HostKind>,
     surface_instance_id: Option<SurfaceInstanceId>,
     failure_reason: Option<UiActionDispatchFailureReason>,
     diagnostic_code: Option<UiRuntimeDiagnosticCode>,
+    runtime_id: Option<String>,
+    source_id: Option<String>,
+    program_id: Option<String>,
+    dirty_cause: Option<UiRuntimeDirtyCause>,
 }
 
 impl UiRuntimeTraceEvent {
@@ -147,12 +154,74 @@ impl UiRuntimeTraceEvent {
     ) -> Self {
         Self {
             kind,
-            action_id: descriptor.action_id().clone(),
-            route,
-            host,
+            action_id: Some(descriptor.action_id().clone()),
+            route: Some(route),
+            host: Some(host),
             surface_instance_id,
             failure_reason: None,
             diagnostic_code: None,
+            runtime_id: None,
+            source_id: None,
+            program_id: None,
+            dirty_cause: None,
+        }
+    }
+
+    pub fn runtime_evaluation(
+        runtime_id: impl Into<String>,
+        facts: &UiRuntimeSourceProgramFacts,
+    ) -> Self {
+        Self::runtime_event(
+            UiRuntimeTraceEventKind::RuntimeEvaluation,
+            runtime_id,
+            facts,
+            None,
+        )
+    }
+
+    pub fn state_snapshot(
+        runtime_id: impl Into<String>,
+        facts: &UiRuntimeSourceProgramFacts,
+    ) -> Self {
+        Self::runtime_event(
+            UiRuntimeTraceEventKind::StateSnapshot,
+            runtime_id,
+            facts,
+            None,
+        )
+    }
+
+    pub fn invalidation(
+        runtime_id: impl Into<String>,
+        facts: &UiRuntimeSourceProgramFacts,
+        dirty_cause: UiRuntimeDirtyCause,
+    ) -> Self {
+        Self::runtime_event(
+            UiRuntimeTraceEventKind::Invalidation,
+            runtime_id,
+            facts,
+            Some(dirty_cause),
+        )
+    }
+
+    fn runtime_event(
+        kind: UiRuntimeTraceEventKind,
+        runtime_id: impl Into<String>,
+        facts: &UiRuntimeSourceProgramFacts,
+        dirty_cause: Option<UiRuntimeDirtyCause>,
+    ) -> Self {
+        Self {
+            kind,
+            action_id: None,
+            route: None,
+            host: None,
+            surface_instance_id: None,
+            failure_reason: None,
+            diagnostic_code: None,
+            runtime_id: Some(runtime_id.into()),
+            source_id: Some(facts.source_id().to_owned()),
+            program_id: Some(facts.program_id().to_owned()),
+            dirty_cause,
         }
     }
 
@@ -170,15 +239,15 @@ impl UiRuntimeTraceEvent {
         self.kind
     }
 
-    pub fn action_id(&self) -> &UiTypedActionId {
-        &self.action_id
+    pub fn action_id(&self) -> Option<&UiTypedActionId> {
+        self.action_id.as_ref()
     }
 
-    pub fn route(&self) -> &RouteId {
-        &self.route
+    pub fn route(&self) -> Option<&RouteId> {
+        self.route.as_ref()
     }
 
-    pub fn host(&self) -> HostKind {
+    pub fn host(&self) -> Option<HostKind> {
         self.host
     }
 
@@ -192,6 +261,22 @@ impl UiRuntimeTraceEvent {
 
     pub fn diagnostic_code(&self) -> Option<UiRuntimeDiagnosticCode> {
         self.diagnostic_code
+    }
+
+    pub fn runtime_id(&self) -> Option<&str> {
+        self.runtime_id.as_deref()
+    }
+
+    pub fn source_id(&self) -> Option<&str> {
+        self.source_id.as_deref()
+    }
+
+    pub fn program_id(&self) -> Option<&str> {
+        self.program_id.as_deref()
+    }
+
+    pub fn dirty_cause(&self) -> Option<UiRuntimeDirtyCause> {
+        self.dirty_cause
     }
 }
 

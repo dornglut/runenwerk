@@ -18,6 +18,7 @@ pub enum UiRuntimeDiagnosticCode {
     MountRequestRejected,
     TypedContractRejected,
     ActionDispatchRejected,
+    RuntimeEvaluationRejected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,6 +70,29 @@ pub struct UiActionDispatchDiagnostic {
     pub failure_reason: UiActionDispatchFailureReason,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UiRuntimeEvaluationFailureReason {
+    ArtifactDiagnostics,
+    RuntimeViewDiagnostics,
+}
+
+impl UiRuntimeEvaluationFailureReason {
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::ArtifactDiagnostics => "UI runtime artifact evaluation produced diagnostics",
+            Self::RuntimeViewDiagnostics => "UI runtime view projection produced diagnostics",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiRuntimeEvaluationDiagnostic {
+    pub runtime_id: String,
+    pub source_id: String,
+    pub program_id: String,
+    pub failure_reason: UiRuntimeEvaluationFailureReason,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiRuntimeDiagnostic {
     pub code: UiRuntimeDiagnosticCode,
@@ -77,6 +101,7 @@ pub struct UiRuntimeDiagnostic {
     pub mount: Option<UiMountDiagnostic>,
     pub typed_contract: Option<UiTypedContractDiagnostic>,
     pub action_dispatch: Option<UiActionDispatchDiagnostic>,
+    pub runtime_evaluation: Option<UiRuntimeEvaluationDiagnostic>,
 }
 
 impl UiRuntimeDiagnostic {
@@ -92,6 +117,7 @@ impl UiRuntimeDiagnostic {
             mount: None,
             typed_contract: None,
             action_dispatch: None,
+            runtime_evaluation: None,
         }
     }
 
@@ -111,6 +137,7 @@ impl UiRuntimeDiagnostic {
             }),
             typed_contract: None,
             action_dispatch: None,
+            runtime_evaluation: None,
         }
     }
 
@@ -130,6 +157,7 @@ impl UiRuntimeDiagnostic {
                 failure_reason,
             }),
             action_dispatch: None,
+            runtime_evaluation: None,
         }
     }
 
@@ -149,6 +177,29 @@ impl UiRuntimeDiagnostic {
                 action_id: action_id.into(),
                 route: route.into(),
                 host,
+                failure_reason,
+            }),
+            runtime_evaluation: None,
+        }
+    }
+
+    pub fn runtime_evaluation_rejected(
+        runtime_id: impl Into<String>,
+        source_id: impl Into<String>,
+        program_id: impl Into<String>,
+        failure_reason: UiRuntimeEvaluationFailureReason,
+    ) -> Self {
+        Self {
+            code: UiRuntimeDiagnosticCode::RuntimeEvaluationRejected,
+            severity: UiRuntimeDiagnosticSeverity::Error,
+            message: failure_reason.message(),
+            mount: None,
+            typed_contract: None,
+            action_dispatch: None,
+            runtime_evaluation: Some(UiRuntimeEvaluationDiagnostic {
+                runtime_id: runtime_id.into(),
+                source_id: source_id.into(),
+                program_id: program_id.into(),
                 failure_reason,
             }),
         }
