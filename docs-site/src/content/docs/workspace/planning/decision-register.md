@@ -193,11 +193,11 @@ Reason: The correct next step is to add the workflow layer before runtime implem
 
 Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, `completed-work.md`, `decision-register.md`, `../start-here.md`, `../authority-model.md`, `../planning/README.md`, `../routines/README.md`, `../task-cards/README.md`, `../routines/track-orchestration-routine.md`, `../task-cards/track-manager-task.md`, `../specs/README.md`, `../specs/phase-implementation-spec.md`, and `../specs/templates/phase-implementation-spec.ron`.
 
-Evidence: `AGENTS.md`, root architecture/domain/testing summaries, workspace operating model, authority model, lifecycle, implementation routine, PR review routine, phase completion drift check, roadmap update routine, planning records, PR #76 merge state, and accepted runtime-platform cutover docs.
+Evidence: `AGENTS.md`, root architecture/domain/testing summaries, workspace operating model, authority model, lifecycle, implementation routine, PR review routine, phase completion drift check, roadmap update routine, planning records, PR #76 merge state, accepted runtime-platform cutover docs, and the completion/planning alignment updates in roadmap, production-tracks, completed-work, active-work, and decision-register.
 
 Follow-up: Review and merge this docs-only workflow PR. After it merges, open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as a separate active-implementation PR using the new track orchestration routine and phase spec handoff rules.
 
-Reactivation condition: Reopen if the workflow creates a second authority source, encourages one broad implementation PR, makes phase specs replace Markdown authority, selects JSONL as the primary phase spec format, or starts validator/tooling before the spec shape is accepted.
+Reactivation condition: Reopen if the workflow creates a second authority source, encourages one broad implementation PR, makes phase specs replace Markdown authority, selects JSONL as the primary phase spec format, starts validator/tooling before the spec shape is accepted, or omits implementation-authorization fields needed for phase handoff.
 
 Supersedes: none.
 
