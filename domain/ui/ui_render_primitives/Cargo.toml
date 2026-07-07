@@ -9,6 +9,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 ui_math.workspace = true
 ui_render_data.workspace = true
 ui_runtime_view.workspace = true
+ui_schema.workspace = true
 ui_text.workspace = true
 ui_theme.workspace = true
 
