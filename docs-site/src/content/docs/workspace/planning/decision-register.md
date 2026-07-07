@@ -7,6 +7,8 @@ canonical: true
 last_reviewed: 2026-07-07
 related_docs:
   - ../workflow-lifecycle.md
+  - ../routines/track-orchestration-routine.md
+  - ../specs/phase-implementation-spec.md
   - ./ecs-backed-counter-ui-story-proof-planning.md
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
@@ -172,6 +174,32 @@ Follow-up: Review PR #76 as docs-only full cutover planning. If accepted, merge 
 Reactivation condition: Reopen this decision if review finds a missing render/app-engine feature, incomplete agent/product acceptance criterion, a preserved prior path, incomplete trace/history model, missing source reload/persistence boundary, render-boundary genericization scheduled after code depends on non-target ownership names, or a phase that cannot be handed to a simple implementation agent.
 
 Supersedes: the earlier “first runtime slice” framing after PR #74.
+
+Superseded by: none.
+
+## Track orchestration and phase spec workflow decision
+
+Date: 2026-07-07
+
+Decision: Add `PT-WORKFLOW-TRACK-ORCHESTRATION-001` as a docs-only workflow hardening step before `PT-UI-RUNTIME-PLATFORM-003` implementation begins.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-002 active-planning full-platform cutover contract draft -> PT-WORKFLOW-TRACK-ORCHESTRATION-001 active-planning workflow-hardening contract draft`.
+
+Context: PR #76 established the full Live UiPlugin Runtime Platform cutover and recorded that implementation must proceed through bounded phase PRs. Review then identified one missing workflow layer: the repo had strong routines for implementation, PR review, roadmap updates, and phase completion, but no explicit manager/orchestrator routine for a long production-track goal executed through multiple phase PRs.
+
+Options considered: start `PT-UI-RUNTIME-PLATFORM-003` immediately using the existing routines; add only a prompt/task card; add a docs-only track orchestration routine plus phase-spec handoff docs; add validator/tooling immediately.
+
+Reason: The correct next step is to add the workflow layer before runtime implementation. A one-shot track goal is valid as manager intent because it can own the whole destination, phase order, planning truth, PR readiness, and next-phase activation. It is not valid as one implementation PR because active implementation still requires one bounded phase with exact owner, scope, validation, evidence, and stop conditions. Phase specs should be RON handoff contracts derived from accepted Markdown authority, not replacements for Markdown design/process/planning truth. JSONL is reserved for append-only event/log/trace streams such as runtime traces, agent output, validation/proof logs, and a possible future track-manager execution ledger. Validator/tooling is deferred because the spec shape should be reviewed and exercised before scripts harden it.
+
+Affected planning files: `active-work.md`, `decision-register.md`, `../start-here.md`, `../authority-model.md`, `../planning/README.md`, `../routines/README.md`, `../task-cards/README.md`, `../routines/track-orchestration-routine.md`, `../task-cards/track-manager-task.md`, `../specs/README.md`, `../specs/phase-implementation-spec.md`, and `../specs/templates/phase-implementation-spec.ron`.
+
+Evidence: `AGENTS.md`, root architecture/domain/testing summaries, workspace operating model, authority model, lifecycle, implementation routine, PR review routine, phase completion drift check, roadmap update routine, planning records, PR #76 merge state, and accepted runtime-platform cutover docs.
+
+Follow-up: Review and merge this docs-only workflow PR. After it merges, open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as a separate active-implementation PR using the new track orchestration routine and phase spec handoff rules.
+
+Reactivation condition: Reopen if the workflow creates a second authority source, encourages one broad implementation PR, makes phase specs replace Markdown authority, selects JSONL as the primary phase spec format, or starts validator/tooling before the spec shape is accepted.
+
+Supersedes: none.
 
 Superseded by: none.
 
