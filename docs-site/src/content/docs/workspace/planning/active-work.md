@@ -37,9 +37,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-004`
 
 Title: `App Mounting API`
 
-State: active planning only after Phase 003 completion truth. No Phase 004 implementation is authorized by this closeout record.
+State: active-implementation authorization recorded for one bounded Phase 004 PR. No runtime code is changed by this planning record.
 
-Lifecycle state: `active-planning`.
+Lifecycle state: `active-implementation` for Phase 004 only.
 
 Owner: `engine::plugins::ui` owns the App-facing mounting API and mount-request resources. Domain UI crates continue to own UI semantics; RenderPlugin owns render preparation/submission consumption only.
 
@@ -81,9 +81,9 @@ Evidence classes: `E3` source/design/planning inspection by path, `E5` local com
 
 Complete investigation gate: complete for opening Phase 004 active planning. Phase 004 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and the Phase 003 closeout evidence.
 
-Complete design gate: complete for Phase 004 planning through the accepted cutover plan. Active implementation still requires a separate authorization record after this closeout branch merges.
+Complete design gate: complete for Phase 004 implementation through the accepted cutover plan, Phase 003 closeout, and this planning authorization record.
 
-Implementation authorization status: `active-planning-only`.
+Implementation authorization status: `active-implementation-authorized`.
 
 Phase 003 completion truth:
 
@@ -127,7 +127,7 @@ engine/src/prelude.rs: optional public export only if accepted by the Phase 004 
 focused engine tests/examples: App mounting API compile and request-recording evidence.
 ```
 
-Maintainability review status: active-planning only. Phase 004 implementation must confirm this map before opening a branch.
+Maintainability review status: complete for Phase 004 authorization. Stop if implementation needs a broader module map than the files named here.
 
 Feature support matrix:
 
@@ -160,9 +160,9 @@ Evidence expectation: focused engine tests/examples must prove the normal `app.m
 
 Stop conditions: stop if Phase 004 requires manual host adapters, manual route maps, manual render submission writes, private App internals outside the accepted API, typed screen/source/action implementation, mounted session runtime, host action dispatch, runtime trace, render publication, source reload/persistence, `apps/ui_counter_runtime`, SDF/world-space/SpatialCanvas, `foundation/meta`, `domain/app_program`, a generic plugin framework, or a render backend rewrite.
 
-Known blockers: Phase 004 implementation is not authorized until this closeout/planning branch merges and a separate active-implementation authorization confirms exact scope from accepted Markdown authority.
+Known blockers: no Phase 004 implementation branch has been opened or merged yet. Phase 005 and later remain blocked until Phase 004 is reviewed, merged, and completion truth is recorded.
 
-Next action: review and merge this Phase 003 closeout/planning branch. After it merges, decide whether to authorize exactly one bounded `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` implementation branch/PR. Do not write Phase 004 runtime code from this closeout branch.
+Next action: create exactly one bounded `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` implementation branch/PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 004 validation and the required docs/diff/status commands are clean.
 
 ## Active-work rules
 
