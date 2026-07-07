@@ -236,9 +236,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-004`
 
 Title: App Mounting API
 
-State: active implementation authorization recorded; implementation PR not yet opened
+State: completed through merged PR #82 and closeout truth
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `completed`
 
 Authority:
 
@@ -254,7 +254,7 @@ Authority:
 ../evidence-quality-taxonomy.md
 ```
 
-Planning contract from accepted cutover authority:
+Implementation contract from accepted cutover authority:
 
 ```text
 Implement public app mounting ergonomics after Phase 003 closeout truth is merged.
@@ -264,15 +264,16 @@ Mount diagnostics include screen identity, mount source, and stable failure reas
 Normal users are not exposed to route maps, event packets, host adapters, or render registries.
 ```
 
-Allowed files/crates for a future Phase 004 implementation authorization:
+Delivered files:
 
 ```text
 engine/src/plugins/ui/app_ext.rs
 engine/src/plugins/ui/mount.rs
 engine/src/plugins/ui/resources.rs
 engine/src/plugins/ui/diagnostics.rs
-engine/src/prelude.rs if accepted for public export
-focused engine tests/examples proving app.mount_ui and app.ui().mount compile
+engine/src/plugins/ui/mod.rs
+engine/src/prelude.rs
+engine/tests/ui_mount_api.rs
 ```
 
 Forbidden files/crates:
@@ -293,15 +294,98 @@ phase spec validator implementation
 any tools/docs validator or script changes
 ```
 
+Evidence:
+
+```text
+PR #82 merged into main at 9fb86f0d426385be7e425ff943c7a9d5450e1edb.
+Validation: cargo test -p engine ui_mount, cargo test -p engine, docs validation, diff hygiene, branch status, and diff stat passed before merge.
+Closeout report: ../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md.
+```
+
 Gate status:
 
 ```text
-Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 003 closeout evidence.
-Complete design gate: complete for implementation through the accepted cutover plan and Phase 003 closeout evidence.
-Implementation authorization: active for exactly one bounded Phase 004 implementation PR.
+Complete investigation gate: complete through accepted runtime-platform authority and Phase 004 closeout evidence.
+Complete design gate: complete for Phase 004 through the accepted full cutover plan and Phase 004 contract.
+Merge readiness: satisfied before PR #82 merged; no hosted checks were reported for the branch.
 ```
 
-Next action: Open exactly one bounded Phase 004 implementation branch/PR after this planning authorization merges. Keep it draft until focused Phase 004 validation and required docs/diff/status commands are clean.
+Next action: Keep Phase 004 as completed evidence. Use the closeout as the prerequisite for `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` planning.
+
+### PT-UI-RUNTIME-PLATFORM-005
+
+ID: `PT-UI-RUNTIME-PLATFORM-005`
+
+Title: Typed Screen / Source / Action Contracts
+
+State: active planning only after Phase 004 completion truth
+
+Lifecycle state: `active-planning`
+
+Authority:
+
+```text
+../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../architecture/live-uiplugin-runtime-platform-architecture.md
+../../reports/closeouts/pt-ui-runtime-platform-004-closeout.md
+../routines/track-orchestration-routine.md
+../routines/implementation-routine.md
+../complete-investigation-gate.md
+../complete-design-gate.md
+../complete-merge-readiness-gate.md
+../evidence-quality-taxonomy.md
+```
+
+Planning contract from accepted cutover authority:
+
+```text
+Typed screens lower to ui_definition-compatible source records.
+Typed source produces route/source-map facts.
+Typed action handlers emit host-owned mutation intent.
+Action identity is stable and diagnostic-friendly.
+ui_app_integration remains proof evidence, not final framework owner.
+```
+
+Allowed files/crates for a future Phase 005 implementation authorization:
+
+```text
+engine/src/plugins/ui/screen.rs
+engine/src/plugins/ui/source.rs
+engine/src/plugins/ui/action.rs
+engine/src/plugins/ui/host.rs
+engine/src/plugins/ui/diagnostics.rs
+engine/Cargo.toml dependency additions for selected domain/ui crates
+focused engine tests plus comparison evidence from ui_app_integration where useful
+```
+
+Forbidden files/crates:
+
+```text
+mounted session runtime
+host action dispatch runtime
+runtime trace implementation
+render adapter code
+SurfaceFrame generic producer boundary implementation code
+scene/debug overlay producer migration implementation code
+source reload/persistence implementation code
+apps/ui_counter_runtime implementation
+SDF/world-space/SpatialCanvas implementation
+foundation/meta
+domain/app_program
+generic plugin framework
+phase spec validator implementation
+any tools/docs validator or script changes
+```
+
+Gate status:
+
+```text
+Complete investigation gate: complete for active planning through accepted runtime-platform authority and Phase 004 closeout evidence.
+Complete design gate: complete for active planning through the accepted cutover plan.
+Implementation authorization: not yet active; requires a separate active-implementation authorization after this closeout/planning branch merges.
+```
+
+Next action: Review and merge the Phase 004 closeout/planning branch. Then decide whether to authorize exactly one bounded Phase 005 implementation PR.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
