@@ -463,6 +463,32 @@ Reactivation condition: Reopen if PR #91 completion evidence is found inaccurate
 
 Supersedes: Phase 007 Host Action Dispatch and Runtime Trace activation decision.
 
+Superseded by: Phase 008 Runtime Evaluation, State Snapshot, and Invalidation activation decision.
+
+## Phase 008 Runtime Evaluation, State Snapshot, and Invalidation activation decision
+
+Date: 2026-07-07
+
+Decision: Authorize `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` as exactly one bounded active-implementation phase after Phase 007 completion truth merged.
+
+State transition: `PT-UI-RUNTIME-PLATFORM-008 active-planning -> active-implementation`.
+
+Context: PR #92 merged Phase 007 completion truth into `main` at `7f83c02075d976ad6eb19e82408aa596cce1024f`. Active work now has the accepted Phase 008 owner, handoff contract, allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition map, and stop conditions. Activation-time source inspection confirmed that `engine` already depends on `ui_runtime` and `ui_render_data`, and that the bounded implementation may add only `ui_artifacts`, `ui_binding`, `ui_evaluator`, `ui_runtime_view`, and `ui_state` if needed for the evaluator/runtime-view path.
+
+Options considered: leave Phase 008 in active planning only; start Phase 008 implementation without updating planning; authorize one bounded Phase 008 implementation PR.
+
+Reason: The track orchestration workflow allows the next implementation phase only after the previous phase is reviewed, merged, and closeout truth is recorded. That condition is now satisfied for Phase 007. The accepted cutover plan and source inspection provide enough exact scope to authorize Phase 008 implementation without widening into Phase 009 or later.
+
+Affected planning files: `active-work.md`, `roadmap.md`, `production-tracks.md`, and `decision-register.md`.
+
+Evidence: `E3` source/design/planning inspection by path, `E6` PR #92 merge metadata, `E8` accepted architecture/workflow/planning authority, and Phase 007 closeout evidence in `../../reports/closeouts/pt-ui-runtime-platform-007-closeout.md`.
+
+Follow-up: Open exactly one bounded `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` implementation PR from current `main`. Keep the PR draft until focused Phase 008 validation and required docs/diff/status commands are clean.
+
+Reactivation condition: Reopen if Phase 008 implementation needs scope outside the accepted runtime evaluation/snapshot/invalidation contract, if frame output skips source/program/evaluator evidence, if renderer primitives become UI source truth, if render publication enters the PR, or if planning drifts from merged code again.
+
+Supersedes: Phase 007 Host Action Dispatch and Runtime Trace completion and Phase 008 planning decision.
+
 Superseded by: none.
 
 ## Lifecycle rule

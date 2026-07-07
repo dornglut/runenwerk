@@ -41,9 +41,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-008`
 
 Title: `Runtime Evaluation, State Snapshot, and Invalidation`
 
-State: active planning only after Phase 007 completion truth. No Phase 008 implementation PR is authorized by this record.
+State: active-implementation authorization recorded for one bounded Phase 008 PR. No runtime code is changed by this planning record.
 
-Lifecycle state: `active-planning` for Phase 008 only.
+Lifecycle state: `active-implementation` for Phase 008 only.
 
 Owner: `engine::plugins::ui` owns the generic runtime evaluation, UI session snapshot, invalidation, reports, diagnostics, and trace records. Existing evaluator/runtime-view/render-data owners remain the source for their contracts. Host/app owners still own app-state mutation. RenderPlugin remains outside runtime evaluation ownership and consumes only downstream published render frames.
 
@@ -85,13 +85,13 @@ docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architect
 docs-site/src/content/docs/architecture/ui-framework-architecture.md
 ```
 
-Evidence classes: `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 007, `E6` PR #91 merge/check metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment in the closeout report.
+Evidence classes: `E3` source/design/planning inspection by path, `E6` PR #92 merge/check metadata, and `E8` accepted architecture/workflow/planning authority. Phase 007 implementation completion remains backed by `E5` local command validation and `E9` code/test plus validation plus authority alignment in the closeout report.
 
-Complete investigation gate: complete for Phase 008 active planning through the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, and Phase 007 closeout evidence. A separate Phase 008 activation record must re-check exact dependencies and focused tests before implementation.
+Complete investigation gate: complete for opening Phase 008 active implementation. Phase 008 inherits the completed `PT-UI-RUNTIME-PLATFORM-001` investigation, the `PT-UI-RUNTIME-PLATFORM-002` render/app-engine feature mapping, Phase 007 closeout evidence, and activation-time source inspection of existing evaluator/runtime-view/render-data contracts.
 
-Complete design gate: complete for Phase 008 active planning through the accepted cutover plan, architecture record, and Phase 007 closeout. Implementation remains blocked until a separate active-implementation decision records exact scope, owner checks, validation, evidence expectation, stop conditions, principle compliance, and module decomposition.
+Complete design gate: complete for Phase 008 implementation through the accepted cutover plan, Phase 007 closeout, and this planning authorization record.
 
-Implementation authorization status: `not-authorized`; active planning only.
+Implementation authorization status: `active-implementation-authorized`.
 
 Phase 007 completion truth:
 
@@ -109,8 +109,8 @@ engine/src/plugins/ui/resources.rs
 engine/src/plugins/ui/report.rs
 engine/src/plugins/ui/diagnostics.rs
 engine/src/plugins/ui/trace.rs
-engine/Cargo.toml dependencies on selected evaluator/runtime-view/render-data crates
-focused engine tests for output facts, state snapshots, dirty records, and frame payload creation
+engine/Cargo.toml dependencies on ui_artifacts, ui_binding, ui_evaluator, ui_runtime_view, and ui_state; engine already has ui_runtime and ui_render_data
+focused engine tests in engine/tests/ui_runtime_evaluation.rs, named for `cargo test -p engine ui_runtime_evaluation`
 ```
 
 Required Phase 008 evidence from accepted cutover authority:
@@ -145,11 +145,11 @@ engine/src/plugins/ui/resources.rs: runtime evaluation state, snapshot, and dirt
 engine/src/plugins/ui/report.rs: runtime evaluation, output, snapshot, and invalidation reporting only.
 engine/src/plugins/ui/diagnostics.rs: stable runtime evaluation/invalidation diagnostics only.
 engine/src/plugins/ui/trace.rs: runtime evaluation and state/invalidation trace facts only.
-engine/Cargo.toml: selected evaluator/runtime-view/render-data dependencies only after source inspection in the activation PR.
-focused engine tests: output facts, Counter text-after-mutation proof, state snapshots, dirty records, and frame payload creation.
+engine/Cargo.toml: add only `ui_artifacts`, `ui_binding`, `ui_evaluator`, `ui_runtime_view`, and `ui_state`; keep existing `ui_runtime` and `ui_render_data` usage.
+engine/tests/ui_runtime_evaluation.rs: output facts, Counter text-after-mutation proof, state snapshots, dirty records, and frame payload creation.
 ```
 
-Maintainability review status: complete for Phase 008 planning. Stop before implementation if activation needs a broader module map than the files named here.
+Maintainability review status: complete for Phase 008 authorization. Stop if implementation needs a broader module map than the files named here.
 
 Feature support matrix:
 
@@ -159,7 +159,7 @@ Public mounting API: completed by Phase 004.
 Typed screen/source/action contracts: completed by Phase 005.
 Mounted sessions: completed by Phase 006.
 Host action dispatch and trace: completed by Phase 007.
-Runtime evaluation/invalidation: active-planning Phase 008.
+Runtime evaluation/invalidation: active-implementation Phase 008.
 Render boundary/publication: downstream Phases 009-010.
 Scene/debug overlay migration: downstream Phase 011.
 Runtime Counter product: downstream Phase 012.
@@ -170,7 +170,7 @@ Closeout/adoption lock: downstream Phase 014.
 Phase 008 validation envelope from cutover and workflow authority:
 
 ```text
-cargo test -p engine <Phase 008 focused runtime-evaluation filter selected by activation PR>
+cargo test -p engine ui_runtime_evaluation
 cargo test -p engine
 python tools/docs/validate_docs.py
 git diff --check
@@ -178,13 +178,13 @@ git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Evidence expectation: focused engine tests must prove mounted screen source/program facts feed the evaluator/runtime-view path, Counter output text changes after host mutation, frame payloads derive from runtime/evaluator output, session snapshot/replay is stable by source/runtime IDs, dirty records name the required causes, runtime reports include source/program/runtime-view/output/diagnostics/invalidation facts, and trace records runtime evaluation plus state/invalidation facts.
+Evidence expectation: focused engine tests must prove mounted screen source/program facts feed `UiRuntimeArtifact`, `UiEvaluator`, and `UiRuntimeView`; Counter output text changes after host mutation through `UiEvaluationContext` host data, not direct product mutation; frame payloads derive from runtime/evaluator output through existing `ui_runtime`/`ui_render_data` contracts; session snapshot/replay is stable by source/runtime IDs; dirty records name the required causes; runtime reports include source/program/runtime-view/output/diagnostics/invalidation facts; and trace records runtime evaluation plus state/invalidation facts.
 
 Stop conditions: stop if frame output skips source/program/evaluator evidence, a new execution strategy is invented without accepted design, renderer primitives become UI source truth, per-element incremental rendering is claimed without dirty-scope proof, render publication/source reload/persistence enters the PR, `apps/ui_counter_runtime` product packaging enters the PR, or Phase 009+ files become necessary.
 
-Known blockers: no Phase 008 implementation branch is authorized yet. The selected evaluator/runtime-view/render-data dependencies and focused test filter must be confirmed by a separate activation PR after this closeout/planning truth merges. Phase 009 and later remain blocked until Phase 008 is reviewed, merged, and completion truth is recorded.
+Known blockers: no Phase 008 implementation branch has been opened or merged yet. Phase 009 and later remain blocked until Phase 008 is reviewed, merged, and completion truth is recorded.
 
-Next action: create a separate `PT-UI-RUNTIME-PLATFORM-008 - Runtime Evaluation, State Snapshot, and Invalidation` activation branch/PR after this closeout/planning truth merges. Keep Phase 008 implementation blocked until that activation record is merged.
+Next action: create exactly one bounded `PT-UI-RUNTIME-PLATFORM-008 - Runtime Evaluation, State Snapshot, and Invalidation` implementation branch/PR from current `main` after this planning truth is merged. Keep the PR draft until focused Phase 008 validation and the required docs/diff/status commands are clean.
 
 ## Active-work rules
 
