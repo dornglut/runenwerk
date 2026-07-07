@@ -4,12 +4,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-06
+last_reviewed: 2026-07-07
 related_docs:
   - ../workflow-lifecycle.md
   - ../../architecture/ui-framework-architecture.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
+  - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
@@ -38,7 +39,7 @@ Authority: `ui-framework-app-integration-direction-review.md`.
 
 Evidence: PR #70 accepted the direction that App/Plugin/ECS-hosted UI must lower through `ui_definition`, `UiProgram`, `UiStory`, runtime/evaluator artifacts, and host-owned mutation instead of continuing the manual `app_program` proof or promoting SpatialCanvas as the app-framework answer.
 
-Next action: Keep as accepted direction authority. The first proof slice, `PT-UI-FRAMEWORK-APP-INTEGRATION-002`, is completed and now serves as evidence for runtime-platform intake/design work.
+Next action: Keep as accepted direction authority. The first proof slice, `PT-UI-FRAMEWORK-APP-INTEGRATION-002`, is completed and now serves as evidence for runtime-platform planning.
 
 ### PT-UI-FRAMEWORK-APP-INTEGRATION-002
 
@@ -52,7 +53,7 @@ Lifecycle state: `completed`
 
 Authority: `ecs-backed-counter-ui-story-proof-planning.md`.
 
-Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records the new `domain/ui/ui_app_integration` crate, code-authored Counter and Win source records, lowering through `ui_definition` and `ui_program`, `UiEventPacket` route/event evidence, route-missing diagnostics, route-resolved host mutation, ECS-backed Counter mutation, next-output text facts, positive proof flow, fail-closed route/schema/capability/payload/unformed-route/missing-host-data cases, no callback/direct mutation bypass, no public `AppUiExt`, no engine `UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas world-space implementation, no `foundation/meta`, no `domain/app_program`, and no generic plugin framework. Detailed closeout: `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
+Evidence: PR #72 merged the `ui_app_integration` proof into `main` at `e093eb1affdc465b96430200960f8e3cdca0d26b`. Closeout evidence records the new `domain/ui/ui_app_integration` crate, code-authored Counter and Win source records, lowering through `ui_definition` and `ui_program`, `UiEventPacket` route/event evidence, route-missing diagnostics, route-resolved host mutation, ECS-backed Counter mutation, next-output text facts, positive proof flow, fail-closed cases, no callback/direct mutation bypass, no public `AppUiExt`, no engine `UiPlugin`, no render adapter/runtime-visible render proof, no SDF/SpatialCanvas world-space implementation, no `foundation/meta`, no `domain/app_program`, and no generic plugin framework. Detailed closeout: `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
 
 Next action: Keep as completed proof evidence. Do not reopen this slice unless future inspection finds the recorded boundary was violated.
 
@@ -62,9 +63,9 @@ ID: `PT-UI-RUNTIME-PLATFORM-001`
 
 Title: Live UiPlugin Runtime and Generic Surface-Frame Rendering
 
-State: draft docs-only PR #74 hardens the investigation/design gate; implementation not authorized
+State: completed design-gate hardening through merged PR #74; implementation not authorized by this entry
 
-Lifecycle state: `active-planning` design-gate complete / implementation-planning required
+Lifecycle state: `active-planning` design-gate complete / superseded by full cutover-plan focus
 
 Authority:
 
@@ -76,17 +77,48 @@ Authority:
 ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
 ```
 
-Evidence: PR #74 records the target public shape `RenderPlugin + UiPlugin + AppPlugin`, `app.mount_ui(Screen)`, typed `UiScreen`, typed `IntoUi`, typed `UiActionHandler` / `TryUiActionHandler`, host-owned mutation, reuse of existing `ui_surface` and `ui_hosts` owners, and staged generic surface-frame render publication. The current-state investigation records `E2` connector metadata/file inspection, `E3` source/test inspection by path, and `E8` accepted architecture/workflow/planning authority. No local command validation is available from this connector-only session.
+Evidence: PR #74 merged the docs-only investigation/design-gate hardening. The accepted target remains `RenderPlugin + UiPlugin + AppPlugin`, `app.mount_ui(Screen)`, typed `UiScreen`, typed `IntoUi`, typed `UiActionHandler` / `TryUiActionHandler`, host-owned mutation, reuse of existing `ui_surface` and `ui_hosts` owners, and staged generic surface-frame render publication. Runtime Rust implementation remains outside PR #74.
 
 Gate status:
 
 ```text
 Complete investigation gate: complete for PR #74 design-gate hardening.
-Complete design gate: complete for opening a separate implementation-planning PR only.
-Implementation authorization: still forbidden.
+Complete design gate: complete for opening implementation planning.
+Implementation authorization: still forbidden by this entry.
 ```
 
-Next action: Review PR #74 as docs-only design-gate hardening. After review, open a separate implementation-planning PR that names exact owner modules, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, acceptance criteria, and stop conditions before runtime Rust work starts.
+Next action: Use as authority for `PT-UI-RUNTIME-PLATFORM-002`, the full platform cutover plan.
+
+### PT-UI-RUNTIME-PLATFORM-002
+
+ID: `PT-UI-RUNTIME-PLATFORM-002`
+
+Title: Live UiPlugin Runtime Full Platform Cutover Plan
+
+State: draft docs-only implementation-planning PR in progress
+
+Lifecycle state: `active-planning` full-platform cutover contract draft
+
+Authority:
+
+```text
+../../design/active/live-uiplugin-runtime-full-cutover-plan.md
+../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
+../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
+../../architecture/ui-framework-architecture.md
+```
+
+Evidence: This entry corrects the previous “first runtime slice” framing. The platform should be planned as a full cutover, then implemented through bounded phase PRs: UiPlugin foundation, app mounting API, typed screen/source/action contracts, mounted surface/session runtime, host action dispatch, runtime evaluation to frame, render publication, scene/debug compatibility cutover, SurfaceFrame genericization, live Counter app proof, and closeout/adoption lock.
+
+Gate status:
+
+```text
+Complete investigation gate: inherited from PT-UI-RUNTIME-PLATFORM-001.
+Complete design gate: in progress for full cutover contract.
+Implementation authorization: forbidden until this planning PR is accepted and the next phase PR opens.
+```
+
+Next action: Review the full cutover plan. If accepted, merge it and open `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` as the first bounded implementation phase.
 
 ### PT-UI-COMPONENT-PLATFORM-013
 
@@ -157,7 +189,7 @@ These are future planning candidates only. They are not implementation work and 
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-003 - Public AppUiExt Ergonomics`
 - `PT-UI-FRAMEWORK-APP-INTEGRATION-004 - Authoring Frontends and Execution Strategy Model`
 
-`PT-UI-FRAMEWORK-APP-INTEGRATION-003` is superseded/absorbed by `PT-UI-RUNTIME-PLATFORM-001` as the broader live runtime platform track. Do not treat standalone public `AppUiExt` ergonomics as the immediate next implementation target.
+`PT-UI-FRAMEWORK-APP-INTEGRATION-003` is superseded/absorbed by `PT-UI-RUNTIME-PLATFORM-001` and `PT-UI-RUNTIME-PLATFORM-002` as the broader live runtime platform track. Do not treat standalone public `AppUiExt` ergonomics as the immediate next implementation target.
 
 `PT-UI-FRAMEWORK-APP-INTEGRATION-004` should define how Rust builders, templates, visual designer output, compiler DSLs, immediate-mode adapters, reactive adapters, retained execution, ECS-driven execution, and SDF/world-space targets share source/program/event/story contracts without bypasses.
 
