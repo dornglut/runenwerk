@@ -16,7 +16,11 @@ related:
   - ../design/active/ui-live-editing-and-preview-design.md
   - ../design/active/ui-game-and-worldspace-host-requirements-design.md
   - ../design/active/ui-accessibility-internationalization-and-text-conformance-design.md
+  - ../design/active/ui-layout-style-theme-and-motion-design.md
   - ../design/active/ui-performance-virtualization-assets-and-profiling-design.md
+  - ../design/active/ui-render-output-and-host-renderer-boundary-design.md
+  - ../design/active/ui-platform-input-windowing-and-os-integration-design.md
+  - ../design/active/ui-devtools-inspection-and-workbench-design.md
   - ../design/active/ui-testing-conformance-and-proof-matrix-design.md
   - ../design/active/ui-package-security-versioning-and-migration-design.md
   - ../design/active/ui-source-projection-and-program-lowering-design.md
@@ -100,7 +104,11 @@ invalidation report envelopes after proof
 | `ui-live-editing-and-preview-design.md` | Live editing, preview, hot-swap, diagnostics, last-known-good policy. |
 | `ui-game-and-worldspace-host-requirements-design.md` | Game HUD/menu, gamepad navigation, world-space UI, split-screen, input glyphs. |
 | `ui-accessibility-internationalization-and-text-conformance-design.md` | Accessibility, localization, text shaping, bidi, semantic trees, conformance proofs. |
+| `ui-layout-style-theme-and-motion-design.md` | Layout families, style cascade, theme tokens, responsive variants, source order, motion. |
 | `ui-performance-virtualization-assets-and-profiling-design.md` | Virtualization, asset loading, cache keys, renderer packets, profiling, budgets. |
+| `ui-render-output-and-host-renderer-boundary-design.md` | Draw-neutral UI output, frame packets, clipping, layering, text/glyph, renderer boundary. |
+| `ui-platform-input-windowing-and-os-integration-design.md` | Windows/surfaces, normalized input, IME, clipboard, drag/drop, cursor, OS accessibility bridge. |
+| `ui-devtools-inspection-and-workbench-design.md` | Source maps, graph inspection, runtime state inspection, profiling, diagnostics, workbench tooling. |
 | `ui-testing-conformance-and-proof-matrix-design.md` | Test layers, replay, assertions, visual/golden proof, host compatibility, maturity matrix. |
 | `ui-package-security-versioning-and-migration-design.md` | Package trust, capabilities, schema versions, migration, sandboxing, provenance. |
 | `ui-source-projection-and-program-lowering-design.md` | UI-specific `UiSource` vocabulary and lowering into `UiProgram`. |
@@ -132,9 +140,11 @@ typed binding, forms, and effect proposals
 input/focus/navigation
 accessibility
 localization and bidi text
-layout/style/text systems
-animation and transitions
-overlay/popup/layering
+layout/style/theme systems
+motion and animation
+renderer-facing draw-neutral output
+platform/window/input/IME/clipboard integration
+devtools and workbench inspection
 surface mounting
 game and world-space hosts
 live editing and preview
