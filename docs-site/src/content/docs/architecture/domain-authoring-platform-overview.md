@@ -1,6 +1,6 @@
 ---
 title: Domain Authoring Platform Overview
-description: Architecture overview for Runenwerk domain authoring, linking the shared source/program pattern, typed counter app-program proof, UI source lowering, and deferred non-UI proof candidates.
+description: Architecture overview for Runenwerk domain authoring, linking the shared source/program pattern, typed counter app-program proof, UI framework runtime docs, UI source lowering, and deferred non-UI proof candidates.
 status: active
 owner: workspace
 layer: architecture
@@ -9,6 +9,10 @@ last_reviewed: 2026-07-08
 related:
   - ../design/active/domain-authoring-source-and-program-pattern.md
   - ../design/active/typed-app-program-counter-proof-design.md
+  - ../design/active/ui-framework-runtime-requirements-design.md
+  - ../design/active/ui-reactive-runtime-and-invalidation-design.md
+  - ../design/active/ui-live-editing-and-preview-design.md
+  - ../design/active/ui-game-and-worldspace-host-requirements-design.md
   - ../design/active/ui-source-projection-and-program-lowering-design.md
   - ../design/deferred/material-program-authoring-pattern.md
   - ../design/deferred/procgen-program-authoring-pattern.md
@@ -32,8 +36,8 @@ Authoring Source
 -> Source Model
 -> Normalized Domain Model
 -> Domain Program
--> Runtime Artifact
--> Evaluator / Compiler Output
+-> Compiler / Evaluator
+-> Runtime Artifact / Output Facts
 -> Host Integration
 -> Proof / Diagnostics / Migration Reports
 ```
@@ -74,6 +78,7 @@ artifact manifests
 host profiles
 compatibility reports
 proof report envelopes
+invalidation report envelopes after proof
 ```
 
 ## Document Map
@@ -82,6 +87,10 @@ proof report envelopes
 |---|---|
 | `domain-authoring-source-and-program-pattern.md` | Shared source/program lifecycle and extraction rules. |
 | `typed-app-program-counter-proof-design.md` | Counter as typed app-program proof with UI projection and win screen at count ten. |
+| `ui-framework-runtime-requirements-design.md` | Full UI framework runtime requirements. |
+| `ui-reactive-runtime-and-invalidation-design.md` | Reactive update, dependency tracking, retained state, incremental evaluation. |
+| `ui-live-editing-and-preview-design.md` | Live editing, preview, hot-swap, diagnostics, last-known-good policy. |
+| `ui-game-and-worldspace-host-requirements-design.md` | Game HUD/menu, gamepad navigation, world-space UI, split-screen, input glyphs. |
 | `ui-source-projection-and-program-lowering-design.md` | UI-specific `UiSource` vocabulary and lowering into `UiProgram`. |
 | `material-program-authoring-pattern.md` | Deferred non-UI material-domain instantiation. |
 | `procgen-program-authoring-pattern.md` | Deferred non-UI procgen-domain instantiation. |
@@ -99,6 +108,22 @@ UiSource
 -> UiProgram
 -> UiRuntimeArtifact
 -> UiOutput
+```
+
+A mature standalone UI framework additionally requires:
+
+```text
+reactive invalidation
+retained runtime state
+input/focus/navigation
+accessibility
+layout/style/text systems
+animation and transitions
+overlay/popup/layering
+surface mounting
+game and world-space hosts
+live editing and preview
+inspection and proof reports
 ```
 
 `UiSource` is a UI-domain source stage. It should not become the platform-wide
@@ -128,6 +153,7 @@ interaction formation
 UiProgram lowering
 UI runtime artifacts
 UI output and event packets
+reactive update reports
 ```
 
 The active screen is derived from count. When `count >= 10`, projection emits the
@@ -155,6 +181,11 @@ ProcgenSourceGraph
 -> ProcgenProgram
 -> WorldChunkRecipe / SpawnTableArtifact / FieldCacheArtifact
 ```
+
+Both deferred tracks should help prove which structural ideas can later be safely
+abstracted, such as source-map envelopes, diagnostic envelopes, package manifests,
+typed graph substrate, artifact manifests, host compatibility matrices, proof
+reports, and invalidation reports.
 
 ## Relationship To ECS And Graphs
 
