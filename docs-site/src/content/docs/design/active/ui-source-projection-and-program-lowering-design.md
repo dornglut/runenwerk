@@ -10,9 +10,14 @@ related:
   - ./domain-authoring-source-and-program-pattern.md
   - ./typed-app-program-counter-proof-design.md
   - ./ui-framework-runtime-requirements-design.md
+  - ./ui-component-composition-slots-and-authoring-design.md
+  - ./ui-data-binding-forms-and-effects-design.md
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-live-editing-and-preview-design.md
   - ./ui-game-and-worldspace-host-requirements-design.md
+  - ./ui-accessibility-internationalization-and-text-conformance-design.md
+  - ./ui-performance-virtualization-assets-and-profiling-design.md
+  - ./ui-package-security-versioning-and-migration-design.md
   - ./ui-program-architecture.md
   - ./ui-program-architecture-owner-map.md
   - ../../domain/ui/architecture.md
@@ -67,9 +72,15 @@ Full framework behavior requires these companion contracts:
 
 ```text
 ui-framework-runtime-requirements-design.md
+ui-component-composition-slots-and-authoring-design.md
+ui-data-binding-forms-and-effects-design.md
 ui-reactive-runtime-and-invalidation-design.md
 ui-live-editing-and-preview-design.md
 ui-game-and-worldspace-host-requirements-design.md
+ui-accessibility-internationalization-and-text-conformance-design.md
+ui-performance-virtualization-assets-and-profiling-design.md
+ui-testing-conformance-and-proof-matrix-design.md
+ui-package-security-versioning-and-migration-design.md
 ```
 
 Do not implement `UiSource` as if it alone defines a complete UI framework.
