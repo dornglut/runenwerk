@@ -8,9 +8,15 @@ canonical: false
 last_reviewed: 2026-07-08
 related:
   - ./ui-source-projection-and-program-lowering-design.md
+  - ./ui-component-composition-slots-and-authoring-design.md
+  - ./ui-data-binding-forms-and-effects-design.md
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-live-editing-and-preview-design.md
   - ./ui-game-and-worldspace-host-requirements-design.md
+  - ./ui-accessibility-internationalization-and-text-conformance-design.md
+  - ./ui-performance-virtualization-assets-and-profiling-design.md
+  - ./ui-testing-conformance-and-proof-matrix-design.md
+  - ./ui-package-security-versioning-and-migration-design.md
   - ./ui-program-architecture.md
   - ./ui-program-architecture-owner-map.md
   - ./domain-authoring-source-and-program-pattern.md
@@ -50,6 +56,26 @@ The framework must support declarative authoring and reactive updates, while
 keeping app/domain mutation outside UI controls and keeping renderer primitives as
 derived output only.
 
+## Companion Framework Docs
+
+This document is the umbrella requirements document. Detailed contracts live in:
+
+```text
+ui-component-composition-slots-and-authoring-design.md
+ui-data-binding-forms-and-effects-design.md
+ui-reactive-runtime-and-invalidation-design.md
+ui-live-editing-and-preview-design.md
+ui-game-and-worldspace-host-requirements-design.md
+ui-accessibility-internationalization-and-text-conformance-design.md
+ui-performance-virtualization-assets-and-profiling-design.md
+ui-testing-conformance-and-proof-matrix-design.md
+ui-package-security-versioning-and-migration-design.md
+ui-source-projection-and-program-lowering-design.md
+```
+
+Do not implement this umbrella document without also satisfying the relevant
+companion contracts for the target slice.
+
 ## Required Capability Areas
 
 A mature Runenwerk UI framework must cover these areas as first-class contracts:
@@ -57,18 +83,23 @@ A mature Runenwerk UI framework must cover these areas as first-class contracts:
 ```text
 source authoring
 component/control packages
+component and slot composition
+data binding and forms
+async effect proposals
 layout
 style and theme
 text and font handling
+accessibility and internationalization
 input normalization
 actions and route mapping
 focus and navigation
-accessibility
-state and binding
 reactive invalidation
+state and binding
 animation and transitions
 overlay, popup, and layering
 scrolling
+virtualization
+asset loading and cache keys
 surface mounting
 game HUD and menus
 world-space UI
@@ -76,7 +107,8 @@ live editing and preview
 inspection and debugging
 headless proof and replay
 renderer output and artifact caching
-migration and compatibility
+profiling and performance budgets
+package trust, versioning, and migration
 ```
 
 ## Framework Layers
@@ -530,5 +562,9 @@ theme/style proof
 text editing proof
 animation/transition proof
 artifact cache/invalidation proof
+component/slot proof
+forms/binding/effect proof
+virtualized collection proof
+package security/migration proof
 non-UI domain extraction restraint
 ```
