@@ -16,7 +16,12 @@ related:
   - ./ui-live-editing-and-preview-design.md
   - ./ui-game-and-worldspace-host-requirements-design.md
   - ./ui-accessibility-internationalization-and-text-conformance-design.md
+  - ./ui-layout-style-theme-and-motion-design.md
   - ./ui-performance-virtualization-assets-and-profiling-design.md
+  - ./ui-render-output-and-host-renderer-boundary-design.md
+  - ./ui-platform-input-windowing-and-os-integration-design.md
+  - ./ui-devtools-inspection-and-workbench-design.md
+  - ./ui-testing-conformance-and-proof-matrix-design.md
   - ./ui-package-security-versioning-and-migration-design.md
   - ./ui-program-architecture.md
   - ./ui-program-architecture-owner-map.md
@@ -33,8 +38,9 @@ assets, visual designers, and generated tools. It does not authorize broad
 implementation, crate creation, renderer changes, or product-specific bypasses.
 
 This document is not the complete UI framework runtime specification. Reactivity,
-invalidation, retained runtime state, live editing, preview, game UI, and
-world-space host behavior are covered by companion UI framework docs.
+invalidation, retained runtime state, live editing, preview, game UI, world-space
+host behavior, platform integration, renderer output, and devtools inspection are
+covered by companion UI framework docs.
 
 ## Decision
 
@@ -78,7 +84,11 @@ ui-reactive-runtime-and-invalidation-design.md
 ui-live-editing-and-preview-design.md
 ui-game-and-worldspace-host-requirements-design.md
 ui-accessibility-internationalization-and-text-conformance-design.md
+ui-layout-style-theme-and-motion-design.md
 ui-performance-virtualization-assets-and-profiling-design.md
+ui-render-output-and-host-renderer-boundary-design.md
+ui-platform-input-windowing-and-os-integration-design.md
+ui-devtools-inspection-and-workbench-design.md
 ui-testing-conformance-and-proof-matrix-design.md
 ui-package-security-versioning-and-migration-design.md
 ```
