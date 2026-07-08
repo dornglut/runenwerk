@@ -14,7 +14,11 @@ related:
   - ./ui-live-editing-and-preview-design.md
   - ./ui-game-and-worldspace-host-requirements-design.md
   - ./ui-accessibility-internationalization-and-text-conformance-design.md
+  - ./ui-layout-style-theme-and-motion-design.md
   - ./ui-performance-virtualization-assets-and-profiling-design.md
+  - ./ui-render-output-and-host-renderer-boundary-design.md
+  - ./ui-platform-input-windowing-and-os-integration-design.md
+  - ./ui-devtools-inspection-and-workbench-design.md
   - ./ui-testing-conformance-and-proof-matrix-design.md
   - ./ui-package-security-versioning-and-migration-design.md
   - ./ui-program-architecture.md
@@ -67,7 +71,11 @@ ui-reactive-runtime-and-invalidation-design.md
 ui-live-editing-and-preview-design.md
 ui-game-and-worldspace-host-requirements-design.md
 ui-accessibility-internationalization-and-text-conformance-design.md
+ui-layout-style-theme-and-motion-design.md
 ui-performance-virtualization-assets-and-profiling-design.md
+ui-render-output-and-host-renderer-boundary-design.md
+ui-platform-input-windowing-and-os-integration-design.md
+ui-devtools-inspection-and-workbench-design.md
 ui-testing-conformance-and-proof-matrix-design.md
 ui-package-security-versioning-and-migration-design.md
 ui-source-projection-and-program-lowering-design.md
@@ -88,14 +96,15 @@ data binding and forms
 async effect proposals
 layout
 style and theme
+motion and animation
 text and font handling
 accessibility and internationalization
 input normalization
+platform/window/OS integration
 actions and route mapping
 focus and navigation
 reactive invalidation
 state and binding
-animation and transitions
 overlay, popup, and layering
 scrolling
 virtualization
@@ -104,7 +113,7 @@ surface mounting
 game HUD and menus
 world-space UI
 live editing and preview
-inspection and debugging
+inspection, debugging, and devtools
 headless proof and replay
 renderer output and artifact caching
 profiling and performance budgets
@@ -566,5 +575,8 @@ component/slot proof
 forms/binding/effect proof
 virtualized collection proof
 package security/migration proof
+renderer-boundary proof
+platform integration proof
+devtools/workbench proof
 non-UI domain extraction restraint
 ```
