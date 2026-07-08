@@ -11,6 +11,7 @@ related:
   - ./ui-source-projection-and-program-lowering-design.md
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-data-binding-forms-and-effects-design.md
+  - ./ui-platform-input-windowing-and-os-integration-design.md
   - ./ui-program-architecture-owner-map.md
 ---
 
@@ -30,6 +31,22 @@ optional rendering polish.
 
 UI source, programs, artifacts, evaluator output, and host integration must carry
 semantic text/accessibility facts, not only pixels or draw packets.
+
+## Reference Standards
+
+Runenwerk is not a web browser and does not claim direct browser conformance by
+this document. It should still use established standards as reference models:
+
+```text
+WCAG 2.2 for perceivable / operable / understandable / robust accessibility goals
+WAI-ARIA / APG for roles, states, properties, widget semantics, and keyboard patterns
+Accessible Name and Description Computation for name/description behavior
+Unicode Bidirectional Algorithm for bidi text behavior
+ICU MessageFormat / MessageFormat 2 direction for localization patterns
+```
+
+Where a host cannot support a reference behavior, it must produce a compatibility
+diagnostic instead of silently dropping accessibility or text semantics.
 
 ## Accessibility Baseline
 
@@ -151,6 +168,21 @@ MissingLocalizationPolicy
 
 Localization must be snapshot-based and reportable. Missing keys, missing format
 args, invalid plural forms, and fallback usage must be diagnostics.
+
+## Message Formatting Policy
+
+Message formatting should preserve translator context.
+
+Rules:
+
+```text
+prefer complete message patterns over concatenated fragments
+plural/select behavior must be locale-aware
+format arguments must be named and typed
+fallback text must be explicit
+missing or extra arguments produce diagnostics
+source maps must point from rendered text back to text key and source origin
+```
 
 ## Text Shaping And Layout
 
