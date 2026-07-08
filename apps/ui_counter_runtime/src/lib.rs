@@ -4,7 +4,7 @@ use engine::plugins::render::{
     DEFAULT_EDITOR_FONT_ID, RenderFlow, RenderPlugin, UiFontAtlasResource,
 };
 use engine::plugins::ui::{
-    IntoUi, UiAction, UiActionDispatchReportsResource, UiActionHandler, UiHostActionExecutor,
+    UiAction, UiActionDispatchReportsResource, UiActionHandler, UiHostActionExecutor,
     UiHostMutationIntent, UiHostMutationReceipt, UiHostMutationRejection, UiMountRequest,
     UiMountRequestsResource, UiPlugin, UiPointerActivationResource, UiRuntimeActionRequest,
     UiRuntimeDiagnosticsResource, UiRuntimeFramePublicationStatus, UiRuntimeHitTargetResource,

@@ -6,7 +6,9 @@ use ui_render_data::{
     BorderPrimitive, GlyphRunPrimitive, RectPrimitive, UiDrawKey, UiFrame, UiLayer, UiLayerId,
     UiPaint, UiPrimitive, UiSortKey, UiSurface, UiSurfaceId,
 };
-use ui_runtime_view::{ButtonRuntimeView, ButtonRuntimeViewReport, RuntimeControlView, UiRuntimeView};
+use ui_runtime_view::{
+    ButtonRuntimeView, ButtonRuntimeViewReport, RuntimeControlView, UiRuntimeView,
+};
 use ui_schema::UiSchemaValue;
 use ui_text::{
     AtlasTextLayouter, FontAtlasSource, FontId, TextBlock, TextBlockId, TextBlockLayoutRequest,
@@ -18,10 +20,10 @@ use ui_text::{
 use ui_theme::{ThemeTokens, UiColor};
 
 use super::{
-    dispatch_ui_action, IntoUi, UiAction, UiActionDispatchReport, UiActionDispatchReportsResource,
-    UiActionEvent, UiActionHandler, UiHostActionExecutor, UiMountRequestsResource,
-    UiRuntimeDiagnosticsResource, UiRuntimeEvaluationReport, UiRuntimeEvaluationResource,
-    UiRuntimePreparedFrameRecord, UiRuntimePreparedFrameResource, UiRuntimeTraceResource,
+    IntoUi, UiAction, UiActionDispatchReport, UiActionDispatchReportsResource, UiActionEvent,
+    UiActionHandler, UiHostActionExecutor, UiMountRequestsResource, UiRuntimeDiagnosticsResource,
+    UiRuntimeEvaluationReport, UiRuntimeEvaluationResource, UiRuntimePreparedFrameRecord,
+    UiRuntimePreparedFrameResource, UiRuntimeTraceResource, dispatch_ui_action,
 };
 
 const BUTTON_CONTROL_KIND_ID: &str = "runenwerk.ui.controls.button";
@@ -198,7 +200,8 @@ where
     let runtime_view_report = UiRuntimeView::from_artifact_report(input.artifact());
     let mounted_session = mounts.mounted_sessions().first();
     let evaluation = runtime.evaluate(&input, mounted_session, context, trace, diagnostics);
-    let prepared = render_runtime_view(&runtime_view_report, viewport, theme, atlas_source, font_id);
+    let prepared =
+        render_runtime_view(&runtime_view_report, viewport, theme, atlas_source, font_id);
 
     if let Some(frame) = prepared.frame.clone() {
         hit_targets.replace_for_evaluation(&evaluation, prepared.hit_targets.iter().cloned());

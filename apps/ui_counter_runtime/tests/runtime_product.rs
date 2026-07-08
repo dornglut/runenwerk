@@ -51,7 +51,10 @@ fn counter_app_prepares_visible_runtime_frame() {
         );
     }
 
-    let targets = app.world().resource::<UiRuntimeHitTargetResource>().unwrap();
+    let targets = app
+        .world()
+        .resource::<UiRuntimeHitTargetResource>()
+        .unwrap();
     assert_eq!(targets.targets().len(), 3);
     for action in CounterActionKind::all() {
         let target = targets

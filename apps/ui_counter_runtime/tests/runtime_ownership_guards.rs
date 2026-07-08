@@ -26,8 +26,12 @@ fn counter_product_keeps_packet_and_event_construction_out_of_the_app() {
 #[test]
 fn counter_text_helpers_are_real_labels_not_buttons() {
     let source = crate_file("src/lib.rs");
-    let label_start = source.find("fn label_control").expect("label helper should exist");
-    let action_start = source.find("fn counter_action_control").expect("action helper should exist");
+    let label_start = source
+        .find("fn label_control")
+        .expect("label helper should exist");
+    let action_start = source
+        .find("fn counter_action_control")
+        .expect("action helper should exist");
     let label_helpers = &source[label_start..action_start];
     assert!(label_helpers.contains("LABEL_CONTROL_KIND_ID"));
     assert!(!label_helpers.contains("BUTTON_CONTROL_KIND_ID"));
