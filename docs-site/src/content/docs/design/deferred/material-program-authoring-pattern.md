@@ -1,6 +1,6 @@
 ---
 title: Material Program Authoring Pattern
-description: Deferred material-domain instantiation of the domain authoring source/program pattern, covering material source graphs, material programs, compiler artifacts, packages, diagnostics, migration, and proof surfaces.
+description: Deferred material-domain instantiation of the domain authoring source/program pattern, covering material source graphs, material programs, compiler artifacts, packages, diagnostics, migration, live preview, SDF material concerns, and proof surfaces.
 status: deferred
 owner: material
 layer: design
@@ -22,6 +22,9 @@ platform extraction.
 
 The purpose is to record how the domain-authoring pattern should apply to a
 non-UI proving domain once the UI proof is credible.
+
+The frontmatter owner value must be checked against the docs schema before this
+PR is marked ready.
 
 ## Decision
 
@@ -74,6 +77,10 @@ SdfBlend
 Noise
 Fresnel
 RoughnessRemap
+Curvature
+AmbientOcclusion
+TriplanarProjection
+VolumeFieldSample
 ```
 
 ## Source And Graph Families
@@ -94,6 +101,32 @@ DiagnosticGraph
 
 These are material-owned graph meanings over any future shared typed graph
 substrate.
+
+## SDF-First Material Concerns
+
+Runenwerk material authoring should account for SDF-native rendering and world
+procedural surfaces.
+
+Required material concepts to investigate before implementation:
+
+```text
+surface classification
+SDF field sampling
+signed-distance gradient / normal inputs
+curvature inputs
+ambient-occlusion inputs
+triplanar mapping
+volume/material-space coordinates
+world-space coordinates
+procedural texture fields
+distance-aware blending
+surface/volume material split
+weathering/erosion/snow/sand material modifiers
+preview of SDF-driven material attributes
+```
+
+These are material-domain semantics. They must not move into generic platform or
+UI layers.
 
 ## MaterialProgram Contract
 
@@ -131,6 +164,25 @@ MaterialCacheKey
 
 Artifacts are derived products. They must not become material source truth.
 
+## Live Preview Loop
+
+Material live preview should use the same source/program/artifact pipeline:
+
+```text
+edit material source node/property
+-> validate source graph
+-> normalize graph
+-> form MaterialProgram diff
+-> invalidate affected shader/material artifacts
+-> compile or preview-evaluate affected subgraph
+-> update preview surface
+-> preserve preview camera/light/material-instance state by policy
+-> show source-map diagnostics
+```
+
+Invalid material source keeps the last known good preview artifact and overlays
+diagnostics.
+
 ## Host Profiles
 
 Material host compatibility should consider:
@@ -145,8 +197,8 @@ BuildHost
 ```
 
 A host compatibility report should state which nodes, capabilities, texture
-features, shader stages, preview modes, and target profiles are accepted or
-rejected.
+features, shader stages, preview modes, SDF material features, and target profiles
+are accepted or rejected.
 
 ## Proof Requirements
 
@@ -162,6 +214,7 @@ source-map attachment
 diagnostics for invalid ports/types/capabilities
 fixture reproducibility
 host compatibility report
+live-preview invalidation report
 ```
 
 ## Shared Structure Candidates
@@ -179,6 +232,7 @@ typed graph structural substrate
 artifact manifest envelope
 host compatibility matrix
 proof report envelope
+incremental invalidation report envelope
 ```
 
 ## Rejected
