@@ -1,6 +1,6 @@
 ---
 title: Domain Authoring Platform Overview
-description: Architecture overview for Runenwerk domain authoring, linking the shared source/program pattern, typed counter app-program proof, UI framework runtime docs, UI source lowering, and deferred non-UI proof candidates.
+description: Architecture overview for Runenwerk domain authoring, linking the shared source/program pattern, typed counter app-program proof, complete UI framework runtime docs, UI source lowering, and deferred non-UI proof candidates.
 status: active
 owner: workspace
 layer: architecture
@@ -10,9 +10,15 @@ related:
   - ../design/active/domain-authoring-source-and-program-pattern.md
   - ../design/active/typed-app-program-counter-proof-design.md
   - ../design/active/ui-framework-runtime-requirements-design.md
+  - ../design/active/ui-component-composition-slots-and-authoring-design.md
+  - ../design/active/ui-data-binding-forms-and-effects-design.md
   - ../design/active/ui-reactive-runtime-and-invalidation-design.md
   - ../design/active/ui-live-editing-and-preview-design.md
   - ../design/active/ui-game-and-worldspace-host-requirements-design.md
+  - ../design/active/ui-accessibility-internationalization-and-text-conformance-design.md
+  - ../design/active/ui-performance-virtualization-assets-and-profiling-design.md
+  - ../design/active/ui-testing-conformance-and-proof-matrix-design.md
+  - ../design/active/ui-package-security-versioning-and-migration-design.md
   - ../design/active/ui-source-projection-and-program-lowering-design.md
   - ../design/deferred/material-program-authoring-pattern.md
   - ../design/deferred/procgen-program-authoring-pattern.md
@@ -88,9 +94,15 @@ invalidation report envelopes after proof
 | `domain-authoring-source-and-program-pattern.md` | Shared source/program lifecycle and extraction rules. |
 | `typed-app-program-counter-proof-design.md` | Counter as typed app-program proof with UI projection and win screen at count ten. |
 | `ui-framework-runtime-requirements-design.md` | Full UI framework runtime requirements. |
+| `ui-component-composition-slots-and-authoring-design.md` | Components, slots, templates, reusable composition kits, and authoring frontends. |
+| `ui-data-binding-forms-and-effects-design.md` | Typed bindings, forms, validation, action/effect proposals, async status, and collections. |
 | `ui-reactive-runtime-and-invalidation-design.md` | Reactive update, dependency tracking, retained state, incremental evaluation. |
 | `ui-live-editing-and-preview-design.md` | Live editing, preview, hot-swap, diagnostics, last-known-good policy. |
 | `ui-game-and-worldspace-host-requirements-design.md` | Game HUD/menu, gamepad navigation, world-space UI, split-screen, input glyphs. |
+| `ui-accessibility-internationalization-and-text-conformance-design.md` | Accessibility, localization, text shaping, bidi, semantic trees, conformance proofs. |
+| `ui-performance-virtualization-assets-and-profiling-design.md` | Virtualization, asset loading, cache keys, renderer packets, profiling, budgets. |
+| `ui-testing-conformance-and-proof-matrix-design.md` | Test layers, replay, assertions, visual/golden proof, host compatibility, maturity matrix. |
+| `ui-package-security-versioning-and-migration-design.md` | Package trust, capabilities, schema versions, migration, sandboxing, provenance. |
 | `ui-source-projection-and-program-lowering-design.md` | UI-specific `UiSource` vocabulary and lowering into `UiProgram`. |
 | `material-program-authoring-pattern.md` | Deferred non-UI material-domain instantiation. |
 | `procgen-program-authoring-pattern.md` | Deferred non-UI procgen-domain instantiation. |
@@ -113,16 +125,22 @@ UiSource
 A mature standalone UI framework additionally requires:
 
 ```text
+component and slot composition
 reactive invalidation
 retained runtime state
+typed binding, forms, and effect proposals
 input/focus/navigation
 accessibility
+localization and bidi text
 layout/style/text systems
 animation and transitions
 overlay/popup/layering
 surface mounting
 game and world-space hosts
 live editing and preview
+virtualization and asset loading
+profiling and budgets
+package trust, versioning, and migration
 inspection and proof reports
 ```
 
