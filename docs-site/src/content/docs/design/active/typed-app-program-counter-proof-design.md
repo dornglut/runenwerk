@@ -10,6 +10,8 @@ related:
   - ./typed-app-program-and-ui-proof-design.md
   - ./domain-authoring-source-and-program-pattern.md
   - ./ui-source-projection-and-program-lowering-design.md
+  - ./ui-reactive-runtime-and-invalidation-design.md
+  - ./ui-framework-runtime-requirements-design.md
   - ./ui-program-architecture.md
   - ./runenwerk-typed-app-composition-plugin-framework-design.md
 ---
@@ -22,6 +24,10 @@ Active design for the Counter proof target. This document does not authorize
 product implementation by itself. Implementation still requires an active-work
 entry or equivalent planning contract naming files, validation commands, stop
 conditions, and evidence expectations.
+
+`owner: ui` is temporary for the first UI proving slice. The app-program pattern
+must not become permanently UI-owned. Counter uses UI because UI is the first
+available proof domain.
 
 This document narrows the Counter target so future implementation slices do not
 turn the product app into UI runtime plumbing.
@@ -67,6 +73,9 @@ UiRuntimeArtifact -> UiOutput / UiFrame / UiEventPacket
 The host owns concrete effects and runtime integration.
 
 ## Target Author-Facing Shape
+
+The following code is illustrative north-star spelling. It locks architecture
+shape, not exact API spelling.
 
 ```rust
 use anyhow::Result;
@@ -174,9 +183,14 @@ fn counter_screen(
                 .gap(UiSpace::Md)
                 .padding(UiSpace::Lg)
                 .children([
-                    ui::text("title", WINDOW_TITLE).text_key("counter.title"),
-                    ui::text("count", format!("Count: {} / {}", model.count(), WIN_COUNT))
-                        .text_key("counter.count"),
+                    ui::text("title", UiText::key("counter.title").fallback(WINDOW_TITLE)),
+                    ui::text(
+                        "count",
+                        UiText::key("counter.count")
+                            .arg("count", model.count())
+                            .arg("target", WIN_COUNT)
+                            .fallback(format!("Count: {} / {}", model.count(), WIN_COUNT)),
+                    ),
                     ui::row("actions")
                         .gap(UiSpace::Sm)
                         .children([
@@ -200,9 +214,13 @@ fn win_screen(
                 .gap(UiSpace::Md)
                 .padding(UiSpace::Lg)
                 .children([
-                    ui::text("title", "You win!").text_key("counter.win.title"),
-                    ui::text("count", format!("Final count: {}", model.count()))
-                        .text_key("counter.win.count"),
+                    ui::text("title", UiText::key("counter.win.title").fallback("You win!")),
+                    ui::text(
+                        "count",
+                        UiText::key("counter.win.count")
+                            .arg("count", model.count())
+                            .fallback(format!("Final count: {}", model.count())),
+                    ),
                     ui::row("actions")
                         .gap(UiSpace::Sm)
                         .children([
@@ -266,9 +284,6 @@ pub fn run() -> Result<()> {
 }
 ```
 
-The code above is a target shape. It is not a claim that the listed API already
-exists.
-
 ## Model Rules
 
 `CounterModel` stores only count:
@@ -321,6 +336,46 @@ All other action/state pairs:
   rejected with counter.action.disabled_by_state
 ```
 
+## Availability Versus Reducer Rejection
+
+Action availability is predictive UI/host metadata. It allows controls to render
+disabled state, route catalogs to explain available actions, and preview/proof
+systems to show expected affordances.
+
+Reducer rejection is authoritative safety. Even if a stale UI event, replay step,
+remote host, or bad fixture submits a disabled action, the reducer must reject it
+fail-closed and report diagnostics.
+
+## RouteActionMap Requirement
+
+Implementation must create an explicit route-action map from action declarations.
+
+Input facts:
+
+```text
+UiEventPacket
+HostRouteMap or host compatibility evidence
+Counter action declarations
+route schema version
+payload schema references
+required capabilities
+```
+
+Resolution variants:
+
+```text
+Accepted(AppAction)
+RejectedUnknownRoute
+RejectedSchemaVersion
+RejectedPayloadShape
+RejectedMissingCapability
+RejectedDisabledByHost
+RejectedDisabledByState
+RejectedDiagnostics
+```
+
+All rejections must be reportable and fail closed.
+
 ## Projection Rules
 
 The app-program projection produces `UiSource`, not `UiSourceAst`.
@@ -345,6 +400,37 @@ actions: reset only
 The switch to the win screen is a pure projection consequence of `count >= 10`.
 It is not a reducer side effect and not UI-owned state mutation.
 
+## Localization Requirements
+
+Text source should be represented as:
+
+```text
+text key
+format arguments
+fallback text
+source-map provenance
+```
+
+Proof sketches may display fallback text. Mature implementation must preserve
+keys and report missing localization metadata.
+
+## Reactive Update Requirement
+
+The counter proof must demonstrate reactivity:
+
+```text
+counter.increment route accepted
+-> CounterModel count changes
+-> app model revision changes
+-> counter UI projection invalidated
+-> count label updates
+-> when count becomes 10, win screen is projected
+-> UiOutput / UiOutputDelta records the changed screen
+```
+
+The reactive update must be reported through `UiUpdateReport` or an equivalent
+proof-local update trace.
+
 ## Required Reports
 
 A complete implementation must produce or attach these reports:
@@ -361,6 +447,7 @@ UiSourceValidationReport
 UiProgramFormationReport
 UiCompilerReport
 UiEvaluationReport
+UiUpdateReport
 AppReplayTrace
 ProofManifestReport
 ```
@@ -390,6 +477,7 @@ accepted or rejected app action
 reducer outcome
 effect plan
 view projection report
+UI update report
 UI output summary
 after model snapshot
 stable diagnostics
