@@ -11,6 +11,7 @@ related:
   - ./ui-source-projection-and-program-lowering-design.md
   - ./ui-reactive-runtime-and-invalidation-design.md
   - ./ui-live-editing-and-preview-design.md
+  - ./ui-layout-style-theme-and-motion-design.md
   - ./ui-program-architecture-owner-map.md
 ---
 
@@ -281,6 +282,22 @@ UiCompositionKitReport
 UiComponentMigrationReport
 UiComponentAccessibilityReport
 UiComponentPreviewReport
+```
+
+## Acceptance Criteria
+
+A first component slice should prove:
+
+```text
+package-backed Button and Text controls
+one reusable component with typed props
+one composition component with typed slots
+one product component using props and slots
+source validation rejects invalid slot content
+slot fallback content is deterministic
+source maps survive template expansion
+state retention is keyed by stable component/source identity
+headless proof can inspect expanded source and resulting UiProgram
 ```
 
 ## Rejected Shapes
