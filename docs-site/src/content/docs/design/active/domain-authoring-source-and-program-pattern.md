@@ -4,13 +4,15 @@ description: Cross-domain authoring pattern for source, normalized models, domai
 status: active
 owner: workspace
 layer: design
-canonical: true
+canonical: false
 last_reviewed: 2026-07-08
 related:
   - ./runenwerk-domain-workbench-north-star.md
   - ../../guidelines/domain-program-architecture-pattern.md
   - ./ui-program-architecture.md
   - ./runenwerk-typed-app-composition-plugin-framework-design.md
+  - ./ui-framework-runtime-requirements-design.md
+  - ./ui-reactive-runtime-and-invalidation-design.md
 ---
 
 # Domain Authoring Source And Program Pattern
@@ -23,19 +25,37 @@ authorize implementation, crate creation, `foundation/meta`, a generic graph
 runtime, a universal AST, a generic compiler/evaluator framework, or shared
 platform extraction.
 
+This document is a companion to the existing canonical Domain Program
+Architecture Pattern. It is not a replacement for that guideline until a later
+accepted architecture update explicitly promotes it.
+
 ## Decision
 
-Runenwerk domains use this lifecycle:
+Runenwerk domains use a source/program lifecycle:
 
 ```text
 Authoring Source
 -> Source Model
 -> Normalized Domain Model
 -> Domain Program
--> Runtime Artifact
--> Evaluator / Compiler Output
+-> Compiler / Evaluator
+-> Runtime Artifact / Output Facts
 -> Host Integration
 -> Proof / Diagnostics / Migration Reports
+```
+
+The exact compiler/evaluator ordering may vary by domain:
+
+```text
+compile-first:
+  Domain Program -> Compiler -> Runtime Artifact -> Evaluator -> Output Facts
+
+evaluate-direct:
+  Domain Program -> Evaluator -> Output Facts
+
+hybrid:
+  Domain Program -> Compiler -> Runtime Artifact
+  Domain Program + Runtime Artifact -> Evaluator -> Output Facts
 ```
 
 The lifecycle is common. Domain meaning is not common.
@@ -128,6 +148,12 @@ An optimized derived product created from a domain program. Runtime artifacts ma
 be cached, hashed, diffed, inspected, invalidated, and reproduced. They must not
 become source truth.
 
+### Output Facts
+
+Evaluator/compiler facts intended for host consumption. Examples include UI
+output, event packets, render plans, preview facts, proof facts, diagnostics, or
+artifact manifests. Output facts are not host side effects.
+
 ### Host
 
 A concrete environment that consumes evaluated facts or runtime artifacts and
@@ -143,6 +169,8 @@ headless test, CLI, preview, remote-devtools, build, and CI hosts.
 | Source-map envelope | Yes | Domain-neutral provenance. |
 | Diagnostic envelope | Yes | Envelope can be shared; diagnostic meaning stays domain-owned. |
 | Capability references | Yes | Needed for validation, host compatibility, and trust policy. |
+| Dependency/invalidation envelope | Later | Strong candidate after UI plus one non-UI proof. |
+| Incremental update report envelope | Later | Useful if at least two domains prove dirty-scope reporting. |
 | Package manifests | Later | Extract only after UI plus one non-UI proof. |
 | Extension-point manifests | Later | Likely shared, but must remain typed and bounded. |
 | Typed graph substrate | Later | Share structure only, not node/edge/port meaning. |
@@ -156,10 +184,10 @@ headless test, CLI, preview, remote-devtools, build, and CI hosts.
 
 ## Domain Instantiations
 
-| Domain | Source | Program | Artifact | Host examples |
+| Domain | Source | Program | Artifact / output | Host examples |
 |---|---|---|---|---|
-| UI | `UiSource` | `UiProgram` | UI runtime artifacts, UI output, frames | editor, game HUD, world-space, headless, preview |
-| Materials | `MaterialSourceGraph` | `MaterialProgram` | shader modules, material pipeline artifacts | renderer, material lab, game, preview |
+| UI | `UiSource` | `UiProgram` | UI runtime artifacts, UI output, frames, event packets | editor, game HUD, world-space, headless, preview |
+| Materials | `MaterialSourceGraph` | `MaterialProgram` | shader modules, material pipeline artifacts, preview facts | renderer, material lab, game, preview |
 | Procgen | `ProcgenSourceGraph` | `ProcgenProgram` | chunk recipes, spawn tables, field caches | editor, game, headless bake, preview |
 | Render | `RenderPlanSource` | `RenderPlan` | render graph artifacts, GPU resource plans | renderer, editor preview, game |
 | Animation | `AnimationSourceGraph` | `AnimationProgram` | runtime animation graph, baked tables | game, editor preview, tests |
@@ -187,6 +215,27 @@ host/runtime state, schedule systems, and bridge concrete runtime behavior. ECS
 must not own source truth, package catalogs, domain program semantics, material
 node meaning, UI control meaning, procgen rule meaning, or app model truth.
 
+## Reactive And Incremental Structure
+
+Reactive/incremental update concepts are structural candidates, not domain
+meaning. They should be considered for later shared extraction only after UI and
+one non-UI domain prove repeated needs.
+
+Potential shared envelopes:
+
+```text
+DependencyGraphRef
+InvalidationCause
+InvalidationScope
+DirtySetSummary
+IncrementalUpdateReport
+StateRetentionDecision
+ArtifactInvalidationReport
+```
+
+The meaning of a dirty UI node, dirty material shader node, dirty procgen region,
+or dirty render pass remains domain-owned.
+
 ## Required Reports
 
 Any serious domain-authoring track should define report surfaces for:
@@ -199,6 +248,8 @@ package resolution
 capability checks
 compiler/evaluator output
 artifact construction
+artifact invalidation
+incremental update where applicable
 host compatibility
 proof execution
 migration
