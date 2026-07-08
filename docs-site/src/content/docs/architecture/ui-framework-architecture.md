@@ -17,7 +17,7 @@ related_docs:
   - ../design/active/ui-runtime-rendering-pipeline-roadmap.md
   - ../design/active/game-runtime-ui-projection-and-hud-platform-design.md
   - ../design/deferred/ui-model-multiple-execution-strategies-design.md
-  - ../../architecture/domain-authoring-platform-overview.md
+  - domain-authoring-platform-overview.md
   - ../adr/accepted/0009-ui-interaction-formation-v2.md
 ---
 

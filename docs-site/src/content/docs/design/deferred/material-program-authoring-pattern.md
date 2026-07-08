@@ -25,8 +25,7 @@ platform extraction.
 The purpose is to record how the domain-authoring pattern should apply to a
 non-UI proving domain once the UI proof is credible.
 
-The frontmatter owner value must be checked against the docs schema before this
-PR is marked ready.
+The frontmatter owner value was validated against the docs schema during PR readiness cleanup.
 
 Material authoring remains owned by the material domain. The `owner` frontmatter value is schema-facing only.
 
