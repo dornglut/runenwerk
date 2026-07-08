@@ -1,6 +1,6 @@
 ---
 title: UI Testing Conformance And Proof Matrix Design
-description: Long-term testing, conformance, proof matrix, replay, fixture, snapshot, interaction, accessibility, performance, migration, and host compatibility requirements for Runenwerk UI.
+description: Long-term testing, conformance, proof matrix, replay, fixture, snapshot, interaction, accessibility, performance, migration, renderer, platform, devtools, and host compatibility requirements for Runenwerk UI.
 status: active
 owner: ui
 layer: design
@@ -12,8 +12,11 @@ related:
   - ./ui-live-editing-and-preview-design.md
   - ./ui-game-and-worldspace-host-requirements-design.md
   - ./ui-accessibility-internationalization-and-text-conformance-design.md
+  - ./ui-layout-style-theme-and-motion-design.md
   - ./ui-performance-virtualization-assets-and-profiling-design.md
-  - ./typed-app-program-counter-proof-design.md
+  - ./ui-render-output-and-host-renderer-boundary-design.md
+  - ./ui-platform-input-windowing-and-os-integration-design.md
+  - ./ui-devtools-inspection-and-workbench-design.md
   - ./ui-program-architecture-owner-map.md
 ---
 
@@ -23,8 +26,8 @@ related:
 
 Active long-term UI design direction. This document defines testing,
 conformance, proof matrix, replay, fixture, snapshot, interaction, accessibility,
-performance, migration, and host compatibility requirements. It does not
-authorize implementation by itself.
+performance, migration, renderer, platform, devtools, and host compatibility
+requirements. It does not authorize implementation by itself.
 
 ## Decision
 
@@ -50,14 +53,17 @@ binding tests
 state retention tests
 layout tests
 style/theme tests
+motion/reduced-motion tests
 text/i18n tests
 accessibility tests
 input/focus/navigation tests
+platform integration tests
+renderer boundary tests
+devtools/inspection tests
 game/world-space host tests
 live-preview tests
 performance/virtualization tests
 migration tests
-renderer boundary tests
 ```
 
 ## Proof Artifacts
@@ -125,12 +131,16 @@ reducer outcome assertion
 effect proposal assertion
 layout rect assertion
 style token assertion
+motion policy assertion
 text output assertion
 accessibility semantic assertion
 focus/navigation assertion
 input routing assertion
+platform service assertion
+renderer packet assertion
 output delta assertion
 artifact cache assertion
+devtools source-map assertion
 diagnostic assertion
 performance budget assertion
 host compatibility assertion
@@ -172,6 +182,63 @@ error/validation semantics
 semantic tree stability
 high-contrast/reduced-motion behavior
 text scaling behavior
+```
+
+## Layout / Style / Motion Tests
+
+Layout, style, and motion tests must verify:
+
+```text
+flex-like layout
+grid-like layout
+source order versus visual order
+safe-area constraints
+text expansion layout
+style token invalidation
+variant resolution
+reduced-motion replacement
+layout cycle diagnostics
+```
+
+## Renderer Boundary Tests
+
+Renderer boundary tests must verify:
+
+```text
+draw-neutral packet generation
+renderer adapter consumes packets without owning UI semantics
+text/glyph request provenance
+clip stack and layer order facts
+unsupported renderer feature diagnostics
+headless frame summary matches structural output
+```
+
+## Platform Integration Tests
+
+Platform tests must verify:
+
+```text
+pointer normalization
+keyboard versus text input separation
+IME composition representation
+clipboard proposal capability checks
+drag/drop payload schema and capability checks
+window resize invalidates surface/layout facts
+OS accessibility bridge or compatibility diagnostic
+```
+
+## Devtools / Inspection Tests
+
+Devtools tests must verify:
+
+```text
+source-to-output source-map navigation
+route/action rejection inspection
+focus trace inspection
+retained state decision inspection
+live-preview program diff inspection
+cache hit/miss inspection
+headless inspection bundle export
 ```
 
 ## Performance Tests
@@ -256,6 +323,10 @@ accessibility
 localization and bidi
 layout and overflow
 style/theme variants
+motion and reduced motion
+renderer boundary
+platform/window/input integration
+devtools/workbench inspection
 animation and reduced motion
 overlay/popup/layering
 large virtualized collections
