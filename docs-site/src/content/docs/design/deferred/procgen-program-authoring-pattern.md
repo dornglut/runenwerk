@@ -1,6 +1,6 @@
 ---
 title: Procgen Program Authoring Pattern
-description: Deferred procedural-generation domain instantiation of the domain authoring source/program pattern, covering procgen source graphs, procgen programs, deterministic evaluators, runtime artifacts, hosts, diagnostics, migration, and proof surfaces.
+description: Deferred procedural-generation domain instantiation of the domain authoring source/program pattern, covering procgen source graphs, procgen programs, deterministic evaluators, runtime artifacts, hosts, diagnostics, migration, live preview, spatial scope, and proof surfaces.
 status: deferred
 owner: procgen
 layer: design
@@ -22,6 +22,9 @@ shared platform extraction.
 
 The purpose is to record how the domain-authoring pattern should apply to a
 non-UI proving domain after UI proof evidence is credible.
+
+The frontmatter owner value must be checked against the docs schema before this
+PR is marked ready.
 
 ## Decision
 
@@ -79,6 +82,31 @@ SpawnRule
 DistanceFieldMask
 DirtyRegionRebuild
 ```
+
+## Spatial Scope Vocabulary
+
+Procgen must define spatial scope explicitly before implementation.
+
+Candidate vocabulary:
+
+```text
+World
+SuperRegion
+Region
+Chunk
+Cell
+Layer
+Field
+Volume
+StreamingWindow
+DirtyRegion
+DependencyTile
+PreviewBounds
+BakeBounds
+```
+
+Spatial scope affects determinism, invalidation, streaming, preview, and proof
+comparison. It must not be hidden inside ECS queries or renderer-side caches.
 
 ## Source And Graph Families
 
@@ -143,6 +171,49 @@ ProcgenCacheKey
 
 Artifacts are derived products. They must not become procgen source truth.
 
+## Live Preview And Bake Split
+
+Procgen needs separate preview and bake modes.
+
+Preview evaluator:
+
+```text
+bounded
+fast
+partial
+interactive
+may use lower resolution
+must report approximations
+must preserve determinism where claimed
+```
+
+Bake evaluator/compiler:
+
+```text
+complete for declared bounds
+strictly deterministic
+cacheable
+fixture-comparable
+streaming-compatible
+```
+
+Live preview loop:
+
+```text
+edit procgen source node/property
+-> validate source graph
+-> normalize graph
+-> form ProcgenProgram diff
+-> compute dirty spatial scope
+-> invalidate affected field/chunk/spawn artifacts
+-> preview affected bounds
+-> preserve preview camera/selection/seed state by policy
+-> show source-map diagnostics
+```
+
+Invalid procgen source keeps the last known good preview artifact and overlays
+diagnostics.
+
 ## Host Profiles
 
 Procgen host compatibility should consider:
@@ -172,6 +243,7 @@ preview versus bake
 streaming compatibility
 incremental invalidation
 dirty-region rebuilding
+spatial dependency tracking
 reproducible fixture output
 host-specific capability limits
 ```
@@ -190,6 +262,18 @@ source-map attachment
 diagnostics for invalid seeds/types/capabilities/budgets
 fixture reproducibility
 host compatibility report
+live-preview invalidation report
+```
+
+Proof comparison modes:
+
+```text
+exact hash comparison for discrete artifacts
+tolerant numeric comparison for float fields
+seed reproducibility check
+budget compliance check
+dirty-region minimality check
+streaming window consistency check
 ```
 
 ## Shared Structure Candidates
@@ -207,6 +291,7 @@ typed graph structural substrate
 artifact manifest envelope
 host compatibility matrix
 proof report envelope
+incremental invalidation report envelope
 ```
 
 ## Rejected
