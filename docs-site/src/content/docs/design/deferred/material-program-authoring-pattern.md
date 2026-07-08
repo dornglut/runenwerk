@@ -14,6 +14,8 @@ related:
 
 # Material Program Authoring Pattern
 
+This document is a design sketch for how MaterialProgram — the next named second-domain proof — instantiates the domain authoring source/program pattern. The active and material tracks are secondary to UI; ProcgenProgram is an additional deferred candidate, not a replacement for or competitor of MaterialProgram.
+
 ## Status
 
 Deferred design sketch. This document does not authorize implementation, crate
@@ -25,6 +27,8 @@ non-UI proving domain once the UI proof is credible.
 
 The frontmatter owner value must be checked against the docs schema before this
 PR is marked ready.
+
+Material authoring remains owned by the material domain. The `owner` frontmatter value is schema-facing only.
 
 ## Decision
 

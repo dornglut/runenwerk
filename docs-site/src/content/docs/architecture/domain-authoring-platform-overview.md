@@ -244,3 +244,16 @@ hidden global mutable registries
 foundation/meta
 shared extraction before UI plus one non-UI proof
 ```
+
+## Report Surface Taxonomy
+
+Report names must remain layer-scoped. New report types should fit one of these buckets before a new naming family is introduced.
+
+| Layer | Report family | Purpose |
+| --- | --- | --- |
+| Source / lowering | Parse, validation, source-map, lowering reports | Explain how authored source becomes a typed program or why it failed. |
+| Runtime / invalidation | Evaluation, dependency, dirty-scope, retained-state, update reports | Explain how a program evaluates, what changed, and what was reused. |
+| Host / renderer | Host capability, renderer packet, frame summary, text/glyph, clipping reports | Explain the boundary between UI output and host/renderer execution. |
+| Live preview / devtools | Edit, hot-swap, last-known-good, inspection, profiling reports | Explain live authoring behavior and diagnostics. |
+| Testing / conformance | Replay, fixture, structural, visual, accessibility, performance reports | Explain proof evidence and conformance results. |
+| Package / migration / security | Provenance, compatibility, migration, trust, capability reports | Explain package lifecycle, security posture, and upgrade behavior. |

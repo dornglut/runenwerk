@@ -14,6 +14,8 @@ related:
 
 # Procgen Program Authoring Pattern
 
+This document is a design sketch for how ProcgenProgram instantiates the domain authoring source/program pattern. MaterialProgram remains the next named second-domain proof; this file records ProcgenProgram as an additional deferred candidate, not a replacement or successor to the MaterialProgram proof path.
+
 ## Status
 
 Deferred design sketch. This document does not authorize implementation, crate
@@ -25,6 +27,8 @@ non-UI proving domain after UI proof evidence is credible.
 
 The frontmatter owner value must be checked against the docs schema before this
 PR is marked ready.
+
+Procgen authoring remains owned by the procgen/world-generation domain. The `owner` frontmatter value is schema-facing only.
 
 ## Decision
 
