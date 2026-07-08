@@ -327,7 +327,6 @@ motion and reduced motion
 renderer boundary
 platform/window/input integration
 devtools/workbench inspection
-animation and reduced motion
 overlay/popup/layering
 large virtualized collections
 gamepad navigation
@@ -336,7 +335,6 @@ live editing and preview
 host compatibility
 performance budgets
 migration
-renderer boundary
 ```
 
 ## Rejected Test Shapes
