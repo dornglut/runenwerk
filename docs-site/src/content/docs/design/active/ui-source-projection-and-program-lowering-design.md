@@ -9,6 +9,10 @@ last_reviewed: 2026-07-08
 related:
   - ./domain-authoring-source-and-program-pattern.md
   - ./typed-app-program-counter-proof-design.md
+  - ./ui-framework-runtime-requirements-design.md
+  - ./ui-reactive-runtime-and-invalidation-design.md
+  - ./ui-live-editing-and-preview-design.md
+  - ./ui-game-and-worldspace-host-requirements-design.md
   - ./ui-program-architecture.md
   - ./ui-program-architecture-owner-map.md
   - ../../domain/ui/architecture.md
@@ -22,6 +26,10 @@ Active UI design direction. This document defines vocabulary and required
 boundaries for UI source produced by app projections, Rust builders, RON/source
 assets, visual designers, and generated tools. It does not authorize broad
 implementation, crate creation, renderer changes, or product-specific bypasses.
+
+This document is not the complete UI framework runtime specification. Reactivity,
+invalidation, retained runtime state, live editing, preview, game UI, and
+world-space host behavior are covered by companion UI framework docs.
 
 ## Decision
 
@@ -51,6 +59,21 @@ UiSource
 `UiSource` is not a retained runtime tree, not an ECS entity set, not a renderer
 primitive list, and not app mutation authority.
 
+## Relationship To The Full UI Framework
+
+This document defines the source and lowering stage only.
+
+Full framework behavior requires these companion contracts:
+
+```text
+ui-framework-runtime-requirements-design.md
+ui-reactive-runtime-and-invalidation-design.md
+ui-live-editing-and-preview-design.md
+ui-game-and-worldspace-host-requirements-design.md
+```
+
+Do not implement `UiSource` as if it alone defines a complete UI framework.
+
 ## UiSource Envelope
 
 A `UiSource` record should carry or preserve:
@@ -64,11 +87,12 @@ required capabilities
 route/action bindings
 schema references
 source-map provenance
-localization keys
+localization keys and fallback text
 accessibility metadata
 theme/style references
 host requirements
 validation diagnostics
+preview metadata where applicable
 ```
 
 ## Source Body Kinds
@@ -98,8 +122,9 @@ The app projection may know:
 app model read data
 typed app actions
 action availability
-localization text keys
+localization text keys and fallback text
 source ids for projected nodes
+preview fixture data where explicitly supplied
 ```
 
 The app projection must not:
@@ -126,6 +151,7 @@ It should provide controls such as:
 actions.button(Action)
 actions.menu_item(Action)
 actions.action_prompt(Action)
+actions.input_prompt(Action)
 ```
 
 The projection must lower to source facts containing:
@@ -173,6 +199,7 @@ keyboard activation
 text keys
 format arguments
 fallback text
+missing-localization diagnostics
 ```
 
 Direct English strings may be allowed in proof sketches, but real source should
@@ -189,10 +216,30 @@ color tokens
 radius tokens
 layout constraints
 overflow policy
+responsive variants
+safe-area references where applicable
 ```
 
 Token resolution belongs in UI theme/layout/program/artifact stages, not product
 app code.
+
+## Reactive Source Dependencies
+
+`UiSource` should declare or preserve dependency facts needed by the reactive
+runtime:
+
+```text
+model fields read by projection
+host data read by projection
+text keys and format arguments
+theme tokens
+package descriptors
+binding paths
+source node identities
+```
+
+These dependency facts feed `UiDependencyGraph` and invalidation reports. The
+source stage records provenance; the reactive runtime decides update scope.
 
 ## Lowering Reports
 
