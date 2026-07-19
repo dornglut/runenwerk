@@ -1,8 +1,8 @@
 use glam::Vec3;
 
 use sdf::primitives::SdfSphere;
-use sdf::queries::classify::{PointClassification, classify_point};
 use sdf::queries::QueryError;
+use sdf::queries::classify::{PointClassification, classify_point};
 
 #[test]
 fn classify_inside_outside_and_surface() {

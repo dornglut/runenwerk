@@ -1,7 +1,7 @@
 use glam::Vec3;
 
-use crate::error::{ensure_finite_vec3, ensure_positive};
 use crate::SdfField3;
+use crate::error::{ensure_finite_vec3, ensure_positive};
 
 use super::QueryError;
 

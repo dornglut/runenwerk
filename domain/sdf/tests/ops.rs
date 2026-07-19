@@ -22,9 +22,7 @@ fn hard_boolean_ops_preserve_sign_and_conservative_steps() {
     assert!(union.safe_step().is_some());
     assert!(intersect.safe_step().is_some());
     assert!(subtract.safe_step().is_some());
-    assert!(!Union::new(left, right)
-        .capabilities()
-        .has_exact_distance());
+    assert!(!Union::new(left, right).capabilities().has_exact_distance());
 }
 
 #[test]
@@ -45,9 +43,7 @@ fn field_bounds_distinguish_empty_unbounded_and_bounded() {
     assert_eq!(Union::new(a, plane).bounds(), FieldBounds::Unbounded);
 
     let left = FieldBounds::bounded(Bounds3::try_new(Vec3::ZERO, Vec3::ONE).unwrap());
-    let right = FieldBounds::bounded(
-        Bounds3::try_new(Vec3::splat(2.0), Vec3::splat(3.0)).unwrap(),
-    );
+    let right = FieldBounds::bounded(Bounds3::try_new(Vec3::splat(2.0), Vec3::splat(3.0)).unwrap());
     assert_eq!(left.intersection(right), FieldBounds::Empty);
 }
 

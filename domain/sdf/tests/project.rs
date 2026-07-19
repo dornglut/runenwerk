@@ -9,24 +9,18 @@ use sdf::{SampleError, SdfField3, SdfSample};
 fn project_from_outside_and_inside_converges_to_surface() {
     let field = SdfSphere::new(Vec3::ZERO, 1.0).unwrap();
 
-    let QueryOutcome::Hit(outside) = project_point_to_surface(
-        &field,
-        Vec3::new(2.5, 0.0, 0.0),
-        ProjectSettings::default(),
-    )
-    .unwrap()
+    let QueryOutcome::Hit(outside) =
+        project_point_to_surface(&field, Vec3::new(2.5, 0.0, 0.0), ProjectSettings::default())
+            .unwrap()
     else {
         panic!("outside projection should hit");
     };
     assert!(outside.position.distance(Vec3::X) < 1e-3);
     assert!(outside.signed_value.abs() < 1e-3);
 
-    let QueryOutcome::Hit(inside) = project_point_to_surface(
-        &field,
-        Vec3::new(0.2, 0.0, 0.0),
-        ProjectSettings::default(),
-    )
-    .unwrap()
+    let QueryOutcome::Hit(inside) =
+        project_point_to_surface(&field, Vec3::new(0.2, 0.0, 0.0), ProjectSettings::default())
+            .unwrap()
     else {
         panic!("inside projection should hit");
     };
@@ -47,12 +41,9 @@ fn projection_reports_convergence_budget_exhaustion() {
 #[test]
 fn project_on_plane_is_accurate() {
     let field = SdfPlane::from_point_normal(Vec3::ZERO, Vec3::Y).unwrap();
-    let QueryOutcome::Hit(hit) = project_point_to_surface(
-        &field,
-        Vec3::new(1.0, 3.0, 2.0),
-        ProjectSettings::default(),
-    )
-    .unwrap()
+    let QueryOutcome::Hit(hit) =
+        project_point_to_surface(&field, Vec3::new(1.0, 3.0, 2.0), ProjectSettings::default())
+            .unwrap()
     else {
         panic!("plane projection should hit");
     };

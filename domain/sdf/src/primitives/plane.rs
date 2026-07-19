@@ -1,6 +1,8 @@
 use glam::Vec3;
 
-use crate::error::{ValidationError, ensure_finite_scalar, ensure_finite_vec3, ensure_sample_point};
+use crate::error::{
+    ValidationError, ensure_finite_scalar, ensure_finite_vec3, ensure_sample_point,
+};
 use crate::{FieldBounds, FieldCapabilities, SampleError, SdfField3, SdfSample};
 
 #[derive(Debug, Copy, Clone, PartialEq)]

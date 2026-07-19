@@ -30,19 +30,16 @@ fn sphere_signed_distance_safe_step_and_bounds_are_correct() {
 fn box_and_capsule_match_expected_samples() {
     let box3 = SdfBox3::new(Vec3::ZERO, Vec3::new(1.0, 2.0, 3.0)).expect("valid box");
     assert!((box3.sample(Vec3::ZERO).unwrap().signed_value() + 1.0).abs() < EPS);
-    assert!(box3
-        .sample(Vec3::new(1.0, 0.0, 0.0))
-        .unwrap()
-        .signed_value()
-        .abs()
-        < EPS);
+    assert!(
+        box3.sample(Vec3::new(1.0, 0.0, 0.0))
+            .unwrap()
+            .signed_value()
+            .abs()
+            < EPS
+    );
 
-    let capsule = SdfCapsule::new(
-        Vec3::new(0.0, -1.0, 0.0),
-        Vec3::new(0.0, 1.0, 0.0),
-        0.5,
-    )
-    .expect("valid capsule");
+    let capsule = SdfCapsule::new(Vec3::new(0.0, -1.0, 0.0), Vec3::new(0.0, 1.0, 0.0), 0.5)
+        .expect("valid capsule");
     assert!((capsule.sample(Vec3::ZERO).unwrap().signed_value() + 0.5).abs() < EPS);
 
     let FieldBounds::Bounded(bounds) = capsule.bounds() else {
@@ -55,22 +52,26 @@ fn box_and_capsule_match_expected_samples() {
 #[test]
 fn plane_torus_and_cylinder_are_exact_fields() {
     let plane = SdfPlane::from_point_normal(Vec3::ZERO, Vec3::Y).expect("valid plane");
-    assert!((plane
-        .sample(Vec3::new(0.0, 2.0, 0.0))
-        .unwrap()
-        .signed_value()
-        - 2.0)
-        .abs()
-        < EPS);
+    assert!(
+        (plane
+            .sample(Vec3::new(0.0, 2.0, 0.0))
+            .unwrap()
+            .signed_value()
+            - 2.0)
+            .abs()
+            < EPS
+    );
     assert_eq!(plane.bounds(), FieldBounds::Unbounded);
 
     let torus = SdfTorus::new(Vec3::ZERO, 2.0, 0.5).expect("valid torus");
-    assert!(torus
-        .sample(Vec3::new(2.5, 0.0, 0.0))
-        .unwrap()
-        .signed_value()
-        .abs()
-        < EPS);
+    assert!(
+        torus
+            .sample(Vec3::new(2.5, 0.0, 0.0))
+            .unwrap()
+            .signed_value()
+            .abs()
+            < EPS
+    );
 
     let cylinder = SdfCylinder::new(Vec3::ZERO, 1.0, 2.0).expect("valid cylinder");
     assert!((cylinder.sample(Vec3::ZERO).unwrap().signed_value() + 1.0).abs() < EPS);

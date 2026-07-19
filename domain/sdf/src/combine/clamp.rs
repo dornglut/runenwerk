@@ -11,11 +11,7 @@ pub struct ClampDistance<F> {
 }
 
 impl<F> ClampDistance<F> {
-    pub fn new(
-        field: F,
-        min_distance: f32,
-        max_distance: f32,
-    ) -> Result<Self, ValidationError> {
+    pub fn new(field: F, min_distance: f32, max_distance: f32) -> Result<Self, ValidationError> {
         ensure_finite_scalar(min_distance, "minimum clamp distance")?;
         ensure_finite_scalar(max_distance, "maximum clamp distance")?;
         if min_distance > max_distance {

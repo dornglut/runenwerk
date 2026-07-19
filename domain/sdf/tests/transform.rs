@@ -13,23 +13,26 @@ fn translation_and_rotation_preserve_exact_distance() {
         Vec3::new(2.0, 0.0, 0.0),
     )
     .unwrap();
-    assert!((translated
-        .sample(Vec3::new(2.0, 0.0, 0.0))
-        .unwrap()
-        .signed_value()
-        + 1.0)
-        .abs()
-        < EPS);
+    assert!(
+        (translated
+            .sample(Vec3::new(2.0, 0.0, 0.0))
+            .unwrap()
+            .signed_value()
+            + 1.0)
+            .abs()
+            < EPS
+    );
     assert!(translated.capabilities().has_exact_distance());
 
     let box3 = SdfBox3::new(Vec3::new(2.0, 0.0, 0.0), Vec3::splat(0.5)).unwrap();
-    let rotated = Rotate::new(box3, Quat::from_rotation_z(std::f32::consts::FRAC_PI_2))
-        .unwrap();
-    assert!(rotated
-        .sample(Vec3::new(0.0, 2.0, 0.0))
-        .unwrap()
-        .signed_value()
-        < 0.0);
+    let rotated = Rotate::new(box3, Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)).unwrap();
+    assert!(
+        rotated
+            .sample(Vec3::new(0.0, 2.0, 0.0))
+            .unwrap()
+            .signed_value()
+            < 0.0
+    );
     assert!(rotated.capabilities().has_exact_distance());
 }
 

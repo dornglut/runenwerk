@@ -12,11 +12,7 @@ pub struct SdfCylinder {
 }
 
 impl SdfCylinder {
-    pub fn new(
-        center: Vec3,
-        radius: f32,
-        half_height: f32,
-    ) -> Result<Self, ValidationError> {
+    pub fn new(center: Vec3, radius: f32, half_height: f32) -> Result<Self, ValidationError> {
         ensure_finite_vec3(center, "cylinder center")?;
         ensure_non_negative(radius, "cylinder radius")?;
         ensure_non_negative(half_height, "cylinder half height")?;

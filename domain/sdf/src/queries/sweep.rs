@@ -1,9 +1,9 @@
 use glam::Vec3;
 
+use crate::SdfField3;
 use crate::epsilon::{DEFAULT_CLASSIFY_EPSILON, DEFAULT_MAX_SWEEP_STEPS, DEFAULT_NORMAL_EPSILON};
 use crate::error::{ValidationError, ensure_finite_vec3, ensure_non_negative, ensure_positive};
 use crate::gradient::estimate_normal;
-use crate::SdfField3;
 
 use super::{QueryError, QueryOutcome, QueryTermination, require_exact_distance};
 

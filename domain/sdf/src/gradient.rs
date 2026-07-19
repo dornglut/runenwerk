@@ -1,15 +1,11 @@
 use glam::Vec3;
 
+use crate::SdfField3;
 use crate::epsilon::DEFAULT_NORMAL_EPSILON;
 use crate::error::{GradientError, ensure_finite_vec3, ensure_positive};
 use crate::util::finite_difference::central_difference;
-use crate::SdfField3;
 
-pub fn estimate_gradient<F>(
-    field: &F,
-    point: Vec3,
-    epsilon: f32,
-) -> Result<Vec3, GradientError>
+pub fn estimate_gradient<F>(field: &F, point: Vec3, epsilon: f32) -> Result<Vec3, GradientError>
 where
     F: SdfField3 + ?Sized,
 {
@@ -36,11 +32,7 @@ where
     estimate_gradient(field, point, DEFAULT_NORMAL_EPSILON)
 }
 
-pub fn estimate_normal<F>(
-    field: &F,
-    point: Vec3,
-    epsilon: f32,
-) -> Result<Vec3, GradientError>
+pub fn estimate_normal<F>(field: &F, point: Vec3, epsilon: f32) -> Result<Vec3, GradientError>
 where
     F: SdfField3 + ?Sized,
 {

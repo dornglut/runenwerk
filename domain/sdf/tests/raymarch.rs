@@ -80,8 +80,7 @@ fn raymarch_hits_immediately_when_starting_inside() {
         &ray,
         RaymarchSettings::try_new(128, 10.0, 1e-3).unwrap(),
     )
-    .unwrap()
-    else {
+    .unwrap() else {
         panic!("inside point should register a hit");
     };
     assert!(hit.distance_along_ray <= f32::EPSILON);

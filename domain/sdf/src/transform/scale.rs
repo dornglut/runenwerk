@@ -48,9 +48,7 @@ where
     }
 
     fn bounds(&self) -> FieldBounds {
-        self.field
-            .bounds()
-            .map_corners(|point| point * self.scale)
+        self.field.bounds().map_corners(|point| point * self.scale)
     }
 
     fn capabilities(&self) -> FieldCapabilities {

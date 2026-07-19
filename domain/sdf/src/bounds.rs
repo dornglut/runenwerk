@@ -120,9 +120,9 @@ impl FieldBounds {
         match (self, other) {
             (Self::Empty, _) | (_, Self::Empty) => Self::Empty,
             (Self::Unbounded, value) | (value, Self::Unbounded) => value,
-            (Self::Bounded(a), Self::Bounded(b)) => a
-                .intersection(b)
-                .map_or(Self::Empty, Self::Bounded),
+            (Self::Bounded(a), Self::Bounded(b)) => {
+                a.intersection(b).map_or(Self::Empty, Self::Bounded)
+            }
         }
     }
 

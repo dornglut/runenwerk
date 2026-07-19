@@ -6,15 +6,9 @@ pub enum ValidationError {
     #[error("{parameter} must be finite")]
     NonFinite { parameter: &'static str },
     #[error("{parameter} must be non-negative (got {value})")]
-    Negative {
-        parameter: &'static str,
-        value: f32,
-    },
+    Negative { parameter: &'static str, value: f32 },
     #[error("{parameter} must be greater than zero (got {value})")]
-    NonPositive {
-        parameter: &'static str,
-        value: f32,
-    },
+    NonPositive { parameter: &'static str, value: f32 },
     #[error("{parameter} must not be the zero vector")]
     ZeroVector { parameter: &'static str },
     #[error("minimum must not exceed maximum")]
@@ -72,10 +66,7 @@ pub(crate) fn ensure_non_negative(
     }
 }
 
-pub(crate) fn ensure_positive(
-    value: f32,
-    parameter: &'static str,
-) -> Result<(), ValidationError> {
+pub(crate) fn ensure_positive(value: f32, parameter: &'static str) -> Result<(), ValidationError> {
     ensure_finite_scalar(value, parameter)?;
     if value <= 0.0 {
         Err(ValidationError::NonPositive { parameter, value })

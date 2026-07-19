@@ -87,7 +87,11 @@ where
             if entry > settings.max_distance {
                 return Ok(QueryOutcome::Miss(QueryTermination::MaxDistanceReached));
             }
-            (entry, exit.min(settings.max_distance), exit <= settings.max_distance)
+            (
+                entry,
+                exit.min(settings.max_distance),
+                exit <= settings.max_distance,
+            )
         }
     };
 

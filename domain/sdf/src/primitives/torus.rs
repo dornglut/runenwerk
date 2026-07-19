@@ -26,10 +26,8 @@ impl SdfTorus {
                 parameter: "torus combined radius",
             });
         }
-        let bounds = Bounds3::from_center_half_extents(
-            center,
-            Vec3::new(ring, minor_radius, ring),
-        )?;
+        let bounds =
+            Bounds3::from_center_half_extents(center, Vec3::new(ring, minor_radius, ring))?;
         Ok(Self {
             center,
             major_radius,

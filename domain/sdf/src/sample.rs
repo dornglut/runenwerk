@@ -13,10 +13,7 @@ impl SdfSample {
         Self::from_parts(signed_value, Some(signed_value.abs()))
     }
 
-    pub fn with_safe_step(
-        signed_value: f32,
-        safe_step: f32,
-    ) -> Result<Self, crate::SampleError> {
+    pub fn with_safe_step(signed_value: f32, safe_step: f32) -> Result<Self, crate::SampleError> {
         Self::from_parts(signed_value, Some(safe_step))
     }
 

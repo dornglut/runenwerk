@@ -3,8 +3,8 @@ use glam::Vec3;
 use sdf::combine::{DomainWarp, Mirror, MirrorAxes, Repeat};
 use sdf::ops::Union;
 use sdf::primitives::{SdfCapsule, SdfPlane, SdfSphere};
-use sdf::queries::sweep::{SweepSettings, sweep_sphere};
 use sdf::queries::QueryOutcome;
+use sdf::queries::sweep::{SweepSettings, sweep_sphere};
 use sdf::{FieldBounds, Ray3, SampleError, SdfField3, SdfSample};
 
 #[test]
@@ -22,7 +22,10 @@ fn degenerate_capsule_behaves_like_sphere() {
 fn unbounded_fields_propagate_through_union_bounds() {
     let bounded = SdfSphere::new(Vec3::ZERO, 1.0).unwrap();
     let unbounded = SdfPlane::from_point_normal(Vec3::ZERO, Vec3::Y).unwrap();
-    assert_eq!(Union::new(bounded, unbounded).bounds(), FieldBounds::Unbounded);
+    assert_eq!(
+        Union::new(bounded, unbounded).bounds(),
+        FieldBounds::Unbounded
+    );
 }
 
 #[test]
@@ -41,8 +44,7 @@ fn sweep_sphere_reports_first_contact() {
         0.5,
         SweepSettings::default(),
     )
-    .unwrap()
-    else {
+    .unwrap() else {
         panic!("sweep should hit");
     };
 

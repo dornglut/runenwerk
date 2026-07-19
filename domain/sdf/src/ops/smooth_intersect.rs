@@ -41,8 +41,7 @@ where
             );
         }
 
-        let h = (0.5
-            - 0.5 * (right.signed_value() - left.signed_value()) / self.smoothness)
+        let h = (0.5 - 0.5 * (right.signed_value() - left.signed_value()) / self.smoothness)
             .clamp(0.0, 1.0);
         let value = right.signed_value()
             + (left.signed_value() - right.signed_value()) * h

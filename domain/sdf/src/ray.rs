@@ -1,7 +1,7 @@
 use glam::Vec3;
 
-use crate::error::{ValidationError, ensure_finite_vec3};
 use crate::Bounds3;
+use crate::error::{ValidationError, ensure_finite_vec3};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Ray3 {
