@@ -1,6 +1,6 @@
 ---
 title: RunenECS Extraction Boundary Design
-description: Target package shape and required boundary repairs for extracting ECS, macros, and generic schedule semantics without carrying Runenwerk spatial, networking, rendering, or lifecycle policy.
+description: Decision-complete target ownership and staged repair architecture for extracting ECS, macros, and generic scheduling without Runenwerk spatial, networking, rendering, or lifecycle policy.
 status: active
 owner: ecs
 layer: domain/ecs
@@ -10,7 +10,7 @@ related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../reports/investigations/repository-family-current-state-investigation.md
-  - ../../workspace/planning/active-work.md
+  - ../../reports/investigations/runenecs-complete-extraction-investigation.md
   - ../../workspace/planning/roadmap.md
 ---
 
@@ -18,18 +18,29 @@ related_docs:
 
 ## Status
 
-This document fixes the target ownership and phase order. ECS source movement is
-not authorized until the complete source/consumer inventory and the decisions
-listed as implementation gates are proven against current code and tests.
+The target repository and ownership model are decision-complete. Extraction and
+source repair remain blocked until mandatory local inventory/baseline validation
+passes and `PT-RUNENECS-002` converts the repair program into small exact phase
+specifications.
 
-## Goal
+The linked investigation owns detailed current-source evidence, defects, consumer
+findings, and validation gaps. This document owns the durable target.
 
-Create an independently useful Rust ECS repository with explicit storage, query,
-command, scheduling, reflection, messaging, change-tracking, diagnostics, and
-macro contracts while keeping Runenwerk product integration outside the
-framework.
+## Repository and packages
 
-## Initial repository shape
+```text
+repository: Crystonix/RunenECS
+packages:
+  runenecs
+  runenecs_macros
+  runen_schedule
+version: 0.1.0
+edition: 2024
+license: MIT OR Apache-2.0
+publish: false until release gates are accepted
+```
+
+Initial shape:
 
 ```text
 RunenECS/
@@ -43,429 +54,482 @@ RunenECS/
 ├── examples/
 ├── benches/
 ├── docs/
-├── LICENSE-MIT
-├── LICENSE-APACHE
 ├── README.md
+├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md
-└── CHANGELOG.md
+├── LICENSE-MIT
+└── LICENSE-APACHE
 ```
 
-`runen_schedule` remains a separate package in the RunenECS repository because
-current scheduler contracts are generic over an execution context and are a
-required dependency of the ECS runtime. It must remain usable without
-`runenecs`.
-
-Do not create a fourth RunenSchedule repository during this program. Revisit
-repository separation only after a real non-ECS consumer and independent release
-pressure exist.
-
-## Package identities
-
-```text
-repository: Crystonix/RunenECS
-packages:
-  runenecs
-  runenecs_macros
-  runen_schedule
-initial version: 0.1.0
-edition: 2024
-publish: false until release gates are accepted
-license: MIT OR Apache-2.0
-```
+`runen_schedule` remains separately usable without `runenecs`, but stays in the
+same repository until a genuine non-ECS release/consumer pressure justifies a
+fourth repository.
 
 The old package names `ecs`, `ecs_macros`, and `scheduler` are removed during the
 final cutover. No compatibility packages remain.
+
+## Dependency direction
+
+```text
+runen_schedule
+      ▲
+      │
+runenecs ◄── runenecs_macros generated implementations
+      ▲
+      │
+Runenwerk adapters/integration
+```
+
+Forbidden:
+
+```text
+RunenECS -> Runenwerk
+runen_schedule -> runenecs
+runenecs -> Runenwerk geometry/spatial/network/render/app lifecycle
+```
+
+Macros may depend on syntax tooling and generate paths into `runenecs`; the
+runtime package must not depend on the macro package except optional re-exports
+when the package graph permits it without a cycle.
 
 ## RunenECS ownership
 
 `runenecs` owns:
 
-- entity allocation and lifetime;
-- components, stateful components, bundles, and resources;
-- storage and world mutation;
-- queries and query-state caching;
-- added/changed/orphaned observation;
+- world-local generational entities;
+- components, resources, stateful components, and bundles;
+- dense/archetype storage;
+- queries and supported filters;
+- query-local added/changed/orphaned observation;
 - deferred commands;
 - system parameters and ECS access declarations;
-- ECS runtime-plan construction over `runen_schedule`;
-- ECS-local event and deterministic tick-message semantics that pass the
-  messaging review below;
-- generic structural/change journals that do not encode networking policy;
+- ECS runtime integration over `runen_schedule`;
+- typed broadcast/event streams;
+- typed deterministic FIFO world queues;
 - explicit reflection registries;
-- ECS diagnostics, reports, and telemetry contracts;
-- public macros through `runenecs_macros`.
+- optional generic local change journal when consumer evidence requires it;
+- structured diagnostics and deterministic reports;
+- public derives through `runenecs_macros`.
 
 ## RunenSchedule ownership
 
-`runen_schedule` owns context-generic schedule construction and deterministic
-execution planning:
+`runen_schedule` owns:
 
-- schedule and set labels;
+- typed process-local schedule and system-set labels;
 - registered systems over generic context `C`;
-- access declarations and conflict validation;
-- DAG construction;
-- deterministic plan/topological order;
-- plan reports and diagnostics;
-- serial schedule execution;
-- explicitly designed parallel execution only when deterministic and safety
-  contracts are complete.
+- generic access declarations and conflict validation;
+- deterministic DAG/stage/wave planning;
+- generic plan reports and diagnostics;
+- serial reference execution.
 
-`runen_schedule` does not own:
+It does not own:
 
-- Runenwerk frame or tick phases;
-- renderer-specific node exceptions;
-- process-global logging switches;
-- app lifecycle;
-- ECS world storage;
-- worker-pool ownership unless an accepted executor design proves it.
+- Runenwerk update/render/frame phases;
+- ECS world borrowing;
+- deferred commands;
+- product publication;
+- query snapshot publication;
+- generation finalization;
+- replay/network capture;
+- renderer submission;
+- a worker pool or global executor;
+- process-global telemetry/logging.
 
-The current `frame_render_submit` logging exception and process-global slow-node
-logging authority must not survive the extraction.
+The current `ExecutionPhaseKind` and product `BarrierKind` families are removed.
+`runen_schedule` returns generic stages/waves. RunenECS flushes commands at its
+chosen stage boundary; Runenwerk performs product lifecycle hooks externally.
 
 ## Runenwerk ownership
 
 Runenwerk retains:
 
-- app and engine lifecycle;
-- fixed-step, variable-step, frame, render, and product phase policy;
-- plugin installation and product composition;
-- ECS-to-render extraction;
-- scene/world synchronization;
-- spatial indexing adapters;
-- networking, authority, replication, prediction, rollback, and transport;
-- replay/history product policy;
-- editor and diagnostics presentation;
-- cross-repository compatibility tests.
+- app/frame/fixed-update/render/startup/shutdown policy;
+- plugin composition and schedule instances;
+- spatial indexes and entity-to-spatial adapters;
+- simulation tick buffers and provenance;
+- ownership/authority routing;
+- networking, replication, prediction, rollback, and transport;
+- replay/history formats and retention;
+- scene/world/render extraction;
+- editor synchronization and inspection presentation;
+- stable product/network entity/type mappings;
+- cross-repository integration tests.
 
-## Spatial-index decision
+## Entity identity
 
-Spatial indexing is removed from `runenecs` core.
+`Entity` is an opaque world-local generational value.
 
-Current ECS exports its own `SpatialHashConfig`, `SpatialHashIndex`, and
-`SpatialIndex` using `geometry::Aabb3`, while Runenwerk already contains separate
-`spatial` and `spatial_index` domains. Carrying both authorities into RunenECS
-would preserve duplication and force a geometry dependency into ECS core.
+Requirements:
 
-Final direction:
+- fields are private;
+- consumers receive read-only diagnostics/accessors only where justified;
+- allocator validates free/despawn and rejects stale/double-free identities;
+- generation exhaustion retires a slot permanently rather than saturating and
+  reusing it;
+- raw entity values are not stable persistence or network identities;
+- world identity/namespace is included in safety reasoning if entities can cross
+  world boundaries;
+- Runenwerk explicitly maps entities to product/network IDs.
 
-```text
-RunenECS
-    owns entities and component data
+## Atomic world mutation
 
-Runenwerk spatial adapter
-    observes selected entity/component changes
-    maps entities to spatial keys/entries
-    updates the accepted spatial index implementation
-```
+Safe public structural mutation must not leave undocumented partial state.
 
-RunenECS may expose generic change observation required by the adapter. It must
-not know AABBs, world coordinates, cells, or spatial query policy.
+### Bundles
 
-A future RunenSpatial extraction requires its own investigation and ADR. It is
-not part of this program.
+- registration/preflight occurs before mutation;
+- insert commits all members or none;
+- remove verifies all required members before removing any;
+- derived and tuple bundles share one contract;
+- tuple arity is not treated as a permanent architecture limit.
 
-## Geometry decision
+### Spawn
 
-`runenecs` has no dependency on Runenwerk `geometry`.
+- allocation plus bundle insertion is one checked operation;
+- failure leaves no live partial entity;
+- ordinary failure returns a structured error rather than panicking.
 
-Any geometry-bearing component is an application/domain type implemented by a
-consumer. The ECS framework stores and queries it without understanding its
-meaning.
+### Commands
 
-Removing ECS-owned spatial indexing should eliminate the confirmed direct
-geometry dependency. Any remaining use must be classified and moved to an
-adapter or consumer.
+Ordinary command queues remain deterministic ordered sequences. They may be
+explicitly non-transactional across commands, but each individual command must
+preserve its operation's invariants.
 
-## Scheduler decomposition
+A named atomic command batch may be added only with an explicit transaction/
+rollback design. The current `BatchCommands` name must not imply atomicity if it
+continues to stop after partial application.
 
-Three scheduling layers are distinct:
+Failed system-stage commands are discarded and never replayed later.
 
-### Generic schedule semantics
+## Query safety
 
-Owned by `runen_schedule`:
+The first extracted release does not expose arbitrary third-party implementations
+of the low-level raw-pointer `QueryData` contract.
 
-- labels and sets;
-- dependency graph;
-- access-conflict validation;
-- deterministic execution plan;
-- generic context execution.
+Target:
 
-### ECS schedule integration
+- low-level query-data implementation is sealed/internal;
+- public users compose built-in read/write/entity/optional/tuple query forms and
+  filters;
+- safe query methods are sound without trusting external access declarations;
+- mutable query forms reject duplicate component types before execution;
+- unsafe storage/query bridges have complete safety comments and Miri/sanitizer
+  tests;
+- query state is tied to compatible world identity/generation rather than raw
+  pointer coincidence alone;
+- query telemetry cannot affect behavior.
 
-Owned by `runenecs`:
+A public custom-query extension may be designed later as a separate unsafe API
+with external conformance; it is not required for the initial extraction.
 
-- transforming systems and system parameters into access declarations;
-- world/resource borrowing;
-- ECS runtime-plan reports;
-- applying deferred commands at defined barriers;
-- ECS-specific validation and diagnostics.
+## System parameter safety
 
-### Engine lifecycle policy
+`SystemParam` remains extensible primarily through `#[derive(SystemParam)]`.
 
-Owned by Runenwerk:
+- the unsafe extraction implementation trait is sealed/doc-hidden or explicitly
+  unsafe with a complete contract;
+- safe manual implementation is not exposed accidentally;
+- generated implementations declare exact access and preserve state lifetime;
+- raw pointers are scoped to one system invocation;
+- parameter values cannot escape their invocation undetected;
+- nested/named groups use one recursive descriptor model;
+- public params and derives are proven from a downstream package;
+- Miri/sanitizer coverage exercises aliasing, escaped commands, query/resource
+  combinations, and failure paths.
 
-- frame/tick schedule instances;
-- fixed/variable update policy;
-- rendering phases;
-- startup/shutdown;
-- plugin ordering;
-- product-specific phase labels.
+## Serial and parallel execution
 
-Do not merge these into one universal runtime.
+Serial execution is the normative reference for the initial repository.
 
-## Parallel execution decision
-
-Do not promise unrestricted parallel execution merely because access declarations
-exist.
-
-Before public parallel scheduling is accepted, prove:
+Parallel execution is deferred until a separate accepted design proves:
 
 - sound disjoint world/resource access;
-- deterministic barrier and command behavior;
-- panic/error/poison policy;
-- cancellation/shutdown behavior;
-- worker-pool lifetime and ownership;
-- ordering of diagnostics and traces;
-- equivalence tests against serial execution;
-- bounded task and queue behavior;
+- deterministic stage and command barriers;
+- panic/error/poison behavior;
+- cancellation and shutdown;
+- worker-pool ownership and lifetime;
+- trace/diagnostic ordering;
+- bounded queues/tasks;
+- serial/parallel equivalence;
 - no hidden global executor.
 
-Until that gate passes, serial execution is the reference semantics.
+Access declarations and conflict-free waves alone are not sufficient proof.
 
-## Reflection decision
+## Reflection
 
-Reflection uses an explicit registry value. Process-global mutable registration is
-forbidden as final authority.
+Reflection uses explicit instance-owned registry authority.
 
-The design must distinguish:
+Distinguish:
 
-- process-local Rust type identity;
-- stable authored/serialized type keys;
-- component/resource reflection capabilities;
-- registration source and duplicate policy;
-- registry lifetime and ownership;
-- test isolation;
-- plugin unload/reload behavior;
-- schema/version compatibility.
+```text
+Rust TypeId             process-local concrete Rust identity
+ReflectTypeId           opaque registry-local identity
+StableTypeKey           validated persisted/schema identity, when explicitly used
+```
 
-A `World` may own or borrow a registry according to the final API design, but
-reflection state must be explicit and independently constructible.
+Requirements:
 
-Macros may generate registration descriptors. They must not mutate global state
-implicitly.
+- no `OnceLock<Mutex<...>>` global registry;
+- no implicit macro registration;
+- duplicate stable keys are structured errors, never replacement;
+- registry creation and test isolation are deterministic;
+- world may own or borrow a registry through an explicit constructor/config;
+- unload/reload and descriptor lifetime are documented;
+- registry-local IDs are not serialized as durable type IDs;
+- schema/version migration is separate from Rust type reflection.
 
-## Messaging decision
+## Messaging
 
-The current public surface exposes broadcast streams, tick buffers, and work
-queues. They are retained only after each family has one precise semantic role.
+### Events
 
-Target classification:
+RunenECS retains typed one-to-many events/broadcast streams.
 
-### Events/broadcast
+- lifecycle terminology is host-neutral;
+- transient cleanup is triggered by an explicit runtime finalization call, not an
+  engine `FrameEnd` concept inside core;
+- capacity/retention/overflow are validated;
+- no normal panic overflow policy;
+- rejected/dropped outcomes are structured and preserve payload where relevant;
+- reader cursors report lag/retention loss explicitly;
+- sequence exhaustion is handled, not saturated silently;
+- observers are notification/diagnostic hooks, not mutation reentrancy.
 
-- one-to-many observation;
-- explicit retention and overflow policy;
-- reader cursors/lifetimes;
-- no mutation authority;
-- deterministic diagnostics.
+### FIFO world queues
 
-### Tick-local buffers
+RunenECS retains typed FIFO queues as world-coordination storage.
 
-- messages associated with a defined logical tick/window;
-- deterministic drain/finalization;
-- explicit provenance and capacity;
-- no external transport semantics.
+- queue semantics are enqueue, inspect, and explicit destructive drain/clear;
+- capacity backpressure returns the exact unaccepted payload where ownership
+  matters;
+- no implicit retry, transport, priority, task execution, claim, or acknowledgement;
+- Runenwerk networking decides drop/retry/log policy.
 
-### Work queues
+### Tick buffers
 
-- one-consumer or claimed-work semantics;
-- explicit retry/acknowledgement/failure policy;
-- retained only if they are genuinely ECS-world coordination rather than an
-  application job system.
+Tick-indexed buffers, current/finalized simulation tick state, deduplication
+provenance, and network-prediction lifecycle move out of RunenECS.
 
-### External ingress and networking
+The current implementation moves to a reviewed Runenwerk simulation/network
+owner, initially `engine_sim` plus engine integration. Do not invent a generic
+buffer framework without a second independent consumer.
 
-Remain Runenwerk-owned. Transport packets, network channels, replication messages,
-remote authority, and replay streams do not become ECS messaging merely because
-they eventually mutate a world.
+## Spatial indexing
 
-The complete investigation must map every current consumer. Any family without a
-clear independent ECS use is removed or moved before extraction.
+Spatial indexing is not ECS-core ownership.
 
-## Change tracking and replication boundary
+- delete ECS `SpatialIndex`, `SpatialHashIndex`, and geometry-based world storage;
+- remove `geometry` from `runenecs` dependencies;
+- entity despawn no longer knows spatial indexes;
+- Runenwerk spatial adapters observe entities/components and update the accepted
+  `spatial`/`spatial_index` implementation;
+- geometry-bearing components remain ordinary downstream component types.
 
-RunenECS may own generic facts such as:
+A future RunenSpatial extraction is separate work.
 
-- component/resource added, changed, and removed facts;
-- entity spawn/despawn facts;
-- structural deltas;
-- bounded extraction windows;
-- stable type keys where explicitly registered;
-- deterministic journals and cursors.
+## Change tracking
 
-Runenwerk owns:
+RunenECS retains:
 
-- network entity mapping;
-- replication schemas;
-- authority and ownership policy beyond generic local descriptors;
-- packet construction;
-- transport;
-- prediction and rollback;
-- snapshot cadence;
-- replay file format and product retention.
+- local monotonic change tick/sequence;
+- query-local `Added`, `Changed`, and removed/orphaned observation;
+- entity/component/resource structural facts needed for world correctness;
+- optionally one bounded generic change journal if actual consumers require
+  historical extraction.
 
-The existing ownership and change-extraction API must be reviewed field by field.
-Only host-neutral local-world semantics transfer.
+The generic journal, if retained:
 
-## Identity policy
+- uses one local `ChangeSequence` and cursor;
+- has explicit retention and cursor-too-old outcomes;
+- contains no engine frame index;
+- contains no network/simulation tick type;
+- contains no owner/interest filter;
+- does not claim stable serialized entity/type identity.
 
-Entity identity remains generational and runtime/world-local unless the current
-implementation proves another accepted invariant.
+Runenwerk owns frame/tick windows, ownership/interest filtering, replication
+snapshot/delta construction, replay, and editor sync policy.
 
-Do not serialize raw process/runtime entity IDs as durable cross-run identities.
-Runenwerk networking and persistence own explicit mapping to stable product IDs.
+## Ownership and authority routing
 
-System, schedule, set, parameter-slot, broadcast, buffer, queue, owner, and type
-identities each require a documented lifetime and serialization status.
+Remove current `OwnerId`, `OwnerRole`, owner-routing, resource-owner, and transfer-
+log authority from RunenECS.
 
-## Error and terminal policy
+They are network/product semantics currently consumed by connection handling.
+Runenwerk owns them or models them as product components/resources.
 
-Replace broad `anyhow` use at public boundaries with structured public errors
-where consumers must branch on failure.
+RunenECS remains able to store and query any downstream ownership component
+without knowing its meaning.
 
-`anyhow` may remain an internal/application composition convenience only when it
-does not erase public failure categories.
+## Errors and panic policy
 
-Define behavior for:
+Public framework APIs use structured errors.
 
-- invalid entity generations;
-- borrow/access conflicts;
-- duplicate registration;
-- schedule cycles;
-- command failure;
-- system failure;
-- panic/poisoning;
-- capacity exhaustion;
-- invalid change windows;
-- shutdown and partial execution.
+```text
+EntityError
+WorldMutationError
+BundleError
+CommandError
+QueryError
+SystemParamError
+ReflectionError
+EventError
+QueueError
+ScheduleBuildError
+ScheduleRunError
+```
 
-## Macro policy
+Exact names may consolidate, but consumers must be able to branch without parsing
+strings.
 
-`runenecs_macros` may generate implementations for public traits and registration
-descriptors. Generated code must:
+`anyhow` is allowed only at Runenwerk/application composition boundaries.
 
-- use only public APIs;
-- preserve generic parameters and where clauses;
-- produce stable compile diagnostics;
-- avoid hidden global registration;
-- avoid Runenwerk paths;
-- be proven from an external downstream crate;
-- have compile-pass and compile-fail coverage.
+Ordinary stale identity, missing data, duplicate registration, schedule cycle,
+capacity, invalid access, and setup failure do not panic. User-system panic policy
+is explicit and cannot leave staged commands published as success.
 
-## Public API review
+## Telemetry and diagnostics
 
-Before extraction, inventory every public:
+Remove process-global wall-clock telemetry and hard-coded logging policy from
+RunenECS/RunenSchedule.
 
-- module and re-export;
-- trait and derive macro;
-- type and public field;
-- constructor;
-- generic bound;
-- unsafe boundary;
-- error/result;
-- lifetime promise;
-- serialization promise;
-- feature flag;
-- telemetry hook.
+Retain deterministic counters in operation/plan reports. Runenwerk and benchmarks
+measure elapsed time externally.
 
-The current broad crate-root exports are not accepted automatically.
+A future optional observer/sink must be instance-owned, bounded where applicable,
+and behaviorally subordinate.
+
+Diagnostics use `runenecs.*` and `runen_schedule.*` namespaces and preserve
+structured identity/provenance.
+
+## Macros
+
+`runenecs_macros` owns derives for the accepted public traits.
+
+Requirements:
+
+- resolve renamed `runenecs` dependencies correctly;
+- preserve generics, lifetimes, where clauses, visibility, and attributes;
+- use supported public/doc-hidden bridge APIs only;
+- generate atomic bundle preflight/commit participation;
+- generate explicit reflection descriptors, not global registration;
+- generate supported system-param bridge implementations;
+- produce precise compile diagnostics;
+- include external compile-pass and compile-fail conformance;
+- emit no Runenwerk path.
+
+## Versioning and persistence
+
+All three packages begin pre-1.0 and unpublished.
+
+Runtime identities, scheduler labels, reflection IDs, event sequences, and change
+sequences are process/world/registry local unless explicitly documented.
+
+No raw Rust layout, `TypeId`, or `Entity` value is a persistence format. Stable
+schemas and network/replay formats remain separately versioned by Runenwerk
+owners.
 
 ## Independent conformance
 
-RunenECS must prove, without Runenwerk:
+RunenECS must validate without Runenwerk:
 
-- entity generation and stale-handle safety;
+- entity stale/double-free/exhaustion behavior;
+- atomic bundle/spawn/insert/remove;
 - component/resource lifecycle;
-- queries and filters;
-- deferred command ordering;
-- change observation;
-- system parameter/access declarations;
-- schedule cycles, sets, barriers, and deterministic plans;
-- serial reference execution;
-- parallel equivalence if parallel execution is retained;
-- explicit reflection registry isolation;
-- accepted messaging semantics;
-- external macro consumer;
-- structured diagnostics and failure behavior;
-- stable and MSRV validation;
-- representative benchmarks.
+- storage/archetype invariants;
+- query/filter/change behavior;
+- Miri/sanitizer unsafe-boundary tests;
+- deferred command ordering/failure isolation;
+- event retention/cursors/overflow;
+- FIFO queue ordering/backpressure/exact rejected payload;
+- explicit reflection registry and duplicate errors;
+- generic schedule labels/sets/cycles/conflicts/stages;
+- absence of product phases/barriers;
+- external macros and package renaming;
+- no geometry or Runenwerk dependency;
+- serial reference behavior;
+- stable/MSRV validation and representative benchmarks.
 
-At least one standalone simulation example must use only RunenECS public APIs.
+At least one standalone simulation example uses only public RunenECS APIs.
 
-## Extraction phases
+## Repair sequence
 
-### ECS-001 — Complete investigation
+The boundary repair must be divided into reviewable phases. `PT-RUNENECS-002`
+will name exact files and validation for each.
 
-Read all ECS, macros, scheduler, spatial, networking, replay, renderer, app, tests,
-examples, and benchmarks. Produce public API, consumer, and ownership matrices.
+Recommended order:
 
-### ECS-002 — Decision closure
+```text
+ECS-R1 entity identity and structured core errors
+ECS-R2 atomic bundle/spawn/command invariants
+ECS-R3 query/SystemParam unsafe-boundary hardening
+ECS-R4 explicit reflection registry and macro migration
+ECS-R5 remove spatial/geometry and add Runenwerk adapter
+ECS-R6 messaging split: events/queues retained, tick buffers migrated
+ECS-R7 generic change journal and ownership/network separation
+ECS-R8 neutralize runen_schedule phases/barriers/errors/telemetry
+ECS-R9 standalone downstream conformance and benchmark baseline
+```
 
-Finalize:
+Do not combine all repairs into one implementation PR.
 
-- scheduler package API;
-- spatial deletion/migration;
-- reflection registry;
-- messaging families;
-- change/replication split;
-- identity and error policy;
-- concurrency contract;
-- macro compatibility;
-- exact move/stay/redesign/delete map.
+## Extraction sequence
 
-### ECS-003 — Boundary repair inside Runenwerk
+### PT-RUNENECS-001 — Complete investigation
 
-- remove ECS geometry dependency;
-- remove ECS-owned spatial index;
-- remove product-specific scheduler behavior;
-- make reflection explicit;
-- prune or separate messaging families;
-- separate networking/replay adapters;
-- add independent downstream conformance.
+Complete subject to mandatory local file/test/consumer and command verification.
 
-### ECS-004 — Repository creation and transfer
+### PT-RUNENECS-002 — Decision/spec closure
 
-Create RunenECS, establish governance/provenance, transfer corrected packages,
-and validate independently.
+Produce exact phase specs for R1–R9, including file scopes, API migrations,
+validation, stop conditions, dependency order, and temporary seam limits. No broad
+source implementation.
 
-### ECS-005 — Runenwerk cutover
+### PT-RUNENECS-003 — Boundary repair
 
-Pin exact revisions, migrate consumers, delete original ECS/macros/scheduler
-packages, regenerate the lockfile, run workspace and product validation, and
-remove migration seams.
+Execute R1–R9 through bounded PRs inside Runenwerk. Current packages remain local
+until independent conformance passes.
 
-### ECS-006 — Closeout
+### PT-RUNENECS-004 — Repository creation and transfer
 
-Record compatibility, provenance, performance, deleted paths, and final ownership.
+Create `Crystonix/RunenECS`, establish governance/provenance, transfer corrected
+packages, and validate independently.
+
+### PT-RUNENECS-005 — Runenwerk cutover
+
+Pin exact revisions, migrate consumers, delete original packages, regenerate the
+lockfile, and prove workspace/application/network integration.
+
+### PT-RUNENECS-006 — Closeout
+
+Record compatibility, performance, safety evidence, provenance, deleted paths,
+and final ownership.
 
 ## Stop conditions
 
-Stop source movement if:
+Stop if:
 
-- scheduler ownership remains ambiguous;
-- ECS still depends on geometry;
-- two spatial index authorities remain;
-- reflection depends on process-global mutation;
-- messaging families remain semantically overlapping;
-- networking or replay policy remains in core ECS;
-- serial/parallel semantics cannot be stated and tested;
-- external macro conformance is incomplete;
-- a long-lived compatibility package would be required.
+- safe public APIs still trust arbitrary unsafe query/param implementations;
+- entity generations can saturate/reuse;
+- safe mutation leaves partial undocumented state;
+- `runen_schedule` retains Runenwerk phases/barriers;
+- ECS retains geometry/spatial ownership;
+- reflection remains global;
+- tick-buffer/ownership/network policy remains core ECS;
+- public branchable errors remain erased into `anyhow`;
+- local inventory finds persisted raw entity/type identity dependencies;
+- parallel execution begins without soundness/equivalence proof;
+- extraction requires compatibility/mirror packages.
 
 ## Definition of done
 
-RunenECS is complete only when all three packages validate independently,
-Runenwerk consumes exact revisions through one-way dependencies, no Runenwerk
-policy remains in the framework, all original source packages are removed, and
-standalone plus Runenwerk integration conformance is green.
+RunenECS is complete only when:
+
+- all three packages validate independently on stable and MSRV;
+- unsafe boundaries have Miri/sanitizer and external conformance;
+- RunenECS has no Runenwerk/geometry/network/render dependency;
+- RunenSchedule has no product lifecycle vocabulary;
+- Runenwerk pins exact revisions through one-way dependencies;
+- original ECS/macros/scheduler source is deleted;
+- no compatibility package, mirror, or moving dependency remains;
+- full Runenwerk engine/network/application validation passes;
+- provenance and current documentation are complete.
