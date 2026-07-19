@@ -1,7 +1,9 @@
 use glam::Vec3;
 
-use crate::epsilon::DEFAULT_CLASSIFY_EPSILON;
-use crate::field::SdfField3;
+use crate::error::{ensure_finite_vec3, ensure_positive};
+use crate::SdfField3;
+
+use super::QueryError;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PointClassification {
@@ -10,26 +12,36 @@ pub enum PointClassification {
     Outside,
 }
 
-pub fn classify_point(field: &impl SdfField3, point: Vec3, epsilon: f32) -> PointClassification {
-    let distance = field.sample(point).distance;
-    let epsilon = if epsilon > 0.0 {
-        epsilon
-    } else {
-        DEFAULT_CLASSIFY_EPSILON
-    };
-    if distance < -epsilon {
+pub fn classify_point<F>(
+    field: &F,
+    point: Vec3,
+    epsilon: f32,
+) -> Result<PointClassification, QueryError>
+where
+    F: SdfField3 + ?Sized,
+{
+    ensure_finite_vec3(point, "classification point")?;
+    ensure_positive(epsilon, "classification epsilon")?;
+    let signed_value = field.sample(point)?.signed_value();
+    Ok(if signed_value < -epsilon {
         PointClassification::Inside
-    } else if distance > epsilon {
+    } else if signed_value > epsilon {
         PointClassification::Outside
     } else {
         PointClassification::OnSurface
-    }
+    })
 }
 
-pub fn is_inside(field: &impl SdfField3, point: Vec3, epsilon: f32) -> bool {
-    classify_point(field, point, epsilon) == PointClassification::Inside
+pub fn is_inside<F>(field: &F, point: Vec3, epsilon: f32) -> Result<bool, QueryError>
+where
+    F: SdfField3 + ?Sized,
+{
+    Ok(classify_point(field, point, epsilon)? == PointClassification::Inside)
 }
 
-pub fn is_outside(field: &impl SdfField3, point: Vec3, epsilon: f32) -> bool {
-    classify_point(field, point, epsilon) == PointClassification::Outside
+pub fn is_outside<F>(field: &F, point: Vec3, epsilon: f32) -> Result<bool, QueryError>
+where
+    F: SdfField3 + ?Sized,
+{
+    Ok(classify_point(field, point, epsilon)? == PointClassification::Outside)
 }
