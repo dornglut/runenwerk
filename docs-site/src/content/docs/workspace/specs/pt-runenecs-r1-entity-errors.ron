@@ -1,0 +1,133 @@
+// Planning-only handoff contract for the first RunenECS boundary repair.
+// Markdown investigation, design, and execution-plan authority remain primary.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENECS-R1",
+    title: "Entity Identity and Structured Core Errors",
+    lifecycle_state: "active-planning",
+    implementation_authorization_status: "active-planning-only",
+    owner: "ECS core owner",
+
+    authority_docs: [
+        "ARCHITECTURE.md",
+        "DEPENDENCY_RULES.md",
+        "DOMAIN_MAP.md",
+        "docs-site/src/content/docs/architecture/repository-family-architecture.md",
+        "docs-site/src/content/docs/adr/accepted/0014-repository-family-extraction-boundaries.md",
+        "docs-site/src/content/docs/reports/investigations/runenecs-extraction-investigation.md",
+        "docs-site/src/content/docs/design/active/runenecs-extraction-boundary-design.md",
+        "docs-site/src/content/docs/design/active/runenecs-boundary-repair-execution-plan.md",
+        "docs-site/src/content/docs/workspace/complete-investigation-gate.md",
+        "docs-site/src/content/docs/workspace/complete-design-gate.md",
+        "docs-site/src/content/docs/guidelines/programming-principles.md",
+    ],
+
+    complete_investigation_gate_status: "connector source inspection complete for entity.rs, errors.rs, crate exports, and broad consumers; complete local grep/Cargo baseline required before activation",
+    complete_design_gate_status: "complete for R1 entity opacity, stale/double-free handling, generation exhaustion, allocation failure, and structured error scope; implementation remains unauthorized",
+    principle_compliance_status: "complete for R1 in RunenECS extraction design and execution plan",
+    module_decomposition_status: "complete for R1: entity allocation/lifecycle and directly related public errors only",
+    maintainability_review_status: "complete for target; R1 must not absorb bundle, storage, query, reflection, messaging, spatial, scheduler, or networking redesign",
+
+    allowed_paths: [
+        "domain/ecs/src/entity.rs",
+        "domain/ecs/src/errors.rs",
+        "domain/ecs/src/lib.rs only for reviewed entity/error exports",
+        "domain/ecs/src/prelude.rs only for reviewed entity/error exports",
+        "domain/ecs/tests/** only for focused entity/allocation/error tests or migration of compile failures caused directly by the R1 API",
+        "current direct consumers identified by the activation-time grep only for mechanical migration to opaque Entity accessors or structured R1 errors",
+        "docs-site/src/content/docs/reports/proofs/pt-runenecs-r1-*.md",
+        "docs-site/src/content/docs/reports/closeouts/pt-runenecs-r1-closeout.md only after implementation merges",
+    ],
+
+    forbidden_paths: [
+        "bundle, command, storage, query, SystemParam, reflection, messaging, tick buffer, work queue, change journal, ownership, spatial, scheduler, networking, replay, renderer, or app-lifecycle redesign",
+        "package rename or external RunenECS repository creation",
+        "deleting or moving domain/ecs, domain/ecs_macros, or domain/scheduler",
+        "compatibility Entity type, duplicate allocator, forwarding package, or deprecated parallel identity API",
+        "parallel executor work",
+        "global registry or telemetry work except a compile-only migration forced directly by the R1 error API",
+        ".github/**",
+        "tools/**",
+    ],
+
+    public_api_surface: [
+        "Entity becomes an opaque Copy/Eq/Hash/Ord world-local generational value with no public id or generation fields.",
+        "Read-only diagnostic accessors may expose index/generation only if current consumers require them; they do not promise persistence or network stability.",
+        "EntityAllocator allocation is fallible when identity space is exhausted.",
+        "EntityAllocator free/despawn validation distinguishes unknown index, stale generation, and already-freed identity.",
+        "Exhausted generations retire the slot permanently rather than saturating and reusing it.",
+        "EntityError and allocator errors use structured variants suitable for caller branching.",
+        "No compatibility constructor permits arbitrary forged Entity values in safe public API.",
+    ],
+
+    invariants: [
+        "A live Entity identifies at most one live allocation within its owning world/allocator lifecycle.",
+        "A stale or already-freed Entity cannot free or mutate a newer allocation.",
+        "Freeing an invalid, stale, or already-freed Entity does not alter allocator state.",
+        "Generation exhaustion never causes identity reuse through saturation or wraparound.",
+        "Index/allocation exhaustion is reported as a structured error and does not panic or wrap.",
+        "Entity raw parts are not stable persistence, replay, or network identity.",
+        "Public safe callers cannot forge arbitrary Entity values.",
+        "Existing valid allocation/free/reuse behavior remains deterministic.",
+        "R1 changes no storage, query, command, reflection, spatial, messaging, scheduler, or networking semantics.",
+    ],
+
+    acceptance_criteria: [
+        "Entity id and generation fields are private.",
+        "EntityAllocator::allocate or its reviewed replacement reports exhaustion structurally.",
+        "EntityAllocator::free or its reviewed replacement rejects unknown, stale, and already-freed entities structurally.",
+        "A slot at generation exhaustion is retired and never returned again.",
+        "Tests cover ordinary allocation, free/reuse, stale free after reuse, double free, unknown index, generation exhaustion, index exhaustion, deterministic ordering/hash behavior, and no state mutation on rejected free.",
+        "All direct field-access consumers found by mandatory grep migrate without adding a forging escape hatch.",
+        "No unrelated ECS subsystem enters the diff.",
+        "Focused ECS tests and full workspace validation pass.",
+    ],
+
+    validation_commands: [
+        "git status --short --branch",
+        "git rev-parse HEAD",
+        "cargo metadata --format-version 1 --locked",
+        "cargo tree -p ecs",
+        "cargo tree -i ecs --workspace",
+        "rg -n 'Entity\\s*\\{|\\.id\\b|\\.generation\\b|EntityAllocator|EntityError' domain engine net apps adapters --glob '*.rs'",
+        "cargo +stable fmt --all --check",
+        "cargo test -p ecs --locked",
+        "cargo clippy -p ecs --all-targets --locked -- -D warnings",
+        "repository-authoritative MSRV test command",
+        "cargo test --workspace --locked",
+        "cargo clippy --workspace --all-targets --locked -- -D warnings",
+        "python tools/docs/validate_docs.py",
+        "pnpm --dir docs-site build",
+        "git diff --check",
+        "git diff --check main...HEAD",
+        "git status --short --branch",
+        "git diff --stat main...HEAD",
+    ],
+
+    evidence_expectations: [
+        "Report the complete Entity field/construction/allocator/error consumer grep before code changes.",
+        "Report the old-to-new public Entity and allocator API map.",
+        "Report allocator state-transition proofs for every accepted and rejected operation.",
+        "Report generation/index exhaustion tests without relying on impractical full-space iteration; use a reviewed test seam that is not public production API.",
+        "Report every consumer migration and why it does not introduce stable raw-ID semantics.",
+        "Report focused, workspace, stable, MSRV, docs, and diff validation separately.",
+        "Classify unavailable or skipped commands honestly.",
+    ],
+
+    stop_conditions: [
+        "Stop if Entity values are intentionally persisted or serialized as stable external identity by an unclassified consumer.",
+        "Stop if safe public custom Entity construction is a required supported contract.",
+        "Stop if world namespace must become part of Entity to preserve current cross-world safety; record a separate design correction before implementation.",
+        "Stop if R1 requires bundle, storage, query, command, reflection, spatial, messaging, scheduler, or networking redesign.",
+        "Stop if current main fails for unrelated reasons.",
+        "Stop if implementation authorization remains active-planning-only.",
+    ],
+
+    closeout_expectations: [
+        "Record exact API changes, consumer migrations, allocator transition table, tests, validation, evidence classes, forbidden-scope proof, known gaps, and next safe action.",
+        "Do not activate R2 until R1 is reviewed, merged, and closeout truth is recorded against current main.",
+        "Write the R2 phase spec only after R1 implementation facts are known.",
+    ],
+
+    next_phase_activation_condition: "PT-RUNENECS-R2 may enter active planning only after R1 is locally validated, reviewed, merged, and closed; active implementation still requires a new R2 specification derived from current main.",
+)
