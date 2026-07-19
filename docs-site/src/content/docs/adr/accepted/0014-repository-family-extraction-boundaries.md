@@ -1,6 +1,6 @@
 ---
 title: Repository Family Extraction Boundaries
-description: Accepted decision for extracting RunenSDF, RunenECS, and RunenRender as independent framework repositories while retaining Runenwerk integration ownership.
+description: Accepted repository-level decision for extracting RunenSDF, RunenECS, and RunenRender while retaining Runenwerk integration ownership and independent RunenUI authority.
 status: accepted
 owner: workspace
 layer: architecture
@@ -28,46 +28,51 @@ Create three independent framework repositories through governed clean cutovers:
 - `Crystonix/RunenRender`.
 
 Runenwerk remains the integration and product repository. Framework repositories
-must not depend on Runenwerk. Integration-specific translation, lifecycle,
-product policy, and cross-domain composition remain in Runenwerk.
+must not depend on Runenwerk. Integration-specific translation, application
+lifecycle, product policy, and cross-domain composition remain in Runenwerk.
 
-RunenUI is explicitly outside this program and remains governed by its separate
-repository and workstream. This ADR neither blocks nor directs RunenUI work.
+RunenUI remains an independent peer repository governed by its own workstream.
+This ADR fixes only the repository relationship:
 
-## Dependency Direction
+- RunenUI does not depend on Runenwerk or RunenRender by default;
+- RunenRender does not depend on RunenUI;
+- Runenwerk may later translate accepted renderer-neutral RunenUI output into
+  generic RunenRender work;
+- standalone RunenUI backends may exist without becoming RunenRender authority.
 
-The intended direction is:
+This ADR does not select RunenUI APIs or authorize RunenUI implementation.
+
+## Dependency direction
 
 ```text
 RunenSDF -------+
 RunenECS -------+--> Runenwerk adapters/integration --> applications
 RunenRender ----+
-RunenUI --------+   (future separate integration)
+RunenUI --------+
 ```
 
-`RunenRender` must not require RunenECS, RunenSDF, or RunenUI. Those domains feed
-it through Runenwerk-owned adapters and generic render contracts.
+A direct dependency between framework repositories requires another ADR proving
+independent value and correct ownership. It is not introduced merely to avoid an
+adapter.
 
-A direct dependency between framework repositories requires a later ADR. It is
-not introduced merely to avoid writing an adapter.
+## Extraction order
 
-## Extraction Order
+The tracks may progress at different maturity levels:
 
-Use different maturity levels in parallel:
+1. RunenSDF: verify the bounded source/API investigation, correct the local
+   numerical and geometry boundary, then extract first.
+2. RunenECS: complete scheduler, spatial, reflection, messaging, change, safety,
+   and replication ownership decisions before source movement.
+3. RunenRender: complete semantic inventory, decompose internally, and prove the
+   intended public seams through Runenwerk consumption before external transfer.
 
-1. RunenSDF: complete design, repair its local boundary, then extract first.
-2. RunenECS: complete scheduler, spatial, reflection, messaging, and replication
-   decisions before extraction.
-3. RunenRender: complete semantic inventory and internal decomposition before
-   external extraction.
+RunenRender moves last because the current engine plugin combines neutral render
+planning with WGPU, windows/surfaces, ECS, scene, material, SDF, UI, editor,
+diagnostics, and runtime integration.
 
-RunenRender moves last because its current implementation combines neutral render
-planning with WGPU, window/surface, ECS, scene, material, SDF, UI, editor,
-diagnostics, and runtime integration concerns.
+## Clean cutover
 
-## Clean Cutover
-
-Every extraction must:
+Every completed extraction must:
 
 - preserve source provenance and licensing;
 - establish independent validation and public downstream conformance;
@@ -75,43 +80,56 @@ Every extraction must:
 - migrate all active consumers;
 - delete the original Runenwerk implementation in the same completed cutover;
 - remove temporary migration seams before merge;
-- leave no compatibility crate, forwarding namespace, source mirror, or writable
-  parallel authority.
+- leave no compatibility package, forwarding namespace, source mirror,
+  submodule, or writable parallel authority.
 
 Temporary duplication may exist only on an unmerged extraction branch.
 
-## Ownership Decisions
+## Ownership decisions
 
 ### RunenSDF
 
-RunenSDF owns reusable SDF mathematics and CPU reference queries. It does not own
-Runenwerk geometry, world streaming, ECS, rendering, materials, or product policy.
-Its public bounds and ray/query vocabulary must be repository-local.
+RunenSDF owns reusable signed-field mathematics, validated field vocabulary,
+numerical policy, spatial bounds, composition, and CPU reference queries. It does
+not own Runenwerk geometry, world streaming, ECS, rendering, materials, or product
+policy.
+
+The exact field-sample and query contracts remain track-level design decisions and
+must distinguish algorithmically safe distance estimates from values that cannot
+support sphere tracing.
 
 ### RunenECS
 
-RunenECS owns ECS semantics. General spatial indexing, engine lifecycle,
-networking policy, rendering extraction, and world policy are not automatically
-ECS-owned. Scheduler ownership must be classified between ECS schedule semantics,
-generic execution, and Runenwerk frame/tick policy before source movement.
+RunenECS owns ECS semantics, not a permanently fixed storage implementation.
+General spatial indexing, engine lifecycle, rendering extraction, networking,
+replay, and world policy are outside ECS core.
+
+Scheduler ownership is divided between neutral scheduling, ECS integration, and
+Runenwerk frame/tick policy. Messaging and change-journal facilities remain
+provisional until consumer evidence proves their independent ECS role.
 
 ### RunenRender
 
 RunenRender owns only proven backend-neutral render contracts and a conventional
-backend implementation. Runenwerk retains ECS extraction, scene/world/material/
-SDF adapters, app lifecycle, editor policy, window/event-loop policy, and future
-UI integration.
+WGPU backend. Runenwerk retains ECS extraction, scene/world/material/SDF/UI
+adapters, application lifecycle, editor policy, native-window/event-loop policy,
+and product feature selection.
 
-## Shared Infrastructure
+The required initial package candidates are `runenrender_core` and
+`runenrender_wgpu`. A proc-macro package is conditional on retaining and proving
+the current GPU derives. WGSL/WGPU layout semantics are backend-specific and must
+not leak into renderer-neutral core authority.
+
+## Shared infrastructure
 
 Do not create a universal `RunenCore`, shared meta-framework, universal ID crate,
 or universal diagnostics crate.
 
-Each repository owns the values and identities whose invariants it defines.
-Adapters map them explicitly. Diagnostics use repository-specific namespaces and
-preserve upstream identity.
+Each repository owns values and identities whose invariants it defines. Adapters
+map them explicitly. Diagnostics use repository-specific namespaces and preserve
+upstream identity.
 
-## Versioning And Formats
+## Versioning and formats
 
 Before stable publication, cross-repository dependencies use exact revisions or
 exact pre-release versions. Moving branches are forbidden.
@@ -122,40 +140,35 @@ Rust API versioning does not implicitly version persisted data.
 
 ## Consequences
 
-- Parallel work is allowed, but the tracks have different implementation gates.
+- Parallel investigation is allowed, but implementation gates differ by track.
 - Shared workspace and planning files have one active owner at a time.
 - RunenSDF provides the first extraction-workflow proof.
-- RunenECS extraction is blocked by unresolved internal ownership decisions.
-- RunenRender external extraction is blocked until internal package boundaries
-  are proven through actual Runenwerk consumption.
-- Existing code location is evidence, not ownership authority.
+- RunenECS source movement is blocked by unresolved safety and ownership work.
+- RunenRender external extraction is blocked until internal public-boundary proof.
+- Existing code location is implementation evidence, not permanent ownership.
+- Connector-only inspection cannot satisfy command-validation gates.
 
-## Rejected Alternatives
+## Rejected alternatives
 
-Extracting all three current directories immediately was rejected because it
-would turn unresolved internal coupling into cross-repository coupling.
+The following are rejected:
 
-A single repository containing SDF, ECS, and rendering was rejected because the
-subsystems change for different reasons and have different consumers.
+- extracting all current directories immediately;
+- one repository containing SDF, ECS, and rendering;
+- Git submodules or source mirrors;
+- a universal shared-core repository;
+- long-lived compatibility packages;
+- making RunenUI depend on RunenRender solely for Runenwerk integration;
+- moving Runenwerk-specific product policy into framework cores.
 
-Git submodules and source mirrors were rejected because they preserve operational
-and ownership ambiguity.
+## Fitness functions
 
-A universal shared-core repository was rejected because it would attract
-unrelated identities, diagnostics, geometry, plugin, and metadata concerns.
-
-Long-lived compatibility crates were rejected because these repositories are
-pre-1.0 and controlled by the same owner; a clean coordinated cutover is safer.
-
-## Fitness Functions
-
-The program is successful only when:
+The program succeeds only when:
 
 - each framework validates independently;
 - Runenwerk consumes it through one-way dependencies;
 - independent downstream consumers use public APIs;
 - framework repositories contain no Runenwerk assumptions;
-- adapters contain translation rather than duplicate algorithms;
-- original Runenwerk implementations are removed;
-- no dependency cycle or source mirror remains;
+- adapters translate rather than duplicate algorithms;
+- original Runenwerk implementations are removed after cutover;
+- no dependency cycle, source mirror, or compatibility authority remains;
 - provenance, licensing, compatibility, and current documentation are complete.
