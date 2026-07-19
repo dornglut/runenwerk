@@ -10,12 +10,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout implementation branch
         uses: actions/checkout@v4
@@ -28,22 +28,13 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
           rustup default stable
 
-      - name: Patch the bounded SDF lockfile entry
+      - name: Verify bounded SDF lockfile entry
         shell: python
         run: |
           from pathlib import Path
 
-          path = Path("Cargo.lock")
-          text = path.read_text(encoding="utf-8")
-          old = '''[[package]]
-          name = "sdf"
-          version = "0.1.0"
-          dependencies = [
-           "geometry",
-           "glam 0.31.1",
-          ]
-          '''
-          new = '''[[package]]
+          text = Path("Cargo.lock").read_text(encoding="utf-8")
+          expected = '''[[package]]
           name = "sdf"
           version = "0.1.0"
           dependencies = [
@@ -51,14 +42,19 @@ jobs:
            "thiserror 2.0.18",
           ]
           '''
-          if old not in text:
-              raise SystemExit("expected sdf package block was not found exactly once")
-          if text.count(old) != 1:
-              raise SystemExit("expected exactly one sdf package block")
-          path.write_text(text.replace(old, new), encoding="utf-8")
+          if text.count(expected) != 1:
+              raise SystemExit("Cargo.lock does not contain exactly one corrected sdf package block")
 
-      - name: Format workspace
-        run: cargo fmt --all
+      - name: Verify Cargo metadata
+        run: cargo metadata --format-version 1 --locked --no-deps > /dev/null
+
+      - name: Inspect RunenSDF dependency tree
+        run: |
+          cargo tree -p sdf --locked
+          cargo tree -i sdf --workspace --locked
+
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
 
       - name: Test RunenSDF package
         run: cargo test -p sdf --locked
@@ -66,19 +62,31 @@ jobs:
       - name: Clippy RunenSDF package
         run: cargo clippy -p sdf --all-targets --locked -- -D warnings
 
-      - name: Verify formatting
-        run: cargo fmt --all -- --check
+      - name: Test workspace
+        run: cargo test --workspace --locked
 
-      - name: Commit bounded generated and formatted files
-        if: github.event_name == 'push'
-        shell: bash
+      - name: Clippy workspace
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install docs dependencies
+        run: pnpm --dir docs-site install --frozen-lockfile
+
+      - name: Validate documentation authority
+        run: python tools/docs/validate_docs.py
+
+      - name: Build documentation site
+        run: pnpm --dir docs-site build
+
+      - name: Verify clean generated state
         run: |
-          if git diff --quiet -- Cargo.lock domain/sdf; then
-            echo "Cargo.lock and SDF sources already match bounded/formatted output."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock domain/sdf
-          git commit -m "Format and lock SDF boundary correction"
-          git push origin HEAD:impl/runensdf-boundary-correction
+          git diff --check
+          git status --short
+          test -z "$(git status --short)"
