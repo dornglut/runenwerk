@@ -28,9 +28,8 @@ related_docs:
 
 # Active Work
 
-This file names the current planning focus. Detailed historical UI execution
-records remain in closeouts, completed-work, pull requests, and Git history; they
-are not current implementation authority.
+This file names current execution authority. Historical UI work remains in
+completed-work, closeouts, merged pull requests, and Git history.
 
 ## Current focus
 
@@ -38,132 +37,94 @@ ID: `PT-REPOSITORY-FAMILY-000`
 
 Title: Repository Family Charter and Track Activation
 
-State: `active-implementation` for one documentation/authority PR only
+Lifecycle state: `active-planning`
+
+Implementation authorization: documentation and authority changes only
 
 Owner: workspace architecture and planning
 
-Current branch:
+Branch:
 
 ```text
 docs/repository-family-charter
 ```
 
-Goal:
+## Goal
+
+Establish one repository-family architecture and replace obsolete active UI
+product authority with three bounded tracks at different maturity levels:
 
 ```text
-Establish one canonical repository-family architecture and activate three bounded
-parallel tracks at different maturity levels:
-
-RunenSDF    complete investigation/design, then extract first
-RunenECS    complete investigation and architecture decisions
-RunenRender complete semantic inventory and internal decomposition design
-```
-
-RunenUI is explicitly outside this workstream and remains governed by its
-separate repository/thread.
-
-## Authority
-
-```text
-docs-site/src/content/docs/architecture/repository-family-architecture.md
-docs-site/src/content/docs/adr/accepted/0014-repository-family-extraction-boundaries.md
-docs-site/src/content/docs/reports/investigations/repository-family-current-state-investigation.md
-docs-site/src/content/docs/design/active/runensdf-extraction-design.md
-docs-site/src/content/docs/design/active/runenecs-extraction-boundary-design.md
-docs-site/src/content/docs/design/active/runenrender-decomposition-design.md
+RunenSDF     architecture ready; executable investigation verification pending
+RunenECS     architectural investigation in progress
+RunenRender  semantic investigation in progress
+RunenUI      independent workstream; repository relationship fixed only
 ```
 
 ## Decisions fixed by this phase
 
+- Runenwerk remains the integration and product repository.
+- Framework repositories do not depend on Runenwerk.
+- RunenSDF is the first extraction candidate.
+- RunenECS does not retain Runenwerk geometry or general spatial policy.
+- RunenRender is decomposed and proven internally before external extraction.
+- RunenUI and RunenRender remain independent peers; Runenwerk owns their future
+  integration.
+- No universal shared-core repository, source mirror, submodule, or long-lived
+  compatibility package is introduced.
+- Completed extraction uses one clean cutover.
+
+Track-specific APIs, package details, and implementation mechanisms are not fixed
+by this planning phase unless the accepted ADR or architecture document states
+them explicitly.
+
+## Allowed scope
+
 ```text
-Runenwerk remains the integration/product repository.
-Framework repositories must not depend on Runenwerk.
-No universal RunenCore/shared-meta repository is created.
-RunenSDF is the first extraction candidate.
-RunenECS does not retain ECS-owned spatial indexing or Runenwerk geometry.
-The generic scheduler remains a separate package in the RunenECS repository.
-RunenRender is internally decomposed before external extraction.
-RunenRender must not depend on ECS, SDF, UI, scene, material authoring, or Runenwerk.
-All extractions use one clean cutover with no source mirror or compatibility crate.
+root architecture summaries
+docs-site architecture and ADR authority
+repository-family current-state investigation
+track design documents
+active-work, roadmap, production-tracks, and decision-register
 ```
 
-## Implementation contract
-
-This phase changes architecture, ADR, investigation, design, and planning
-Markdown only.
-
-It must:
-
-- replace obsolete `PT-UI-RUNTIME-PLATFORM-012` active implementation authority;
-- record PR #107 as closed/unmerged historical evidence;
-- record commit `b5e9624c...` as a rejected incomplete extraction attempt;
-- make repository-family sequencing understandable from Markdown alone;
-- keep historical closeouts and completed-work evidence intact;
-- avoid Rust, Cargo, lockfile, workflow, tool, or generated-file changes;
-- pass documentation build/validation and diff hygiene.
-
-## Allowed files
+## Forbidden scope
 
 ```text
-docs-site/src/content/docs/architecture/repository-family-architecture.md
-docs-site/src/content/docs/adr/accepted/0014-repository-family-extraction-boundaries.md
-docs-site/src/content/docs/reports/investigations/repository-family-current-state-investigation.md
-docs-site/src/content/docs/design/active/runensdf-extraction-design.md
-docs-site/src/content/docs/design/active/runenecs-extraction-boundary-design.md
-docs-site/src/content/docs/design/active/runenrender-decomposition-design.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
-root architecture/planning summaries only if required for current-truth alignment
-```
-
-## Forbidden files and scope
-
-```text
-Cargo.toml
-Cargo.lock
-engine/**
-domain/**
-apps/**
-net/**
-foundation/**
-.github/**
-tools/**
-RunenUI repository changes
-RunenSDF/RunenECS/RunenRender repository creation
-any extraction implementation
-any source move/delete
+Rust source
+Cargo manifests or Cargo.lock
+workflows or validation tools
+external repository creation
+source movement or deletion
+RunenUI implementation
+SDF, ECS, or renderer implementation
 ```
 
 ## Evidence and gates
 
-Evidence classes:
+Evidence currently available:
 
 ```text
-E2 GitHub repository/commit/PR metadata
-E3 current source, manifest, and authority inspection
-E8 accepted architecture/ADR/planning authority after this phase is reviewed
+E2 GitHub commit and pull-request metadata
+E3 connector-backed source, manifest, and authority inspection
 ```
 
-Complete investigation gate:
+Gate status:
 
 ```text
-Complete for repository-family direction and track ordering.
-Not complete for RunenSDF consumer-level implementation authorization.
-Not complete for RunenECS extraction.
-Not complete for RunenRender decomposition implementation.
+Repository-family direction investigation: complete for track ordering
+Repository-family design: complete after owner review and docs validation
+RunenSDF source/API investigation: substantially complete; consumer/command verification pending
+RunenECS complete investigation: not complete
+RunenRender complete investigation: not complete
+Implementation authorization: none
+Merge readiness: blocked by owner review and local docs validation
 ```
 
-Complete design gate:
+The words “complete” and “decision-complete” may be used only for the scope whose
+required evidence has actually passed.
 
-```text
-Complete for the repository-family architecture and planning reset.
-RunenSDF target direction is fixed but implementation awaits SDF-001 inventory.
-RunenECS and RunenRender remain investigation/design tracks.
-```
-
-Validation envelope:
+## Validation envelope
 
 ```text
 pnpm --dir docs-site build
@@ -174,26 +135,27 @@ git status --short --branch
 git diff --stat main...HEAD
 ```
 
-Cargo validation is not required for this docs-only phase unless a non-document
-file changes unexpectedly.
+Cargo validation is unnecessary for this docs-only phase unless a non-document
+file enters the diff.
 
-## Stop conditions
+## Historical truth
 
-Stop this phase if:
+PR #107 is closed and unmerged. It is not current implementation authority.
 
-- current docs schema rejects a new owner/layer/status value;
-- a current accepted ADR contradicts the fixed dependency direction;
-- source inspection reveals a dependency cycle that invalidates track ordering;
-- the diff touches source, manifests, lockfiles, workflows, or tools;
-- documentation validation cannot be run or fails for reasons introduced here.
+Commit `b5e9624c594c9f1e3f2a0929bf84028f13fde860` is a rejected incomplete
+extraction attempt and is not an implementation base.
+
+Planning-file pruning must not remove unique completion evidence. Completed UI
+facts remain in `completed-work.md`, closeout reports, merged PRs, and Git history.
 
 ## Next actions after merge
 
-Exactly three bounded follow-ups become active:
+1. Correct and verify `PT-RUNENSDF-001`, then activate one bounded SDF boundary
+   correction phase if its local gates pass.
+2. Continue `PT-RUNENECS-001` until source, consumer, and safety inventory is
+   complete; prepare only the next executable repair spec.
+3. Continue `PT-RUNENRENDER-001` until module, shader, consumer, and runtime
+   inventory is complete; prepare only the next executable repair spec.
 
-1. `PT-RUNENSDF-001` — complete SDF source, test, consumer, and public API investigation;
-2. `PT-RUNENECS-001` — complete ECS/macros/scheduler/spatial/network/replay investigation;
-3. `PT-RUNENRENDER-001` — complete renderer module/shader/control-flow inventory.
-
-Only RunenSDF may advance directly toward boundary-correction implementation once
-its investigation and design gate are accepted.
+Only RunenSDF may advance directly toward implementation after its verification
+and design corrections pass.
