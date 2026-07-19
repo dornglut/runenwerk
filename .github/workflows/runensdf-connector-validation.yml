@@ -28,8 +28,34 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
           rustup default stable
 
-      - name: Regenerate workspace lockfile
-        run: cargo generate-lockfile
+      - name: Patch the bounded SDF lockfile entry
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("Cargo.lock")
+          text = path.read_text(encoding="utf-8")
+          old = '''[[package]]
+          name = "sdf"
+          version = "0.1.0"
+          dependencies = [
+           "geometry",
+           "glam 0.31.1",
+          ]
+          '''
+          new = '''[[package]]
+          name = "sdf"
+          version = "0.1.0"
+          dependencies = [
+           "glam 0.31.1",
+           "thiserror 2.0.18",
+          ]
+          '''
+          if old not in text:
+              raise SystemExit("expected sdf package block was not found exactly once")
+          if text.count(old) != 1:
+              raise SystemExit("expected exactly one sdf package block")
+          path.write_text(text.replace(old, new), encoding="utf-8")
 
       - name: Format workspace
         run: cargo fmt --all
@@ -43,12 +69,12 @@ jobs:
       - name: Verify formatting
         run: cargo fmt --all -- --check
 
-      - name: Commit generated and formatted files
+      - name: Commit bounded generated and formatted files
         if: github.event_name == 'push'
         shell: bash
         run: |
           if git diff --quiet -- Cargo.lock domain/sdf; then
-            echo "Cargo.lock and SDF sources already match generated/formatted output."
+            echo "Cargo.lock and SDF sources already match bounded/formatted output."
             exit 0
           fi
           git config user.name "github-actions[bot]"
