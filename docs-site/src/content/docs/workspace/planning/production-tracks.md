@@ -4,186 +4,261 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-07
+last_reviewed: 2026-07-19
 related_docs:
   - ../workflow-lifecycle.md
   - ../routines/track-orchestration-routine.md
   - ../specs/phase-implementation-spec.md
-  - ../../architecture/ui-framework-architecture.md
-  - ../../architecture/live-uiplugin-runtime-platform-architecture.md
-  - ../../design/active/ui-framework-app-integration-direction-review.md
-  - ../../design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
-  - ../../design/active/live-uiplugin-runtime-full-cutover-plan.md
-  - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
-  - ../../design/active/ui-component-platform-overlay-popup-layering-design.md
-  - ../../design/active/ui-component-platform-text-editing-design.md
-  - ../../design/active/ui-component-platform-generic-text-design.md
-  - ../../design/active/ui-component-platform-surface2d-design.md
+  - ../../architecture/repository-family-architecture.md
+  - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
+  - ../../reports/investigations/repository-family-current-state-investigation.md
+  - ../../design/active/runensdf-extraction-design.md
+  - ../../design/active/runenecs-extraction-boundary-design.md
+  - ../../design/active/runenrender-decomposition-design.md
+  - ./active-work.md
+  - ./roadmap.md
 ---
 
 # Production Tracks
 
-Use this file for strategic production-track planning in Markdown.
+The repository-family program runs three tracks in parallel at different maturity
+levels. It does not run three simultaneous external source moves.
 
-## PT-UI-COMPONENT-PLATFORM
+## Coordination model
 
-Track ID: `PT-UI-COMPONENT-PLATFORM`
+```text
+Primary implementation track
+    PT-RUNENSDF
 
-Title: UI Component Platform
+Parallel investigation/design track
+    PT-RUNENECS
 
-Track type: product / architecture proof
+Parallel investigation/internal-decomposition track
+    PT-RUNENRENDER
 
-State: active
+External independent workstream
+    RunenUI — not governed here
+```
 
-Lifecycle state: `production-track`
+Shared planning and root files have one owner at a time. After the charter phase,
+track PRs use track-specific investigation, design, proof, and closeout files
+until a lifecycle transition requires shared authority updates.
+
+## PT-REPOSITORY-FAMILY
+
+Track ID: `PT-REPOSITORY-FAMILY`
+
+Title: Repository Family Governance
+
+Track type: architecture / governance / release coordination
+
+State: active through `PT-REPOSITORY-FAMILY-000`
 
 Goal:
 
 ```text
-Make reusable Runenwerk UI controls and component surfaces story-proven, descriptor-backed, inspectable, executable, and consumable by higher product tracks without moving reusable control semantics into those consumers.
+Define repository missions, dependency direction, adapter ownership, versioning,
+MSRV/toolchain, diagnostics, identities, persisted formats, provenance,
+conformance, clean cutovers, and shared-file coordination.
 ```
+
+Current phase: `PT-REPOSITORY-FAMILY-000 — Repository Family Charter and Track Activation`
 
 Milestones:
 
 ```text
-001 ControlPackage / ControlKernel contract — completed by user report
-002 Authoring Kit — completed by user validation report
-003 Story proof envelope consumption — completed by user validation report
-004 Catalog / discovery / inspection — completed by user validation report
-005 Input / gesture / device — completed by user validation report
-006 State binding / Host Intent — completed by user validation report
-007 Theme / State / Style — completed by user validation report
-008 Accessibility / Focus / Inspection — completed by user validation report
-009 Layout / Container / Virtualization — completed by user validation report through 009A/009B/009C
-010 Render Surface / Output — completed through PR #34 and user validation report
-011 Base Control Packages — completed through PR #37 and user validation report
-012 Generic Interaction — completed through PR #43 and user validation report
-012A Executable Interaction Story — completed through PR #43 and user validation report
-013 Overlay / Popup / Layering — completed through PR #44 and local validation report
-014 Text Editing / Editable Text Behavior — completed through PR #46 and local validation report
-015 Generic Text — completed through PR #48 baseline and PR #49 hardening
-016 Surface2D — completed through PR #61 after PR #62 workflow hardening
-017 SpatialCanvas — downstream, blocked behind runtime platform cutover
-018 NodeCanvas — downstream
-019 PortGraphCanvas — downstream
-020 ProgressionTreeView — downstream; may be reframed as a generic tree/hierarchical graph package before implementation
-021 TrackSurface / Timeline — downstream
-022 Transitions / effects — downstream
-023 Adoption gates — downstream final hardening, not the first adoption proof
-024 Runtime-proven closeout — downstream
+000 Repository-family charter and track activation — active docs-only phase
+001 Compatibility matrix and release-policy hardening — deferred until first external repository exists
+002 Cross-repository conformance automation — deferred until at least two repositories exist
 ```
 
-Current blocker:
+Current blocker: documentation validation and owner review of Phase 000.
 
-```text
-No Phase 16 product blocker remains. The bounded ECS-backed app-integration proof is completed through PR #72 and closeout report `../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md`.
+Next action: merge Phase 000, then activate the three bounded investigation
+phases from current `main`.
 
-The full `PT-UI-RUNTIME-PLATFORM-002` cutover plan is completed through PR #76. The `PT-WORKFLOW-TRACK-ORCHESTRATION-001` workflow gate is completed through PR #77 and closeout truth. `PT-UI-RUNTIME-PLATFORM-003 — UiPlugin Foundation` is completed through PR #79 and closeout truth. `PT-UI-RUNTIME-PLATFORM-004 — App Mounting API` is completed through PR #82 and closeout truth. `PT-UI-RUNTIME-PLATFORM-005 — Typed Screen / Source / Action Contracts` is completed through PR #85 and closeout truth. `PT-UI-RUNTIME-PLATFORM-006 — Mounted Surface Session Runtime` is completed through PR #88 and closeout truth. `PT-UI-RUNTIME-PLATFORM-007 — Host Action Dispatch and Runtime Trace` is completed through PR #91 and closeout truth. `PT-UI-RUNTIME-PLATFORM-008 — Runtime Evaluation, State Snapshot, and Invalidation` is completed through PR #94 and closeout truth. `PT-UI-RUNTIME-PLATFORM-009 — SurfaceFrame Generic Producer Boundary` is completed through PR #97 and closeout truth. `PT-UI-RUNTIME-PLATFORM-010 — UiPlugin Render Publication` is completed through PR #101 and closeout truth. `PT-UI-RUNTIME-PLATFORM-011 — Scene/Debug Overlay Producer Migration and Retirement` is completed through PR #104 and closeout truth. The active runtime-platform focus is now `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` active implementation authorization after the Phase 012 activation record merges.
-```
+## PT-RUNENSDF
 
-Next action:
+Track ID: `PT-RUNENSDF`
 
-```text
-After the Phase 012 activation record merges, open exactly one bounded `PT-UI-RUNTIME-PLATFORM-012 — Runtime Counter App Product` implementation PR from current `main`. Do not return to SpatialCanvas implementation or later Component Platform milestones before the runtime platform product path is proven or explicitly deferred.
-```
+Title: RunenSDF Extraction
 
-## PT-UI-RUNTIME-PLATFORM
+Track type: reusable framework extraction
 
-Track ID: `PT-UI-RUNTIME-PLATFORM`
-
-Title: Live UiPlugin Runtime Platform
-
-Track type: architecture / runtime platform / public API
-
-State: active implementation authorization for Phase 012
-
-Lifecycle state: `active-implementation` for `PT-UI-RUNTIME-PLATFORM-012` only
+State: queued; first extraction track after charter merge
 
 Goal:
 
 ```text
-Live UiPlugin runtime and generic surface-frame rendering: app authors install `RenderPlugin`, `UiPlugin`, and their own app plugin; mount typed UI screens; handle typed actions through host-owned app state; produce source/program/evaluator-backed frames; publish through a producer-generic surface-frame seam that RenderPlugin prepares without owning UI semantics; retire prior render-owned UI producer paths; provide generic UI-runtime trace/history and agent operation; support source-reload/persistence contracts; and ship a runnable Counter app product.
+Extract reusable SDF mathematics and CPU queries into Crystonix/RunenSDF with no
+Runenwerk geometry, ECS, world, material, renderer, or product dependency.
 ```
 
 Authority:
 
 ```text
-Current-state investigation: docs-site/src/content/docs/reports/investigations/live-uiplugin-runtime-current-state-investigation.md
-Runtime architecture: docs-site/src/content/docs/architecture/live-uiplugin-runtime-platform-architecture.md
-Design-gate authority: docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
-Full cutover plan: docs-site/src/content/docs/design/active/live-uiplugin-runtime-full-cutover-plan.md
-Track orchestration routine: docs-site/src/content/docs/workspace/routines/track-orchestration-routine.md
-Phase implementation spec: docs-site/src/content/docs/workspace/specs/phase-implementation-spec.md
-Architecture spine: docs-site/src/content/docs/architecture/ui-framework-architecture.md
-Workflow gates: complete-investigation-gate.md, complete-design-gate.md, complete-merge-readiness-gate.md
+../../design/active/runensdf-extraction-design.md
+../../architecture/repository-family-architecture.md
+../../adr/accepted/0014-repository-family-extraction-boundaries.md
 ```
 
 Milestones:
 
 ```text
-001 Live UiPlugin runtime and generic surface-frame rendering investigation/design gate — completed through merged PR #74 docs-only hardening
-002 Full platform cutover plan — completed through merged PR #76 docs-only planning
-Workflow gate PT-WORKFLOW-TRACK-ORCHESTRATION-001 — completed through merged PR #77 and closeout truth
-003 UiPlugin Foundation — completed through merged PR #79 and closeout truth
-004 App Mounting API — completed through merged PR #82 and closeout truth
-005 Typed Screen / Source / Action Contracts — completed through PR #85 and closeout truth
-006 Mounted Surface Session Runtime — completed through PR #88 and closeout truth
-007 Host Action Dispatch and Runtime Trace — completed through PR #91 and closeout truth
-008 Runtime Evaluation, State Snapshot, and Invalidation — completed through PR #94 and closeout truth
-009 SurfaceFrame Generic Producer Boundary — completed through PR #97 and closeout truth
-010 UiPlugin Render Publication — completed through PR #101 and closeout truth
-011 Scene/Debug Overlay Producer Migration and Retirement — completed through PR #104 and closeout truth
-012 Runtime Counter App Product — active implementation authorized after Phase 012 activation merges
-013 Source Reload and Persistence Contract — downstream implementation PR
-014 Closeout and Adoption Lock — downstream closeout PR
+001 Complete source/test/consumer/public-API investigation
+002 Correct geometry, validation, bounds, and query boundaries inside Runenwerk
+003 Create RunenSDF and transfer corrected source
+004 Cut Runenwerk over and delete domain/sdf
+005 Closeout, provenance, compatibility, and branch cleanup
 ```
 
-Design gates:
+Complete investigation gate: incomplete for implementation; Phase 001 is next.
 
-```text
-Complete investigation gate: complete for `PT-UI-RUNTIME-PLATFORM-001`; `PT-UI-RUNTIME-PLATFORM-002` added render/app-engine feature mapping, runtime architecture, agent/trace requirements, producer-generic render-boundary ordering, reload/persistence decisions, SDF-backend downstream ownership, phase-spec workflow decision, and product acceptance requirements.
-Complete design gate: completed for `PT-UI-RUNTIME-PLATFORM-002` through merged PR #76.
-Implementation authorization: Phase 012 is authorized after the Phase 012 activation record merges. The authorized contract names exact owner files/crates, validation, evidence, principle checks, module decomposition, and stop conditions. Phase 013 and later remain forbidden until Phase 012 is reviewed, merged, and completion truth is recorded.
-```
+Complete design gate: target direction fixed; implementation details require the
+Phase 001 evidence package.
 
-Evidence gates:
+Current blocker: complete consumer/test inventory and local baseline validation.
 
-```text
-Current evidence is `E3` source/design/planning inspection by path, `E5` local command validation for completed Phase 011 and activation docs validation, `E6` PR #104 implementation merge metadata and PR #105 closeout merge metadata, `E8` accepted architecture/workflow/planning authority, and `E9` code/test plus validation plus authority alignment for Phase 011 closeout. Phase 012 implementation must provide focused crate tests, integration/proof tests, docs validation, dependency checks where applicable, runtime/proof report evidence, and recorded human and agent Counter app commands.
-```
+Activation condition: Phase 001 may start after the charter merges. Phase 002
+requires a separate accepted implementation contract.
 
-Current blocker:
+Next action: open exactly one `PT-RUNENSDF-001` investigation/design PR.
 
-```text
-Phase 011 is merged and closed out. Phase 012 implementation is authorized only by the bounded activation contract and must stay inside the runtime Counter product scope. Source reload/persistence implementation and Phases 013-014 implementation remain blocked until Phase 012 is reviewed, merged, and completion truth is recorded.
-```
+## PT-RUNENECS
 
-Activation condition:
+Track ID: `PT-RUNENECS`
 
-```text
-Phase 012 may proceed only through the separately authorized implementation PR that uses the named app/product crate inventory, human and agent command proof plan, exact allowed files, forbidden files, validation envelope, evidence expectation, principle checks, module decomposition, and stop conditions recorded in active-work and the Phase 012 spec. Phase 013 may move only after Phase 012 is complete, reviewed/merged, and truthfully closed.
-```
+Title: RunenECS Extraction
 
-Next action:
+Track type: reusable framework architecture and extraction
 
-```text
-After the Phase 012 activation record merges, open exactly one bounded Phase 012 implementation PR from current `main`. Keep it draft until focused validation is clean. Do not implement multiple runtime phases in one broad PR.
-```
+State: queued parallel investigation/design
 
-## Track shape
-
-```text
-Track ID:
-Title:
-Track type:
-State:
-Lifecycle state:
 Goal:
-Authority:
-Milestones:
-Design gates:
-Evidence gates:
-Current blocker:
-Activation condition:
-Next action:
+
+```text
+Extract runenecs, runenecs_macros, and a context-generic runen_schedule package
+without carrying Runenwerk spatial, geometry, lifecycle, renderer, networking,
+replay, or product policy into the framework.
 ```
+
+Authority:
+
+```text
+../../design/active/runenecs-extraction-boundary-design.md
+../../architecture/repository-family-architecture.md
+../../adr/accepted/0014-repository-family-extraction-boundaries.md
+```
+
+Milestones:
+
+```text
+001 Complete ECS/macros/scheduler/spatial/network/replay investigation
+002 Close scheduler, spatial, reflection, messaging, replication, identity, error, and concurrency decisions
+003 Repair boundaries and add standalone public conformance inside Runenwerk
+004 Create RunenECS and transfer corrected packages
+005 Cut Runenwerk over and delete original packages
+006 Closeout, compatibility, performance, provenance, and branch cleanup
+```
+
+Fixed decisions:
+
+```text
+ECS core will not depend on Runenwerk geometry.
+ECS-owned spatial indexing will be removed.
+runen_schedule stays a separate context-generic package in the RunenECS repository.
+Runenwerk owns engine lifecycle and network/replay product policy.
+Reflection must use explicit registry authority.
+```
+
+Complete investigation gate: incomplete.
+
+Complete design gate: incomplete for source changes.
+
+Current blocker: broad public surface and unresolved scheduler/messaging/change
+ownership.
+
+Activation condition: Phase 001 investigation may run after charter merge. No ECS
+source movement before Phase 002 acceptance and Phase 003 repair.
+
+Next action: open exactly one `PT-RUNENECS-001` investigation PR.
+
+## PT-RUNENRENDER
+
+Track ID: `PT-RUNENRENDER`
+
+Title: RunenRender Decomposition and Extraction
+
+Track type: renderer architecture / internal decomposition / framework extraction
+
+State: queued parallel investigation
+
+Goal:
+
+```text
+Separate backend-neutral render planning and a conventional WGPU backend from
+Runenwerk ECS, scene, world, material, SDF, UI, editor, window, lifecycle, and
+product policy; prove the boundary internally; then extract RunenRender.
+```
+
+Authority:
+
+```text
+../../design/active/runenrender-decomposition-design.md
+../../architecture/repository-family-architecture.md
+../../adr/accepted/0014-repository-family-extraction-boundaries.md
+```
+
+Milestones:
+
+```text
+001 Complete module/shader/macro/example/benchmark/test/control-flow inventory
+002 Close graph, producer, resource, surface, frame, sync, error/device-loss, diagnostic, macro, and threading decisions
+003 Separate neutral renderer core inside Runenwerk
+004 Separate WGPU backend and host/native-window mapping inside Runenwerk
+005 Migrate Runenwerk adapters and prove public-boundary-only consumption
+006 Create RunenRender and transfer corrected packages
+007 Cut Runenwerk over and delete original implementation
+008 Closeout, compatibility, GPU/platform evidence, provenance, and branch cleanup
+```
+
+Fixed decisions:
+
+```text
+RunenRender core must not depend on ECS, SDF, UI, scene, material authoring, Winit, WGPU, or Runenwerk.
+RunenRender WGPU owns WGPU surfaces and backend execution.
+Runenwerk owns NativeWindowId, event-loop policy, ECS extraction, and domain adapters.
+Product-specific graph validation such as built-in UI validation is not renderer-core authority.
+External extraction is forbidden until the internal anti-cheating proof passes.
+```
+
+Complete investigation gate: incomplete.
+
+Complete design gate: incomplete.
+
+Current blocker: renderer responsibilities are still combined in one engine plugin
+and package.
+
+Activation condition: Phase 001 investigation may run after charter merge.
+Internal source changes require Phase 002 acceptance. External extraction requires
+Phase 005 completion.
+
+Next action: open exactly one `PT-RUNENRENDER-001` investigation PR.
+
+## Retired internal UI track
+
+`PT-UI-RUNTIME-PLATFORM-012` is superseded and closed unmerged. It is not an
+active production track.
+
+The separate RunenUI workstream is independent. Historical internal UI closeouts
+remain evidence, not current implementation authorization.
+
+## Track rules
+
+- One phase per implementation PR.
+- Investigation/design PRs do not move source unless explicitly authorized.
+- New branches start from the latest merged `main`.
+- Exact revision dependencies only; no moving branches.
+- No submodules, source mirrors, compatibility crates, or universal shared core.
+- No next phase activation before truthful prior-phase closeout or explicit
+  supersession.
