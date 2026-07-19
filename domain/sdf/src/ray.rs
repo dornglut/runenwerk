@@ -91,7 +91,7 @@ fn update_interval(
         core::mem::swap(&mut near, &mut far);
     }
 
-    *minimum = minimum.max(near);
-    *maximum = maximum.min(far);
+    *minimum = (*minimum).max(near);
+    *maximum = (*maximum).min(far);
     *maximum >= *minimum
 }
