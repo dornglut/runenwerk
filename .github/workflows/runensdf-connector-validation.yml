@@ -7,21 +7,60 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  docs-diagnostic:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Checkout implementation branch
         uses: actions/checkout@v4
         with:
           ref: impl/runensdf-boundary-correction
           fetch-depth: 0
+
+      - name: Install stable Rust tools
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+
+      - name: Verify bounded SDF lockfile entry
+        shell: python
+        run: |
+          from pathlib import Path
+
+          text = Path("Cargo.lock").read_text(encoding="utf-8")
+          expected = '''[[package]]
+          name = "sdf"
+          version = "0.1.0"
+          dependencies = [
+           "glam 0.31.1",
+           "thiserror 2.0.18",
+          ]
+          '''
+          if text.count(expected) != 1:
+              raise SystemExit("Cargo.lock does not contain exactly one corrected sdf package block")
+
+      - name: Verify metadata and dependency direction
+        run: |
+          cargo metadata --format-version 1 --locked --no-deps > /dev/null
+          cargo tree -p sdf --locked
+          cargo tree -i sdf --workspace --locked
+
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+
+      - name: Test RunenSDF package
+        run: cargo test -p sdf --locked
+
+      - name: Clippy RunenSDF package
+        run: cargo clippy -p sdf --all-targets --locked -- -D warnings
+
+      - name: Check complete workspace API compatibility
+        run: cargo check --workspace --all-targets --locked
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -31,24 +70,16 @@ jobs:
       - name: Install pnpm 11
         run: npm install --global pnpm@11.0.0
 
-      - name: Capture docs dependency installation
-        shell: bash
+      - name: Install docs dependencies
+        run: pnpm --dir docs-site install --frozen-lockfile
+
+      - name: Validate documentation authority
+        run: python tools/docs/validate_docs.py
+
+      - name: Build documentation site
+        run: pnpm --dir docs-site build
+
+      - name: Verify clean tracked state
         run: |
-          set +e
-          pnpm --dir docs-site install --frozen-lockfile > docs-install.log 2>&1
-          status=$?
-          set -e
-          printf '%s\n' "$status" > docs-install.status
-          cat docs-install.log
-
-      - name: Upload docs install diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: runensdf-docs-install-log
-          path: |
-            docs-install.log
-            docs-install.status
-          if-no-files-found: error
-
-      - name: Enforce docs install result
-        run: test "$(cat docs-install.status)" -eq 0
+          git diff --check
+          test -z "$(git status --short --untracked-files=no)"
