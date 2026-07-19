@@ -1,0 +1,142 @@
+// Planning-only handoff contract for the first RunenRender internal repair.
+// Markdown investigation, design, and execution-plan authority remain primary.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENRENDER-R1",
+    title: "Neutral Renderer Identities and Structured Identity Errors",
+    lifecycle_state: "active-planning",
+    implementation_authorization_status: "active-planning-only",
+    owner: "renderer API owner",
+
+    authority_docs: [
+        "ARCHITECTURE.md",
+        "DEPENDENCY_RULES.md",
+        "DOMAIN_MAP.md",
+        "docs-site/src/content/docs/architecture/repository-family-architecture.md",
+        "docs-site/src/content/docs/adr/accepted/0014-repository-family-extraction-boundaries.md",
+        "docs-site/src/content/docs/reports/investigations/runenrender-extraction-investigation.md",
+        "docs-site/src/content/docs/design/active/runenrender-decomposition-design.md",
+        "docs-site/src/content/docs/design/active/runenrender-internal-decomposition-execution-plan.md",
+        "docs-site/src/content/docs/workspace/complete-investigation-gate.md",
+        "docs-site/src/content/docs/workspace/complete-design-gate.md",
+        "docs-site/src/content/docs/guidelines/programming-principles.md",
+    ],
+
+    complete_investigation_gate_status: "connector inspection complete for current renderer ID declarations, handles, shared id macro, and monotonic allocator; complete local consumer/import baseline required before activation",
+    complete_design_gate_status: "complete for R1 runtime identity ownership, allocation, exhaustion, raw diagnostic access, stable-key separation, and error scope; implementation remains unauthorized",
+    principle_compliance_status: "complete for R1 in RunenRender design and execution plan",
+    module_decomposition_status: "complete for R1: renderer-local runtime identities, explicit allocators, immediate handle/API migrations, and focused dependency guards only",
+    maintainability_review_status: "complete for target; R1 must not absorb graph, resource semantics, prepared inputs, GPU layout, shaders, WGPU, surfaces, diagnostics, or producer migration",
+
+    allowed_paths: [
+        "engine/src/plugins/render/api/ids.rs",
+        "engine/src/plugins/render/api/errors.rs or one equivalently narrow renderer API error module",
+        "engine/src/plugins/render/api/mod.rs only for identity/error exports",
+        "engine/src/plugins/render/api/handles.rs only for mechanical migration to corrected identities",
+        "engine/src/plugins/render/mod.rs and engine/src/prelude.rs only for reviewed identity/error exports",
+        "focused renderer identity/allocation/error tests",
+        "current direct consumers identified by activation-time grep only for mechanical migration to corrected IDs/allocators/errors",
+        "engine/Cargo.toml only if the corrected renderer identity module can remove a direct dependency proven to exist solely for renderer IDs; otherwise forbidden",
+        "docs-site/src/content/docs/reports/proofs/pt-runenrender-r1-*.md",
+        "docs-site/src/content/docs/reports/closeouts/pt-runenrender-r1-closeout.md only after implementation merges",
+    ],
+
+    forbidden_paths: [
+        "render graph/pass/resource semantic redesign",
+        "prepared frame inputs or producer seam implementation",
+        "GPU uniform/storage layout or macro migration",
+        "shader, pipeline, residency, WGPU, surface, device-loss, diagnostics, capture, runtime, material, SDF, UI, editor, world, or product migration",
+        "external RunenRender repository or package creation",
+        "source movement or deletion",
+        "compatibility ID wrappers, forwarding modules, duplicate allocators, or deprecated parallel APIs",
+        "foundation/id or foundation/id_macros redesign",
+        ".github/**",
+        "tools/**",
+    ],
+
+    public_api_surface: [
+        "RenderFlowId, RenderPassId, RenderResourceId, RenderFeatureId, and RenderFrameProducerId remain opaque renderer-local runtime identities or are renamed only by an explicitly reviewed current-consumer migration.",
+        "Runtime renderer IDs no longer depend on Runenwerk foundation id/id_macros in their implementation or public signature.",
+        "Runtime IDs cannot be arbitrarily reconstructed through a safe public raw constructor.",
+        "Read-only integer access may remain for diagnostics, ordering, hashing, and trace correlation, explicitly without persistence or network-stability guarantees.",
+        "Each identity family has an explicit owner-scoped allocator; allocation is fallible at exhaustion and never wraps, saturates into reuse, or panics in the public fallible path.",
+        "Stable authored or persisted graph keys are separate future concepts and are not represented by runtime renderer IDs.",
+        "Structured RenderIdentityError or equivalent reports invalid allocator start/admission and exhausted identity space without anyhow or panic-based caller branching.",
+    ],
+
+    invariants: [
+        "A runtime renderer ID is allocated by its explicit owning builder/registry/allocator rather than a process-global implicit sequence.",
+        "Zero or any reserved sentinel is never issued as a valid runtime ID.",
+        "Identity allocation is deterministic for the same explicit allocator state and operation order.",
+        "Exhaustion does not wrap, reuse, or panic through the public fallible allocation path.",
+        "Safe public API cannot forge arbitrary runtime IDs from raw integers.",
+        "Diagnostic raw values do not become stable serialization, replay, cache, or network identifiers.",
+        "Distinct identity families remain type-distinct.",
+        "Handle equality, ordering, hashing, and typed association remain correct after migration.",
+        "The corrected identity/error module imports no ECS, WGPU, Winit, Runenwerk runtime, SDF, UI, scene, material, editor, or product type.",
+        "R1 changes no graph, resource, frame, producer, GPU, shader, WGPU, surface, or product semantics.",
+    ],
+
+    acceptance_criteria: [
+        "engine/src/plugins/render/api/ids.rs no longer uses id_macros::id or exposes a safe arbitrary try_from_raw constructor for runtime IDs.",
+        "All renderer identity families use one reviewed renderer-local implementation pattern without copy-pasted divergent allocators.",
+        "Allocator construction and allocation expose structured fallible behavior for invalid start/reserved values and exhaustion.",
+        "Tests cover first allocation, deterministic monotonic order, family type distinction, invalid start/admission, exhaustion, non-wrapping behavior, handle equality/order/hash, and no public raw reconstruction path.",
+        "A compile/source dependency guard proves the neutral identity/error layer has no forbidden Runenwerk/domain/backend imports.",
+        "All direct current ID/Sequence/raw/try_from_raw consumers found by mandatory grep migrate mechanically without creating stable raw-ID assumptions.",
+        "No graph, WGPU, surface, shader, macro, product, or external-repository scope enters the diff.",
+        "Focused renderer identity tests and full engine/workspace validation pass.",
+    ],
+
+    validation_commands: [
+        "git status --short --branch",
+        "git rev-parse HEAD",
+        "cargo metadata --format-version 1 --locked",
+        "cargo tree -p engine --edges normal,build,dev",
+        "rg -n 'Render(Flow|Pass|Resource|Feature|FrameProducer)Id|Render[A-Za-z]+IdSequence|try_from_raw|\\.raw\\(' engine apps domain net adapters --glob '*.rs'",
+        "rg -n 'id_macros::id|foundation::id|::id::|ecs::|wgpu::|winit::|material_graph|world_sdf|ui_' engine/src/plugins/render/api/ids.rs engine/src/plugins/render/api/errors.rs",
+        "cargo +stable fmt --all --check",
+        "cargo test -p engine render_identity --locked",
+        "cargo test -p engine --lib --locked",
+        "cargo test -p engine --tests --locked",
+        "cargo clippy -p engine --all-targets --locked -- -D warnings",
+        "repository-authoritative MSRV test command",
+        "cargo test --workspace --locked",
+        "cargo clippy --workspace --all-targets --locked -- -D warnings",
+        "python tools/docs/validate_docs.py",
+        "pnpm --dir docs-site build",
+        "git diff --check",
+        "git diff --check main...HEAD",
+        "git status --short --branch",
+        "git diff --stat main...HEAD",
+    ],
+
+    evidence_expectations: [
+        "Report the complete renderer ID declaration, allocator, raw-construction, handle, and consumer inventory before code changes.",
+        "Report whether engine's id/id_macros dependencies have non-render consumers and therefore remain in engine after R1.",
+        "Map every old ID/Sequence/raw API to the corrected runtime identity contract.",
+        "Report allocator transition/exhaustion tests without exposing production-only test constructors publicly.",
+        "Report every direct consumer migration and classify any apparent persistence/replay/cache usage before proceeding.",
+        "Report the exact dependency-guard mechanism and forbidden-import result.",
+        "Report focused, engine, workspace, stable, MSRV, docs, and diff validation separately.",
+        "Classify unavailable or skipped commands honestly.",
+    ],
+
+    stop_conditions: [
+        "Stop if any current consumer intentionally persists or transmits runtime renderer raw IDs as a stable format.",
+        "Stop if arbitrary safe raw ID reconstruction is a required accepted public contract.",
+        "Stop if renderer identity requires generation/stale-handle semantics rather than monotonic runtime identity; record a separate design correction before implementation.",
+        "Stop if identity ownership cannot be separated without graph/resource/registry redesign outside R1.",
+        "Stop if R1 requires foundation/id or id_macros redesign.",
+        "Stop if current main fails for unrelated reasons.",
+        "Stop if implementation authorization remains active-planning-only.",
+    ],
+
+    closeout_expectations: [
+        "Record exact identity/error API changes, consumer migrations, allocator behavior, dependency guard, tests, validation, evidence classes, forbidden-scope proof, known gaps, and next safe action.",
+        "Do not activate R2 until R1 is reviewed, merged, and closeout truth is recorded against current main.",
+        "Write the R2 phase spec only after R1 implementation facts and consumer migrations are known.",
+    ],
+
+    next_phase_activation_condition: "PT-RUNENRENDER-R2 may enter active planning only after R1 is locally validated, reviewed, merged, and closed; active implementation still requires a new R2 specification derived from current main.",
+)
