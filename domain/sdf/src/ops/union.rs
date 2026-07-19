@@ -1,18 +1,25 @@
 use glam::Vec3;
 
-use crate::bounds::FieldBounds;
-use crate::field::SdfField3;
-use crate::sample::SdfSample;
+use crate::sample::minimum_safe_step;
+use crate::{FieldBounds, FieldCapabilities, SampleError, SdfField3, SdfSample};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Union<A, B> {
-    pub left: A,
-    pub right: B,
+    left: A,
+    right: B,
 }
 
 impl<A, B> Union<A, B> {
-    pub fn new(left: A, right: B) -> Self {
+    pub const fn new(left: A, right: B) -> Self {
         Self { left, right }
+    }
+
+    pub const fn left(&self) -> &A {
+        &self.left
+    }
+
+    pub const fn right(&self) -> &B {
+        &self.right
     }
 }
 
@@ -21,13 +28,20 @@ where
     A: SdfField3,
     B: SdfField3,
 {
-    fn sample(&self, point: Vec3) -> SdfSample {
-        let a = self.left.sample(point).distance;
-        let b = self.right.sample(point).distance;
-        SdfSample::new(a.min(b))
+    fn sample(&self, point: Vec3) -> Result<SdfSample, SampleError> {
+        let left = self.left.sample(point)?;
+        let right = self.right.sample(point)?;
+        SdfSample::from_parts(
+            left.signed_value().min(right.signed_value()),
+            minimum_safe_step(left, right),
+        )
     }
 
     fn bounds(&self) -> FieldBounds {
         self.left.bounds().union(self.right.bounds())
+    }
+
+    fn capabilities(&self) -> FieldCapabilities {
+        FieldCapabilities::SIGNED_FIELD
     }
 }
