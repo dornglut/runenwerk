@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - impl/runensdf-boundary-correction
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -38,6 +41,7 @@ jobs:
         run: cargo clippy -p sdf --all-targets --locked -- -D warnings
 
       - name: Commit regenerated lockfile
+        if: github.event_name == 'push'
         shell: bash
         run: |
           if git diff --quiet -- Cargo.lock; then
