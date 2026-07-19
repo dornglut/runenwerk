@@ -39,7 +39,7 @@ impl Bounds3 {
     }
 
     pub fn center(self) -> Vec3 {
-        (self.min + self.max) * 0.5
+        self.min + (self.max - self.min) * 0.5
     }
 
     pub fn half_extents(self) -> Vec3 {
@@ -157,8 +157,10 @@ impl FieldBounds {
     }
 
     pub(crate) fn map_corners(self, mapper: impl Fn(Vec3) -> Vec3) -> Self {
-        let Self::Bounded(bounds) = self else {
-            return self;
+        let bounds = match self {
+            Self::Unbounded => return Self::Unbounded,
+            Self::Empty => return Self::Empty,
+            Self::Bounded(bounds) => bounds,
         };
 
         let corners = bounds.corners();

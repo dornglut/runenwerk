@@ -56,8 +56,9 @@ where
     }
 
     fn bounds(&self) -> FieldBounds {
-        let FieldBounds::Bounded(bounds) = self.field.bounds() else {
-            return self.field.bounds();
+        let field_bounds = self.field.bounds();
+        let FieldBounds::Bounded(bounds) = field_bounds else {
+            return field_bounds;
         };
         let mut min = bounds.min();
         let mut max = bounds.max();
