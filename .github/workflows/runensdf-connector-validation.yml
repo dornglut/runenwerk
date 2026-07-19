@@ -62,11 +62,43 @@ jobs:
       - name: Clippy RunenSDF package
         run: cargo clippy -p sdf --all-targets --locked -- -D warnings
 
-      - name: Test workspace
-        run: cargo test --workspace --locked
+      - name: Capture workspace tests
+        shell: bash
+        run: |
+          set +e
+          cargo test --workspace --locked > workspace-test.log 2>&1
+          status=$?
+          set -e
+          printf '%s\n' "$status" > workspace-test.status
+          tail -n 120 workspace-test.log
 
-      - name: Clippy workspace
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Upload workspace test log
+        uses: actions/upload-artifact@v4
+        with:
+          name: runensdf-workspace-test-log
+          path: |
+            workspace-test.log
+            workspace-test.status
+          if-no-files-found: error
+
+      - name: Capture workspace Clippy
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --workspace --all-targets --locked -- -D warnings > workspace-clippy.log 2>&1
+          status=$?
+          set -e
+          printf '%s\n' "$status" > workspace-clippy.status
+          tail -n 120 workspace-clippy.log
+
+      - name: Upload workspace Clippy log
+        uses: actions/upload-artifact@v4
+        with:
+          name: runensdf-workspace-clippy-log
+          path: |
+            workspace-clippy.log
+            workspace-clippy.status
+          if-no-files-found: error
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -79,14 +111,42 @@ jobs:
       - name: Install docs dependencies
         run: pnpm --dir docs-site install --frozen-lockfile
 
-      - name: Validate documentation authority
-        run: python tools/docs/validate_docs.py
+      - name: Capture documentation validation
+        shell: bash
+        run: |
+          set +e
+          python tools/docs/validate_docs.py > docs-validator.log 2>&1
+          validator_status=$?
+          pnpm --dir docs-site build > docs-build.log 2>&1
+          build_status=$?
+          set -e
+          printf '%s\n' "$validator_status" > docs-validator.status
+          printf '%s\n' "$build_status" > docs-build.status
+          tail -n 80 docs-validator.log
+          tail -n 80 docs-build.log
 
-      - name: Build documentation site
-        run: pnpm --dir docs-site build
+      - name: Upload documentation logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: runensdf-docs-validation-log
+          path: |
+            docs-validator.log
+            docs-validator.status
+            docs-build.log
+            docs-build.status
+          if-no-files-found: error
 
       - name: Verify clean generated state
+        shell: bash
         run: |
           git diff --check
           git status --short
-          test -z "$(git status --short)"
+          test -z "$(git status --short --untracked-files=no)"
+
+      - name: Enforce captured command results
+        shell: bash
+        run: |
+          test "$(cat workspace-test.status)" -eq 0
+          test "$(cat workspace-clippy.status)" -eq 0
+          test "$(cat docs-validator.status)" -eq 0
+          test "$(cat docs-build.status)" -eq 0
