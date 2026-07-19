@@ -1,38 +1,71 @@
 use glam::{Affine3A, Vec3};
 
-use crate::bounds::FieldBounds;
-use crate::field::SdfField3;
-use crate::sample::SdfSample;
-
-use super::map_bounded_aabb;
+use crate::error::ValidationError;
+use crate::{FieldBounds, FieldCapabilities, SampleError, SdfField3, SdfSample};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Affine<F> {
-    pub field: F,
-    pub transform: Affine3A,
+    field: F,
+    transform: Affine3A,
     inverse: Affine3A,
-    distance_scale: f32,
+    conservative_scale: f32,
 }
 
 impl<F> Affine<F> {
-    pub fn new(field: F, transform: Affine3A) -> Self {
-        let inverse = transform.inverse();
-        let sx = transform.matrix3.x_axis.length();
-        let sy = transform.matrix3.y_axis.length();
-        let sz = transform.matrix3.z_axis.length();
-        let min_scale = sx.min(sy).min(sz);
-        let distance_scale = if min_scale.is_finite() {
-            min_scale.max(0.0)
-        } else {
-            1.0
-        };
+    pub fn new(field: F, transform: Affine3A) -> Result<Self, ValidationError> {
+        let matrix = transform.matrix3;
+        let finite = matrix.x_axis.is_finite()
+            && matrix.y_axis.is_finite()
+            && matrix.z_axis.is_finite()
+            && transform.translation.is_finite();
+        let determinant = matrix.determinant();
+        if !finite || !determinant.is_finite() || determinant == 0.0 {
+            return Err(ValidationError::SingularTransform);
+        }
 
-        Self {
+        let inverse = transform.inverse();
+        let inverse_matrix = inverse.matrix3;
+        let inverse_finite = inverse_matrix.x_axis.is_finite()
+            && inverse_matrix.y_axis.is_finite()
+            && inverse_matrix.z_axis.is_finite()
+            && inverse.translation.is_finite();
+        if !inverse_finite {
+            return Err(ValidationError::SingularTransform);
+        }
+
+        let frobenius_squared = inverse_matrix.x_axis.length_squared()
+            + inverse_matrix.y_axis.length_squared()
+            + inverse_matrix.z_axis.length_squared();
+        if !frobenius_squared.is_finite() || frobenius_squared <= 0.0 {
+            return Err(ValidationError::SingularTransform);
+        }
+        let conservative_scale = frobenius_squared.sqrt().recip();
+        if !conservative_scale.is_finite() || conservative_scale <= 0.0 {
+            return Err(ValidationError::SingularTransform);
+        }
+
+        Ok(Self {
             field,
             transform,
             inverse,
-            distance_scale,
-        }
+            conservative_scale,
+        })
+    }
+
+    pub const fn transform(&self) -> Affine3A {
+        self.transform
+    }
+
+    pub const fn conservative_scale(&self) -> f32 {
+        self.conservative_scale
+    }
+
+    pub const fn field(&self) -> &F {
+        &self.field
+    }
+
+    pub fn into_field(self) -> F {
+        self.field
     }
 }
 
@@ -40,15 +73,21 @@ impl<F> SdfField3 for Affine<F>
 where
     F: SdfField3,
 {
-    fn sample(&self, point: Vec3) -> SdfSample {
-        let local = self.inverse.transform_point3(point);
-        let local_distance = self.field.sample(local).distance;
-        SdfSample::new(local_distance * self.distance_scale)
+    fn sample(&self, point: Vec3) -> Result<SdfSample, SampleError> {
+        let local = self.field.sample(self.inverse.transform_point3(point))?;
+        SdfSample::from_parts(
+            local.signed_value() * self.conservative_scale,
+            local.safe_step().map(|step| step * self.conservative_scale),
+        )
     }
 
     fn bounds(&self) -> FieldBounds {
-        map_bounded_aabb(self.field.bounds(), |point| {
-            self.transform.transform_point3(point)
-        })
+        self.field
+            .bounds()
+            .map_corners(|point| self.transform.transform_point3(point))
+    }
+
+    fn capabilities(&self) -> FieldCapabilities {
+        FieldCapabilities::SIGNED_FIELD
     }
 }
