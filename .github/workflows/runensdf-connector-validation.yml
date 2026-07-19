@@ -31,8 +31,8 @@ jobs:
       - name: Regenerate workspace lockfile
         run: cargo generate-lockfile
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Format workspace
+        run: cargo fmt --all
 
       - name: Test RunenSDF package
         run: cargo test -p sdf --locked
@@ -40,16 +40,19 @@ jobs:
       - name: Clippy RunenSDF package
         run: cargo clippy -p sdf --all-targets --locked -- -D warnings
 
-      - name: Commit regenerated lockfile
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+
+      - name: Commit generated and formatted files
         if: github.event_name == 'push'
         shell: bash
         run: |
-          if git diff --quiet -- Cargo.lock; then
-            echo "Cargo.lock already matches the manifest."
+          if git diff --quiet -- Cargo.lock domain/sdf; then
+            echo "Cargo.lock and SDF sources already match generated/formatted output."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock
-          git commit -m "Regenerate lockfile for SDF boundary correction"
+          git add Cargo.lock domain/sdf
+          git commit -m "Format and lock SDF boundary correction"
           git push origin HEAD:impl/runensdf-boundary-correction
