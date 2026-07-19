@@ -1,6 +1,6 @@
 ---
 title: RunenSDF Extraction Design
-description: Target public boundary, numerical policy, package shape, conformance, and clean-cutover sequence for extracting domain/sdf into RunenSDF.
+description: Decision-complete public boundary, numerical policy, package shape, conformance, and clean-cutover design for extracting domain/sdf into RunenSDF.
 status: active
 owner: sdf
 layer: domain/sdf
@@ -10,7 +10,7 @@ related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../reports/investigations/repository-family-current-state-investigation.md
-  - ../../workspace/planning/active-work.md
+  - ../../reports/investigations/runensdf-complete-extraction-investigation.md
   - ../../workspace/planning/roadmap.md
 ---
 
@@ -18,149 +18,83 @@ related_docs:
 
 ## Status
 
-Target direction is fixed. Implementation remains blocked until the complete
-source, test, and consumer inventory is recorded and the existing Runenwerk
-baseline is validated locally.
+The extraction target and `PT-RUNENSDF-002` boundary-correction design are
+decision-complete. Source changes remain blocked until the repository-family
+charter and complete investigation are reviewed, local preflight commands pass,
+and a bounded implementation phase is activated.
+
+The complete evidence, public API inventory, test gaps, consumer findings, and
+implementation contract live in the linked investigation report. This document
+owns the durable target architecture.
 
 ## Goal
 
-Extract reusable signed-distance-field mathematics into an independent,
-host-neutral repository without carrying Runenwerk geometry, world, ECS,
-renderer, material, or product ownership into the new package.
+Create `Crystonix/RunenSDF` as a small, independently useful Rust library for
+signed-distance-field mathematics and CPU reference queries without Runenwerk
+geometry, ECS, world, renderer, material, or product dependencies.
 
-## Initial repository shape
+## Initial repository and package
 
-Start with one crate:
+```text
+repository: Crystonix/RunenSDF
+package: runensdf
+version: 0.1.0
+edition: 2024
+license: MIT OR Apache-2.0
+publish: false until release gates are accepted
+```
+
+Initial shape:
 
 ```text
 RunenSDF/
 ├── Cargo.toml
 ├── Cargo.lock
-├── crates/
-│   └── runensdf/
+├── crates/runensdf/
 ├── examples/
 ├── tests/
+├── benches/
 ├── docs/
-├── LICENSE-MIT
-├── LICENSE-APACHE
 ├── README.md
+├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md
-└── CHANGELOG.md
+├── LICENSE-MIT
+└── LICENSE-APACHE
 ```
 
-Do not create `runensdf_core`, `runensdf_queries`, `runensdf_gpu`,
-`runensdf_shader`, or a macro crate initially. Add a crate only when a real
-independent consumer or dependency boundary proves the need.
+Do not create core/query/GPU/shader/program/macro subcrates initially. A new
+package requires independent dependency or release pressure.
 
-## Package identity
-
-```text
-repository: Crystonix/RunenSDF
-package: runensdf
-initial version: 0.1.0
-edition: 2024
-MSRV: align with the accepted repository-family toolchain baseline
-publish: false until release and API gates are accepted
-license: MIT OR Apache-2.0
-```
-
-Runenwerk may rename its dependency from `sdf` to `runensdf` during cutover. No
-compatibility package named `sdf` remains afterward.
-
-## Owned capabilities
+## Ownership
 
 RunenSDF owns:
 
-- `SdfField3` or its reviewed replacement;
-- `SdfSample`;
-- repository-local finite bounds and unbounded-field representation;
-- primitives: sphere, box, capsule, cylinder, plane, torus;
-- boolean operations: union, intersection, subtraction;
-- smooth boolean operations;
+- `SdfField3` and `SdfSample`;
+- repository-local bounds and rays;
+- analytic primitives;
+- hard and smooth boolean operations;
+- composition wrappers;
 - translation, rotation, scale, and affine transforms;
-- repeat, mirror, clamp, and domain warp composition;
 - finite-difference gradient and normal estimation;
-- point classification;
-- closest-point and projection queries;
-- raymarch queries;
-- sphere sweep queries;
-- epsilon/default-query policy;
-- deterministic CPU reference tests and benchmarks.
-
-## Explicit non-ownership
+- classification, projection, closest-point, raymarch, and sphere-sweep queries;
+- numerical defaults and validation;
+- deterministic CPU reference conformance and benchmarks.
 
 RunenSDF does not own:
 
-- Runenwerk `geometry`;
-- ECS components or resources;
+- Runenwerk geometry;
+- ECS components/resources;
 - spatial indexes;
-- world chunks or streaming;
-- scene nodes;
-- materials;
-- renderer graph or pipelines;
-- WGPU or shader compilation;
-- collision-world policy;
-- gameplay or editor policy;
-- persistence formats unless later accepted explicitly.
+- chunks, streaming, scene, or world policy;
+- materials or material payloads;
+- renderer passes, WGPU, shader generation, or GPU residency;
+- editor/game policy;
+- stable persisted field/program formats.
 
-## Geometry boundary
+## Core field contract
 
-The current public dependency on `geometry::Aabb3` and `geometry::Ray3` is
-removed before extraction.
-
-RunenSDF owns a minimal validated vocabulary:
-
-```rust
-pub struct Bounds3 {
-    min: glam::Vec3,
-    max: glam::Vec3,
-}
-
-pub enum FieldBounds {
-    Unbounded,
-    Bounded(Bounds3),
-}
-
-pub struct Ray3 {
-    origin: glam::Vec3,
-    direction: glam::Vec3,
-}
-```
-
-Exact constructor and accessor names may be refined during implementation, but
-the following semantics are fixed.
-
-### Bounds3 invariants
-
-- every component is finite;
-- `min <= max` component-wise;
-- construction is fallible for invalid authored/external values;
-- internally derived valid finite arithmetic must not silently create NaN;
-- union and intersection behavior is deterministic;
-- disjoint intersection must not return a union while claiming intersection;
-- an empty/disjoint result must be represented explicitly or conservatively as
-  an accepted documented alternative.
-
-The current disjoint-intersection fallback that returns the union is not retained
-as final semantics.
-
-### Ray3 invariants
-
-- origin components are finite;
-- direction components are finite;
-- zero-length direction is rejected at construction or query admission;
-- normalized direction is derived once per query;
-- query distance remains world-space distance independent of input direction
-  magnitude.
-
-Runenwerk owns conversions between `runensdf::Bounds3`/`Ray3` and its own
-geometry types. RunenSDF does not implement conversions that require depending on
-Runenwerk.
-
-## Field contract
-
-The initial public field contract remains object-model-neutral and CPU-oriented:
+The initial contract remains deliberately small:
 
 ```rust
 pub trait SdfField3 {
@@ -172,208 +106,298 @@ pub trait SdfField3 {
 }
 ```
 
-Before implementation, review whether query functions require `?Sized` generic
-support so trait objects and borrowed composites work without unnecessary
-restrictions.
+Helpers and queries accept `F: SdfField3 + ?Sized` where no sized value is
+required.
 
-The trait does not expose renderer, ECS, allocation, mutation, serialization, or
-threading policy.
+The base trait does not require `Send + Sync`, serialization, allocation,
+mutation, rendering, or ECS semantics. Consumers may impose stronger bounds.
 
-## Sample and numerical policy
+`SdfSample` initially contains signed distance only. Material IDs, channels,
+gradients, provenance, and payloads are deferred until real consumers justify
+them.
 
-`SdfSample` initially owns signed distance only. Material IDs, gradients,
-provenance, channels, or payloads are not added until a second real consumer
-requires them.
+## Geometry boundary
 
-Public constructors and query settings reject non-finite authored inputs.
-Negative primitive extents or radii are either rejected or deliberately
-normalized through a documented constructor policy; public fields must not allow
-callers to bypass that policy.
+The current public `geometry::Aabb3` and `geometry::Ray3` dependency is removed
+before source transfer.
 
-The design adopts:
+RunenSDF owns:
 
-- `f32` as the initial scalar;
-- explicit finite-value validation at public boundaries;
-- deterministic epsilon defaults;
-- no hidden global mutable tolerance;
-- no panic for ordinary invalid query input;
-- structured errors for invalid settings where recovery matters;
-- `Option` only for ordinary no-hit/no-result outcomes after valid admission.
+```rust
+pub struct Bounds3 {
+    min: glam::Vec3,
+    max: glam::Vec3,
+}
+
+pub enum FieldBounds {
+    Unbounded,
+    Empty,
+    Bounded(Bounds3),
+}
+
+pub struct Ray3 {
+    origin: glam::Vec3,
+    direction: glam::Vec3,
+}
+```
+
+Exact accessor names remain implementation-level, but invariants are fixed.
+
+### Bounds3
+
+- all components are finite;
+- `min <= max` component-wise;
+- external construction is fallible;
+- valid derived arithmetic cannot silently publish NaN/infinity;
+- union/intersection are deterministic;
+- disjoint finite intersection is `FieldBounds::Empty`;
+- `Empty` is distinct from unknown/unbounded.
+
+### FieldBounds algebra
+
+```text
+union(Unbounded, x)          = Unbounded
+union(Empty, x)              = x
+intersection(Empty, x)       = Empty
+intersection(Unbounded, x)   = x
+intersection(disjoint finite)= Empty
+subtraction bounds           = left operand bounds
+```
+
+Smooth operations expand finite bounds where required. When a finite conservative
+bound cannot be proven, return `Unbounded`.
+
+The current disjoint-intersection fallback to the operands' union is rejected.
+
+### Ray3
+
+- origin and direction are finite;
+- zero-length direction is rejected;
+- direction normalization occurs once at validated construction or query
+  admission;
+- hit distance is world-space distance independent of original direction
+  magnitude.
+
+Runenwerk owns conversions between RunenSDF and Runenwerk geometry types. Those
+conversions do not live in RunenSDF.
+
+## Invariant-preserving values
+
+Primitive, operation-policy, composition, transform, bounds, ray, and settings
+fields become private where public mutation bypasses invariants.
+
+Fallible constructors reject invalid external values, including:
+
+- NaN/infinite positions and scalars;
+- negative sizes where no explicit signed meaning exists;
+- zero/invalid plane normals;
+- invalid quaternions;
+- singular/non-finite affine transforms;
+- zero/non-finite scale;
+- invalid clamp ranges;
+- invalid repeat periods;
+- non-positive/non-finite epsilon;
+- invalid iteration/distance budgets.
+
+Deliberate normalization requires an explicitly named constructor or method. It
+must not occur invisibly inside `sample()`.
+
+## Numerical policy
+
+- scalar type is `f32` initially;
+- sign convention is negative inside, zero on surface, positive outside;
+- epsilon defaults are explicit immutable constants/settings defaults;
+- there is no global mutable tolerance;
+- public authored/query inputs are finite and validated;
+- ordinary invalid input does not panic;
+- field evaluation that returns non-finite distance is reported by query APIs;
+- CPU behavior is deterministic for fixed inputs, settings, target, and expected
+  `f32` precision;
+- ordinary scalar query paths avoid allocation unless documented and benchmarked.
+
+The package does not promise bit-identical floating-point results across all
+architectures unless later conformance proves that stronger contract.
+
+## Gradient and normal policy
+
+Finite differences remain the CPU baseline.
+
+A positive finite epsilon is required. Invalid/non-finite samples and unusable
+zero gradients produce explicit failure in the primary API.
+
+The primary normal API does not silently substitute `Vec3::Y`.
+
+A deliberately named fallback helper may exist for debug visualization, but it
+must expose that fallback policy and is not used by correctness-sensitive
+queries.
 
 ## Query API
 
-Current long positional parameter lists are replaced by settings values where
-multiple policy inputs exist.
-
-Target families:
+Policy-heavy queries use validated settings:
 
 ```text
 RaymarchSettings
 ProjectSettings
 SweepSettings
-GradientSettings or explicit epsilon where one scalar is sufficient
 ```
 
-Settings validate:
+Use an explicit epsilon value or a small validated settings type for gradient and
+classification depending on final implementation ergonomics.
 
-- positive finite epsilon;
-- finite non-negative maximum distance;
-- non-zero iteration/step budget where required;
-- finite radii and offsets;
-- any convergence-specific limits.
+Query outcomes use the semantic shape:
 
-A query distinguishes:
+```rust
+Result<Option<Hit>, QueryError>
+```
 
-- invalid settings/input;
-- no result within valid limits;
-- successful result.
+- `Err` means invalid admission or invalid field evaluation;
+- `Ok(None)` means a valid query produced no hit/convergence within limits;
+- `Ok(Some(hit))` means success.
 
-The exact error enum is fixed during the complete API inventory; silent fallback
-from invalid user input to defaults is not the final public contract.
+Classification returns an error when the field cannot provide a valid finite
+sample rather than treating NaN as on-surface.
 
-## Bounds semantics
+Structured errors cover invalid scalar/vector/bounds/ray/transform/settings and
+field-evaluation failures. Public API does not use `anyhow`.
 
-Bounds are conservative acceleration facts, not proof that a field is finite.
+## Transform policy
 
-Rules:
+- translation requires finite offset;
+- rotation requires a finite non-zero quaternion and stores a validated normalized
+  form;
+- uniform scale requires finite non-zero scale; negative scale behavior must be
+  documented and tested if retained;
+- affine transform requires finite invertible transform;
+- transformed bounds conservatively map all finite corners;
+- operations that cannot guarantee a conservative finite bound return
+  `Unbounded`.
 
-- unbounded combined with union remains unbounded;
-- bounded intersection with unbounded may retain the bounded operand;
-- transforms conservatively map all corners where that is valid;
-- operations that cannot guarantee a finite conservative bound return
-  `Unbounded`;
-- domain warps and repeats must not claim finite bounds without a proof;
-- negative expansion is rejected or clamped through explicit named behavior, not
-  silently reinterpreted.
+Zero scale and singular transforms are invalid rather than constant-field
+fallbacks.
 
-## Threading and allocation
+## Serialization policy
 
-RunenSDF does not own a scheduler or allocator policy. Field values may be used
-from multiple threads when their Rust trait bounds permit it. The base trait does
-not impose `Send + Sync` globally unless consumer evidence proves that as a
-necessary public invariant.
+No stable serialization format is part of the initial extraction. Do not add
+serde merely for potential future authoring.
 
-Queries must not allocate in ordinary scalar paths unless documented and
-benchmarked.
+A later persisted SDF program/field design must define schema identity, version,
+validation, migration, and deterministic encoding separately from Rust API
+versioning.
 
-## Serialization
+## Public API policy
 
-No stable serialization format is promised in the initial extraction.
-
-Primitive and composition values may later derive or implement serialization
-only after an accepted persisted-field/program design names schema identity,
-versioning, validation, and migration. Rust layout is never a persistence format.
-
-## Public API review requirements
-
-Before code changes, inventory and decide every public:
-
-- module;
-- type;
-- trait;
-- constructor;
-- public field;
-- error/result shape;
-- re-export;
-- default constant;
-- generic bound;
-- serialization or debug promise.
-
-Public struct fields should become private where they bypass invariants.
+- preserve concrete wrappers and ordinary Rust composition;
+- no universal graph or AST in the initial package;
+- keep preludes small or omit them until usage proves value;
+- keep low-level utilities private unless external implementation requires them;
+- generated/derived results expose read-only accessors;
+- no compatibility aliases when package and API names change before 1.0;
+- all public enums/traits receive deliberate pre-1.0 evolution review.
 
 ## Independent conformance
 
 RunenSDF must prove:
 
-- primitive signed-distance behavior at inside/surface/outside points;
-- finite and invalid-input handling;
-- conservative bounds for every bounded primitive and operation;
-- transform bounds;
-- union/intersection/subtraction and smooth-operation edge cases;
-- gradient and normal behavior;
-- raymarch hit/miss/zero-direction/max-step/max-distance cases;
-- projection and closest-point convergence/failure cases;
-- sweep cases;
-- deterministic repeated outcomes;
-- external downstream implementation of `SdfField3`;
-- use without Runenwerk;
+- valid and invalid construction for every public value;
+- primitive inside/surface/outside samples;
+- conservative finite bounds and `Empty` algebra;
+- hard/smooth operation semantics and bounds;
+- composition/repeat/warp/mirror/clamp behavior;
+- transform sampling, bounds, and invalid admission;
+- finite-difference gradient/normal success and failure;
+- classification success and invalid evaluation;
+- raymarch hit, miss, inside start, zero direction, step/distance exhaustion, and
+  invalid field output;
+- projection/closest-point convergence, exhaustion, invalid gradient, and invalid
+  field output;
+- sweep hit/miss/settings/evaluation cases;
+- deterministic repeated results;
+- external downstream `SdfField3` implementation using public APIs only;
+- trait-object/`?Sized` usage;
 - stable and MSRV validation;
-- benchmark baselines for representative primitive/composite/query workloads.
+- representative benchmarks.
 
-Property tests should cover finite geometry, bound containment, and operation
-relationships where mathematically valid.
+Property tests cover finite bounds, bound containment, algebra relationships, and
+transform invariants where mathematically applicable.
 
 ## Runenwerk adapter
 
-Runenwerk retains a narrow integration module for:
+Runenwerk retains one narrow integration boundary for:
 
-- conversion to/from Runenwerk geometry;
-- world and scene ownership;
-- ECS components/resources;
-- renderer preparation;
-- material and product policy;
-- application diagnostics context.
+- geometry conversions;
+- ECS/world/scene ownership;
+- spatial indexing and chunk policy;
+- renderer preparation and SDF representation selection;
+- materials and product policy;
+- integration diagnostics.
 
-The adapter must not duplicate SDF algorithms.
+The adapter does not duplicate field or query algorithms.
 
-## Cutover sequence
+## Cutover phases
 
-### SDF-001 — Complete investigation
+### PT-RUNENSDF-001 — Complete investigation
 
-- read every source and test file;
-- inventory all consumers, examples, benchmarks, docs, persisted assets, and
-  shader duplication;
-- produce the exact public API inventory;
-- produce move/stay/redesign/delete classification;
-- run the current local baseline.
+Complete. The linked investigation records all source and test files, public API,
+dependencies, docs, known consumer evidence, defects, decisions, and the next
+implementation contract. Local verification commands remain required before
+implementation activation.
 
-### SDF-002 — Boundary correction
+### PT-RUNENSDF-002 — Boundary correction inside Runenwerk
 
-Inside Runenwerk:
+- add local validated geometry/query vocabulary;
+- remove `geometry` dependency;
+- enforce constructors/settings invariants;
+- correct bounds algebra and smooth bounds;
+- add structured query outcomes;
+- remove implicit primary normal fallback;
+- add external/public negative/property conformance;
+- migrate any consumers found by mandatory local grep.
 
-- add repository-local bounds/ray vocabulary to the SDF package;
-- remove public and manifest dependency on `geometry`;
-- correct validation, disjoint intersection, and query setting semantics;
-- migrate consumers through Runenwerk-owned conversions;
-- add independent downstream conformance.
+No external repository is created in this phase.
 
-### SDF-003 — Repository creation and source transfer
+### PT-RUNENSDF-003 — Repository creation and transfer
 
 - create `Crystonix/RunenSDF`;
-- establish governance, license, validation, and provenance;
-- transfer the corrected package and history evidence;
+- add governance, licensing, validation, and provenance;
+- transfer the corrected package and tests;
 - validate independently.
 
-### SDF-004 — Runenwerk cutover
+### PT-RUNENSDF-004 — Runenwerk cutover
 
-- pin Runenwerk to the exact RunenSDF revision;
+- pin exact RunenSDF revision;
 - migrate all consumers;
 - delete `domain/sdf`;
-- remove old workspace entries and lockfile packages;
-- retain no compatibility package or mirror;
-- run full Runenwerk validation and runtime examples.
+- remove old workspace/lockfile entries;
+- retain no compatibility package or source mirror;
+- run full integration/runtime validation.
 
-### SDF-005 — Closeout
+### PT-RUNENSDF-005 — Closeout
 
-- record repository SHAs and compatibility;
-- update architecture/domain maps;
-- record provenance and deleted paths;
-- close temporary branches and migration authority.
+Record SHAs, compatibility, validation, provenance, deleted paths, and final
+ownership; remove temporary branches and migration authority.
 
 ## Stop conditions
 
-Stop implementation when:
+Stop and return to design when:
 
-- a public consumer requires an unclassified capability;
-- geometry coupling is broader than the recorded boundary;
-- shader/GPU code is found to share source authority with CPU SDF code;
-- current main is not green for unrelated reasons;
-- repository creation or dependency pinning is unavailable;
-- the final cutover would require a long-lived duplicate package.
+- mandatory local search finds a persisted/public format using current types;
+- a production consumer requires unclassified material/channel payloads;
+- GPU/shader code shares direct source authority with CPU field code;
+- conservative operation bounds cannot be defined without changing semantics;
+- singular-transform fallback is intentional product behavior;
+- current `main` is not green for unrelated reasons;
+- removal of geometry would require a universal shared-core repository;
+- final cutover would retain duplicate or compatibility source.
 
 ## Definition of done
 
-RunenSDF is complete only when it validates independently, has a public downstream
-consumer, contains no Runenwerk dependency, Runenwerk consumes an exact revision,
-all original `domain/sdf` source is removed, and the full Runenwerk integration
-validation is green.
+RunenSDF is complete only when:
+
+- the independent repository validates on stable and MSRV;
+- a public downstream consumer passes;
+- RunenSDF contains no Runenwerk dependency;
+- Runenwerk pins an exact revision and uses explicit adapters;
+- all original `domain/sdf` source is deleted;
+- no compatibility package, mirror, or moving dependency remains;
+- full Runenwerk integration validation passes;
+- provenance and current documentation are complete.
