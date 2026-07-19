@@ -1,0 +1,45 @@
+name: Docs pnpm validation
+
+on:
+  push:
+    branches:
+      - fix/docs-pnpm-build-approvals
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout tooling branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/docs-pnpm-build-approvals
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm 11
+        run: npm install --global pnpm@11.0.0
+
+      - name: Install docs dependencies
+        run: pnpm --dir docs-site install --frozen-lockfile
+
+      - name: Validate documentation authority
+        run: python tools/docs/validate_docs.py
+
+      - name: Build documentation site
+        run: pnpm --dir docs-site build
+
+      - name: Verify clean tracked state
+        run: |
+          git diff --check
+          test -z "$(git status --short --untracked-files=no)"
