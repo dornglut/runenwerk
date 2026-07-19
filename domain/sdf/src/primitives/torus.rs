@@ -1,41 +1,72 @@
-use geometry::Aabb3;
 use glam::{Vec2, Vec3};
 
-use crate::bounds::FieldBounds;
-use crate::field::SdfField3;
-use crate::sample::SdfSample;
+use crate::error::{ValidationError, ensure_finite_vec3, ensure_non_negative, ensure_sample_point};
+use crate::{Bounds3, FieldBounds, FieldCapabilities, SampleError, SdfField3, SdfSample};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct SdfTorus {
-    pub center: Vec3,
-    pub major_radius: f32,
-    pub minor_radius: f32,
+    center: Vec3,
+    major_radius: f32,
+    minor_radius: f32,
+    bounds: Bounds3,
 }
 
 impl SdfTorus {
-    pub fn new(center: Vec3, major_radius: f32, minor_radius: f32) -> Self {
-        Self {
+    pub fn new(
+        center: Vec3,
+        major_radius: f32,
+        minor_radius: f32,
+    ) -> Result<Self, ValidationError> {
+        ensure_finite_vec3(center, "torus center")?;
+        ensure_non_negative(major_radius, "torus major radius")?;
+        ensure_non_negative(minor_radius, "torus minor radius")?;
+        let ring = major_radius + minor_radius;
+        if !ring.is_finite() {
+            return Err(ValidationError::NonFinite {
+                parameter: "torus combined radius",
+            });
+        }
+        let bounds = Bounds3::from_center_half_extents(
+            center,
+            Vec3::new(ring, minor_radius, ring),
+        )?;
+        Ok(Self {
             center,
             major_radius,
             minor_radius,
-        }
+            bounds,
+        })
+    }
+
+    pub const fn center(self) -> Vec3 {
+        self.center
+    }
+
+    pub const fn major_radius(self) -> f32 {
+        self.major_radius
+    }
+
+    pub const fn minor_radius(self) -> f32 {
+        self.minor_radius
     }
 }
 
 impl SdfField3 for SdfTorus {
-    fn sample(&self, point: Vec3) -> SdfSample {
-        let major = self.major_radius.max(0.0);
-        let minor = self.minor_radius.max(0.0);
-        let p = point - self.center;
-        let q = Vec2::new(Vec2::new(p.x, p.z).length() - major, p.y);
-        SdfSample::new(q.length() - minor)
+    fn sample(&self, point: Vec3) -> Result<SdfSample, SampleError> {
+        ensure_sample_point(point)?;
+        let local = point - self.center;
+        let q = Vec2::new(
+            Vec2::new(local.x, local.z).length() - self.major_radius,
+            local.y,
+        );
+        SdfSample::exact_signed_distance(q.length() - self.minor_radius)
     }
 
     fn bounds(&self) -> FieldBounds {
-        let major = self.major_radius.max(0.0);
-        let minor = self.minor_radius.max(0.0);
-        let ring = major + minor;
-        let extents = Vec3::new(ring, minor, ring);
-        FieldBounds::bounded(Aabb3::from_center_extents(self.center, extents))
+        FieldBounds::bounded(self.bounds)
+    }
+
+    fn capabilities(&self) -> FieldCapabilities {
+        FieldCapabilities::EXACT_DISTANCE
     }
 }
