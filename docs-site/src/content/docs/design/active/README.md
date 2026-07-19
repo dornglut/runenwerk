@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-07
+last_reviewed: 2026-07-19
 ---
 
 # Active Designs
@@ -109,6 +109,34 @@ restate the entire UI framework architecture.
 - [UI Component Platform Theme / State / Style Design](ui-component-platform-theme-state-style-design.md)
 - [UI Component Platform Track Surface Design](ui-component-platform-track-surface-design.md)
 - [UI Component Platform Transitions / Effects Design](ui-component-platform-transitions-effects-design.md)
+
+### Repository Family Extraction
+
+- [RunenSDF Extraction Design](runensdf-extraction-design.md)
+- [RunenECS Extraction Boundary Design](runenecs-extraction-boundary-design.md)
+- [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
+- [RunenRender Decomposition Design](runenrender-decomposition-design.md)
+- [RunenRender Internal Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
+
+### Domain Authoring And Standalone UI Framework
+
+- [Domain Authoring Source And Program Pattern](domain-authoring-source-and-program-pattern.md)
+- [Typed App Program Counter Proof Design](typed-app-program-counter-proof-design.md)
+- [UI Framework Runtime Requirements](ui-framework-runtime-requirements-design.md)
+- [UI Source Projection And Program Lowering](ui-source-projection-and-program-lowering-design.md)
+- [UI Component Composition, Slots, And Authoring](ui-component-composition-slots-and-authoring-design.md)
+- [UI Data Binding, Forms, And Effects](ui-data-binding-forms-and-effects-design.md)
+- [UI Reactive Runtime And Invalidation](ui-reactive-runtime-and-invalidation-design.md)
+- [UI Live Editing And Preview](ui-live-editing-and-preview-design.md)
+- [UI Game And World-Space Host Requirements](ui-game-and-worldspace-host-requirements-design.md)
+- [UI Accessibility, Internationalization, And Text Conformance](ui-accessibility-internationalization-and-text-conformance-design.md)
+- [UI Layout, Style, Theme, And Motion](ui-layout-style-theme-and-motion-design.md)
+- [UI Performance, Virtualization, Assets, And Profiling](ui-performance-virtualization-assets-and-profiling-design.md)
+- [UI Render Output And Host Renderer Boundary](ui-render-output-and-host-renderer-boundary-design.md)
+- [UI Platform Input, Windowing, And OS Integration](ui-platform-input-windowing-and-os-integration-design.md)
+- [UI Devtools, Inspection, And Workbench](ui-devtools-inspection-and-workbench-design.md)
+- [UI Testing, Conformance, And Proof Matrix](ui-testing-conformance-and-proof-matrix-design.md)
+- [UI Package Security, Versioning, And Migration](ui-package-security-versioning-and-migration-design.md)
 
 ### Workspace / Cross-Domain
 

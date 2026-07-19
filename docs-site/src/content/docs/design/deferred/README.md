@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-07-19
 ---
 
 # Deferred Designs
@@ -36,6 +36,11 @@ Use this folder for designs that remain valid but are intentionally postponed.
 ### Engine Runtime / Cross-Domain
 
 - [Game Runtime, Editor, ECS, Scripting, and Hot Reload Preserved Target Draft](engine-game-runtime-editor-ecs-scripting-hot-reload-preserved-target-draft.md)
+
+### Deferred Domain Authoring Patterns
+
+- [Material Program Authoring Pattern](material-program-authoring-pattern.md)
+- [Procgen Program Authoring Pattern](procgen-program-authoring-pattern.md)
 
 ### SDF-First Capability Detail Drafts
 
