@@ -4,17 +4,17 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-20
 related_docs:
   - ../workflow-lifecycle.md
   - ../routines/track-orchestration-routine.md
   - ../specs/phase-implementation-spec.md
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
-  - ../../reports/investigations/repository-family-current-state-investigation.md
   - ../../design/active/runensdf-extraction-design.md
-  - ../../design/active/runenecs-extraction-boundary-design.md
-  - ../../design/active/runenrender-decomposition-design.md
+  - ../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md
+  - ../../design/active/runenecs-boundary-repair-execution-plan.md
+  - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ./active-work.md
   - ./production-tracks.md
   - ./completed-work.md
@@ -23,369 +23,171 @@ related_docs:
 
 # Roadmap
 
-This roadmap contains current and future execution authority only. Detailed
-historical UI phases remain in [Completed Work](completed-work.md), closeout
-reports, pull requests, and Git history.
-
 ## Program destination
 
 ```text
 RunenSDF -------+
 RunenECS -------+--> Runenwerk integration/adapters --> applications
 RunenRender ----+
-RunenUI --------+   (separate external workstream)
+RunenUI --------+   independent external workstream
 ```
 
-Framework repositories do not depend on Runenwerk. Runenwerk owns cross-domain
-integration and products.
+Framework repositories do not depend on Runenwerk. Runenwerk owns product and
+cross-framework integration. RunenUI and RunenRender remain independent peers.
 
-## Current program
-
-### PT-REPOSITORY-FAMILY-000
-
-ID: `PT-REPOSITORY-FAMILY-000`
-
-Title: Repository Family Charter and Track Activation
-
-State: `active-implementation` for one docs-only authority PR
-
-Owner: workspace
-
-Authority:
+## Current state
 
 ```text
-../../architecture/repository-family-architecture.md
-../../adr/accepted/0014-repository-family-extraction-boundaries.md
-../../reports/investigations/repository-family-current-state-investigation.md
+Repository-family charter   complete through PR #109
+RunenSDF investigation      complete through PR #110
+RunenECS investigation      recorded through PR #111; R1 specified, not active
+RunenRender investigation   recorded through PR #112; R1 specified, not active
+RunenSDF boundary repair    complete through PR #116
+RunenSDF repository phase   queued planning; no implementation authorization
 ```
 
-Evidence:
+## Next phase — PT-RUNENSDF-003
 
-- current Runenwerk `main` inspected at
-  `c078bd8609dc407d68269e86a1472c9234932213`;
-- SDF manifest and public geometry/query coupling inspected;
-- ECS, macro, scheduler, and duplicate spatial-index package boundaries inspected;
-- render module root, graph, plugin, backend, and surface coupling inspected;
-- PR #107 is closed unmerged;
-- commit `b5e9624c...` is an incomplete deletion and not a valid extraction base.
+Title: Standalone RunenSDF Repository Creation and Corrected Source Transfer
 
-Complete investigation gate: complete for repository-family direction and track
-ordering.
+State: `queued-planning`
 
-Complete design gate: complete for this documentation/authority phase.
+Owner: SDF and repository governance
 
-Known gaps: local documentation validation and owner review remain required
-before merge.
+Implementation authorization: none until a new bounded phase specification is
+accepted.
 
-Next action: merge this phase after docs validation, then activate the three
-bounded investigation tracks below.
+### Mission
+
+Create `Crystonix/RunenSDF`, transfer the corrected SDF package and tests with
+provenance, and prove the repository independently without cutting Runenwerk over
+or deleting `domain/sdf`.
+
+### Required decisions before activation
+
+1. repository creation mechanism and owner action;
+2. repository/package naming and initial version;
+3. license, edition, MSRV, lockfile, and release policy;
+4. provenance-preserving transfer method;
+5. exact source/test/document move matrix;
+6. initial repository layout and validation workflow;
+7. downstream public-consumer proof;
+8. dependency pinning strategy reserved for PT-RUNENSDF-004;
+9. explicit stop and rollback conditions;
+10. one exact implementation spec written against merged PT-RUNENSDF-002 source.
+
+### Intended repository shape
+
+```text
+Crystonix/RunenSDF
+├── Cargo.toml
+├── Cargo.lock
+├── LICENSE-APACHE
+├── LICENSE-MIT
+├── README.md
+├── crates/
+│   └── runensdf/
+├── tests or downstream-conformance/
+├── docs/
+└── .github/workflows/ only for durable repository validation
+```
+
+The exact top-level layout is fixed during PT-RUNENSDF-003 planning. The initial
+framework remains one package; no core/query/GPU/shader/program/macro split is
+introduced without independent pressure.
+
+### Required implementation outcomes
+
+- corrected source and all package tests exist in RunenSDF;
+- package name and public imports are finalized without compatibility aliases;
+- no Runenwerk path, package, feature, type, document, or build dependency exists;
+- independent downstream code can implement and consume `SdfField3` publicly;
+- provenance identifies the Runenwerk source commit and transfer mapping;
+- repository validation covers formatting, tests, Clippy, docs, stable/MSRV,
+  dependency direction, and diff hygiene;
+- benchmarks and property testing are included only when their owned scope and
+  maintenance policy are explicit;
+- Runenwerk remains unchanged except planning/provenance references required to
+  prepare the later cutover.
+
+### Forbidden scope
+
+```text
+Runenwerk dependency cutover
+deleting domain/sdf
+source mirror maintained after the later cutover
+compatibility or forwarding package
+RunenSDF dependency on Runenwerk
+GPU, WGPU, shader, material, world, ECS, renderer, or UI ownership
+stable persisted field/program format
+speculative multi-package split
+```
+
+### Exit gate
+
+PT-RUNENSDF-003 completes only when the standalone repository validates
+independently, public downstream use is proven, provenance is recorded, and the
+exact revision intended for PT-RUNENSDF-004 is identified. Completion authorizes
+cutover planning, not automatic Runenwerk deletion.
 
 ---
 
-# RunenSDF track
+## Later RunenSDF phases
 
-## PT-RUNENSDF-001 — Complete extraction investigation
+| Phase | Purpose | State |
+|---|---|---|
+| `PT-RUNENSDF-004` | Pin exact RunenSDF revision, migrate Runenwerk consumers, delete `domain/sdf`, remove old workspace/lockfile authority, validate integration | Blocked by PT-003 |
+| `PT-RUNENSDF-005` | Close provenance, compatibility, deleted-path, release, branch, and final ownership evidence | Blocked by PT-004 |
 
-State: `queued`; becomes active after `PT-REPOSITORY-FAMILY-000` merges
+## RunenECS track
 
-Owner: SDF
-
-Goal:
-
-- read every source/test/benchmark/example;
-- inventory every consumer;
-- inventory every public API item;
-- map all `geometry` coupling;
-- inspect numerical, validation, serialization, and shader/GPU assumptions;
-- produce an exact move/stay/redesign/delete matrix;
-- run the current baseline.
-
-Authority:
+The accepted internal sequence remains:
 
 ```text
-../../design/active/runensdf-extraction-design.md
-../../reports/investigations/repository-family-current-state-investigation.md
+R1 entity identity and structured errors
+R2 atomic structural mutation
+R3 query and SystemParam unsafe boundaries
+R4 explicit reflection and macro migration
+R5 remove spatial and geometry ownership
+R6 messaging split
+R7 change, ownership, and networking separation
+R8 neutralize runen_schedule
+R9 standalone conformance and performance baseline
 ```
 
-Implementation authorization: source changes forbidden.
+R1 has a planning specification but no Rust implementation authorization.
+Repository creation remains blocked through R9.
 
-Exit criteria:
+## RunenRender track
 
-- complete source and consumer inventory;
-- public API inventory;
-- evidence-backed design corrections;
-- local Cargo baseline recorded;
-- exact `SDF-002` implementation contract.
-
-Next action: open one investigation/design PR from current `main`.
-
-## PT-RUNENSDF-002 — Boundary correction
-
-State: `blocked` by `PT-RUNENSDF-001`
-
-Owner: SDF
-
-Goal:
-
-- replace public `geometry::Aabb3` and `geometry::Ray3` coupling;
-- add repository-local validated bounds/ray/query settings;
-- correct disjoint intersection and invalid-input semantics;
-- remove `geometry` from the SDF manifest;
-- add downstream/public conformance;
-- migrate Runenwerk consumers through explicit adapters.
-
-Implementation authorization: requires a separate exact phase spec after
-`PT-RUNENSDF-001` acceptance.
-
-Exit criteria:
-
-- `domain/sdf` validates independently inside the workspace;
-- no geometry dependency remains;
-- all consumers and tests pass;
-- external repository transfer is mechanical rather than architectural.
-
-## PT-RUNENSDF-003 — Create RunenSDF and transfer source
-
-State: `blocked` by `PT-RUNENSDF-002`
-
-Owner: SDF/repository governance
-
-Goal:
-
-- create `Crystonix/RunenSDF`;
-- establish governance, licenses, metadata, validation, and provenance;
-- transfer corrected `runensdf` source and tests;
-- validate the independent repository.
-
-Manual dependency: repository creation must be available to the owner or an
-installed connector/tool.
-
-## PT-RUNENSDF-004 — Runenwerk cutover
-
-State: `blocked` by `PT-RUNENSDF-003`
-
-Goal:
-
-- pin Runenwerk to the exact RunenSDF revision;
-- migrate all consumers;
-- delete `domain/sdf`;
-- remove old workspace/lockfile entries;
-- retain no compatibility package or source mirror;
-- run full integration and runtime evidence.
-
-## PT-RUNENSDF-005 — Closeout
-
-State: `blocked` by `PT-RUNENSDF-004`
-
-Goal: record provenance, compatibility, validation, deleted paths, and final
-ownership; remove temporary branches and migration authority.
-
----
-
-# RunenECS track
-
-## PT-RUNENECS-001 — Complete ECS boundary investigation
-
-State: `queued`; parallel investigation after `PT-REPOSITORY-FAMILY-000`
-
-Owner: ECS
-
-Goal:
-
-- read ECS, macros, scheduler, spatial, networking, replay, renderer, and app
-  consumers;
-- inventory public API and unsafe/lifetime contracts;
-- map scheduler ownership;
-- map reflection registry behavior;
-- classify broadcast, tick-buffer, and work-queue semantics;
-- classify change extraction, ownership, replication, and replay boundaries;
-- produce exact move/stay/redesign/delete matrices.
-
-Authority:
+The accepted internal sequence remains:
 
 ```text
-../../design/active/runenecs-extraction-boundary-design.md
+R1 neutral identities, errors, and dependency guards
+R2 neutral graph and resource descriptors
+R3 prepared frame inputs and generic producers
+R4 GPU parameter and optional macro ABI
+R5 shader and hot-reload boundary
+R6 headless WGPU executor
+R7 generic surfaces and device loss
+R8 diagnostics, capture, and provenance split
+R9 Runenwerk adapter migration
+R10 internal conformance and performance proof
 ```
 
-Implementation authorization: source changes forbidden.
+R1 has a planning specification but no Rust implementation authorization.
+External extraction remains blocked through R10.
 
-Exit criteria: all boundary decisions have evidence and `PT-RUNENECS-002` can be
-specified without implementation invention.
+## RunenUI relationship
 
-## PT-RUNENECS-002 — Decision closure
+RunenUI is governed elsewhere. This program does not design or implement RunenUI
+APIs. A future Runenwerk-owned adapter may translate accepted renderer-neutral
+RunenUI output into generic RunenRender contributions after both sides expose
+stable public seams.
 
-State: `blocked` by `PT-RUNENECS-001`
+## Parallelism policy
 
-Goal: accept final APIs and ownership for:
-
-```text
-runenecs
-runenecs_macros
-runen_schedule
-spatial deletion/migration
-explicit reflection registry
-messaging families
-change tracking versus replication
-serial/parallel scheduling
-identity and error policy
-```
-
-No extraction occurs in this phase.
-
-## PT-RUNENECS-003 — Boundary repair
-
-State: `blocked` by `PT-RUNENECS-002`
-
-Goal:
-
-- remove ECS geometry dependency and ECS-owned spatial index;
-- remove Runenwerk-specific scheduler policy;
-- make reflection explicit;
-- prune/separate messaging;
-- separate network/replay adapters;
-- add standalone public conformance.
-
-## PT-RUNENECS-004 — Create RunenECS and transfer packages
-
-State: `blocked` by `PT-RUNENECS-003`
-
-Goal: create the repository, transfer corrected `runenecs`,
-`runenecs_macros`, and `runen_schedule`, preserve provenance, and validate
-independently.
-
-## PT-RUNENECS-005 — Runenwerk cutover
-
-State: `blocked` by `PT-RUNENECS-004`
-
-Goal: pin exact revisions, migrate all consumers, delete original packages,
-regenerate the lockfile, and prove standalone plus product integration.
-
-## PT-RUNENECS-006 — Closeout
-
-State: `blocked` by `PT-RUNENECS-005`
-
-Goal: record compatibility, performance, provenance, deleted paths, and final
-ownership.
-
----
-
-# RunenRender track
-
-## PT-RUNENRENDER-001 — Complete semantic inventory
-
-State: `queued`; parallel investigation after `PT-REPOSITORY-FAMILY-000`
-
-Owner: render
-
-Goal:
-
-- read every render module, shader, macro, example, benchmark, and test;
-- trace preparation, graph planning, resource creation, submission,
-  presentation, surface lifecycle, and failure control flow;
-- classify every item by future owner;
-- identify current hard-coded UI, ECS, scene, material, SDF, editor, Winit, WGPU,
-  and runtime coupling.
-
-Authority:
-
-```text
-../../design/active/runenrender-decomposition-design.md
-```
-
-Implementation authorization: source changes forbidden.
-
-Exit criteria: complete classification and exact `PT-RUNENRENDER-002` design
-questions.
-
-## PT-RUNENRENDER-002 — Seam and package design closure
-
-State: `blocked` by `PT-RUNENRENDER-001`
-
-Goal: accept public contracts for graph, producer submissions, resources,
-surfaces, frames, synchronization, errors/device loss, diagnostics, macros, and
-threading.
-
-## PT-RUNENRENDER-003 — Neutral core separation
-
-State: `blocked` by `PT-RUNENRENDER-002`
-
-Goal:
-
-- remove ECS and product types from neutral graph/resource/frame contracts;
-- remove product-specific graph validation;
-- add independent core tests;
-- preserve behavior through Runenwerk adapters.
-
-## PT-RUNENRENDER-004 — WGPU/backend separation
-
-State: `blocked` by `PT-RUNENRENDER-003`
-
-Goal:
-
-- isolate WGPU device/resource/pipeline/execution ownership;
-- split native-window mapping from WGPU surface ownership;
-- define surface error and device-loss recovery contracts;
-- add headless/GPU conformance.
-
-## PT-RUNENRENDER-005 — Adapter migration and internal package proof
-
-State: `blocked` by `PT-RUNENRENDER-004`
-
-Goal: migrate ECS/scene/material/SDF/editor/UI/plugin concerns into Runenwerk
-adapters and make Runenwerk consume only the intended external boundary.
-
-## PT-RUNENRENDER-006 — Create RunenRender and transfer packages
-
-State: `blocked` by `PT-RUNENRENDER-005`
-
-Goal: create repository, transfer corrected core/WGPU packages, preserve
-provenance, and validate independently.
-
-## PT-RUNENRENDER-007 — Runenwerk cutover
-
-State: `blocked` by `PT-RUNENRENDER-006`
-
-Goal: pin exact revisions, remove original implementation, migrate applications,
-and run complete CPU/headless/GPU validation.
-
-## PT-RUNENRENDER-008 — Closeout
-
-State: `blocked` by `PT-RUNENRENDER-007`
-
-Goal: record compatibility, provenance, performance/platform evidence, deleted
-paths, and final ownership.
-
----
-
-# Retired current-work authority
-
-## PT-UI-RUNTIME-PLATFORM-012
-
-State: `superseded/closed-unmerged`
-
-PR #107 was closed without merge. It is not active implementation authority.
-
-The separate RunenUI repository/workstream now owns standalone reusable UI
-framework development. Historical Runenwerk UI phases remain evidence only.
-
-No work in this roadmap authorizes RunenUI changes or immediate deletion of
-Runenwerk UI source.
-
-## Rejected extraction attempt
-
-Commit `b5e9624c594c9f1e3f2a0929bf84028f13fde860` is classified
-`REJECTED_EXTRACTION_ATTEMPT`. It must not be used as an extraction base.
-
----
-
-# Coordination rules
-
-- One implementation PR receives one bounded phase.
-- New implementation branches start from current merged `main`.
-- Shared root manifests, lockfile, and canonical planning files have one active
-  owner at a time.
-- Parallel investigation/design branches avoid shared-file edits after this
-  charter merges.
-- Source movement is the final step after boundary repair, not the first step.
-- No source mirror, submodule, compatibility crate, or moving-branch dependency.
-- RunenUI remains outside this program.
+Read-only investigation, consumer classification, benchmark/safety command
+discovery, and unrelated documentation cleanup may proceed in parallel.
+Structural implementation remains phase-authorized and serialized where branches
+share workspace, identity, dependency, or planning authority.

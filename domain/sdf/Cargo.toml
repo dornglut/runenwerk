@@ -6,4 +6,4 @@ publish = false
 
 [dependencies]
 glam = "0.31.0"
-geometry = { path = "../geometry" }
+thiserror = "2.0.18"

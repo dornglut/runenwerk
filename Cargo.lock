@@ -3078,8 +3078,8 @@ dependencies = [
 name = "sdf"
 version = "0.1.0"
 dependencies = [
- "geometry",
  "glam 0.31.1",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

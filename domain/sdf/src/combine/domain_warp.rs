@@ -1,35 +1,40 @@
-use geometry::Aabb3;
 use glam::Vec3;
 
-use crate::bounds::FieldBounds;
-use crate::field::SdfField3;
-use crate::sample::SdfSample;
+use crate::error::{ValidationError, ensure_finite_vec3};
+use crate::{FieldBounds, FieldCapabilities, SampleError, SdfField3, SdfSample};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DomainWarp<F> {
-    pub field: F,
-    pub amplitude: Vec3,
-    pub frequency: Vec3,
-    pub phase: Vec3,
+    field: F,
+    amplitude: Vec3,
+    frequency: Vec3,
+    phase: Vec3,
 }
 
 impl<F> DomainWarp<F> {
-    pub fn new(field: F, amplitude: Vec3, frequency: Vec3, phase: Vec3) -> Self {
-        Self {
+    pub fn new(
+        field: F,
+        amplitude: Vec3,
+        frequency: Vec3,
+        phase: Vec3,
+    ) -> Result<Self, ValidationError> {
+        ensure_finite_vec3(amplitude, "warp amplitude")?;
+        ensure_finite_vec3(frequency, "warp frequency")?;
+        ensure_finite_vec3(phase, "warp phase")?;
+        Ok(Self {
             field,
             amplitude,
             frequency,
             phase,
-        }
+        })
     }
 
     fn warp_offset(&self, point: Vec3) -> Vec3 {
-        let wave = Vec3::new(
+        Vec3::new(
             (point.x * self.frequency.x + self.phase.x).sin(),
             (point.y * self.frequency.y + self.phase.y).sin(),
             (point.z * self.frequency.z + self.phase.z).sin(),
-        );
-        wave * self.amplitude
+        ) * self.amplitude
     }
 }
 
@@ -37,17 +42,16 @@ impl<F> SdfField3 for DomainWarp<F>
 where
     F: SdfField3,
 {
-    fn sample(&self, point: Vec3) -> SdfSample {
-        self.field.sample(point + self.warp_offset(point))
+    fn sample(&self, point: Vec3) -> Result<SdfSample, SampleError> {
+        let sample = self.field.sample(point + self.warp_offset(point))?;
+        Ok(sample.without_safe_step())
     }
 
     fn bounds(&self) -> FieldBounds {
-        match self.field.bounds() {
-            FieldBounds::Unbounded => FieldBounds::Unbounded,
-            FieldBounds::Bounded(aabb) => {
-                let extent = self.amplitude.abs();
-                FieldBounds::Bounded(Aabb3::new(aabb.min - extent, aabb.max + extent))
-            }
-        }
+        self.field.bounds().expanded_vector(self.amplitude.abs())
+    }
+
+    fn capabilities(&self) -> FieldCapabilities {
+        FieldCapabilities::SIGNED_FIELD
     }
 }

@@ -1,27 +1,47 @@
 use glam::{Quat, Vec3};
 
-use crate::bounds::FieldBounds;
-use crate::field::SdfField3;
-use crate::sample::SdfSample;
-
-use super::map_bounded_aabb;
+use crate::error::ValidationError;
+use crate::{FieldBounds, FieldCapabilities, SampleError, SdfField3, SdfSample};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Rotate<F> {
-    pub field: F,
-    pub rotation: Quat,
+    field: F,
+    rotation: Quat,
     inverse: Quat,
 }
 
 impl<F> Rotate<F> {
-    pub fn new(field: F, rotation: Quat) -> Self {
-        let rotation = rotation.normalize();
-        let inverse = rotation.inverse();
-        Self {
+    pub fn new(field: F, rotation: Quat) -> Result<Self, ValidationError> {
+        let components = rotation.to_array();
+        if !components.into_iter().all(f32::is_finite) {
+            return Err(ValidationError::NonFinite {
+                parameter: "rotation quaternion",
+            });
+        }
+        let length_squared = rotation.length_squared();
+        if !length_squared.is_finite() || length_squared <= f32::EPSILON {
+            return Err(ValidationError::ZeroVector {
+                parameter: "rotation quaternion",
+            });
+        }
+        let rotation = rotation / length_squared.sqrt();
+        Ok(Self {
             field,
             rotation,
-            inverse,
-        }
+            inverse: rotation.conjugate(),
+        })
+    }
+
+    pub const fn rotation(&self) -> Quat {
+        self.rotation
+    }
+
+    pub const fn field(&self) -> &F {
+        &self.field
+    }
+
+    pub fn into_field(self) -> F {
+        self.field
     }
 }
 
@@ -29,12 +49,17 @@ impl<F> SdfField3 for Rotate<F>
 where
     F: SdfField3,
 {
-    fn sample(&self, point: Vec3) -> SdfSample {
-        let local = self.inverse * point;
-        self.field.sample(local)
+    fn sample(&self, point: Vec3) -> Result<SdfSample, SampleError> {
+        self.field.sample(self.inverse * point)
     }
 
     fn bounds(&self) -> FieldBounds {
-        map_bounded_aabb(self.field.bounds(), |point| self.rotation * point)
+        self.field
+            .bounds()
+            .map_corners(|point| self.rotation * point)
+    }
+
+    fn capabilities(&self) -> FieldCapabilities {
+        self.field.capabilities()
     }
 }

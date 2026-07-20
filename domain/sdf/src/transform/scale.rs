@@ -1,20 +1,36 @@
 use glam::Vec3;
 
-use crate::bounds::FieldBounds;
-use crate::field::SdfField3;
-use crate::sample::SdfSample;
-
-use super::map_bounded_aabb;
+use crate::error::{ValidationError, ensure_finite_scalar};
+use crate::{FieldBounds, FieldCapabilities, SampleError, SdfField3, SdfSample};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Scale<F> {
-    pub field: F,
-    pub scale: f32,
+    field: F,
+    scale: f32,
 }
 
 impl<F> Scale<F> {
-    pub fn new(field: F, scale: f32) -> Self {
-        Self { field, scale }
+    pub fn new(field: F, scale: f32) -> Result<Self, ValidationError> {
+        ensure_finite_scalar(scale, "uniform scale")?;
+        if scale.abs() <= f32::EPSILON {
+            return Err(ValidationError::NonPositive {
+                parameter: "absolute uniform scale",
+                value: scale.abs(),
+            });
+        }
+        Ok(Self { field, scale })
+    }
+
+    pub const fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    pub const fn field(&self) -> &F {
+        &self.field
+    }
+
+    pub fn into_field(self) -> F {
+        self.field
     }
 }
 
@@ -22,18 +38,20 @@ impl<F> SdfField3 for Scale<F>
 where
     F: SdfField3,
 {
-    fn sample(&self, point: Vec3) -> SdfSample {
-        let abs_scale = self.scale.abs();
-        if abs_scale <= f32::EPSILON {
-            return SdfSample::new(self.field.sample(Vec3::ZERO).distance);
-        }
-
-        let local = point / self.scale;
-        let local_sample = self.field.sample(local);
-        SdfSample::new(local_sample.distance * abs_scale)
+    fn sample(&self, point: Vec3) -> Result<SdfSample, SampleError> {
+        let absolute_scale = self.scale.abs();
+        let local = self.field.sample(point / self.scale)?;
+        SdfSample::from_parts(
+            local.signed_value() * absolute_scale,
+            local.safe_step().map(|step| step * absolute_scale),
+        )
     }
 
     fn bounds(&self) -> FieldBounds {
-        map_bounded_aabb(self.field.bounds(), |point| point * self.scale)
+        self.field.bounds().map_corners(|point| point * self.scale)
+    }
+
+    fn capabilities(&self) -> FieldCapabilities {
+        self.field.capabilities()
     }
 }

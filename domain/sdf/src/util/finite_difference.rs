@@ -1,16 +1,19 @@
 use glam::Vec3;
 
-pub fn central_difference<F>(sample_distance: F, point: Vec3, epsilon: f32) -> Vec3
+pub fn central_difference<E, F>(
+    sample_signed_value: F,
+    point: Vec3,
+    epsilon: f32,
+) -> Result<Vec3, E>
 where
-    F: Fn(Vec3) -> f32,
+    F: Fn(Vec3) -> Result<f32, E>,
 {
-    let h = epsilon.max(f32::EPSILON);
-    let ex = Vec3::new(h, 0.0, 0.0);
-    let ey = Vec3::new(0.0, h, 0.0);
-    let ez = Vec3::new(0.0, 0.0, h);
+    let x = Vec3::new(epsilon, 0.0, 0.0);
+    let y = Vec3::new(0.0, epsilon, 0.0);
+    let z = Vec3::new(0.0, 0.0, epsilon);
 
-    let dx = sample_distance(point + ex) - sample_distance(point - ex);
-    let dy = sample_distance(point + ey) - sample_distance(point - ey);
-    let dz = sample_distance(point + ez) - sample_distance(point - ez);
-    Vec3::new(dx, dy, dz) / (2.0 * h)
+    let dx = sample_signed_value(point + x)? - sample_signed_value(point - x)?;
+    let dy = sample_signed_value(point + y)? - sample_signed_value(point - y)?;
+    let dz = sample_signed_value(point + z)? - sample_signed_value(point - z)?;
+    Ok(Vec3::new(dx, dy, dz) / (2.0 * epsilon))
 }

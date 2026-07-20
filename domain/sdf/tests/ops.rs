@@ -2,92 +2,88 @@ use glam::Vec3;
 
 use sdf::ops::{Intersect, SmoothIntersect, SmoothSubtract, SmoothUnion, Subtract, Union};
 use sdf::primitives::{SdfPlane, SdfSphere};
-use sdf::{FieldBounds, SdfField3};
+use sdf::{Bounds3, FieldBounds, SdfField3};
 
 const EPS: f32 = 1e-4;
 
 #[test]
-fn union_uses_min_distance() {
-    let left = SdfSphere::new(Vec3::ZERO, 1.0);
-    let right = SdfSphere::new(Vec3::new(2.0, 0.0, 0.0), 1.0);
-    let union = Union::new(left, right);
+fn hard_boolean_ops_preserve_sign_and_conservative_steps() {
+    let left = SdfSphere::new(Vec3::ZERO, 2.0).unwrap();
+    let right = SdfSphere::new(Vec3::ZERO, 1.0).unwrap();
+    let point = Vec3::new(1.5, 0.0, 0.0);
 
-    let point = Vec3::new(0.5, 0.0, 0.0);
-    let expected = left
-        .sample(point)
-        .distance
-        .min(right.sample(point).distance);
-    assert!((union.sample(point).distance - expected).abs() < EPS);
+    let union = Union::new(left, right).sample(point).unwrap();
+    let intersect = Intersect::new(left, right).sample(point).unwrap();
+    let subtract = Subtract::new(left, right).sample(point).unwrap();
+
+    assert!(union.signed_value() < 0.0);
+    assert!(intersect.signed_value() > 0.0);
+    assert!(subtract.signed_value() < 0.0);
+    assert!(union.safe_step().is_some());
+    assert!(intersect.safe_step().is_some());
+    assert!(subtract.safe_step().is_some());
+    assert!(!Union::new(left, right).capabilities().has_exact_distance());
 }
 
 #[test]
-fn subtract_and_intersect_have_expected_sign_behavior() {
-    let left = SdfSphere::new(Vec3::ZERO, 2.0);
-    let right = SdfSphere::new(Vec3::ZERO, 1.0);
+fn field_bounds_distinguish_empty_unbounded_and_bounded() {
+    let a = SdfSphere::new(Vec3::ZERO, 1.0).unwrap();
+    let b = SdfSphere::new(Vec3::new(4.0, 0.0, 0.0), 1.0).unwrap();
 
-    let subtract = Subtract::new(left, right);
-    assert!(subtract.sample(Vec3::ZERO).distance > 0.0);
-    assert!(subtract.sample(Vec3::new(1.5, 0.0, 0.0)).distance < 0.0);
-
-    let intersect = Intersect::new(left, right);
-    assert!(intersect.sample(Vec3::ZERO).distance < 0.0);
-    assert!(intersect.sample(Vec3::new(1.5, 0.0, 0.0)).distance > 0.0);
-}
-
-#[test]
-fn bounds_compose_conservatively() {
-    let a = SdfSphere::new(Vec3::ZERO, 1.0);
-    let b = SdfSphere::new(Vec3::new(1.5, 0.0, 0.0), 1.0);
+    assert_eq!(Intersect::new(a, b).bounds(), FieldBounds::Empty);
 
     let union = Union::new(a, b);
-    let subtract = Subtract::new(a, b);
-    let intersect = Intersect::new(a, b);
-
-    let FieldBounds::Bounded(union_bounds) = union.bounds() else {
+    let FieldBounds::Bounded(bounds) = union.bounds() else {
         panic!("union should be bounded");
     };
-    assert_eq!(union_bounds.min, Vec3::new(-1.0, -1.0, -1.0));
-    assert_eq!(union_bounds.max, Vec3::new(2.5, 1.0, 1.0));
+    assert_eq!(bounds.min(), Vec3::new(-1.0, -1.0, -1.0));
+    assert_eq!(bounds.max(), Vec3::new(5.0, 1.0, 1.0));
 
-    assert_eq!(subtract.bounds(), a.bounds());
+    let plane = SdfPlane::from_point_normal(Vec3::ZERO, Vec3::Y).unwrap();
+    assert_eq!(Union::new(a, plane).bounds(), FieldBounds::Unbounded);
 
-    let FieldBounds::Bounded(intersect_bounds) = intersect.bounds() else {
-        panic!("intersect should be bounded");
-    };
-    assert!(intersect_bounds.min.x >= -1.0 && intersect_bounds.max.x <= 2.5);
-
-    let unbounded_union = Union::new(a, SdfPlane::from_point_normal(Vec3::ZERO, Vec3::Y));
-    assert_eq!(unbounded_union.bounds(), FieldBounds::Unbounded);
+    let left = FieldBounds::bounded(Bounds3::try_new(Vec3::ZERO, Vec3::ONE).unwrap());
+    let right = FieldBounds::bounded(Bounds3::try_new(Vec3::splat(2.0), Vec3::splat(3.0)).unwrap());
+    assert_eq!(left.intersection(right), FieldBounds::Empty);
 }
 
 #[test]
-fn smooth_ops_fall_back_to_hard_ops_when_smoothness_is_zero() {
-    let left = SdfSphere::new(Vec3::ZERO, 1.0);
-    let right = SdfSphere::new(Vec3::new(1.0, 0.0, 0.0), 1.0);
+fn zero_smoothness_matches_hard_ops_and_preserves_step() {
+    let left = SdfSphere::new(Vec3::ZERO, 1.0).unwrap();
+    let right = SdfSphere::new(Vec3::new(1.0, 0.0, 0.0), 1.0).unwrap();
     let point = Vec3::new(0.25, 0.0, 0.0);
 
-    let hard_union = Union::new(left, right).sample(point).distance;
-    let smooth_union = SmoothUnion::new(left, right, 0.0).sample(point).distance;
-    assert!((hard_union - smooth_union).abs() < EPS);
-
-    let hard_subtract = Subtract::new(left, right).sample(point).distance;
-    let smooth_subtract = SmoothSubtract::new(left, right, 0.0).sample(point).distance;
-    assert!((hard_subtract - smooth_subtract).abs() < EPS);
-
-    let hard_intersect = Intersect::new(left, right).sample(point).distance;
-    let smooth_intersect = SmoothIntersect::new(left, right, 0.0)
+    let hard_union = Union::new(left, right).sample(point).unwrap();
+    let smooth_union = SmoothUnion::new(left, right, 0.0)
+        .unwrap()
         .sample(point)
-        .distance;
-    assert!((hard_intersect - smooth_intersect).abs() < EPS);
+        .unwrap();
+    assert!((hard_union.signed_value() - smooth_union.signed_value()).abs() < EPS);
+    assert_eq!(hard_union.safe_step(), smooth_union.safe_step());
+
+    let hard_intersect = Intersect::new(left, right).sample(point).unwrap();
+    let smooth_intersect = SmoothIntersect::new(left, right, 0.0)
+        .unwrap()
+        .sample(point)
+        .unwrap();
+    assert!((hard_intersect.signed_value() - smooth_intersect.signed_value()).abs() < EPS);
+
+    let hard_subtract = Subtract::new(left, right).sample(point).unwrap();
+    let smooth_subtract = SmoothSubtract::new(left, right, 0.0)
+        .unwrap()
+        .sample(point)
+        .unwrap();
+    assert!((hard_subtract.signed_value() - smooth_subtract.signed_value()).abs() < EPS);
 }
 
 #[test]
-fn smooth_union_softens_the_join_region() {
-    let left = SdfSphere::new(Vec3::new(-0.5, 0.0, 0.0), 1.0);
-    let right = SdfSphere::new(Vec3::new(0.5, 0.0, 0.0), 1.0);
-    let point = Vec3::ZERO;
+fn positive_smoothing_removes_unproven_tracing_capability() {
+    let left = SdfSphere::new(Vec3::new(-0.5, 0.0, 0.0), 1.0).unwrap();
+    let right = SdfSphere::new(Vec3::new(0.5, 0.0, 0.0), 1.0).unwrap();
+    let smooth = SmoothUnion::new(left, right, 0.5).unwrap();
+    let sample = smooth.sample(Vec3::ZERO).unwrap();
 
-    let hard = Union::new(left, right).sample(point).distance;
-    let smooth = SmoothUnion::new(left, right, 0.5).sample(point).distance;
-    assert!(smooth <= hard);
+    assert!(sample.signed_value() < 0.0);
+    assert_eq!(sample.safe_step(), None);
+    assert!(!smooth.capabilities().has_exact_distance());
 }
