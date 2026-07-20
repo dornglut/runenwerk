@@ -32,3 +32,6 @@ The repository uses one root public package plus `conformance/downstream` and
 
 The source-transfer baseline is Runenwerk merge commit
 `8de096259eab30f8d67672010df9190970d0bfc4`, path `domain/sdf`.
+
+Implementation authority is `PT-RUNENSDF-003`; Runenwerk integration remains
+`PT-RUNENSDF-004` scope.
