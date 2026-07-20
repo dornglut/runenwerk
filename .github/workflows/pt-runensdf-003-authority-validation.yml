@@ -1,0 +1,27 @@
+name: PT-RUNENSDF-003 Authority Validation
+
+on:
+  push:
+    branches:
+      - docs/pt-runensdf-003-transfer-authority
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --global pnpm@11.0.0
+      - run: pnpm --dir docs-site install --frozen-lockfile
+      - run: python tools/docs/validate_docs.py
+      - run: pnpm --dir docs-site build
+      - run: git diff --check
