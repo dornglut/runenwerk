@@ -7,128 +7,110 @@ canonical: true
 last_reviewed: 2026-07-20
 related_docs:
   - ../workflow-lifecycle.md
-  - ../complete-investigation-gate.md
-  - ../complete-design-gate.md
   - ../complete-merge-readiness-gate.md
   - ../evidence-quality-taxonomy.md
-  - ../routines/track-orchestration-routine.md
-  - ../specs/phase-implementation-spec.md
-  - ../../guidelines/programming-principles.md
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
-  - ../../reports/investigations/runensdf-extraction-investigation.md
   - ../../design/active/runensdf-extraction-design.md
-  - ../specs/pt-runensdf-002-boundary-correction.ron
   - ../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md
-  - ../../reports/investigations/runenecs-extraction-investigation.md
-  - ../../design/active/runenecs-boundary-repair-execution-plan.md
-  - ../specs/pt-runenecs-r1-entity-errors.ron
-  - ../../reports/investigations/runenrender-extraction-investigation.md
-  - ../../design/active/runenrender-internal-decomposition-execution-plan.md
-  - ../specs/pt-runenrender-r1-identities-errors.ron
+  - ../specs/pt-runensdf-003-standalone-transfer.ron
   - ./roadmap.md
   - ./production-tracks.md
-  - ./completed-work.md
   - ./decision-register.md
 ---
 
 # Active Work
 
-## Current primary track
+## Current primary implementation
 
 ID: `PT-RUNENSDF-003`
 
-Title: Standalone RunenSDF Repository Creation and Corrected Source Transfer
+Title: Standalone RunenSDF Repository and Corrected Source Transfer
 
-Lifecycle state: `queued-planning`
+Lifecycle state: `active-implementation`
 
-Implementation authorization: **none**
+External repository:
 
-No external repository creation, source transfer, Runenwerk dependency cutover, or
-`domain/sdf` deletion is authorized by this record.
+```text
+Crystonix/runen-sdf
+main skeleton commit: 6fb544856e42445e5be53107f61a14e5ccea211d
+implementation branch: agent/pt-runensdf-003-bootstrap
+bootstrap pull request: Crystonix/runen-sdf#1
+```
+
+Canonical identity:
+
+```text
+product: RunenSDF
+repository: Crystonix/runen-sdf
+package: runen-sdf
+crate: runen_sdf
+```
+
+The former `Crystonix/RunenSDF` and `runensdf` planning spellings are superseded.
+No compatibility package or crate alias preserves them.
 
 ## Completed prerequisite
 
-`PT-RUNENSDF-002 — RunenSDF Boundary Correction` is complete through PR #116.
-The phase corrected the public and numerical boundary inside Runenwerk before any
-source movement:
+`PT-RUNENSDF-002` completed the public and numerical boundary correction in
+Runenwerk through PR #116 and merge commit
+`8de096259eab30f8d67672010df9190970d0bfc4`.
 
-- removed the `geometry` package dependency from `domain/sdf`;
-- introduced validated SDF-owned bounds and ray values;
-- separated signed field value from a proven conservative tracing step;
-- made exact-distance capability explicit;
-- replaced unchecked authored state and hidden normalization with validated
-  construction;
-- replaced ambiguous query `Option` results with structured outcomes and errors;
-- made gradient and normal failures explicit;
-- migrated all nine SDF package test modules;
-- retained one implementation authority with no compatibility layer or source
-  mirror.
+That commit is the source-transfer baseline for `domain/sdf`.
 
-Detailed evidence is recorded in
-`../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md`.
+## Current implementation order
 
-## Verified merge gate
+1. establish one root package and repository governance;
+2. establish provenance, downstream conformance, and validation authority;
+3. transfer the corrected implementation without behavioral redesign;
+4. migrate all nine package test modules and crate imports;
+5. generate the independent lockfile;
+6. pass stable and Rust 1.93.0 validation;
+7. record the exact standalone revision intended for Runenwerk cutover.
 
-GitHub Actions validation passed for the completed source and documentation state:
+Parity is established before optional module-vocabulary cleanup. The proposed
+`operators`, `transforms`, and `differential` grouping must be a separately
+reviewable behavior-preserving change after standalone parity is green.
+
+## Allowed scope
 
 ```text
-cargo metadata --format-version 1 --locked --no-deps
-cargo tree -p sdf --locked
-cargo tree -i sdf --workspace --locked
-cargo fmt --all -- --check
-cargo test -p sdf --locked
-cargo clippy -p sdf --all-targets --locked -- -D warnings
-cargo check --workspace --all-targets --locked
-pnpm --dir docs-site install --frozen-lockfile
-python tools/docs/validate_docs.py
-pnpm --dir docs-site build
-git diff --check and clean tracked-state verification
+Crystonix/runen-sdf repository files
+Runenwerk PT-RUNENSDF-003 planning and provenance records
+package/test import migration required by sdf -> runen-sdf naming
+independent conformance and validation tooling
 ```
 
-MSRV, dedicated property-test tooling, benchmarks, full workspace tests, and full
-workspace Clippy remain separate evidence. They are not represented as passed by
-this phase. Earlier exploratory broad runs encountered hosted-runner disk
-exhaustion while linking editor/Godot tests and existing unrelated `ui_text`
-Clippy warnings.
+## Forbidden scope
+
+```text
+Runenwerk Cargo dependency cutover
+retirement of Runenwerk domain/sdf
+compatibility or forwarding packages
+permanent source mirrors
+crates.io publication
+GPU, shader, renderer, world, material, ECS, UI, or persisted-program ownership
+speculative public package decomposition
+```
+
+## Completion gate
+
+PT-RUNENSDF-003 completes only when:
+
+- the corrected source and all package tests run independently;
+- no Runenwerk dependency or private source inclusion exists;
+- public downstream conformance passes;
+- stable and Rust 1.93.0 validation pass through one maintained command;
+- provenance names the exact source and accepted standalone commits;
+- no Runenwerk cutover or source retirement enters the phase.
 
 ## Program allocation
 
 ```text
-RunenSDF     PT-RUNENSDF-002 complete; PT-RUNENSDF-003 queued planning only
+RunenSDF     PT-RUNENSDF-003 active implementation
 RunenECS     R1 specified; no Rust implementation authorized
 RunenRender  R1 specified; no Rust implementation authorized
 RunenUI      independent workstream outside this program
 ```
 
-## PT-RUNENSDF-003 planning gate
-
-Before implementation authorization, the next phase must close:
-
-1. external repository creation responsibility and owner action;
-2. exact repository/package naming and license/toolchain baseline;
-3. provenance-preserving source-transfer method;
-4. independent downstream-consumer and conformance layout;
-5. exact Runenwerk pinning strategy for the later cutover;
-6. move/stay/delete matrix for every current SDF file;
-7. validation that the external package has no Runenwerk dependency;
-8. a bounded phase specification written against merged PT-RUNENSDF-002 source.
-
-The next phase creates and proves the standalone repository. It does **not** delete
-`domain/sdf` or cut Runenwerk over; those remain `PT-RUNENSDF-004` scope.
-
-## Parallel work
-
-Allowed:
-
-- read-only RunenECS and RunenRender investigation;
-- documentation cleanup that does not alter extraction authority;
-- preparation of repository-creation and provenance decisions.
-
-Forbidden until separately authorized:
-
-- RunenECS or RunenRender structural implementation;
-- RunenSDF source duplication without a bounded transfer phase;
-- Runenwerk dependency cutover;
-- deletion of `domain/sdf`;
-- compatibility packages, source mirrors, or universal shared-core repositories.
+`PT-RUNENSDF-004` remains blocked until the standalone revision is accepted.
