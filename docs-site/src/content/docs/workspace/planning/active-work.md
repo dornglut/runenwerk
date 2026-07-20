@@ -4,7 +4,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-20
 related_docs:
   - ../workflow-lifecycle.md
   - ../complete-investigation-gate.md
@@ -19,6 +19,7 @@ related_docs:
   - ../../reports/investigations/runensdf-extraction-investigation.md
   - ../../design/active/runensdf-extraction-design.md
   - ../specs/pt-runensdf-002-boundary-correction.ron
+  - ../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md
   - ../../reports/investigations/runenecs-extraction-investigation.md
   - ../../design/active/runenecs-boundary-repair-execution-plan.md
   - ../specs/pt-runenecs-r1-entity-errors.ron
@@ -33,154 +34,101 @@ related_docs:
 
 # Active Work
 
-## Current primary implementation
+## Current primary track
 
-ID: `PT-RUNENSDF-002`
+ID: `PT-RUNENSDF-003`
 
-Title: RunenSDF Boundary Correction
+Title: Standalone RunenSDF Repository Creation and Corrected Source Transfer
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `queued-planning`
 
-Implementation branch:
+Implementation authorization: **none**
+
+No external repository creation, source transfer, Runenwerk dependency cutover, or
+`domain/sdf` deletion is authorized by this record.
+
+## Completed prerequisite
+
+`PT-RUNENSDF-002 — RunenSDF Boundary Correction` is complete through PR #116.
+The phase corrected the public and numerical boundary inside Runenwerk before any
+source movement:
+
+- removed the `geometry` package dependency from `domain/sdf`;
+- introduced validated SDF-owned bounds and ray values;
+- separated signed field value from a proven conservative tracing step;
+- made exact-distance capability explicit;
+- replaced unchecked authored state and hidden normalization with validated
+  construction;
+- replaced ambiguous query `Option` results with structured outcomes and errors;
+- made gradient and normal failures explicit;
+- migrated all nine SDF package test modules;
+- retained one implementation authority with no compatibility layer or source
+  mirror.
+
+Detailed evidence is recorded in
+`../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md`.
+
+## Verified merge gate
+
+GitHub Actions validation passed for the completed source and documentation state:
 
 ```text
-impl/runensdf-boundary-correction
+cargo metadata --format-version 1 --locked --no-deps
+cargo tree -p sdf --locked
+cargo tree -i sdf --workspace --locked
+cargo fmt --all -- --check
+cargo test -p sdf --locked
+cargo clippy -p sdf --all-targets --locked -- -D warnings
+cargo check --workspace --all-targets --locked
+pnpm --dir docs-site install --frozen-lockfile
+python tools/docs/validate_docs.py
+pnpm --dir docs-site build
+git diff --check and clean tracked-state verification
 ```
 
-Owner authorization:
+MSRV, dedicated property-test tooling, benchmarks, full workspace tests, and full
+workspace Clippy remain separate evidence. They are not represented as passed by
+this phase. Earlier exploratory broad runs encountered hosted-runner disk
+exhaustion while linking editor/Godot tests and existing unrelated `ui_text`
+Clippy warnings.
+
+## Program allocation
 
 ```text
-The repository owner explicitly authorized continued connector-side execution on
-2026-07-19 and waived manual/local validation as an activation prerequisite.
-```
-
-The waiver permits implementation to proceed. It does not establish that any
-Cargo, Clippy, docs, property, benchmark, or runtime command passed. Skipped
-commands remain unavailable evidence and must be reported as such.
-
-## Program state
-
-Repository-family planning is merged through:
-
-```text
-PR #109  repository-family authority
-PR #110  RunenSDF investigation, design, and PT-RUNENSDF-002 specification
-PR #111  RunenECS investigation, R1-R9 roadmap, and R1 specification
-PR #112  RunenRender investigation, R1-R10 roadmap, and R1 specification
-```
-
-Current allocation:
-
-```text
-RunenSDF     active implementation: PT-RUNENSDF-002
-RunenECS     parallel read-only investigation/specification; R1 not code-active
-RunenRender  parallel read-only investigation/specification; R1 not code-active
+RunenSDF     PT-RUNENSDF-002 complete; PT-RUNENSDF-003 queued planning only
+RunenECS     R1 specified; no Rust implementation authorized
+RunenRender  R1 specified; no Rust implementation authorized
 RunenUI      independent workstream outside this program
 ```
 
-## PT-RUNENSDF-002 goal
+## PT-RUNENSDF-003 planning gate
 
-Correct `domain/sdf` in place so its public contract is suitable for later clean
-transfer into RunenSDF:
+Before implementation authorization, the next phase must close:
 
-- remove the public and manifest dependency on Runenwerk `geometry`;
-- add repository-local validated bounds and ray values;
-- distinguish signed field value from a proven conservative tracing step;
-- expose exact-distance capability explicitly where queries require it;
-- replace unchecked authored state and hidden normalization with validated
-  construction;
-- replace ambiguous `Option` query terminals with structured outcomes/errors;
-- make gradient/normal failure explicit;
-- migrate all package tests and any discovered direct consumers;
-- keep repository creation and source deletion out of this phase.
+1. external repository creation responsibility and owner action;
+2. exact repository/package naming and license/toolchain baseline;
+3. provenance-preserving source-transfer method;
+4. independent downstream-consumer and conformance layout;
+5. exact Runenwerk pinning strategy for the later cutover;
+6. move/stay/delete matrix for every current SDF file;
+7. validation that the external package has no Runenwerk dependency;
+8. a bounded phase specification written against merged PT-RUNENSDF-002 source.
 
-## Fixed public invariants
+The next phase creates and proves the standalone repository. It does **not** delete
+`domain/sdf` or cut Runenwerk over; those remain `PT-RUNENSDF-004` scope.
 
-```text
-SdfSample.signed_value
-    finite sign/value information; not universally exact Euclidean distance
+## Parallel work
 
-SdfSample.safe_step
-    absent or a finite non-negative conservative lower bound to the nearest zero set
+Allowed:
 
-Sphere tracing
-    advances only by safe_step and rejects unsupported fields structurally
+- read-only RunenECS and RunenRender investigation;
+- documentation cleanup that does not alter extraction authority;
+- preparation of repository-creation and provenance decisions.
 
-Exact-distance queries
-    require an explicit exact-distance capability
+Forbidden until separately authorized:
 
-FieldBounds
-    Unbounded | Empty | Bounded(Bounds3)
-
-Disjoint finite intersection
-    Empty
-```
-
-## Allowed scope
-
-```text
-domain/sdf/Cargo.toml
-domain/sdf/src/**
-domain/sdf/tests/**
-focused directly discovered consumer migrations
-Cargo.lock only when dependency correction changes it
-current SDF documentation/proof/closeout truth
-this active-work record and PT-RUNENSDF-002 status
-```
-
-## Forbidden scope
-
-```text
-external RunenSDF repository creation
-deleting domain/sdf
-compatibility packages, forwarding APIs, or source mirrors
-renderer, world, material, ECS, scheduler, UI, or RunenUI redesign
-stable serialization or material/channel payload expansion
-GPU/shader/program authoring expansion
-universal geometry/core/meta repository
-RunenECS or RunenRender Rust implementation in this branch
-```
-
-## Evidence status
-
-Available:
-
-```text
-E2 GitHub commit, branch, and pull-request metadata
-E3 connector-backed inspection of all SDF source modules and all nine test files
-E8 merged repository-family, investigation, design, and phase-spec authority
-```
-
-Not available unless later supplied by CI or a local executor:
-
-```text
-Cargo metadata/tree
-Rust compilation and tests
-Clippy and formatting
-MSRV
-property/benchmark execution
-docs-site build and docs validator
-runtime/GPU evidence
-```
-
-No GitHub status checks are configured for the current planning heads.
-
-## Stop conditions
-
-Stop and revise authority before continuing if connector inspection finds:
-
-- a persisted or production consumer requiring an unclassified SDF contract;
-- a built-in composition whose sign or conservative-step behavior cannot be
-  specified correctly;
-- shared CPU/shader source authority;
-- a need for material/channel payloads in the core sample;
-- a need to create the external repository or delete original source in this phase;
-- a dependency on a universal shared-core repository;
-- required changes outside the explicitly owned SDF boundary.
-
-## Next phase rule
-
-`PT-RUNENSDF-003` repository-creation planning is not active. It may be considered
-only after this implementation is reviewed and its delivered API, source scope,
-consumer migrations, tests-as-written, unavailable validations, and remaining
-risks are recorded truthfully.
+- RunenECS or RunenRender structural implementation;
+- RunenSDF source duplication without a bounded transfer phase;
+- Runenwerk dependency cutover;
+- deletion of `domain/sdf`;
+- compatibility packages, source mirrors, or universal shared-core repositories.
