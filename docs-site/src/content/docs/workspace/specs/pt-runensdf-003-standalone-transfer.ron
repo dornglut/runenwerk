@@ -1,0 +1,33 @@
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENSDF-003",
+    title: "Standalone RunenSDF Repository and Corrected Source Transfer",
+    lifecycle_state: "active-implementation",
+    implementation_authorization_status: "authorized after creation of Crystonix/runen-sdf; Runenwerk cutover remains forbidden",
+    owner: "RunenSDF framework and repository governance",
+    authority_docs: [
+        "docs-site/src/content/docs/design/active/runensdf-extraction-design.md",
+        "docs-site/src/content/docs/reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md",
+        "docs-site/src/content/docs/workspace/planning/active-work.md",
+        "docs-site/src/content/docs/workspace/planning/roadmap.md",
+    ],
+    allowed_paths: [
+        "Crystonix/runen-sdf repository bootstrap and implementation paths",
+        "Runenwerk planning and provenance records",
+    ],
+    forbidden_paths: [
+        "Runenwerk dependency cutover or domain/sdf retirement",
+        "compatibility packages or permanent mirrors",
+        "GPU, renderer, world, material, ECS, UI, or persisted-program ownership",
+        "crates.io publication",
+    ],
+    acceptance_criteria: [
+        "Repository, package, and crate identity are Crystonix/runen-sdf, runen-sdf, and runen_sdf.",
+        "The corrected source baseline is Runenwerk commit 8de096259eab30f8d67672010df9190970d0bfc4.",
+        "All nine package test modules pass independently.",
+        "No Runenwerk dependency or private source inclusion remains.",
+        "Downstream public conformance passes.",
+        "Stable and Rust 1.93.0 validation pass through one maintained command.",
+        "The exact standalone revision for PT-RUNENSDF-004 is recorded.",
+    ],
+    next_phase_activation_condition: "PT-RUNENSDF-004 may be planned only after independent validation and exact revision closeout.",
+)
