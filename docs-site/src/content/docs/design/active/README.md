@@ -5,14 +5,16 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-21
 ---
 
 # Active Designs
 
-Use this folder for designs that are useful but not yet fully accepted or not yet checked against implementation.
+Use this folder for designs that are useful but not yet fully accepted or not yet
+checked against implementation.
 
-Active does not mean wrong or deprecated. It means the design is still part of current planning, implementation, or validation work.
+Active does not mean wrong or deprecated. It means the design is still part of
+current planning, implementation, or validation work.
 
 ## Architecture spine
 
@@ -20,9 +22,9 @@ For the whole UI framework architecture, start with:
 
 - [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md)
 
-Active design docs below are slice-level authorities, proposals,
-implementation designs, or product-track references. They should not each
-restate the entire UI framework architecture.
+Active design docs below are slice-level authorities, proposals, implementation
+designs, or product references. They should not each restate the entire framework
+architecture.
 
 ## Current Designs
 
@@ -115,8 +117,9 @@ restate the entire UI framework architecture.
 - [RunenSDF Extraction Design](runensdf-extraction-design.md)
 - [RunenECS Extraction Boundary Design](runenecs-extraction-boundary-design.md)
 - [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
-- [RunenRender Decomposition Design](runenrender-decomposition-design.md)
-- [RunenRender Internal Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
+- [RunenGPU Architecture Design](runengpu-architecture-design.md)
+- [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
+- [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 
 ### Domain Authoring And Standalone UI Framework
 
@@ -135,19 +138,19 @@ restate the entire UI framework architecture.
 - [UI Render Output And Host Renderer Boundary](ui-render-output-and-host-renderer-boundary-design.md)
 - [UI Platform Input, Windowing, And OS Integration](ui-platform-input-windowing-and-os-integration-design.md)
 - [UI Devtools, Inspection, And Workbench](ui-devtools-inspection-and-workbench-design.md)
-- [UI Testing, Conformance, And Proof Matrix](ui-testing-conformance-and-proof-matrix-design.md)
-- [UI Package Security, Versioning, And Migration](ui-package-security-versioning-and-migration-design.md)
+- [UI Testing, Conformance, And Proof Matrix](ui-testing-conformance-proof-matrix-design.md)
+- [UI Package Security, Versioning, And Migration](ui-package-security-versioning-migration-design.md)
 
 ### Workspace / Cross-Domain
 
-- [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
+- [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-comic-layout-platform-design.md)
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
 - [Field Visualizer Product Workflow Design](field-visualizer-product-workflow-design.md)
 - [Material Lab And Material Preview Design](material-lab-and-material-preview-design.md)
-- [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
+- [Native Tablet Input and Latency Contract](native-tablet-input-latency-contract.md)
 - [Runenwerk Capability Workbench Target Architecture](runenwerk-capability-workbench-target-architecture.md)
 - [Runenwerk Domain Workbench North Star](runenwerk-domain-workbench-north-star.md)
-- [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
+- [Typed App Program And UI Proof Design](typed-app-program-ui-proof-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
 - [UI Framework App Integration Direction Review](ui-framework-app-integration-direction-review.md)
@@ -162,6 +165,6 @@ restate the entire UI framework architecture.
 - [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)
 - [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
 - [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md)
-- [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
-- [Viewport Camera And Projection Contract Platform](viewport-camera-and-projection-contract-platform-design.md)
+- [Semantic Graph IR and Compilation Design](semantic-graph-ir-compilation-design.md)
+- [Viewport Camera And Projection Contract Platform](viewport-camera-projection-contract-platform-design.md)
 - [Viewport Expression Upgrade Design](workspace-viewport-expression-upgrade-design.md)
