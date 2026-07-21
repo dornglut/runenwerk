@@ -1,74 +1,125 @@
 ---
 title: Repository Family Extraction Boundaries
-description: Accepted repository-level decision for extracting RunenSDF, RunenECS, and RunenRender while retaining Runenwerk integration ownership and independent RunenUI authority.
+description: Accepted repository-level ownership, dependency, clean-cutover, and integration rules for RunenSDF, RunenECS, RunenGPU, RunenRender, RunenUI, and Runenwerk.
 status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-21
 related_designs:
   - ../../architecture/repository-family-architecture.md
   - ../../design/active/runensdf-extraction-design.md
   - ../../design/active/runenecs-extraction-boundary-design.md
+  - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-decomposition-design.md
 related_roadmaps:
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
 ---
 
 # ADR 0014: Repository Family Extraction Boundaries
 
 ## Decision
 
-Create three independent framework repositories through governed clean cutovers:
+Runenwerk is the integration and product repository for independently usable peer
+frameworks:
 
-- `Crystonix/RunenSDF`;
-- `Crystonix/RunenECS`;
-- `Crystonix/RunenRender`.
+```text
+product       repository                 package       crate
+RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
+RunenECS      Crystonix/runen-ecs        runen-ecs     runen_ecs
+RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
+RunenRender   Crystonix/runen-render     runen-render  runen_render
+RunenUI       Crystonix/runen-ui         runen-ui      runen_ui
+```
 
-Runenwerk remains the integration and product repository. Framework repositories
-must not depend on Runenwerk. Integration-specific translation, application
-lifecycle, product policy, and cross-domain composition remain in Runenwerk.
+RunenSDF and RunenUI already exist as independent workstreams. RunenECS,
+RunenGPU, and RunenRender remain governed by their accepted boundary designs and
+clean-cutover evidence.
 
-RunenUI remains an independent peer repository governed by its own workstream.
-This ADR fixes only the repository relationship:
+Framework repositories must not depend on Runenwerk. Integration-specific
+translation, application lifecycle, product policy, and cross-framework
+composition remain in Runenwerk.
 
-- RunenUI does not depend on Runenwerk or RunenRender by default;
-- RunenRender does not depend on RunenUI;
-- Runenwerk may later translate accepted renderer-neutral RunenUI output into
-  generic RunenRender work;
-- standalone RunenUI backends may exist without becoming RunenRender authority.
-
-This ADR does not select RunenUI APIs or authorize RunenUI implementation.
+Each new framework repository begins with one public package. Additional packages
+require independently useful dependency, backend, release, ABI, or compile-time
+pressure. Repository extraction is not itself justification for package
+proliferation.
 
 ## Dependency direction
 
+The accepted family direction is:
+
 ```text
-RunenSDF -------+
-RunenECS -------+--> Runenwerk adapters/integration --> applications
-RunenRender ----+
-RunenUI --------+
+RunenSDF ----+
+RunenECS ----+--> Runenwerk adapters/integration --> applications
+RunenUI -----+
+                  |
+                  +--> RunenRender --> RunenGPU
+                  +--> non-render RunenGPU workloads
 ```
 
-A direct dependency between framework repositories requires another ADR proving
-independent value and correct ownership. It is not introduced merely to avoid an
-adapter.
+The default rule is framework independence. A direct framework dependency requires
+a separate ADR proving independent value and correct ownership.
+
+ADR 0015 accepts exactly one such foundational dependency:
+
+```text
+RunenRender -> RunenGPU
+```
+
+This dependency is valid because image formation requires GPU execution, while
+RunenGPU remains independently useful for compute, simulation, field realization,
+procedural tools, bakers, and offscreen workloads.
+
+RunenSDF, RunenECS, and RunenUI do not depend on RunenGPU or RunenRender merely
+because an application may accelerate or display their outputs.
+
+## Current program state
+
+### RunenSDF
+
+The corrected standalone repository transfer completed at:
+
+```text
+repository: Crystonix/runen-sdf
+commit: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
+```
+
+Current Runenwerk `main` does not yet contain a merged clean-cutover removal of
+`domain/sdf`. That decision remains separate from the completed standalone
+transfer.
+
+### RunenECS
+
+Internal ownership and safety repairs remain required before source movement.
+
+### RunenGPU and RunenRender
+
+The previous renderer-owned-WGPU target is superseded. GPU execution must be
+separated before rendering extraction. No implementation phase is authorized
+until the complete current-source S0 inventory is accepted.
+
+### RunenUI
+
+RunenUI remains an independent peer governed in its own repository. This ADR does
+not select its internal APIs or implementation roadmap.
 
 ## Extraction order
 
-The tracks may progress at different maturity levels:
+Tracks may investigate in parallel, but structural changes that share manifests,
+lockfiles, identity policy, or canonical architecture must be serialized or
+explicitly rebased.
 
-1. RunenSDF: verify the bounded source/API investigation, correct the local
-   numerical and geometry boundary, then extract first.
-2. RunenECS: complete scheduler, spatial, reflection, messaging, change, safety,
-   and replication ownership decisions before source movement.
-3. RunenRender: complete semantic inventory, decompose internally, and prove the
-   intended public seams through Runenwerk consumption before external transfer.
+The dependency-constrained order is:
 
-RunenRender moves last because the current engine plugin combines neutral render
-planning with WGPU, windows/surfaces, ECS, scene, material, SDF, UI, editor,
-diagnostics, and runtime integration.
+1. complete any separately approved RunenSDF clean cutover;
+2. repair and prove RunenECS before extraction;
+3. inventory the current combined GPU/render implementation;
+4. separate and extract RunenGPU;
+5. separate RunenRender on the accepted RunenGPU boundary;
+6. extract RunenRender;
+7. consider reusable cross-framework adapters after public contracts stabilize.
 
 ## Clean cutover
 
@@ -77,57 +128,95 @@ Every completed extraction must:
 - preserve source provenance and licensing;
 - establish independent validation and public downstream conformance;
 - pin Runenwerk to an exact revision or exact pre-release version;
-- migrate all active consumers;
-- delete the original Runenwerk implementation in the same completed cutover;
+- migrate every active consumer;
+- delete the original Runenwerk implementation in the completed cutover;
 - remove temporary migration seams before merge;
-- leave no compatibility package, forwarding namespace, source mirror,
-  submodule, or writable parallel authority.
+- leave no compatibility package, forwarding namespace, source mirror, submodule,
+  branch dependency, or writable parallel authority.
 
 Temporary duplication may exist only on an unmerged extraction branch.
+
+If current Runenwerk has no real consumer for an extracted framework, removal of
+the internal package does not require adding an unused external dependency.
 
 ## Ownership decisions
 
 ### RunenSDF
 
 RunenSDF owns reusable signed-field mathematics, validated field vocabulary,
-numerical policy, spatial bounds, composition, and CPU reference queries. It does
-not own Runenwerk geometry, world streaming, ECS, rendering, materials, or product
-policy.
-
-The exact field-sample and query contracts remain track-level design decisions and
-must distinguish algorithmically safe distance estimates from values that cannot
-support sphere tracing.
+numerical policy, bounds, composition, transforms, capabilities, and CPU reference
+queries. It does not own Runenwerk geometry, world streaming, ECS, rendering,
+materials, GPU execution, or product policy.
 
 ### RunenECS
 
-RunenECS owns ECS semantics, not a permanently fixed storage implementation.
-General spatial indexing, engine lifecycle, rendering extraction, networking,
-replay, and world policy are outside ECS core.
+RunenECS owns entity/component/resource lifecycle, storage and query semantics,
+deferred structural mutation, system access contracts, explicit reflection, and
+ECS-local scheduling integration.
 
-Scheduler ownership is divided between neutral scheduling, ECS integration, and
-Runenwerk frame/tick policy. Messaging and change-journal facilities remain
-provisional until consumer evidence proves their independent ECS role.
+General spatial indexing, engine lifecycle, rendering extraction, networking,
+replay, world policy, and product scheduling remain outside ECS core.
+
+### RunenGPU
+
+RunenGPU owns validated GPU capabilities, resources, access/lifetimes, workloads,
+submissions, uploads/readback, low-level surfaces, backend outcomes, and WGPU as
+the initial internal backend.
+
+It does not own renderer semantics, simulations, fields, ECS, UI, windows/event
+loops, shader filesystem policy, or product recovery.
 
 ### RunenRender
 
-RunenRender owns only proven backend-neutral render contracts and a conventional
-WGPU backend. Runenwerk retains ECS extraction, scene/world/material/SDF/UI
-adapters, application lifecycle, editor policy, native-window/event-loop policy,
-and product feature selection.
+RunenRender owns prepared render scenes, views, providers/interactions,
+materials/media, emitters, visibility, transport, radiance caches,
+reconstruction, overlays, color, presentation intent, and lowering into RunenGPU
+workloads.
 
-The required initial package candidates are `runenrender_core` and
-`runenrender_wgpu`. A proc-macro package is conditional on retaining and proving
-the current GPU derives. WGSL/WGPU layout semantics are backend-specific and must
-not leak into renderer-neutral core authority.
+It does not own general GPU execution, WGPU directly, ECS extraction, field/SDF
+mathematics, UI semantics, native-window policy, or Runenwerk lifecycle.
+
+### RunenUI
+
+RunenUI owns semantic UI, state, actions, focus, accessibility, layout/style,
+text, hit testing, and renderer-neutral paint output. It does not depend on
+RunenRender or RunenGPU by default.
+
+### Runenwerk
+
+Runenwerk owns lifecycle, scheduling, windows/event loops, ECS/domain extraction,
+scene/world/material/SDF/UI/editor/simulation adapters, shader source discovery and
+reload policy, product quality/capability selection, diagnostics presentation,
+recovery, and integration evidence.
+
+## Adapter rule
+
+A framework must remain useful without its Runenwerk adapter.
+
+A Runenwerk adapter may depend on Runenwerk and one or more framework contracts
+when its purpose is explicitly cross-framework translation. No framework depends
+back on the adapter.
+
+Adapters translate identities, prepared inputs, outputs, lifecycle facts,
+diagnostics, and ownership. They must not:
+
+- copy framework algorithms;
+- mirror source;
+- create writable parallel authority;
+- hide dependency cycles;
+- expose broad compatibility facades.
+
+A reusable bridge is extracted only after at least one independent consumer proves
+that the bridge itself has stable ownership.
 
 ## Shared infrastructure
 
-Do not create a universal `RunenCore`, shared meta-framework, universal ID crate,
-or universal diagnostics crate.
+Do not create a universal `RunenCore`, shared meta-framework, universal ID
+repository, universal diagnostics repository, or generic plugin framework merely
+to make extraction convenient.
 
 Each repository owns values and identities whose invariants it defines. Adapters
-map them explicitly. Diagnostics use repository-specific namespaces and preserve
-upstream identity.
+map them explicitly and preserve upstream diagnostics/provenance.
 
 ## Versioning and formats
 
@@ -136,39 +225,44 @@ exact pre-release versions. Moving branches are forbidden.
 
 Persisted source, artifact, trace, replay, cache, and wire formats each require a
 separate owner, identifier, version, validation policy, and migration policy.
-Rust API versioning does not implicitly version persisted data.
+Runtime IDs are not silently promoted into persisted identity.
 
 ## Consequences
 
-- Parallel investigation is allowed, but implementation gates differ by track.
-- Shared workspace and planning files have one active owner at a time.
-- RunenSDF provides the first extraction-workflow proof.
-- RunenECS source movement is blocked by unresolved safety and ownership work.
-- RunenRender external extraction is blocked until internal public-boundary proof.
 - Existing code location is implementation evidence, not permanent ownership.
-- Connector-only inspection cannot satisfy command-validation gates.
+- RunenSDF provides the first standalone transfer proof.
+- RunenECS source movement remains blocked by internal ownership/safety work.
+- RunenGPU must be proven and extracted before RunenRender.
+- RunenRender consumes RunenGPU through a public one-way dependency.
+- RunenUI remains independent.
+- Connector inspection does not substitute for executable validation.
+- No implementation contract is written before its current-source inventory is
+  complete.
 
 ## Rejected alternatives
 
-The following are rejected:
+Rejected:
 
-- extracting all current directories immediately;
-- one repository containing SDF, ECS, and rendering;
+- extracting current directories unchanged;
+- one repository containing SDF, ECS, GPU, rendering, and UI;
 - Git submodules or source mirrors;
 - a universal shared-core repository;
+- speculative multi-package repository skeletons;
 - long-lived compatibility packages;
-- making RunenUI depend on RunenRender solely for Runenwerk integration;
-- moving Runenwerk-specific product policy into framework cores.
+- making RunenUI or RunenSDF depend on rendering for integration convenience;
+- retaining WGPU ownership in RunenRender;
+- moving Runenwerk-specific product policy into framework packages.
 
 ## Fitness functions
 
 The program succeeds only when:
 
 - each framework validates independently;
-- Runenwerk consumes it through one-way dependencies;
+- Runenwerk consumes exact revisions through one-way public dependencies;
 - independent downstream consumers use public APIs;
 - framework repositories contain no Runenwerk assumptions;
 - adapters translate rather than duplicate algorithms;
 - original Runenwerk implementations are removed after cutover;
-- no dependency cycle, source mirror, or compatibility authority remains;
+- no dependency cycle, source mirror, compatibility authority, or duplicate path
+  remains;
 - provenance, licensing, compatibility, and current documentation are complete.
