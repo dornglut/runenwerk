@@ -26,6 +26,7 @@ jobs:
 
           import ast
           import subprocess
+          import sys
           from collections import defaultdict, deque
           from pathlib import Path
 
@@ -106,12 +107,38 @@ jobs:
           for path in files:
               deps = ', '.join(sorted(p.as_posix() for p in imports.get(path, ()))) or '-'
               print(f'{path.as_posix()}: {deps}')
+
+          tracked = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
           print()
           print('## Non-Python legacy entrypoints')
-          tracked = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
           for path in tracked:
               if path in {'workflow', 'workflow.cmd', 'quiet_editor_gate.sh', 'quiet_full_gate.sh'}:
                   print(path)
+
+          print()
+          print('## Python outside tools/workflow')
+          external_imports: dict[str, set[str]] = defaultdict(set)
+          for raw in tracked:
+              if not raw.endswith('.py') or raw.startswith('tools/workflow/'):
+                  continue
+              path = Path(raw)
+              try:
+                  tree = ast.parse(path.read_text(encoding='utf-8'))
+              except (OSError, SyntaxError):
+                  continue
+              for node in ast.walk(tree):
+                  names: list[str] = []
+                  if isinstance(node, ast.Import):
+                      names.extend(alias.name for alias in node.names)
+                  elif isinstance(node, ast.ImportFrom) and node.module:
+                      names.append(node.module)
+                  for name in names:
+                      top = name.split('.', 1)[0]
+                      if top not in sys.stdlib_module_names:
+                          external_imports[raw].add(top)
+          for path in sorted(external_imports):
+              print(f"{path}: {', '.join(sorted(external_imports[path]))}")
+
           print()
           print('## Active references to deprecated executable surfaces')
           terms = [
@@ -120,6 +147,9 @@ jobs:
               'quiet_editor_gate.sh', 'quiet_full_gate.sh', 'workflow.cmd',
               'execution-contract-packs', 'execution-locks', 'truth-verifier-registry',
               'track-execution-manifests', 'track-execution-runs', 'truth-certificates',
+              'production-tracks.yaml', 'roadmap-items.yaml', 'roadmap-archive.yaml',
+              'roadmap-deferred.yaml', 'production-track-index.md',
+              'production-track-planning-model.md',
           ]
           for term in terms:
               result = subprocess.run(
@@ -132,12 +162,14 @@ jobs:
               if lines:
                   print(f'### {term}')
                   print('\n'.join(lines))
+
           print()
           print('## Tracked active generated state')
           prefixes = (
               'docs-site/src/content/docs/workspace/execution-contract-packs/',
               'docs-site/src/content/docs/workspace/execution-locks/',
               'docs-site/src/content/docs/workspace/truth-conformance-specs/',
+              'docs-site/src/content/docs/workspace/track-execution-manifests/',
               'docs-site/src/content/docs/reports/track-execution-manifests/',
               'docs-site/src/content/docs/reports/track-execution-runs/',
               'docs-site/src/content/docs/reports/truth-certificates/',
@@ -146,17 +178,16 @@ jobs:
           for path in tracked:
               if path in exact or path.startswith(prefixes):
                   print(path)
+
           print()
-          print('## Retained planning sources')
+          print('## Structured planning files')
+          planning_terms = (
+              'roadmap-items', 'roadmap-archive', 'roadmap-deferred',
+              'production-track', 'production_tracks', 'production-tracks',
+              'batch-manifest',
+          )
           for path in tracked:
-              if path in {
-                  'docs-site/src/content/docs/workspace/roadmap-items.yaml',
-                  'docs-site/src/content/docs/workspace/production-tracks.yaml',
-                  'docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json',
-                  'docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json',
-                  'docs-site/src/content/docs/workspace/planning/roadmap.md',
-                  'docs-site/src/content/docs/workspace/planning/production-tracks.md',
-              }:
+              if any(term in path for term in planning_terms):
                   print(path)
           PY
 
