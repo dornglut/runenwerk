@@ -1,0 +1,303 @@
+name: Narrow GPU Render Package Authority
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  correct:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Narrow package authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'missing expected block in {path}')
+              target.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace(
+              'ARCHITECTURE.md',
+              '''## Initial repository packages
+
+```text
+repository                 package       crate
+Crystonix/runen-sdf        runen-sdf     runen_sdf
+Crystonix/runen-ecs        runen-ecs     runen_ecs
+Crystonix/runen-gpu        runen-gpu     runen_gpu
+Crystonix/runen-render     runen-render  runen_render
+Crystonix/runen-ui         runen-ui      runen_ui
+```
+
+Each framework begins with one public package. Internal modules carry boundaries
+until an independently useful dependency, backend, release, ABI, or compile-time
+constraint proves that another package is needed.
+
+Do not create speculative `core`, `wgpu`, `gpu`, facade, macro, testing, capture,
+or compatibility packages merely to draw architecture boundaries.
+''',
+              '''## Repository and package identity
+
+Accepted or target identities relevant to this architecture are:
+
+```text
+product       repository                 package       crate
+RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
+RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
+RunenRender   Crystonix/runen-render     runen-render  runen_render
+```
+
+RunenGPU and RunenRender each begin with one public package. Internal modules carry
+boundaries until an independently useful dependency, backend, release, ABI, or
+compile-time constraint proves that another package is needed.
+
+RunenECS package topology remains governed by its own boundary work. RunenUI is an
+existing workspace whose current packages include `runenui_core` and
+`runenui_runtime`; this GPU/render decision does not collapse or rename them.
+
+Do not create speculative GPU/render `core`, `wgpu`, `gpu`, facade, macro,
+testing, capture, or compatibility packages merely to draw architecture
+boundaries.
+''')
+
+          replace(
+              'DEPENDENCY_RULES.md',
+              '''## Initial package rule
+
+Each framework repository begins with one public package:
+
+```text
+runen-sdf
+runen-ecs
+runen-gpu
+runen-render
+runen-ui
+```
+
+Do not create speculative `core`, `wgpu`, `gpu`, facade, macro, testing, capture,
+or compatibility packages for extraction convenience.
+
+A package split requires concrete evidence such as:
+''',
+              '''## Initial package rule
+
+RunenGPU and RunenRender each begin with one public package:
+
+```text
+runen-gpu
+runen-render
+```
+
+RunenSDF already uses one public `runen-sdf` package. RunenECS package topology is
+settled by its own boundary work. RunenUI is an existing multi-package workspace;
+this rule does not rename or collapse `runenui_core` or `runenui_runtime`.
+
+Do not create speculative GPU/render `core`, `wgpu`, `gpu`, facade, macro,
+testing, capture, or compatibility packages for extraction convenience.
+
+A package split requires concrete evidence such as:
+''')
+
+          replace(
+              'DOMAIN_MAP.md',
+              '''Reusable ECS semantics            -> Crystonix/runen-ecs, package runen-ecs
+General GPU execution/WGPU        -> Crystonix/runen-gpu, package runen-gpu
+Image formation/render semantics  -> Crystonix/runen-render, package runen-render
+Reusable UI framework             -> Crystonix/runen-ui, package runen-ui
+''',
+              '''Reusable ECS semantics            -> target Crystonix/runen-ecs; package topology governed separately
+General GPU execution/WGPU        -> Crystonix/runen-gpu, package runen-gpu
+Image formation/render semantics  -> Crystonix/runen-render, package runen-render
+Reusable UI framework             -> Crystonix/runen-ui workspace; current packages include runenui_core and runenui_runtime
+''')
+
+          replace(
+              'docs-site/src/content/docs/adr/accepted/0014-repository-family-extraction-boundaries.md',
+              '''```text
+product       repository                 package       crate
+RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
+RunenECS      Crystonix/runen-ecs        runen-ecs     runen_ecs
+RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
+RunenRender   Crystonix/runen-render     runen-render  runen_render
+RunenUI       Crystonix/runen-ui         runen-ui      runen_ui
+```
+
+RunenSDF and RunenUI already exist as independent workstreams. RunenECS,
+RunenGPU, and RunenRender remain governed by their accepted boundary designs and
+clean-cutover evidence.
+
+Framework repositories must not depend on Runenwerk. Integration-specific
+translation, application lifecycle, product policy, and cross-framework
+composition remain in Runenwerk.
+
+Each new framework repository begins with one public package. Additional packages
+require independently useful dependency, backend, release, ABI, or compile-time
+pressure. Repository extraction is not itself justification for package
+proliferation.
+''',
+              '''```text
+product       repository                 package/workspace identity
+RunenSDF      Crystonix/runen-sdf        runen-sdf / runen_sdf
+RunenECS      target Crystonix/runen-ecs package topology governed by RunenECS boundary work
+RunenGPU      Crystonix/runen-gpu        runen-gpu / runen_gpu
+RunenRender   Crystonix/runen-render     runen-render / runen_render
+RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
+```
+
+RunenSDF and RunenUI already exist as independent workstreams. RunenECS,
+RunenGPU, and RunenRender remain governed by their accepted boundary designs and
+clean-cutover evidence.
+
+Framework repositories must not depend on Runenwerk. Integration-specific
+translation, application lifecycle, product policy, and cross-framework
+composition remain in Runenwerk.
+
+RunenGPU and RunenRender each begin with one public package. Additional GPU/render
+packages require independently useful dependency, backend, release, ABI, or
+compile-time pressure. This ADR does not redefine RunenUI's existing workspace or
+settle RunenECS package topology.
+''')
+
+          replace(
+              'docs-site/src/content/docs/architecture/repository-family-architecture.md',
+              '''```text
+product       repository                 package       crate
+RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
+RunenECS      Crystonix/runen-ecs        runen-ecs     runen_ecs
+RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
+RunenRender   Crystonix/runen-render     runen-render  runen_render
+RunenUI       Crystonix/runen-ui         runen-ui      runen_ui
+Runenwerk     Crystonix/runenwerk        workspace      integration/product
+```
+
+Each new framework repository begins with one public package. Internal modules
+carry responsibility boundaries until a real second consumer, backend, release
+unit, ABI, or compile-time boundary proves another package is required.
+''',
+              '''```text
+product       repository                 package/workspace identity
+RunenSDF      Crystonix/runen-sdf        runen-sdf / runen_sdf
+RunenECS      target Crystonix/runen-ecs package topology governed separately
+RunenGPU      Crystonix/runen-gpu        runen-gpu / runen_gpu
+RunenRender   Crystonix/runen-render     runen-render / runen_render
+RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
+Runenwerk     Crystonix/runenwerk        integration/product workspace
+```
+
+RunenGPU and RunenRender each begin with one public package. Internal modules carry
+responsibility boundaries until a real second consumer, backend, release unit,
+ABI, or compile-time boundary proves another package is required. RunenECS package
+topology remains separate, and this architecture does not rename or collapse
+RunenUI's existing packages.
+''')
+
+          replace(
+              'docs-site/src/content/docs/architecture/repository-family-architecture.md',
+              '''Initial targets are:
+
+```text
+runen-sdf
+runen-ecs
+runen-gpu
+runen-render
+runen-ui
+```
+
+Additional packages require evidence such as:
+''',
+              '''The one-package initial rule applies here to the new GPU/render targets:
+
+```text
+runen-gpu
+runen-render
+```
+
+RunenSDF already proves the single-package pattern. RunenECS topology is governed
+separately. RunenUI already has an accepted workspace/package structure and is not
+changed by this program.
+
+Additional GPU/render packages require evidence such as:
+''')
+
+          replace(
+              'docs-site/src/content/docs/reports/investigations/repository-family-current-state-investigation.md',
+              '''```text
+product       repository                 package       crate
+RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
+RunenECS      Crystonix/runen-ecs        runen-ecs     runen_ecs
+RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
+RunenRender   Crystonix/runen-render     runen-render  runen_render
+RunenUI       Crystonix/runen-ui         runen-ui      runen_ui
+Runenwerk     Crystonix/runenwerk        workspace      integration/product
+```
+''',
+              '''```text
+product       repository                 package/workspace identity
+RunenSDF      Crystonix/runen-sdf        runen-sdf / runen_sdf
+RunenECS      target Crystonix/runen-ecs package topology governed separately
+RunenGPU      Crystonix/runen-gpu        runen-gpu / runen_gpu
+RunenRender   Crystonix/runen-render     runen-render / runen_render
+RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
+Runenwerk     Crystonix/runenwerk        integration/product workspace
+```
+''')
+
+          replace(
+              'docs-site/src/content/docs/workspace/planning/decision-register.md',
+              '''```text
+product       repository                 package       crate
+RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
+RunenECS      Crystonix/runen-ecs        runen-ecs     runen_ecs
+RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
+RunenRender   Crystonix/runen-render     runen-render  runen_render
+RunenUI       Crystonix/runen-ui         runen-ui      runen_ui
+```
+
+Each framework begins with one public package. Additional packages require proven
+independent dependency, backend, release, ABI, platform, or compile-time pressure.
+Internal module separation is preferred first.
+''',
+              '''```text
+product       repository                 package/workspace identity
+RunenSDF      Crystonix/runen-sdf        runen-sdf / runen_sdf
+RunenECS      target Crystonix/runen-ecs package topology governed by RunenECS work
+RunenGPU      Crystonix/runen-gpu        runen-gpu / runen_gpu
+RunenRender   Crystonix/runen-render     runen-render / runen_render
+RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
+```
+
+RunenGPU and RunenRender each begin with one public package. Additional GPU/render
+packages require proven independent dependency, backend, release, ABI, platform,
+or compile-time pressure. This decision does not redefine RunenUI or settle
+RunenECS package topology.
+''')
+          PY
+
+      - name: Commit correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ARCHITECTURE.md DEPENDENCY_RULES.md DOMAIN_MAP.md docs-site/src/content/docs
+          git commit -m 'Narrow GPU render package authority'
+          git push origin HEAD:${{ github.head_ref || github.ref_name }}
