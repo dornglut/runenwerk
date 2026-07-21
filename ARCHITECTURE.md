@@ -36,22 +36,24 @@ RunenRender -> RunenGPU
 RunenGPU owns general GPU execution. RunenRender owns image formation and lowers
 render work through RunenGPU.
 
-## Initial repository packages
+## Repository and package identity
 
 ```text
 repository                 package       crate
 Crystonix/runen-sdf        runen-sdf     runen_sdf
-Crystonix/runen-ecs        runen-ecs     runen_ecs
+target Crystonix/runen-ecs package topology governed separately
 Crystonix/runen-gpu        runen-gpu     runen_gpu
 Crystonix/runen-render     runen-render  runen_render
-Crystonix/runen-ui         runen-ui      runen_ui
+Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
 ```
 
-Each framework begins with one public package. Internal modules carry boundaries
+RunenGPU and RunenRender each begin with one public package. Internal modules carry boundaries
 until an independently useful dependency, backend, release, ABI, or compile-time
 constraint proves that another package is needed.
 
-Do not create speculative `core`, `wgpu`, `gpu`, facade, macro, testing, capture,
+RunenECS package topology remains governed separately. RunenUI is an existing multi-package workspace.
+
+Do not create speculative GPU/render `core`, `wgpu`, `gpu`, facade, macro, testing, capture,
 or compatibility packages merely to draw architecture boundaries.
 
 ## Current in-repository layer model

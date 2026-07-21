@@ -32,14 +32,14 @@ dependency direction, and cutover rules. Framework designs own subsystem contrac
 ```text
 product       repository                 package       crate
 RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
-RunenECS      Crystonix/runen-ecs        runen-ecs     runen_ecs
+RunenECS      target Crystonix/runen-ecs package topology governed separately
 RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
 RunenRender   Crystonix/runen-render     runen-render  runen_render
-RunenUI       Crystonix/runen-ui         runen-ui      runen_ui
+RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
 Runenwerk     Crystonix/runenwerk        workspace      integration/product
 ```
 
-Each new framework repository begins with one public package. Internal modules
+RunenGPU and RunenRender each begin with one public package. This decision does not redefine RunenUI package topology or settle RunenECS package topology. Internal modules
 carry responsibility boundaries until a real second consumer, backend, release
 unit, ABI, or compile-time boundary proves another package is required.
 

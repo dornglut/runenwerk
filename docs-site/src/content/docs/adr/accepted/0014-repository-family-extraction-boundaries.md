@@ -27,10 +27,10 @@ frameworks:
 ```text
 product       repository                 package       crate
 RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
-RunenECS      Crystonix/runen-ecs        runen-ecs     runen_ecs
+RunenECS      target Crystonix/runen-ecs package topology governed separately
 RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
 RunenRender   Crystonix/runen-render     runen-render  runen_render
-RunenUI       Crystonix/runen-ui         runen-ui      runen_ui
+RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
 ```
 
 RunenSDF and RunenUI already exist as independent workstreams. RunenECS,
@@ -41,7 +41,7 @@ Framework repositories must not depend on Runenwerk. Integration-specific
 translation, application lifecycle, product policy, and cross-framework
 composition remain in Runenwerk.
 
-Each new framework repository begins with one public package. Additional packages
+RunenGPU and RunenRender each begin with one public package. This decision does not redefine RunenUI package topology or settle RunenECS package topology. Additional packages
 require independently useful dependency, backend, release, ABI, or compile-time
 pressure. Repository extraction is not itself justification for package
 proliferation.

@@ -39,17 +39,16 @@ In particular:
 
 ## Initial package rule
 
-Each framework repository begins with one public package:
+RunenGPU and RunenRender each begin with one public package:
 
 ```text
-runen-sdf
-runen-ecs
 runen-gpu
 runen-render
-runen-ui
 ```
 
-Do not create speculative `core`, `wgpu`, `gpu`, facade, macro, testing, capture,
+RunenSDF already uses one public `runen-sdf` package. RunenECS topology is governed separately. RunenUI is an existing multi-package workspace.
+
+Do not create speculative GPU/render `core`, `wgpu`, `gpu`, facade, macro, testing, capture,
 or compatibility packages for extraction convenience.
 
 A package split requires concrete evidence such as:

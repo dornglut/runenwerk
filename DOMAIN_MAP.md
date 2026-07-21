@@ -29,10 +29,10 @@ Roadmap                           -> docs-site/src/content/docs/workspace/planni
 
 ```text
 Reusable SDF mathematics/queries  -> Crystonix/runen-sdf, package runen-sdf
-Reusable ECS semantics            -> Crystonix/runen-ecs, package runen-ecs
+Reusable ECS semantics            -> target Crystonix/runen-ecs; package topology governed separately
 General GPU execution/WGPU        -> Crystonix/runen-gpu, package runen-gpu
 Image formation/render semantics  -> Crystonix/runen-render, package runen-render
-Reusable UI framework             -> Crystonix/runen-ui, package runen-ui
+Reusable UI framework             -> Crystonix/runen-ui workspace; current packages include runenui_core and runenui_runtime
 Cross-framework integration       -> Crystonix/runenwerk
 Applications and product policy   -> Crystonix/runenwerk
 ```

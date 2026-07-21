@@ -32,10 +32,10 @@ safely in parallel?
 ```text
 product       repository                 package       crate
 RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
-RunenECS      Crystonix/runen-ecs        runen-ecs     runen_ecs
+RunenECS      target Crystonix/runen-ecs package topology governed separately
 RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
 RunenRender   Crystonix/runen-render     runen-render  runen_render
-RunenUI       Crystonix/runen-ui         runen-ui      runen_ui
+RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
 Runenwerk     Crystonix/runenwerk        workspace      integration/product
 ```
 
