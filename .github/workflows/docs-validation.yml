@@ -1,0 +1,67 @@
+name: Documentation Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "docs-site/**"
+      - "tools/docs/**"
+      - ".github/workflows/docs-validation.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs-site/**"
+      - "tools/docs/**"
+      - ".github/workflows/docs-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate documentation authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: docs-site/pnpm-lock.yaml
+
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.0.0
+
+      - name: Install documentation dependencies
+        run: pnpm --dir docs-site install --frozen-lockfile
+
+      - name: Validate documentation authority
+        run: python tools/docs/validate_docs.py
+
+      - name: Build documentation site
+        run: pnpm --dir docs-site build
+
+      - name: Check diff hygiene
+        run: git diff --check
+
+      - name: Prove validation leaves tracked state clean
+        run: |
+          status="$(git status --short)"
+          if [ -n "$status" ]; then
+            printf 'Documentation validation changed tracked state:\n%s\n' "$status" >&2
+            exit 1
+          fi
