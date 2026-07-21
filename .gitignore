@@ -1,4 +1,5 @@
 /target
+/tools/xtask/target
 .runenwerk/
 docs-site/src/content/docs/reports/agent-transcripts/
 __pycache__/
