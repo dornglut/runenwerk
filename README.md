@@ -1,63 +1,60 @@
 # Runenwerk
 
-Runenwerk is a long-term world, editor, simulation, and rendering platform organized around explicit domain ownership, stable contracts, and inspectable documentation.
+Runenwerk is an experimental Rust platform for building world-centric applications, editors, simulations, and rendering systems.
 
-Canonical documentation lives under:
+It is the integration and product repository for the wider Runen framework family. Reusable foundations are being separated into focused repositories, while Runenwerk retains application lifecycle, cross-domain composition, editor and runtime integration, adapters, and product-level policy.
 
-```text
-docs-site/src/content/docs
-```
+> **Status:** Active development. Architecture and package boundaries are still evolving. Runenwerk does not yet provide a stable public API or production-readiness guarantee.
 
-## Human start
+## Design direction
 
-Start here for repository orientation, planning, implementation, review, and cleanup:
+- explicit domain ownership and one-way dependencies;
+- field-first spatial and rendering systems without mandatory mesh authoring;
+- deterministic, inspectable contracts and structured diagnostics;
+- direct authoring, procedural generation, simulation, and persistent state as composable sources;
+- reusable frameworks separated from application and product integration;
+- headless validation and focused conformance tests.
 
-```text
-docs-site/src/content/docs/workspace/start-here.md
-```
+## Repository family
 
-For the docs-site landing page, use:
+Runenwerk is being decomposed into focused peer frameworks:
 
-```text
-docs-site/src/content/docs/index.mdx
-```
+- **RunenSDF** — signed-distance and implicit-field foundations;
+- **RunenECS** — ECS and scheduling foundations;
+- **RunenGPU** — shared GPU execution;
+- **RunenRender** — image formation and rendering;
+- **RunenUI** — standalone UI framework developed as a separate workstream.
 
-## AI agent start
+Some extractions are still in progress. Runenwerk remains responsible for composing these frameworks into applications and tools.
 
-AI coding agents must start from:
-
-```text
-AGENTS.md
-```
-
-`AGENTS.md` is the only root AI entrypoint. It explains how to work through GitHub connector, context tooling, Codex-style patching, manual file inspection, or a local checkout without requiring command execution.
-
-## Core references
-
-- Architecture summary: `ARCHITECTURE.md`
-- Dependency direction: `DEPENDENCY_RULES.md`
-- Concept ownership map: `DOMAIN_MAP.md`
-- Crate inventory: `CRATES.md`
-- Validation guidance: `TESTING.md`
-- Terminology: `GLOSSARY.md`
-- Programming principles: `docs-site/src/content/docs/guidelines/programming-principles.md`
-
-## Optional local setup
-
-Local tools are optional helpers. They are useful for validation, but they are not required to understand the repository workflow.
-
-Toolchain bootstrap details live in:
+## Repository layout
 
 ```text
-docs-site/src/content/docs/workspace/toolchain-bootstrap.md
+foundation/  low-level shared contracts
+domain/      engine-agnostic domain crates
+engine/      runtime and integration
+apps/        executable products and examples
+adapters/    external-host and cross-system adapters
+docs-site/   canonical documentation
 ```
 
-## Optional local validation
+## Documentation
 
-When a local checkout is available, run the smallest relevant validation first. For docs-only changes, start with:
+- [Architecture overview](ARCHITECTURE.md)
+- [Dependency rules](DEPENDENCY_RULES.md)
+- [Domain ownership map](DOMAIN_MAP.md)
+- [Crate inventory](CRATES.md)
+- [Testing and validation](TESTING.md)
+- [Documentation entrypoint](docs-site/src/content/docs/index.mdx)
 
-```text
-python3 tools/docs/validate_docs.py
-```
+Canonical long-form documentation lives under `docs-site/src/content/docs`.
 
-For code changes, use `TESTING.md` to choose focused validation before broad workspace checks.
+## Contributions
+
+Runenwerk is currently a solo-maintained research and development project.
+
+Issue reports and technical discussion are welcome. External code contributions and pull requests are not currently accepted.
+
+## License
+
+Runenwerk is licensed under the [MIT License](LICENSE).
