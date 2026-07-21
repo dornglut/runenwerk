@@ -1,0 +1,63 @@
+name: GPU Render Architecture Residue
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Scan active authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          roots=(
+            ARCHITECTURE.md
+            DEPENDENCY_RULES.md
+            DOMAIN_MAP.md
+            README.md
+            CRATES.md
+            GLOSSARY.md
+            docs-site/src/content/docs/architecture
+            docs-site/src/content/docs/adr/accepted
+            docs-site/src/content/docs/design/active
+            docs-site/src/content/docs/reports/investigations
+            docs-site/src/content/docs/workspace/planning
+            docs-site/src/content/docs/workspace/specs
+          )
+
+          pattern='runenrender_core|runenrender_wgpu|runenrender_gpu|runengpu_core|runengpu_wgpu|PT-RUNENRENDER-R1|pt-runenrender-r1-identities-errors|Crystonix/RunenSDF|package: runensdf|future RunenRender WGPU|future Crystonix/RunenRender/runenrender_core'
+
+          {
+            echo '# GPU/render architecture residue audit'
+            echo
+            echo '## Forbidden active-authority matches'
+            rg -n -i "$pattern" "${roots[@]}" || true
+            echo
+            echo '## Target package/dependency markers'
+            rg -n 'Crystonix/runen-gpu|Crystonix/runen-render|RunenRender -> RunenGPU|package: runen-gpu|package: runen-render' "${roots[@]}" || true
+          } > gpu-render-architecture-residue.txt
+
+          if rg -q -i "$pattern" "${roots[@]}"; then
+            echo 'Stale GPU/render architecture markers remain.' >&2
+            exit 1
+          fi
+
+      - name: Upload audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-render-architecture-residue
+          path: gpu-render-architecture-residue.txt
+          if-no-files-found: error
+          retention-days: 3
