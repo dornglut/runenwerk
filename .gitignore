@@ -15,3 +15,18 @@ playgrounds/godot-chunking-demo/.godot/
 editor-scenes/*.changes.ron
 editor-scenes/*.workspace.ron
 editor-scenes/workspaces/*.workspace.ron
+
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+service-account*.json
+secrets/
