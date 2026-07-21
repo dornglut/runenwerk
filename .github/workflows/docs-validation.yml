@@ -50,21 +50,27 @@ jobs:
       - name: Validate documentation authority
         run: python tools/docs/validate_docs.py 2>&1 | tee docs-validation.log
 
-      - name: Upload validation diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: documentation-validation-diagnostics
-          path: docs-validation.log
-          if-no-files-found: error
-          retention-days: 3
-
       - name: Remove validation diagnostics
-        if: always()
+        if: success()
         run: rm -f docs-validation.log
 
       - name: Build documentation site
-        run: pnpm --dir docs-site build
+        run: pnpm --dir docs-site build 2>&1 | tee docs-build.log
+
+      - name: Upload documentation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-diagnostics
+          path: |
+            docs-validation.log
+            docs-build.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Remove documentation diagnostics
+        if: always()
+        run: rm -f docs-validation.log docs-build.log
 
       - name: Check diff hygiene
         run: git diff --check
