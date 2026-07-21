@@ -8,7 +8,32 @@ use std::{
     process::{Command, ExitCode},
 };
 
-const BASELINE_CARGO_STEPS: &[&[&str]] = &[
+const TOOLING_CARGO_STEPS: &[&[&str]] = &[
+    &[
+        "fmt",
+        "--manifest-path",
+        "tools/xtask/Cargo.toml",
+        "--check",
+    ],
+    &[
+        "test",
+        "--manifest-path",
+        "tools/xtask/Cargo.toml",
+        "--locked",
+    ],
+    &[
+        "clippy",
+        "--manifest-path",
+        "tools/xtask/Cargo.toml",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings",
+    ],
+];
+
+const PRODUCT_CARGO_STEPS: &[&[&str]] = &[
     &["fmt", "--all", "--check"],
     &["test", "--workspace", "--locked"],
     &[
@@ -80,7 +105,11 @@ fn main() -> ExitCode {
 fn validate(extended: bool) -> Result<(), String> {
     let root = repository_root()?;
 
-    for args in BASELINE_CARGO_STEPS {
+    for args in TOOLING_CARGO_STEPS {
+        run(&root, "cargo", args)?;
+    }
+
+    for args in PRODUCT_CARGO_STEPS {
         run(&root, "cargo", args)?;
     }
 
