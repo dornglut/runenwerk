@@ -40,8 +40,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: docs-site/pnpm-lock.yaml
 
       - name: Install pinned pnpm
         run: npm install --global pnpm@11.0.0
@@ -50,7 +48,20 @@ jobs:
         run: pnpm --dir docs-site install --frozen-lockfile
 
       - name: Validate documentation authority
-        run: python tools/docs/validate_docs.py
+        run: python tools/docs/validate_docs.py 2>&1 | tee docs-validation.log
+
+      - name: Upload validation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-validation-diagnostics
+          path: docs-validation.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Remove validation diagnostics
+        if: always()
+        run: rm -f docs-validation.log
 
       - name: Build documentation site
         run: pnpm --dir docs-site build

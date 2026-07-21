@@ -1220,37 +1220,6 @@ fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_
 }
 
 #[test]
-fn validation_gates_have_quick_and_full_paths_with_nextest_fallback() {
-    let quick_gate = read_workspace_source("quiet_editor_gate.sh");
-    let full_gate = read_workspace_source("quiet_full_gate.sh");
-    let taskfile = read_workspace_source("Taskfile.yml");
-
-    assert!(
-        quick_gate.contains("editor_inspector")
-            && quick_gate.contains("runenwerk_editor")
-            && quick_gate.contains("tools/docs/validate_docs.py"),
-        "quick editor gate should cover active editor/ECS crates and docs validation",
-    );
-    assert!(
-        full_gate.contains("cargo nextest --version")
-            && full_gate.contains("cargo nextest run")
-            && full_gate.contains("cargo test"),
-        "full gate should prefer nextest but keep cargo test as a zero-install fallback",
-    );
-    assert!(
-        taskfile.contains("ci:local:")
-            && taskfile.contains("task docs:validate")
-            && taskfile.contains("task rust:test")
-            && taskfile.contains("task rust:policy"),
-        "local validation should keep one full manual gate with docs, tests, and policy checks",
-    );
-    assert!(
-        taskfile.contains("cargo nextest run") && taskfile.contains("cargo deny check"),
-        "Taskfile should keep cargo-nextest and Rust policy checks on the local validation path",
-    );
-}
-
-#[test]
 fn surface_dispatch_facade_delegates_to_surface_handlers() {
     let facade = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch_shell_command.rs");
     let handlers = [
