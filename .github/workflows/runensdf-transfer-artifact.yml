@@ -12,11 +12,8 @@ permissions:
 jobs:
   package:
     name: Package accepted SDF source baseline
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 20
-    defaults:
-      run:
-        shell: pwsh
     env:
       SOURCE_SHA: 8de096259eab30f8d67672010df9190970d0bfc4
     steps:
@@ -28,20 +25,20 @@ jobs:
 
       - name: Verify source baseline
         run: |
-          git cat-file -e "$env:SOURCE_SHA^{commit}"
-          git cat-file -e "$env:SOURCE_SHA`:domain/sdf/Cargo.toml"
-          git cat-file -e "$env:SOURCE_SHA`:domain/sdf/src/lib.rs"
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          git cat-file -e "$SOURCE_SHA:domain/sdf/Cargo.toml"
+          git cat-file -e "$SOURCE_SHA:domain/sdf/src/lib.rs"
 
       - name: Create deterministic transfer archive
         run: |
-          git archive --format=zip --output=runensdf-transfer.zip $env:SOURCE_SHA domain/sdf/Cargo.toml domain/sdf/src domain/sdf/tests
-          $hash = (Get-FileHash runensdf-transfer.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          @"
+          git archive --format=zip --output=runensdf-transfer.zip "$SOURCE_SHA" domain/sdf/Cargo.toml domain/sdf/src domain/sdf/tests
+          hash="$(sha256sum runensdf-transfer.zip | cut -d ' ' -f 1)"
+          cat > runensdf-transfer.provenance <<EOF
           source_repository=Crystonix/runenwerk
-          source_commit=$env:SOURCE_SHA
+          source_commit=$SOURCE_SHA
           source_path=domain/sdf
           archive_sha256=$hash
-          "@ | Set-Content -NoNewline runensdf-transfer.provenance
+          EOF
 
       - name: Upload transfer evidence
         uses: actions/upload-artifact@v4
