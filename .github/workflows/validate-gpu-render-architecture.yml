@@ -1,5 +1,6 @@
 name: Validate GPU and render architecture docs
 
+# Temporary branch-only validation workflow. Remove after evidence is captured.
 on:
   push:
     branches:
