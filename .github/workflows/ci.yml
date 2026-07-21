@@ -36,4 +36,17 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run canonical validation baseline
-        run: cargo validate
+        run: cargo validate 2>&1 | tee validation.log
+
+      - name: Upload validation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-validation-diagnostics
+          path: validation.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Remove validation diagnostics
+        if: always()
+        run: rm -f validation.log
