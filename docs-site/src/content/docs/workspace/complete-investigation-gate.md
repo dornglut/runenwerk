@@ -1,6 +1,6 @@
 ---
 title: Complete Investigation Gate
- description: Superseded historical investigation workflow.
+description: Superseded historical investigation workflow.
 status: superseded
 owner: workspace
 layer: workspace
