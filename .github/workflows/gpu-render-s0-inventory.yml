@@ -1,4 +1,4 @@
-name: GPU Render S0 Inventory
+name: Compile GPU Render S0 Evidence
 
 on:
   pull_request:
@@ -7,399 +7,705 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inventory:
+  compile:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v7
         with:
-          fetch-depth: 1
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
 
-      - name: Generate source-grounded S0 inventory
+      - name: Generate durable S0 documents
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p s0-inventory
-          cargo metadata --format-version 1 --locked --no-deps > s0-inventory/cargo-metadata.json
-
           python - <<'PY'
           from __future__ import annotations
 
-          import csv
-          import json
           import re
           import subprocess
           from collections import Counter, defaultdict
           from pathlib import Path
 
           ROOT = Path('.')
-          OUT = Path('s0-inventory')
-          OUT.mkdir(exist_ok=True)
+          REPORT_ROOT = Path('docs-site/src/content/docs/reports/investigations')
+          REPORT_ROOT.mkdir(parents=True, exist_ok=True)
 
           tracked = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
           tracked_paths = [Path(path) for path in tracked]
-          text_suffixes = {
-              '.rs', '.toml', '.md', '.mdx', '.ron', '.wgsl', '.json', '.yaml',
-              '.yml', '.puml', '.txt', '.sh', '.ps1', '.cmd', '.py', '.lock'
-          }
-
-          primary_prefixes = (
-              'engine/src/plugins/render/',
-              'engine_render_macros/',
-          )
-
-          def is_primary(path: Path) -> bool:
-              raw = path.as_posix()
-              return raw == 'engine/src/plugins/render.rs' or raw.startswith(primary_prefixes)
-
-          primary = sorted(path for path in tracked_paths if is_primary(path))
-
-          related = sorted(
+          primary = sorted(
               path for path in tracked_paths
-              if not is_primary(path)
-              and (
-                  path.suffix == '.wgsl'
-                  or re.search(r'(^|/)(render|renderer|gpu|shader|material|viewport)', path.as_posix(), re.I)
-              )
+              if path.as_posix() == 'engine/src/plugins/render.rs'
+              or path.as_posix().startswith('engine/src/plugins/render/')
+              or path.as_posix().startswith('engine_render_macros/')
           )
 
-          marker_patterns = {
-              'wgpu_backend': re.compile(r'\bwgpu(?:::|_)|\bWgpu[A-Z]|\bWGPU\b'),
-              'window_host': re.compile(r'\bwinit\b|RawWindowHandle|RawDisplayHandle|\bWindow(?:Id)?\b|event_loop', re.I),
-              'ecs_host': re.compile(r'\becs::|\bWorld\b|\bResMut?\b|\bQuery\b|\bCommands\b|derive\([^)]*(?:Resource|Component)', re.I),
-              'scene_world': re.compile(r'\bscene::|\bworld[_:]|Scene[A-Z]|World[A-Z]|chunk|terrain|cave', re.I),
-              'sdf_field': re.compile(r'\bsdf\b|Sdf[A-Z]|signed[_ ]distance|sphere[_ ]trac|ray[_ ]march', re.I),
-              'ui_editor': re.compile(r'\bui[_:]|Ui[A-Z]|\beditor[_:]|Editor[A-Z]|viewport|picking', re.I),
-              'material_authoring': re.compile(r'material_graph|MaterialGraph|material[_ ]compiler|naga|MaterialAsset|shader asset', re.I),
-              'procgen_sim': re.compile(r'procgen|procedural|simulation|deform|wind|particle|vfx', re.I),
-              'render_semantic': re.compile(r'Render(?:Scene|View|Target|Provider|Instance|Material|Medium|Emitter|Environment|Interaction|Visibility|Transport|Radiance|Overlay|History|Presentation)|light(?:ing)?|reconstruct|tone[_ ]map', re.I),
-              'shader_pipeline': re.compile(r'\bshader\b|Pipeline|BindGroup|WGSL|SPIR|entry[_ ]point', re.I),
-              'filesystem_reload': re.compile(r'fs::|File::|PathBuf|read_to_string|watch|poll|hot[_ ]reload|last[_ ]known[_ ]good', re.I),
-              'capture_artifact': re.compile(r'capture|artifact|screenshot|export|trace|profil|startup|frame[_ ]pac', re.I),
-              'network_persist': re.compile(r'serde|Serialize|Deserialize|ron::|replay|network|packet|persist|cache|history|wire|schema', re.I),
-              'lifecycle': re.compile(r'Instance|Adapter|Device|Queue|Surface|acquire|present|resize|reconfig|shutdown|drop\b|device[_ ]lost|out[_ ]of[_ ]memory', re.I),
-          }
+          if len(primary) != 174:
+              raise SystemExit(f'expected 174 primary files, found {len(primary)}')
 
-          def read_text(path: Path) -> str:
-              try:
-                  return path.read_text(encoding='utf-8')
-              except (OSError, UnicodeDecodeError):
-                  return ''
-
-          def initial_disposition(path: Path, counts: dict[str, int]) -> tuple[str, str]:
+          def classify(path: Path) -> tuple[str, str]:
               raw = path.as_posix()
-              domain_pressure = sum(counts[key] for key in ('ecs_host', 'scene_world', 'sdf_field', 'ui_editor', 'material_authoring', 'procgen_sim'))
-              host_pressure = counts['window_host'] + counts['filesystem_reload'] + counts['capture_artifact']
-              gpu_pressure = counts['wgpu_backend'] + counts['shader_pipeline']
-              render_pressure = counts['render_semantic']
+              name = path.name
 
               if raw.startswith('engine_render_macros/'):
-                  return 'redesign before movement', 'macro ABI and ownership require consumer proof'
-              if raw.endswith('/plugin.rs') or '/runtime/' in raw or '/api/' in raw:
-                  if domain_pressure or host_pressure:
-                      return 'stay in Runenwerk or redesign', 'plugin/runtime/API path reaches host or domain state'
-              if domain_pressure and gpu_pressure:
-                  return 'redesign before movement', 'GPU mechanics and domain integration are mixed'
-              if domain_pressure and render_pressure:
-                  return 'redesign before movement', 'render semantics and source-domain integration are mixed'
-              if host_pressure and (gpu_pressure or render_pressure):
-                  return 'redesign before movement', 'host/product lifecycle is mixed with framework behavior'
-              if '/backend/' in raw or '/gpu_primitives/' in raw or '/resource/' in raw:
-                  if gpu_pressure and not domain_pressure:
-                      return 'RunenGPU candidate', 'path and markers primarily describe GPU execution'
-              if '/graph/' in raw:
-                  return 'redesign before movement', 'current graph may mix GPU work and render/product semantics'
-              if any(part in raw for part in ('/renderer/', '/composition/', '/frame/', '/features/')):
-                  if not domain_pressure and not counts['window_host']:
-                      return 'RunenRender candidate', 'path primarily describes image formation'
-              if counts['window_host'] or counts['filesystem_reload'] or counts['capture_artifact']:
-                  return 'stay in Runenwerk or redesign', 'host/product/source-management responsibility detected'
-              if gpu_pressure > render_pressure and gpu_pressure:
-                  return 'RunenGPU candidate', 'GPU execution markers dominate'
-              if render_pressure:
-                  return 'RunenRender candidate', 'image-formation markers dominate'
-              return 'unresolved', 'manual ownership inspection required'
+                  return 'redesign before movement', 'macro ABI hard-codes engine paths and requires independent consumer proof'
 
-          rows = []
-          disposition_counts = Counter()
-          marker_totals = Counter()
+              prefix = 'engine/src/plugins/render/'
+              rest = raw[len(prefix):] if raw.startswith(prefix) else raw
+              top = rest.split('/', 1)[0] if '/' in rest else '(root)'
+
+              if top == '(root)':
+                  return 'stay in Runenwerk', 'plugin assembly, product integration, and asset/upload orchestration remain host-owned'
+              if top == 'api':
+                  return 'redesign before movement', 'current public API mixes GPU handles, render-flow semantics, producer/product identities, and engine paths'
+              if top == 'backend':
+                  if name == 'surface.rs':
+                      return 'redesign before movement', 'GPU surface mechanics are mixed with native-window lifetime, ECS storage, and current RenderSurfaceId semantics'
+                  return 'move to RunenGPU', 'low-level backend, device, resource, pipeline, and execution responsibility belongs to GPU execution'
+              if top == 'composition':
+                  if name in {'fragment_registry.rs', 'fragment_validation.rs', 'fragments.rs'}:
+                      return 'move to RunenRender', 'render contribution and fragment composition are image-formation inputs'
+                  if name in {'hot_reload.rs', 'integration.rs'}:
+                      return 'stay in Runenwerk', 'source reload and cross-domain integration remain product and host policy'
+                  return 'redesign before movement', 'module exports combine renderer composition with Runenwerk integration'
+              if top == 'features':
+                  if '/detail/' in raw:
+                      return 'move to RunenRender', 'renderer detail and quality semantics belong to image formation'
+                  if any(marker in raw for marker in ('/caves/', '/particle_vfx/', '/world/')):
+                      return 'stay with another domain', 'world, cave, and VFX semantics remain source-domain owned and feed adapters'
+                  return 'stay in Runenwerk', 'feature registry, editor picking, and UI bridge behavior are product/integration policy'
+              if top == 'frame':
+                  if name in {'context.rs', 'contribution_diagnostics.rs', 'contribution_registry.rs', 'contributions.rs', 'mod.rs', 'view.rs'}:
+                      return 'move to RunenRender', 'prepared scene, view, and contribution semantics belong to image formation'
+                  if name in {'product_selection.rs', 'product_surface.rs'}:
+                      return 'stay in Runenwerk', 'product selection and host surface policy remain Runenwerk-owned'
+                  return 'redesign before movement', 'prepared packets mix renderer identities, GPU resources, and Runenwerk producer/product state'
+              if top == 'gpu_primitives':
+                  return 'move to RunenGPU', 'generic GPU scan, compaction, counter, and indirect-draw primitives are execution building blocks'
+              if top == 'graph':
+                  if name == 'resource_lifetimes.rs':
+                      return 'move to RunenGPU', 'resource lifetime validation belongs to GPU execution'
+                  if name == 'validation_builtin_ui.rs':
+                      return 'delete', 'UI-specific graph validation is replaced by neutral overlay contribution validation'
+                  return 'redesign before movement', 'current graph combines GPU hazards/resources with render passes, fixed-step regions, features, and product validation'
+              if top == 'inspect':
+                  return 'stay in Runenwerk', 'capture, artifacts, readiness, product evidence, and diagnostics presentation remain host/product responsibilities'
+              if top == 'material_compiler':
+                  return 'stay with another domain', 'material source and IR compilation remain material-authoring integration, not GPU/render core'
+              if top == 'params':
+                  return 'move to RunenGPU', 'GPU value and parameter layout/upload representation are execution ABI responsibilities'
+              if top == 'pipelines':
+                  if name in {'cache.rs', 'keys.rs', 'specialization.rs'}:
+                      return 'move to RunenGPU', 'backend pipeline identity, cache, and specialization mechanics belong to GPU execution'
+                  return 'redesign before movement', 'flow-pass keys and module exports mix render semantics with backend realization'
+              if top == 'procedural':
+                  return 'stay with another domain', 'procedural authoring, population, camera, lowering, and validation remain procgen/source-domain responsibility'
+              if top == 'renderer':
+                  if raw.endswith('/extract.rs') or raw.endswith('/setup.rs') or raw.endswith('/render_flow/capture.rs'):
+                      return 'stay in Runenwerk', 'ECS/host extraction, native setup, and capture/artifact policy remain Runenwerk-owned'
+                  return 'redesign before movement', 'current renderer execution mixes image formation, WGPU realization, runtime resources, product targets, and diagnostics'
+              if top == 'residency':
+                  return 'redesign before movement', 'current residency combines GPU handles, renderer caches, and world/SDF lifecycle ownership'
+              if top == 'resource':
+                  if name in {'descriptors.rs', 'import.rs', 'lifetime.rs', 'mod.rs', 'usages.rs'}:
+                      return 'move to RunenGPU', 'GPU resource descriptors, imports, usages, and lifetimes belong to execution'
+                  return 'redesign before movement', 'dynamic and transient targets mix render-product semantics and host/runtime allocation policy'
+              if top == 'runtime':
+                  return 'stay in Runenwerk', 'frame preparation/submission, dynamic uploads, debug evaluation, and ECS scheduling are engine integration'
+              if top == 'shader':
+                  if name in {'hot_reload.rs', 'registry.rs', 'helpers.rs'}:
+                      return 'stay in Runenwerk', 'filesystem discovery, registry/revision, and hot-reload product policy remain host-owned'
+                  return 'redesign before movement', 'current shader module/types mix source identity/revision with renderer use and future GPU admission'
+
+              raise SystemExit(f'unclassified primary path: {raw}')
+
+          rows = [(path.as_posix(), *classify(path)) for path in primary]
+          counts = Counter(row[1] for row in rows)
+          expected = {
+              'move to RunenGPU': 25,
+              'move to RunenRender': 10,
+              'stay in Runenwerk': 60,
+              'stay with another domain': 28,
+              'redesign before movement': 50,
+              'delete': 1,
+          }
+          if dict(counts) != expected:
+              raise SystemExit(f'unexpected disposition counts: {dict(counts)}')
+
+          disposition = '''---
+          title: GPU and Render S0 File Disposition
+          description: Exact tracked-file ownership disposition for the current combined GPU and render implementation.
+          status: active
+          owner: render
+          layer: investigation
+          canonical: true
+          last_reviewed: 2026-07-21
+          related_docs:
+            - ./runengpu-render-s0-inventory.md
+            - ./runengpu-render-s0-identity-consumer-lifecycle.md
+            - ../../design/active/runengpu-architecture-design.md
+            - ../../design/active/runenrender-decomposition-design.md
+            - ../../design/active/runenrender-internal-decomposition-execution-plan.md
+            - ../../workspace/planning/roadmap.md
+          ---
+
+          # GPU and Render S0 File Disposition
+
+          ## Decision rule
+
+          This matrix accounts for every tracked file currently under
+          `engine/src/plugins/render/**` and `engine_render_macros/**` at the S0
+          baseline. The disposition names the semantic target for the current file;
+          it does not authorize direct source movement.
+
+          ```text
+          move to RunenGPU          current responsibility is substantially GPU execution
+          move to RunenRender       current responsibility is substantially image formation
+          stay in Runenwerk         host, product, lifecycle, adapter, capture, or integration ownership
+          stay with another domain  source-domain semantics remain outside GPU/render frameworks
+          redesign before movement  current file combines multiple owners and must be split or replaced
+          delete                    current path must disappear after its accepted replacement
+          ```
+
+          Files marked `move` still move only after internal public-boundary proof
+          and clean external cutover. Files marked `redesign` are not copied
+          wholesale.
+
+          ## Summary
+
+          | Disposition | Files |
+          |---|---:|
+          | move to RunenGPU | 25 |
+          | move to RunenRender | 10 |
+          | stay in Runenwerk | 60 |
+          | stay with another domain | 28 |
+          | redesign before movement | 50 |
+          | delete | 1 |
+
+          **Total: 174 files.**
+
+          ## Exact matrix
+
+          | Current file | Disposition | Reason |
+          |---|---|---|
+          '''
+          disposition = '\n'.join(line.strip() for line in disposition.splitlines()) + '\n'
+          for path, target, reason in rows:
+              disposition += f'| `{path}` | {target} | {reason} |\n'
+          disposition += '''
+
+          ## Migration interpretation
+
+          - The 25 RunenGPU candidates form the low-level backend/resource/ABI
+            substrate, but current engine paths and IDs still require internal
+            boundary proof.
+          - The 10 RunenRender candidates are limited to prepared
+            view/contribution/detail semantics already substantially renderer-facing.
+          - The 50 redesign files contain the critical seam work: graph versus GPU
+            work, render planning versus WGPU execution, render target versus
+            surface/window identity, and renderer cache versus world/SDF residency.
+          - Runenwerk-retained files own application lifecycle, domain extraction,
+            product features, source reload, diagnostics presentation, capture, and
+            recovery.
+          - Source-domain files remain with material authoring, procgen, world/cave,
+            or VFX owners. They publish prepared contributions through adapters.
+          - `graph/validation_builtin_ui.rs` is deleted after neutral overlay
+            validation replaces the built-in UI graph special case.
+
+          ## Cutover rule
+
+          No file changes repository until its public replacement is tested
+          internally. A completed cutover migrates every active consumer and deletes
+          the original file or mixed implementation; no copy, alias, compatibility
+          module, or parallel execution path remains.
+          '''
+          (REPORT_ROOT / 'runengpu-render-s0-file-disposition.md').write_text(
+              disposition.rstrip() + '\n', encoding='utf-8'
+          )
+
+          identity_class = {
+              'DoubleBufferHandle': ('RunenGPU', 'GPU resource aggregate handle', 'ephemeral; no stable format'),
+              'FlowPassBindGroupKey': ('redesign', 'render semantic pass plus WGPU bind-group cache key', 'ephemeral cache key'),
+              'FlowPassPipelineKey': ('redesign', 'render semantic pass plus WGPU pipeline cache key', 'ephemeral cache key'),
+              'PassHandle': ('RunenRender', 'builder-local semantic pass handle', 'ephemeral builder handle'),
+              'PipelineKey': ('RunenGPU', 'backend pipeline realization key', 'ephemeral cache key'),
+              'PreparedFlowInvocationId': ('RunenRender', 'prepared render-plan invocation identity', 'string runtime key; no accepted persisted format'),
+              'RenderDynamicTextureTargetKey': ('Runenwerk/redesign', 'product texture-target selection mapped to render/GPU targets', 'string product key; no stable format accepted'),
+              'RenderFeatureContributionCollectorId': ('RunenRender', 'contribution producer/collector identity', 'string runtime identity'),
+              'RenderFeatureId': ('Runenwerk', 'product feature registry identity', 'runtime ID; not stable format'),
+              'RenderFixedStepRegionId': ('Runenwerk', 'engine scheduling/fixed-time region identity', 'runtime ID; not stable format'),
+              'RenderFlowId': ('RunenRender', 'semantic render-plan/flow identity', 'runtime ID; not stable format'),
+              'RenderFragmentId': ('RunenRender', 'render contribution fragment identity', 'format must be separately versioned'),
+              'RenderFragmentPackageId': ('RunenRender', 'render contribution package identity', 'format must be separately versioned'),
+              'RenderFrameProducerId': ('RunenRender', 'contribution producer identity consumed by Runenwerk adapters', 'runtime ID; not stable format'),
+              'RenderGpuCacheHandle': ('redesign', 'mixes renderer residency/cache and GPU realization', 'ephemeral cache handle'),
+              'RenderPassId': ('redesign', 'conflates render semantic pass and GPU work node', 'runtime ID; split required'),
+              'RenderPreparedFramePreflightCacheKey': ('RunenRender', 'prepared-scene preflight cache key', 'ephemeral cache key'),
+              'RenderResourceId': ('RunenGPU', 'logical GPU work-graph resource identity', 'graph-local runtime ID; G1A candidate'),
+              'RenderSurfaceId': ('redesign', 'conflates host mapping and low-level GPU surface', 'runtime ID; split host/GPU ownership'),
+              'RuntimeResourceKey': ('redesign', 'mixes logical aliases, renderer targets, and GPU realizations', 'ephemeral runtime key'),
+              'ShaderHandle': ('Runenwerk', 'shader source registry/reload handle', 'runtime registry handle; future GpuShaderId separate'),
+              'StorageArrayHandle': ('RunenGPU', 'typed GPU storage resource handle', 'ephemeral logical resource handle'),
+              'UniformHandle': ('RunenGPU', 'typed GPU uniform resource handle', 'ephemeral logical resource handle'),
+          }
+
+          declaration_pattern = re.compile(
+              r'(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|type)\s+'
+              r'([A-Za-z][A-Za-z0-9_]*(?:Id|ID|Handle|Key|Generation|Epoch|Sequence|Allocator))\b'
+          )
+          macro_id_pattern = re.compile(
+              r'\b(?:define_id|id_type|typed_id)!?\s*\([^)]*?([A-Za-z][A-Za-z0-9_]*Id)'
+          )
+          declarations: dict[str, list[tuple[str, int]]] = defaultdict(list)
           for path in primary:
-              text = read_text(path)
-              counts = {name: len(pattern.findall(text)) for name, pattern in marker_patterns.items()}
-              disposition, reason = initial_disposition(path, counts)
-              disposition_counts[disposition] += 1
-              marker_totals.update(counts)
-              rows.append({
-                  'path': path.as_posix(),
-                  'suffix': path.suffix,
-                  'lines': text.count('\n') + (1 if text else 0),
-                  'bytes': len(text.encode('utf-8')),
-                  'initial_disposition': disposition,
-                  'reason': reason,
-                  **counts,
-              })
-
-          with (OUT / 'primary-files.csv').open('w', encoding='utf-8', newline='') as handle:
-              fieldnames = list(rows[0].keys()) if rows else ['path']
-              writer = csv.DictWriter(handle, fieldnames=fieldnames)
-              writer.writeheader()
-              writer.writerows(rows)
-
-          with (OUT / 'all-primary-files.txt').open('w', encoding='utf-8') as handle:
-              for path in primary:
-                  handle.write(path.as_posix() + '\n')
-
-          with (OUT / 'related-files.txt').open('w', encoding='utf-8') as handle:
-              for path in related:
-                  handle.write(path.as_posix() + '\n')
-
-          # Package/dependency inventory.
-          metadata = json.loads((OUT / 'cargo-metadata.json').read_text(encoding='utf-8'))
-          packages = metadata.get('packages', [])
-          package_by_name = {package['name']: package for package in packages}
-          render_packages = {'engine', 'engine_render_macros'}
-          downstream_packages = []
-          for package in packages:
-              deps = sorted(dep['name'] for dep in package.get('dependencies', []))
-              if render_packages.intersection(deps):
-                  downstream_packages.append((package['name'], package['manifest_path'], deps))
-
-          cargo_lines = ['# Cargo/package inventory', '']
-          for name in sorted(render_packages):
-              package = package_by_name.get(name)
-              if not package:
-                  cargo_lines.extend([f'## {name}', '', 'Package not present in metadata.', ''])
+              if path.suffix != '.rs':
                   continue
-              cargo_lines.extend([
-                  f'## {name}', '',
-                  f"Manifest: `{package['manifest_path']}`", '',
-                  'Direct dependencies:', '',
-              ])
-              for dep in sorted(package.get('dependencies', []), key=lambda value: value['name']):
-                  source = dep.get('source') or dep.get('path') or 'workspace/path'
-                  cargo_lines.append(f"- `{dep['name']}` — {source}")
-              cargo_lines.append('')
+              text = path.read_text(encoding='utf-8')
+              for pattern in (declaration_pattern, macro_id_pattern):
+                  for match in pattern.finditer(text):
+                      name = match.group(1)
+                      if name in identity_class:
+                          line = text.count('\n', 0, match.start()) + 1
+                          declarations[name].append((path.as_posix(), line))
 
-          cargo_lines.extend(['## Packages depending on engine or engine_render_macros', ''])
-          for name, manifest, deps in sorted(downstream_packages):
-              matched = sorted(render_packages.intersection(deps))
-              cargo_lines.append(f"- `{name}` ({manifest}) -> {', '.join(matched)}")
-          cargo_lines.append('')
-          (OUT / 'cargo-inventory.md').write_text('\n'.join(cargo_lines), encoding='utf-8')
+          if set(declarations) != set(identity_class):
+              missing = set(identity_class) - set(declarations)
+              extra = set(declarations) - set(identity_class)
+              raise SystemExit(f'identity declaration mismatch; missing={missing}, extra={extra}')
 
-          # Direct module consumers outside the primary tree.
+          text_suffixes = {'.rs', '.toml', '.wgsl', '.py'}
           consumer_pattern = re.compile(
               r'(?:engine::)?plugins::render|engine::plugins::render|crate::plugins::render|'
               r'\bRender(?:Flow|Pass|Resource|Feature|Frame|View|Target|Surface|Shader|Pipeline|Producer|Packet|Product|Graph|Context|Backend)[A-Za-z0-9_]*|'
               r'\bGpu(?:Uniform|Storage|Buffer|Texture|Pipeline|Resource|Context|Device|Queue|Work)[A-Za-z0-9_]*'
           )
-          consumer_records = []
+          consumers: dict[str, list[tuple[str, int]]] = defaultdict(list)
+
+          def group(path: str) -> str:
+              if path.startswith('apps/runenwerk_editor/'):
+                  return 'apps/runenwerk_editor'
+              if path.startswith('apps/runenwerk_draw/'):
+                  return 'apps/runenwerk_draw'
+              if path.startswith('apps/runenwerk_runtime_preview/'):
+                  return 'apps/runenwerk_runtime_preview'
+              if path.startswith('engine/tests/'):
+                  return 'engine/tests'
+              if path.startswith('engine/examples/'):
+                  return 'engine/examples'
+              if path.startswith('engine/benches/'):
+                  return 'engine/benches'
+              if path.startswith('engine/'):
+                  return 'engine other source'
+              if path.startswith('domain/'):
+                  return 'domain'
+              if path.startswith('net/'):
+                  return 'net'
+              if path.startswith('adapters/'):
+                  return 'adapters'
+              return 'other source'
+
+          primary_set = {path.as_posix() for path in primary}
           for path in tracked_paths:
-              if is_primary(path) or path.suffix not in text_suffixes:
+              raw = path.as_posix()
+              if raw in primary_set or path.suffix not in text_suffixes:
                   continue
-              text = read_text(path)
-              matches = list(consumer_pattern.finditer(text))
-              if matches:
-                  line_numbers = sorted({text.count('\n', 0, match.start()) + 1 for match in matches})
-                  consumer_records.append((path.as_posix(), len(matches), line_numbers[:40]))
-
-          with (OUT / 'direct-consumers.md').open('w', encoding='utf-8') as handle:
-              handle.write('# Direct module/type consumers outside the current render tree\n\n')
-              for path, count, lines in sorted(consumer_records):
-                  handle.write(f"- `{path}` — {count} matches; lines {', '.join(map(str, lines))}\n")
-
-          # Identity declarations and uses.
-          declaration_pattern = re.compile(
-              r'(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|type)\s+'
-              r'([A-Za-z][A-Za-z0-9_]*(?:Id|ID|Handle|Key|Generation|Epoch|Sequence|Allocator))\b'
-          )
-          macro_id_pattern = re.compile(r'\b(?:define_id|id_type|typed_id)!?\s*\([^)]*?([A-Za-z][A-Za-z0-9_]*Id)')
-          identities: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
-          for path in primary:
-              if path.suffix != '.rs':
+              if raw.startswith(('docs-site/', '.github/')):
                   continue
-              text = read_text(path)
-              for pattern in (declaration_pattern, macro_id_pattern):
-                  for match in pattern.finditer(text):
-                      line = text.count('\n', 0, match.start()) + 1
-                      source_line = text.splitlines()[line - 1].strip() if text.splitlines() else ''
-                      identities[match.group(1)].append((path.as_posix(), line, source_line))
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (OSError, UnicodeDecodeError):
+                  continue
+              count = len(consumer_pattern.findall(text))
+              if count:
+                  consumers[group(raw)].append((raw, count))
 
-          risk_path = re.compile(r'net/|history|replay|persist|cache|artifact|schema|wire|packet|serde|ron', re.I)
-          with (OUT / 'identity-inventory.md').open('w', encoding='utf-8') as handle:
-              handle.write('# Identity and allocator inventory\n\n')
-              for name in sorted(identities):
-                  handle.write(f'## `{name}`\n\nDeclarations:\n\n')
-                  for path, line, source in identities[name]:
-                      handle.write(f'- `{path}:{line}` — `{source}`\n')
-                  uses = []
-                  stable_risks = []
-                  name_re = re.compile(rf'\b{re.escape(name)}\b')
-                  for path in tracked_paths:
-                      if path.suffix not in text_suffixes:
-                          continue
-                      text = read_text(path)
-                      count = len(name_re.findall(text))
-                      if count:
-                          uses.append((path.as_posix(), count))
-                          if risk_path.search(path.as_posix()) or marker_patterns['network_persist'].search(text):
-                              stable_risks.append((path.as_posix(), count))
-                  handle.write('\nAll tracked-text uses:\n\n')
-                  for path, count in sorted(uses):
-                      handle.write(f'- `{path}` — {count}\n')
-                  handle.write('\nPotential stable-format/persistence risk uses:\n\n')
-                  if stable_risks:
-                      for path, count in sorted(stable_risks):
-                          handle.write(f'- `{path}` — {count}\n')
-                  else:
-                      handle.write('- none detected by path/content heuristic\n')
-                  handle.write('\n')
-
-          # Raw/allocator/generation evidence.
-          raw_pattern = re.compile(
-              r'try_from_raw|from_raw|\.raw\(\)|fetch_add|AtomicU|wrapping_|saturating_|'
-              r'next_id|allocate|allocator|generation|epoch|stale|foreign', re.I
-          )
-          with (OUT / 'identity-raw-evidence.txt').open('w', encoding='utf-8') as handle:
-              for path in primary:
-                  if path.suffix != '.rs':
-                      continue
-                  for line_no, line in enumerate(read_text(path).splitlines(), start=1):
-                      if raw_pattern.search(line):
-                          handle.write(f'{path}:{line_no}:{line}\n')
-
-          # Shader and macro ownership inventory.
-          shader_paths = sorted(path for path in tracked_paths if path.suffix == '.wgsl')
-          macro_use_pattern = re.compile(r'\b(?:GpuUniform|GpuStorage)\b')
-          with (OUT / 'shader-macro-inventory.md').open('w', encoding='utf-8') as handle:
-              handle.write('# Shader and macro inventory\n\n## WGSL files\n\n')
-              for path in shader_paths:
-                  text = read_text(path)
-                  refs = []
-                  basename = path.name
-                  for other in tracked_paths:
-                      if other == path or other.suffix not in text_suffixes:
-                          continue
-                      other_text = read_text(other)
-                      if basename in other_text or path.as_posix() in other_text:
-                          refs.append(other.as_posix())
-                  handle.write(f'- `{path}` — {text.count(chr(10)) + (1 if text else 0)} lines')
-                  if refs:
-                      handle.write(f"; references: {', '.join(f'`{ref}`' for ref in refs[:20])}")
-                  handle.write('\n')
-              handle.write('\n## GpuUniform/GpuStorage consumers\n\n')
-              for path in tracked_paths:
-                  if path.suffix not in text_suffixes:
-                      continue
-                  text = read_text(path)
-                  count = len(macro_use_pattern.findall(text))
-                  if count:
-                      handle.write(f'- `{path}` — {count}\n')
-              handle.write('\n## Shader/pipeline/reload evidence\n\n')
-              for path in primary:
-                  text = read_text(path)
-                  if marker_patterns['shader_pipeline'].search(text) or marker_patterns['filesystem_reload'].search(text):
-                      handle.write(f'- `{path}` — shader/pipeline={len(marker_patterns["shader_pipeline"].findall(text))}, filesystem/reload={len(marker_patterns["filesystem_reload"].findall(text))}\n')
-
-          # Lifecycle evidence.
-          lifecycle_pattern = marker_patterns['lifecycle']
-          with (OUT / 'lifecycle-evidence.txt').open('w', encoding='utf-8') as handle:
-              for path in primary:
-                  if path.suffix != '.rs':
-                      continue
-                  for line_no, line in enumerate(read_text(path).splitlines(), start=1):
-                      if lifecycle_pattern.search(line):
-                          handle.write(f'{path}:{line_no}:{line}\n')
-
-          # Domain reach-back evidence.
-          with (OUT / 'domain-reachback.md').open('w', encoding='utf-8') as handle:
-              handle.write('# Domain and product reach-back by current file\n\n')
-              for row in rows:
-                  active = [
-                      name for name in (
-                          'window_host', 'ecs_host', 'scene_world', 'sdf_field',
-                          'ui_editor', 'material_authoring', 'procgen_sim',
-                          'filesystem_reload', 'capture_artifact'
-                      ) if row[name]
-                  ]
-                  if active:
-                      facts = ', '.join(f'{name}={row[name]}' for name in active)
-                      handle.write(f"- `{row['path']}` — {facts}\n")
-
-          # Tests/examples/benchmarks and validation commands.
-          evidence_paths = sorted(
-              path for path in tracked_paths
-              if (
-                  '/tests/' in path.as_posix()
-                  or '/examples/' in path.as_posix()
-                  or '/benches/' in path.as_posix()
-                  or path.as_posix().startswith('tests/')
+          source_files = sum(len(values) for values in consumers.values())
+          source_matches = sum(count for values in consumers.values() for _, count in values)
+          if source_files != 111 or source_matches != 963:
+              raise SystemExit(
+                  f'unexpected direct consumer totals: files={source_files}, matches={source_matches}'
               )
-              and re.search(r'render|gpu|shader|surface|viewport|material', path.as_posix(), re.I)
-          )
-          with (OUT / 'tests-examples-benchmarks.md').open('w', encoding='utf-8') as handle:
-              handle.write('# Render/GPU tests, examples, and benchmarks\n\n')
-              for path in evidence_paths:
-                  handle.write(f'- `{path}`\n')
 
-          command_roots = [
-              Path('.github/workflows'), Path('Taskfile.yml'), Path('TESTING.md'),
-              Path('docs-site/src/content/docs')
-          ]
-          command_pattern = re.compile(
-              r'cargo (?:test|run|bench|clippy|validate)[^\n`]*|pnpm[^\n`]*|'
-              r'RUNENWERK_[A-Z0-9_]+=[^\n`]*', re.I
+          shaders = sorted(
+              path.as_posix() for path in tracked_paths
+              if path.as_posix().startswith('assets/shaders/') and path.suffix == '.wgsl'
           )
-          commands = set()
-          for root in command_roots:
-              candidates = [root] if root.is_file() else list(root.rglob('*')) if root.exists() else []
-              for path in candidates:
-                  if not path.is_file() or path.suffix not in text_suffixes:
-                      continue
-                  text = read_text(path)
-                  if not re.search(r'render|gpu|shader|surface|viewport|material|cargo validate', text, re.I):
-                      continue
-                  for match in command_pattern.finditer(text):
-                      commands.add((path.as_posix(), ' '.join(match.group(0).split())))
-          with (OUT / 'validation-commands.md').open('w', encoding='utf-8') as handle:
-              handle.write('# Validation and runtime command inventory\n\n')
-              for path, command in sorted(commands):
-                  handle.write(f'- `{command}` — `{path}`\n')
+          if len(shaders) != 23:
+              raise SystemExit(f'expected 23 active WGSL assets, found {len(shaders)}')
 
-          # Summary.
-          summary = [
-              '# GPU/Render S0 generated inventory summary', '',
-              f'- Tracked repository files: {len(tracked_paths)}',
-              f'- Primary current render/macro files: {len(primary)}',
-              f'- Related render/GPU/shader files outside primary tree: {len(related)}',
-              f'- Direct external consumer files detected: {len(consumer_records)}',
-              f'- Identity-like declarations detected: {len(identities)}',
-              f'- WGSL files detected: {len(shader_paths)}',
-              f'- Render/GPU tests/examples/benchmarks detected: {len(evidence_paths)}',
-              '', '## Initial disposition counts', ''
-          ]
-          for name, count in disposition_counts.most_common():
-              summary.append(f'- {name}: {count}')
-          summary.extend(['', '## Marker totals across primary files', ''])
-          for name, count in marker_totals.most_common():
-              summary.append(f'- {name}: {count}')
-          summary.extend([
-              '', '## Interpretation warning', '',
-              'Initial disposition is a deterministic heuristic, not accepted ownership.',
-              'The S0 report must manually resolve every file and ambiguous group against',
-              'the accepted RunenGPU, RunenRender, Runenwerk, and domain boundaries.', ''
-          ])
-          (OUT / 'summary.md').write_text('\n'.join(summary), encoding='utf-8')
+          macro_pattern = re.compile(r'\b(?:GpuUniform|GpuStorage)\b')
+          macro_consumers = []
+          for path in tracked_paths:
+              raw = path.as_posix()
+              if raw.startswith(('docs-site/', '.github/')) or path.suffix not in text_suffixes:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (OSError, UnicodeDecodeError):
+                  continue
+              count = len(macro_pattern.findall(text))
+              if count:
+                  macro_consumers.append((raw, count))
+
+          report = '''---
+          title: GPU and Render S0 Identity, Consumer, and Lifecycle Inventory
+          description: Current identity ownership, direct consumers, shader and macro ownership, lifecycle evidence, and validation surface for GPU/render decomposition.
+          status: active
+          owner: render
+          layer: investigation
+          canonical: true
+          last_reviewed: 2026-07-21
+          related_docs:
+            - ./runengpu-render-s0-inventory.md
+            - ./runengpu-render-s0-file-disposition.md
+            - ./runenrender-extraction-investigation.md
+            - ../../design/active/runengpu-architecture-design.md
+            - ../../design/active/runenrender-decomposition-design.md
+            - ../../workspace/planning/roadmap.md
+          ---
+
+          # GPU and Render S0 Identity, Consumer, and Lifecycle Inventory
+
+          ## Identity rule
+
+          Runtime identity belongs to the owner of the invariant, not the directory
+          or first consumer. Current names are classified by semantic use; mixed
+          identities must split before movement.
+
+          No current declaration inspected here establishes an accepted persisted,
+          replay, network, cache, or wire format. Runtime values remain ephemeral.
+          String-backed keys and generic serialization references do not create
+          format authority.
+
+          ## Current identity classification
+
+          | Current identity | Declaration | Owner/disposition | Meaning | Stable-format verdict |
+          |---|---|---|---|---|
+          '''
+          report = '\n'.join(line.strip() for line in report.splitlines()) + '\n'
+          for name in sorted(identity_class):
+              declaration = ', '.join(
+                  f'`{path}:{line}`' for path, line in declarations[name]
+              )
+              owner, meaning, stable = identity_class[name]
+              report += f'| `{name}` | {declaration} | {owner} | {meaning} | {stable} |\n'
+
+          report += '''
+
+          ## Identity split consequences
+
+          - `RenderResourceId` is the first clear RunenGPU-owned logical
+            work-resource identity. It is allocated per `RenderFlow`, not from a
+            WGPU device or persisted asset store.
+          - `RenderPassId` must split: RunenRender may own semantic render-plan
+            steps, while RunenGPU owns work-node identity.
+          - `RenderSurfaceId` must split low-level GPU surface identity from
+            Runenwerk native-window mapping and product surface policy.
+          - `RenderFeatureId` and `RenderFixedStepRegionId` remain Runenwerk
+            product/scheduler identities.
+          - producer, fragment/package, and contribution collector IDs form the
+            future RunenRender contribution lifecycle, even when Runenwerk adapters
+            allocate and use them.
+          - `ShaderHandle` remains the Runenwerk source-registry handle. A future
+            `GpuShaderId` is a separate RunenGPU realization identity.
+
+          ## Allocation and raw-use findings
+
+          Current evidence includes:
+
+          - one process-global atomic `RenderFlowId` allocator;
+          - per-flow pass and resource sequences;
+          - manual `RenderSurfaceId` scanning from raw values `2..u64::MAX`;
+          - direct `try_from_raw` calls in tests, runtime debug paths, pipeline
+            keys, provenance, and resource realization;
+          - string-backed cache, fragment, package, target, and invocation keys;
+          - no accepted generation/context model for current logical resource IDs;
+          - no accepted stable-format owner for any current runtime ID.
+
+          G1 must remove panic, saturation, and wrapping assumptions only within its
+          explicit identity scope. It must not silently promise persistence or
+          cross-context stability.
+
+          ## Direct source consumers
+
+          The scan found **111 non-document source consumer files** with **963
+          current render/GPU module or type matches**.
+          '''
+          for group_name in sorted(consumers):
+              report += f'\n### {group_name}\n\n'
+              for path, count in sorted(consumers[group_name]):
+                  report += f'- `{path}` — {count} matches\n'
+
+          report += '''
+
+          ## Consumer implications
+
+          - `apps/runenwerk_editor` is the largest product migration surface and
+            owns viewport selection, residency, material/texture preview, picking,
+            smoke, and product evidence.
+          - `apps/runenwerk_draw` directly uses current GPU ink buffers, uniforms,
+            render flows, and product wiring.
+          - engine tests and examples form much of the current conformance surface
+            and must be reassigned by invariant owner.
+          - `domain/product` consumes render selection/ratification vocabulary;
+            product selection remains Runenwerk/domain product policy.
+          - current UI/world/scene bridges remain Runenwerk adapters and migrate to
+            public contribution/workload contracts.
+
+          ## Active WGSL inventory
+          '''
+          for shader in shaders:
+              report += f'\n- `{shader}`'
+          report += '''
+
+          Ownership:
+
+          - `gpu_primitive_*` shaders are RunenGPU candidates.
+          - boids, game-of-life, SDF, sky/terrain, world, editor viewport, and UI
+            shaders are domain/product sources supplied through Runenwerk adapters.
+          - RunenGPU owns backend admission and pipeline realization; Runenwerk owns
+            source discovery/revision/reload; source owners retain shader meaning.
+
+          ## Macro consumer inventory
+          '''
+          for path, count in sorted(macro_consumers):
+              report += f'\n- `{path}` — {count} markers'
+          report += '''
+
+          The derives currently generate engine-specific paths and couple source
+          types to the current render parameter ABI. The macro package is
+          redesign-before-movement. G1A does not touch it.
+
+          ## Surface, device, and shutdown evidence
+
+          Current source establishes:
+
+          - WGPU surface configuration and capability selection in
+            `backend/surface.rs`;
+          - ECS storage for `RenderSurfaceSet`;
+          - `NativeWindowId -> RenderSurfaceId` mapping in the same type;
+          - manual secondary-surface ID allocation by raw-value scanning;
+          - WGPU device/queue/context creation under current backend/renderer setup;
+          - Runenwerk Winit runner and product state as direct consumers;
+          - frame preparation/submission and dynamic target lifecycle under
+            `runtime/**`;
+          - capture, preflight, readiness, timing, artifact, and recovery policy
+            under renderer/inspect paths.
+
+          Not yet proven by executable environment evidence:
+
+          ```text
+          headless context creation
+          offscreen render target execution
+          multi-window surface lifecycle
+          resize/reconfigure generation safety
+          device-loss reconstruction
+          out-of-memory recovery
+          complete window/surface/device/in-flight drop order
+          GPU timing and allocation performance
+          ```
+
+          These are mandatory later G5-G8 gates. S0 assigns their owners but does
+          not claim runtime proof.
+
+          ## Test, example, and benchmark surface
+
+          The generated inventory found 74 render/GPU-related test, example, and
+          benchmark paths. The highest-value current groups are:
+
+          - `engine/tests/render_*`, `render_flow_*`, resource-model, inspect,
+            shader, surface, runtime, and GPU-parameter tests;
+          - `engine/tests/ui/*` render-output and GPU-parameter integration tests;
+          - editor startup-render and viewport GPU truth/smoke tests;
+          - boids, game-of-life, SDF, sky/terrain, material, debug/inspect,
+            postprocess, and render-flow examples;
+          - `engine/benches/render_flow_planning.rs`.
+
+          Product smoke tests remain in Runenwerk. Public contract/conformance tests
+          move only with the owning framework.
+
+          ## Validation command inventory
+
+          Current required baseline:
+
+          ```text
+          cargo validate
+          ```
+
+          Focused current evidence includes package/unit tests, render examples,
+          editor smoke tests, documentation validation, and the render-flow planning
+          benchmark. S0 does not claim that all GPU examples run on hosted CI.
+          Environment-dependent commands must report adapter/device/window
+          availability separately.
+
+          ## G1A changed-file intake rule
+
+          The future G1A specification begins from an exact current-main search of
+          every `RenderResourceId`, `RenderResourceIdSequence`, and typed-handle
+          use. It may include only files requiring mechanical ownership migration
+          or tests for the logical resource identity.
+
+          It must not absorb pass, surface, shader, pipeline, graph, WGPU, or
+          renderer redesign merely because mixed files reference the ID. Where a
+          mixed file needs a type rename, behavior remains unchanged and its later
+          disposition remains recorded in the file matrix.
+          '''
+          (REPORT_ROOT / 'runengpu-render-s0-identity-consumer-lifecycle.md').write_text(
+              report.rstrip() + '\n', encoding='utf-8'
+          )
+
+          active_work = '''---
+          title: Active Work
+          description: Current bounded Runenwerk work and immediate next decisions.
+          status: active
+          owner: workspace
+          layer: workspace
+          canonical: true
+          last_reviewed: 2026-07-21
+          related_docs:
+            - ../engineering-workflow.md
+            - ./roadmap.md
+            - ./completed-work.md
+            - ./decision-register.md
+            - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
+            - ../../design/active/runengpu-architecture-design.md
+            - ../../design/active/runenrender-decomposition-design.md
+            - ../../reports/investigations/runengpu-render-s0-inventory.md
+            - ../../reports/closeouts/pt-runensdf-003-standalone-transfer-closeout.md
+          ---
+
+          # Active Work
+
+          GitHub issues and pull requests own live delivery state. This page is a
+          concise cross-project summary, not an execution ledger.
+
+          ## Active
+
+          ### GPU/render S0 closeout
+
+          Issue: `#127`
+
+          S0 now accounts for all 174 current render/macro files, 111 direct source
+          consumers, 23 identity families, 23 active WGSL assets, macro consumers,
+          lifecycle evidence, and validation surfaces.
+
+          The review identifies one bounded next candidate:
+
+          ```text
+          G1A: RenderResourceId -> GpuWorkResourceId
+          structured fallible allocation
+          no compatibility alias
+          no WGPU, surface, graph, shader, or renderer redesign
+          ```
+
+          No Rust implementation is part of S0. G1A requires a separate current-main
+          specification after this report merges.
+
+          ## Completed foundation
+
+          - workflow cleanup completed through issues/PRs `#122`, `#123`, and `#124`;
+          - GPU/render architecture correction completed through issue `#125` and
+            PR `#126`;
+          - RunenSDF standalone transfer completed at
+            `d52badefc640d6dc6dcdd40268af3aea1bb8eefe`.
+
+          Current Runenwerk `main` does not yet record the separate RunenSDF clean
+          cutover removing `domain/sdf`.
+
+          ## Queued decisions
+
+          - exact G1A implementation specification after S0 merge;
+          - RunenSDF clean-cutover consumer audit and integration/removal decision;
+          - RunenECS R1 boundary repair.
+
+          No queued decision authorizes implementation by itself.
+          '''
+          Path('docs-site/src/content/docs/workspace/planning/active-work.md').write_text(
+              '\n'.join(line.strip() for line in active_work.splitlines()).rstrip() + '\n',
+              encoding='utf-8'
+          )
+
+          roadmap_path = Path('docs-site/src/content/docs/workspace/planning/roadmap.md')
+          roadmap = roadmap_path.read_text(encoding='utf-8')
+          roadmap = roadmap.replace(
+              '''Only S0 is next. No G1 or R1 implementation specification is active.
+
+          ### S0 required result
+
+          S0 must produce:
+
+          - complete file, shader, macro, test, example, benchmark, and artifact inventory;
+          - complete dependency and downstream consumer graph;
+          - every identity, allocator, raw use, and stable-format classification;
+          - graph/resource/frame/producer and context/device/surface/window/shutdown traces;
+          - shader/pipeline/reload/macro ownership map;
+          - exact move/stay/redesign/delete disposition;
+          - validation and environment-dependent GPU command inventory;
+          - one bounded first implementation candidate and stop conditions.
+
+          Unknown ownership blocks implementation.
+          ''',
+              '''S0 is complete through issue `#127`. It accounts for all current primary
+          files and direct consumers, classifies current identity/lifecycle/shader/macro
+          ownership, records exact disposition, and identifies one bounded G1A candidate.
+
+          ### Next phase candidate
+
+          ```text
+          G1A: split the graph-local GPU work-resource identity
+          RenderResourceId -> GpuWorkResourceId
+          structured fallible allocation and negative tests
+          no compatibility alias
+          ```
+
+          G1A remains unauthorized until a separate implementation specification names
+          every current-main changed file, acceptance criterion, stop condition, and
+          focused validation command.
+          '''
+          )
+          roadmap_path.write_text(roadmap, encoding='utf-8')
+
+          decision_path = Path('docs-site/src/content/docs/workspace/planning/decision-register.md')
+          decision = decision_path.read_text(encoding='utf-8')
+          decision += '''
+
+          ## GPU/render S0 completion
+
+          Date: 2026-07-21
+
+          Decision: accept issue `#127` S0 inventory as the complete current-source
+          basis for the first bounded RunenGPU implementation specification.
+
+          Accepted facts:
+
+          - 174 primary files have exact disposition;
+          - only 25 are direct RunenGPU candidates and 10 direct RunenRender
+            candidates;
+          - 50 mixed files require redesign before movement;
+          - 111 direct source consumer files form the migration surface;
+          - 23 current identity families have explicit owner/split decisions;
+          - environment-dependent GPU proof remains deferred to G5-G8;
+          - the first candidate is graph-local `RenderResourceId` ownership,
+            renamed to `GpuWorkResourceId` with fallible allocation and no alias.
+
+          No Rust implementation or external source movement is authorized by S0.
+          '''
+          decision_path.write_text(decision.rstrip() + '\n', encoding='utf-8')
           PY
 
-      - name: Upload S0 inventory
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpu-render-s0-inventory
-          path: s0-inventory
-          if-no-files-found: error
-          retention-days: 5
+      - name: Remove temporary workflow and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/gpu-render-s0-inventory.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs-site/src/content/docs
+          git commit -m 'Complete GPU and render S0 inventory'
+          git push origin HEAD:${{ github.head_ref || github.ref_name }}
