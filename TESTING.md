@@ -21,7 +21,7 @@ baseline
 extended
 ```
 
-It does not use quick, full, or quiet gates. Output verbosity does not change validation semantics.
+It does not use quick, full, quiet, or output-dependent gates. Output verbosity does not change validation semantics.
 
 ### Focused
 
@@ -47,7 +47,17 @@ cargo validate
 git diff --check
 ```
 
-`cargo validate` is the canonical, read-only, lockfile-safe implementation shared by local development and GitHub Actions. It runs:
+`cargo validate` is the canonical, read-only, lockfile-safe implementation shared by local development and GitHub Actions. It validates its own standalone tooling workspace before the product workspace.
+
+Repository tooling:
+
+```text
+cargo fmt --manifest-path tools/xtask/Cargo.toml --check
+cargo test --manifest-path tools/xtask/Cargo.toml --locked
+cargo clippy --manifest-path tools/xtask/Cargo.toml --all-targets --locked -- -D warnings
+```
+
+Product workspace and repository authority:
 
 ```text
 cargo fmt --all --check
@@ -95,7 +105,7 @@ Extended checks are not ordinary PR blockers unless an accepted policy promotes 
 
 Prefer typed APIs, dependency checks, and behavior tests over source-string scanning.
 
-A repository audit may enforce durable repository invariants such as required authority files, dependency direction, or a canonical CI command. Product tests must not own branch policy, workflow names, prompt formats, roadmap states, or merge procedure.
+A repository audit may enforce durable repository invariants such as required authority files, retired-path absence, dependency direction, or the canonical CI command. Product tests must not own branch policy, workflow names, prompt formats, roadmap states, or merge procedure.
 
 When a source guard is temporarily necessary, it must name:
 

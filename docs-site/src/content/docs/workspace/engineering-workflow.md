@@ -153,7 +153,7 @@ A separate planning or closeout PR is required only when it carries independentl
 
 ## Validation profiles
 
-Runenwerk does not use `quick`, `full`, or `quiet` gates. Those names are ambiguous and drift over time.
+Runenwerk does not use `quick`, `full`, `quiet`, or output-dependent gates. Those names are ambiguous and drift over time.
 
 ### Focused
 
@@ -178,7 +178,15 @@ cargo validate
 git diff --check
 ```
 
-`cargo validate` is read-only and lockfile-safe. It runs:
+`cargo validate` is read-only and lockfile-safe. It validates the standalone repository-tooling workspace first:
+
+```text
+cargo fmt --manifest-path tools/xtask/Cargo.toml --check
+cargo test --manifest-path tools/xtask/Cargo.toml --locked
+cargo clippy --manifest-path tools/xtask/Cargo.toml --all-targets --locked -- -D warnings
+```
+
+It then validates the product workspace and repository authority:
 
 ```text
 cargo fmt --all --check
@@ -249,27 +257,18 @@ Confidence matrices and certificates are not required. A claim must simply ident
 
 - Code, tests, fixtures, and runtime evidence own current behavior.
 - Accepted ADRs and designs own durable decisions.
-- GitHub issues and the active roadmap own planned work.
+- GitHub issues own live work; the manually maintained roadmap owns high-level sequencing.
 - Pull requests own review and delivery evidence, not long-term architecture.
-- Generated documents are derived views and must identify their source.
+- Historical generated views are evidence only and are not maintained.
 - Historical reports and superseded documents do not authorize new work.
 
 See [Authority Model](authority-model.md) for conflict resolution.
 
-## Legacy workflow migration
+## Retired workflow systems
 
-The production-track, execution-lock, truth-certificate, batch, and generated-prompt tools remain temporarily available only for active work that has not migrated.
+Runenwerk does not use production-track state machines, execution contract packs, track locks, truth certificates, batch execution, generated worker prompts, or local workflow ledgers. These systems were retired under issue `#122`.
 
-They are deprecated and must not be used for new work. They do not override this document, GitHub issue state, accepted designs, tests, or CI.
-
-Retirement is tracked by GitHub issue `#122`. A legacy command may be removed when:
-
-```text
-no active issue or branch depends on it
-its durable decisions exist in accepted docs or issues
-its generated state is archived or deleted
-its replacement path is validated
-```
+Historical reports may mention them, but those references provide context only. New work uses GitHub issues and pull requests, accepted ADRs/designs, the maintained roadmap, tests, `cargo validate`, and exact-head CI.
 
 ## Stop conditions
 

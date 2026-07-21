@@ -97,10 +97,6 @@ git diff --check
 
 GitHub Actions runs the same `cargo validate` implementation.
 
-## Legacy workflow tooling
+## Retired workflow systems
 
-Production-track, execution-lock, truth-certificate, batch, generated-prompt, routine, and task-card machinery is deprecated under issue `#122`.
-
-It remains temporarily available only for active work that has not migrated. Do not use it for new work and do not treat it as workflow authority.
-
-Historical links to superseded gate documents remain valid so old reports stay readable.
+Production-track databases, execution locks, truth certificates, batch execution, generated prompts, and local workflow state were retired under issue `#122`. Historical links remain context only.
