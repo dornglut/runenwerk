@@ -1,0 +1,405 @@
+name: GPU Render S0 Inventory
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Generate source-grounded S0 inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p s0-inventory
+          cargo metadata --format-version 1 --locked --no-deps > s0-inventory/cargo-metadata.json
+
+          python - <<'PY'
+          from __future__ import annotations
+
+          import csv
+          import json
+          import re
+          import subprocess
+          from collections import Counter, defaultdict
+          from pathlib import Path
+
+          ROOT = Path('.')
+          OUT = Path('s0-inventory')
+          OUT.mkdir(exist_ok=True)
+
+          tracked = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
+          tracked_paths = [Path(path) for path in tracked]
+          text_suffixes = {
+              '.rs', '.toml', '.md', '.mdx', '.ron', '.wgsl', '.json', '.yaml',
+              '.yml', '.puml', '.txt', '.sh', '.ps1', '.cmd', '.py', '.lock'
+          }
+
+          primary_prefixes = (
+              'engine/src/plugins/render/',
+              'engine_render_macros/',
+          )
+
+          def is_primary(path: Path) -> bool:
+              raw = path.as_posix()
+              return raw == 'engine/src/plugins/render.rs' or raw.startswith(primary_prefixes)
+
+          primary = sorted(path for path in tracked_paths if is_primary(path))
+
+          related = sorted(
+              path for path in tracked_paths
+              if not is_primary(path)
+              and (
+                  path.suffix == '.wgsl'
+                  or re.search(r'(^|/)(render|renderer|gpu|shader|material|viewport)', path.as_posix(), re.I)
+              )
+          )
+
+          marker_patterns = {
+              'wgpu_backend': re.compile(r'\bwgpu(?:::|_)|\bWgpu[A-Z]|\bWGPU\b'),
+              'window_host': re.compile(r'\bwinit\b|RawWindowHandle|RawDisplayHandle|\bWindow(?:Id)?\b|event_loop', re.I),
+              'ecs_host': re.compile(r'\becs::|\bWorld\b|\bResMut?\b|\bQuery\b|\bCommands\b|derive\([^)]*(?:Resource|Component)', re.I),
+              'scene_world': re.compile(r'\bscene::|\bworld[_:]|Scene[A-Z]|World[A-Z]|chunk|terrain|cave', re.I),
+              'sdf_field': re.compile(r'\bsdf\b|Sdf[A-Z]|signed[_ ]distance|sphere[_ ]trac|ray[_ ]march', re.I),
+              'ui_editor': re.compile(r'\bui[_:]|Ui[A-Z]|\beditor[_:]|Editor[A-Z]|viewport|picking', re.I),
+              'material_authoring': re.compile(r'material_graph|MaterialGraph|material[_ ]compiler|naga|MaterialAsset|shader asset', re.I),
+              'procgen_sim': re.compile(r'procgen|procedural|simulation|deform|wind|particle|vfx', re.I),
+              'render_semantic': re.compile(r'Render(?:Scene|View|Target|Provider|Instance|Material|Medium|Emitter|Environment|Interaction|Visibility|Transport|Radiance|Overlay|History|Presentation)|light(?:ing)?|reconstruct|tone[_ ]map', re.I),
+              'shader_pipeline': re.compile(r'\bshader\b|Pipeline|BindGroup|WGSL|SPIR|entry[_ ]point', re.I),
+              'filesystem_reload': re.compile(r'fs::|File::|PathBuf|read_to_string|watch|poll|hot[_ ]reload|last[_ ]known[_ ]good', re.I),
+              'capture_artifact': re.compile(r'capture|artifact|screenshot|export|trace|profil|startup|frame[_ ]pac', re.I),
+              'network_persist': re.compile(r'serde|Serialize|Deserialize|ron::|replay|network|packet|persist|cache|history|wire|schema', re.I),
+              'lifecycle': re.compile(r'Instance|Adapter|Device|Queue|Surface|acquire|present|resize|reconfig|shutdown|drop\b|device[_ ]lost|out[_ ]of[_ ]memory', re.I),
+          }
+
+          def read_text(path: Path) -> str:
+              try:
+                  return path.read_text(encoding='utf-8')
+              except (OSError, UnicodeDecodeError):
+                  return ''
+
+          def initial_disposition(path: Path, counts: dict[str, int]) -> tuple[str, str]:
+              raw = path.as_posix()
+              domain_pressure = sum(counts[key] for key in ('ecs_host', 'scene_world', 'sdf_field', 'ui_editor', 'material_authoring', 'procgen_sim'))
+              host_pressure = counts['window_host'] + counts['filesystem_reload'] + counts['capture_artifact']
+              gpu_pressure = counts['wgpu_backend'] + counts['shader_pipeline']
+              render_pressure = counts['render_semantic']
+
+              if raw.startswith('engine_render_macros/'):
+                  return 'redesign before movement', 'macro ABI and ownership require consumer proof'
+              if raw.endswith('/plugin.rs') or '/runtime/' in raw or '/api/' in raw:
+                  if domain_pressure or host_pressure:
+                      return 'stay in Runenwerk or redesign', 'plugin/runtime/API path reaches host or domain state'
+              if domain_pressure and gpu_pressure:
+                  return 'redesign before movement', 'GPU mechanics and domain integration are mixed'
+              if domain_pressure and render_pressure:
+                  return 'redesign before movement', 'render semantics and source-domain integration are mixed'
+              if host_pressure and (gpu_pressure or render_pressure):
+                  return 'redesign before movement', 'host/product lifecycle is mixed with framework behavior'
+              if '/backend/' in raw or '/gpu_primitives/' in raw or '/resource/' in raw:
+                  if gpu_pressure and not domain_pressure:
+                      return 'RunenGPU candidate', 'path and markers primarily describe GPU execution'
+              if '/graph/' in raw:
+                  return 'redesign before movement', 'current graph may mix GPU work and render/product semantics'
+              if any(part in raw for part in ('/renderer/', '/composition/', '/frame/', '/features/')):
+                  if not domain_pressure and not counts['window_host']:
+                      return 'RunenRender candidate', 'path primarily describes image formation'
+              if counts['window_host'] or counts['filesystem_reload'] or counts['capture_artifact']:
+                  return 'stay in Runenwerk or redesign', 'host/product/source-management responsibility detected'
+              if gpu_pressure > render_pressure and gpu_pressure:
+                  return 'RunenGPU candidate', 'GPU execution markers dominate'
+              if render_pressure:
+                  return 'RunenRender candidate', 'image-formation markers dominate'
+              return 'unresolved', 'manual ownership inspection required'
+
+          rows = []
+          disposition_counts = Counter()
+          marker_totals = Counter()
+          for path in primary:
+              text = read_text(path)
+              counts = {name: len(pattern.findall(text)) for name, pattern in marker_patterns.items()}
+              disposition, reason = initial_disposition(path, counts)
+              disposition_counts[disposition] += 1
+              marker_totals.update(counts)
+              rows.append({
+                  'path': path.as_posix(),
+                  'suffix': path.suffix,
+                  'lines': text.count('\n') + (1 if text else 0),
+                  'bytes': len(text.encode('utf-8')),
+                  'initial_disposition': disposition,
+                  'reason': reason,
+                  **counts,
+              })
+
+          with (OUT / 'primary-files.csv').open('w', encoding='utf-8', newline='') as handle:
+              fieldnames = list(rows[0].keys()) if rows else ['path']
+              writer = csv.DictWriter(handle, fieldnames=fieldnames)
+              writer.writeheader()
+              writer.writerows(rows)
+
+          with (OUT / 'all-primary-files.txt').open('w', encoding='utf-8') as handle:
+              for path in primary:
+                  handle.write(path.as_posix() + '\n')
+
+          with (OUT / 'related-files.txt').open('w', encoding='utf-8') as handle:
+              for path in related:
+                  handle.write(path.as_posix() + '\n')
+
+          # Package/dependency inventory.
+          metadata = json.loads((OUT / 'cargo-metadata.json').read_text(encoding='utf-8'))
+          packages = metadata.get('packages', [])
+          package_by_name = {package['name']: package for package in packages}
+          render_packages = {'engine', 'engine_render_macros'}
+          downstream_packages = []
+          for package in packages:
+              deps = sorted(dep['name'] for dep in package.get('dependencies', []))
+              if render_packages.intersection(deps):
+                  downstream_packages.append((package['name'], package['manifest_path'], deps))
+
+          cargo_lines = ['# Cargo/package inventory', '']
+          for name in sorted(render_packages):
+              package = package_by_name.get(name)
+              if not package:
+                  cargo_lines.extend([f'## {name}', '', 'Package not present in metadata.', ''])
+                  continue
+              cargo_lines.extend([
+                  f'## {name}', '',
+                  f"Manifest: `{package['manifest_path']}`", '',
+                  'Direct dependencies:', '',
+              ])
+              for dep in sorted(package.get('dependencies', []), key=lambda value: value['name']):
+                  source = dep.get('source') or dep.get('path') or 'workspace/path'
+                  cargo_lines.append(f"- `{dep['name']}` — {source}")
+              cargo_lines.append('')
+
+          cargo_lines.extend(['## Packages depending on engine or engine_render_macros', ''])
+          for name, manifest, deps in sorted(downstream_packages):
+              matched = sorted(render_packages.intersection(deps))
+              cargo_lines.append(f"- `{name}` ({manifest}) -> {', '.join(matched)}")
+          cargo_lines.append('')
+          (OUT / 'cargo-inventory.md').write_text('\n'.join(cargo_lines), encoding='utf-8')
+
+          # Direct module consumers outside the primary tree.
+          consumer_pattern = re.compile(
+              r'(?:engine::)?plugins::render|engine::plugins::render|crate::plugins::render|'
+              r'\bRender(?:Flow|Pass|Resource|Feature|Frame|View|Target|Surface|Shader|Pipeline|Producer|Packet|Product|Graph|Context|Backend)[A-Za-z0-9_]*|'
+              r'\bGpu(?:Uniform|Storage|Buffer|Texture|Pipeline|Resource|Context|Device|Queue|Work)[A-Za-z0-9_]*'
+          )
+          consumer_records = []
+          for path in tracked_paths:
+              if is_primary(path) or path.suffix not in text_suffixes:
+                  continue
+              text = read_text(path)
+              matches = list(consumer_pattern.finditer(text))
+              if matches:
+                  line_numbers = sorted({text.count('\n', 0, match.start()) + 1 for match in matches})
+                  consumer_records.append((path.as_posix(), len(matches), line_numbers[:40]))
+
+          with (OUT / 'direct-consumers.md').open('w', encoding='utf-8') as handle:
+              handle.write('# Direct module/type consumers outside the current render tree\n\n')
+              for path, count, lines in sorted(consumer_records):
+                  handle.write(f"- `{path}` — {count} matches; lines {', '.join(map(str, lines))}\n")
+
+          # Identity declarations and uses.
+          declaration_pattern = re.compile(
+              r'(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|type)\s+'
+              r'([A-Za-z][A-Za-z0-9_]*(?:Id|ID|Handle|Key|Generation|Epoch|Sequence|Allocator))\b'
+          )
+          macro_id_pattern = re.compile(r'\b(?:define_id|id_type|typed_id)!?\s*\([^)]*?([A-Za-z][A-Za-z0-9_]*Id)')
+          identities: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
+          for path in primary:
+              if path.suffix != '.rs':
+                  continue
+              text = read_text(path)
+              for pattern in (declaration_pattern, macro_id_pattern):
+                  for match in pattern.finditer(text):
+                      line = text.count('\n', 0, match.start()) + 1
+                      source_line = text.splitlines()[line - 1].strip() if text.splitlines() else ''
+                      identities[match.group(1)].append((path.as_posix(), line, source_line))
+
+          risk_path = re.compile(r'net/|history|replay|persist|cache|artifact|schema|wire|packet|serde|ron', re.I)
+          with (OUT / 'identity-inventory.md').open('w', encoding='utf-8') as handle:
+              handle.write('# Identity and allocator inventory\n\n')
+              for name in sorted(identities):
+                  handle.write(f'## `{name}`\n\nDeclarations:\n\n')
+                  for path, line, source in identities[name]:
+                      handle.write(f'- `{path}:{line}` — `{source}`\n')
+                  uses = []
+                  stable_risks = []
+                  name_re = re.compile(rf'\b{re.escape(name)}\b')
+                  for path in tracked_paths:
+                      if path.suffix not in text_suffixes:
+                          continue
+                      text = read_text(path)
+                      count = len(name_re.findall(text))
+                      if count:
+                          uses.append((path.as_posix(), count))
+                          if risk_path.search(path.as_posix()) or marker_patterns['network_persist'].search(text):
+                              stable_risks.append((path.as_posix(), count))
+                  handle.write('\nAll tracked-text uses:\n\n')
+                  for path, count in sorted(uses):
+                      handle.write(f'- `{path}` — {count}\n')
+                  handle.write('\nPotential stable-format/persistence risk uses:\n\n')
+                  if stable_risks:
+                      for path, count in sorted(stable_risks):
+                          handle.write(f'- `{path}` — {count}\n')
+                  else:
+                      handle.write('- none detected by path/content heuristic\n')
+                  handle.write('\n')
+
+          # Raw/allocator/generation evidence.
+          raw_pattern = re.compile(
+              r'try_from_raw|from_raw|\.raw\(\)|fetch_add|AtomicU|wrapping_|saturating_|'
+              r'next_id|allocate|allocator|generation|epoch|stale|foreign', re.I
+          )
+          with (OUT / 'identity-raw-evidence.txt').open('w', encoding='utf-8') as handle:
+              for path in primary:
+                  if path.suffix != '.rs':
+                      continue
+                  for line_no, line in enumerate(read_text(path).splitlines(), start=1):
+                      if raw_pattern.search(line):
+                          handle.write(f'{path}:{line_no}:{line}\n')
+
+          # Shader and macro ownership inventory.
+          shader_paths = sorted(path for path in tracked_paths if path.suffix == '.wgsl')
+          macro_use_pattern = re.compile(r'\b(?:GpuUniform|GpuStorage)\b')
+          with (OUT / 'shader-macro-inventory.md').open('w', encoding='utf-8') as handle:
+              handle.write('# Shader and macro inventory\n\n## WGSL files\n\n')
+              for path in shader_paths:
+                  text = read_text(path)
+                  refs = []
+                  basename = path.name
+                  for other in tracked_paths:
+                      if other == path or other.suffix not in text_suffixes:
+                          continue
+                      other_text = read_text(other)
+                      if basename in other_text or path.as_posix() in other_text:
+                          refs.append(other.as_posix())
+                  handle.write(f'- `{path}` — {text.count(chr(10)) + (1 if text else 0)} lines')
+                  if refs:
+                      handle.write(f"; references: {', '.join(f'`{ref}`' for ref in refs[:20])}")
+                  handle.write('\n')
+              handle.write('\n## GpuUniform/GpuStorage consumers\n\n')
+              for path in tracked_paths:
+                  if path.suffix not in text_suffixes:
+                      continue
+                  text = read_text(path)
+                  count = len(macro_use_pattern.findall(text))
+                  if count:
+                      handle.write(f'- `{path}` — {count}\n')
+              handle.write('\n## Shader/pipeline/reload evidence\n\n')
+              for path in primary:
+                  text = read_text(path)
+                  if marker_patterns['shader_pipeline'].search(text) or marker_patterns['filesystem_reload'].search(text):
+                      handle.write(f'- `{path}` — shader/pipeline={len(marker_patterns["shader_pipeline"].findall(text))}, filesystem/reload={len(marker_patterns["filesystem_reload"].findall(text))}\n')
+
+          # Lifecycle evidence.
+          lifecycle_pattern = marker_patterns['lifecycle']
+          with (OUT / 'lifecycle-evidence.txt').open('w', encoding='utf-8') as handle:
+              for path in primary:
+                  if path.suffix != '.rs':
+                      continue
+                  for line_no, line in enumerate(read_text(path).splitlines(), start=1):
+                      if lifecycle_pattern.search(line):
+                          handle.write(f'{path}:{line_no}:{line}\n')
+
+          # Domain reach-back evidence.
+          with (OUT / 'domain-reachback.md').open('w', encoding='utf-8') as handle:
+              handle.write('# Domain and product reach-back by current file\n\n')
+              for row in rows:
+                  active = [
+                      name for name in (
+                          'window_host', 'ecs_host', 'scene_world', 'sdf_field',
+                          'ui_editor', 'material_authoring', 'procgen_sim',
+                          'filesystem_reload', 'capture_artifact'
+                      ) if row[name]
+                  ]
+                  if active:
+                      facts = ', '.join(f'{name}={row[name]}' for name in active)
+                      handle.write(f"- `{row['path']}` — {facts}\n")
+
+          # Tests/examples/benchmarks and validation commands.
+          evidence_paths = sorted(
+              path for path in tracked_paths
+              if (
+                  '/tests/' in path.as_posix()
+                  or '/examples/' in path.as_posix()
+                  or '/benches/' in path.as_posix()
+                  or path.as_posix().startswith('tests/')
+              )
+              and re.search(r'render|gpu|shader|surface|viewport|material', path.as_posix(), re.I)
+          )
+          with (OUT / 'tests-examples-benchmarks.md').open('w', encoding='utf-8') as handle:
+              handle.write('# Render/GPU tests, examples, and benchmarks\n\n')
+              for path in evidence_paths:
+                  handle.write(f'- `{path}`\n')
+
+          command_roots = [
+              Path('.github/workflows'), Path('Taskfile.yml'), Path('TESTING.md'),
+              Path('docs-site/src/content/docs')
+          ]
+          command_pattern = re.compile(
+              r'cargo (?:test|run|bench|clippy|validate)[^\n`]*|pnpm[^\n`]*|'
+              r'RUNENWERK_[A-Z0-9_]+=[^\n`]*', re.I
+          )
+          commands = set()
+          for root in command_roots:
+              candidates = [root] if root.is_file() else list(root.rglob('*')) if root.exists() else []
+              for path in candidates:
+                  if not path.is_file() or path.suffix not in text_suffixes:
+                      continue
+                  text = read_text(path)
+                  if not re.search(r'render|gpu|shader|surface|viewport|material|cargo validate', text, re.I):
+                      continue
+                  for match in command_pattern.finditer(text):
+                      commands.add((path.as_posix(), ' '.join(match.group(0).split())))
+          with (OUT / 'validation-commands.md').open('w', encoding='utf-8') as handle:
+              handle.write('# Validation and runtime command inventory\n\n')
+              for path, command in sorted(commands):
+                  handle.write(f'- `{command}` — `{path}`\n')
+
+          # Summary.
+          summary = [
+              '# GPU/Render S0 generated inventory summary', '',
+              f'- Tracked repository files: {len(tracked_paths)}',
+              f'- Primary current render/macro files: {len(primary)}',
+              f'- Related render/GPU/shader files outside primary tree: {len(related)}',
+              f'- Direct external consumer files detected: {len(consumer_records)}',
+              f'- Identity-like declarations detected: {len(identities)}',
+              f'- WGSL files detected: {len(shader_paths)}',
+              f'- Render/GPU tests/examples/benchmarks detected: {len(evidence_paths)}',
+              '', '## Initial disposition counts', ''
+          ]
+          for name, count in disposition_counts.most_common():
+              summary.append(f'- {name}: {count}')
+          summary.extend(['', '## Marker totals across primary files', ''])
+          for name, count in marker_totals.most_common():
+              summary.append(f'- {name}: {count}')
+          summary.extend([
+              '', '## Interpretation warning', '',
+              'Initial disposition is a deterministic heuristic, not accepted ownership.',
+              'The S0 report must manually resolve every file and ambiguous group against',
+              'the accepted RunenGPU, RunenRender, Runenwerk, and domain boundaries.', ''
+          ])
+          (OUT / 'summary.md').write_text('\n'.join(summary), encoding='utf-8')
+          PY
+
+      - name: Upload S0 inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-render-s0-inventory
+          path: s0-inventory
+          if-no-files-found: error
+          retention-days: 5
