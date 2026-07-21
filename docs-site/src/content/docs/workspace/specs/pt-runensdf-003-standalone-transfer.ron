@@ -1,0 +1,125 @@
+// Active implementation contract for PT-RUNENSDF-003.
+// Markdown architecture, design, planning, and closeout records remain primary.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENSDF-003",
+    title: "Standalone RunenSDF Repository and Corrected Source Transfer",
+    lifecycle_state: "active-implementation",
+    implementation_authorization_status: "active-implementation-authorized; Runenwerk dependency cutover and domain/sdf retirement remain forbidden until PT-RUNENSDF-004",
+    owner: "RunenSDF framework and repository governance; Runenwerk owns only source provenance and later integration",
+
+    authority_docs: [
+        "docs-site/src/content/docs/architecture/repository-family-architecture.md",
+        "docs-site/src/content/docs/adr/accepted/0014-repository-family-extraction-boundaries.md",
+        "docs-site/src/content/docs/reports/investigations/runensdf-extraction-investigation.md",
+        "docs-site/src/content/docs/design/active/runensdf-extraction-design.md",
+        "docs-site/src/content/docs/design/active/runensdf-repository-identity-decision.md",
+        "docs-site/src/content/docs/reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md",
+        "docs-site/src/content/docs/workspace/planning/active-work.md",
+        "docs-site/src/content/docs/workspace/planning/roadmap.md",
+        "docs-site/src/content/docs/guidelines/programming-principles.md",
+    ],
+
+    complete_investigation_gate_status: "complete: all source modules, all nine integration-test modules, package dependencies, public contracts, numerical semantics, documentation ownership, and known consumer evidence were inspected; PT-RUNENSDF-004 must repeat the final consumer audit before cutover",
+    complete_design_gate_status: "complete: canonical identity, root-package layout, ownership, public and numerical contracts, provenance, conformance, validation, temporary-duplication policy, rollback, and clean-cutover sequencing are fixed",
+    principle_compliance_status: "complete for authorization: one public package, one eventual source authority, no compatibility facade, validated public state, structured failure, dependency inversion through public APIs, and no speculative GPU/renderer/ECS/UI ownership",
+    module_decomposition_status: "complete for parity transfer: preserve the accepted PT-RUNENSDF-002 module layout; operators/transforms/differential regrouping is forbidden until an independently green parity revision exists",
+    maintainability_review_status: "complete for transfer: repository-local validation is one maintained cargo validate command; CI invokes that command; provenance and authority are explicit; duplicate implementation may exist only between unmerged coordinated branches",
+
+    allowed_paths: [
+        "Crystonix/runen-sdf root package manifest, lockfile, source, tests, documentation, licenses, security policy, CI, conformance/downstream, and xtask",
+        "Runenwerk docs-site/src/content/docs/design/active/runensdf-extraction-design.md",
+        "Runenwerk docs-site/src/content/docs/design/active/runensdf-repository-identity-decision.md",
+        "Runenwerk docs-site/src/content/docs/workspace/planning/active-work.md",
+        "Runenwerk docs-site/src/content/docs/workspace/planning/roadmap.md",
+        "Runenwerk docs-site/src/content/docs/workspace/specs/pt-runensdf-003-standalone-transfer.ron",
+        "Runenwerk durable documentation-validation workflow required to validate this authority change",
+    ],
+
+    forbidden_paths: [
+        "Runenwerk Cargo dependency cutover, workspace-member removal, Cargo.lock retirement, or domain/sdf deletion",
+        "compatibility packages, forwarding namespaces, deprecated aliases, submodules, source includes, or permanent mirrors",
+        "behavioral redesign during the source-parity transfer",
+        "module vocabulary regrouping before parity is independently green",
+        "GPU, shader, renderer, world, material, ECS, scheduler, UI, RunenUI, networking, or persisted-program ownership",
+        "crates.io publication or a stable persisted field/program format",
+        "speculative public package decomposition",
+    ],
+
+    public_api_surface: [
+        "The package identity is runen-sdf and the Rust crate identity is runen_sdf.",
+        "SdfField3 returns Result<SdfSample, SampleError>, conservative FieldBounds, and explicit FieldCapabilities.",
+        "SdfSample exposes finite signed_value and optional finite non-negative conservative safe_step.",
+        "Sphere tracing consumes safe_step only and returns structured unsupported-capability errors.",
+        "Projection, closest-point, and sphere-sweep queries require exact-distance capability where value magnitude is interpreted metrically.",
+        "Bounds3, FieldBounds::{Unbounded, Empty, Bounded}, and normalized Ray3 are RunenSDF-owned validated values.",
+        "Queries distinguish explicit hits, ordinary terminal misses, invalid input, sampling failures, gradient failures, and unsupported capabilities.",
+        "No compatibility alias preserves the former sdf or runensdf package identity.",
+    ],
+
+    invariants: [
+        "The transfer source is exactly Runenwerk commit 8de096259eab30f8d67672010df9190970d0bfc4 at domain/sdf.",
+        "Transfer changes are limited to repository/package/crate identity, import migration, documentation ownership, provenance, conformance, and validation integration.",
+        "All public authored scalar, vector, transform, ray, bounds, and settings inputs remain finite and validated.",
+        "signed_value remains finite sign/value information and is not universally represented as Euclidean distance.",
+        "safe_step remains absent or a finite non-negative conservative lower bound to the zero set.",
+        "Metric queries require exact-distance capability and tracing requires conservative-step capability.",
+        "Capability propagation remains conservative and identical to the accepted PT-RUNENSDF-002 behavior.",
+        "Empty and Unbounded bounds remain distinct and disjoint finite intersection remains Empty.",
+        "The primary normal API never fabricates Vec3::Y.",
+        "The standalone repository has no Runenwerk path, package, feature, source, build, or document dependency.",
+        "CI and local validation share one maintained cargo validate authority.",
+        "No merged final state contains two writable implementation authorities.",
+    ],
+
+    acceptance_criteria: [
+        "Crystonix/runen-sdf uses one root public package plus conformance/downstream and xtask support packages only.",
+        "The corrected source baseline and all nine integration-test modules are transferred without behavioral redesign.",
+        "All package and test imports use runen_sdf with no alias for sdf or runensdf.",
+        "The independent Cargo.lock is committed and CI never generates or mutates it.",
+        "The declared MIT OR Apache-2.0 licensing is backed by complete license files and repository metadata.",
+        "A security policy, dependency policy, provenance record, status map, roadmap, and validation contract exist and agree.",
+        "A downstream package implements SdfField3 and exercises public construction, sampling, query, trait-object, and unsupported-capability behavior without private reach-through.",
+        "Repository checks reject Runenwerk references, external path dependencies, source includes, forwarding packages, stale package identities, missing licenses, broken documentation links, and dirty generated state.",
+        "Stable and Rust 1.93.0 formatting, metadata, tests, Clippy, rustdoc, downstream conformance, and repository-policy checks pass through cargo validate in GitHub Actions.",
+        "The exact standalone head intended for PT-RUNENSDF-004 is recorded without claiming Runenwerk cutover or source retirement.",
+    ],
+
+    validation_commands: [
+        "cargo metadata --format-version 1 --locked --no-deps",
+        "cargo tree -p runen-sdf --locked",
+        "cargo tree -i runen-sdf --workspace --locked",
+        "cargo fmt --all -- --check",
+        "cargo test --workspace --locked",
+        "cargo clippy --workspace --all-targets --locked -- -D warnings",
+        "cargo doc --workspace --no-deps --locked with RUSTDOCFLAGS=-D warnings",
+        "cargo +1.93.0 test --workspace --locked",
+        "cargo validate",
+        "repository policy checks for dependency direction, identities, licenses, links, provenance, source inclusion, and diff hygiene",
+    ],
+
+    evidence_expectations: [
+        "The RunenSDF PR records the exact source commit, transfer mapping, standalone head, workflow run, commands executed, and every unavailable or deferred evidence class.",
+        "Source parity is reviewed against the baseline with only declared identity, import, documentation, conformance, and validation differences.",
+        "GitHub Actions is the merge gate and invokes cargo validate; no manual validation is required from the owner.",
+        "Runenwerk records only planning and provenance during PT-RUNENSDF-003; integration evidence belongs to PT-RUNENSDF-004.",
+    ],
+
+    stop_conditions: [
+        "Stop if source transfer requires a behavior or numerical-contract change; open a separately authorized correction instead.",
+        "Stop if an unclassified Runenwerk consumer, persisted format, shader source authority, dependency cycle, or private reach-through is discovered.",
+        "Stop if the standalone repository cannot validate without Runenwerk or an external path dependency.",
+        "Stop if CI cannot allocate a runner or produce command evidence; do not substitute an inspection-only pass.",
+        "Stop if the exact standalone revision changes after PT-RUNENSDF-004 pins it without updating and revalidating the cutover branch.",
+    ],
+
+    closeout_expectations: [
+        "Update standalone provenance with the accepted parity commit and successful workflow run.",
+        "Update Runenwerk active-work and roadmap to PT-RUNENSDF-003 complete and PT-RUNENSDF-004 ready for bounded activation.",
+        "Do not merge module-vocabulary cleanup into the parity closeout.",
+        "Do not delete domain/sdf, remove its workspace membership, or add a Runenwerk dependency during this phase.",
+        "PT-RUNENSDF-004 must coordinate the exact external revision, final consumer migration, original-source deletion, lockfile change, and absence proof without a forwarding package.",
+    ],
+
+    next_phase_activation_condition: "PT-RUNENSDF-004 may be activated only after an exact standalone revision passes GitHub Actions through cargo validate, public downstream conformance is green, provenance is closed for PT-RUNENSDF-003, and the final Runenwerk consumer audit is scheduled as part of the cutover.",
+)

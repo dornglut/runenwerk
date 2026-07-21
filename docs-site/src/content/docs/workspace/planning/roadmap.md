@@ -4,14 +4,16 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 related_docs:
   - ../workflow-lifecycle.md
   - ../routines/track-orchestration-routine.md
   - ../specs/phase-implementation-spec.md
+  - ../specs/pt-runensdf-003-standalone-transfer.ron
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../design/active/runensdf-extraction-design.md
+  - ../../design/active/runensdf-repository-identity-decision.md
   - ../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md
   - ../../design/active/runenecs-boundary-repair-execution-plan.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
@@ -43,101 +45,126 @@ RunenSDF investigation      complete through PR #110
 RunenECS investigation      recorded through PR #111; R1 specified, not active
 RunenRender investigation   recorded through PR #112; R1 specified, not active
 RunenSDF boundary repair    complete through PR #116
-RunenSDF repository phase   queued planning; no implementation authorization
+RunenSDF transfer authority active in Runenwerk PR #118
+RunenSDF repository         created at Crystonix/runen-sdf
+RunenSDF bootstrap          active in Crystonix/runen-sdf PR #1
 ```
 
-## Next phase — PT-RUNENSDF-003
+## PT-RUNENSDF-003 — Standalone repository and parity transfer
 
-Title: Standalone RunenSDF Repository Creation and Corrected Source Transfer
-
-State: `queued-planning`
-
-Owner: SDF and repository governance
-
-Implementation authorization: none until a new bounded phase specification is
-accepted.
-
-### Mission
-
-Create `Crystonix/RunenSDF`, transfer the corrected SDF package and tests with
-provenance, and prove the repository independently without cutting Runenwerk over
-or deleting `domain/sdf`.
-
-### Required decisions before activation
-
-1. repository creation mechanism and owner action;
-2. repository/package naming and initial version;
-3. license, edition, MSRV, lockfile, and release policy;
-4. provenance-preserving transfer method;
-5. exact source/test/document move matrix;
-6. initial repository layout and validation workflow;
-7. downstream public-consumer proof;
-8. dependency pinning strategy reserved for PT-RUNENSDF-004;
-9. explicit stop and rollback conditions;
-10. one exact implementation spec written against merged PT-RUNENSDF-002 source.
-
-### Intended repository shape
+State: `active-implementation`
 
 ```text
-Crystonix/RunenSDF
-├── Cargo.toml
-├── Cargo.lock
-├── LICENSE-APACHE
-├── LICENSE-MIT
-├── README.md
-├── crates/
-│   └── runensdf/
-├── tests or downstream-conformance/
-├── docs/
-└── .github/workflows/ only for durable repository validation
+product: RunenSDF
+repository: Crystonix/runen-sdf
+package: runen-sdf
+crate: runen_sdf
+version: 0.1.0
+source baseline: Runenwerk 8de096259eab30f8d67672010df9190970d0bfc4
 ```
 
-The exact top-level layout is fixed during PT-RUNENSDF-003 planning. The initial
-framework remains one package; no core/query/GPU/shader/program/macro split is
-introduced without independent pressure.
+The former `Crystonix/RunenSDF` and `runensdf` spellings are superseded. No
+compatibility package or crate alias preserves them.
 
-### Required implementation outcomes
+### Repository target
 
-- corrected source and all package tests exist in RunenSDF;
-- package name and public imports are finalized without compatibility aliases;
-- no Runenwerk path, package, feature, type, document, or build dependency exists;
-- independent downstream code can implement and consume `SdfField3` publicly;
-- provenance identifies the Runenwerk source commit and transfer mapping;
-- repository validation covers formatting, tests, Clippy, docs, stable/MSRV,
-  dependency direction, and diff hygiene;
-- benchmarks and property testing are included only when their owned scope and
-  maintenance policy are explicit;
-- Runenwerk remains unchanged except planning/provenance references required to
-  prepare the later cutover.
+The repository contains one root public package plus only:
+
+```text
+conformance/downstream  public downstream-consumer proof
+xtask                   maintained repository validation authority
+```
+
+It does not use `crates/runen-sdf`, a façade, a source submodule, private source
+inclusion, or speculative public subpackages.
+
+### Ordered delivery
+
+1. merge the decision-complete Runenwerk authority and durable docs validation;
+2. complete the standalone foundation: licenses, security policy, lockfile,
+   validation authority, durable CI, truthful status, and repository-policy checks;
+3. transfer `domain/sdf/src/**` without behavioral redesign;
+4. transfer all nine integration-test modules and migrate `sdf` imports to
+   `runen_sdf`;
+5. migrate or rewrite framework-owned API, numerical, query, and ownership docs;
+6. replace the downstream stub with a real public-API consumer;
+7. pass `cargo validate` on stable and Rust 1.93.0 in GitHub Actions;
+8. review source parity against the exact baseline;
+9. record the exact standalone commit intended for PT-RUNENSDF-004;
+10. close PT-RUNENSDF-003 without changing Runenwerk dependencies or deleting
+    `domain/sdf`.
+
+Parity precedes module-vocabulary cleanup. Combining `combine` and `ops`, renaming
+`transform`, or introducing a `differential` group requires a later independently
+reviewed behavior-preserving change.
+
+### Required automated evidence
+
+GitHub Actions is the merge gate and invokes the repository-local `cargo validate`
+command. The command covers:
+
+- committed locked metadata and dependency trees;
+- formatting, workspace tests, downstream conformance, and all-target Clippy;
+- rustdoc with denied warnings;
+- Rust 1.93.0 tests;
+- dependency-direction and external-path checks;
+- rejection of Runenwerk references, source includes, forwarding packages, and
+  stale package identities;
+- licenses, security policy, provenance, document links, and diff hygiene.
+
+CI must not generate or mutate `Cargo.lock`.
 
 ### Forbidden scope
 
 ```text
-Runenwerk dependency cutover
-deleting domain/sdf
-source mirror maintained after the later cutover
+Runenwerk dependency cutover or domain/sdf retirement
 compatibility or forwarding package
-RunenSDF dependency on Runenwerk
-GPU, WGPU, shader, material, world, ECS, renderer, or UI ownership
-stable persisted field/program format
-speculative multi-package split
+permanent source mirror, submodule, or private include
+behavioral or numerical redesign during parity transfer
+GPU, shader, renderer, world, material, ECS, UI, or persisted-program ownership
+crates.io publication
+speculative public package decomposition
 ```
 
 ### Exit gate
 
-PT-RUNENSDF-003 completes only when the standalone repository validates
-independently, public downstream use is proven, provenance is recorded, and the
-exact revision intended for PT-RUNENSDF-004 is identified. Completion authorizes
-cutover planning, not automatic Runenwerk deletion.
+PT-RUNENSDF-003 completes only when one exact standalone revision:
 
----
+- contains the corrected source and all nine package-test modules;
+- passes public downstream conformance;
+- has no Runenwerk or external-path dependency;
+- passes stable and Rust 1.93.0 validation through `cargo validate` in GitHub
+  Actions;
+- records exact provenance and source-parity evidence;
+- is ready to be pinned by a separately authorized PT-RUNENSDF-004 cutover.
 
-## Later RunenSDF phases
+## PT-RUNENSDF-004 — Runenwerk clean cutover
 
-| Phase | Purpose | State |
-|---|---|---|
-| `PT-RUNENSDF-004` | Pin exact RunenSDF revision, migrate Runenwerk consumers, delete `domain/sdf`, remove old workspace/lockfile authority, validate integration | Blocked by PT-003 |
-| `PT-RUNENSDF-005` | Close provenance, compatibility, deleted-path, release, branch, and final ownership evidence | Blocked by PT-004 |
+State: blocked by PT-RUNENSDF-003.
+
+The cutover phase must:
+
+1. repeat the complete Runenwerk consumer audit;
+2. pin every real consumer to the exact accepted standalone commit;
+3. migrate imports and Runenwerk-owned adapters;
+4. remove `domain/sdf` from workspace membership and the old lockfile authority;
+5. delete internal source, tests, and stale framework-owned documentation;
+6. prove no forwarding package, alias, source include, submodule, duplicate source,
+   or old package identity remains;
+7. validate the complete Runenwerk workspace and integration.
+
+If the consumer audit still finds no production consumer, remove the isolated
+internal package without adding an unused external dependency.
+
+Temporary duplicate source may exist only between unmerged coordinated transfer
+and cutover branches. A moving branch dependency is forbidden.
+
+## PT-RUNENSDF-005 — Final closeout and release readiness
+
+State: blocked by PT-RUNENSDF-004.
+
+Close provenance, compatibility, deleted-path, branch, release-policy, ownership,
+and adoption evidence. Publication remains a separate decision.
 
 ## RunenECS track
 
@@ -182,8 +209,8 @@ External extraction remains blocked through R10.
 
 RunenUI is governed elsewhere. This program does not design or implement RunenUI
 APIs. A future Runenwerk-owned adapter may translate accepted renderer-neutral
-RunenUI output into generic RunenRender contributions after both sides expose
-stable public seams.
+RunenUI output into generic RunenRender contributions after both public boundaries
+are accepted.
 
 ## Parallelism policy
 
