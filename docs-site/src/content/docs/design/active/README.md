@@ -5,14 +5,16 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-21
 ---
 
 # Active Designs
 
-Use this folder for designs that are useful but not yet fully accepted or not yet checked against implementation.
+Use this folder for designs that are useful but not yet fully accepted or not yet
+checked against implementation.
 
-Active does not mean wrong or deprecated. It means the design is still part of current planning, implementation, or validation work.
+Active does not mean wrong or deprecated. It means the design is still part of
+current planning, implementation, or validation work.
 
 ## Architecture spine
 
@@ -20,9 +22,9 @@ For the whole UI framework architecture, start with:
 
 - [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md)
 
-Active design docs below are slice-level authorities, proposals,
-implementation designs, or product-track references. They should not each
-restate the entire UI framework architecture.
+Active design docs below are slice-level authorities, proposals, implementation
+designs, or product references. They should not each restate the entire framework
+architecture.
 
 ## Current Designs
 
@@ -115,8 +117,9 @@ restate the entire UI framework architecture.
 - [RunenSDF Extraction Design](runensdf-extraction-design.md)
 - [RunenECS Extraction Boundary Design](runenecs-extraction-boundary-design.md)
 - [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
-- [RunenRender Decomposition Design](runenrender-decomposition-design.md)
-- [RunenRender Internal Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
+- [RunenGPU Architecture Design](runengpu-architecture-design.md)
+- [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
+- [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 
 ### Domain Authoring And Standalone UI Framework
 

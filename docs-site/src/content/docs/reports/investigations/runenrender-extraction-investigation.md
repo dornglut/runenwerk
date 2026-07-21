@@ -1,76 +1,82 @@
 ---
-title: RunenRender Extraction Investigation
-description: Connector-backed renderer module, graph, WGPU, surface, shader, producer, adapter, diagnostics, and extraction-readiness evidence.
+title: RunenGPU and RunenRender Boundary Investigation
+description: Connector-backed current ownership findings and remaining S0 evidence required to separate GPU execution from image formation.
 status: active
 owner: render
 layer: investigation
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-21
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
+  - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
+  - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-decomposition-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/specs/pt-runenrender-r1-identities-errors.ron
 ---
 
-# RunenRender Extraction Investigation
+# RunenGPU and RunenRender Boundary Investigation
 
 ## Question
 
-Which current renderer responsibilities are reusable neutral renderer contracts,
-which belong to a WGPU backend, which remain Runenwerk adapters/product policy,
-and what must be repaired before external extraction?
+Which current `engine/src/plugins/render` responsibilities are:
+
+- general GPU execution owned by RunenGPU;
+- image-formation semantics owned by RunenRender;
+- Runenwerk host/product/integration responsibility;
+- another domain's responsibility;
+- redesign or deletion candidates?
 
 ## Verdict
 
 ```text
-EXTRACTION CANDIDATE                 yes
-MOVE engine/src/plugins/render      forbidden
-REQUIRED PACKAGES                    runenrender_core, runenrender_wgpu
-OPTIONAL PACKAGE                     runenrender_macros after ABI proof
-CONNECTOR SEMANTIC INVESTIGATION     substantial, not workflow-complete
-COMPLETE FILE/SHADER/CONSUMER MAP    pending local verification
-FIRST EXECUTABLE REPAIR              R1 neutral identities and structured errors
-EXTERNAL SOURCE MOVEMENT             forbidden
+RUNENGPU CANDIDATE                 yes
+RUNENRENDER CANDIDATE              yes
+MOVE CURRENT RENDER DIRECTORY      forbidden
+INITIAL PUBLIC PACKAGES            runen-gpu, runen-render
+DIRECT WGPU OWNER                  RunenGPU only
+FIRST EXECUTABLE WORK              none; S0 inventory first
+EXTERNAL SOURCE MOVEMENT           forbidden
 ```
 
-The current renderer contains credible graph, resource, pipeline, GPU parameter,
-WGPU, surface, shader, and inspection foundations. It is nevertheless one engine
-plugin whose authoring and execution paths directly depend on ECS, Runenwerk
-lifecycle/time/window state, scene/world/material/SDF/UI/editor features,
-filesystem hot reload, diagnostics presentation, and startup policy.
+The current plugin combines general GPU execution, image formation, domain
+adaptation, native host integration, and product policy. It cannot be extracted as
+one repository or repaired by renaming.
 
-The correct approach is an internal strangler decomposition followed by an
-anti-cheating proof, not a directory move.
-
-## Baseline and evidence
-
-Repository: `Crystonix/Runenwerk`
-
-Reviewed published main:
+The required dependency direction is:
 
 ```text
-c078bd8609dc407d68269e86a1472c9234932213
+RunenRender -> RunenGPU
 ```
 
-Evidence:
+The correct approach is two internal public-boundary proofs followed by separate
+clean cutovers.
 
-```text
-E2 GitHub package/commit/PR metadata
-E3 connector-backed source, manifest, module, and control-flow inspection
-```
+## Evidence status
 
-The connector cannot reliably list every repository file, run Cargo, validate
-WGSL, initialize WGPU, execute window/GPU examples, or run benchmarks. Local
-verification remains mandatory before implementation activation.
+The durable findings below come from connector-backed source, manifest, module,
+and control-flow inspection originally recorded against the current renderer
+family before the architecture correction. Workflow and planning infrastructure
+changed afterward, but no GPU/render Rust cutover has merged.
+
+Evidence currently supports ownership correction. It does not satisfy the complete
+S0 file/consumer/command inventory.
+
+Not yet verified by this investigation:
+
+- complete recursive file and shader listing;
+- every downstream consumer/import;
+- current `cargo validate` with any proposed implementation;
+- headless/offscreen/surface/device-loss behavior;
+- GPU adapter/driver evidence;
+- renderer benchmarks;
+- exact move/stay/redesign/delete disposition.
 
 ## Current package boundary
 
-Rendering lives inside `engine`, not an independent crate.
-
-The inspected render root exposes:
+Rendering remains inside the `engine` package. The inspected render root exposes
+families such as:
 
 ```text
 api
@@ -94,31 +100,98 @@ texture_upload
 plugin
 ```
 
-`engine_render_macros` is a separate proc-macro package whose generated paths
-target `engine::plugins::render`.
+`engine_render_macros` is a separate proc-macro package whose generated paths target
+`engine::plugins::render`.
+
+Source grouping is evidence, not target ownership.
 
 ## Current ownership aggregation
 
-The current plugin combines:
+The current implementation combines:
 
-1. backend-neutral graph and resource planning;
-2. WGPU instance/adapter/device/queue/resources/pipelines/execution;
-3. native-window and surface integration;
+1. WGPU instance, adapter, device, queue, resources, pipelines, and submission;
+2. generic-looking graph/resource/access/lifetime planning;
+3. native-window surface creation and presentation;
 4. Runenwerk plugin scheduling and frame lifecycle;
-5. ECS resource/state extraction;
+5. ECS resource and state extraction;
 6. scene/world preparation;
-7. material graph compilation and material asset loading;
-8. SDF/world residency and raymarch product policy;
-9. UI feature preparation and built-in graph validation;
+7. material graph compilation and asset loading;
+8. SDF/world residency and ray-march product policy;
+9. UI preparation and built-in composite behavior;
 10. editor picking and product features;
 11. shader filesystem discovery, polling, and hot reload;
 12. diagnostics, capture, artifact export, startup readiness, and frame pacing.
 
-This is Runenwerk integration composition, not one reusable renderer package.
+This is integration composition, not one reusable framework boundary.
 
-## API and graph findings
+## Ownership classification
 
-Current IDs use Runenwerk `id_macros`:
+### RunenGPU candidates
+
+Potential RunenGPU responsibility:
+
+- device/context/queue creation and backend facts;
+- normalized capability admission;
+- buffers, textures, views, samplers, query resources, and pipelines;
+- access, initialization, lifetime, hazard, and retirement validation;
+- generic compute/render/copy/clear/resolve/present workload execution;
+- shader/module/pipeline realization;
+- staging upload and asynchronous readback;
+- command encoding, submission, completion, and shutdown;
+- low-level surface creation/configuration/acquisition/presentation;
+- structured GPU/surface/device outcomes and timings.
+
+These candidates must be purged of renderer, ECS, scene, world, material, SDF, UI,
+editor, and product meaning before extraction.
+
+### RunenRender candidates
+
+Potential RunenRender responsibility:
+
+- prepared render scenes and deterministic contributions;
+- renderer views and logical targets;
+- provider/instance/interaction contracts;
+- material, medium, emitter, and environment rendering semantics;
+- visibility/provider-query policy;
+- light transport and estimator policy;
+- radiance caches and bounded history;
+- reconstruction, overlay, color, and presentation intent;
+- renderer diagnostics/provenance;
+- lowering into RunenGPU work fragments.
+
+These candidates must not own WGPU, windows, ECS extraction, source authoring,
+field/SDF mathematics, UI semantics, or product recovery.
+
+### Runenwerk-retained responsibility
+
+Runenwerk retains:
+
+- application/plugin/frame lifecycle;
+- native windows, event loop, DPI, monitor, resize, and visibility policy;
+- ECS and domain extraction;
+- scene/world/material-authoring/SDF/UI/editor/simulation adapters;
+- shader filesystem discovery, revision, watch, reload, and last-known-good policy;
+- product feature, quality, fallback, artifact, startup, and recovery policy;
+- integration diagnostics and runtime evidence.
+
+### Other-domain responsibility
+
+The following remain with their semantic owners:
+
+```text
+SDF values, bounds, and query safety       RunenSDF/domain SDF
+ECS lifecycle and query semantics          RunenECS/domain ECS
+UI state/layout/hit testing/accessibility  RunenUI
+material authoring graph/source            material-authoring owner
+scene/world authoritative state            scene/world owners
+simulation algorithms/state                simulation owners
+```
+
+Adapters lower accepted facts into RunenGPU or RunenRender inputs.
+
+## Identity findings
+
+Current runtime concepts include identities such as:
 
 ```text
 RenderFlowId
@@ -128,84 +201,134 @@ RenderFeatureId
 RenderFrameProducerId
 ```
 
-Current graph/authoring APIs include or depend on:
+Current IDs use Runenwerk identity infrastructure and are consumed across graph,
+resource, producer, feature, and runtime paths.
 
-- ECS resource/state projections;
+These names do not prove one semantic owner. S0 must classify every identity as:
+
+```text
+RunenGPU runtime identity
+RunenRender semantic identity
+Runenwerk producer/product identity
+source/persisted identity
+delete or redesign
+```
+
+The old renderer-first identity phase is unsafe because it could encode GPU and
+Runenwerk concepts into RunenRender.
+
+S0 must also inspect:
+
+- allocators and sequences;
+- safe raw constructors and `.raw()` consumers;
+- hashing/ordering assumptions;
+- persistence, replay, network, cache, trace, and artifact uses;
+- stale-handle or generation requirements;
+- foreign-context requirements.
+
+## Graph findings
+
+The current graph contains potentially reusable planning mechanics but also host
+and product semantics:
+
+- built-in UI composite behavior;
+- UI and product feature IDs;
 - host `TypeId` requirements and callbacks;
-- fixed-time and catch-up policy;
+- fixed-time regions;
 - product view categories;
-- built-in UI composite execution and validation;
-- material-scene shader selection;
-- product feature IDs and fallback policy;
-- `anyhow` and mixed panic/skip behavior.
+- material-scene shader selection and fallback policy.
 
-Target neutral core cannot retain these host/product semantics.
+Target separation:
+
+```text
+RunenRender
+    semantic render plan and quality/visibility/transport intent
+        -> RunenGPU work fragments
+
+RunenGPU
+    compute/render/copy/clear/resolve/present nodes
+    resource accesses and dependencies
+    hazard/capability/lifetime validation
+```
+
+Neither graph reaches back into ECS or host state.
 
 ## Frame and producer findings
 
-The current frame model combines potentially neutral frame/view/resource facts
-with product selection, main/offscreen product semantics, UI contributions, and
+The current frame model mixes potentially reusable view/resource facts with
+product selection, main/offscreen product semantics, UI contributions, and
 ECS-backed registries.
 
-Target direction:
+Target:
 
 ```text
 Runenwerk adapters
-  resolve ECS/application/domain state
-  build explicit prepared inputs and generic contributions
+    resolve source state
+    -> immutable RenderContribution values
 
-runenrender_core
-  validates and plans explicit work
-
-runenrender_wgpu
-  realizes resources/pipelines and executes the plan
+RunenRender
+    compose PreparedRenderScene
+    -> deterministic render plan
+    -> RunenGPU work fragments
 ```
 
-Renderer plans never reach back into a host world.
+Producer identities are not raw ECS entity identities. Replacement/removal and
+retirement are explicit.
 
-## Backend findings
+## Backend and surface findings
 
-Current WGPU initialization requires a Winit `Arc<Window>`, selecting device and
-surface together. This prevents independent headless/offscreen initialization and
-mixes host lifetime with backend ownership.
+Current WGPU initialization selects device and native surface together from a
+Winit window. This prevents clean headless initialization and couples host lifetime
+to backend execution.
 
-Target split:
+Target:
 
 ```text
 Runenwerk host
-  Winit windows, event loop, monitor/DPI/resize/visibility policy
+    windows/event loop/handles/DPI/resize/visibility/recovery
 
-runenrender_wgpu
-  headless device creation
-  optional WGPU surface creation from admitted handles
-  configuration/acquire/present/device-loss facts
+RunenGPU
+    headless context
+    optional surface realization from admitted handles
+    configuration/acquire/present/device outcomes
+
+RunenRender
+    logical target, color, compositing, presentation intent
 ```
 
-The complete design must prove raw handle lifetime, thread affinity, drop order,
-surface retirement, multi-window operation, and device-loss reconstruction.
+S0 must trace:
 
-## Graph classification
+- raw handle admission and lifetime;
+- thread affinity;
+- surface creation/retirement;
+- resize/reconfiguration;
+- acquire/present outcomes;
+- window/surface/device/in-flight drop order;
+- multi-window and headless paths;
+- device-loss reconstruction ownership.
 
-The graph is the strongest core candidate but currently contains:
+## Resource and residency findings
 
-- `BuiltinUiComposite` and UI feature IDs;
-- host state projections and `TypeId` callbacks;
-- fixed-step regions;
-- Runenwerk product view categories;
-- product feature variants.
+Current resource infrastructure mixes generic-looking handles/lifetimes with
+surface defaults, host type state, material/world/SDF residency, dynamic texture
+policy, and saturating arithmetic.
 
-Core graph target:
+Potential RunenGPU ownership:
 
-```text
-compute
-graphics
-fullscreen-raster convenience
-copy
-present
-```
+- validated resource descriptors;
+- context/generation/stale-handle behavior;
+- imports/exports;
+- access and hazard validation;
+- transient lifetime planning;
+- generic budgets and backend allocation facts.
 
-Semantic UI/material/SDF/world/editor validation remains in Runenwerk producers.
-Core validates only generic graph/resource/capability contracts.
+Potential RunenRender ownership:
+
+- render-provider acceleration and cache keys;
+- render-specific realization requirements;
+- history/radiance/reconstruction validity.
+
+Runenwerk/domain owners retain authoritative source and reconstruction policy.
 
 ## Shader and pipeline findings
 
@@ -213,164 +336,120 @@ Current shader authority combines:
 
 - generic identity/source revision;
 - filesystem roots and path normalization;
-- polling/throttling/force reload;
-- last-known-good/application policy;
+- polling/throttling/forced reload;
+- last-known-good application policy;
+- material translation;
 - Naga/WGSL/WGPU realization;
 - tracing and temporary-file tests.
 
 Target split:
 
 ```text
-runenrender_core
-  backend-neutral shader/interface identity and intent where proven
+consumer/RunenRender
+    shader meaning and source product
 
-runenrender_wgpu
-  WGSL validation, module creation, pipeline realization, backend errors
+RunenGPU
+    admission, backend validation, module/binding/pipeline realization
 
 Runenwerk
-  filesystem discovery/watch/reload, asset paths, material translation, fallback policy
+    filesystem discovery/watch/reload, source revision, material translation,
+    product fallback and user diagnostics
 ```
 
-## GPU layout and macro findings
+Logical parameters, byte representation, binding representation, and WGPU layout
+must remain distinct.
 
-Current `GpuUniform` and `GpuStorage` derives generate raw layout types, bytemuck
-traits, parameter conversion, and paths into `engine::plugins::render`.
+## Macro findings
 
-A macro package is not mandatory merely because proc macros require a separate
-crate. First decide whether the derives remain the correct public API.
+Current `GpuUniform` and `GpuStorage` derives generate layout types, conversions,
+bytemuck traits, and hard-coded engine render paths.
 
-If retained:
+A macro package is not accepted by default. S0 must determine:
 
-- WGSL/WGPU layout authority belongs with the WGPU ABI owner, not neutral core;
-- generated paths must support dependency renaming;
-- padding/alignment/arrays/matrices/nested structures need byte-level proof;
-- bytemuck safety requires generated representation invariants;
-- external compile-pass/fail tests are mandatory.
+- every macro consumer;
+- whether the derives are still the correct public API;
+- byte layout, padding, alignment, arrays, matrices, nested structures, and
+  bytemuck safety;
+- dependency renaming and external compile-pass/fail behavior;
+- whether ordinary traits/builders are sufficient.
 
-## Resource and residency findings
+If retained, backend ABI mechanics belong with RunenGPU, while renderer parameter
+meaning remains with RunenRender or the source owner.
 
-Current generic-looking resource/handle/lifetime infrastructure is mixed with
-surface defaults, host type state, material/world/SDF residency, dynamic texture
-policy, and saturating arithmetic.
+## RunenUI findings
 
-Potential neutral ownership includes validated resource descriptors, generations,
-stale-handle behavior, transient lifetime planning, and generic budgets.
+RunenUI and RunenRender remain independent.
 
-Runenwerk retains source reconstruction and domain-specific residency policy.
+RunenUI owns semantic UI, state, focus, accessibility, layout/style/text, hit
+testing, and renderer-neutral paint output.
 
-## Domain adapter findings
+A future Runenwerk bridge may translate paint output into a RunenRender overlay
+contribution. RunenRender must not access widget state or perform UI hit testing.
+RunenUI core does not depend on RunenGPU.
 
-The following remain Runenwerk-owned by default:
+## RunenSDF findings
 
-```text
-scene/world extraction
-material IR and material asset translation
-SDF representation and world residency policy
-UI paint/font/atlas conversion
-editor picking and editor workflows
-procedural camera/population policy
-product feature selection and fallback
-```
+RunenSDF standalone transfer is complete at revision
+`d52badefc640d6dc6dcdd40268af3aea1bb8eefe`. Current Runenwerk `main` does not yet
+record a completed internal clean cutover.
 
-RunenRender accepts generic prepared work only.
-
-## RunenUI relationship
-
-RunenUI and RunenRender are independent peers.
-
-RunenUI owns UI semantics, hit testing, and renderer-neutral paint output. A
-future Runenwerk adapter translates accepted paint output into generic
-RunenRender contributions. RunenUI may retain standalone backends. Neither
-framework depends on the other by default.
+RunenSDF remains backend-neutral. Rendering and GPU realization consume explicit
+adapter products that preserve field capabilities and numerical safety.
 
 ## Diagnostics findings
 
-Potentially neutral diagnostics include graph dumps, pass/resource provenance,
-backend capabilities, surface/device outcomes, and timing facts.
+Potential RunenGPU diagnostics:
 
-Runenwerk retains material/SDF/world/editor/product inspection, artifact paths,
-overlay presentation, capture export policy, startup readiness, and frame pacing.
-Wall-clock/GPU evidence is not deterministic planning authority.
+- backend/adapter/capabilities;
+- resources, workloads, hazards, submissions;
+- shader/pipeline realization;
+- uploads/readbacks/timings;
+- surface/device/terminal outcomes.
 
-## Durable target decisions
+Potential RunenRender diagnostics:
 
-Fixed:
+- prepared scene/contribution validity;
+- provider/material/emitter/transport admission;
+- quality degradation;
+- cache/history/reconstruction/overlay validity;
+- mapping to RunenGPU work provenance.
 
-- required package candidates: `runenrender_core` and `runenrender_wgpu`;
-- optional `runenrender_macros` only after ABI proof;
-- no ECS, Runenwerk, SDF, UI, scene, material-authoring, Winit, or WGPU dependency
-  in neutral core;
-- no Winit, ECS, Runenwerk, or domain semantics in WGPU package;
-- headless WGPU initialization before optional surface attachment;
-- no product-specific graph/pass/feature variants;
-- explicit prepared inputs and generic producer contributions;
-- Runenwerk owns native windows, domain adapters, lifecycle, hot reload, and
-  product recovery;
-- external extraction blocked until internal public-boundary anti-cheating proof.
+Runenwerk retains user presentation, artifact paths, capture/export policy,
+startup readiness, frame pacing, and recovery.
 
-Provisional until local evidence:
+## S0 required output
 
-- exact module/file dispositions;
-- exact neutral graph/resource API;
-- exact macro retention and package;
-- exact shader/interface boundary;
-- exact surface target abstraction and thread/drop contract;
-- exact diagnostics/capture set;
-- exact internal crate/module sequence.
+Before any G1 specification, produce:
 
-## Repair program
+1. complete recursive file, shader, macro, test, example, benchmark, and artifact
+   inventory;
+2. complete Cargo/import/downstream consumer graph;
+3. identity/allocator/raw-use/stable-format classification;
+4. graph/resource/frame/producer control-flow traces;
+5. context/device/queue/surface/window/drop/shutdown trace;
+6. shader/pipeline/reload/macro ABI inventory;
+7. domain and product reach-back inventory;
+8. headless/offscreen/surface/device-loss/runtime/benchmark command inventory;
+9. exact move/stay/redesign/delete matrix;
+10. first bounded G1 candidate and stop conditions;
+11. current `cargo validate` plus separately reported environment-dependent evidence.
 
-```text
-R1 neutral identities, structured errors, and dependency guards
-R2 neutral graph and resource descriptors
-R3 explicit prepared frame inputs and generic producers
-R4 GPU parameter and optional macro ABI conformance
-R5 shader descriptor and hot-reload separation
-R6 headless WGPU device/resource/pipeline executor
-R7 generic surfaces and device-loss contract
-R8 generic diagnostics/capture/provenance split
-R9 Runenwerk domain/runtime adapter migration
-R10 internal public-boundary and performance conformance
-```
+## Stop conditions
 
-Only R1 receives a concrete specification now.
+Stop before implementation when:
 
-## Mandatory local gate
+- any file or active consumer is unclassified;
+- runtime IDs may be persisted/transmitted without a separate stable format;
+- GPU versus renderer versus Runenwerk ownership remains ambiguous;
+- surface/window/device/drop order remains unknown;
+- macro safety/ABI cannot be separated;
+- the first slice requires graph, WGPU, renderer, adapter, and product changes at
+  once;
+- a speculative package or compatibility layer is proposed;
+- current main is not green for unrelated reasons.
 
-Before activating R1, run:
+## Conclusion
 
-```text
-cargo metadata --format-version 1 --locked
-cargo tree -p engine --edges normal,build,dev
-find engine/src/plugins/render engine_render_macros assets/shaders engine/examples engine/tests engine/benches -type f | sort
-rg -n 'ecs::|crate::runtime|crate::plugins::scene|material_graph|world_sdf|ui_|Ui|NativeWindowId|winit::|wgpu::|anyhow|panic!|unwrap\(|expect\(' engine/src/plugins/render engine_render_macros
-rg -n 'plugins::render|RenderFlow|RenderPlugin|PreparedRenderFrame|Gfx' apps domain net adapters engine/tests engine/examples
-rg -n 'BuiltinUi|UI_RENDER_FEATURE_ID|TypeId|FixedStep|MainSurface|OffscreenProduct|with_state|uniform_from_state|dispatch_from_state' engine/src/plugins/render
-cargo test -p engine --lib --locked
-cargo test -p engine --tests --locked
-cargo clippy -p engine --all-targets --locked -- -D warnings
-python tools/docs/validate_docs.py
-pnpm --dir docs-site build
-git diff --check
-git status --short --branch
-```
-
-Also identify shader validation, headless WGPU, surface/window, device-loss, GPU
-example, and renderer benchmark commands. Report adapter/device/platform for GPU
-evidence.
-
-## Gate result
-
-```text
-repository ownership direction     established
-connector semantic investigation   substantial, not workflow-complete
-local complete inventory           pending
-complete design gate               pending
-implementation authorization       blocked
-external extraction                forbidden
-```
-
-## Next safe action
-
-After local verification and owner review, activate exactly R1. Do not implement
-R2–R10, create RunenRender, or move renderer source externally during R1.
+The current source contains credible reusable GPU and rendering foundations, but
+its ownership is combined. The durable next action is S0—not renderer identity
+implementation, directory movement, or external repository population.

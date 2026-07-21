@@ -1,323 +1,325 @@
 ---
 title: Repository Family Current-State Investigation
-description: Current source, dependency, ownership, and extraction-readiness evidence for RunenSDF, RunenECS, and RunenRender.
+description: Current source, dependency, ownership, and extraction-readiness evidence for RunenSDF, RunenECS, RunenGPU, and RunenRender.
 status: active
 owner: workspace
 layer: investigation
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-21
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
+  - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runensdf-extraction-design.md
   - ../../design/active/runenecs-extraction-boundary-design.md
+  - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-decomposition-design.md
+  - ./runenrender-extraction-investigation.md
   - ../../workspace/planning/active-work.md
+  - ../../workspace/planning/roadmap.md
 ---
 
 # Repository Family Current-State Investigation
 
-## Investigation question
+## Question
 
-Which Runenwerk subsystems can become independent repositories, what boundaries
-must change first, and which work may proceed safely in parallel?
+Which Runenwerk subsystems are independently useful framework candidates, what is
+their current state, what boundaries remain incorrect, and which work may proceed
+safely in parallel?
 
-## Baseline
-
-Repository: `Crystonix/Runenwerk`
-
-Reviewed published `main` head:
+## Current repository family
 
 ```text
-c078bd8609dc407d68269e86a1472c9234932213
+product       repository                 package       crate
+RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
+RunenECS      target Crystonix/runen-ecs package topology governed separately
+RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
+RunenRender   Crystonix/runen-render     runen-render  runen_render
+RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
+Runenwerk     Crystonix/runenwerk        workspace      integration/product
 ```
 
-The investigation also inspected rejected commit
-`b5e9624c594c9f1e3f2a0929bf84028f13fde860` as historical evidence of an
-incomplete source deletion. That commit is not an implementation base for this
-program.
+RunenSDF and RunenUI exist as independent repositories. RunenECS, RunenGPU, and
+RunenRender require the accepted internal-proof and clean-cutover sequences before
+Runenwerk source movement.
 
-## Evidence limits
+## Evidence basis and limits
 
-This investigation used GitHub repository, source, manifest, commit, and pull
-request inspection. It did not run the local Cargo workspace or GPU/runtime
-commands. Command validation remains required in each implementation phase.
+This investigation is grounded in:
 
-Source classification in this report is sufficient to establish track order and
-required design gates. It is not by itself authorization for ECS or renderer
-source movement.
+- GitHub repository, branch, commit, issue, and pull-request state;
+- source, manifest, module, and documentation inspection;
+- exact-head CI and documentation validation from completed workflow cleanup;
+- accepted RunenSDF standalone conformance evidence;
+- connector-backed GPU/render ownership inspection.
 
-## Workspace facts
+It does not yet provide the complete GPU/render S0 file and consumer inventory, GPU
+adapter/driver evidence, headless/offscreen/surface/device-loss runtime evidence,
+or renderer performance baselines.
 
-The root workspace currently contains domain crates for SDF, ECS, geometry,
-spatial indexing, scheduler, scene, materials, world systems, applications, and
-the monolithic engine package.
+Source classification establishes ownership and sequencing. It does not authorize
+implementation by itself.
 
-The extraction candidates are not equivalent in maturity:
+## Program-state summary
 
-| Candidate | Current location | Immediate extraction readiness |
-|---|---|---|
-| RunenSDF | `domain/sdf` | high after a bounded geometry/query correction |
-| RunenECS | `domain/ecs`, `domain/ecs_macros`, parts of `domain/scheduler` | medium/low until ownership decisions close |
-| RunenRender | `engine/src/plugins/render`, `engine_render_macros` | low until internal decomposition is proven |
+| Candidate | Current location/state | Readiness | Next allowed work |
+|---|---|---|---|
+| RunenSDF | standalone repository accepted at `d52badefc640d6dc6dcdd40268af3aea1bb8eefe`; `domain/sdf` still present on current Runenwerk `main` | standalone complete; Runenwerk cutover separate | exact consumer audit and separately reviewed clean cutover |
+| RunenECS | `domain/ecs`, `domain/ecs_macros`, parts of `domain/scheduler` | internal ownership/safety repair required | bounded R1 implementation after current-main review |
+| RunenGPU | GPU execution mixed into `engine/src/plugins/render` and related packages | architecture accepted; S0 incomplete | read-only S0 inventory only |
+| RunenRender | image formation mixed with GPU/host/domain/product code | architecture accepted; depends on RunenGPU extraction | read-only S0 inventory only |
+| RunenUI | independent repository/workstream | governed separately | RunenUI roadmap; no Runenwerk ownership claim |
 
-## RunenSDF findings
+## RunenSDF
 
-### Current package
+### Completed
 
-`domain/sdf/Cargo.toml` defines one unpublished `sdf` package with only:
+The in-workspace boundary correction completed through Runenwerk PR `#116`.
+
+The standalone repository transfer completed through Runenwerk PR `#118` and
+`Crystonix/runen-sdf` PR `#1` at:
 
 ```text
-glam
-geometry
+d52badefc640d6dc6dcdd40268af3aea1bb8eefe
 ```
 
-The crate exports:
+Accepted standalone ownership includes:
 
-```text
-bounds
-combine
-epsilon
-field
-gradient
-normal
-ops
-primitives
-queries
-sample
-transform
-util
-```
+- field values and samples;
+- conservative tracing steps and exact-distance capabilities;
+- validated bounds and rays;
+- primitives, composition, transforms, gradients, normals, and queries;
+- numerical policy and CPU reference conformance.
 
-Its public spine is `SdfField3`, `SdfSample`, and `FieldBounds`.
+RunenSDF does not own Runenwerk geometry, world streaming, ECS, rendering, GPU,
+materials, UI, or product policy.
 
-### Confirmed coupling
+### Remaining Runenwerk state
 
-The `geometry` dependency is public rather than incidental:
+Current Runenwerk `main` still contains `domain/sdf`. No merged Runenwerk evidence
+currently records the clean-cutover deletion as complete.
 
-- `FieldBounds::Bounded` stores `geometry::Aabb3`;
-- `FieldBounds::bounded` accepts `Aabb3`;
-- `FieldBounds::as_aabb` returns `Aabb3`;
-- raymarch queries accept `geometry::Ray3`.
+The next decision must inventory every code, test, manifest, adapter, document, and
+persisted consumer, then either:
 
-This means moving the crate unchanged would make RunenSDF depend on another
-Runenwerk domain package and would expose Runenwerk geometry as part of its API.
+- pin the accepted external revision for real active consumers and delete the
+  internal authority; or
+- delete the internal package without adding an unused external dependency.
 
-### Boundary assessment
+No forwarding package, source include, mirror, alias, submodule, or branch
+dependency may survive.
 
-The coupling is narrow and replaceable. SDF needs only a small repository-local
-bounds and ray/query vocabulary based on `glam::Vec3`.
+## RunenECS
 
-The initial extraction should remain one `runensdf` crate. Current evidence does
-not justify separate core, query, macro, GPU, shader, or program crates.
+### Current aggregation
+
+Current ECS-related source includes:
+
+- entity/component/resource/world lifecycle;
+- storage and queries;
+- commands and deferred structural mutation;
+- systems and access declarations;
+- reflection and macros;
+- geometry-dependent spatial indexing;
+- configured scheduling/runtime reports;
+- messaging, work queues, change extraction, ownership, telemetry, and integration
+  surfaces.
+
+### Boundary problems
+
+- geometry/spatial policy is exposed through ECS ownership;
+- scheduler versus ECS-local scheduling ownership requires explicit separation;
+- reflection and macro contracts require independent public proof;
+- unsafe query/SystemParam boundaries require review;
+- messaging, networking, replay, ownership, and change extraction mix reusable and
+  Runenwerk-specific semantics;
+- moving current directories unchanged would freeze accidental aggregation.
+
+### Next work
+
+The accepted repair order remains R1–R9. R1 covers identity and structured errors.
+No external source movement is authorized before the internal proof sequence and
+standalone conformance complete.
+
+## Current GPU/render aggregation
+
+The current `engine/src/plugins/render` and related macro/shader/runtime code
+combine:
+
+1. WGPU instance, adapter, device, queue, resources, pipelines, and submission;
+2. generic-looking graph, resource, access, and lifetime planning;
+3. native-window surface creation and presentation;
+4. Runenwerk plugin/frame/time lifecycle;
+5. ECS and domain extraction;
+6. scene/world preparation;
+7. material graph compilation and asset preparation;
+8. SDF/world residency and product rendering policy;
+9. UI and editor integration;
+10. shader filesystem discovery and hot reload;
+11. diagnostics, capture, artifacts, startup, frame pacing, and recovery policy.
+
+Moving this directory unchanged is forbidden.
+
+## RunenGPU findings
+
+### Target ownership
+
+RunenGPU owns:
+
+- GPU contexts and execution epochs;
+- normalized capabilities and requirements;
+- resources, views, pipelines, and query resources;
+- initialization, access, lifetimes, hazards, imports/exports, and retirement;
+- compute/render/copy/clear/resolve/present workloads;
+- shader/pipeline admission and WGPU realization;
+- uploads, asynchronous readback, submission, completion, and shutdown;
+- low-level surfaces and backend/device outcomes;
+- GPU diagnostics, timings, and provenance.
+
+### Target exclusions
+
+RunenGPU does not own renderer semantics, field/simulation algorithms, ECS, UI,
+world/editor/product meaning, native-window/event-loop policy, shader file
+watching, or product recovery.
 
 ### Readiness
 
 ```text
-COMPLETE_INVESTIGATION: active; consumer and test inventory still required
-DESIGN: target direction fixed; detailed conformance inventory still required
-IMPLEMENTATION: blocked until the design gate and local baseline validation pass
-EXTRACTION_ORDER: first
-```
-
-## RunenECS findings
-
-### Current package graph
-
-`domain/ecs` directly depends on:
-
-```text
-anyhow
-ecs_macros
-geometry
-scheduler
-thiserror
-```
-
-The public crate root exports substantially more than storage and queries:
-
-- entity, bundle, component, resource, world, command, and query APIs;
-- reflection;
-- spatial hash configuration and spatial indexes;
-- configured systems and runtime-plan reports;
-- broadcast streams;
-- tick buffers;
-- work queues;
-- ownership transfer and ownership descriptors;
-- component/resource change extraction and structural deltas;
-- telemetry.
-
-The separate `domain/scheduler` crate has no ECS dependency and exports access,
-builder, DAG, label, node, plan, scheduler-core, system, telemetry, and utility
-modules. Its low-level package shape suggests possible independent value, but
-semantic ownership cannot be inferred from package direction alone.
-
-### Confirmed boundary problems
-
-1. ECS core publicly exports geometry-dependent spatial indexing.
-2. ECS scheduling semantics and generic scheduler/executor semantics are not yet
-   classified.
-3. Reflection ownership and registry lifetime require explicit review.
-4. Broadcast, tick-buffer, and work-queue families may represent distinct
-   semantics under one public surface.
-5. Change extraction, ownership, structural deltas, networking, replay, and
-   replication boundaries require consumer mapping.
-6. The public root is broad enough that moving it unchanged would freeze current
-   accidental aggregation.
-
-### Readiness
-
-```text
-COMPLETE_INVESTIGATION: incomplete
-DESIGN: incomplete
-IMPLEMENTATION: forbidden
-EXTRACTION_ORDER: second, after SDF workflow proof and boundary repair
+ARCHITECTURE: accepted
+S0 INVENTORY: incomplete
+IMPLEMENTATION SPEC: none
+RUST IMPLEMENTATION: forbidden until S0 review
+EXTERNAL TRANSFER: forbidden
 ```
 
 ## RunenRender findings
 
-### Current package location
+### Target ownership
 
-Rendering is not an independent package. It is a large engine plugin rooted at:
+RunenRender owns:
 
-```text
-engine/src/plugins/render
-```
+- prepared render scenes and deterministic contributions;
+- views and logical targets;
+- providers, instances, and interactions;
+- materials, media, emitters, and environments;
+- visibility and provider-query policy;
+- transport, quality, radiance caches, history, and reconstruction;
+- overlays, color, and presentation intent;
+- lowering render plans into RunenGPU workloads;
+- renderer diagnostics and provenance.
 
-The public module tree includes:
+### Target exclusions
 
-```text
-api
-backend
-composition
-features
-frame
-gpu_primitives
-graph
-inspect
-material_compiler
-params
-pipelines
-procedural
-renderer
-residency
-resource
-shader
-runtime
-texture_upload
-plugin
-```
-
-The engine package directly depends on WGPU, Winit, Naga, image, rusttype,
-material graph, world, spatial, ECS, scheduler, networking/history packages, and
-many former/current UI packages.
-
-### Confirmed boundary problems
-
-The current renderer location combines at least these ownership categories:
-
-1. backend-neutral graph and frame planning;
-2. WGPU backend state and command execution;
-3. window/surface integration;
-4. Runenwerk plugin scheduling and resources;
-5. ECS extraction;
-6. scene/world preparation;
-7. material graph compilation;
-8. SDF rendering integration;
-9. editor and product features;
-10. UI feature integration;
-11. diagnostics and proof infrastructure.
-
-Moving `engine/src/plugins/render` unchanged would create a physically separate
-repository that still depends on Runenwerk product semantics.
-
-### Required direction
-
-RunenRender must first be decomposed inside Runenwerk into:
-
-```text
-backend-neutral render contracts and graph planning
-WGPU backend
-Runenwerk host/plugin integration
-Runenwerk ECS/scene/material/SDF/editor/UI adapters
-```
-
-Runenwerk must consume the separated renderer through the same boundary intended
-for external consumers before repository transfer is authorized.
+RunenRender does not own WGPU directly, general GPU execution, ECS extraction,
+field/SDF mathematics, UI semantics/hit testing, native windows, shader file
+watching, or Runenwerk lifecycle/product recovery.
 
 ### Readiness
 
 ```text
-COMPLETE_INVESTIGATION: incomplete; full per-module and control-flow review required
-DESIGN: incomplete
-INTERNAL_DECOMPOSITION: blocked by design gate
-EXTERNAL_EXTRACTION: forbidden
-EXTRACTION_ORDER: last
+ARCHITECTURE: accepted
+DEPENDENCY: RunenRender -> RunenGPU
+S0 INVENTORY: incomplete
+RUNENGPU CUTOVER: prerequisite
+IMPLEMENTATION SPEC: none
+EXTERNAL TRANSFER: forbidden
 ```
 
-## Parallel-work decision
+## Identity problem
 
-Three tracks may proceed concurrently, but not as three simultaneous source
-moves:
+Current `Render*Id` values span graph, resources, features, producers, and runtime
+paths. Their names and location do not prove one semantic owner.
+
+S0 must classify every identity and allocator as:
 
 ```text
-RunenSDF    complete investigation/design, then implementation and extraction
-RunenECS    complete investigation and decision closure
-RunenRender complete semantic inventory and decomposition design
+RunenGPU runtime identity
+RunenRender semantic identity
+Runenwerk producer/product identity
+source/persisted identity
+delete or redesign
 ```
 
-This avoids concurrent large changes to root manifests, lockfiles, engine
-imports, architecture summaries, and shared planning authority.
+It must inspect raw constructors/accessors, hashing/order assumptions, generation
+and stale-handle needs, and persistence/replay/network/cache/trace/artifact uses.
+
+The old renderer-first identity phase is unsafe and retired.
+
+## Required GPU/render sequence
+
+```text
+S0 complete inventory
+-> G1-G8 internal RunenGPU proof
+-> GX external RunenGPU clean cutover
+-> R1-R8 internal RunenRender proof on RunenGPU
+-> RX external RunenRender clean cutover
+-> reusable adapter review
+-> advanced renderer work
+```
+
+RunenGPU precedes RunenRender because rendering depends on general GPU execution.
+Advanced renderer work must not harden accidental ownership before foundational
+cutovers.
+
+## S0 required evidence
+
+S0 must provide:
+
+- complete file, shader, macro, test, example, benchmark, and artifact inventory;
+- complete Cargo and downstream consumer graph;
+- identity, allocator, raw-use, and stable-format classification;
+- graph/resource/frame/producer control-flow trace;
+- context/device/queue/surface/window/drop/shutdown trace;
+- shader/pipeline/reload/macro ABI ownership map;
+- domain/product reach-back inventory;
+- headless/offscreen/surface/device-loss/runtime/benchmark command inventory;
+- exact move/stay/redesign/delete matrix;
+- current `cargo validate` and separately reported environment-dependent evidence;
+- one bounded first implementation candidate and stop conditions.
 
 ## RunenUI disposition
 
-RunenUI is explicitly excluded from this program. Another workstream owns it.
-This investigation makes no maturity claim and creates no RunenUI dependency.
+RunenUI remains an independent peer.
 
-RunenRender must expose generic producer and render-consumer contracts so that a
-future RunenUI adapter can integrate without UI semantics in renderer core.
+It owns semantic UI, state/actions, focus/accessibility, layout/style/text, hit
+testing, and renderer-neutral paint output.
+
+A future Runenwerk bridge may translate accepted paint output into a RunenRender
+overlay contribution. RunenRender does not access widget state or perform UI hit
+testing. RunenUI does not depend on RunenGPU by default.
+
+## Parallel-work decision
+
+Allowed in parallel:
+
+- read-only GPU/render S0 inventory;
+- independently scoped RunenECS repair work that does not share manifests,
+  identities, or lifecycle ownership;
+- RunenUI work in its repository;
+- separately reviewed RunenSDF consumer/cutover investigation;
+- unrelated product work with no shared architecture files.
+
+Must be serialized or explicitly rebased:
+
+- root workspace manifests and lockfiles;
+- GPU/render identity and lifecycle changes;
+- framework dependency direction;
+- canonical repository-family architecture;
+- external source movement or deletion.
 
 ## Rejected extraction attempt
 
-Commit `b5e9624c...` removed large source areas before completing workspace,
-dependency, consumer, lockfile, renderer, test, asset, and authority cutover.
-That demonstrates why deletion is the final step of a governed cutover rather
-than its starting point.
+Commit `b5e9624c...` remains historical evidence of deletion before complete
+workspace, dependency, consumer, test, asset, and authority cutover. It is not an
+implementation base.
 
-The commit is retained as historical evidence only and is classified:
-
-```text
-REJECTED_EXTRACTION_ATTEMPT
-```
-
-## Recommended next evidence
-
-### RunenSDF
-
-- inspect every source and test file;
-- inventory every direct and transitive consumer;
-- map all geometry leakage;
-- decide numerical and error policy;
-- define independent conformance;
-- produce exact move/stay/redesign/delete map.
-
-### RunenECS
-
-- inspect storage, world, queries, systems, reflection, indexing, messaging,
-  change extraction, ownership, macros, scheduler, networking, replay, renderer,
-  and application consumers;
-- classify scheduler and spatial ownership;
-- define public compatibility and concurrency policy.
-
-### RunenRender
-
-- inspect every module, shader, example, benchmark, and integration test;
-- trace frame, resource, graph, surface, device-loss, and plugin control flow;
-- classify every module by future owner;
-- identify generic seams before file movement.
+PR `#119` is also superseded: it correctly identified `RunenRender -> RunenGPU`,
+but used stale repository state, speculative multi-package targets, and retired
+planning authorities.
 
 ## Conclusion
 
-RunenSDF is the only candidate suitable for near-term extraction after one
-bounded design and boundary-correction program. RunenECS requires architecture
-closure. RunenRender requires internal decomposition and must move last.
+RunenSDF standalone transfer is complete; its Runenwerk clean cutover remains a
+separate decision. RunenECS requires ordered repair. RunenGPU and RunenRender have
+accepted ownership architecture, but S0 is the only safe next action. No GPU or
+renderer implementation or external source movement is authorized yet.
