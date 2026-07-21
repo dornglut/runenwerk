@@ -21,30 +21,144 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          {
-            echo '# Legacy workflow inventory'
-            echo
-            echo '## Tracked files under tools/workflow'
-            git ls-files 'tools/workflow/**' | sort
-            echo
-            echo '## Root and tool scripts with gate/workflow names'
-            git ls-files | grep -E '(^|/)(quiet_.*gate|.*workflow.*|.*track.*|.*truth.*|.*batch.*|.*ai_task.*|.*production_.*|.*roadmap_.*)(\.py|\.sh|\.ps1|\.yml|\.yaml|\.toml|\.json|\.ron|\.md)?$' | sort || true
-            echo
-            echo '## References to deprecated orchestration commands and state'
-            rg -n --hidden --glob '!target/**' --glob '!docs-site/node_modules/**' --glob '!.git/**' \
-              'track_control_cli|production_track_cli|execution/cli\.py|truth/cli\.py|parallel_batch\.py|ai_task\.py|production_goal\.py|quick gate|full gate|quiet gate|quiet_editor_gate|quiet_full_gate|contract pack|truth certificate|track lock|batch manifest|\.runenwerk/' . || true
-            echo
-            echo '## Tracked generated workflow state and reports'
-            git ls-files | grep -E '(^|/)(\.runenwerk|execution|truth|batches|agent-transcripts|task-cards|production-tracks|roadmap-items)' | sort || true
-            echo
-            echo '## Python tests owned by workflow tooling'
-            git ls-files 'tools/workflow/**' | grep -E '(^|/)(test_.*\.py|.*_test\.py)$' | sort || true
-            echo
-            echo '## Open-work documentation references'
-            rg -n --glob '*.md' --glob '*.mdx' --glob '*.ron' --glob '*.yaml' --glob '*.yml' \
-              'PT-RUNENSDF-004|PT-RUNENGPU|RunenGPU|RunenRender|track:|production:|execution:|truth:|batch:' \
-              docs-site AGENTS.md TESTING.md Taskfile.yml || true
-          } > workflow-retirement-inventory.txt
+          python - <<'PY' > workflow-retirement-inventory.txt
+          from __future__ import annotations
+
+          import ast
+          import subprocess
+          from collections import defaultdict, deque
+          from pathlib import Path
+
+          root = Path('tools/workflow')
+          files = sorted(root.rglob('*.py'))
+          module_for = {}
+          file_for = {}
+          for path in files:
+              rel = path.relative_to(root).with_suffix('')
+              parts = list(rel.parts)
+              if parts[-1] == '__init__':
+                  parts = parts[:-1]
+              module = '.'.join(parts)
+              module_for[path] = module
+              file_for[module] = path
+
+          def resolve_local(module: str) -> Path | None:
+              if module in file_for:
+                  return file_for[module]
+              candidates = [name for name in file_for if name.endswith('.' + module)]
+              return file_for[candidates[0]] if len(candidates) == 1 else None
+
+          imports: dict[Path, set[Path]] = defaultdict(set)
+          for path in files:
+              try:
+                  tree = ast.parse(path.read_text(encoding='utf-8'))
+              except SyntaxError:
+                  continue
+              current = module_for[path].split('.') if module_for[path] else []
+              for node in ast.walk(tree):
+                  names: list[str] = []
+                  if isinstance(node, ast.Import):
+                      names.extend(alias.name for alias in node.names)
+                  elif isinstance(node, ast.ImportFrom):
+                      base = node.module or ''
+                      if node.level:
+                          prefix = current[:-node.level]
+                          base = '.'.join(prefix + ([base] if base else []))
+                      names.append(base)
+                  for name in names:
+                      target = resolve_local(name)
+                      if target and target != path:
+                          imports[path].add(target)
+
+          roots = [
+              root / 'roadmap_state.py',
+              root / 'generate_roadmap_docs.py',
+              root / 'production_state.py',
+              root / 'generate_production_docs.py',
+              root / 'ux_lab_terminology.py',
+          ]
+          reachable: set[Path] = set()
+          queue = deque(roots)
+          while queue:
+              path = queue.popleft()
+              if path in reachable:
+                  continue
+              reachable.add(path)
+              queue.extend(imports.get(path, ()))
+
+          print('# Legacy workflow retirement inventory')
+          print()
+          print('## Summary')
+          print(f'- Python files: {len(files)}')
+          print(f'- Retained entrypoints: {len(roots)}')
+          print(f'- Files reachable from retained entrypoints: {len(reachable)}')
+          print(f'- Python deletion candidates: {len(set(files) - reachable)}')
+          print()
+          print('## Retained entrypoint dependency closure')
+          for path in sorted(reachable):
+              print(path.as_posix())
+          print()
+          print('## Python deletion candidates')
+          for path in sorted(set(files) - reachable):
+              print(path.as_posix())
+          print()
+          print('## Local import graph')
+          for path in files:
+              deps = ', '.join(sorted(p.as_posix() for p in imports.get(path, ()))) or '-'
+              print(f'{path.as_posix()}: {deps}')
+          print()
+          print('## Non-Python legacy entrypoints')
+          tracked = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
+          for path in tracked:
+              if path in {'workflow', 'workflow.cmd', 'quiet_editor_gate.sh', 'quiet_full_gate.sh'}:
+                  print(path)
+          print()
+          print('## Active references to deprecated executable surfaces')
+          terms = [
+              'track_control_cli.py', 'production_track_cli.py', 'execution/cli.py',
+              'truth/cli.py', 'parallel_batch.py', 'ai_task.py', 'production_goal.py',
+              'quiet_editor_gate.sh', 'quiet_full_gate.sh', 'workflow.cmd',
+              'execution-contract-packs', 'execution-locks', 'truth-verifier-registry',
+              'track-execution-manifests', 'track-execution-runs', 'truth-certificates',
+          ]
+          for term in terms:
+              result = subprocess.run(
+                  ['git', 'grep', '-n', '-F', term, '--', ':!docs-site/src/content/docs/reports/agent-transcripts/**'],
+                  text=True,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+              )
+              lines = [line for line in result.stdout.splitlines() if 'workflow-retirement-inventory.yml' not in line]
+              if lines:
+                  print(f'### {term}')
+                  print('\n'.join(lines))
+          print()
+          print('## Tracked active generated state')
+          prefixes = (
+              'docs-site/src/content/docs/workspace/execution-contract-packs/',
+              'docs-site/src/content/docs/workspace/execution-locks/',
+              'docs-site/src/content/docs/workspace/truth-conformance-specs/',
+              'docs-site/src/content/docs/reports/track-execution-manifests/',
+              'docs-site/src/content/docs/reports/track-execution-runs/',
+              'docs-site/src/content/docs/reports/truth-certificates/',
+          )
+          exact = {'docs-site/src/content/docs/workspace/truth-verifier-registry.yaml'}
+          for path in tracked:
+              if path in exact or path.startswith(prefixes):
+                  print(path)
+          print()
+          print('## Retained planning sources')
+          for path in tracked:
+              if path in {
+                  'docs-site/src/content/docs/workspace/roadmap-items.yaml',
+                  'docs-site/src/content/docs/workspace/production-tracks.yaml',
+                  'docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json',
+                  'docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json',
+                  'docs-site/src/content/docs/workspace/planning/roadmap.md',
+                  'docs-site/src/content/docs/workspace/planning/production-tracks.md',
+              }:
+                  print(path)
+          PY
 
       - name: Upload inventory
         uses: actions/upload-artifact@v4
