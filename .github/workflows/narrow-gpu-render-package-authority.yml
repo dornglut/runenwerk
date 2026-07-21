@@ -1,5 +1,6 @@
 name: Narrow GPU Render Package Authority
 
+# Temporary one-shot correction. Remove after the branch commit is produced.
 on:
   pull_request:
     branches:
