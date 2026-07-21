@@ -21,6 +21,7 @@ related_docs:
   - ../../design/active/runensdf-extraction-design.md
   - ../../design/active/runensdf-repository-identity-decision.md
   - ../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md
+  - ../../reports/closeouts/pt-runensdf-003-standalone-transfer-closeout.md
   - ./roadmap.md
   - ./production-tracks.md
   - ./completed-work.md
@@ -29,112 +30,58 @@ related_docs:
 
 # Active Work
 
-## Current primary implementation
+## Completed primary implementation
 
 ID: `PT-RUNENSDF-003`
 
 Title: Standalone RunenSDF Repository and Corrected Source Transfer
 
-Lifecycle state: `active-implementation`
+Lifecycle state: `complete`
 
-Implementation authorization: `active-implementation-authorized`
-
-External delivery:
+Accepted standalone revision:
 
 ```text
 repository: Crystonix/runen-sdf
-main skeleton commit: 6fb544856e42445e5be53107f61a14e5ccea211d
-implementation branch: agent/pt-runensdf-003-bootstrap
-pull request: Crystonix/runen-sdf#1
-```
-
-Canonical identity:
-
-```text
-product: RunenSDF
-repository: Crystonix/runen-sdf
+commit: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
 package: runen-sdf
 crate: runen_sdf
-version: 0.1.0
 ```
 
-The former `Crystonix/RunenSDF` and `runensdf` planning spellings are superseded.
-No compatibility package or crate alias preserves them.
+The standalone repository now contains the corrected implementation, all nine integration-test modules, public downstream conformance, independent lockfile, framework documentation, licensing, security policy, repository-policy validation, and durable `cargo validate` workflow.
 
-## Completed prerequisite
+Automatic GitHub Actions evidence passed in runs `29845971330` and `29846386222`. The private target repositories failed before runner allocation; no manual owner validation was substituted.
 
-`PT-RUNENSDF-002` completed the public and numerical boundary correction through
-Runenwerk PR #116 and merge commit
-`8de096259eab30f8d67672010df9190970d0bfc4`.
+Detailed evidence is recorded in `../../reports/closeouts/pt-runensdf-003-standalone-transfer-closeout.md`.
 
-That exact commit and `domain/sdf` are the only source-transfer authority.
+## Next bounded phase
 
-## Immediate execution order
+ID: `PT-RUNENSDF-004`
 
-1. merge Runenwerk PR #118 after its durable GitHub Actions documentation gate is
-   green;
-2. finish the standalone repository foundation in `runen-sdf` PR #1;
-3. transfer the corrected source without behavioral redesign;
-4. transfer all nine integration-test modules and migrate imports to `runen_sdf`;
-5. replace the downstream conformance stub with real public-API proof;
-6. migrate framework-owned API, numerical, query, and ownership documentation;
-7. commit the independent lockfile and complete repository-policy checks;
-8. pass stable and Rust 1.93.0 validation through `cargo validate` in GitHub
-   Actions;
-9. review exact source parity and record the accepted standalone revision;
-10. close PT-RUNENSDF-003 and activate a separately bounded PT-RUNENSDF-004.
+Title: Runenwerk Clean Cutover to Standalone RunenSDF
 
-No owner-operated local validation is required. GitHub Actions is the merge gate
-and must invoke the same repository-local validation command used by contributors.
+Lifecycle state: `queued-planning`
 
-## Allowed scope
+Implementation authorization: **none until a complete PT-RUNENSDF-004 phase specification and final consumer audit are accepted**
 
-```text
-Crystonix/runen-sdf root package, source, tests, docs, conformance, xtask, CI,
-licenses, security policy, lockfile, status, roadmap, and provenance
-Runenwerk PT-RUNENSDF-003 design, identity, planning, specification, provenance,
-and durable documentation validation
-identity/import migration required by sdf -> runen-sdf / runen_sdf
-```
+The phase must:
 
-## Forbidden scope
+1. repeat the complete Runenwerk consumer and manifest audit;
+2. classify every real source, test, documentation, adapter, and persisted consumer;
+3. pin real consumers to exact revision `d52badefc640d6dc6dcdd40268af3aea1bb8eefe`;
+4. remove `domain/sdf` from workspace membership and old lockfile authority;
+5. delete internal source, tests, and stale framework-owned documentation;
+6. prove no forwarding package, crate alias, source include, submodule, branch dependency, or duplicate implementation remains;
+7. validate the complete Runenwerk integration automatically.
 
-```text
-Runenwerk Cargo dependency cutover
-removal of domain/sdf or its workspace membership
-compatibility or forwarding packages
-permanent source mirrors, source includes, or submodules
-behavioral or numerical redesign during parity transfer
-module regrouping before parity is independently green
-crates.io publication
-GPU, shader, renderer, world, material, ECS, scheduler, UI, or persisted-program ownership
-```
-
-## Automated completion gate
-
-PT-RUNENSDF-003 completes only when one exact standalone revision proves through
-GitHub Actions that:
-
-- the corrected source and all nine package tests run independently;
-- public downstream code implements and consumes the framework through public APIs;
-- no Runenwerk reference, external path dependency, private include, compatibility
-  package, forwarding namespace, or stale package identity exists;
-- the committed lockfile, licenses, security policy, provenance, and documentation
-  are valid;
-- stable and Rust 1.93.0 metadata, tests, Clippy, and rustdoc pass through one
-  maintained `cargo validate` command;
-- the exact standalone commit intended for PT-RUNENSDF-004 is recorded;
-- Runenwerk source, dependencies, workspace membership, and lockfile remain
-  unchanged during this phase.
+If the final audit still finds no production consumer, the phase removes the isolated internal package without adding an unused external dependency.
 
 ## Program allocation
 
 ```text
-RunenSDF     PT-RUNENSDF-003 active implementation
+RunenSDF     PT-RUNENSDF-003 complete; PT-RUNENSDF-004 queued planning
 RunenECS     R1 specified; no Rust implementation authorized
 RunenRender  R1 specified; no Rust implementation authorized
 RunenUI      independent workstream outside this program
 ```
 
-`PT-RUNENSDF-004` remains blocked until the standalone revision is accepted and
-its GitHub Actions evidence is recorded.
+RunenSDF module regrouping, publication, GPU work, renderer work, and unrelated repository cleanup remain outside PT-RUNENSDF-004.
