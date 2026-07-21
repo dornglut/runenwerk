@@ -1,4 +1,4 @@
-name: Workflow Retirement Inventory
+name: Apply Workflow Retirement
 
 on:
   pull_request:
@@ -7,194 +7,660 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inventory:
+  migrate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
 
-      - name: Build retirement inventory
+      - name: Apply retirement migration
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY' > workflow-retirement-inventory.txt
+          python - <<'PY'
           from __future__ import annotations
 
-          import ast
-          import subprocess
-          import sys
-          from collections import defaultdict, deque
+          import re
+          import shutil
           from pathlib import Path
 
-          root = Path('tools/workflow')
-          files = sorted(root.rglob('*.py'))
-          module_for = {}
-          file_for = {}
-          for path in files:
-              rel = path.relative_to(root).with_suffix('')
-              parts = list(rel.parts)
-              if parts[-1] == '__init__':
-                  parts = parts[:-1]
-              module = '.'.join(parts)
-              module_for[path] = module
-              file_for[module] = path
+          root = Path('.')
 
-          def resolve_local(module: str) -> Path | None:
-              if module in file_for:
-                  return file_for[module]
-              candidates = [name for name in file_for if name.endswith('.' + module)]
-              return file_for[candidates[0]] if len(candidates) == 1 else None
+          def remove(path: str) -> None:
+              target = root / path
+              if target.is_dir():
+                  shutil.rmtree(target)
+              elif target.exists():
+                  target.unlink()
 
-          imports: dict[Path, set[Path]] = defaultdict(set)
-          for path in files:
-              try:
-                  tree = ast.parse(path.read_text(encoding='utf-8'))
-              except SyntaxError:
-                  continue
-              current = module_for[path].split('.') if module_for[path] else []
-              for node in ast.walk(tree):
-                  names: list[str] = []
-                  if isinstance(node, ast.Import):
-                      names.extend(alias.name for alias in node.names)
-                  elif isinstance(node, ast.ImportFrom):
-                      base = node.module or ''
-                      if node.level:
-                          prefix = current[:-node.level]
-                          base = '.'.join(prefix + ([base] if base else []))
-                      names.append(base)
-                  for name in names:
-                      target = resolve_local(name)
-                      if target and target != path:
-                          imports[path].add(target)
+          def write(path: str, content: str) -> None:
+              target = root / path
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content.rstrip() + '\n', encoding='utf-8')
 
-          roots = [
-              root / 'roadmap_state.py',
-              root / 'generate_roadmap_docs.py',
-              root / 'production_state.py',
-              root / 'generate_production_docs.py',
-              root / 'ux_lab_terminology.py',
-          ]
-          reachable: set[Path] = set()
-          queue = deque(roots)
-          while queue:
-              path = queue.popleft()
-              if path in reachable:
-                  continue
-              reachable.add(path)
-              queue.extend(imports.get(path, ()))
+          # Preserve the only useful standard-library repository check outside the
+          # retired workflow package.
+          write('tools/checks/ux_lab_terminology.py', '''#!/usr/bin/env python3
+          """Fail when current UX Lab contracts drift back to Story Lab vocabulary."""
 
-          print('# Legacy workflow retirement inventory')
-          print()
-          print('## Summary')
-          print(f'- Python files: {len(files)}')
-          print(f'- Retained entrypoints: {len(roots)}')
-          print(f'- Files reachable from retained entrypoints: {len(reachable)}')
-          print(f'- Python deletion candidates: {len(set(files) - reachable)}')
-          print()
-          print('## Retained entrypoint dependency closure')
-          for path in sorted(reachable):
-              print(path.as_posix())
-          print()
-          print('## Python deletion candidates')
-          for path in sorted(set(files) - reachable):
-              print(path.as_posix())
-          print()
-          print('## Local import graph')
-          for path in files:
-              deps = ', '.join(sorted(p.as_posix() for p in imports.get(path, ()))) or '-'
-              print(f'{path.as_posix()}: {deps}')
+          from __future__ import annotations
 
-          tracked = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
-          print()
-          print('## Non-Python legacy entrypoints')
-          for path in tracked:
-              if path in {'workflow', 'workflow.cmd', 'quiet_editor_gate.sh', 'quiet_full_gate.sh'}:
-                  print(path)
+          from pathlib import Path
+          import sys
 
-          print()
-          print('## Python outside tools/workflow')
-          external_imports: dict[str, set[str]] = defaultdict(set)
-          for raw in tracked:
-              if not raw.endswith('.py') or raw.startswith('tools/workflow/'):
-                  continue
-              path = Path(raw)
-              try:
-                  tree = ast.parse(path.read_text(encoding='utf-8'))
-              except (OSError, SyntaxError):
-                  continue
-              for node in ast.walk(tree):
-                  names: list[str] = []
-                  if isinstance(node, ast.Import):
-                      names.extend(alias.name for alias in node.names)
-                  elif isinstance(node, ast.ImportFrom) and node.module:
-                      names.append(node.module)
-                  for name in names:
-                      top = name.split('.', 1)[0]
-                      if top not in sys.stdlib_module_names:
-                          external_imports[raw].add(top)
-          for path in sorted(external_imports):
-              print(f"{path}: {', '.join(sorted(external_imports[path]))}")
+          REPO_ROOT = Path(__file__).resolve().parents[2]
 
-          print()
-          print('## Active references to deprecated executable surfaces')
-          terms = [
-              'track_control_cli.py', 'production_track_cli.py', 'execution/cli.py',
-              'truth/cli.py', 'parallel_batch.py', 'ai_task.py', 'production_goal.py',
-              'quiet_editor_gate.sh', 'quiet_full_gate.sh', 'workflow.cmd',
-              'execution-contract-packs', 'execution-locks', 'truth-verifier-registry',
-              'track-execution-manifests', 'track-execution-runs', 'truth-certificates',
-              'production-tracks.yaml', 'roadmap-items.yaml', 'roadmap-archive.yaml',
-              'roadmap-deferred.yaml', 'production-track-index.md',
-              'production-track-planning-model.md',
-          ]
-          for term in terms:
-              result = subprocess.run(
-                  ['git', 'grep', '-n', '-F', term, '--', ':!docs-site/src/content/docs/reports/agent-transcripts/**'],
-                  text=True,
-                  stdout=subprocess.PIPE,
-                  stderr=subprocess.DEVNULL,
+          BANNED_TERMS = (
+              "Storybook",
+              "Story Lab",
+              "EditorUxStory",
+              "PrimitiveWidgetStory",
+              "story_lab",
+              "editor_ux_story_lab",
+          )
+
+          CURRENT_PATHS = (
+              "domain/editor/editor_shell/src",
+              "domain/ui/ui_widgets/src",
+              "apps/runenwerk_editor/src/shell",
+              "docs-site/src/content/docs/design/active",
+              "docs-site/src/content/docs/workspace/planning/roadmap.md",
+              "docs-site/src/content/docs/workspace/planning/active-work.md",
+          )
+
+          TEXT_SUFFIXES = {".md", ".puml", ".rs", ".toml", ".txt", ".yaml", ".yml"}
+          HISTORICAL_NOTE = "Current name: UX Lab Scenarios; historical name: Story Lab."
+          HISTORICAL_CLOSEOUTS = (
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md",
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-002-native-editor-ux-story-lab-and-evidence-harness/closeout.md",
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-003-layered-editor-design-system-migration/closeout.md",
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-004-standalone-ui-designer-workbench/closeout.md",
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-005-graph-canvas-and-node-editor-productization/closeout.md",
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-006-shell-and-product-pattern-polish/closeout.md",
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-007-all-registered-visible-surface-wave/closeout.md",
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-008-game-ui-readiness-seam/closeout.md",
+              "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md",
+          )
+
+          def iter_text_files(path: Path) -> list[Path]:
+              if path.is_file():
+                  return [path]
+              return sorted(
+                  candidate
+                  for candidate in path.rglob("*")
+                  if candidate.is_file() and candidate.suffix in TEXT_SUFFIXES
               )
-              lines = [line for line in result.stdout.splitlines() if 'workflow-retirement-inventory.yml' not in line]
-              if lines:
-                  print(f'### {term}')
-                  print('\n'.join(lines))
 
-          print()
-          print('## Tracked active generated state')
-          prefixes = (
-              'docs-site/src/content/docs/workspace/execution-contract-packs/',
-              'docs-site/src/content/docs/workspace/execution-locks/',
-              'docs-site/src/content/docs/workspace/truth-conformance-specs/',
-              'docs-site/src/content/docs/workspace/track-execution-manifests/',
-              'docs-site/src/content/docs/reports/track-execution-manifests/',
-              'docs-site/src/content/docs/reports/track-execution-runs/',
-              'docs-site/src/content/docs/reports/truth-certificates/',
-          )
-          exact = {'docs-site/src/content/docs/workspace/truth-verifier-registry.yaml'}
-          for path in tracked:
-              if path in exact or path.startswith(prefixes):
-                  print(path)
+          def check_current_terms() -> list[str]:
+              failures: list[str] = []
+              for relative in CURRENT_PATHS:
+                  path = REPO_ROOT / relative
+                  if not path.exists():
+                      continue
+                  for file_path in iter_text_files(path):
+                      try:
+                          lines = file_path.read_text(encoding="utf-8").splitlines()
+                      except UnicodeDecodeError:
+                          continue
+                      for line_number, line in enumerate(lines, start=1):
+                          for term in BANNED_TERMS:
+                              if term in line:
+                                  failures.append(
+                                      f"{file_path.relative_to(REPO_ROOT)}:{line_number}: "
+                                      f"banned UX Lab terminology '{term}'"
+                                  )
+              return failures
 
-          print()
-          print('## Structured planning files')
-          planning_terms = (
-              'roadmap-items', 'roadmap-archive', 'roadmap-deferred',
-              'production-track', 'production_tracks', 'production-tracks',
-              'batch-manifest',
+          def check_historical_notes() -> list[str]:
+              failures: list[str] = []
+              for relative in HISTORICAL_CLOSEOUTS:
+                  path = REPO_ROOT / relative
+                  if not path.exists():
+                      failures.append(f"{relative}: missing PM-EDITOR-UX closeout")
+                      continue
+                  text = path.read_text(encoding="utf-8")
+                  if HISTORICAL_NOTE not in text:
+                      failures.append(f"{relative}: missing terminology note '{HISTORICAL_NOTE}'")
+              return failures
+
+          def main() -> int:
+              failures = check_current_terms() + check_historical_notes()
+              if failures:
+                  print("UX Lab terminology check failed:", file=sys.stderr)
+                  for failure in failures:
+                      print(f"- {failure}", file=sys.stderr)
+                  return 1
+              print("UX Lab terminology check passed.")
+              return 0
+
+          if __name__ == "__main__":
+              raise SystemExit(main())
+          ''')
+
+          # Remove the executable orchestration platform and its dedicated Python
+          # environment. No third-party Python consumer exists outside this tree.
+          for path in (
+              'tools/workflow',
+              'pyproject.toml',
+              'uv.lock',
+              'workflow',
+              'workflow.cmd',
+              'quiet_editor_gate.sh',
+              'quiet_full_gate.sh',
+          ):
+              remove(path)
+
+          # Remove active machine state. Human-authored closeouts and audits remain
+          # as historical evidence.
+          for path in (
+              'docs-site/src/content/docs/workspace/execution-contract-packs',
+              'docs-site/src/content/docs/workspace/execution-locks',
+              'docs-site/src/content/docs/workspace/track-execution-manifests',
+              'docs-site/src/content/docs/workspace/truth-conformance-specs',
+              'docs-site/src/content/docs/workspace/truth-verifier-registry.yaml',
+              'docs-site/src/content/docs/reports/track-execution-manifests',
+              'docs-site/src/content/docs/reports/track-execution-runs',
+              'docs-site/src/content/docs/reports/truth-certificates',
+          ):
+              remove(path)
+
+          # Remove generated batch inputs while retaining rendered historical batch
+          # reports. They no longer authorize or execute work.
+          batch_root = root / 'docs-site/src/content/docs/reports/batches'
+          if batch_root.exists():
+              for path in list(batch_root.rglob('batch.toml')):
+                  path.unlink()
+              for path in list(batch_root.rglob('prompts')):
+                  if path.is_dir():
+                      shutil.rmtree(path)
+
+          # Remove structured planning databases, schemas, and generated diagrams.
+          for path in (
+              'docs-site/src/content/docs/workspace/roadmap-items.yaml',
+              'docs-site/src/content/docs/workspace/roadmap-archive.yaml',
+              'docs-site/src/content/docs/workspace/roadmap-deferred.yaml',
+              'docs-site/src/content/docs/workspace/production-tracks.yaml',
+              'docs-site/src/content/docs/workspace/schemas/batch-manifest.schema.json',
+              'docs-site/src/content/docs/workspace/schemas/roadmap-item-source.schema.json',
+              'docs-site/src/content/docs/workspace/schemas/roadmap-items.schema.json',
+              'docs-site/src/content/docs/workspace/schemas/production-tracks.schema.json',
+              'docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml',
+              'docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml',
+              'docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml',
+              'docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml',
+          ):
+              remove(path)
+
+          write('Taskfile.yml', '''version: '3'
+
+          # Task is an optional convenience layer. Workflow authority and required
+          # validation live in engineering-workflow.md and `cargo validate`.
+          tasks:
+            default:
+              desc: List available optional helper tasks.
+              cmds:
+                - task --list
+
+            validate:
+              desc: Run the canonical required repository baseline.
+              cmds:
+                - cargo validate
+
+            ci:local:
+              desc: Compatibility alias for the canonical repository baseline.
+              cmds:
+                - cargo validate
+
+            ci:extended:
+              desc: Run the baseline plus optional deep validation tools.
+              cmds:
+                - cargo xtask validate --extended
+
+            docs:validate:
+              desc: Validate repository documentation only.
+              cmds:
+                - cargo xtask docs
+
+            repo:audit:
+              desc: Run the deterministic repository audit only.
+              cmds:
+                - cargo xtask audit
+
+            toolchain:bootstrap:
+              desc: Install or update the optional Windows host toolchain.
+              cmds:
+                - powershell -ExecutionPolicy Bypass -File tools/bootstrap/bootstrap.ps1 {{.CLI_ARGS}}
+
+            toolchain:doctor:
+              desc: Check that optional host tools are available.
+              cmds:
+                - powershell -ExecutionPolicy Bypass -File tools/bootstrap/bootstrap.ps1 -CheckOnly {{.CLI_ARGS}}
+
+            rust:test:
+              desc: Run locked workspace tests.
+              cmds:
+                - cargo test --workspace --locked
+
+            rust:policy:
+              desc: Run optional dependency policy and unused-dependency checks.
+              cmds:
+                - cargo deny check
+                - cargo machete --skip-target-dir
+
+            ui:dependencies:
+              desc: Validate domain UI ownership and dependency boundaries.
+              cmds:
+                - python3 tools/checks/check_ui_layer_dependencies.py --root .
+
+            links:check:
+              desc: Run optional external Markdown link validation.
+              cmds:
+                - lychee docs-site/src/content/docs
+
+            ast:scan:
+              desc: Run optional structural source policy checks.
+              cmds:
+                - ast-grep scan
+
+            app:material-lab:
+              desc: Run the standalone Material Lab application.
+              cmds:
+                - cargo run -p runenwerk_editor --bin runenwerk_material_lab
+
+            ux:lab:test:
+              desc: Run focused UX Lab Rust contract tests.
+              cmds:
+                - cargo test -p ui_widgets scenario
+                - cargo test -p editor_shell ux_lab
+                - cargo test -p runenwerk_editor editor_ux
+
+            ux:lab:evidence:
+              desc: Refresh PM-EDITOR-UX 002-007 UX Lab evidence manifests.
+              cmds:
+                - RUNENWERK_WRITE_PM_EDITOR_UX_002_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_002 -- --nocapture
+                - RUNENWERK_WRITE_PM_EDITOR_UX_003_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_003 -- --nocapture
+                - RUNENWERK_WRITE_PM_EDITOR_UX_004_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_004 -- --nocapture
+                - RUNENWERK_WRITE_PM_EDITOR_UX_005_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_005 -- --nocapture
+                - RUNENWERK_WRITE_PM_EDITOR_UX_006_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_006 -- --nocapture
+                - RUNENWERK_WRITE_PM_EDITOR_UX_007_EVIDENCE=1 cargo test -p runenwerk_editor pm_editor_ux_007 -- --nocapture
+
+            ux:lab:terminology:
+              desc: Check UX Lab and scenario terminology.
+              cmds:
+                - python3 tools/checks/ux_lab_terminology.py
+          ''')
+
+          write('docs-site/src/content/docs/workspace/planning/roadmap.md', '''---
+          title: Roadmap
+          description: Manually maintained high-level sequencing for Runenwerk and its peer frameworks.
+          status: active
+          owner: workspace
+          layer: workspace
+          canonical: true
+          last_reviewed: 2026-07-21
+          related_docs:
+            - ../engineering-workflow.md
+            - ./active-work.md
+            - ./completed-work.md
+            - ./decision-register.md
+            - ../../architecture/repository-family-architecture.md
+            - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
+            - ../../design/active/runenecs-boundary-repair-execution-plan.md
+            - ../../design/active/runenrender-internal-decomposition-execution-plan.md
+            - ../../reports/closeouts/pt-runensdf-003-standalone-transfer-closeout.md
+          ---
+
+          # Roadmap
+
+          This is the single maintained roadmap for Runenwerk. It records high-level
+          sequencing and dependencies; GitHub issues and pull requests own active delivery.
+
+          ## Repository family
+
+          ```text
+          RunenSDF -----+
+          RunenECS -----+--> Runenwerk adapters and product integration --> applications
+          RunenGPU -----+
+          RunenRender --+
+          RunenUI ------+    independent peer framework
+          ```
+
+          Framework repositories do not depend on Runenwerk. Runenwerk owns application
+          lifecycle, cross-framework composition, adapters, editor/runtime integration,
+          product policy, and recovery.
+
+          ## Current priorities
+
+          1. Finish workflow-orchestration retirement and repository cleanup under issue
+             `#122` without disturbing framework extraction work.
+          2. Reconcile the GPU/render architecture branch with current `main`, the accepted
+             SDF state, and the one-package-per-repository policy before implementation.
+          3. Perform any RunenSDF clean cutover only through an exact consumer audit and a
+             separately reviewed change.
+          4. Start RunenECS or RunenGPU implementation only after their current-state
+             inventories and bounded first contracts are accepted.
+
+          ## RunenSDF
+
+          ### Completed
+
+          - Boundary correction completed in Runenwerk through PR `#116`.
+          - Standalone repository transfer completed through Runenwerk PR `#118` and
+            `Crystonix/runen-sdf` PR `#1`.
+          - Accepted standalone revision:
+
+          ```text
+          repository: Crystonix/runen-sdf
+          commit: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
+          package: runen-sdf
+          crate: runen_sdf
+          ```
+
+          ### Next decision
+
+          `PT-RUNENSDF-004` is not recorded as completed on current Runenwerk `main`.
+          Before a clean cutover:
+
+          1. audit every code, test, manifest, adapter, documentation, and persisted consumer;
+          2. add the exact standalone revision only where a real consumer exists;
+          3. remove `domain/sdf`, its workspace membership, and stale lockfile authority;
+          4. prove no forwarding package, alias, source include, branch dependency, or
+             duplicate implementation remains;
+          5. pass the complete Runenwerk baseline and integration evidence.
+
+          If no production consumer exists, remove the internal package without adding an
+          unused external dependency.
+
+          ## RunenGPU and RunenRender
+
+          The accepted dependency direction is:
+
+          ```text
+          RunenRender -> RunenGPU
+          ```
+
+          RunenGPU owns general GPU execution: device/context, capabilities, resources,
+          access and lifetime validation, workloads, synchronization, uploads/readback,
+          low-level surfaces, and backend outcomes.
+
+          RunenRender owns image formation: prepared scenes, providers/interactions,
+          materials/media, emitters, visibility, transport, radiance caches,
+          reconstruction, overlays, color, and presentation intent.
+
+          Runenwerk retains windows, application lifecycle, ECS/domain extraction,
+          adapters, product policy, diagnostics presentation, shader discovery/reload
+          policy, and recovery. RunenUI and RunenRender remain independent peers.
+
+          The existing draft architecture PR `#119` predates the SDF closeout and workflow
+          cleanup. It must be rebased and critically reconciled before review readiness.
+          No GPU or renderer implementation is authorized by this roadmap alone.
+
+          ## RunenECS
+
+          The accepted repair order remains:
+
+          ```text
+          R1 entity identity and structured errors
+          R2 atomic structural mutation
+          R3 query and SystemParam unsafe boundaries
+          R4 explicit reflection and macro migration
+          R5 remove spatial and geometry ownership
+          R6 messaging split
+          R7 change, ownership, and networking separation
+          R8 neutralize runen_schedule
+          R9 standalone conformance and performance baseline
+          ```
+
+          R1 is specified but not implemented. Repository extraction remains blocked until
+          the internal boundary repair and conformance sequence is complete.
+
+          ## RunenUI
+
+          RunenUI is governed in its own repository. A future Runenwerk-owned adapter may
+          translate accepted renderer-neutral UI paint output into RunenRender overlay
+          contributions after both public boundaries stabilize. Neither framework depends
+          on the other.
+
+          ## Sequencing rule
+
+          Read-only investigation and unrelated cleanup may run in parallel. Structural
+          changes that share workspace manifests, dependency boundaries, identity policy,
+          or canonical roadmap files must be serialized or explicitly rebased.
+          ''')
+
+          write('docs-site/src/content/docs/workspace/planning/active-work.md', '''---
+          title: Active Work
+          description: Current bounded Runenwerk work and immediate next decisions.
+          status: active
+          owner: workspace
+          layer: workspace
+          canonical: true
+          last_reviewed: 2026-07-21
+          related_docs:
+            - ../engineering-workflow.md
+            - ./roadmap.md
+            - ./completed-work.md
+            - ./decision-register.md
+            - ../../reports/closeouts/pt-runensdf-003-standalone-transfer-closeout.md
+          ---
+
+          # Active Work
+
+          GitHub issues and pull requests own live delivery state. This page is a concise
+          cross-project summary, not an execution ledger.
+
+          ## Active
+
+          ### Repository workflow cleanup
+
+          Issue: `#122`
+
+          The canonical `cargo validate` baseline and engineering workflow landed through
+          PR `#123`. Draft PR `#124` retires the obsolete Python orchestration platform,
+          machine execution state, structured production-track databases, and ambiguous
+          gate scripts while retaining human historical evidence.
+
+          ### GPU/render architecture reconciliation
+
+          Draft PR `#119` records the intended `RunenRender -> RunenGPU` dependency
+          direction but predates current `main`. It requires rebase and reconciliation;
+          implementation remains unauthorized.
+
+          ## Completed foundation
+
+          RunenSDF standalone transfer completed at revision
+          `d52badefc640d6dc6dcdd40268af3aea1bb8eefe` through Runenwerk PR `#118` and
+          `Crystonix/runen-sdf` PR `#1`.
+
+          ## Queued decisions
+
+          - RunenSDF clean-cutover consumer audit and exact integration/removal decision.
+          - RunenGPU current-source inventory and first bounded execution contract.
+          - RunenECS R1 boundary repair.
+
+          No queued item is implementation authorization by itself.
+          ''')
+
+          def stub(path: str, title: str, description: str) -> None:
+              write(path, f'''---
+              title: {title}
+              description: {description}
+              status: superseded
+              owner: workspace
+              layer: workspace
+              canonical: false
+              last_reviewed: 2026-07-21
+              related_docs:
+                - ./planning/roadmap.md
+                - ./engineering-workflow.md
+              ---
+
+              # {title}
+
+              This workflow-generated planning surface was retired under issue `#122`.
+
+              Current sequencing is maintained in [Roadmap](planning/roadmap.md). GitHub
+              issues and pull requests own live work state. Historical reports remain
+              evidence only and do not reactivate the retired production-track system.
+              ''')
+
+          stub('docs-site/src/content/docs/workspace/production-track-index.md', 'Production Track Index', 'Compatibility record for the retired production-track index.')
+          stub('docs-site/src/content/docs/workspace/production-track-planning-model.md', 'Production Track Planning Model', 'Compatibility record for the retired production-track planning model.')
+          stub('docs-site/src/content/docs/workspace/production-milestone-register.md', 'Production Milestone Register', 'Compatibility record for the retired generated milestone register.')
+          stub('docs-site/src/content/docs/workspace/roadmap-index.md', 'Roadmap Index', 'Compatibility record for the retired generated roadmap index.')
+          stub('docs-site/src/content/docs/workspace/roadmap-decision-register.md', 'Roadmap Decision Register', 'Compatibility record for the retired generated roadmap decision register.')
+          stub('docs-site/src/content/docs/workspace/design-implementation-triage.md', 'Design Implementation Triage', 'Compatibility record for the retired generated design triage view.')
+          stub('docs-site/src/content/docs/workspace/roadmap-archive-register.md', 'Roadmap Archive Register', 'Compatibility record for the retired generated roadmap archive.')
+          stub('docs-site/src/content/docs/workspace/roadmap-deferred-register.md', 'Roadmap Deferred Register', 'Compatibility record for the retired generated deferred roadmap.')
+
+          write('docs-site/src/content/docs/workspace/planning/production-tracks.md', '''---
+          title: Production Tracks
+          description: Compatibility record for the retired generated production-track roadmap.
+          status: superseded
+          owner: workspace
+          layer: workspace
+          canonical: false
+          last_reviewed: 2026-07-21
+          related_docs:
+            - ./roadmap.md
+            - ../engineering-workflow.md
+          ---
+
+          # Production Tracks
+
+          The production-track database, milestone state machine, generators, execution
+          contracts, locks, and truth certificates were retired under issue `#122`.
+
+          Use [Roadmap](roadmap.md) for high-level sequencing and GitHub issues/pull
+          requests for live work state.
+          ''')
+
+          write('docs-site/src/content/docs/workspace/specs/phase-implementation-spec.md', '''---
+          title: Phase Implementation Specification
+          description: Compatibility record for the retired machine-oriented phase template.
+          status: superseded
+          owner: workspace
+          layer: workspace
+          canonical: false
+          last_reviewed: 2026-07-21
+          related_docs:
+            - ../engineering-workflow.md
+            - ../planning/roadmap.md
+          ---
+
+          # Phase Implementation Specification
+
+          This machine-oriented phase template was retired under issue `#122`.
+          Significant work uses one issue, accepted design or ADR, and a bounded pull
+          request as defined by [Engineering Workflow](../engineering-workflow.md).
+          ''')
+
+          write('docs-site/src/content/docs/workspace/routines/track-orchestration-routine.md', '''---
+          title: Track Orchestration Routine
+          description: Compatibility record for the retired track orchestration routine.
+          status: superseded
+          owner: workspace
+          layer: workspace
+          canonical: false
+          last_reviewed: 2026-07-21
+          related_docs:
+            - ../engineering-workflow.md
+            - ../planning/roadmap.md
+          ---
+
+          # Track Orchestration Routine
+
+          Track locks, contract packs, truth certificates, generated prompts, and local
+          execution ledgers were retired under issue `#122`. Use GitHub issues and pull
+          requests with the canonical validation baseline instead.
+          ''')
+
+          # Remove obsolete migration-language sections from canonical entrypoints.
+          agents = (root / 'AGENTS.md').read_text(encoding='utf-8')
+          agents = re.sub(
+              r'\n## Legacy workflow tools\n.*?(?=\n## Reporting\n)',
+              '\n## Retired workflow systems\n\nTrack locks, execution contract packs, truth certificates, batch execution, and generated prompts are not part of the repository workflow. Historical references are context only.\n',
+              agents,
+              flags=re.S,
           )
-          for path in tracked:
-              if any(term in path for term in planning_terms):
-                  print(path)
+          (root / 'AGENTS.md').write_text(agents, encoding='utf-8')
+
+          start = (root / 'docs-site/src/content/docs/workspace/start-here.md').read_text(encoding='utf-8')
+          start = re.sub(
+              r'\n## Legacy workflow tooling\n.*\Z',
+              '\n## Retired workflow systems\n\nProduction-track databases, execution locks, truth certificates, batch execution, generated prompts, and local workflow state were retired under issue `#122`. Historical links remain context only.\n',
+              start,
+              flags=re.S,
+          )
+          (root / 'docs-site/src/content/docs/workspace/start-here.md').write_text(start, encoding='utf-8')
+
+          authority = (root / 'docs-site/src/content/docs/workspace/authority-model.md').read_text(encoding='utf-8')
+          authority = authority.replace(
+              '- **Generated views:** derivative convenience output; they must identify their source.\n',
+              '- **Roadmap:** manually maintained high-level sequencing; never an execution ledger.\n',
+          )
+          authority = re.sub(
+              r'\nThe legacy production-track, execution-lock, truth-certificate, batch, and generated-prompt systems are deprecated under issue `#122`\.[^\n]*\n',
+              '\nThe former production-track, execution-lock, truth-certificate, batch, and generated-prompt systems were retired under issue `#122`. Historical references have no active authority.\n',
+              authority,
+          )
+          authority = authority.replace('one derived view -> one named source', 'one roadmap state -> one maintained roadmap')
+          (root / 'docs-site/src/content/docs/workspace/authority-model.md').write_text(authority, encoding='utf-8')
+
+          workflow = (root / 'docs-site/src/content/docs/workspace/engineering-workflow.md').read_text(encoding='utf-8')
+          workflow = workflow.replace(
+              '- GitHub issues and the active roadmap own planned work.\n',
+              '- GitHub issues own live work; the manually maintained roadmap owns high-level sequencing.\n',
+          )
+          workflow = workflow.replace(
+              '- Generated documents are derived views and must identify their source.\n',
+              '- Historical generated views are evidence only and are not maintained.\n',
+          )
+          workflow = re.sub(
+              r'\n## Legacy workflow migration\n.*?(?=\n## Stop conditions\n)',
+              '''\n## Retired workflow systems\n\nRunenwerk does not use production-track state machines, execution contract packs, track locks, truth certificates, batch execution, generated worker prompts, or local workflow ledgers. These systems were retired under issue `#122`.\n\nHistorical reports may mention them, but those references provide context only. New work uses GitHub issues and pull requests, accepted ADRs/designs, the maintained roadmap, tests, `cargo validate`, and exact-head CI.\n''',
+              workflow,
+              flags=re.S,
+          )
+          (root / 'docs-site/src/content/docs/workspace/engineering-workflow.md').write_text(workflow, encoding='utf-8')
+
+          # Batch manifests no longer exist, so documentation validation must not
+          # interpret historical batch reports as active machine state.
+          validator_path = root / 'tools/docs/validate_docs.py'
+          validator = validator_path.read_text(encoding='utf-8')
+          validator = re.sub(
+              r'\ndef batch_index_current_proposals\(.*?\n(?=def main\(\) -> int:)',
+              '\n',
+              validator,
+              flags=re.S,
+          )
+          validator = validator.replace('    validate_batch_manifests(errors)\n', '')
+          validator_path.write_text(validator, encoding='utf-8')
+
+          gitignore = root / '.gitignore'
+          text = gitignore.read_text(encoding='utf-8')
+          text = text.replace('.runenwerk/\n', '')
+          gitignore.write_text(text, encoding='utf-8')
           PY
 
-      - name: Upload inventory
-        uses: actions/upload-artifact@v4
-        with:
-          name: workflow-retirement-inventory
-          path: workflow-retirement-inventory.txt
-          if-no-files-found: error
-          retention-days: 3
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet && [ -z "$(git status --short)" ]; then
+            echo 'Migration already applied.'
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add --all
+          git commit -m 'Retire legacy workflow orchestration and machine state'
+          git push origin HEAD:${{ github.head_ref || github.ref_name }}
