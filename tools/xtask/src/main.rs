@@ -30,6 +30,28 @@ const EXTENDED_STEPS: &[(&str, &[&str])] = &[
     ("pnpm", &["--dir", "docs-site", "build"]),
 ];
 
+const RETIRED_PATHS: &[&str] = &[
+    "tools/workflow",
+    "pyproject.toml",
+    "uv.lock",
+    "workflow",
+    "workflow.cmd",
+    "quiet_editor_gate.sh",
+    "quiet_full_gate.sh",
+    "docs-site/src/content/docs/workspace/execution-contract-packs",
+    "docs-site/src/content/docs/workspace/execution-locks",
+    "docs-site/src/content/docs/workspace/track-execution-manifests",
+    "docs-site/src/content/docs/workspace/truth-conformance-specs",
+    "docs-site/src/content/docs/workspace/truth-verifier-registry.yaml",
+    "docs-site/src/content/docs/reports/track-execution-manifests",
+    "docs-site/src/content/docs/reports/track-execution-runs",
+    "docs-site/src/content/docs/reports/truth-certificates",
+    "docs-site/src/content/docs/workspace/roadmap-items.yaml",
+    "docs-site/src/content/docs/workspace/roadmap-archive.yaml",
+    "docs-site/src/content/docs/workspace/roadmap-deferred.yaml",
+    "docs-site/src/content/docs/workspace/production-tracks.yaml",
+];
+
 fn main() -> ExitCode {
     let mut args = env::args().skip(1);
     let command = args.next().unwrap_or_else(|| "help".to_owned());
@@ -113,10 +135,21 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         ".github/workflows/ci.yml",
         "AGENTS.md",
         "TESTING.md",
+        "Taskfile.yml",
+        "tools/checks/ux_lab_terminology.py",
         "docs-site/src/content/docs/workspace/engineering-workflow.md",
+        "docs-site/src/content/docs/workspace/planning/roadmap.md",
     ] {
         if !root.join(required).is_file() {
             return Err(format!("repository audit: missing required file {required}"));
+        }
+    }
+
+    for retired in RETIRED_PATHS {
+        if root.join(retired).exists() {
+            return Err(format!(
+                "repository audit: retired workflow path must not exist: {retired}"
+            ));
         }
     }
 
@@ -136,7 +169,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         root,
         "Taskfile.yml",
         "- cargo validate",
-        "the legacy ci:local compatibility path must delegate to cargo validate",
+        "the ci:local compatibility path must delegate to cargo validate",
     )?;
     require_text(
         root,
@@ -150,6 +183,50 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         "engineering-workflow.md",
         "the workspace start page must route to the concise workflow authority",
     )?;
+    require_text(
+        root,
+        "docs-site/src/content/docs/workspace/engineering-workflow.md",
+        "were retired under issue `#122`",
+        "the canonical workflow must record the completed retirement",
+    )?;
+
+    for marker in [
+        "uv run",
+        "roadmap:",
+        "production:",
+        "planning:",
+        "puml:",
+        "track:",
+        "execution:",
+        "truth:",
+        "batch:",
+    ] {
+        forbid_text(
+            root,
+            "Taskfile.yml",
+            marker,
+            "retired workflow command surfaces must not return",
+        )?;
+    }
+
+    for (relative, marker) in [
+        ("AGENTS.md", "remain temporarily available"),
+        (
+            "docs-site/src/content/docs/workspace/start-here.md",
+            "remains temporarily available",
+        ),
+        (
+            "docs-site/src/content/docs/workspace/engineering-workflow.md",
+            "remain temporarily available",
+        ),
+    ] {
+        forbid_text(
+            root,
+            relative,
+            marker,
+            "retired workflow systems must not be described as active compatibility paths",
+        )?;
+    }
 
     eprintln!("> repository audit passed");
     Ok(())
@@ -165,6 +242,19 @@ fn require_text(root: &Path, relative: &str, marker: &str, reason: &str) -> Resu
         Err(format!(
             "repository audit: {relative} is missing required marker {marker:?}: {reason}"
         ))
+    }
+}
+
+fn forbid_text(root: &Path, relative: &str, marker: &str, reason: &str) -> Result<(), String> {
+    let path = root.join(relative);
+    let text = fs::read_to_string(&path)
+        .map_err(|error| format!("repository audit: failed to read {relative}: {error}"))?;
+    if text.contains(marker) {
+        Err(format!(
+            "repository audit: {relative} contains retired marker {marker:?}: {reason}"
+        ))
+    } else {
+        Ok(())
     }
 }
 
