@@ -13,7 +13,10 @@ related_docs:
   - ./decision-register.md
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
+  - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runenecs-boundary-repair-execution-plan.md
+  - ../../design/active/runengpu-architecture-design.md
+  - ../../design/active/runenrender-decomposition-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../reports/closeouts/pt-runensdf-003-standalone-transfer-closeout.md
 ---
@@ -21,41 +24,49 @@ related_docs:
 # Roadmap
 
 This is the single maintained roadmap for Runenwerk. It records high-level
-sequencing and dependencies; GitHub issues and pull requests own active delivery.
+sequencing and dependencies. GitHub issues and pull requests own live delivery.
 
 ## Repository family
 
 ```text
-RunenSDF -----+
-RunenECS -----+--> Runenwerk adapters and product integration --> applications
-RunenGPU -----+
-RunenRender --+
-RunenUI ------+    independent peer framework
+RunenSDF ----+
+RunenECS ----+--> Runenwerk adapters and product integration --> applications
+RunenUI -----+
+                  |
+                  +--> RunenRender --> RunenGPU
+                  +--> non-render RunenGPU workloads
 ```
 
 Framework repositories do not depend on Runenwerk. Runenwerk owns application
 lifecycle, cross-framework composition, adapters, editor/runtime integration,
-product policy, and recovery.
+product policy, diagnostics presentation, and recovery.
 
-## Current priorities
+Each framework begins with one public package. Package splitting requires proven
+independent dependency or release pressure.
 
-1. Finish workflow-orchestration retirement and repository cleanup under issue
-   `#122` without disturbing framework extraction work.
-2. Reconcile the GPU/render architecture branch with current `main`, the accepted
-   SDF state, and the one-package-per-repository policy before implementation.
-3. Perform any RunenSDF clean cutover only through an exact consumer audit and a
-   separately reviewed change.
-4. Start RunenECS or RunenGPU implementation only after their current-state
-   inventories and bounded first contracts are accepted.
+## Completed repository work
 
-## RunenSDF
+### Workflow simplification
 
-### Completed
+Issue `#122` completed through PRs `#123` and `#124`.
 
-- Boundary correction completed in Runenwerk through PR `#116`.
-- Standalone repository transfer completed through Runenwerk PR `#118` and
-  `Crystonix/runen-sdf` PR `#1`.
-- Accepted standalone revision:
+Delivered:
+
+- one canonical `cargo validate` baseline;
+- permanent exact-head CI;
+- one engineering workflow and one maintained roadmap;
+- removal of production-track, execution-lock, truth-certificate, batch, generated
+  prompt, quiet/full gate, and generated planning systems;
+- permanent repository audit preventing their return.
+
+### RunenSDF standalone transfer
+
+Completed:
+
+- in-workspace boundary correction through Runenwerk PR `#116`;
+- standalone repository transfer and conformance through Runenwerk PR `#118` and
+  `Crystonix/runen-sdf` PR `#1`;
+- accepted standalone revision:
 
 ```text
 repository: Crystonix/runen-sdf
@@ -64,44 +75,94 @@ package: runen-sdf
 crate: runen_sdf
 ```
 
-### Next decision
+Current Runenwerk `main` does not yet record a completed clean cutover removing
+`domain/sdf`. That remains a separate consumer-audit and integration/removal
+decision.
 
-`PT-RUNENSDF-004` is not recorded as completed on current Runenwerk `main`.
-Before a clean cutover:
+## Current priorities
 
-1. audit every code, test, manifest, adapter, documentation, and persisted consumer;
-2. add the exact standalone revision only where a real consumer exists;
-3. remove `domain/sdf`, its workspace membership, and stale lockfile authority;
-4. prove no forwarding package, alias, source include, branch dependency, or
-   duplicate implementation remains;
-5. pass the complete Runenwerk baseline and integration evidence.
-
-If no production consumer exists, remove the internal package without adding an
-unused external dependency.
+1. Complete issue `#125`: correct RunenGPU/RunenRender architecture on current
+   `main`, superseding closed PR `#119`.
+2. Perform GPU/render S0 inventory before writing any implementation phase.
+3. Resolve RunenSDF clean cutover only through exact current consumer evidence.
+4. Continue RunenECS R1 only as a separately bounded change that does not conflict
+   with GPU/render identities, manifests, or lifecycle ownership.
 
 ## RunenGPU and RunenRender
 
-The accepted dependency direction is:
+Accepted repository identities:
+
+```text
+product       repository                 package       crate
+RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
+RunenRender   Crystonix/runen-render     runen-render  runen_render
+```
+
+Accepted dependency direction:
 
 ```text
 RunenRender -> RunenGPU
 ```
 
-RunenGPU owns general GPU execution: device/context, capabilities, resources,
-access and lifetime validation, workloads, synchronization, uploads/readback,
-low-level surfaces, and backend outcomes.
+RunenGPU owns validated GPU contexts, capabilities, resources, access/lifetimes,
+hazards, workloads, submission, uploads/readback, low-level surfaces, WGPU
+realization, backend outcomes, and GPU diagnostics.
 
-RunenRender owns image formation: prepared scenes, providers/interactions,
-materials/media, emitters, visibility, transport, radiance caches,
-reconstruction, overlays, color, and presentation intent.
+RunenRender owns prepared render scenes, views, providers/interactions,
+materials/media, emitters, visibility, transport, radiance caches, history,
+reconstruction, overlays, color, presentation intent, and lowering into RunenGPU
+workloads.
 
-Runenwerk retains windows, application lifecycle, ECS/domain extraction,
-adapters, product policy, diagnostics presentation, shader discovery/reload
-policy, and recovery. RunenUI and RunenRender remain independent peers.
+Runenwerk retains application lifecycle, windows/event loops, ECS/domain
+extraction, shader source discovery/reload policy, adapters, product quality,
+diagnostics presentation, and recovery.
 
-The existing draft architecture PR `#119` predates the SDF closeout and workflow
-cleanup. It must be rebased and critically reconciled before review readiness.
-No GPU or renderer implementation is authorized by this roadmap alone.
+RunenUI and RunenSDF remain independent. Cross-framework bridges are
+Runenwerk-owned until independent reuse proves extraction.
+
+### Required sequence
+
+```text
+S0 complete current-source inventory
+-> G1-G8 internal RunenGPU proof
+-> GX external RunenGPU clean cutover
+-> R1-R8 internal RunenRender proof on RunenGPU
+-> RX external RunenRender clean cutover
+-> A1 reusable adapter review
+-> V1+ advanced renderer work
+```
+
+Only S0 is next. No G1 or R1 implementation specification is active.
+
+### S0 required result
+
+S0 must produce:
+
+- complete file, shader, macro, test, example, benchmark, and artifact inventory;
+- complete dependency and downstream consumer graph;
+- every identity, allocator, raw use, and stable-format classification;
+- graph/resource/frame/producer and context/device/surface/window/shutdown traces;
+- shader/pipeline/reload/macro ownership map;
+- exact move/stay/redesign/delete disposition;
+- validation and environment-dependent GPU command inventory;
+- one bounded first implementation candidate and stop conditions.
+
+Unknown ownership blocks implementation.
+
+## RunenSDF next decision
+
+Before a Runenwerk clean cutover:
+
+1. audit every code, test, manifest, adapter, document, and persisted consumer;
+2. determine whether Runenwerk has a real external dependency consumer;
+3. pin the accepted standalone revision only where needed;
+4. remove `domain/sdf`, workspace membership, and stale lockfile authority;
+5. prove no forwarding package, alias, source include, branch dependency, or
+   duplicate implementation remains;
+6. pass exact-head `cargo validate` and focused integration evidence.
+
+If no product consumer exists, remove the internal package without adding an unused
+external dependency.
 
 ## RunenECS
 
@@ -115,7 +176,7 @@ R4 explicit reflection and macro migration
 R5 remove spatial and geometry ownership
 R6 messaging split
 R7 change, ownership, and networking separation
-R8 neutralize runen_schedule
+R8 neutral scheduling boundary
 R9 standalone conformance and performance baseline
 ```
 
@@ -124,13 +185,19 @@ the internal boundary repair and conformance sequence is complete.
 
 ## RunenUI
 
-RunenUI is governed in its own repository. A future Runenwerk-owned adapter may
-translate accepted renderer-neutral UI paint output into RunenRender overlay
-contributions after both public boundaries stabilize. Neither framework depends
-on the other.
+RunenUI is governed in its own repository.
+
+A future Runenwerk-owned bridge may translate accepted renderer-neutral paint
+output into a RunenRender overlay contribution after both public boundaries
+stabilize. RunenUI owns UI state, layout, text, accessibility, and hit testing;
+RunenRender does not.
 
 ## Sequencing rule
 
 Read-only investigation and unrelated cleanup may run in parallel. Structural
-changes that share workspace manifests, dependency boundaries, identity policy,
-or canonical roadmap files must be serialized or explicitly rebased.
+changes that share manifests, lockfiles, dependency direction, identities,
+lifecycle, or canonical architecture must be serialized or explicitly rebased.
+
+No roadmap item authorizes implementation by itself. An implementation PR requires
+a current issue/design, explicit scope, acceptance criteria, and exact-head
+validation.
