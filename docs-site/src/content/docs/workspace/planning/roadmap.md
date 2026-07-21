@@ -4,17 +4,22 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 related_docs:
   - ../workflow-lifecycle.md
   - ../routines/track-orchestration-routine.md
   - ../specs/phase-implementation-spec.md
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
+  - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runensdf-extraction-design.md
   - ../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md
   - ../../design/active/runenecs-boundary-repair-execution-plan.md
+  - ../../design/active/runengpu-architecture-design.md
+  - ../../design/active/runenrender-decomposition-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
+  - ../../reports/investigations/runenrender-extraction-investigation.md
+  - ../specs/pt-runengpu-g1-identities-errors.ron
   - ./active-work.md
   - ./production-tracks.md
   - ./completed-work.md
@@ -26,122 +31,200 @@ related_docs:
 ## Program destination
 
 ```text
-RunenSDF -------+
-RunenECS -------+--> Runenwerk integration/adapters --> applications
-RunenRender ----+
-RunenUI --------+   independent external workstream
+RunenSDF --------------------+
+RunenECS --------------------+
+RunenUI ---------------------+--> Runenwerk integration --> applications
+                             |
+RunenRender --> RunenGPU ----+
+other GPU consumers -> RunenGPU
 ```
 
-Framework repositories do not depend on Runenwerk. Runenwerk owns product and
-cross-framework integration. RunenUI and RunenRender remain independent peers.
+Runenwerk remains the integration and product repository. Framework repositories
+do not depend on Runenwerk. RunenRender depends on the lower-level RunenGPU
+framework. RunenUI remains an independent peer.
 
 ## Current state
 
 ```text
-Repository-family charter   complete through PR #109
-RunenSDF investigation      complete through PR #110
-RunenECS investigation      recorded through PR #111; R1 specified, not active
-RunenRender investigation   recorded through PR #112; R1 specified, not active
-RunenSDF boundary repair    complete through PR #116
-RunenSDF repository phase   queued planning; no implementation authorization
+Repository-family charter       complete through PR #109
+RunenSDF boundary correction    complete through PR #116
+RunenSDF standalone transfer    active in its separate thread/branch
+RunenECS                         R1 planned; no implementation authorization
+GPU/render split architecture   active planning on docs/gpu-render-split-architecture
+Old RunenRender R1              retired before implementation
+RunenGPU G1                     planning-only; blocked by S0 local gate and activation
+RunenRender implementation      blocked by accepted RunenGPU boundary
 ```
 
-## Next phase — PT-RUNENSDF-003
+The GPU/render architecture branch must be rebased after the active SDF planning
+PR changes shared planning authority. No SDF lifecycle fact in this branch may
+silently replace the SDF track's newer truth.
 
-Title: Standalone RunenSDF Repository Creation and Corrected Source Transfer
-
-State: `queued-planning`
-
-Owner: SDF and repository governance
-
-Implementation authorization: none until a new bounded phase specification is
-accepted.
-
-### Mission
-
-Create `Crystonix/RunenSDF`, transfer the corrected SDF package and tests with
-provenance, and prove the repository independently without cutting Runenwerk over
-or deleting `domain/sdf`.
-
-### Required decisions before activation
-
-1. repository creation mechanism and owner action;
-2. repository/package naming and initial version;
-3. license, edition, MSRV, lockfile, and release policy;
-4. provenance-preserving transfer method;
-5. exact source/test/document move matrix;
-6. initial repository layout and validation workflow;
-7. downstream public-consumer proof;
-8. dependency pinning strategy reserved for PT-RUNENSDF-004;
-9. explicit stop and rollback conditions;
-10. one exact implementation spec written against merged PT-RUNENSDF-002 source.
-
-### Intended repository shape
+## Immediate sequence
 
 ```text
-Crystonix/RunenSDF
-├── Cargo.toml
-├── Cargo.lock
-├── LICENSE-APACHE
-├── LICENSE-MIT
-├── README.md
-├── crates/
-│   └── runensdf/
-├── tests or downstream-conformance/
-├── docs/
-└── .github/workflows/ only for durable repository validation
+1. Continue the separately authorized RunenSDF transfer track.
+2. Review and merge PT-GPU-RENDER-SPLIT-001 after rebasing shared planning files.
+3. Complete the local S0 GPU/render file, consumer, command, shader, surface,
+   identity, and benchmark inventory.
+4. Update and separately activate PT-RUNENGPU-G1.
+5. Complete G1-G9 internal RunenGPU decomposition and conformance.
+6. Transfer RunenGPU externally and cut Runenwerk over cleanly.
+7. Complete R1-R8 internal RunenRender decomposition on external RunenGPU.
+8. Transfer RunenRender externally and cut Runenwerk over cleanly.
+9. Add RunenUI, RunenSDF, and simulation adapters where justified.
+10. Begin the advanced field-ray transport roadmap.
 ```
 
-The exact top-level layout is fixed during PT-RUNENSDF-003 planning. The initial
-framework remains one package; no core/query/GPU/shader/program/macro split is
-introduced without independent pressure.
+## PT-GPU-RENDER-SPLIT-001
 
-### Required implementation outcomes
+State: `active-planning`
 
-- corrected source and all package tests exist in RunenSDF;
-- package name and public imports are finalized without compatibility aliases;
-- no Runenwerk path, package, feature, type, document, or build dependency exists;
-- independent downstream code can implement and consume `SdfField3` publicly;
-- provenance identifies the Runenwerk source commit and transfer mapping;
-- repository validation covers formatting, tests, Clippy, docs, stable/MSRV,
-  dependency direction, and diff hygiene;
-- benchmarks and property testing are included only when their owned scope and
-  maintenance policy are explicit;
-- Runenwerk remains unchanged except planning/provenance references required to
-  prepare the later cutover.
+Implementation authorization: documentation and investigation only
 
-### Forbidden scope
+Mission:
 
-```text
-Runenwerk dependency cutover
-deleting domain/sdf
-source mirror maintained after the later cutover
-compatibility or forwarding package
-RunenSDF dependency on Runenwerk
-GPU, WGPU, shader, material, world, ECS, renderer, or UI ownership
-stable persisted field/program format
-speculative multi-package split
-```
+- establish RunenGPU as a separate lower-level framework;
+- change RunenRender to use RunenGPU instead of owning WGPU;
+- classify the current renderer/GPU module families and identities;
+- replace the old renderer-only decomposition plan;
+- retire the unimplemented RunenRender R1 specification;
+- prepare one planning-only RunenGPU G1 contract.
 
-### Exit gate
+Exit gate:
 
-PT-RUNENSDF-003 completes only when the standalone repository validates
-independently, public downstream use is proven, provenance is recorded, and the
-exact revision intended for PT-RUNENSDF-004 is identified. Completion authorizes
-cutover planning, not automatic Runenwerk deletion.
+- ADR 0015 accepted in the branch;
+- RunenGPU and revised RunenRender designs aligned;
+- canonical repository/planning/root summaries aligned;
+- old R1 removed from active authority;
+- module-family connector inventory recorded;
+- docs validation and diff hygiene pass;
+- branch rebased against current main after active SDF planning changes.
 
----
+This phase authorizes no Rust, Cargo, shader, WGPU, or external-repository source
+change.
 
-## Later RunenSDF phases
+## S0 — Complete GPU/render inventory
+
+Before implementation, produce:
+
+- complete local file list;
+- complete import and consumer map;
+- every current renderer/GPU ID, allocator, raw conversion, and stable-use map;
+- every shader, pipeline, macro, example, test, and benchmark map;
+- device/surface/window/drop-order control flow;
+- CPU planning, GPU, surface, and performance command baseline;
+- exact file-level move/stay/redesign/delete matrix.
+
+Required command families are recorded in the investigation and execution plan.
+
+S0 completion permits G1 activation planning. It does not itself authorize code.
+
+## RunenGPU internal phases
 
 | Phase | Purpose | State |
 |---|---|---|
-| `PT-RUNENSDF-004` | Pin exact RunenSDF revision, migrate Runenwerk consumers, delete `domain/sdf`, remove old workspace/lockfile authority, validate integration | Blocked by PT-003 |
-| `PT-RUNENSDF-005` | Close provenance, compatibility, deleted-path, release, branch, and final ownership evidence | Blocked by PT-004 |
+| `G1` | GPU-owned runtime identities, structured errors, dependency guards | planning-only; blocked by S0 and activation |
+| `G2` | resource descriptors, access, initialization, ownership, lifetimes | blocked by G1 |
+| `G3` | bounded compute/render/copy work fragments and deterministic work graph | blocked by G2 |
+| `G4` | shader, pipeline, parameter, byte/binding, and optional macro ABI boundary | blocked by G3 |
+| `G5` | headless WGPU device, compute execution, upload, submission, readback | blocked by G4 |
+| `G6` | offscreen render/copy execution and compute-to-render proof | blocked by G5 |
+| `G7` | surfaces, generations, acquire/present, retirement, device-loss facts | blocked by G6 |
+| `G8` | one render and one non-render consumer sharing public GPU seams | blocked by G7 |
+| `G9` | internal public-boundary, validation, platform, and performance conformance | blocked by G8 |
+
+Only G1 may receive the next implementation specification. Later specs are written
+just in time after the preceding phase closes.
+
+## External RunenGPU phases
+
+| Phase | Purpose | State |
+|---|---|---|
+| `GX1` | transfer accepted internal packages to `Crystonix/runen-gpu`; validate standalone and public downstream use | blocked by G9 |
+| `GX2` | pin exact revision, migrate Runenwerk consumers, delete internal GPU source, remove migration seams | blocked by GX1 |
+
+The completed cutover leaves one external GPU authority and no duplicate context,
+allocator, resource namespace, or execution path.
+
+## RunenRender internal phases
+
+RunenRender implementation waits for the accepted external RunenGPU cutover.
+Read-only planning may continue earlier.
+
+| Phase | Purpose | State |
+|---|---|---|
+| `R1` | renderer-semantic identities and structured errors, distinct from GPU handles | blocked by GX2 |
+| `R2` | immutable prepared render scene and contribution lifecycle | blocked by R1 |
+| `R3` | semantic render planning separated from GPU work planning | blocked by R2 |
+| `R4` | render-specific GPU realization through RunenGPU only | blocked by R3 |
+| `R5` | renderer material/shader interface versus host authoring/reload boundary | blocked by R4 |
+| `R6` | logical targets, overlays, output color, and presentation boundary | blocked by R5 |
+| `R7` | migrate scene/world/material/SDF/UI/editor/procedural/debug adapters and prove parity | blocked by R6 |
+| `R8` | standalone/public-boundary, headless, parity, and performance conformance | blocked by R7 |
+
+## External RunenRender phases
+
+| Phase | Purpose | State |
+|---|---|---|
+| `RX1` | transfer `runenrender_core` and `runenrender_gpu`; validate standalone/downstream | blocked by R8 |
+| `RX2` | pin exact revision, migrate adapters, delete internal framework source, close provenance | blocked by RX1 |
+
+## Integration adapter phases
+
+### RunenUI
+
+```text
+RunenUI paint output
+    -> Runenwerk-owned adapter
+    -> RunenRender overlay contribution
+    -> RunenGPU execution
+```
+
+Blocked until the renderer-neutral RunenUI paint protocol and both framework
+boundaries are stable. Neither core depends on the other.
+
+### RunenSDF
+
+```text
+RunenSDF field contract
+    -> Runenwerk-owned adapter
+    -> RunenRender provider
+    -> optional RunenGPU realization
+```
+
+The adapter initially remains in Runenwerk. A bridge package requires a second
+independent host.
+
+### Simulations and procedural systems
+
+Fluid, wind, vegetation, fire, and generation systems may publish RunenGPU work
+and RunenRender providers through explicit adapters. Their algorithms and source
+state remain domain-owned.
+
+## Advanced renderer roadmap
+
+After both framework cutovers:
+
+```text
+F1 reference implicit solid renderer
+F2 shell, fiber, liquid, volume, and analytic providers
+F3 unified many-light direct transport
+F4 sparse directional world-space radiance cache
+F5 lobe-separated reconstruction and bounded history
+F6 preview/standard/high/ultra/reference quality continuum
+F7 endless-world visibility and transport horizons
+F8 material, transport, and display stylization
+F9 world/vegetation/water/character production proofs
+F10 authoring integration, profiling, capture, and hardening
+```
+
+These features extend the accepted framework. They do not justify delaying the
+boundary extraction or adding more experimental systems to the old monolith.
 
 ## RunenECS track
 
-The accepted internal sequence remains:
+The accepted sequence remains independent:
 
 ```text
 R1 entity identity and structured errors
@@ -155,39 +238,32 @@ R8 neutralize runen_schedule
 R9 standalone conformance and performance baseline
 ```
 
-R1 has a planning specification but no Rust implementation authorization.
-Repository creation remains blocked through R9.
-
-## RunenRender track
-
-The accepted internal sequence remains:
-
-```text
-R1 neutral identities, errors, and dependency guards
-R2 neutral graph and resource descriptors
-R3 prepared frame inputs and generic producers
-R4 GPU parameter and optional macro ABI
-R5 shader and hot-reload boundary
-R6 headless WGPU executor
-R7 generic surfaces and device loss
-R8 diagnostics, capture, and provenance split
-R9 Runenwerk adapter migration
-R10 internal conformance and performance proof
-```
-
-R1 has a planning specification but no Rust implementation authorization.
-External extraction remains blocked through R10.
-
-## RunenUI relationship
-
-RunenUI is governed elsewhere. This program does not design or implement RunenUI
-APIs. A future Runenwerk-owned adapter may translate accepted renderer-neutral
-RunenUI output into generic RunenRender contributions after both sides expose
-stable public seams.
+No RunenECS Rust implementation is authorized by the GPU/render split.
 
 ## Parallelism policy
 
-Read-only investigation, consumer classification, benchmark/safety command
-discovery, and unrelated documentation cleanup may proceed in parallel.
-Structural implementation remains phase-authorized and serialized where branches
-share workspace, identity, dependency, or planning authority.
+Allowed:
+
+- independently authorized RunenSDF work;
+- local S0 GPU/render inventory and validation;
+- read-only future-phase design;
+- independent RunenUI work;
+- benchmark and command discovery.
+
+Serialized or explicitly coordinated:
+
+- canonical planning/root summaries;
+- Cargo manifests and lockfile;
+- current renderer/GPU identity files;
+- WGPU ownership changes;
+- source transfers and cutovers.
+
+Forbidden without phase authority:
+
+- structural GPU or renderer implementation;
+- external RunenGPU/RunenRender source transfer;
+- duplicate GPU/renderer paths;
+- implementing the retired old RunenRender R1;
+- broad field/path-tracing rewrite in the current plugin;
+- direct RunenUI/RunenRender core dependency;
+- compatibility packages, source mirrors, or a universal shared core.
