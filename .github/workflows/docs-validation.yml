@@ -27,11 +27,8 @@ concurrency:
 jobs:
   validate:
     name: Validate documentation authority
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    defaults:
-      run:
-        shell: pwsh
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v4
@@ -63,8 +60,8 @@ jobs:
 
       - name: Prove validation leaves tracked state clean
         run: |
-          $status = git status --short
-          if ($status) {
-            Write-Error "Documentation validation changed tracked state:`n$status"
+          status="$(git status --short)"
+          if [ -n "$status" ]; then
+            printf 'Documentation validation changed tracked state:\n%s\n' "$status" >&2
             exit 1
-          }
+          fi
