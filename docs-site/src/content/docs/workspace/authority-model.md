@@ -75,7 +75,7 @@ Inspection can establish structure and likely behavior. It cannot be reported as
 - **Roadmap:** high-level sequencing and dependencies; not an execution ledger.
 - **Pull requests:** diff review, delivery evidence, and merge decision.
 - **Root summaries:** concise navigation and stable repository shape.
-- **Generated views:** derivative convenience output; they must identify their source.
+- **Roadmap:** manually maintained high-level sequencing; never an execution ledger.
 - **Historical and superseded documents:** context only; they do not authorize new work.
 
 ## Workflow authority
@@ -84,7 +84,7 @@ Inspection can establish structure and likely behavior. It cannot be reported as
 
 Repository scripts may validate deterministic invariants. They do not grant permissions, certify truth, promote lifecycle state, or override accepted documents and GitHub state.
 
-The legacy production-track, execution-lock, truth-certificate, batch, and generated-prompt systems are deprecated under issue `#122`. Their state is compatibility data until active consumers migrate, not higher-order authority.
+The former production-track, execution-lock, truth-certificate, batch, and generated-prompt systems were retired under issue `#122`. Historical references have no active authority.
 
 ## Single-source rule
 
@@ -95,7 +95,7 @@ one durable decision -> one accepted ADR or design
 one active task -> one GitHub issue
 one required validation baseline -> cargo validate
 one implementation delivery -> one PR
-one derived view -> one named source
+one roadmap state -> one maintained roadmap
 ```
 
 Cross-link instead of copying full state.

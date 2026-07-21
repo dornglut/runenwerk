@@ -1,9 +1,7 @@
 version: '3'
 
-# Task is an optional convenience layer. Workflow authority and required validation
-# live in docs-site/src/content/docs/workspace/engineering-workflow.md and
-# `cargo validate`. Do not add project-management state machines here.
-
+# Task is an optional convenience layer. Workflow authority and required
+# validation live in engineering-workflow.md and `cargo validate`.
 tasks:
   default:
     desc: List available optional helper tasks.
@@ -16,7 +14,7 @@ tasks:
       - cargo validate
 
   ci:local:
-    desc: Deprecated compatibility alias for the canonical repository baseline.
+    desc: Compatibility alias for the canonical repository baseline.
     cmds:
       - cargo validate
 
@@ -45,54 +43,8 @@ tasks:
     cmds:
       - powershell -ExecutionPolicy Bypass -File tools/bootstrap/bootstrap.ps1 -CheckOnly {{.CLI_ARGS}}
 
-  roadmap:validate:
-    desc: Validate the retained structured roadmap source.
-    cmds:
-      - uv run python tools/workflow/roadmap_state.py validate
-
-  roadmap:render:
-    desc: Render retained roadmap Markdown and PlantUML views.
-    cmds:
-      - uv run python tools/workflow/generate_roadmap_docs.py render
-
-  roadmap:check:
-    desc: Check retained roadmap generated views and schema.
-    cmds:
-      - uv run python tools/workflow/roadmap_state.py schema --check
-      - uv run python tools/workflow/generate_roadmap_docs.py check
-
-  production:validate:
-    desc: Validate retained production-track planning data during migration.
-    cmds:
-      - uv run python tools/workflow/production_state.py validate
-
-  production:render:
-    desc: Render retained production-track planning views during migration.
-    cmds:
-      - uv run python tools/workflow/generate_production_docs.py render
-
-  production:check:
-    desc: Check retained production-track generated views during migration.
-    cmds:
-      - uv run python tools/workflow/production_state.py schema --check
-      - uv run python tools/workflow/generate_production_docs.py check
-
-  planning:validate:
-    desc: Validate retained roadmap and production planning data plus documentation.
-    cmds:
-      - task roadmap:validate
-      - task roadmap:check
-      - task production:validate
-      - task production:check
-      - task docs:validate
-
-  puml:validate:
-    desc: Validate PlantUML diagrams through the retained roadmap helper.
-    cmds:
-      - uv run python tools/workflow/roadmap_state.py puml
-
   rust:test:
-    desc: Run locked workspace tests without requiring cargo-nextest.
+    desc: Run locked workspace tests.
     cmds:
       - cargo test --workspace --locked
 
@@ -142,4 +94,4 @@ tasks:
   ux:lab:terminology:
     desc: Check UX Lab and scenario terminology.
     cmds:
-      - uv run python tools/workflow/ux_lab_terminology.py
+      - python3 tools/checks/ux_lab_terminology.py

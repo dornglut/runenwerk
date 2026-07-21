@@ -6,7 +6,6 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 BANNED_TERMS = (
@@ -23,27 +22,11 @@ CURRENT_PATHS = (
     "domain/ui/ui_widgets/src",
     "apps/runenwerk_editor/src/shell",
     "docs-site/src/content/docs/design/active",
-    "docs-site/src/content/docs/workspace/production-tracks.yaml",
-    "docs-site/src/content/docs/workspace/production-track-index.md",
-    "docs-site/src/content/docs/workspace/production-milestone-register.md",
-    "docs-site/src/content/docs/workspace/roadmap-items.yaml",
-    "docs-site/src/content/docs/workspace/roadmap-index.md",
-    "docs-site/src/content/docs/workspace/diagrams/current-roadmap-candidates.puml",
-    "docs-site/src/content/docs/workspace/diagrams/production-track-full-roadmap.puml",
-    "docs-site/src/content/docs/workspace/diagrams/production-track-roadmap.puml",
-    "docs-site/src/content/docs/workspace/diagrams/value-weighted-dependency-roadmap.puml",
+    "docs-site/src/content/docs/workspace/planning/roadmap.md",
+    "docs-site/src/content/docs/workspace/planning/active-work.md",
 )
 
-TEXT_SUFFIXES = {
-    ".md",
-    ".puml",
-    ".rs",
-    ".toml",
-    ".txt",
-    ".yaml",
-    ".yml",
-}
-
+TEXT_SUFFIXES = {".md", ".puml", ".rs", ".toml", ".txt", ".yaml", ".yml"}
 HISTORICAL_NOTE = "Current name: UX Lab Scenarios; historical name: Story Lab."
 HISTORICAL_CLOSEOUTS = (
     "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-001-governance-truth-audit-and-track-activation/closeout.md",
@@ -57,7 +40,6 @@ HISTORICAL_CLOSEOUTS = (
     "docs-site/src/content/docs/reports/closeouts/pm-editor-ux-009-final-local-native-no-gap-certification/closeout.md",
 )
 
-
 def iter_text_files(path: Path) -> list[Path]:
     if path.is_file():
         return [path]
@@ -66,7 +48,6 @@ def iter_text_files(path: Path) -> list[Path]:
         for candidate in path.rglob("*")
         if candidate.is_file() and candidate.suffix in TEXT_SUFFIXES
     )
-
 
 def check_current_terms() -> list[str]:
     failures: list[str] = []
@@ -83,10 +64,10 @@ def check_current_terms() -> list[str]:
                 for term in BANNED_TERMS:
                     if term in line:
                         failures.append(
-                            f"{file_path.relative_to(REPO_ROOT)}:{line_number}: banned UX Lab terminology '{term}'"
+                            f"{file_path.relative_to(REPO_ROOT)}:{line_number}: "
+                            f"banned UX Lab terminology '{term}'"
                         )
     return failures
-
 
 def check_historical_notes() -> list[str]:
     failures: list[str] = []
@@ -100,7 +81,6 @@ def check_historical_notes() -> list[str]:
             failures.append(f"{relative}: missing terminology note '{HISTORICAL_NOTE}'")
     return failures
 
-
 def main() -> int:
     failures = check_current_terms() + check_historical_notes()
     if failures:
@@ -110,7 +90,6 @@ def main() -> int:
         return 1
     print("UX Lab terminology check passed.")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

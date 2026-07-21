@@ -90,11 +90,9 @@ cargo xtask validate --extended
 
 Runenwerk does not use quick, full, or quiet gates. Output verbosity never changes validation semantics.
 
-## Legacy workflow tools
+## Retired workflow systems
 
-The existing production-track, execution, truth, batch, and AI-prompt commands are deprecated during issue `#122` migration. They remain temporarily available for active branches that already depend on them.
-
-Do not use them for new work and do not treat their generated state as stronger authority than accepted docs, GitHub issues, tests, or CI.
+Track locks, execution contract packs, truth certificates, batch execution, and generated prompts are not part of the repository workflow. Historical references are context only.
 
 ## Reporting
 

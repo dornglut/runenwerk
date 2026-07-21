@@ -247,72 +247,6 @@ def validate_domain_map_alignment(errors: list[str]) -> None:
     if "domain/id_macros" in text:
         errors.append("canonical domain map references stale domain/id_macros path; use foundation/id_macros")
 
-def batch_index_current_proposals(index_text: str) -> set[str]:
-    return batch_index_section_entries(index_text, "Current Proposal")
-
-def batch_index_historical_proposals(index_text: str) -> set[str]:
-    return batch_index_section_entries(index_text, "Historical Proposal Artifacts")
-
-def batch_index_section_entries(index_text: str, section_title: str) -> set[str]:
-    match = re.search(
-        rf"## {re.escape(section_title)}(?P<section>.*?)(?:\n## |\Z)",
-        index_text,
-        re.DOTALL,
-    )
-    if not match:
-        return set()
-    return set(re.findall(r"20\d{2}-[a-z0-9][a-z0-9-]*", match.group("section")))
-
-def validate_batch_manifests(errors: list[str]) -> None:
-    batch_root = DOCS_ROOT / "reports" / "batches"
-    if not batch_root.exists():
-        return
-    index_path = batch_root / "README.md"
-    try:
-        index_text = index_path.read_text(encoding="utf-8")
-    except OSError:
-        errors.append(f"missing batch report index: {index_path}")
-        index_text = ""
-    current_proposals = batch_index_current_proposals(index_text)
-    historical_proposals = batch_index_historical_proposals(index_text)
-    for manifest_path in sorted(batch_root.rglob("batch.toml")):
-        try:
-            manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-        except (OSError, tomllib.TOMLDecodeError) as error:
-            errors.append(f"could not parse batch manifest {manifest_path}: {error}")
-            continue
-        batch_id = str(manifest.get("id", ""))
-        approval_state = str(manifest.get("approval_state", ""))
-        integration_status = str(manifest.get("integration_status", "not_started"))
-        closeout_status = str(manifest.get("closeout_status", "not_started"))
-        for item in manifest.get("items", []):
-            prompt_path = str(item.get("prompt_path", ""))
-            if re.match(r"^[A-Za-z]:", prompt_path) or prompt_path.startswith(("/", "\\")):
-                errors.append(f"absolute batch prompt_path in {manifest_path}: {prompt_path}")
-        report_path = manifest_path.with_name("batch.md")
-        if integration_status == "merged" and closeout_status == "completed":
-            if not report_path.exists():
-                errors.append(f"completed batch is missing rendered batch.md report: {manifest_path}")
-            continue
-        if (
-            approval_state == "proposed"
-            and integration_status == "not_started"
-            and closeout_status == "not_started"
-            and batch_id in current_proposals
-        ):
-            continue
-        if (
-            approval_state == "rejected"
-            and integration_status == "superseded"
-            and closeout_status == "not_applicable"
-            and batch_id in historical_proposals
-        ):
-            continue
-        errors.append(
-            f"stale or unindexed active-looking batch state in {manifest_path}: "
-            f"approval_state={approval_state}, integration_status={integration_status}, closeout_status={closeout_status}"
-        )
-
 def main() -> int:
     errors: list[str] = []
 
@@ -323,7 +257,6 @@ def main() -> int:
     validate_design_lifecycle_indexes(errors)
     validate_crate_docs_coverage(errors)
     validate_domain_map_alignment(errors)
-    validate_batch_manifests(errors)
 
     for path in DOCS_ROOT.rglob("*"):
         if any(path.is_relative_to(subtree) for subtree in IGNORED_DOCS_SUBTREES):
