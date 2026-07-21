@@ -153,7 +153,7 @@ A separate planning or closeout PR is required only when it carries independentl
 
 ## Validation profiles
 
-Runenwerk does not use `quick`, `full`, or `quiet` gates. Those names are ambiguous and drift over time.
+Runenwerk does not use `quick`, `full`, `quiet`, or output-dependent gates. Those names are ambiguous and drift over time.
 
 ### Focused
 
@@ -178,7 +178,15 @@ cargo validate
 git diff --check
 ```
 
-`cargo validate` is read-only and lockfile-safe. It runs:
+`cargo validate` is read-only and lockfile-safe. It validates the standalone repository-tooling workspace first:
+
+```text
+cargo fmt --manifest-path tools/xtask/Cargo.toml --check
+cargo test --manifest-path tools/xtask/Cargo.toml --locked
+cargo clippy --manifest-path tools/xtask/Cargo.toml --all-targets --locked -- -D warnings
+```
+
+It then validates the product workspace and repository authority:
 
 ```text
 cargo fmt --all --check
