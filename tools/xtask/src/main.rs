@@ -38,6 +38,7 @@ const RETIRED_PATHS: &[&str] = &[
     "workflow.cmd",
     "quiet_editor_gate.sh",
     "quiet_full_gate.sh",
+    ".github/workflows/runensdf-transfer-artifact.yml",
     "docs-site/src/content/docs/workspace/execution-contract-packs",
     "docs-site/src/content/docs/workspace/execution-locks",
     "docs-site/src/content/docs/workspace/track-execution-manifests",
@@ -169,7 +170,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         root,
         "Taskfile.yml",
         "- cargo validate",
-        "the ci:local compatibility path must delegate to cargo validate",
+        "the optional Task helper must delegate to cargo validate",
     )?;
     require_text(
         root,
@@ -192,6 +193,8 @@ fn audit_repository(root: &Path) -> Result<(), String> {
 
     for marker in [
         "uv run",
+        "ci:local:",
+        "ci:extended:",
         "roadmap:",
         "production:",
         "planning:",
@@ -205,7 +208,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
             root,
             "Taskfile.yml",
             marker,
-            "retired workflow command surfaces must not return",
+            "retired or duplicate workflow command surfaces must not return",
         )?;
     }
 
