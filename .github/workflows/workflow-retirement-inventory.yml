@@ -1,0 +1,55 @@
+name: Workflow Retirement Inventory
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build retirement inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '# Legacy workflow inventory'
+            echo
+            echo '## Tracked files under tools/workflow'
+            git ls-files 'tools/workflow/**' | sort
+            echo
+            echo '## Root and tool scripts with gate/workflow names'
+            git ls-files | grep -E '(^|/)(quiet_.*gate|.*workflow.*|.*track.*|.*truth.*|.*batch.*|.*ai_task.*|.*production_.*|.*roadmap_.*)(\.py|\.sh|\.ps1|\.yml|\.yaml|\.toml|\.json|\.ron|\.md)?$' | sort || true
+            echo
+            echo '## References to deprecated orchestration commands and state'
+            rg -n --hidden --glob '!target/**' --glob '!docs-site/node_modules/**' --glob '!.git/**' \
+              'track_control_cli|production_track_cli|execution/cli\.py|truth/cli\.py|parallel_batch\.py|ai_task\.py|production_goal\.py|quick gate|full gate|quiet gate|quiet_editor_gate|quiet_full_gate|contract pack|truth certificate|track lock|batch manifest|\.runenwerk/' . || true
+            echo
+            echo '## Tracked generated workflow state and reports'
+            git ls-files | grep -E '(^|/)(\.runenwerk|execution|truth|batches|agent-transcripts|task-cards|production-tracks|roadmap-items)' | sort || true
+            echo
+            echo '## Python tests owned by workflow tooling'
+            git ls-files 'tools/workflow/**' | grep -E '(^|/)(test_.*\.py|.*_test\.py)$' | sort || true
+            echo
+            echo '## Open-work documentation references'
+            rg -n --glob '*.md' --glob '*.mdx' --glob '*.ron' --glob '*.yaml' --glob '*.yml' \
+              'PT-RUNENSDF-004|PT-RUNENGPU|RunenGPU|RunenRender|track:|production:|execution:|truth:|batch:' \
+              docs-site AGENTS.md TESTING.md Taskfile.yml || true
+          } > workflow-retirement-inventory.txt
+
+      - name: Upload inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-retirement-inventory
+          path: workflow-retirement-inventory.txt
+          if-no-files-found: error
+          retention-days: 3
