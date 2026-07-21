@@ -1,164 +1,106 @@
 ---
 title: Start Here
-description: Single workspace router for scriptless Runenwerk work.
+description: Canonical workspace router for Runenwerk engineering work.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-07
+last_reviewed: 2026-07-21
 related_docs:
-  - ./operating-model.md
+  - ./engineering-workflow.md
   - ./authority-model.md
   - ./documentation-structure.md
-  - ./workflow-lifecycle.md
-  - ./complete-investigation-gate.md
-  - ./complete-design-gate.md
-  - ./evidence-quality-taxonomy.md
-  - ./complete-merge-readiness-gate.md
-  - ./routines/README.md
-  - ./routines/track-orchestration-routine.md
-  - ./task-cards/README.md
-  - ./task-cards/track-manager-task.md
-  - ./specs/README.md
-  - ./planning/README.md
 ---
 
 # Start Here
 
 Use this page for non-trivial Runenwerk work.
 
-The workflow must work from GitHub connector, ChatGPT context tooling, Codex-style patching, manual repo browsing, or a local checkout. Do not require scripts, generated prompts, rendered planning views, Taskfile tasks, or a full repository export to know what to do next.
-
-## Entry points
-
-- Human entrypoint: `README.md`
-- AI agent entrypoint: `AGENTS.md`
-- Workspace router: this file
-- Complete investigation gate: [`complete-investigation-gate.md`](complete-investigation-gate.md)
-- Complete design gate: [`complete-design-gate.md`](complete-design-gate.md)
-- Evidence quality taxonomy: [`evidence-quality-taxonomy.md`](evidence-quality-taxonomy.md)
-- Complete merge readiness gate: [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md)
-
-## Choose the task shape
-
-| Work type | Routine | Task card |
-|---|---|---|
-| Investigation | [`routines/investigation-routine.md`](routines/investigation-routine.md) | [`task-cards/github-connector-task.md`](task-cards/github-connector-task.md) |
-| Implementation | [`routines/implementation-routine.md`](routines/implementation-routine.md) | [`task-cards/implementation-task.md`](task-cards/implementation-task.md) |
-| Track orchestration / manager handoff | [`routines/track-orchestration-routine.md`](routines/track-orchestration-routine.md) | [`task-cards/track-manager-task.md`](task-cards/track-manager-task.md) |
-| Architecture review | [`routines/architecture-governance-review-routine.md`](routines/architecture-governance-review-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
-| Code refactor | [`routines/code-refactor-routine.md`](routines/code-refactor-routine.md) | [`task-cards/implementation-task.md`](task-cards/implementation-task.md) |
-| Documentation cleanup | [`routines/docs-refactor-routine.md`](routines/docs-refactor-routine.md) | [`task-cards/docs-cleanup-task.md`](task-cards/docs-cleanup-task.md) |
-| Roadmap or planning update | [`routines/roadmap-update-routine.md`](routines/roadmap-update-routine.md) | [`task-cards/implementation-task.md`](task-cards/implementation-task.md) |
-| Phase closeout | [`routines/phase-completion-drift-check-routine.md`](routines/phase-completion-drift-check-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
-| Pull request review / merge readiness | [`routines/pr-review-routine.md`](routines/pr-review-routine.md) | [`task-cards/review-task.md`](task-cards/review-task.md) |
-
-## Lifecycle rule
-
-For non-trivial work, classify the current lifecycle state before editing:
+## Primary entrypoints
 
 ```text
-idea
-investigating
-proposed-design
-accepted-direction
-track-candidate
-production-track
-active-planning
-active-implementation
-review
-completed
-deferred
-rejected
-superseded
-archived
+Human repository overview: README.md
+AI agent entrypoint: AGENTS.md
+Engineering process: docs-site/src/content/docs/workspace/engineering-workflow.md
+Testing and validation: TESTING.md
 ```
 
-Use [`workflow-lifecycle.md`](workflow-lifecycle.md) when a task crosses from design to decision, planning, implementation, review, merge readiness, or closeout.
+## Read by task
 
-Use [`complete-investigation-gate.md`](complete-investigation-gate.md) before design/planning/implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
-
-Use [`complete-design-gate.md`](complete-design-gate.md) before implementation is authorized for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
-
-Use [`evidence-quality-taxonomy.md`](evidence-quality-taxonomy.md) whenever a decision depends on validation, current behavior, authority, confidence, or freshness claims.
-
-Use [`complete-merge-readiness-gate.md`](complete-merge-readiness-gate.md) before recommending a merge, branch cleanup, or phase merge.
-
-## Read first
-
-For code changes:
+### Code or refactor
 
 ```text
 AGENTS.md
 ARCHITECTURE.md
 DEPENDENCY_RULES.md
 DOMAIN_MAP.md
+CRATES.md
 TESTING.md
+owning code, tests, ADRs, and designs
 ```
 
-For documentation changes:
+### Documentation
 
 ```text
 AGENTS.md
+docs-site/src/content/docs/workspace/engineering-workflow.md
 docs-site/src/content/docs/workspace/documentation-structure.md
-docs-site/src/content/docs/workspace/authority-model.md
-docs-site/src/content/docs/workspace/workflow-lifecycle.md
-docs-site/src/content/docs/workspace/complete-investigation-gate.md
-docs-site/src/content/docs/workspace/complete-design-gate.md
-docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
-docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
+owning architecture, design, planning, or history document
 ```
 
-For planning changes:
+### Architecture or extraction
 
 ```text
-docs-site/src/content/docs/workspace/planning/README.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/authority-model.md
-docs-site/src/content/docs/workspace/workflow-lifecycle.md
-docs-site/src/content/docs/workspace/complete-investigation-gate.md
-docs-site/src/content/docs/workspace/complete-design-gate.md
-docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
-docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
+AGENTS.md
+ARCHITECTURE.md
+DEPENDENCY_RULES.md
+DOMAIN_MAP.md
+docs-site/src/content/docs/workspace/engineering-workflow.md
+relevant accepted ADRs and designs
+current code and conformance evidence
+active GitHub issue and roadmap entry
 ```
 
-For track orchestration:
+### Pull-request review
+
+Inspect:
 
 ```text
-docs-site/src/content/docs/workspace/routines/track-orchestration-routine.md
-docs-site/src/content/docs/workspace/task-cards/track-manager-task.md
-docs-site/src/content/docs/workspace/planning/active-work.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
-docs-site/src/content/docs/workspace/planning/decision-register.md
-docs-site/src/content/docs/workspace/specs/phase-implementation-spec.md
+issue or accepted design
+actual diff
+owning tests and public surfaces
+focused validation evidence
+cargo validate and exact-head CI
+known risks and post-merge truth
 ```
 
-For all significant changes, use:
+## Work classification
+
+Classify the task using [Engineering Workflow](engineering-workflow.md):
 
 ```text
-docs-site/src/content/docs/guidelines/programming-principles.md
+routine
+significant
+architectural or extraction
 ```
 
-## Evidence report
+The classification controls how much investigation and durable design is required. It does not create a separate workflow state machine.
 
-End with:
+## Required baseline
+
+Before merge:
 
 ```text
-Files changed:
-Exact functions/modules/sections changed:
-Authority files inspected:
-Evidence classes used:
-Complete investigation gate status:
-Complete design gate status:
-Merge readiness status when relevant:
-Manual validation performed:
-Command validation run or unavailable:
-Remaining risks or blockers:
-Next recommended step:
+cargo validate
+git diff --check
 ```
 
-## Optional local helpers
+GitHub Actions runs the same `cargo validate` implementation.
 
-Commands and scripts may provide extra evidence when a local checkout is available. They are never required to understand this workflow and they are never the authority for what should be changed.
+## Legacy workflow tooling
+
+Production-track, execution-lock, truth-certificate, batch, generated-prompt, routine, and task-card machinery is deprecated under issue `#122`.
+
+It remains temporarily available only for active work that has not migrated. Do not use it for new work and do not treat it as workflow authority.
+
+Historical links to superseded gate documents remain valid so old reports stay readable.
