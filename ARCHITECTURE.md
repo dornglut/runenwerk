@@ -10,23 +10,49 @@ Current repository-family authority:
 ```text
 docs-site/src/content/docs/architecture/repository-family-architecture.md
 docs-site/src/content/docs/adr/accepted/0014-repository-family-extraction-boundaries.md
+docs-site/src/content/docs/adr/accepted/0015-separate-gpu-execution-from-rendering.md
 ```
 
 ## Target repository family
 
 ```text
-RunenSDF -------+
-RunenECS -------+--> Runenwerk integration/adapters --> applications
-RunenRender ----+
-RunenUI --------+   (separate external workstream)
+RunenSDF ----+
+RunenECS ----+--> Runenwerk adapters/integration --> applications
+RunenUI -----+
+                  |
+                  +--> RunenRender --> RunenGPU
+                  +--> non-render RunenGPU workloads
 ```
 
-Runenwerk remains the integration and product repository. Extracted framework
-repositories must not depend on Runenwerk. Adapters map framework-local contracts
-to Runenwerk lifecycle, domains, rendering, and applications.
+Runenwerk remains the integration and product repository. Framework repositories
+must not depend on Runenwerk.
 
-RunenUI work is governed separately and is not part of the current SDF/ECS/render
-extraction program.
+The accepted direct framework dependency is:
+
+```text
+RunenRender -> RunenGPU
+```
+
+RunenGPU owns general GPU execution. RunenRender owns image formation and lowers
+render work through RunenGPU.
+
+## Initial repository packages
+
+```text
+repository                 package       crate
+Crystonix/runen-sdf        runen-sdf     runen_sdf
+Crystonix/runen-ecs        runen-ecs     runen_ecs
+Crystonix/runen-gpu        runen-gpu     runen_gpu
+Crystonix/runen-render     runen-render  runen_render
+Crystonix/runen-ui         runen-ui      runen_ui
+```
+
+Each framework begins with one public package. Internal modules carry boundaries
+until an independently useful dependency, backend, release, ABI, or compile-time
+constraint proves that another package is needed.
+
+Do not create speculative `core`, `wgpu`, `gpu`, facade, macro, testing, capture,
+or compatibility packages merely to draw architecture boundaries.
 
 ## Current in-repository layer model
 
@@ -37,7 +63,8 @@ foundation -> domain -> engine/runtime -> apps/adapters/tools
 ```
 
 Code location is current implementation fact, not permanent ownership authority.
-Extraction proceeds only after a boundary is corrected and independently proven.
+Extraction proceeds only after the future public boundary is corrected and proven
+inside Runenwerk.
 
 ## Core doctrine
 
@@ -55,10 +82,10 @@ Adapters translate without duplicating authority.
 Runenwerk should be truth-shaped: clear owners, explicit contracts, precise
 errors, stable IDs, testable behavior, and one-way dependencies.
 
-## Seven programming principles
+## Engineering principles
 
-Use `docs-site/src/content/docs/guidelines/programming-principles.md` as the
-engineering lens for architecture and code review:
+Use `docs-site/src/content/docs/guidelines/programming-principles.md` as the review
+lens:
 
 1. KISS: keep the owned path simple.
 2. DRY: remove duplicate authority.
@@ -71,7 +98,7 @@ engineering lens for architecture and code review:
 ## Foundation
 
 Foundation crates provide low-level vocabulary that is not specific to editor,
-runtime, renderer, application behavior, or AI workflow.
+runtime, rendering, application behavior, or repository workflow.
 
 Current foundation crates:
 
@@ -88,74 +115,138 @@ foundation/resource_ref
 Do not create a universal `RunenCore`, shared meta-framework, universal ID crate,
 or universal diagnostics crate for extraction convenience.
 
-## Domain and framework ownership
+## Framework ownership
 
-Domain crates currently own engine-agnostic concepts and invariants. The active
-program will move selected mature boundaries to independent repositories:
+### RunenSDF
+
+Owns reusable field mathematics, numerical contracts, bounds, composition,
+transforms, capabilities, and CPU reference queries.
+
+It does not own Runenwerk world, rendering, GPU, ECS, material, or product policy.
+
+### RunenECS
+
+Owns entity/component/resource lifecycle, storage/query semantics, deferred
+structural mutation, system access, explicit reflection, and ECS-local scheduling
+integration.
+
+It does not own general spatial indexing, engine lifecycle, rendering extraction,
+networking, replay, world streaming, or product policy.
+
+### RunenGPU
+
+Owns GPU contexts, normalized capabilities, resources, access/lifetimes, hazards,
+workloads, submissions, uploads/readback, low-level surfaces, WGPU realization,
+backend outcomes, and GPU diagnostics.
+
+It does not own image formation, field/simulation algorithms, ECS, UI, windows and
+event loops, shader filesystem policy, or product recovery.
+
+### RunenRender
+
+Owns prepared render scenes, views, providers/interactions, materials/media,
+emitters, visibility, transport, radiance caches, history, reconstruction,
+overlays, color, presentation intent, and lowering into RunenGPU workloads.
+
+It does not own WGPU directly, general GPU execution, ECS extraction, SDF
+mathematics, UI semantics, native-window policy, or Runenwerk lifecycle.
+
+### RunenUI
+
+Owns semantic UI, state/actions, focus/accessibility, layout/style/text, hit
+testing, and renderer-neutral paint output.
+
+RunenUI remains independent of RunenRender and RunenGPU. A Runenwerk bridge may
+translate accepted paint output into a RunenRender overlay contribution.
+
+### Runenwerk
+
+Retains:
+
+- application and engine lifecycle;
+- frame/tick and domain scheduling;
+- windows/event-loop policy;
+- ECS and domain extraction;
+- scene, world, material-authoring, SDF, UI, editor, and simulation adapters;
+- shader source discovery/revision/watch/reload policy;
+- product capability and quality selection;
+- cross-framework composition;
+- diagnostics presentation, artifacts, recovery, and runtime evidence;
+- applications and tools.
+
+## Current GPU/render implementation
+
+The current `engine/src/plugins/render` location combines several future owners:
 
 ```text
-domain/sdf                         -> future RunenSDF
-domain/ecs + ecs_macros + scheduler -> future RunenECS
-engine render-neutral/WGPU parts   -> future RunenRender
+general GPU execution             -> future RunenGPU
+image formation                   -> future RunenRender
+windows/lifecycle/domain adapters -> retained Runenwerk
+source-domain semantics           -> owning domain/framework
 ```
 
-Runenwerk retains scene, world, material, editor, app, lifecycle, and adapter
-policy.
+Moving the directory unchanged is forbidden.
 
-## Engine and runtime
+The required sequence is:
 
-Runtime code composes domains/frameworks into executable behavior. It owns:
+```text
+S0 complete inventory
+-> internal RunenGPU boundary proof
+-> external RunenGPU clean cutover
+-> internal RunenRender boundary proof on RunenGPU
+-> external RunenRender clean cutover
+-> reusable adapter review
+-> advanced renderer work
+```
 
-- app lifecycle;
-- frame/tick policy;
-- plugin composition;
-- windows/event-loop policy;
-- cross-domain adapters;
-- product feature selection;
-- integration diagnostics and tests.
-
-Runtime must not become editor-shaped, and framework cores must not become
-Runenwerk-shaped.
+No implementation phase is authorized before S0 classifies current files,
+consumers, identities, lifecycles, shaders, macros, and validation evidence.
 
 ## Apps, adapters, and tools
 
 Apps and tools compose the engine for concrete use cases. Adapters own external
-host and cross-repository translation.
+host and cross-framework translation.
 
-An adapter may depend on both Runenwerk and one framework. The framework must not
-depend back on the adapter or Runenwerk.
+An adapter may depend on Runenwerk and framework public contracts. Frameworks do
+not depend back on the adapter or Runenwerk.
+
+Adapters translate identities, prepared inputs, outputs, lifecycle facts,
+diagnostics, provenance, and ownership. They do not mirror algorithms or create
+parallel authority.
 
 ## Architectural invariants
 
 - Foundation crates do not depend on domain, engine, editor, app, or adapter code.
 - Framework repositories do not depend on Runenwerk.
-- RunenRender core does not depend on ECS, SDF, UI, scene, material authoring,
-  Winit, WGPU, or Runenwerk.
-- RunenECS core does not depend on Runenwerk geometry or spatial policy.
-- RunenSDF does not depend on Runenwerk geometry, world, renderer, or ECS.
+- RunenGPU contains no renderer or domain meaning.
+- RunenRender depends on RunenGPU and does not depend on WGPU directly.
+- RunenRender does not depend on ECS, SDF, UI, scene/material authoring, Winit, or
+  Runenwerk.
+- RunenSDF, RunenECS, and RunenUI do not depend on RunenGPU or RunenRender merely
+  because applications display or accelerate their output.
 - Important mutations go through commands, builders, import pipelines, or
   controlled transactions.
 - Projected state is derived unless explicitly documented otherwise.
 - Persisted formats have explicit owners and versions.
 - Inspection APIs expose read-only products, not mutable internals.
-- Generated, imported, migrated, or AI-proposed state is ratified by its owner.
-- No source mirror, submodule, compatibility package, or moving-branch dependency
-  survives a completed extraction.
+- Generated, imported, migrated, or proposed state is ratified by its owner.
+- No source mirror, submodule, compatibility package, forwarding namespace, or
+  moving-branch dependency survives a completed extraction.
 
 ## Description versus execution
 
 Prefer separate description/model and execution/runtime layers:
 
 ```text
-RenderGraphDefinition -> RenderGraphExecutionPlan
-AnimationGraph        -> AnimationRuntime
-SceneAsset            -> LoadedScene
-CommandDescriptor     -> CommandExecutor
+RenderContribution -> PreparedRenderScene -> RenderPlan -> GpuWorkFragment
+AnimationGraph      -> AnimationRuntime
+SceneAsset          -> LoadedScene
+CommandDescriptor   -> CommandExecutor
 ```
 
-Descriptions should be serializable, inspectable, ratifiable, diffable, and
-testable. Execution objects may be optimized, backend-aware, resource-owning, and
-non-serializable.
+Descriptions should be serializable where appropriate, inspectable, ratifiable,
+diffable, and testable. Execution objects may be optimized, backend-aware,
+resource-owning, and non-serializable.
 
 ## Source of truth
 
@@ -165,5 +256,5 @@ The canonical documentation tree is:
 docs-site/src/content/docs
 ```
 
-Root Markdown files are entry summaries. Update canonical docs first, then keep
-root summaries aligned.
+Root Markdown files are entry summaries. Update canonical documents first, then
+align root summaries.
