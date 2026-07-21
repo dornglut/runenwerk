@@ -1,0 +1,53 @@
+name: Validate GPU and render architecture docs
+
+on:
+  push:
+    branches:
+      - docs/gpu-render-split-architecture
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable pnpm 11
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.0.0 --activate
+          pnpm --version
+
+      - name: Install docs dependencies
+        run: pnpm --dir docs-site install --frozen-lockfile
+
+      - name: Validate documentation
+        run: python tools/docs/validate_docs.py
+
+      - name: Build documentation
+        run: pnpm --dir docs-site build
+
+      - name: Check branch diff whitespace
+        run: git diff --check origin/main...HEAD
+
+      - name: Confirm permanent scope
+        shell: bash
+        run: |
+          unexpected="$({ git diff --name-only origin/main...HEAD; } | grep -Ev '^(ARCHITECTURE\.md|DEPENDENCY_RULES\.md|DOMAIN_MAP\.md|docs-site/|\.github/workflows/validate-gpu-render-architecture\.yml)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected paths in architecture branch:"
+            echo "$unexpected"
+            exit 1
+          fi
