@@ -13,12 +13,7 @@ tasks:
     cmds:
       - cargo validate
 
-  ci:local:
-    desc: Compatibility alias for the canonical repository baseline.
-    cmds:
-      - cargo validate
-
-  ci:extended:
+  validate:extended:
     desc: Run the baseline plus optional deep validation tools.
     cmds:
       - cargo xtask validate --extended
