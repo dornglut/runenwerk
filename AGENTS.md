@@ -1,58 +1,16 @@
 # AGENTS.md
 
-This is the single root entrypoint for AI coding agents working in Runenwerk.
+This is the root entrypoint for AI coding agents working in Runenwerk through a local checkout, GitHub connector, ChatGPT context tooling, or patch-based workflow.
 
-Use it when working through a local checkout, GitHub connector, ChatGPT context tooling, Codex-style patching, or manual file browsing.
+## Read first
 
-## Start here
-
-For any non-trivial task, read:
+For non-trivial work, read:
 
 ```text
-docs-site/src/content/docs/workspace/start-here.md
+docs-site/src/content/docs/workspace/engineering-workflow.md
 ```
 
-Then follow the matching routine under:
-
-```text
-docs-site/src/content/docs/workspace/routines/
-```
-
-For reusable task handoffs, use:
-
-```text
-docs-site/src/content/docs/workspace/task-cards/
-```
-
-For architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work, use the complete investigation gate and complete design gate before implementation:
-
-```text
-docs-site/src/content/docs/workspace/complete-investigation-gate.md
-docs-site/src/content/docs/workspace/complete-design-gate.md
-```
-
-For evidence classification and merge decisions, use:
-
-```text
-docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
-docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
-```
-
-## Operating rule
-
-Runenwerk workflows are repository-readable first.
-
-Do not assume a full repo export, a clean worktree, command execution, generated files, rendered planning views, or local scripts. Commands may provide optional validation evidence, but they are not workflow authority.
-
-Default workflow:
-
-```text
-Read authority files -> inspect working files -> classify evidence -> verify complete investigation gate when required -> verify complete design gate when required -> patch exact files -> manually validate evidence -> verify merge readiness when relevant -> report changed files and gaps
-```
-
-## Authority files
-
-Before code changes, read the relevant root summaries:
+Then inspect the authorities relevant to the change:
 
 ```text
 ARCHITECTURE.md
@@ -60,98 +18,96 @@ DEPENDENCY_RULES.md
 DOMAIN_MAP.md
 CRATES.md
 TESTING.md
-GLOSSARY.md
 ```
 
-For detailed workflow authority, use:
+Use accepted ADRs and design documents for durable subsystem decisions. Use GitHub issues and the active roadmap for current work state.
+
+## Operating model
+
+Work from repository evidence rather than memory:
 
 ```text
-docs-site/src/content/docs/workspace/operating-model.md
-docs-site/src/content/docs/workspace/authority-model.md
-docs-site/src/content/docs/workspace/documentation-structure.md
-docs-site/src/content/docs/workspace/workflow-lifecycle.md
-docs-site/src/content/docs/workspace/complete-investigation-gate.md
-docs-site/src/content/docs/workspace/complete-design-gate.md
-docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
-docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
+identify the owner and boundary
+-> inspect current code, tests, and accepted docs
+-> classify the change as routine, significant, or architectural
+-> implement a bounded coherent slice
+-> run focused checks
+-> run cargo validate before merge
+-> report exact evidence and remaining gaps
 ```
 
-For UI framework architecture work, read:
-`docs-site/src/content/docs/architecture/ui-framework-architecture.md`
+Do not require generated prompts, contract packs, execution locks, truth certificates, batch manifests, or local workflow state to understand or authorize work.
 
-For engineering principles, use:
+## Change classes
 
-```text
-docs-site/src/content/docs/guidelines/programming-principles.md
-```
+### Routine
 
-## Seven programming principles
+Local fix or behavior-preserving refactor with a clear owner and unchanged dependency direction. A separate design is not required.
 
-Use these principles as a review lens:
+### Significant
 
-1. KISS: keep the owned path simple.
-2. DRY: remove duplicate authority.
-3. YAGNI: do not build speculative surfaces.
-4. SOLID: keep responsibility and dependency boundaries honest.
-5. Separation of Concerns: organize by responsibility.
-6. Avoid Premature Optimization: prove the bottleneck first.
-7. Law of Demeter: depend on direct contracts.
+Cross-module or durable behavior change. Record the owner, boundary, alternatives, acceptance criteria, migration impact, and validation in one appropriate authority: issue, design, ADR, or PR body.
 
-These principles do not override accepted ADRs, dependency rules, domain ownership, complete investigation gates, complete design gates, evidence quality rules, merge readiness gates, or tests. They help identify when a proposed change is overbuilt, duplicated, misplaced, or too coupled.
+### Architectural or extraction
+
+New repository/crate, reusable platform contract, public API, dependency-direction change, host/renderer boundary, or workflow-authority change. Inspect current reality and establish the complete target ownership, alternatives, migration, cutover, deletion, and conformance plan before implementation.
 
 ## Repository conventions
 
-- Code is organized by domain, not by technical layer.
-- Each domain owns its models, services, rules, and vocabulary.
-- Changes must respect domain boundaries and dependency direction.
-- Prefer long-term, architecture-correct solutions over local patches.
-- Prefer explicit types, clear interfaces, and discoverable public APIs.
-- Avoid hidden global mutable state unless it is already an intentional repository pattern.
-- Follow nearby module and crate conventions before adding abstractions.
+- Organize code by domain responsibility.
+- Preserve one-way dependency direction.
+- Prefer explicit types and discoverable public APIs.
+- Reuse nearby patterns before adding abstractions.
+- Do not add compatibility layers without a real consumer and removal condition.
+- Do not create new crates or shared foundations without accepted architectural ownership.
+- Keep product policy in Runenwerk and reusable framework semantics in the owning peer repository.
+- Do not place repository workflow policy in application or domain tests.
 
-## Code discovery
+## Validation
 
-Before editing:
-
-- inspect existing implementations, helpers, tests, examples, and docs;
-- reuse local patterns before adding new abstractions;
-- inspect public exports when public API changes;
-- identify the owner, invariant, and boundary before patching;
-- classify evidence using the evidence quality taxonomy when claims matter;
-- verify complete investigation gate evidence when the task requires it;
-- verify complete design gate evidence when the task requires it;
-- verify merge readiness before recommending merge.
-
-## Documentation rules
-
-Root Markdown files are short entrypoints and summaries. They must not become full workflow manuals, generated status views, design documents, roadmaps, or historical reports.
-
-Canonical long-form documentation lives under:
+Use focused commands while implementing, for example:
 
 ```text
-docs-site/src/content/docs
+cargo test -p <package>
+cargo clippy -p <package> --all-targets -- -D warnings
+python tools/docs/validate_docs.py
 ```
 
-When root docs and docs-site docs overlap, update the docs-site authority first, then align the root summary.
-
-## Validation and reporting
-
-If command execution is unavailable, say so directly and use the routine's manual validation checklist.
-
-Every final report must include:
+The required baseline is:
 
 ```text
-Files changed:
-Exact functions/modules/sections changed:
-Authority files inspected:
-Evidence classes used:
-Complete investigation gate status:
-Complete design gate status:
-Merge readiness status when relevant:
-Manual validation performed:
-Command validation run or unavailable:
-Remaining risks or blockers:
-Next recommended step:
+cargo validate
+git diff --check
 ```
 
-Do not claim validation that was not run.
+`cargo validate` is the same locked, read-only implementation used by GitHub Actions. See `TESTING.md`.
+
+Use the extended profile only when broader evidence is required:
+
+```text
+cargo xtask validate --extended
+```
+
+Runenwerk does not use quick, full, or quiet gates. Output verbosity never changes validation semantics.
+
+## Legacy workflow tools
+
+The existing production-track, execution, truth, batch, and AI-prompt commands are deprecated during issue `#122` migration. They remain temporarily available for active branches that already depend on them.
+
+Do not use them for new work and do not treat their generated state as stronger authority than accepted docs, GitHub issues, tests, or CI.
+
+## Reporting
+
+Report:
+
+```text
+files and exact owners changed
+behavior or authority changed
+focused validation run
+cargo validate and CI status
+public API or dependency impact
+remaining risks or blockers
+next concrete action
+```
+
+Do not claim commands, CI, local branch cleanup, or runtime behavior that were not actually observed.
