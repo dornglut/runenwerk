@@ -3,7 +3,7 @@ title: Dependency Rules
 description: Canonical dependency direction and clean-cutover rules for Runenwerk and peer frameworks.
 status: active
 owner: workspace
-layer: guideline
+layer: guidelines
 canonical: true
 last_reviewed: 2026-07-22
 related_docs:
