@@ -1,245 +1,93 @@
 ---
 title: Documentation Structure
+description: Canonical placement and authority rules for Runenwerk documentation.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-03
+last_reviewed: 2026-07-22
 related_docs:
   - ./start-here.md
-  - ./operating-model.md
+  - ./engineering-workflow.md
   - ./authority-model.md
-  - ./workflow-lifecycle.md
-  - ./complete-investigation-gate.md
-  - ./complete-design-gate.md
-  - ./evidence-quality-taxonomy.md
-  - ./complete-merge-readiness-gate.md
-  - ../guidelines/programming-principles.md
 ---
 
 # Documentation Structure
 
-This document defines how Runenwerk documentation is organized and where docs belong.
-
-## Core model
-
-Runenwerk uses a two-level documentation model:
+Runenwerk uses two documentation levels:
 
 ```text
-repository root Markdown files
-  short entrypoints and summaries
+repository root
+  concise public and contributor entrypoints
 
 docs-site/src/content/docs
-  canonical long-form documentation tree
+  canonical long-form architecture, design, planning, and history
 ```
 
-When a root document and a docs-site document overlap, update the docs-site document first, then align the root summary.
+When they overlap, the docs-site document owns the detail. Root files summarize and link; they do not duplicate full policy or design.
 
-## Scriptless workflow requirement
+## Root entrypoints
 
-Workflow documentation must be usable by reading files. Do not require a command, local checkout, generated prompt, rendered planning view, or full repository export to understand the next action.
-
-The active workspace workflow starts at:
-
-```text
-docs-site/src/content/docs/workspace/start-here.md
-```
-
-The lifecycle model is:
-
-```text
-docs-site/src/content/docs/workspace/workflow-lifecycle.md
-```
-
-The complete investigation gate is:
-
-```text
-docs-site/src/content/docs/workspace/complete-investigation-gate.md
-```
-
-Use the complete investigation gate before design, planning, or implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
-
-The complete design gate is:
-
-```text
-docs-site/src/content/docs/workspace/complete-design-gate.md
-```
-
-Use the complete design gate before implementation authorization for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
-
-The evidence quality taxonomy is:
-
-```text
-docs-site/src/content/docs/workspace/evidence-quality-taxonomy.md
-```
-
-Use the evidence quality taxonomy when validation, current behavior, confidence, freshness, CI, generated artifacts, connector inspection, or user-reported validation affects a decision.
-
-The complete merge readiness gate is:
-
-```text
-docs-site/src/content/docs/workspace/complete-merge-readiness-gate.md
-```
-
-Use the merge readiness gate before recommending merge, phase merge, branch deletion, or post-merge cleanup.
-
-## Root documents
-
-The following root files are intentionally kept at repository root:
+The root keeps:
 
 ```text
 README.md
 AGENTS.md
 ARCHITECTURE.md
-CRATES.md
+TESTING.md
 DEPENDENCY_RULES.md
 DOMAIN_MAP.md
+CRATES.md
 GLOSSARY.md
-TESTING.md
 ```
 
-Root documents should be concise, stable, operationally useful, and linked to canonical docs-site pages where detail exists.
-
-Root documents must not become full design documents, detailed roadmaps, generated status views, long historical records, duplicated docs-site pages, or dumping grounds for incomplete notes.
+`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, and `TESTING.md` are concise operational summaries. The other root documents are compatibility entrypoints to canonical docs-site owners. Root documents must not become roadmaps, design dossiers, execution ledgers, or duplicated reference manuals.
 
 ## Canonical tree
 
 ```text
 docs-site/src/content/docs/
-  workspace/
-  guidelines/
-  software-development/
-  foundation/
-  adr/
-  design/
-  domain/
-  apps/
-  net/
-  adapters/
-  reports/
-  archive/
+  workspace/     process, planning, repository inventories, glossary
+  guidelines/    stable engineering and dependency rules
+  architecture/  current and target system structure
+  adr/           durable decisions and rejected alternatives
+  design/        target contracts and migration plans
+  foundation/    foundation-specific documentation
+  domain/        domain-specific documentation
+  apps/          application documentation
+  net/           networking documentation
+  adapters/      integration and host adapters
+  reports/       investigations, proofs, closeouts, benchmarks
+  archive/       non-authoritative historical material
 ```
 
-## Workspace structure
+## Document responsibilities
 
-`workspace/` owns repository process, lifecycle, complete investigation gate, complete design gate, evidence quality, merge readiness, structure, planning, status, and maintenance docs.
+- **Guideline:** stable engineering rule or doctrine.
+- **ADR:** durable decision, alternatives, and consequences.
+- **Architecture:** repository or subsystem ownership and dependency structure.
+- **Design:** target behavior, public vocabulary, boundaries, and migration.
+- **Investigation report:** source-grounded current reality and unresolved findings.
+- **Roadmap:** high-level sequence and dependencies; never an execution ledger.
+- **Active work:** concise cross-project summary; GitHub issues remain authoritative.
+- **Closeout report:** historical completion evidence when a PR and issue are not enough.
+- **Archive:** superseded or historical context that does not authorize new work.
 
-```text
-workspace/
-  start-here.md
-  operating-model.md
-  authority-model.md
-  ai-agent-boundaries.md
-  documentation-structure.md
-  workflow-lifecycle.md
-  complete-investigation-gate.md
-  complete-design-gate.md
-  evidence-quality-taxonomy.md
-  complete-merge-readiness-gate.md
-  routines/
-  task-cards/
-  planning/
-```
+## Placement rules
 
-## Folder responsibilities
+1. Put one durable decision in one ADR or accepted design.
+2. Put one active task in one GitHub issue.
+3. Put high-level sequence in the maintained roadmap.
+4. Put current behavior in code and tests.
+5. Put delivery evidence in the pull request.
+6. Cross-link instead of copying full state.
+7. Move obsolete active documentation to reports or archive; do not preserve it as a parallel workflow.
 
-- `workspace/`: repository process, lifecycle, complete investigation gate, complete design gate, evidence quality, merge readiness, structure, planning, status, and maintenance docs.
-- `workspace/routines/`: repeatable human/agent procedures.
-- `workspace/task-cards/`: short reusable task instructions that point to routines.
-- `workspace/planning/`: Markdown-first planning records.
-- `guidelines/`: stable doctrine, including programming principles, architecture, dependency, module, and validation rules.
-- `adr/`: durable decisions and rejected alternatives.
-- `design/`: target architecture and tradeoffs.
-- `domain/`: domain-specific current-state and target documentation.
-- `reports/`: historical evidence, audits, migrations, closeouts, and benchmarks.
-- `reports/closeouts/`: detailed completion evidence for completed phases or slices.
-- `archive/`: non-authoritative historical material.
-
-## Document-type rules
-
-Use [`workflow-lifecycle.md`](workflow-lifecycle.md) for state transitions and promotion rules.
-
-```text
-Guideline
-  stable doctrine and engineering rules
-
-Investigation dossier
-  current reality, authority/source evidence, alternatives, confidence, and blockers
-
-Design
-  target architecture, vocabulary, owner boundaries, tradeoffs, non-owned responsibilities
-
-Complete investigation gate
-  mandatory investigation checklist and matrix templates before design/planning/implementation decisions
-
-Complete design gate
-  mandatory readiness checklist and matrix templates before implementation authorization
-
-Evidence quality taxonomy
-  evidence classes, confidence, freshness, and validation wording
-
-Complete merge readiness gate
-  merge checklist, branch cleanup, and post-merge truth requirements
-
-Roadmap / production track
-  strategic sequence and current planning state
-
-Active work
-  one current focus
-
-Completed work
-  short completion index
-
-Closeout report
-  detailed historical evidence
-
-Generated file
-  mirror, evidence, or contract only
-```
-
-## Routine shape
-
-Every active routine should use this structure:
-
-```text
-Use when
-Authority files to read
-Working files to inspect
-What to decide before editing
-State transitions produced
-Patch rules
-Manual validation checklist
-Stop conditions
-Evidence to report
-Optional local helpers
-```
-
-## Naming rules
+## Naming
 
 - Use kebab-case for docs-site Markdown files.
 - Use `README.md` for section landing pages.
-- Do not add docs-site `readme.md` files.
-- Keep names boring and searchable.
-- Prefer task-oriented names for workflow docs.
-- Prefer authority-oriented names for doctrine docs.
+- Keep names literal and searchable.
+- Prefer ownership-oriented names for architecture and task-oriented names for procedures.
 
-## Pruning rules
-
-Use the programming principles when pruning docs:
-
-- KISS: keep navigation short.
-- DRY: keep one authority for each durable claim.
-- YAGNI: remove unused workflow surfaces.
-- Separation of Concerns: separate entrypoints, lifecycle, complete investigation gates, complete design gates, evidence quality, merge readiness, routines, planning, reports, and tooling.
-
-When moving, merging, or pruning docs, report old path to new path mapping.
-
-## Authority conflicts
-
-Use:
-
-```text
-docs-site/src/content/docs/workspace/authority-model.md
-```
-
-Do not resolve authority conflicts by editing generated views first or by treating local helper output as policy.
+When pruning or moving documents, update inbound links and record any compatibility entrypoint that remains.

@@ -1,8 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    env,
-    fs,
+    env, fs,
     io::ErrorKind,
     path::{Path, PathBuf},
     process::{Command, ExitCode},
@@ -47,18 +46,9 @@ const PRODUCT_CARGO_STEPS: &[&[&str]] = &[
     ],
 ];
 
-const EXTENDED_STEPS: &[(&str, &[&str])] = &[
-    ("cargo", &["deny", "check"]),
-    ("cargo", &["machete", "--skip-target-dir"]),
-    ("lychee", &["docs-site/src/content/docs"]),
-    ("ast-grep", &["scan"]),
-    ("pnpm", &["--dir", "docs-site", "build"]),
-];
-
 const RETIRED_PATHS: &[&str] = &[
+    "Taskfile.yml",
     "tools/workflow",
-    "pyproject.toml",
-    "uv.lock",
     "workflow",
     "workflow.cmd",
     "quiet_editor_gate.sh",
@@ -68,7 +58,6 @@ const RETIRED_PATHS: &[&str] = &[
     "docs-site/src/content/docs/workspace/execution-locks",
     "docs-site/src/content/docs/workspace/track-execution-manifests",
     "docs-site/src/content/docs/workspace/truth-conformance-specs",
-    "docs-site/src/content/docs/workspace/truth-verifier-registry.yaml",
     "docs-site/src/content/docs/reports/track-execution-manifests",
     "docs-site/src/content/docs/reports/track-execution-runs",
     "docs-site/src/content/docs/reports/truth-certificates",
@@ -79,11 +68,10 @@ const RETIRED_PATHS: &[&str] = &[
 ];
 
 fn main() -> ExitCode {
-    let mut args = env::args().skip(1);
-    let command = args.next().unwrap_or_else(|| "help".to_owned());
+    let command = env::args().nth(1).unwrap_or_else(|| "help".to_owned());
 
     let result = match command.as_str() {
-        "validate" => validate(args.any(|arg| arg == "--extended")),
+        "validate" => validate(),
         "docs" => repository_root().and_then(|root| validate_docs(&root)),
         "audit" => repository_root().and_then(|root| audit_repository(&root)),
         "help" | "--help" | "-h" => {
@@ -102,7 +90,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn validate(extended: bool) -> Result<(), String> {
+fn validate() -> Result<(), String> {
     let root = repository_root()?;
 
     for args in TOOLING_CARGO_STEPS {
@@ -114,15 +102,7 @@ fn validate(extended: bool) -> Result<(), String> {
     }
 
     validate_docs(&root)?;
-    audit_repository(&root)?;
-
-    if extended {
-        for (program, args) in EXTENDED_STEPS {
-            run(&root, program, args)?;
-        }
-    }
-
-    Ok(())
+    audit_repository(&root)
 }
 
 fn validate_docs(root: &Path) -> Result<(), String> {
@@ -145,9 +125,7 @@ fn validate_docs(root: &Path) -> Result<(), String> {
                 ));
             }
             Err(error) if error.kind() == ErrorKind::NotFound => unavailable.push(*program),
-            Err(error) => {
-                return Err(format!("failed to run {program}: {error}"));
-            }
+            Err(error) => return Err(format!("failed to run {program}: {error}")),
         }
     }
 
@@ -163,12 +141,16 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         "Cargo.lock",
         ".cargo/config.toml",
         ".github/workflows/ci.yml",
+        ".github/workflows/docs-validation.yml",
+        "README.md",
         "AGENTS.md",
+        "ARCHITECTURE.md",
         "TESTING.md",
-        "Taskfile.yml",
         "tools/checks/ux_lab_terminology.py",
         "docs-site/src/content/docs/workspace/engineering-workflow.md",
+        "docs-site/src/content/docs/workspace/documentation-structure.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
+        "docs-site/src/content/docs/guidelines/dependency-rules.md",
     ] {
         if !root.join(required).is_file() {
             return Err(format!("repository audit: missing required file {required}"));
@@ -193,81 +175,34 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         root,
         ".github/workflows/ci.yml",
         "run: cargo validate",
-        "CI must invoke the same canonical baseline as local development",
-    )?;
-    require_text(
-        root,
-        "Taskfile.yml",
-        "- cargo validate",
-        "the optional Task helper must delegate to cargo validate",
+        "CI must invoke the same baseline as local development",
     )?;
     require_text(
         root,
         "AGENTS.md",
-        "engineering-workflow.md",
-        "AGENTS.md must route agents to the concise workflow authority",
-    )?;
-    require_text(
-        root,
-        "docs-site/src/content/docs/workspace/start-here.md",
-        "engineering-workflow.md",
-        "the workspace start page must route to the concise workflow authority",
+        "cargo validate",
+        "the agent entrypoint must name the canonical baseline",
     )?;
     require_text(
         root,
         "docs-site/src/content/docs/workspace/engineering-workflow.md",
-        "were retired under issue `#122`",
-        "the canonical workflow must record the completed retirement",
+        "GitHub issues and pull requests manage work",
+        "the canonical workflow must use ordinary repository artifacts",
     )?;
 
-    for marker in [
-        "uv run",
-        "ci:local:",
-        "ci:extended:",
-        "roadmap:",
-        "production:",
-        "planning:",
-        "puml:",
-        "track:",
-        "execution:",
-        "truth:",
-        "batch:",
-    ] {
-        forbid_text(
-            root,
-            "Taskfile.yml",
-            marker,
-            "retired or duplicate workflow command surfaces must not return",
-        )?;
-    }
-
-    for (relative, marker) in [
-        ("AGENTS.md", "remain temporarily available"),
-        (
-            "docs-site/src/content/docs/workspace/start-here.md",
-            "remains temporarily available",
-        ),
-        (
-            "docs-site/src/content/docs/workspace/engineering-workflow.md",
-            "remain temporarily available",
-        ),
-    ] {
-        forbid_text(
-            root,
-            relative,
-            marker,
-            "retired workflow systems must not be described as active compatibility paths",
-        )?;
-    }
+    forbid_text(
+        root,
+        ".github/workflows/docs-validation.yml",
+        "validate_docs.py",
+        "the path-scoped docs build must not duplicate baseline documentation validation",
+    )?;
 
     eprintln!("> repository audit passed");
     Ok(())
 }
 
 fn require_text(root: &Path, relative: &str, marker: &str, reason: &str) -> Result<(), String> {
-    let path = root.join(relative);
-    let text = fs::read_to_string(&path)
-        .map_err(|error| format!("repository audit: failed to read {relative}: {error}"))?;
+    let text = read_text(root, relative)?;
     if text.contains(marker) {
         Ok(())
     } else {
@@ -278,16 +213,19 @@ fn require_text(root: &Path, relative: &str, marker: &str, reason: &str) -> Resu
 }
 
 fn forbid_text(root: &Path, relative: &str, marker: &str, reason: &str) -> Result<(), String> {
-    let path = root.join(relative);
-    let text = fs::read_to_string(&path)
-        .map_err(|error| format!("repository audit: failed to read {relative}: {error}"))?;
+    let text = read_text(root, relative)?;
     if text.contains(marker) {
         Err(format!(
-            "repository audit: {relative} contains retired marker {marker:?}: {reason}"
+            "repository audit: {relative} contains forbidden marker {marker:?}: {reason}"
         ))
     } else {
         Ok(())
     }
+}
+
+fn read_text(root: &Path, relative: &str) -> Result<String, String> {
+    fs::read_to_string(root.join(relative))
+        .map_err(|error| format!("repository audit: failed to read {relative}: {error}"))
 }
 
 fn repository_root() -> Result<PathBuf, String> {
@@ -329,8 +267,7 @@ fn run_status(root: &Path, program: &str, args: &[&str]) -> std::io::Result<bool
 
 fn print_usage() {
     eprintln!("Runenwerk repository tasks:");
-    eprintln!("  cargo validate                    required baseline");
-    eprintln!("  cargo xtask docs                  documentation validation only");
-    eprintln!("  cargo xtask audit                 deterministic repository audit only");
-    eprintln!("  cargo xtask validate --extended  baseline plus optional deep checks");
+    eprintln!("  cargo validate       required baseline");
+    eprintln!("  cargo xtask docs     documentation validation only");
+    eprintln!("  cargo xtask audit    deterministic repository audit only");
 }

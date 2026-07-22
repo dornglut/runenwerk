@@ -1,11 +1,11 @@
 ---
 title: Start Here
-description: Canonical workspace router for Runenwerk engineering work.
+description: Entry point for Runenwerk engineering work.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-22
 related_docs:
   - ./engineering-workflow.md
   - ./authority-model.md
@@ -14,89 +14,23 @@ related_docs:
 
 # Start Here
 
-Use this page for non-trivial Runenwerk work.
+## Repository work
 
-## Primary entrypoints
+1. Read [`AGENTS.md`](../../../../../AGENTS.md) for the concise operating rules.
+2. Inspect the owning code and tests.
+3. Read the relevant accepted ADR or design for architectural work.
+4. Use the active GitHub issue when the task is already planned.
+5. Run focused checks while editing and `cargo validate` before merge.
 
-```text
-Human repository overview: README.md
-AI agent entrypoint: AGENTS.md
-Engineering process: docs-site/src/content/docs/workspace/engineering-workflow.md
-Testing and validation: TESTING.md
-```
+## Primary authority
 
-## Read by task
+- [Engineering Workflow](engineering-workflow.md) — process and validation.
+- [Authority Model](authority-model.md) — conflict resolution and artifact ownership.
+- [Documentation Structure](documentation-structure.md) — where durable documents belong.
+- [Roadmap](planning/roadmap.md) — high-level sequencing.
+- [Repository-family architecture](../architecture/repository-family-architecture.md) — framework ownership.
+- [Dependency Rules](../guidelines/dependency-rules.md) — dependency and cutover rules.
 
-### Code or refactor
+## Review
 
-```text
-AGENTS.md
-ARCHITECTURE.md
-DEPENDENCY_RULES.md
-DOMAIN_MAP.md
-CRATES.md
-TESTING.md
-owning code, tests, ADRs, and designs
-```
-
-### Documentation
-
-```text
-AGENTS.md
-docs-site/src/content/docs/workspace/engineering-workflow.md
-docs-site/src/content/docs/workspace/documentation-structure.md
-owning architecture, design, planning, or history document
-```
-
-### Architecture or extraction
-
-```text
-AGENTS.md
-ARCHITECTURE.md
-DEPENDENCY_RULES.md
-DOMAIN_MAP.md
-docs-site/src/content/docs/workspace/engineering-workflow.md
-relevant accepted ADRs and designs
-current code and conformance evidence
-active GitHub issue and roadmap entry
-```
-
-### Pull-request review
-
-Inspect:
-
-```text
-issue or accepted design
-actual diff
-owning tests and public surfaces
-focused validation evidence
-cargo validate and exact-head CI
-known risks and post-merge truth
-```
-
-## Work classification
-
-Classify the task using [Engineering Workflow](engineering-workflow.md):
-
-```text
-routine
-significant
-architectural or extraction
-```
-
-The classification controls how much investigation and durable design is required. It does not create a separate workflow state machine.
-
-## Required baseline
-
-Before merge:
-
-```text
-cargo validate
-git diff --check
-```
-
-GitHub Actions runs the same `cargo validate` implementation.
-
-## Retired workflow systems
-
-Production-track databases, execution locks, truth certificates, batch execution, generated prompts, and local workflow state were retired under issue `#122`. Historical links remain context only.
+A pull request is reviewed against its actual diff, owning tests, accepted authority, acceptance criteria, and exact-head CI. Historical reports and superseded workflow pages do not authorize new work.
