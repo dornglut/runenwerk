@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-22
 related_docs:
   - ../engineering-workflow.md
   - ./active-work.md
@@ -18,6 +18,9 @@ related_docs:
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-decomposition-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
+  - ../../reports/investigations/runengpu-render-s0-inventory.md
+  - ../../reports/investigations/runengpu-render-s0-file-disposition.md
+  - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
   - ../../reports/closeouts/pt-runensdf-003-standalone-transfer-closeout.md
 ---
 
@@ -41,32 +44,20 @@ Framework repositories do not depend on Runenwerk. Runenwerk owns application
 lifecycle, cross-framework composition, adapters, editor/runtime integration,
 product policy, diagnostics presentation, and recovery.
 
-Each framework begins with one public package. Package splitting requires proven
-independent dependency or release pressure.
-
 ## Completed repository work
 
 ### Workflow simplification
 
-Issue `#122` completed through PRs `#123` and `#124`.
-
-Delivered:
-
-- one canonical `cargo validate` baseline;
-- permanent exact-head CI;
-- one engineering workflow and one maintained roadmap;
-- removal of production-track, execution-lock, truth-certificate, batch, generated
-  prompt, quiet/full gate, and generated planning systems;
-- permanent repository audit preventing their return.
+Issue `#122` completed through PRs `#123` and `#124`. `cargo validate` and
+exact-head CI are the canonical baseline. The obsolete workflow orchestration,
+machine state, generated planning, truth-certificate, batch, and quiet/full gate
+systems are removed.
 
 ### RunenSDF standalone transfer
 
-Completed:
-
-- in-workspace boundary correction through Runenwerk PR `#116`;
-- standalone repository transfer and conformance through Runenwerk PR `#118` and
-  `Crystonix/runen-sdf` PR `#1`;
-- accepted standalone revision:
+The in-workspace boundary correction completed through PR `#116`. Standalone
+transfer and conformance completed through Runenwerk PR `#118` and
+`Crystonix/runen-sdf` PR `#1` at:
 
 ```text
 repository: Crystonix/runen-sdf
@@ -79,51 +70,51 @@ Current Runenwerk `main` does not yet record a completed clean cutover removing
 `domain/sdf`. That remains a separate consumer-audit and integration/removal
 decision.
 
-## Current priorities
+### GPU/render architecture correction
 
-1. Complete issue `#125`: correct RunenGPU/RunenRender architecture on current
-   `main`, superseding closed PR `#119`.
-2. Perform GPU/render S0 inventory before writing any implementation phase.
-3. Resolve RunenSDF clean cutover only through exact current consumer evidence.
-4. Continue RunenECS R1 only as a separately bounded change that does not conflict
-   with GPU/render identities, manifests, or lifecycle ownership.
-
-## RunenGPU and RunenRender
-
-Accepted repository identities:
-
-```text
-product       repository                 package       crate
-RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
-RunenRender   Crystonix/runen-render     runen-render  runen_render
-```
-
-Accepted dependency direction:
+Issue `#125` completed through PR `#126`. Accepted direction:
 
 ```text
 RunenRender -> RunenGPU
 ```
 
-RunenGPU owns validated GPU contexts, capabilities, resources, access/lifetimes,
-hazards, workloads, submission, uploads/readback, low-level surfaces, WGPU
-realization, backend outcomes, and GPU diagnostics.
+RunenGPU and RunenRender each begin with one public package. WGPU belongs inside
+RunenGPU. RunenRender owns image formation and lowers through RunenGPU.
 
-RunenRender owns prepared render scenes, views, providers/interactions,
-materials/media, emitters, visibility, transport, radiance caches, history,
-reconstruction, overlays, color, presentation intent, and lowering into RunenGPU
-workloads.
+### GPU/render S0 inventory
 
-Runenwerk retains application lifecycle, windows/event loops, ECS/domain
-extraction, shader source discovery/reload policy, adapters, product quality,
-diagnostics presentation, and recovery.
-
-RunenUI and RunenSDF remain independent. Cross-framework bridges are
-Runenwerk-owned until independent reuse proves extraction.
-
-### Required sequence
+Issue `#127` and PR `#128` establish the current-source inventory required before
+implementation:
 
 ```text
-S0 complete current-source inventory
+primary render/macro files       174
+move to RunenGPU                  25
+move to RunenRender               10
+stay in Runenwerk                 60
+stay with another domain          28
+redesign before movement          50
+delete after replacement           1
+```
+
+S0 classifies current identities, direct consumers, shader/macro boundaries,
+surface lifecycle ownership, validation commands, and every primary file.
+Environment-dependent GPU proof remains intentionally deferred to later phases.
+
+## Current priorities
+
+1. Complete and merge the S0 documentation in PR `#128`.
+2. Write exactly one G1A implementation specification against the merged current
+   `main` for the logical GPU work-resource identity.
+3. Implement G1A only after that specification is reviewed and explicitly
+   authorized.
+4. Resolve the RunenSDF clean cutover through exact current consumer evidence.
+5. Continue RunenECS work only as separately bounded changes that do not conflict
+   with GPU/render identities, manifests, or lifecycle ownership.
+
+## RunenGPU and RunenRender sequence
+
+```text
+S0 current-source inventory
 -> G1-G8 internal RunenGPU proof
 -> GX external RunenGPU clean cutover
 -> R1-R8 internal RunenRender proof on RunenGPU
@@ -132,22 +123,39 @@ S0 complete current-source inventory
 -> V1+ advanced renderer work
 ```
 
-Only S0 is next. No G1 or R1 implementation specification is active.
+### S0 result
 
-### S0 required result
+S0 is complete for deterministic current-source and direct-consumer evidence. It
+identifies one bounded first implementation candidate:
 
-S0 must produce:
+```text
+G1A
+RenderResourceId -> GpuWorkResourceId
+```
 
-- complete file, shader, macro, test, example, benchmark, and artifact inventory;
-- complete dependency and downstream consumer graph;
-- every identity, allocator, raw use, and stable-format classification;
-- graph/resource/frame/producer and context/device/surface/window/shutdown traces;
-- shader/pipeline/reload/macro ownership map;
-- exact move/stay/redesign/delete disposition;
-- validation and environment-dependent GPU command inventory;
-- one bounded first implementation candidate and stop conditions.
+`RenderResourceId` is a graph-local logical GPU work-resource identity allocated
+per `RenderFlow`. G1A must provide an opaque nonzero identity, fallible deterministic
+allocation, explicit exhaustion, structured errors, no arbitrary safe raw
+construction, no stable-format claim, and no compatibility alias.
 
-Unknown ownership blocks implementation.
+G1A explicitly excludes:
+
+```text
+RenderFlowId
+RenderPassId
+RenderFeatureId
+RenderFrameProducerId
+RenderSurfaceId
+WGPU realization
+render graph redesign
+surface/window lifecycle
+shader/pipeline redesign
+external repository creation
+RunenRender implementation
+```
+
+No G1A implementation is authorized by S0 alone. The next artifact is a precise
+implementation specification naming every current consumer and changed file.
 
 ## RunenSDF next decision
 
@@ -166,31 +174,16 @@ external dependency.
 
 ## RunenECS
 
-The accepted repair order remains:
-
-```text
-R1 entity identity and structured errors
-R2 atomic structural mutation
-R3 query and SystemParam unsafe boundaries
-R4 explicit reflection and macro migration
-R5 remove spatial and geometry ownership
-R6 messaging split
-R7 change, ownership, and networking separation
-R8 neutral scheduling boundary
-R9 standalone conformance and performance baseline
-```
-
-R1 is specified but not implemented. Repository extraction remains blocked until
-the internal boundary repair and conformance sequence is complete.
+The accepted repair order remains R1-R9. R1 is specified but not implemented.
+Repository extraction remains blocked until the internal boundary repair and
+conformance sequence completes.
 
 ## RunenUI
 
-RunenUI is governed in its own repository.
-
-A future Runenwerk-owned bridge may translate accepted renderer-neutral paint
-output into a RunenRender overlay contribution after both public boundaries
-stabilize. RunenUI owns UI state, layout, text, accessibility, and hit testing;
-RunenRender does not.
+RunenUI is governed in its own repository. A future Runenwerk-owned bridge may
+translate accepted renderer-neutral paint output into a RunenRender overlay
+contribution after both public boundaries stabilize. RunenUI owns UI state, layout,
+text, accessibility, and hit testing; RunenRender does not.
 
 ## Sequencing rule
 
