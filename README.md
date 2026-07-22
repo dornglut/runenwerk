@@ -41,13 +41,11 @@ docs-site/   canonical documentation
 ## Documentation
 
 - [Architecture overview](ARCHITECTURE.md)
-- [Dependency rules](DEPENDENCY_RULES.md)
-- [Domain ownership map](DOMAIN_MAP.md)
-- [Crate inventory](CRATES.md)
 - [Testing and validation](TESTING.md)
-- [Documentation entrypoint](docs-site/src/content/docs/index.mdx)
-
-Canonical long-form documentation lives under `docs-site/src/content/docs`.
+- [Canonical documentation](docs-site/src/content/docs/index.mdx)
+- [Repository-family architecture](docs-site/src/content/docs/architecture/repository-family-architecture.md)
+- [Dependency rules](docs-site/src/content/docs/guidelines/dependency-rules.md)
+- [Crate inventory](docs-site/src/content/docs/workspace/crate-inventory.md)
 
 ## Contributions
 
