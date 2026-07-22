@@ -1,0 +1,144 @@
+name: Finalize S0 File Disposition
+
+on:
+  push:
+    branches:
+      - docs/gpu-render-s0-inventory
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: docs/gpu-render-s0-inventory
+          fetch-depth: 0
+
+      - name: Generate exact disposition report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from collections import Counter
+          from pathlib import Path
+          import subprocess
+
+          paths = sorted(
+              Path(p) for p in subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
+              if p == 'engine/src/plugins/render.rs'
+              or p.startswith('engine/src/plugins/render/')
+              or p.startswith('engine_render_macros/')
+          )
+          if len(paths) != 174:
+              raise SystemExit(f'expected 174 primary files, found {len(paths)}')
+
+          def classify(path):
+              raw = path.as_posix()
+              name = path.name
+              if raw.startswith('engine_render_macros/'):
+                  return 'redesign before movement', 'macro ABI hard-codes engine paths and requires independent consumer proof'
+              prefix = 'engine/src/plugins/render/'
+              rest = raw[len(prefix):] if raw.startswith(prefix) else raw
+              top = rest.split('/', 1)[0] if '/' in rest else '(root)'
+              if top == '(root)': return 'stay in Runenwerk', 'plugin assembly, product integration, and asset/upload orchestration remain host-owned'
+              if top == 'api': return 'redesign before movement', 'current public API mixes GPU handles, render-flow semantics, producer/product identities, and engine paths'
+              if top == 'backend':
+                  if name == 'surface.rs': return 'redesign before movement', 'GPU surface mechanics are mixed with native-window lifetime, ECS storage, and current RenderSurfaceId semantics'
+                  return 'move to RunenGPU', 'low-level backend, device, resource, pipeline, and execution responsibility belongs to GPU execution'
+              if top == 'composition':
+                  if name in {'fragment_registry.rs','fragment_validation.rs','fragments.rs'}: return 'move to RunenRender', 'render contribution and fragment composition are image-formation inputs'
+                  if name in {'hot_reload.rs','integration.rs'}: return 'stay in Runenwerk', 'source reload and cross-domain integration remain product and host policy'
+                  return 'redesign before movement', 'module exports combine renderer composition with Runenwerk integration'
+              if top == 'features':
+                  if '/detail/' in raw: return 'move to RunenRender', 'renderer detail and quality semantics belong to image formation'
+                  if any(x in raw for x in ('/caves/','/particle_vfx/','/world/')): return 'stay with another domain', 'world, cave, and VFX semantics remain source-domain owned and feed adapters'
+                  return 'stay in Runenwerk', 'feature registry, editor picking, and UI bridge behavior are product/integration policy'
+              if top == 'frame':
+                  if name in {'context.rs','contribution_diagnostics.rs','contribution_registry.rs','contributions.rs','mod.rs','view.rs'}: return 'move to RunenRender', 'prepared scene, view, and contribution semantics belong to image formation'
+                  if name in {'product_selection.rs','product_surface.rs'}: return 'stay in Runenwerk', 'product selection and host surface policy remain Runenwerk-owned'
+                  return 'redesign before movement', 'prepared packets mix renderer identities, GPU resources, and Runenwerk producer/product state'
+              if top == 'gpu_primitives': return 'move to RunenGPU', 'generic GPU scan, compaction, counter, and indirect-draw primitives are execution building blocks'
+              if top == 'graph':
+                  if name == 'resource_lifetimes.rs': return 'move to RunenGPU', 'resource lifetime validation belongs to GPU execution'
+                  if name == 'validation_builtin_ui.rs': return 'delete', 'UI-specific graph validation is replaced by neutral overlay contribution validation'
+                  return 'redesign before movement', 'current graph combines GPU hazards/resources with render passes, fixed-step regions, features, and product validation'
+              if top == 'inspect': return 'stay in Runenwerk', 'capture, artifacts, readiness, product evidence, and diagnostics presentation remain host/product responsibilities'
+              if top == 'material_compiler': return 'stay with another domain', 'material source and IR compilation remain material-authoring integration, not GPU/render core'
+              if top == 'params': return 'move to RunenGPU', 'GPU value and parameter layout/upload representation are execution ABI responsibilities'
+              if top == 'pipelines':
+                  if name in {'cache.rs','keys.rs','specialization.rs'}: return 'move to RunenGPU', 'backend pipeline identity, cache, and specialization mechanics belong to GPU execution'
+                  return 'redesign before movement', 'flow-pass keys and module exports mix render semantics with backend realization'
+              if top == 'procedural': return 'stay with another domain', 'procedural authoring, population, camera, lowering, and validation remain procgen/source-domain responsibility'
+              if top == 'renderer':
+                  if raw.endswith('/extract.rs') or raw.endswith('/setup.rs') or raw.endswith('/render_flow/capture.rs'): return 'stay in Runenwerk', 'ECS/host extraction, native setup, and capture/artifact policy remain Runenwerk-owned'
+                  return 'redesign before movement', 'current renderer execution mixes image formation, WGPU realization, runtime resources, product targets, and diagnostics'
+              if top == 'residency': return 'redesign before movement', 'current residency combines GPU handles, renderer caches, and world/SDF lifecycle ownership'
+              if top == 'resource':
+                  if name in {'descriptors.rs','import.rs','lifetime.rs','mod.rs','usages.rs'}: return 'move to RunenGPU', 'GPU resource descriptors, imports, usages, and lifetimes belong to execution'
+                  return 'redesign before movement', 'dynamic and transient targets mix render-product semantics and host/runtime allocation policy'
+              if top == 'runtime': return 'stay in Runenwerk', 'frame preparation/submission, dynamic uploads, debug evaluation, and ECS scheduling are engine integration'
+              if top == 'shader':
+                  if name in {'hot_reload.rs','registry.rs','helpers.rs'}: return 'stay in Runenwerk', 'filesystem discovery, registry/revision, and hot-reload product policy remain host-owned'
+                  return 'redesign before movement', 'current shader module/types mix source identity/revision with renderer use and future GPU admission'
+              raise SystemExit(f'unclassified path: {raw}')
+
+          rows = [(p.as_posix(), *classify(p)) for p in paths]
+          counts = Counter(row[1] for row in rows)
+          expected = {'move to RunenGPU':25,'move to RunenRender':10,'stay in Runenwerk':60,'stay with another domain':28,'redesign before movement':50,'delete':1}
+          if dict(counts) != expected:
+              raise SystemExit(f'unexpected counts: {dict(counts)}')
+
+          lines = [
+              '---',
+              'title: GPU and Render S0 File Disposition',
+              'description: Exact tracked-file ownership disposition for the current combined GPU and render implementation.',
+              'status: active',
+              'owner: render',
+              'layer: investigation',
+              'canonical: true',
+              'last_reviewed: 2026-07-22',
+              'related_docs:',
+              '  - ./runengpu-render-s0-inventory.md',
+              '  - ./runengpu-render-s0-identity-consumer-lifecycle.md',
+              '  - ../../design/active/runengpu-architecture-design.md',
+              '  - ../../design/active/runenrender-decomposition-design.md',
+              '  - ../../workspace/planning/roadmap.md',
+              '---', '', '# GPU and Render S0 File Disposition', '',
+              '## Decision rule', '',
+              'This matrix accounts for every tracked file currently under',
+              '`engine/src/plugins/render/**` and `engine_render_macros/**` at the S0',
+              'baseline. The disposition names semantic ownership; it does not authorize',
+              'direct source movement.', '',
+              '## Summary', '',
+              '| Disposition | Files |', '|---|---:|',
+              '| move to RunenGPU | 25 |', '| move to RunenRender | 10 |',
+              '| stay in Runenwerk | 60 |', '| stay with another domain | 28 |',
+              '| redesign before movement | 50 |', '| delete | 1 |', '',
+              '**Total: 174 files.**', '', '## Exact matrix', '',
+              '| Current file | Disposition | Reason |', '|---|---|---|'
+          ]
+          lines.extend(f'| `{p}` | {d} | {r} |' for p,d,r in rows)
+          lines += ['', '## Interpretation', '',
+              '- Files marked `move` still move only after internal public-boundary proof.',
+              '- Files marked `redesign` are split or replaced rather than copied.',
+              '- Runenwerk retains lifecycle, adapters, product policy, source reload, capture, and recovery.',
+              '- Source-domain semantics remain with their owning domains and feed prepared contributions.',
+              '- `graph/validation_builtin_ui.rs` is deleted only after neutral overlay validation replaces it.', '',
+              'A completed cutover migrates every active consumer and deletes the original',
+              'implementation. No alias, compatibility module, source mirror, or parallel',
+              'execution path remains.', '']
+          out = Path('docs-site/src/content/docs/reports/investigations/runengpu-render-s0-file-disposition.md')
+          out.write_text('\n'.join(lines), encoding='utf-8')
+          PY
+
+          rm .github/workflows/finalize-s0-disposition.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs-site/src/content/docs/reports/investigations/runengpu-render-s0-file-disposition.md .github/workflows/finalize-s0-disposition.yml
+          git commit -m "Finalize exact GPU render S0 disposition"
+          git push origin HEAD:docs/gpu-render-s0-inventory
