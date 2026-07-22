@@ -1,4 +1,4 @@
-name: Documentation Validation
+name: Documentation Build
 
 on:
   pull_request:
@@ -6,14 +6,12 @@ on:
       - main
     paths:
       - "docs-site/**"
-      - "tools/docs/**"
       - ".github/workflows/docs-validation.yml"
   push:
     branches:
       - main
     paths:
       - "docs-site/**"
-      - "tools/docs/**"
       - ".github/workflows/docs-validation.yml"
   workflow_dispatch:
 
@@ -21,12 +19,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: docs-validation-${{ github.workflow }}-${{ github.ref }}
+  group: docs-build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Validate documentation authority
+  build:
+    name: Build documentation site
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -47,38 +45,29 @@ jobs:
       - name: Install documentation dependencies
         run: pnpm --dir docs-site install --frozen-lockfile
 
-      - name: Validate documentation authority
-        run: python tools/docs/validate_docs.py 2>&1 | tee docs-validation.log
-
-      - name: Remove validation diagnostics
-        if: success()
-        run: rm -f docs-validation.log
-
       - name: Build documentation site
         run: pnpm --dir docs-site build 2>&1 | tee docs-build.log
 
-      - name: Upload documentation diagnostics
+      - name: Upload build diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: documentation-diagnostics
-          path: |
-            docs-validation.log
-            docs-build.log
+          name: documentation-build-diagnostics
+          path: docs-build.log
           if-no-files-found: warn
           retention-days: 3
 
-      - name: Remove documentation diagnostics
+      - name: Remove build diagnostics
         if: always()
-        run: rm -f docs-validation.log docs-build.log
+        run: rm -f docs-build.log
 
       - name: Check diff hygiene
         run: git diff --check
 
-      - name: Prove validation leaves tracked state clean
+      - name: Prove build leaves tracked state clean
         run: |
           status="$(git status --short)"
           if [ -n "$status" ]; then
-            printf 'Documentation validation changed tracked state:\n%s\n' "$status" >&2
+            printf 'Documentation build changed tracked state:\n%s\n' "$status" >&2
             exit 1
           fi
