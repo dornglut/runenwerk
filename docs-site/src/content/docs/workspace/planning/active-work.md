@@ -10,83 +10,52 @@ related_docs:
   - ../engineering-workflow.md
   - ./roadmap.md
   - ./completed-work.md
-  - ./decision-register.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
-  - ../../design/active/runengpu-architecture-design.md
-  - ../../design/active/runenrender-decomposition-design.md
   - ../../reports/investigations/runengpu-render-s0-inventory.md
-  - ../../reports/investigations/runengpu-render-s0-file-disposition.md
-  - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
-  - ../../reports/closeouts/pt-runensdf-003-standalone-transfer-closeout.md
 ---
 
 # Active Work
 
-GitHub issues and pull requests own live delivery state. This page is a concise
-cross-project summary, not an execution ledger.
+GitHub issues and pull requests own live delivery. This page is only a concise cross-project summary.
 
 ## Active
 
-### GPU/render S0 inventory
+### Repository surface cleanup
 
-Issue: `#127`
+Issue `#135` owns the final workflow and documentation simplification:
 
-Draft PR `#128` records the complete deterministic current-source inventory required
-before RunenGPU implementation:
+- remove the duplicate Task command layer;
+- reduce root documents to concise entrypoints;
+- consolidate canonical workspace documentation;
+- correct stale planning state;
+- simplify the path-scoped Astro build workflow;
+- preserve `cargo validate`, permanent CI, and the Astro/Starlight site.
 
-- 174 primary render/macro files classified;
-- every file assigned move, stay, redesign, or delete disposition;
-- 23 identity-like values classified by semantic owner and stability;
-- 111 direct source consumer files and 963 matches inventoried;
-- shader, macro, surface, device, lifecycle, and validation boundaries recorded;
-- environment-dependent GPU proof explicitly deferred;
-- one bounded first candidate identified.
+No runtime or framework behavior is in scope.
 
-The candidate is:
+## Next implementation
+
+### RunenGPU G1A
+
+Issue `#131` remains open for the accepted migration:
 
 ```text
-G1A
-RenderResourceId -> GpuWorkResourceId
+RenderResourceId         -> GpuWorkResourceId
+RenderResourceIdSequence -> GpuWorkResourceIdAllocator
 ```
 
-S0 does not authorize implementation. The next step after S0 merges is one exact
-G1A implementation specification based on current `main`.
+PR `#132` was closed without merge because it contained only temporary automation scaffolding. The Rust implementation has not started. After issue `#135` merges, G1A restarts from current `main` on one ordinary implementation branch with no additional planning or activation PR.
+
+## Queued
+
+- RunenSDF clean-cutover consumer audit and exact integration/removal decision.
+- Further internal RunenGPU boundary slices after G1A is merged and reviewed.
+- RunenECS boundary repair as a separately scheduled, non-conflicting workstream.
 
 ## Completed foundation
 
-### Repository workflow cleanup
-
-Issue `#122` completed through PRs `#123` and `#124`. The obsolete workflow
-orchestration and generated state are removed. `cargo validate` and exact-head CI
-are authoritative.
-
-### GPU/render architecture correction
-
-Issue `#125` completed through PR `#126`. Accepted direction:
-
-```text
-RunenRender -> RunenGPU
-```
-
-RunenGPU and RunenRender each begin with one public package. WGPU belongs to
-RunenGPU; RunenRender owns image formation.
-
-### RunenSDF standalone transfer
-
-RunenSDF standalone transfer completed through Runenwerk PR `#118` and
-`Crystonix/runen-sdf` PR `#1` at revision:
-
-```text
-d52badefc640d6dc6dcdd40268af3aea1bb8eefe
-```
-
-Current Runenwerk `main` does not yet record the later clean-cutover removal of
-`domain/sdf` as complete.
-
-## Queued decisions
-
-- exact G1A implementation specification after S0 merges;
-- RunenSDF clean-cutover consumer audit and exact integration/removal decision;
-- RunenECS R1 boundary repair.
-
-No queued decision is implementation authorization by itself.
+- workflow execution platform retirement: issues/PRs `#122`, `#123`, and `#124`;
+- GPU/render architecture correction: issue `#125`, PR `#126`;
+- GPU/render S0 inventory: issue `#127`, PR `#128`;
+- G1A implementation specification: issue `#129`, PR `#130`;
+- RunenSDF standalone transfer: Runenwerk PR `#118` and `Crystonix/runen-sdf` PR `#1`.
