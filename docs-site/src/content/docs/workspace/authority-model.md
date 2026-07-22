@@ -1,11 +1,11 @@
 ---
 title: Authority Model
-description: Conflict-resolution order for Runenwerk behavior, architecture, planning, delivery evidence, and generated views.
+description: Conflict-resolution order for behavior, architecture, planning, and delivery evidence.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-22
 related_docs:
   - ./start-here.md
   - ./engineering-workflow.md
@@ -14,98 +14,68 @@ related_docs:
 
 # Authority Model
 
-Every repository artifact has one job. Avoid duplicating the same decision or state across several files.
+Every artifact has one job. Cross-link instead of copying decisions or live state.
 
-## Authority order
-
-When sources conflict, use this order for the specific claim being made.
-
-### Current behavior
+## Current behavior
 
 ```text
 code and executable tests
 -> fixtures, captures, and runtime evidence
 -> implementation documentation
--> summaries and reports
+-> summaries and historical reports
 ```
 
-A design or roadmap cannot override current code behavior. It may state the intended target and the gap.
+A design or roadmap may describe the target and the gap, but it does not override current behavior.
 
-### Durable architecture and ownership
+## Durable architecture
 
 ```text
-accepted ADR or accepted architecture/design document
--> root architecture and dependency summaries
+accepted ADR or accepted design
+-> concise root summary
 -> active implementation issue
 -> pull-request description
 -> historical report
 ```
 
-Implementation must either conform to accepted architecture or update the owning decision explicitly.
+Implementation conforms to accepted architecture or explicitly revises the owning decision.
 
-### Active work and sequencing
+## Active work
 
 ```text
-GitHub issue state and accepted milestone/roadmap decision
--> active roadmap view
--> pull-request state
--> generated planning view
+GitHub issue
+-> maintained roadmap summary
+-> pull-request delivery state
 -> historical report
 ```
 
-Do not put volatile branch heads, transient CI runs, or daily execution state in stable architecture documents.
+Do not place transient branch heads, daily execution state, or CI runs in stable architecture documents.
 
-### Delivery and validation evidence
+## Validation evidence
 
 ```text
 exact-head CI
 -> local command output identified by commit
 -> user-reported command output
--> connector/manual inspection
+-> source inspection
 -> unverified claim
 ```
 
-Inspection can establish structure and likely behavior. It cannot be reported as command or runtime validation.
+Inspection can establish structure and likely behavior. It is not executed validation or runtime proof.
 
-## Artifact responsibilities
+## Artifact ownership
 
 - **Code and tests:** current behavior and executable invariants.
-- **ADRs and accepted designs:** durable decisions, ownership, dependency direction, migration and deletion contracts.
+- **ADRs and accepted designs:** durable decisions, ownership, dependency direction, migration, and deletion contracts.
 - **GitHub issues:** proposed, active, blocked, deferred, and completed work.
-- **Roadmap:** high-level sequencing and dependencies; not an execution ledger.
+- **Roadmap:** high-level sequencing and dependencies.
 - **Pull requests:** diff review, delivery evidence, and merge decision.
-- **Root summaries:** concise navigation and stable repository shape.
-- **Roadmap:** manually maintained high-level sequencing; never an execution ledger.
-- **Historical and superseded documents:** context only; they do not authorize new work.
-
-## Workflow authority
-
-[Engineering Workflow](engineering-workflow.md) owns process and validation terminology.
-
-Repository scripts may validate deterministic invariants. They do not grant permissions, certify truth, promote lifecycle state, or override accepted documents and GitHub state.
-
-The former production-track, execution-lock, truth-certificate, batch, and generated-prompt systems were retired under issue `#122`. Historical references have no active authority.
-
-## Single-source rule
-
-Before adding or updating an artifact, identify the existing owner.
-
-```text
-one durable decision -> one accepted ADR or design
-one active task -> one GitHub issue
-one required validation baseline -> cargo validate
-one implementation delivery -> one PR
-one roadmap state -> one maintained roadmap
-```
-
-Cross-link instead of copying full state.
+- **Root documents:** concise navigation and stable repository shape.
+- **Reports and archive:** historical evidence and context only.
 
 ## Conflict handling
 
-When a conflict is found:
-
-1. Name the exact claim in conflict.
-2. Identify the owning authority for that claim.
+1. Name the exact conflicting claim.
+2. Identify its owning authority.
 3. Inspect current code and evidence.
 4. Correct the lower-authority source or explicitly revise the owner.
 5. Record unresolved uncertainty as a blocker.
