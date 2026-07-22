@@ -1,0 +1,152 @@
+name: RunenSDF Cutover Audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "domain/**"
+      - "engine/**"
+      - "apps/**"
+      - "adapters/**"
+      - "foundation/**"
+      - "net/**"
+      - "tools/**"
+      - ".github/workflows/runensdf-cutover-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runensdf-cutover-audit-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit exact RunenSDF consumers
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          clean: true
+          fetch-depth: 1
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Audit current consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="runensdf-consumer-audit.txt"
+          {
+            echo "RunenSDF consumer audit"
+            echo "head=$(git rev-parse HEAD)"
+            echo "tree=$(git rev-parse 'HEAD^{tree}')"
+            echo
+
+            echo "== inverse Cargo dependency tree =="
+            cargo tree -i sdf --workspace --locked
+            echo
+
+            echo "== workspace packages declaring an sdf dependency =="
+            cargo metadata --format-version 1 --locked --no-deps > /tmp/runensdf-metadata.json
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          metadata = json.loads(Path('/tmp/runensdf-metadata.json').read_text())
+          consumers = []
+          for package in metadata['packages']:
+              if package['name'] == 'sdf':
+                  continue
+              for dependency in package['dependencies']:
+                  if dependency['name'] == 'sdf' or dependency.get('rename') == 'sdf':
+                      consumers.append((package['name'], dependency))
+          if consumers:
+              for package, dependency in consumers:
+                  print(f"{package}: {dependency}")
+              raise SystemExit('real Cargo consumers of the internal sdf package exist')
+          print('none')
+          PY
+            echo
+
+            echo "== Rust imports outside domain/sdf =="
+            if git grep -n -I -E '(^|[^[:alnum:]_])sdf::|use[[:space:]]+sdf([[:space:]]|::)|extern[[:space:]]+crate[[:space:]]+sdf' -- \
+              . \
+              ':(exclude)domain/sdf/**' \
+              ':(exclude)docs-site/**' \
+              ':(exclude).github/workflows/runensdf-cutover-audit.yml'; then
+              echo "unexpected Rust consumers found"
+              exit 1
+            else
+              echo "none"
+            fi
+            echo
+
+            echo "== manifest dependency declarations =="
+            if git grep -n -I -E '^[[:space:]]*sdf[[:space:]]*=' -- \
+              ':(glob)**/Cargo.toml' \
+              ':(exclude)domain/sdf/Cargo.toml'; then
+              echo "unexpected manifest consumers found"
+              exit 1
+            else
+              echo "none"
+            fi
+            echo
+
+            echo "== Cargo.lock reverse dependency entries =="
+            if git grep -n -F '"sdf",' -- Cargo.lock; then
+              echo "unexpected lockfile reverse dependencies found"
+              exit 1
+            else
+              echo "none"
+            fi
+            echo
+
+            echo "== active code, manifest, and persisted identity references =="
+            if git grep -n -I -E 'runen-sdf|runen_sdf|domain/sdf' -- \
+              ':(glob)**/*.rs' \
+              ':(glob)**/*.toml' \
+              ':(glob)**/*.ron' \
+              ':(glob)**/*.json' \
+              ':(glob)**/*.yaml' \
+              ':(glob)**/*.yml' \
+              ':(exclude)domain/sdf/**' \
+              ':(exclude)docs-site/**' \
+              ':(exclude).github/workflows/runensdf-cutover-audit.yml' \
+              ':(exclude)Cargo.toml'; then
+              echo "unexpected active identity references found"
+              exit 1
+            else
+              echo "none"
+            fi
+          } 2>&1 | tee "${report}"
+
+      - name: Export exact audited source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > runensdf-audited-head.txt
+          git rev-parse 'HEAD^{tree}' > runensdf-audited-tree.txt
+          git archive --format=tar HEAD -o runensdf-audited-source.tar
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runensdf-cutover-audit
+          path: |
+            runensdf-consumer-audit.txt
+            runensdf-audited-head.txt
+            runensdf-audited-tree.txt
+            runensdf-audited-source.tar
+          if-no-files-found: error
+          retention-days: 7
