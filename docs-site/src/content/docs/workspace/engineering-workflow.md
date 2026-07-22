@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-22
 related_docs:
   - ./start-here.md
   - ./authority-model.md
@@ -14,273 +14,97 @@ related_docs:
 
 # Engineering Workflow
 
-This document is the canonical workflow authority for Runenwerk.
+GitHub issues and pull requests manage work. Accepted ADRs and designs own durable architecture. Code and tests own current behavior. `cargo validate` and exact-head CI own the required validation baseline.
 
-The repository uses ordinary engineering artifacts:
-
-```text
-GitHub issues and pull requests manage work
-ADRs and design documents own durable architecture decisions
-code and tests own current behavior
-cargo validate owns the required validation baseline
-CI proves the same baseline at the reviewed commit
-```
-
-Repository scripts may automate checks. They do not create implementation authority, grant permissions, certify truth, or replace review.
+Repository scripts may automate deterministic checks. They do not grant permission, certify truth, manage lifecycle state, or author feature-branch changes.
 
 ## Core rules
 
 1. Identify the owner and boundary before changing shared behavior.
-2. Scale investigation and documentation to the risk of the change.
-3. Keep one source of authority for each decision or state.
-4. Use focused checks while iterating and the baseline before merge.
-5. Do not claim validation that was not run.
-6. Do not preserve obsolete paths without an explicit compatibility need and removal condition.
-7. Prefer a coherent bounded slice over a broad change with mixed ownership.
+2. Inspect current code, tests, and accepted authority instead of relying on memory.
+3. Scale investigation and documentation to the risk of the change.
+4. Keep one source of authority for each decision or live state.
+5. Prefer one coherent implementation slice over mixed ownership.
+6. Do not preserve obsolete paths without a real compatibility need and removal condition.
+7. Report only validation and runtime behavior that was actually observed.
 
 ## Work classes
 
 ### Routine
 
-Use for local fixes and behavior-preserving refactors with a clear owner and unchanged dependency direction.
-
-Required record:
-
-```text
-problem
-changed behavior or structure
-focused tests
-baseline status before merge
-```
-
-A separate design document is not required.
+Local fixes and behavior-preserving refactors with a clear owner and unchanged dependency direction. Record the problem, change, focused checks, and baseline status. A separate design is not required.
 
 ### Significant
 
-Use when a change affects several modules, durable behavior, a public surface, persistence, host integration, or a major product path.
-
-Required record:
-
-```text
-problem and intended outcome
-owner and affected boundaries
-important alternatives and selected approach
-acceptance criteria
-migration or compatibility impact
-validation evidence
-```
-
-This record may live in an issue, accepted design, ADR, or PR body. Do not duplicate it across all four.
+Cross-module behavior, public surfaces, persistence, host integration, or major product paths. Record the owner, affected boundaries, important alternatives, acceptance criteria, migration impact, and validation in one suitable issue, design, ADR, or PR body.
 
 ### Architectural or extraction
 
-Use for new repositories or crates, framework extraction, reusable platform contracts, dependency-direction changes, renderer/host boundaries, durable public APIs, or authority changes.
+New repositories or crates, reusable platform contracts, public APIs, dependency-direction changes, renderer/host boundaries, and authority changes. Before implementation, establish:
 
-Required before implementation:
+- current reality grounded in code and tests;
+- target ownership and dependency direction;
+- important alternatives and trade-offs;
+- migration, cutover, deletion, and conformance requirements;
+- explicit non-owned responsibilities.
 
-```text
-current-state investigation grounded in code and tests
-complete target ownership and dependency direction
-alternatives and trade-offs
-public and internal vocabulary
-migration, cutover, and deletion plan
-conformance and acceptance evidence
-explicit non-owned responsibilities
-```
-
-The target design must be complete enough to prevent ownership ambiguity. Delivery may still use bounded implementation PRs.
-
-## Lifecycle
-
-Operational work uses five states:
-
-```text
-proposed
-active
-blocked
-done
-deferred
-```
-
-Durable documents may additionally be:
-
-```text
-accepted
-superseded
-archived
-```
-
-Do not create additional states unless they cause a distinct review, release, or compatibility decision.
+The target must be complete enough to prevent ownership ambiguity. Delivery should still use bounded implementation PRs.
 
 ## Standard flow
 
-### Routine change
-
 ```text
-branch
--> implement
+issue or accepted authority when needed
+-> implementation branch
 -> focused checks
 -> cargo validate
 -> pull request
--> review
+-> review at the exact head
 -> squash merge
+-> delete the branch
 ```
 
-### Significant change
+A separate planning or closeout PR is justified only when it carries independently reviewable information. Do not create process-only PRs, activation PRs, generated prompts, or temporary authoring workflows by default.
 
-```text
-issue or accepted design
--> bounded implementation branch
--> tests and documentation
--> cargo validate
--> pull request
--> review against acceptance criteria
--> squash merge and close issue
-```
+## Validation
 
-### Architecture or extraction
-
-```text
-investigation and design or ADR
--> explicit acceptance
--> implementation issue
--> bounded implementation PRs
--> conformance and cutover proof
--> old-authority deletion
-```
-
-A separate planning or closeout PR is required only when it carries independently reviewable truth. Do not create process-only PRs by default.
-
-## Validation profiles
-
-Runenwerk does not use `quick`, `full`, `quiet`, or output-dependent gates. Those names are ambiguous and drift over time.
-
-### Focused
-
-Run the smallest checks that exercise the changed owner while implementing.
-
-Examples:
-
-```text
-cargo test -p <package>
-cargo clippy -p <package> --all-targets -- -D warnings
-python tools/docs/validate_docs.py
-```
-
-Focused checks accelerate iteration. They are not the merge baseline.
-
-### Baseline
-
-Every merge requires:
+Use focused package checks while implementing. Every merge requires:
 
 ```text
 cargo validate
 git diff --check
 ```
 
-`cargo validate` is read-only and lockfile-safe. It validates the standalone repository-tooling workspace first:
+`cargo validate` is the same read-only, lockfile-safe implementation used by GitHub Actions. It validates the repository tooling, workspace formatting, locked tests, strict Clippy, documentation structure, and durable repository invariants.
 
-```text
-cargo fmt --manifest-path tools/xtask/Cargo.toml --check
-cargo test --manifest-path tools/xtask/Cargo.toml --locked
-cargo clippy --manifest-path tools/xtask/Cargo.toml --all-targets --locked -- -D warnings
-```
+Documentation changes additionally run the Astro/Starlight production build through the path-scoped documentation workflow.
 
-It then validates the product workspace and repository authority:
+Broader tools such as cargo-deny, cargo-machete, Lychee, ast-grep, benchmarks, or platform matrices are run directly when the affected change or release needs them. They are not a second named gate.
 
-```text
-cargo fmt --all --check
-cargo test --workspace --locked
-cargo clippy --workspace --all-targets --locked -- -D warnings
-repository documentation validation
-deterministic repository audit
-```
+## Pull-request review
 
-The same command runs locally and in GitHub Actions. CI is authoritative for the reviewed commit.
+Before merge, verify:
 
-### Extended
-
-Run manually or on a schedule when the change or release needs broader evidence:
-
-```text
-cargo xtask validate --extended
-```
-
-The extended profile may include dependency policy, unused-dependency analysis, external links, structural AST rules, and the docs-site production build. These checks are not ordinary PR blockers unless an accepted policy promotes a specific check into the baseline.
-
-Output verbosity never changes which checks are required.
-
-## Pull-request contract
-
-A PR must state:
-
-```text
-what changed
-why it changed
-owner and boundary impact
-validation actually run
-known risks or deferred work
-```
-
-Before recommending merge, verify:
-
-```text
-scope matches the issue or design
-no unrelated changes are included
-acceptance criteria are met
-public and dependency impacts are explicit
-required tests and documentation are present
-cargo validate passes at the reviewed head
-CI passes at the reviewed head
-no unresolved correctness or ownership findings remain
-post-merge state is truthful
-```
-
-Use squash merge for bounded feature branches unless preserving individual commits has a specific value.
+- the diff matches the issue or accepted authority;
+- no unrelated owner or behavior is changed;
+- acceptance criteria and required tests are satisfied;
+- public API, persistence, and dependency impacts are explicit;
+- `cargo validate` and required workflows pass at the reviewed head;
+- no unresolved correctness or ownership finding remains;
+- post-merge documentation and planning state are truthful.
 
 ## Evidence language
 
-Use concrete evidence labels in prose when they matter:
+Distinguish exact-head CI, local command output, user-reported output, source inspection, and unverified claims. Inspection can establish structure; it cannot be reported as executed validation or runtime proof.
 
-```text
-connector inspection
-manual source inspection
-local command result
-CI result
-user-reported result
-not verified
-```
+## Authority
 
-Confidence matrices and certificates are not required. A claim must simply identify the evidence that supports it and any important gap.
-
-## Repository authority
-
-- Code, tests, fixtures, and runtime evidence own current behavior.
+- Code and tests own current behavior.
 - Accepted ADRs and designs own durable decisions.
-- GitHub issues own live work; the manually maintained roadmap owns high-level sequencing.
-- Pull requests own review and delivery evidence, not long-term architecture.
-- Historical generated views are evidence only and are not maintained.
-- Historical reports and superseded documents do not authorize new work.
-
-See [Authority Model](authority-model.md) for conflict resolution.
-
-## Retired workflow systems
-
-Runenwerk does not use production-track state machines, execution contract packs, track locks, truth certificates, batch execution, generated worker prompts, or local workflow ledgers. These systems were retired under issue `#122`.
-
-Historical reports may mention them, but those references provide context only. New work uses GitHub issues and pull requests, accepted ADRs/designs, the maintained roadmap, tests, `cargo validate`, and exact-head CI.
+- GitHub issues own active work.
+- The roadmap owns high-level sequencing, not execution details.
+- Pull requests own delivery and review evidence.
+- Historical reports and superseded documents provide context only.
 
 ## Stop conditions
 
-Stop and resolve the issue before implementation or merge when any of these remain unknown:
-
-```text
-owner or dependency direction
-public API or persistence impact
-migration or deletion path for an architectural change
-acceptance criteria
-required validation
-reviewed-head CI status
-```
-
-Unknowns should be recorded as blockers, not converted into assumptions.
+Stop before implementation or merge when the owner, dependency direction, public or persistence impact, migration/deletion path, acceptance criteria, required validation, or exact-head CI status remains materially unknown.
