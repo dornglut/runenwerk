@@ -437,7 +437,7 @@ fn invalid_higher_precedence_scope_fails_closed() {
     let selected = CompositionLayoutCatalog::default()
         .with_scope(
             CompositionLayoutScope::BuiltIn,
-            CompositionScopeLoad::Valid(loaded.clone()),
+            CompositionScopeLoad::Valid(Box::new(loaded.clone())),
         )
         .with_scope(
             CompositionLayoutScope::Project,
@@ -458,7 +458,7 @@ fn invalid_higher_precedence_scope_fails_closed() {
     let rejection = CompositionLayoutCatalog::default()
         .with_scope(
             CompositionLayoutScope::BuiltIn,
-            CompositionScopeLoad::Valid(loaded),
+            CompositionScopeLoad::Valid(Box::new(loaded)),
         )
         .with_scope(
             CompositionLayoutScope::User,
