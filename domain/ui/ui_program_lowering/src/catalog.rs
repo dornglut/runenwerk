@@ -63,81 +63,62 @@ impl UiProgramFormationControlCatalog {
                     None
                 };
 
-                let property_schema = validate_schema_ref(
+                let mut validation = ControlContractValidationContext {
                     package,
                     control_kind_id,
+                    diagnostics: &mut kind_diagnostics,
+                };
+                let property_schema = validation.validate_schema_ref(
                     "property_schema",
                     &kind.property_schema,
                     "Properties",
                     "ui.program.catalog.missing_property_schema",
                     &package.property_schemas,
-                    &mut kind_diagnostics,
                 );
-                validate_schema_ref(
-                    package,
-                    control_kind_id,
+                validation.validate_schema_ref(
                     "state_schema",
                     &kind.state_schema,
                     "State",
                     "ui.program.catalog.missing_state_schema",
                     &package.state_schemas,
-                    &mut kind_diagnostics,
                 );
-                validate_schema_ref(
-                    package,
-                    control_kind_id,
+                validation.validate_schema_ref(
                     "event_payload_schema",
                     &kind.event_payload_schema,
                     "EventPayload",
                     "ui.program.catalog.missing_event_payload_schema",
                     &package.event_payload_schemas,
-                    &mut kind_diagnostics,
                 );
 
-                validate_kernel_ref(
-                    package,
-                    control_kind_id,
+                validation.validate_kernel_ref(
                     "layout_kernel",
                     &kind.kernels.layout,
                     ControlKernelKind::Layout,
                     "ui.program.catalog.missing_layout_kernel",
-                    &mut kind_diagnostics,
                 );
-                validate_kernel_ref(
-                    package,
-                    control_kind_id,
+                validation.validate_kernel_ref(
                     "interaction_kernel",
                     &kind.kernels.interaction,
                     ControlKernelKind::Interaction,
                     "ui.program.catalog.missing_interaction_kernel",
-                    &mut kind_diagnostics,
                 );
-                validate_kernel_ref(
-                    package,
-                    control_kind_id,
+                validation.validate_kernel_ref(
                     "visual_kernel",
                     &kind.kernels.visual,
                     ControlKernelKind::Visual,
                     "ui.program.catalog.missing_visual_kernel",
-                    &mut kind_diagnostics,
                 );
-                validate_kernel_ref(
-                    package,
-                    control_kind_id,
+                validation.validate_kernel_ref(
                     "accessibility_kernel",
                     &kind.kernels.accessibility,
                     ControlKernelKind::Accessibility,
                     "ui.program.catalog.missing_accessibility_kernel",
-                    &mut kind_diagnostics,
                 );
-                validate_kernel_ref(
-                    package,
-                    control_kind_id,
+                validation.validate_kernel_ref(
                     "inspection_kernel",
                     &kind.kernels.inspection,
                     ControlKernelKind::Inspection,
                     "ui.program.catalog.missing_inspection_kernel",
-                    &mut kind_diagnostics,
                 );
 
                 let Some(activation_capability) = activation_capability else {
@@ -152,17 +133,18 @@ impl UiProgramFormationControlCatalog {
                     continue;
                 }
 
-                catalog = catalog.with_control_kind(UiProgramFormationControlContract::new(
-                    control_kind_id,
-                    package_id,
-                    kind.display_name.clone(),
-                    property_schema.expect("property schema was validated before catalog insert"),
-                    kind.state_schema.clone(),
-                    kind.event_payload_schema.clone(),
-                    ControlKernelRef::new(kind.kernels.layout.as_str()),
-                    ControlKernelRef::new(kind.kernels.visual.as_str()),
+                catalog = catalog.with_control_kind(UiProgramFormationControlContract {
+                    kind_id: control_kind_id.to_owned(),
+                    package_id: package_id.to_owned(),
+                    display_name: kind.display_name.clone(),
+                    property_schema: property_schema
+                        .expect("property schema was validated before catalog insert"),
+                    state_schema: kind.state_schema.clone(),
+                    event_payload_schema: kind.event_payload_schema.clone(),
+                    layout_kernel: ControlKernelRef::new(kind.kernels.layout.as_str()),
+                    visual_kernel: ControlKernelRef::new(kind.kernels.visual.as_str()),
                     activation_capability,
-                ));
+                });
             }
         }
 
@@ -174,101 +156,97 @@ impl UiProgramFormationControlCatalog {
     }
 }
 
-fn validate_schema_ref(
-    package: &ControlPackageDescriptor,
-    control_kind_id: &str,
-    contract_part: &str,
-    expected_schema: &UiSchemaRef,
-    expected_role: &str,
-    diagnostic_code: &'static str,
-    schemas: &[ControlSchemaDescriptor],
-    diagnostics: &mut Vec<UiProgramDiagnostic>,
-) -> Option<UiSchema> {
-    let schema = schemas
-        .iter()
-        .find(|schema| schema.schema_ref() == expected_schema);
-
-    if let Some(schema) = schema {
-        return Some(schema.schema.clone());
-    }
-
-    diagnostics.push(UiProgramDiagnostic::new(
-        diagnostic_code,
-        format!(
-            "package {} control kind {} contract part {} references schema {}@{}; expected schema role {}",
-            package.package_id.as_str(),
-            control_kind_id,
-            contract_part,
-            expected_schema.id.as_str(),
-            expected_schema.version.value(),
-            expected_role
-        ),
-    ));
-    None
+struct ControlContractValidationContext<'a> {
+    package: &'a ControlPackageDescriptor,
+    control_kind_id: &'a str,
+    diagnostics: &'a mut Vec<UiProgramDiagnostic>,
 }
 
-fn validate_kernel_ref(
-    package: &ControlPackageDescriptor,
-    control_kind_id: &str,
-    contract_part: &str,
-    expected_kernel: &ControlKernelId,
-    expected_kind: ControlKernelKind,
-    missing_diagnostic_code: &'static str,
-    diagnostics: &mut Vec<UiProgramDiagnostic>,
-) {
-    let Some(kernel) = package
-        .kernels
-        .iter()
-        .find(|kernel| &kernel.kernel_id == expected_kernel)
-    else {
-        diagnostics.push(UiProgramDiagnostic::new(
-            missing_diagnostic_code,
+impl ControlContractValidationContext<'_> {
+    fn validate_schema_ref(
+        &mut self,
+        contract_part: &str,
+        expected_schema: &UiSchemaRef,
+        expected_role: &str,
+        diagnostic_code: &'static str,
+        schemas: &[ControlSchemaDescriptor],
+    ) -> Option<UiSchema> {
+        let schema = schemas
+            .iter()
+            .find(|schema| schema.schema_ref() == expected_schema);
+
+        if let Some(schema) = schema {
+            return Some(schema.schema.clone());
+        }
+
+        self.diagnostics.push(UiProgramDiagnostic::new(
+            diagnostic_code,
             format!(
-                "package {} control kind {} contract part {} references kernel {}; expected kernel kind {:?}",
-                package.package_id.as_str(),
-                control_kind_id,
+                "package {} control kind {} contract part {} references schema {}@{}; expected schema role {}",
+                self.package.package_id.as_str(),
+                self.control_kind_id,
                 contract_part,
-                expected_kernel.as_str(),
-                expected_kind
+                expected_schema.id.as_str(),
+                expected_schema.version.value(),
+                expected_role
             ),
         ));
-        return;
-    };
-
-    validate_kernel_kind(
-        package,
-        control_kind_id,
-        contract_part,
-        kernel,
-        expected_kind,
-        diagnostics,
-    );
-}
-
-fn validate_kernel_kind(
-    package: &ControlPackageDescriptor,
-    control_kind_id: &str,
-    contract_part: &str,
-    kernel: &ControlKernelDescriptor,
-    expected_kind: ControlKernelKind,
-    diagnostics: &mut Vec<UiProgramDiagnostic>,
-) {
-    if kernel.kind == expected_kind {
-        return;
+        None
     }
 
-    diagnostics.push(UiProgramDiagnostic::new(
-        "ui.program.catalog.kernel_kind_mismatch",
-        format!(
-            "package {} control kind {} contract part {} references kernel {}; expected kernel kind {:?}, found {:?}",
-            package.package_id.as_str(),
-            control_kind_id,
-            contract_part,
-            kernel.kernel_id.as_str(),
-            expected_kind,
-            kernel.kind
-        ),
-    ));
+    fn validate_kernel_ref(
+        &mut self,
+        contract_part: &str,
+        expected_kernel: &ControlKernelId,
+        expected_kind: ControlKernelKind,
+        missing_diagnostic_code: &'static str,
+    ) {
+        let Some(kernel) = self
+            .package
+            .kernels
+            .iter()
+            .find(|kernel| &kernel.kernel_id == expected_kernel)
+        else {
+            self.diagnostics.push(UiProgramDiagnostic::new(
+                missing_diagnostic_code,
+                format!(
+                    "package {} control kind {} contract part {} references kernel {}; expected kernel kind {:?}",
+                    self.package.package_id.as_str(),
+                    self.control_kind_id,
+                    contract_part,
+                    expected_kernel.as_str(),
+                    expected_kind
+                ),
+            ));
+            return;
+        };
+
+        self.validate_kernel_kind(contract_part, kernel, expected_kind);
+    }
+
+    fn validate_kernel_kind(
+        &mut self,
+        contract_part: &str,
+        kernel: &ControlKernelDescriptor,
+        expected_kind: ControlKernelKind,
+    ) {
+        if kernel.kind == expected_kind {
+            return;
+        }
+
+        self.diagnostics.push(UiProgramDiagnostic::new(
+            "ui.program.catalog.kernel_kind_mismatch",
+            format!(
+                "package {} control kind {} contract part {} references kernel {}; expected kernel kind {:?}, found {:?}",
+                self.package.package_id.as_str(),
+                self.control_kind_id,
+                contract_part,
+                kernel.kernel_id.as_str(),
+                expected_kind,
+                kernel.kind
+            ),
+        ));
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -282,32 +260,6 @@ pub struct UiProgramFormationControlContract {
     pub layout_kernel: ControlKernelRef,
     pub visual_kernel: ControlKernelRef,
     pub activation_capability: RouteCapability,
-}
-
-impl UiProgramFormationControlContract {
-    pub fn new(
-        kind_id: impl Into<String>,
-        package_id: impl Into<String>,
-        display_name: impl Into<String>,
-        property_schema: UiSchema,
-        state_schema: UiSchemaRef,
-        event_payload_schema: UiSchemaRef,
-        layout_kernel: ControlKernelRef,
-        visual_kernel: ControlKernelRef,
-        activation_capability: RouteCapability,
-    ) -> Self {
-        Self {
-            kind_id: kind_id.into(),
-            package_id: package_id.into(),
-            display_name: display_name.into(),
-            event_payload_schema,
-            layout_kernel,
-            state_schema,
-            activation_capability,
-            property_schema,
-            visual_kernel,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
