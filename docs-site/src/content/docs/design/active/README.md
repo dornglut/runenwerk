@@ -115,6 +115,7 @@ architecture.
 ### Repository Family Extraction
 
 - [RunenSDF Extraction Design](runensdf-extraction-design.md)
+- [RunenSDF Repository Identity Decision](runensdf-repository-identity-decision.md)
 - [RunenECS Extraction Boundary Design](runenecs-extraction-boundary-design.md)
 - [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
 - [RunenGPU Architecture Design](runengpu-architecture-design.md)

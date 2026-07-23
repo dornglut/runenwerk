@@ -64,10 +64,7 @@ impl DrawingInkTileCacheState {
         &mut self,
         source_key: &str,
     ) -> Option<(ProductCacheKey, DrawingInkTileProduct)> {
-        let product_key = match self.cached_source_keys.get(source_key) {
-            Some(product_key) => product_key.clone(),
-            None => return None,
-        };
+        let product_key = self.cached_source_keys.get(source_key)?.clone();
         let access_frame = self.next_cache_access_frame();
         let Some(entry) = self.cached_products.get_mut(&product_key) else {
             self.cached_source_keys.remove(source_key);

@@ -78,15 +78,33 @@ pub trait UiAction {
     fn action_descriptor(&self) -> UiTypedActionDescriptor;
 }
 
+pub struct UiActionDispatchOutputs<'a> {
+    reports: &'a mut UiActionDispatchReportsResource,
+    trace: &'a mut UiRuntimeTraceResource,
+    diagnostics: &'a mut UiRuntimeDiagnosticsResource,
+}
+
+impl<'a> UiActionDispatchOutputs<'a> {
+    pub fn new(
+        reports: &'a mut UiActionDispatchReportsResource,
+        trace: &'a mut UiRuntimeTraceResource,
+        diagnostics: &'a mut UiRuntimeDiagnosticsResource,
+    ) -> Self {
+        Self {
+            reports,
+            trace,
+            diagnostics,
+        }
+    }
+}
+
 pub fn dispatch_ui_action<A, Handler, Host, Executor>(
     action: &A,
     handler: &Handler,
     event: &UiActionEvent,
     host: &Host,
     executor: &mut Executor,
-    reports: &mut UiActionDispatchReportsResource,
-    trace: &mut UiRuntimeTraceResource,
-    diagnostics: &mut UiRuntimeDiagnosticsResource,
+    outputs: UiActionDispatchOutputs<'_>,
 ) -> UiActionDispatchReport
 where
     A: UiAction,
@@ -94,6 +112,11 @@ where
     Host: UiHost,
     Executor: UiHostActionExecutor,
 {
+    let UiActionDispatchOutputs {
+        reports,
+        trace,
+        diagnostics,
+    } = outputs;
     let descriptor = action.action_descriptor();
     let route = event.packet().route.clone();
     let host_kind = host.kind();
@@ -203,35 +226,48 @@ where
         action,
         handler,
         event,
-        &descriptor,
-        route,
-        host_kind,
-        mapping,
+        MappedUiActionRoute {
+            descriptor: &descriptor,
+            route,
+            host: host_kind,
+            mapping,
+        },
         executor,
-        reports,
-        trace,
-        diagnostics,
+        UiActionDispatchOutputs::new(reports, trace, diagnostics),
     )
+}
+
+struct MappedUiActionRoute<'a> {
+    descriptor: &'a UiTypedActionDescriptor,
+    route: RouteId,
+    host: HostKind,
+    mapping: &'a HostRouteMapping,
 }
 
 fn dispatch_mapped_action<A, Handler, Executor>(
     action: &A,
     handler: &Handler,
     event: &UiActionEvent,
-    descriptor: &UiTypedActionDescriptor,
-    route: RouteId,
-    host: HostKind,
-    mapping: &HostRouteMapping,
+    mapped_route: MappedUiActionRoute<'_>,
     executor: &mut Executor,
-    reports: &mut UiActionDispatchReportsResource,
-    trace: &mut UiRuntimeTraceResource,
-    diagnostics: &mut UiRuntimeDiagnosticsResource,
+    outputs: UiActionDispatchOutputs<'_>,
 ) -> UiActionDispatchReport
 where
     A: UiAction,
     Handler: UiActionHandler<A>,
     Executor: UiHostActionExecutor,
 {
+    let MappedUiActionRoute {
+        descriptor,
+        route,
+        host,
+        mapping,
+    } = mapped_route;
+    let UiActionDispatchOutputs {
+        reports,
+        trace,
+        diagnostics,
+    } = outputs;
     let intent = handler.host_intent(action);
     if intent.action() != descriptor
         || mapping.host_command != *intent.host_command()

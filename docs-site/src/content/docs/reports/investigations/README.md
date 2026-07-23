@@ -33,12 +33,4 @@ Investigations do not authorize implementation by themselves.
 
 ## Other current investigations
 
-- [Runenwerk Capability Workbench Current-State Investigation](runenwerk-capability-workbench-current-state-investigation.md)
-- [Repository Documentation Audit](repository-documentation-audit.md)
-- [Asset And Material Root Cleanup Investigation](asset-and-material-root-cleanup-investigation.md)
-- [Application API And Manual Dispatch Surface Investigation](application-api-and-manual-dispatch-surface-investigation.md)
-- [App UI Plumbing Reduction Investigation](app-ui-plumbing-reduction-investigation.md)
-- [Frame Resource Transport And Submission Seam Investigation](frame-resource-transport-and-submission-seam-investigation.md)
-- [Runenwerk Legacy UI Residual Investigation](runenwerk-legacy-ui-residual-investigation.md)
-- [UI Runtime Legacy Surface And Application Language Investigation](ui-runtime-legacy-surface-and-application-language-investigation.md)
-- [UI Runtime Submit And Surface Rebuild Investigation](ui-runtime-submit-and-surface-rebuild-investigation.md)
+No additional investigation reports are currently retained in this directory.

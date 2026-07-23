@@ -127,11 +127,10 @@ impl ViewportInstanceRegistryResource {
         }
         if let Some(previous_mounted_unit) = self.mounted_unit_by_viewport.get(&viewport_id)
             && *previous_mounted_unit != mounted_unit_id
+            && let Some(previous) = self.records_by_mounted_unit.remove(previous_mounted_unit)
         {
-            if let Some(previous) = self.records_by_mounted_unit.remove(previous_mounted_unit) {
-                self.mounted_unit_by_tool_surface
-                    .remove(&previous.tool_surface_id);
-            }
+            self.mounted_unit_by_tool_surface
+                .remove(&previous.tool_surface_id);
         }
         if let Some(previous_record) = self.records_by_mounted_unit.get(&mounted_unit_id) {
             self.mounted_unit_by_viewport

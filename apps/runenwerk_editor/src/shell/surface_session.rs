@@ -363,12 +363,11 @@ mod tests {
 
         store.prune_for_workspace(&workspace);
 
-        assert_eq!(
-            store
+        assert!(
+            !store
                 .session(surface_id)
                 .expect("console surface session should be retained")
-                .console_follow_enabled,
-            false
+                .console_follow_enabled
         );
     }
 

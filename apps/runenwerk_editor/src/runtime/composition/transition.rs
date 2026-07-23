@@ -138,7 +138,7 @@ fn sync_editor_composition_transitions(
                     editor_window_id,
                 });
             } else {
-                let detached = detached_bindings(&host, &plan.detached_targets);
+                let detached = detached_bindings(host, &plan.detached_targets);
                 match host.shell_state.commit_prepared_composition(prepared, None) {
                     Ok(()) => {
                         host.shell_state

@@ -435,9 +435,7 @@ impl RunenwerkEditorShellState {
     }
 
     pub fn runtime_for_target_mut(&mut self, target_id: PresentationTargetId) -> &mut UiRuntime {
-        self.target_runtimes
-            .entry(target_id)
-            .or_insert_with(UiRuntime::new)
+        self.target_runtimes.entry(target_id).or_default()
     }
 
     pub fn last_tree(&self) -> Option<&UiTree> {
@@ -1172,9 +1170,7 @@ impl RunenwerkEditorShellState {
         self.interaction_by_target
             .retain(|target_id, _| target_ids.contains(target_id));
         for target_id in target_ids {
-            self.target_runtimes
-                .entry(target_id)
-                .or_insert_with(UiRuntime::new);
+            self.target_runtimes.entry(target_id).or_default();
             self.interaction_by_target.entry(target_id).or_default();
         }
     }

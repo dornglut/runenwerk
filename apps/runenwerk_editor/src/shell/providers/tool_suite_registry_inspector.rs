@@ -818,19 +818,19 @@ fn build_composition_persistence_preview(
             let valid = panel_instance_id.is_some()
                 && tool_surface_instance_id.is_some()
                 && tab_stack_id.is_some();
-            let diagnostics = (!valid)
-                .then(|| {
-                    vec![diagnostic_row(
-                        ToolSuiteRegistryInspectorDiagnosticSeverity::Error,
-                        ToolSuiteRegistryInspectorDiagnosticScope::PersistencePreview,
-                        "inspector.composition_preview.invalid_editor_binding",
-                        format!(
-                            "mounted unit {} has invalid editor compatibility bindings",
-                            record.mounted_unit_id.raw()
-                        ),
-                    )]
-                })
-                .unwrap_or_default();
+            let diagnostics = if valid {
+                Vec::new()
+            } else {
+                vec![diagnostic_row(
+                    ToolSuiteRegistryInspectorDiagnosticSeverity::Error,
+                    ToolSuiteRegistryInspectorDiagnosticScope::PersistencePreview,
+                    "inspector.composition_preview.invalid_editor_binding",
+                    format!(
+                        "mounted unit {} has invalid editor compatibility bindings",
+                        record.mounted_unit_id.raw()
+                    ),
+                )]
+            };
             ToolSuiteRegistryInspectorPersistedSurfacePreviewRow {
                 workspace_profile_id: shell_state.active_workspace_profile_id(),
                 panel_instance_id,

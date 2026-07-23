@@ -138,14 +138,16 @@ fn run_step_from_formed_route(
     };
 
     finish_step(
-        step,
-        before,
+        UiAppIntegrationStepInput {
+            step,
+            before,
+            source,
+            formation_report,
+            packet,
+            diagnostics,
+        },
         host,
-        source,
-        formation_report,
         bridge,
-        packet,
-        diagnostics,
     )
 }
 
@@ -169,27 +171,41 @@ fn run_step_with_packet(
 
     let formed = formation_report.passed();
     finish_step(
-        step,
-        before,
+        UiAppIntegrationStepInput {
+            step,
+            before,
+            source,
+            formation_report,
+            packet: formed.then_some(packet),
+            diagnostics,
+        },
         host,
-        source,
-        formation_report,
         bridge,
-        formed.then_some(packet),
-        diagnostics,
     )
 }
 
-fn finish_step(
+struct UiAppIntegrationStepInput {
     step: String,
     before: crate::host::UiAppHostSnapshot,
-    host: &mut CounterHost,
     source: UiAppSourceBuildReport,
     formation_report: UiProgramFormationReport,
-    bridge: &UiAppRouteBridge,
     packet: Option<UiEventPacket>,
-    mut diagnostics: Vec<UiAppProofDiagnostic>,
+    diagnostics: Vec<UiAppProofDiagnostic>,
+}
+
+fn finish_step(
+    input: UiAppIntegrationStepInput,
+    host: &mut CounterHost,
+    bridge: &UiAppRouteBridge,
 ) -> UiAppIntegrationStepReport {
+    let UiAppIntegrationStepInput {
+        step,
+        before,
+        source,
+        formation_report,
+        packet,
+        mut diagnostics,
+    } = input;
     let mut action = None;
     let mut mutation = None;
 
@@ -220,12 +236,13 @@ fn finish_step(
                 .as_ref()
                 .and_then(|resolved| host.apply_resolved_action(resolved));
 
-            if resolution.is_resolved() && mutation.is_none() {
-                if let Some(action) = action.as_ref() {
-                    diagnostics.push(UiAppProofDiagnostic::MutationMissing {
-                        action: action.action_id.as_str().to_owned(),
-                    });
-                }
+            if resolution.is_resolved()
+                && mutation.is_none()
+                && let Some(action) = action.as_ref()
+            {
+                diagnostics.push(UiAppProofDiagnostic::MutationMissing {
+                    action: action.action_id.as_str().to_owned(),
+                });
             }
         }
     }

@@ -12,7 +12,7 @@ last_reviewed: 2026-05-20
 
 This folder preserves generated parallel-roadmap batch evidence. Batch artifacts
 are historical records, not active roadmap truth. The active roadmap source is
-[`../../workspace/roadmap-items.yaml`](../../workspace/roadmap-items.yaml), and
+[`Roadmap`](../../workspace/planning/roadmap.md), and
 the generated roadmap view is
 [`../../workspace/roadmap-decision-register.md`](../../workspace/roadmap-decision-register.md).
 
@@ -24,13 +24,11 @@ not-started downstream work.
 
 ## Historical Proposal Artifacts
 
-- [`2026-05-20-next-current-candidate-roadmap-batch-wr-029`](2026-05-20-next-current-candidate-roadmap-batch-wr-029/batch.toml):
-  rejected WR-029 parallel-batch proposal preserved for audit only. WR-029
+- Rejected WR-029 parallel-batch proposal: historical context only. WR-029
   Phase 1-3 evidence lives in
   [`../implementation-plans/wr-029-model-mesh-material-binding/plan.md`](../implementation-plans/wr-029-model-mesh-material-binding/plan.md),
   and Phase 4 remains open for model/mesh GPU pixel proof.
-- [`2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018`](2026-05-16-continue-roadmap-batch-after-2026-05-15-wr-025-wr-018/prompts/wr-018.md):
-  rejected WR-018 continuation proposal preserved for audit only. WR-018
+- Rejected WR-018 continuation proposal: historical context only. WR-018
   completion evidence lives in
   [`../closeouts/wr-018-rendered-world-v1/closeout.md`](../closeouts/wr-018-rendered-world-v1/closeout.md).
 

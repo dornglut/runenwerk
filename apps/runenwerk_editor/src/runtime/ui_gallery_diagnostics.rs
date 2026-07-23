@@ -113,7 +113,7 @@ fn story_report_diagnostics_surface_in_interactive_gallery(
 
 pub(super) fn dedupe_gallery_diagnostics(diagnostics: &mut Vec<UiGalleryDiagnostic>) {
     let mut seen = BTreeSet::new();
-    diagnostics.retain(|diagnostic| seen.insert(UiGalleryDiagnosticKey::from(&*diagnostic)));
+    diagnostics.retain(|diagnostic| seen.insert(UiGalleryDiagnosticKey::from(diagnostic)));
 }
 
 fn gallery_stage_for_story_diagnostic(diagnostic: &UiStoryDiagnostic) -> UiGalleryStage {

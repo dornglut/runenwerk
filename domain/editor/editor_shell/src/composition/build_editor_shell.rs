@@ -372,7 +372,7 @@ fn build_editor_shell_frame_from_projection(
         frame_model.active_toolbar_binding.as_ref(),
     );
     let tab_stack_popup_menus =
-        build_tab_stack_popup_menus(frame_model, &workspace_projection, theme);
+        build_tab_stack_popup_menus(frame_model, workspace_projection, theme);
     let mut toolbar_routes_by_widget_id = toolbar.routes_by_widget_id.clone();
     let mut interaction_model = toolbar.interaction_model.clone();
     if let Some(popup) = toolbar_menu_popup.as_ref() {
@@ -380,9 +380,9 @@ fn build_editor_shell_frame_from_projection(
         interaction_model.extend(popup.interaction_model.clone());
     }
     if structural_interactions_enabled {
-        interaction_model.extend(tab_stack_chrome_interaction_model(&workspace_projection));
+        interaction_model.extend(tab_stack_chrome_interaction_model(workspace_projection));
         interaction_model.extend(dock_drop_zone_interaction_model(
-            &workspace_projection,
+            workspace_projection,
             docking_visual_state,
         ));
     }
@@ -390,7 +390,7 @@ fn build_editor_shell_frame_from_projection(
     interaction_model.extend(viewport_surface_interaction_model(frame_model));
     let (widget_actions_by_id, widget_structural_context_by_id) = build_frame_widget_routes(
         frame_model,
-        &workspace_projection,
+        workspace_projection,
         &toolbar_routes_by_widget_id,
     );
     let projection_artifacts = ShellProjectionArtifacts {

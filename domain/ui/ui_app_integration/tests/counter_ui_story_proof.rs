@@ -36,8 +36,7 @@ fn counter_story_runs_full_ecs_backed_loop() {
             .source
             .source
             .node_ids()
-            .iter()
-            .any(|node| *node == "counter.increment_button")
+            .contains(&"counter.increment_button")
     );
     assert!(first.formation.passed);
     assert!(first.formation.source_map_entries > 0);
@@ -82,11 +81,10 @@ fn counter_story_runs_full_ecs_backed_loop() {
             .source
             .source
             .node_ids()
-            .iter()
-            .any(|node| *node == "counter.reset_button")
+            .contains(&"counter.reset_button")
     );
 
     let routes = report.route_ids();
-    assert!(routes.iter().any(|route| *route == "counter.increment"));
-    assert!(routes.iter().any(|route| *route == "counter.reset"));
+    assert!(routes.contains(&"counter.increment"));
+    assert!(routes.contains(&"counter.reset"));
 }

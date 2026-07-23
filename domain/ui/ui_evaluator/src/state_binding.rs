@@ -35,13 +35,13 @@ pub(crate) fn apply_dirty_bindings_to_state<'a>(
         let Some(value) = snapshot.value.clone() else {
             continue;
         };
-        if let BindingEndpointAddress::UiState { requirement_id, .. } = &snapshot.target {
-            if let Err(error) = state.set_value(requirement_id.as_str(), value) {
-                diagnostics.push(UiRuntimeArtifactDiagnostic::warning(
-                    "ui.evaluator.state_binding_missing",
-                    error.to_string(),
-                ));
-            }
+        if let BindingEndpointAddress::UiState { requirement_id, .. } = &snapshot.target
+            && let Err(error) = state.set_value(requirement_id.as_str(), value)
+        {
+            diagnostics.push(UiRuntimeArtifactDiagnostic::warning(
+                "ui.evaluator.state_binding_missing",
+                error.to_string(),
+            ));
         }
     }
 }

@@ -1,17 +1,31 @@
 use super::*;
 
-pub(crate) fn stable_cache_key(
-    program: &UiProgram,
-    target_profile: UiRuntimeTargetProfile,
-    target_profile_version: u32,
-    package_ids: &[String],
-    control_kind_ids: &[String],
-    schema_ids: &[RuntimeSchemaRef],
-    route_ids: &[RuntimeRouteRef],
-    kernel_ids: &[String],
-    capability_ids: &[String],
-    source_map: &CompiledSourceMap,
-) -> ArtifactCacheKey {
+pub(crate) struct ArtifactCacheKeyInput<'a> {
+    pub(crate) program: &'a UiProgram,
+    pub(crate) target_profile: UiRuntimeTargetProfile,
+    pub(crate) target_profile_version: u32,
+    pub(crate) package_ids: &'a [String],
+    pub(crate) control_kind_ids: &'a [String],
+    pub(crate) schema_ids: &'a [RuntimeSchemaRef],
+    pub(crate) route_ids: &'a [RuntimeRouteRef],
+    pub(crate) kernel_ids: &'a [String],
+    pub(crate) capability_ids: &'a [String],
+    pub(crate) source_map: &'a CompiledSourceMap,
+}
+
+pub(crate) fn stable_cache_key(input: ArtifactCacheKeyInput<'_>) -> ArtifactCacheKey {
+    let ArtifactCacheKeyInput {
+        program,
+        target_profile,
+        target_profile_version,
+        package_ids,
+        control_kind_ids,
+        schema_ids,
+        route_ids,
+        kernel_ids,
+        capability_ids,
+        source_map,
+    } = input;
     let mut parts = Vec::new();
     parts.push(format!(
         "target:{target_profile:?}:{target_profile_version}"

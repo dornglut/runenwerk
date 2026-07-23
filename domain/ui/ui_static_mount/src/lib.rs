@@ -87,7 +87,7 @@ impl UiStaticMountReport {
         let mounted_frame = diagnostics
             .iter()
             .all(|diagnostic| diagnostic.severity != UiStaticMountDiagnosticSeverity::Error)
-            .then(|| MountedStaticUiFrame { frame, summary });
+            .then_some(MountedStaticUiFrame { frame, summary });
 
         Self {
             mounted_frame,

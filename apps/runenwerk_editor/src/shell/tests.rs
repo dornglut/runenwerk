@@ -8301,11 +8301,6 @@ fn dispatch_pointer(
         .expect("pointer dispatch should succeed");
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "test pointer helper keeps UI event fields explicit"
-)]
-
 fn open_tab_stack_create_surface_popup(
     app: &mut RunenwerkEditorApp,
     shell_state: &mut RunenwerkEditorShellState,
