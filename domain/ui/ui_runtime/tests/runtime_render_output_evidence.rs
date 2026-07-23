@@ -2,8 +2,8 @@ use ui_math::{UiRect, UiSize};
 use ui_render_data::UiPrimitiveFamily;
 use ui_runtime::{
     ComputedLayout, ComputedLayoutMap, InteractionVisualState, PanelNode, UiNode, UiNodeKind,
-    UiRuntimeOutputEvidenceSource, UiTree, WidgetId, build_ui_frame_with_render_output_evidence,
-    expected_panel_output,
+    UiRuntimeOutputEvidenceSource, UiRuntimeRenderOutputEvidenceSpec, UiTree, WidgetId,
+    build_ui_frame_with_render_output_evidence, expected_panel_output,
 };
 use ui_text::{FontAtlasSource, FontId, MsdfFontAtlas};
 use ui_theme::ThemeTokens;
@@ -31,9 +31,11 @@ fn runtime_output_evidence_is_derived_from_built_ui_frame() {
         UiSize::new(128.0, 64.0),
         InteractionVisualState::default(),
         &EmptyAtlasSource,
-        "runenwerk.ui.runtime.evidence.panel",
-        UiRuntimeOutputEvidenceSource::new("ui_runtime.build_ui_frame", "panel.runtime"),
-        expected_panel_output(),
+        UiRuntimeRenderOutputEvidenceSpec::new(
+            "runenwerk.ui.runtime.evidence.panel",
+            UiRuntimeOutputEvidenceSource::new("ui_runtime.build_ui_frame", "panel.runtime"),
+            expected_panel_output(),
+        ),
     );
 
     assert!(

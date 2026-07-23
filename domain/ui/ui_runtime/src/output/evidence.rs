@@ -32,6 +32,27 @@ impl UiRuntimeOutputEvidenceSource {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct UiRuntimeRenderOutputEvidenceSpec {
+    pub evidence_id: String,
+    pub source: UiRuntimeOutputEvidenceSource,
+    pub expected_primitive_counts: Vec<UiExpectedPrimitiveCount>,
+}
+
+impl UiRuntimeRenderOutputEvidenceSpec {
+    pub fn new(
+        evidence_id: impl Into<String>,
+        source: UiRuntimeOutputEvidenceSource,
+        expected_primitive_counts: impl IntoIterator<Item = UiExpectedPrimitiveCount>,
+    ) -> Self {
+        Self {
+            evidence_id: evidence_id.into(),
+            source,
+            expected_primitive_counts: expected_primitive_counts.into_iter().collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct UiRuntimeFrameOutputEvidence {
     pub frame: UiFrame,
     pub evidence: UiRenderOutputEvidence,
@@ -57,10 +78,13 @@ pub fn build_ui_frame_with_render_output_evidence(
     surface_size: UiSize,
     interaction_state: InteractionVisualState,
     atlas_source: &dyn FontAtlasSource,
-    evidence_id: impl Into<String>,
-    source: UiRuntimeOutputEvidenceSource,
-    expected_primitive_counts: impl IntoIterator<Item = UiExpectedPrimitiveCount>,
+    evidence_spec: UiRuntimeRenderOutputEvidenceSpec,
 ) -> UiRuntimeFrameOutputEvidence {
+    let UiRuntimeRenderOutputEvidenceSpec {
+        evidence_id,
+        source,
+        expected_primitive_counts,
+    } = evidence_spec;
     let frame = build_ui_frame(tree, layouts, surface_size, interaction_state, atlas_source);
     let evidence = build_runtime_render_output_evidence(
         evidence_id,
