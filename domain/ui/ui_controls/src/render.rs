@@ -38,7 +38,7 @@ impl ControlRenderDescriptor {
     pub fn with_expected_primitive_count(mut self, count: UiExpectedPrimitiveCount) -> Self {
         self.expected_primitive_counts.push(count);
         self.expected_primitive_counts
-            .sort_by(|left, right| left.label().cmp(&right.label()));
+            .sort_by_cached_key(UiExpectedPrimitiveCount::label);
         self.expected_primitive_counts.dedup_by(|left, right| {
             left.family == right.family
                 && left.min_count == right.min_count

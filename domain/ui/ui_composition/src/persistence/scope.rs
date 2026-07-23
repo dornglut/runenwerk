@@ -14,7 +14,7 @@ pub enum CompositionLayoutScope {
 #[derive(Clone, Debug)]
 pub enum CompositionScopeLoad {
     Missing,
-    Valid(LoadedCompositionBundle),
+    Valid(Box<LoadedCompositionBundle>),
     Invalid(CompositionPersistenceRejection),
 }
 
@@ -52,7 +52,10 @@ impl CompositionLayoutCatalog {
             match load.unwrap_or(CompositionScopeLoad::Missing) {
                 CompositionScopeLoad::Missing => continue,
                 CompositionScopeLoad::Valid(bundle) => {
-                    return Ok(Some(CompositionScopedSelection { scope, bundle }));
+                    return Ok(Some(CompositionScopedSelection {
+                        scope,
+                        bundle: *bundle,
+                    }));
                 }
                 CompositionScopeLoad::Invalid(rejection) => {
                     let mut diagnostics = rejection.diagnostics().to_vec();
