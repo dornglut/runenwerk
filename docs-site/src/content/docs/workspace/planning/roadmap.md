@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-22
+last_reviewed: 2026-07-23
 related_docs:
   - ../engineering-workflow.md
   - ./active-work.md
@@ -37,13 +37,39 @@ Runenwerk remains the integration and product repository. Framework repositories
 
 ## Current priorities
 
-1. Complete issue `#135`: prune duplicate repository workflow and documentation surfaces.
-2. Implement RunenGPU G1A under issue `#131` on a fresh branch from current `main`.
-3. Complete the RunenSDF clean-cutover consumer audit and integration/removal decision.
-4. Continue internal RunenGPU boundary proof through coherent implementation slices.
-5. Extract RunenGPU and perform a clean Runenwerk cutover.
-6. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
-7. Resume RunenECS boundary repair as separately bounded work.
+1. Complete the RunenSDF retirement-only cutover gate under issue `#133`.
+2. Implement corrected owner-scoped RunenGPU G1A under issue `#131` from the resulting current `main`.
+3. Continue internal RunenGPU boundary proof through one decision-complete implementation slice at a time.
+4. Extract RunenGPU and perform a clean Runenwerk cutover only after G2-G8 and conformance gates pass.
+5. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
+6. Resume RunenECS boundary repair as separately bounded work.
+
+The SDF and GPU tasks are serialized to keep canonical planning, repository-audit, and exact-base authority simple. Read-only investigation may still proceed independently.
+
+## RunenSDF
+
+The maintained standalone framework is:
+
+```text
+repository: dornglut/runen-sdf
+maintained revision: ffa970f3eb7fd9ebaa1cfc67665e3e3128cd0676
+source-transfer revision: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
+package: runen-sdf
+crate: runen_sdf
+```
+
+Current Runenwerk manifest evidence shows `domain/sdf` remains a workspace member, while the likely product consumers inspected during the authority audit do not declare the package as a dependency. Issue `#133` must still perform the complete reverse-dependency and source-reference census.
+
+If that census confirms zero live consumers, the clean cutover is retirement-only:
+
+1. delete `domain/sdf`;
+2. remove workspace membership and lockfile authority;
+3. remove stale active duplicate-source documentation;
+4. add a durable repository guard preventing return of the internal package;
+5. add no unused dependency on standalone RunenSDF;
+6. pass exact-head validation and prove zero aliases, source mirrors, includes, submodules, branch dependencies, or duplicate implementations.
+
+An exact standalone dependency is added only if the complete census discovers a real consumer that must retain the public framework contract.
 
 ## RunenGPU and RunenRender
 
@@ -57,53 +83,40 @@ Completed prerequisites:
 
 - architecture correction through PR `#126`;
 - deterministic S0 inventory through PR `#128`;
-- G1A implementation specification through PR `#130`.
+- original G1A implementation specification through PR `#130`;
+- cross-flow identity review and corrected owner-scoped G1A specification.
 
-The sequence is:
-
-```text
-G1A logical GPU work-resource identity
--> further internal RunenGPU contracts and execution ownership
--> internal conformance
--> external runen-gpu transfer
--> Runenwerk dependency cutover and internal GPU-source deletion
--> internal RunenRender contracts lowering through RunenGPU
--> external runen-render transfer
--> Runenwerk dependency cutover and internal renderer-source deletion
--> reusable adapter review
--> advanced renderer work
-```
-
-G1A is a behavior-preserving ownership correction:
+The corrected G1A target is:
 
 ```text
-RenderResourceId         -> GpuWorkResourceId
-RenderResourceIdSequence -> GpuWorkResourceIdAllocator
+RenderResourceId
+    -> GpuWorkResourceId { private owner scope, nonzero local value }
+
+RenderResourceIdSequence
+    -> owner-controlled GpuWorkResourceIdAllocator
 ```
 
-It does not redesign the graph, WGPU execution, surfaces, shaders, renderer behavior, or product behavior.
+The owner scope is required because public resource handles can cross flow boundaries and independent flows currently allocate identical local sequence values. G1A must make foreign-flow handles structurally rejectable rather than allowing an accidental collision with an unrelated local resource.
 
-## RunenSDF
+G1A remains a behavior-preserving internal ownership correction. It does not create an external package, GpuPlugin, public graph identity, WGPU redesign, graph-semantic redesign, surface change, shader/pipeline redesign, or renderer behavior change.
 
-Standalone RunenSDF transfer and conformance are complete at:
+The extraction sequence remains:
 
 ```text
-repository: Crystonix/runen-sdf
-commit: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
-package: runen-sdf
-crate: runen_sdf
+G1A owner-scoped logical GPU work-resource identity
+-> G2 capabilities and resource descriptors
+-> G3 access, lifetime, hazard validation, and work fragments
+-> G4 shader/pipeline admission and WGPU realization
+-> G5 headless compute, uploads, and readback
+-> G6 offscreen graphics and shared consumer proof
+-> G7 surfaces, generations, and device outcomes
+-> G8 diagnostics, shutdown, and conformance
+-> GX external runen-gpu transfer and clean Runenwerk cutover
+-> internal RunenRender proof on RunenGPU
+-> external runen-render transfer and cutover
 ```
 
-Runenwerk still requires a clean-cutover decision:
-
-1. audit every current code, test, manifest, adapter, document, and persisted consumer;
-2. add the exact external dependency only where a real consumer exists;
-3. migrate consumers;
-4. remove `domain/sdf`, workspace membership, and stale lockfile authority;
-5. prove no alias, forwarding package, source include, branch dependency, or duplicate implementation remains;
-6. pass exact-head validation and focused integration evidence.
-
-If no product consumer exists, remove the internal package without adding an unused dependency.
+G1A is future-transferable but does not by itself make RunenGPU extraction-ready.
 
 ## RunenECS
 
@@ -111,8 +124,8 @@ RunenECS remains a separate workstream. Continue only through bounded internal b
 
 ## RunenUI
 
-RunenUI is governed in its own repository. Runenwerk eventually owns only the integration adapter between accepted renderer-neutral UI output and RunenRender contributions after both public boundaries stabilize.
+RunenUI is governed in `dornglut/runen-ui`. Runenwerk eventually owns only the integration adapter between accepted renderer-neutral UI output and RunenRender contributions after both public boundaries stabilize.
 
 ## Sequencing rule
 
-Read-only investigation and unrelated cleanup may proceed in parallel. Structural changes sharing manifests, lockfiles, identities, dependency direction, lifecycle ownership, or canonical architecture must be serialized or explicitly rebased.
+Structural changes sharing manifests, lockfiles, identities, dependency direction, lifecycle ownership, repository guards, or canonical planning authority are serialized or explicitly rebased. A completed planning or architecture change proves only its own scope and never implies external extraction readiness.
