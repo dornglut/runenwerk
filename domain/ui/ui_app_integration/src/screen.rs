@@ -71,6 +71,10 @@ impl UiAppScreenRegistry {
     pub fn len(&self) -> usize {
         self.screens.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.screens.is_empty()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
