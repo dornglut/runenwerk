@@ -36,6 +36,22 @@ foundation -> domain -> engine/runtime -> apps/adapters/tools
 
 Current file location is implementation fact, not permanent ownership authority. The existing render plugin mixes future RunenGPU, RunenRender, Runenwerk, and source-domain responsibilities and must not be moved unchanged.
 
+## Foundation crates
+
+Foundation crates provide reusable vocabulary and low-level contracts with no domain, engine/runtime, application, or adapter dependencies.
+
+```text
+foundation/id             typed identity primitives and allocators
+foundation/id_macros      attribute macro support for typed ID wrappers
+foundation/diagnostics    structured diagnostic reporting vocabulary
+foundation/ratification   shared ratification report vocabulary
+foundation/schema         portable schema identity, value, shape, constraint, and descriptor vocabulary
+foundation/commands       portable command contract vocabulary
+foundation/resource_ref   portable external resource references
+```
+
+The canonical workspace membership and purpose descriptions live in the [crate inventory](docs-site/src/content/docs/workspace/crate-inventory.md). Keep this root summary aligned with that inventory and the workspace manifest. Foundation must not own domain-specific invariants, application or editor policy, runtime orchestration, backend integration, or cross-framework composition.
+
 The GPU/render extraction sequence is:
 
 ```text
