@@ -112,18 +112,18 @@ impl UiRuntimeArtifactManifest {
             .iter()
             .map(|capability| capability.capability_id.to_owned())
             .collect::<Vec<_>>();
-        let cache_key = stable_cache_key(
+        let cache_key = stable_cache_key(ArtifactCacheKeyInput {
             program,
             target_profile,
             target_profile_version,
-            &package_ids,
-            &control_kind_ids,
-            &schema_ids,
-            &route_ids,
-            &kernel_ids,
-            &capability_ids,
-            &source_map,
-        );
+            package_ids: &package_ids,
+            control_kind_ids: &control_kind_ids,
+            schema_ids: &schema_ids,
+            route_ids: &route_ids,
+            kernel_ids: &kernel_ids,
+            capability_ids: &capability_ids,
+            source_map: &source_map,
+        });
         let program_id = program.id.as_str().to_owned();
         let program_version = program.version.value();
         let diagnostics = program

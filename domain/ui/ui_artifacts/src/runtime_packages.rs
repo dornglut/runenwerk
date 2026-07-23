@@ -31,10 +31,10 @@ pub(crate) fn push_kernel_for_package(
     packages: &mut BTreeMap<String, RuntimePackageRecord>,
     kernel: &str,
 ) {
-    if let Some(package_id) = owning_package_id(packages.keys(), kernel) {
-        if let Some(package) = packages.get_mut(&package_id) {
-            push_unique(&mut package.kernel_ids, kernel);
-        }
+    if let Some(package_id) = owning_package_id(packages.keys(), kernel)
+        && let Some(package) = packages.get_mut(&package_id)
+    {
+        push_unique(&mut package.kernel_ids, kernel);
     }
 }
 
