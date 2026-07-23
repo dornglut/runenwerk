@@ -1593,6 +1593,93 @@ fn consumed_pointer_outcome(
     }
 }
 
+fn is_console_scroll_event(
+    event: &UiInputEvent,
+    outcome: &UiInputOutcome,
+    console_scroll_widget_id: Option<WidgetId>,
+) -> bool {
+    matches!(
+        event,
+        UiInputEvent::Pointer(pointer) if pointer.kind == PointerEventKind::Scroll
+    ) && console_scroll_widget_id
+        .is_some_and(|widget_id| outcome.dispatch.target == Some(widget_id))
+}
+
+fn console_follow_enabled_for_active_surface(
+    app: &RunenwerkEditorApp,
+    shell_state: &RunenwerkEditorShellState,
+) -> bool {
+    active_console_binding(shell_state)
+        .map(|(mounted_unit_id, _)| {
+            app.surface_sessions()
+                .session_or_default(mounted_unit_id)
+                .console_follow_enabled
+        })
+        .unwrap_or(true)
+}
+
+fn active_console_surface(
+    shell_state: &RunenwerkEditorShellState,
+) -> Option<editor_shell::ToolSurfaceInstanceId> {
+    active_console_binding(shell_state).map(|(_, surface_id)| surface_id)
+}
+
+fn active_console_binding(
+    shell_state: &RunenwerkEditorShellState,
+) -> Option<(
+    ui_composition::MountedUnitId,
+    editor_shell::ToolSurfaceInstanceId,
+)> {
+    mounted_content_bindings(shell_state).into_iter().find_map(
+        |(mounted_unit_id, surface_id, stable_key)| {
+            (stable_key == EDITOR_CONSOLE_SURFACE_KEY).then_some((mounted_unit_id, surface_id))
+        },
+    )
+}
+
+fn mounted_content_bindings(
+    shell_state: &RunenwerkEditorShellState,
+) -> Vec<(
+    ui_composition::MountedUnitId,
+    editor_shell::ToolSurfaceInstanceId,
+    String,
+)> {
+    shell_state
+        .composition_runtime()
+        .extension()
+        .mounted_units()
+        .iter()
+        .filter_map(|record| {
+            editor_shell::ToolSurfaceInstanceId::try_from_raw(record.compatibility_surface_raw)
+                .ok()
+                .map(|surface_id| {
+                    (
+                        record.mounted_unit_id,
+                        surface_id,
+                        record.stable_content_key.clone(),
+                    )
+                })
+        })
+        .collect()
+}
+
+fn is_viewport_content_key(stable_key: &str) -> bool {
+    editor_shell::ToolSurfaceStableKey::new(stable_key)
+        .ok()
+        .and_then(|key| editor_shell::tool_surface_kind_for_stable_key(&key))
+        == Some(editor_shell::ToolSurfaceKind::Viewport)
+}
+
+fn active_console_scroll_widget(shell_state: &RunenwerkEditorShellState) -> Option<WidgetId> {
+    active_console_surface(shell_state)
+        .map(|surface_id| surface_widget_id(surface_id, CONSOLE_SCROLL_WIDGET_ID))
+}
+
+fn is_at_bottom(offset: f32, max_offset: f32) -> bool {
+    max_offset <= CONSOLE_FOLLOW_BOTTOM_EPSILON
+        || offset >= (max_offset - CONSOLE_FOLLOW_BOTTOM_EPSILON)
+}
+
 #[cfg(test)]
 mod region_compass_semantic_tests {
     use super::*;
@@ -1717,91 +1804,4 @@ mod region_compass_semantic_tests {
                 .is_none()
         );
     }
-}
-
-fn is_console_scroll_event(
-    event: &UiInputEvent,
-    outcome: &UiInputOutcome,
-    console_scroll_widget_id: Option<WidgetId>,
-) -> bool {
-    matches!(
-        event,
-        UiInputEvent::Pointer(pointer) if pointer.kind == PointerEventKind::Scroll
-    ) && console_scroll_widget_id
-        .is_some_and(|widget_id| outcome.dispatch.target == Some(widget_id))
-}
-
-fn console_follow_enabled_for_active_surface(
-    app: &RunenwerkEditorApp,
-    shell_state: &RunenwerkEditorShellState,
-) -> bool {
-    active_console_binding(shell_state)
-        .map(|(mounted_unit_id, _)| {
-            app.surface_sessions()
-                .session_or_default(mounted_unit_id)
-                .console_follow_enabled
-        })
-        .unwrap_or(true)
-}
-
-fn active_console_surface(
-    shell_state: &RunenwerkEditorShellState,
-) -> Option<editor_shell::ToolSurfaceInstanceId> {
-    active_console_binding(shell_state).map(|(_, surface_id)| surface_id)
-}
-
-fn active_console_binding(
-    shell_state: &RunenwerkEditorShellState,
-) -> Option<(
-    ui_composition::MountedUnitId,
-    editor_shell::ToolSurfaceInstanceId,
-)> {
-    mounted_content_bindings(shell_state).into_iter().find_map(
-        |(mounted_unit_id, surface_id, stable_key)| {
-            (stable_key == EDITOR_CONSOLE_SURFACE_KEY).then_some((mounted_unit_id, surface_id))
-        },
-    )
-}
-
-fn mounted_content_bindings(
-    shell_state: &RunenwerkEditorShellState,
-) -> Vec<(
-    ui_composition::MountedUnitId,
-    editor_shell::ToolSurfaceInstanceId,
-    String,
-)> {
-    shell_state
-        .composition_runtime()
-        .extension()
-        .mounted_units()
-        .iter()
-        .filter_map(|record| {
-            editor_shell::ToolSurfaceInstanceId::try_from_raw(record.compatibility_surface_raw)
-                .ok()
-                .map(|surface_id| {
-                    (
-                        record.mounted_unit_id,
-                        surface_id,
-                        record.stable_content_key.clone(),
-                    )
-                })
-        })
-        .collect()
-}
-
-fn is_viewport_content_key(stable_key: &str) -> bool {
-    editor_shell::ToolSurfaceStableKey::new(stable_key)
-        .ok()
-        .and_then(|key| editor_shell::tool_surface_kind_for_stable_key(&key))
-        == Some(editor_shell::ToolSurfaceKind::Viewport)
-}
-
-fn active_console_scroll_widget(shell_state: &RunenwerkEditorShellState) -> Option<WidgetId> {
-    active_console_surface(shell_state)
-        .map(|surface_id| surface_widget_id(surface_id, CONSOLE_SCROLL_WIDGET_ID))
-}
-
-fn is_at_bottom(offset: f32, max_offset: f32) -> bool {
-    max_offset <= CONSOLE_FOLLOW_BOTTOM_EPSILON
-        || offset >= (max_offset - CONSOLE_FOLLOW_BOTTOM_EPSILON)
 }

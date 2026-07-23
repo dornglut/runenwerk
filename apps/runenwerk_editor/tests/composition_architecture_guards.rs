@@ -311,23 +311,6 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start..end]
 }
 
-fn assert_cfg_test_item(source: &str, item: &str) {
-    let index = source
-        .find(item)
-        .unwrap_or_else(|| panic!("missing test-only item {item}"));
-    let prefix = &source[..index];
-    let previous_nonempty = prefix
-        .lines()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .expect("test-only item should have an attribute");
-    assert_eq!(
-        previous_nonempty.trim(),
-        "#[cfg(test)]",
-        "{item} must remain test-only"
-    );
-}
-
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
