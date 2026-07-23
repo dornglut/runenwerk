@@ -274,7 +274,7 @@ mod tests {
 
     #[test]
     fn evidence_records_sort_deterministically_by_node_producer_and_key() {
-        let mut records = vec![
+        let mut records = [
             UiStoryEvidence::passed(
                 "source_parse",
                 "runenwerk_editor.ui_gallery.parser",

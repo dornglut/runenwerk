@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn diagnostics_sort_deterministically_by_origin_subject_code() {
-        let mut diagnostics = vec![
+        let mut diagnostics = [
             UiStoryDiagnostic::error(
                 UI_STORY_RUN_MISSING_REQUIRED_EVIDENCE,
                 UiStoryDiagnosticOrigin::Runner,

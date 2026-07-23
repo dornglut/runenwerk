@@ -226,11 +226,7 @@ mod tests {
     use crate::evidence::UiStoryEvidence;
     use crate::identity::{UiStoryEvidenceProducerId, UiStoryId, UiStoryWorkflowNodeId};
     use crate::run_v2::UiStoryWorkflowRunV2;
-    use crate::workflow::{
-        NODE_COMPILER, NODE_PREVIEW_FRAME, NODE_PROGRAM_FORMATION, NODE_RENDER_DATA,
-        NODE_RENDER_PRIMITIVES, NODE_RUNTIME_VIEW, NODE_SOURCE_LOAD, NODE_SOURCE_PARSE,
-        NODE_STATIC_MOUNT, UiStoryBuiltinWorkflowProfile,
-    };
+    use crate::workflow::{NODE_SOURCE_LOAD, UiStoryBuiltinWorkflowProfile};
 
     const STORY_ID: &str = "ui.gallery.button.basic";
     const PRODUCER_ID: &str = "runenwerk_editor.ui_gallery.source_loader";
@@ -240,21 +236,6 @@ mod tests {
         UiStoryWorkflowRunV2::new(
             UiStoryId::new(STORY_ID),
             UiStoryBuiltinWorkflowProfile::SourceLoadOnly.graph(),
-        )
-    }
-
-    fn static_preview_run() -> UiStoryWorkflowRunV2 {
-        UiStoryWorkflowRunV2::new(
-            UiStoryId::new(STORY_ID),
-            UiStoryBuiltinWorkflowProfile::StaticPreview.graph(),
-        )
-    }
-
-    fn passed_evidence(node_id: &str) -> UiStoryEvidence {
-        UiStoryEvidence::passed(
-            node_id,
-            "runenwerk_editor.ui_gallery.test_producer",
-            format!("ui.gallery.{node_id}"),
         )
     }
 
@@ -284,22 +265,6 @@ mod tests {
             "ui_gallery.story.source.read_failed",
             UiStoryDiagnosticSeverity::Error,
         ))
-    }
-
-    fn passed_static_preview_result() -> UiStoryWorkflowRunResultV2 {
-        let mut run = static_preview_run();
-        run.record_many([
-            passed_evidence(NODE_SOURCE_LOAD),
-            passed_evidence(NODE_SOURCE_PARSE),
-            passed_evidence(NODE_PROGRAM_FORMATION),
-            passed_evidence(NODE_COMPILER),
-            passed_evidence(NODE_RUNTIME_VIEW),
-            passed_evidence(NODE_RENDER_PRIMITIVES),
-            passed_evidence(NODE_RENDER_DATA),
-            passed_evidence(NODE_STATIC_MOUNT),
-            passed_evidence(NODE_PREVIEW_FRAME),
-        ]);
-        run.finish()
     }
 
     #[test]
@@ -437,12 +402,5 @@ mod tests {
         assert_eq!(summary.outcome, UiStoryOutcomeV2::Failed);
         assert_eq!(summary.node_count, 2);
         assert!(summary.blocked_node_count > 0);
-    }
-
-    pub(crate) fn passed_static_preview_report() -> UiStoryWorkflowReportV2 {
-        UiStoryWorkflowReportV2::from_run_result(
-            passed_static_preview_result(),
-            UiStoryExpectedOutcomeV2::Pass,
-        )
     }
 }
