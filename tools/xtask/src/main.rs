@@ -176,8 +176,8 @@ fn audit_repository(root: &Path) -> Result<(), String> {
     require_text(
         root,
         ".github/workflows/ci.yml",
-        "run: cargo validate",
-        "CI must invoke the same baseline as local development",
+        "uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@79405c457b5b99d5cb9957c9bcdc475109e1e3bf",
+        "CI must invoke the accepted shared orchestration through an immutable revision",
     )?;
     require_text(
         root,
