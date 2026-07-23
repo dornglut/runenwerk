@@ -75,8 +75,9 @@ impl ControlReplacementTarget {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlDeprecationStatus {
+    #[default]
     Active,
     Deprecated {
         reason: String,
@@ -86,12 +87,6 @@ pub enum ControlDeprecationStatus {
         reason: String,
         replacement: Option<ControlReplacementTarget>,
     },
-}
-
-impl Default for ControlDeprecationStatus {
-    fn default() -> Self {
-        Self::Active
-    }
 }
 
 impl ControlDeprecationStatus {
@@ -166,16 +161,16 @@ impl ControlMigrationHook {
     }
 
     pub fn validate_contract(&self, _package_id: &ControlPackageId) -> Result<(), String> {
-        if let Some(from_package_version) = self.from_package_version {
-            if self.to_package_version.value() <= from_package_version.value() {
-                return Err(format!(
-                    "control migration {} must move to a greater package version",
-                    self.migration_id.as_str()
-                ));
-            }
+        if let Some(from_package_version) = self.from_package_version
+            && self.to_package_version.value() <= from_package_version.value()
+        {
+            return Err(format!(
+                "control migration {} must move to a greater package version",
+                self.migration_id.as_str()
+            ));
         }
         if self.breaking_change_policy == ControlBreakingChangePolicy::BreakingRequiresDiagnostic
-            && self.diagnostic_id.as_deref().map_or(true, str::is_empty)
+            && self.diagnostic_id.as_deref().is_none_or(str::is_empty)
         {
             return Err(format!(
                 "breaking control migration {} must name a diagnostic id",
