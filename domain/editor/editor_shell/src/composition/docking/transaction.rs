@@ -664,7 +664,7 @@ mod tests {
             .extension()
             .validate_against(runtime.composition())
             .unwrap();
-        assert_eq!(unit_region(runtime.snapshot(), unit).is_some(), true);
+        assert!(unit_region(runtime.snapshot(), unit).is_some());
         assert_eq!(runtime.composition().revision().raw(), 2);
     }
 

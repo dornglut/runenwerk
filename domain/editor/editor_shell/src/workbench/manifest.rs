@@ -107,14 +107,14 @@ pub fn workspace_profile_manifests_from_authored_documents<'a>(
                     );
                 }
             }
-            EditorDefinitionDocumentContent::WorkspaceLayout(layout) => {
-                if layouts.insert(layout.id.clone(), layout).is_some() {
-                    return Err(
-                        AuthoredWorkspaceProfileManifestError::DuplicateLayoutDocument {
-                            layout_ref: layout.id.clone(),
-                        },
-                    );
-                }
+            EditorDefinitionDocumentContent::WorkspaceLayout(layout)
+                if layouts.insert(layout.id.clone(), layout).is_some() =>
+            {
+                return Err(
+                    AuthoredWorkspaceProfileManifestError::DuplicateLayoutDocument {
+                        layout_ref: layout.id.clone(),
+                    },
+                );
             }
             _ => {}
         }
