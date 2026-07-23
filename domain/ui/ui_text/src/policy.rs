@@ -1,8 +1,9 @@
 //! File: domain/ui/ui_text/src/policy.rs
 //! Purpose: Text layout policy contracts separated from appearance style.
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextWidthConstraint {
+    #[default]
     Unconstrained,
     Exact(f32),
     Max(f32),
@@ -32,14 +33,9 @@ impl TextWidthConstraint {
         }
     }
 }
-impl Default for TextWidthConstraint {
-    fn default() -> Self {
-        Self::Unconstrained
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextHeightConstraint {
+    #[default]
     Unconstrained,
     Exact(f32),
     Max(f32),
@@ -59,14 +55,9 @@ impl TextHeightConstraint {
         }
     }
 }
-impl Default for TextHeightConstraint {
-    fn default() -> Self {
-        Self::Unconstrained
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TextWrapPolicy {
+    #[default]
     NoWrap,
     Word,
     Character,
@@ -80,14 +71,9 @@ impl TextWrapPolicy {
         }
     }
 }
-impl Default for TextWrapPolicy {
-    fn default() -> Self {
-        Self::NoWrap
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TextWhitespacePolicy {
+    #[default]
     Preserve,
     CollapseRuns,
     TrimEdges,
@@ -101,14 +87,9 @@ impl TextWhitespacePolicy {
         }
     }
 }
-impl Default for TextWhitespacePolicy {
-    fn default() -> Self {
-        Self::Preserve
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TextHorizontalAlign {
+    #[default]
     Start,
     Center,
     End,
@@ -122,14 +103,9 @@ impl TextHorizontalAlign {
         }
     }
 }
-impl Default for TextHorizontalAlign {
-    fn default() -> Self {
-        Self::Start
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TextVerticalAlign {
+    #[default]
     Start,
     Center,
     End,
@@ -145,14 +121,9 @@ impl TextVerticalAlign {
         }
     }
 }
-impl Default for TextVerticalAlign {
-    fn default() -> Self {
-        Self::Start
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TextOverflowPolicy {
+    #[default]
     Clip,
     Ellipsis(TextEllipsisPlacement),
 }
@@ -164,12 +135,6 @@ impl TextOverflowPolicy {
         }
     }
 }
-impl Default for TextOverflowPolicy {
-    fn default() -> Self {
-        Self::Clip
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TextEllipsisPlacement {
     Start,
@@ -186,8 +151,9 @@ impl TextEllipsisPlacement {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TextDirectionPolicy {
+    #[default]
     Auto,
     Ltr,
     Rtl,
@@ -201,12 +167,6 @@ impl TextDirectionPolicy {
         }
     }
 }
-impl Default for TextDirectionPolicy {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextLayoutPolicy {
     pub width_constraint: TextWidthConstraint,

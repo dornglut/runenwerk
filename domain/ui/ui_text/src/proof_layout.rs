@@ -611,10 +611,9 @@ fn visual_runs(
             if pending
                 .as_ref()
                 .is_some_and(|segment| !segment.matches(glyph, direction))
+                && let Some(segment) = pending.take()
             {
-                if let Some(segment) = pending.take() {
-                    runs.push(segment.finish(runs.len() as u32));
-                }
+                runs.push(segment.finish(runs.len() as u32));
             }
             if pending.is_none() {
                 pending = Some(PendingVisualRun::new(line_index as u32, glyph, direction));

@@ -34,6 +34,10 @@ impl TextSourceRange {
     pub fn len(self) -> u32 {
         self.end_cluster.saturating_sub(self.start_cluster)
     }
+
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

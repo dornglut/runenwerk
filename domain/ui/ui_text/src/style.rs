@@ -3,10 +3,11 @@
 
 use crate::FontId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TextFontWeight {
     Thin,
     Light,
+    #[default]
     Regular,
     Medium,
     Semibold,
@@ -28,14 +29,9 @@ impl TextFontWeight {
     }
 }
 
-impl Default for TextFontWeight {
-    fn default() -> Self {
-        Self::Regular
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TextFontStyle {
+    #[default]
     Normal,
     Italic,
 }
@@ -46,12 +42,6 @@ impl TextFontStyle {
             Self::Normal => "normal",
             Self::Italic => "italic",
         }
-    }
-}
-
-impl Default for TextFontStyle {
-    fn default() -> Self {
-        Self::Normal
     }
 }
 
@@ -88,8 +78,9 @@ impl Default for TextDecoration {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextLineHeightPolicy {
+    #[default]
     FontDefault,
     Multiplier(f32),
     Absolute(f32),
@@ -113,14 +104,9 @@ impl TextLineHeightPolicy {
     }
 }
 
-impl Default for TextLineHeightPolicy {
-    fn default() -> Self {
-        Self::FontDefault
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TextLetterSpacing {
+    #[default]
     Normal,
     Em(f32),
     Absolute(f32),
@@ -133,12 +119,6 @@ impl TextLetterSpacing {
             Self::Em(value) => value * font_size,
             Self::Absolute(value) => value,
         }
-    }
-}
-
-impl Default for TextLetterSpacing {
-    fn default() -> Self {
-        Self::Normal
     }
 }
 
