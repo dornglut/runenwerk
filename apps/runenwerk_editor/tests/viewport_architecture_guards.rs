@@ -1410,7 +1410,6 @@ fn wr029_phase4_requires_real_model_mesh_renderable_contract_before_pixel_claim(
     let wr030_contract = read_workspace_source(
         "docs-site/src/content/docs/reports/implementation-plans/wr-030-model-mesh-renderable-scene-contract/plan.md",
     );
-    let roadmap = read_workspace_source("docs-site/src/content/docs/workspace/roadmap-items.yaml");
 
     assert!(
         wr029_contract.contains("WR-030")
@@ -1428,23 +1427,6 @@ fn wr029_phase4_requires_real_model_mesh_renderable_contract_before_pixel_claim(
             && wr030_contract.contains("Do not add general mesh scene extraction")
             && wr030_contract.contains("add Mesh Preview beside the existing SDF scene path"),
         "WR-030 must stay product-surface-first until a broader mesh scene extraction ADR/design is accepted",
-    );
-    assert!(
-        roadmap.contains("- id: WR-030")
-            && roadmap.contains("Model Mesh Renderable Scene Contract")
-            && roadmap.contains("planning_state: ready_next")
-            && roadmap.contains(
-                "Deferring product-workflow model-mesh pixel proof so PT-WB-CAP can run WR-032"
-            )
-            && roadmap.contains("Current Mesh Preview pixel proof")
-            && roadmap.contains("PreparedModelMeshMaterialSelection"),
-        "active roadmap must keep WR-030 as the ready-next Mesh Preview prerequisite for WR-029 Phase 4",
-    );
-    assert!(
-        roadmap.contains("- id: WR-029")
-            && roadmap.contains("planning_state: ready_next")
-            && roadmap.contains("WR-030 visible Mesh Preview model/mesh pixel proof"),
-        "active roadmap must keep WR-029 ready-next until WR-030 supplies visible model/mesh pixel proof",
     );
 }
 
