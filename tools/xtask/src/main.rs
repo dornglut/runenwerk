@@ -153,7 +153,9 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         "docs-site/src/content/docs/guidelines/dependency-rules.md",
     ] {
         if !root.join(required).is_file() {
-            return Err(format!("repository audit: missing required file {required}"));
+            return Err(format!(
+                "repository audit: missing required file {required}"
+            ));
         }
     }
 
