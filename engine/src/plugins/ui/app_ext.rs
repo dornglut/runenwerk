@@ -56,17 +56,16 @@ fn record_ui_mount(
         mount_requests.record_mount_request(request, mount_source)
     };
 
-    if let Some(reason) = report.failure_reason() {
-        if let Ok(diagnostics) = app
+    if let Some(reason) = report.failure_reason()
+        && let Ok(diagnostics) = app
             .world_mut()
             .resource_mut::<UiRuntimeDiagnosticsResource>()
-        {
-            diagnostics.push(UiRuntimeDiagnostic::mount_rejected(
-                report.screen_identity().to_string(),
-                report.mount_source(),
-                reason,
-            ));
-        }
+    {
+        diagnostics.push(UiRuntimeDiagnostic::mount_rejected(
+            report.screen_identity().to_string(),
+            report.mount_source(),
+            reason,
+        ));
     }
 
     report

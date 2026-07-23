@@ -3,7 +3,7 @@ use crate::plugins::render::features::UiFontAtlasResource;
 use ui_math::UiRect;
 use ui_render_data::{
     BorderPrimitive, ClipPrimitive, GlyphRunPrimitive, ImagePrimitive, ProductSurfacePrimitive,
-    RectPrimitive, StrokePrimitive, UiFrame, UiPrimitive, ViewportSurfaceEmbedPrimitive,
+    RectPrimitive, StrokePrimitive, UiFrame, UiPrimitive, UiSortKey, ViewportSurfaceEmbedPrimitive,
 };
 
 impl Renderer {
@@ -420,9 +420,7 @@ fn flattened_rect(
         0.0,
         clip,
         submission_order,
-        rect.sort_key.surface_order,
-        rect.sort_key.layer_order,
-        rect.sort_key.primitive_order,
+        rect.sort_key,
     )
 }
 
@@ -445,9 +443,7 @@ fn flattened_border(
         border.width,
         clip,
         submission_order,
-        border.sort_key.surface_order,
-        border.sort_key.layer_order,
-        border.sort_key.primitive_order,
+        border.sort_key,
     )
 }
 
@@ -465,9 +461,7 @@ fn flattened_image(
         0.0,
         clip,
         submission_order,
-        image.sort_key.surface_order,
-        image.sort_key.layer_order,
-        image.sort_key.primitive_order,
+        image.sort_key,
     )
 }
 
@@ -562,9 +556,7 @@ fn flattened_rect_raw(
     border_width: f32,
     clip: Option<UiRect>,
     submission_order: u32,
-    surface_order: u32,
-    layer_order: u32,
-    primitive_order: u32,
+    sort_key: UiSortKey,
 ) -> Option<FlattenedUiRectInstance> {
     if rect.width <= f32::EPSILON || rect.height <= f32::EPSILON || color[3] <= f32::EPSILON {
         return None;
@@ -580,9 +572,9 @@ fn flattened_rect_raw(
         },
         clip: clip.map(|clip| [clip.x, clip.y, clip.width, clip.height]),
         submission_order,
-        surface_order,
-        layer_order,
-        primitive_order,
+        surface_order: sort_key.surface_order,
+        layer_order: sort_key.layer_order,
+        primitive_order: sort_key.primitive_order,
     })
 }
 

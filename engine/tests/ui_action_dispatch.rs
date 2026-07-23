@@ -1,9 +1,9 @@
 use engine::plugins::ui::{
-    UiAction, UiActionDispatchFailureReason, UiActionDispatchReportsResource, UiActionEvent,
-    UiActionHandler, UiHostActionExecutor, UiHostMutationIntent, UiHostMutationReceipt,
-    UiHostMutationRejection, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource,
-    UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiTypedActionDescriptor, UiTypedActionId,
-    dispatch_ui_action,
+    UiAction, UiActionDispatchFailureReason, UiActionDispatchOutputs,
+    UiActionDispatchReportsResource, UiActionEvent, UiActionHandler, UiHostActionExecutor,
+    UiHostMutationIntent, UiHostMutationReceipt, UiHostMutationRejection, UiRuntimeDiagnosticCode,
+    UiRuntimeDiagnosticsResource, UiRuntimeTraceEventKind, UiRuntimeTraceResource,
+    UiTypedActionDescriptor, UiTypedActionId, dispatch_ui_action,
 };
 use ui_hosts::{HeadlessHost, HostCommand, HostKind, HostRouteMapVersion, HostRouteMapping};
 use ui_program::{RouteCapability, RouteId, RouteSchemaVersion, UiEventPacket};
@@ -30,9 +30,7 @@ fn ui_action_dispatch_known_action_mutates_only_through_host_owner_and_traces() 
         &event,
         &host,
         &mut executor,
-        &mut reports,
-        &mut trace,
-        &mut diagnostics,
+        UiActionDispatchOutputs::new(&mut reports, &mut trace, &mut diagnostics),
     );
 
     assert!(report.is_accepted());
@@ -129,9 +127,7 @@ fn assert_rejected(
         &event,
         &host,
         &mut executor,
-        &mut reports,
-        &mut trace,
-        &mut diagnostics,
+        UiActionDispatchOutputs::new(&mut reports, &mut trace, &mut diagnostics),
     );
 
     assert!(!report.is_accepted());
