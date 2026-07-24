@@ -1,0 +1,63 @@
+name: Issue 133 SDF Census
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/issue-133-census.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'domain/sdf/**'
+      - 'tools/xtask/**'
+      - 'docs-site/**'
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v6
+        with:
+          clean: true
+          fetch-depth: 1
+
+      - name: Collect complete SDF authority census
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/issue-133-census"
+          out="$RUNNER_TEMP/issue-133-census"
+
+          git rev-parse HEAD > "$out/head.txt"
+          git status --short > "$out/status-before.txt"
+          cargo metadata --format-version 1 --locked > "$out/cargo-metadata.json"
+          cargo metadata --format-version 1 --locked --no-deps > "$out/cargo-metadata-no-deps.json"
+          cargo tree -i sdf --workspace --locked > "$out/cargo-tree-inverse-sdf.txt"
+          find domain/sdf -type f -print | sort > "$out/domain-sdf-files.txt"
+          find . -name Cargo.toml -not -path './target/*' -print | sort > "$out/manifest-inventory.txt"
+          git ls-files -s > "$out/git-index.txt"
+          git submodule status > "$out/submodules.txt" || true
+
+          git grep -n -I -E 'domain/sdf|runen[-_]sdf|Crystonix/runen-sdf|dornglut/runen-sdf|(^|[^A-Za-z0-9_])sdf([^A-Za-z0-9_]|$)' -- \
+            ':!domain/sdf/**' \
+            ':!Cargo.lock' \
+            > "$out/references-outside-package.txt" || true
+
+          git grep -n -I -E 'use[[:space:]]+sdf::|extern[[:space:]]+crate[[:space:]]+sdf|sdf::|package[[:space:]]*=[[:space:]]*"sdf"|name[[:space:]]*=[[:space:]]*"sdf"|path[[:space:]]*=[[:space:]]*"[^"]*domain/sdf' -- \
+            ':!domain/sdf/**' \
+            > "$out/consumer-patterns-outside-package.txt" || true
+
+          git status --short > "$out/status-after.txt"
+
+      - name: Upload census evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: issue-133-sdf-census
+          path: ${{ runner.temp }}/issue-133-census
+          if-no-files-found: error
+          retention-days: 7
