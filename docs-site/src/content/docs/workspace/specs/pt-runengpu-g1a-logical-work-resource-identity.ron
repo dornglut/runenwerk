@@ -33,7 +33,7 @@ PhaseImplementationSpec(
         "G1A must close this identity-collision seam before implementation; a type rename that preserves it is not extraction-grade.",
         "The first guarded implementation attempt proved that the original 38-file identity-consumer inventory was complete for type migration but incomplete for allocation-error propagation.",
         "RenderFlow currently exposes infallible resource-authoring methods, while GpuWorkResourceIdAllocator::allocate() is deliberately fallible; bridging them with expect, panic, unwrap, or fallback violates the accepted error contract.",
-        "A corrected current-main census identifies 24 additional direct authoring callsite files plus the core flow/pass/procedural seams that must migrate atomically to structured fallible authoring.",
+        "A corrected current-main census identifies 27 core and direct fallible-authoring files: 17 additional to the identity inventory and 10 already present in both inventories; all must migrate atomically to structured fallible authoring.",
     ],
 
     semantic_decisions: [
@@ -124,7 +124,6 @@ PhaseImplementationSpec(
         "engine/tests/render_resource_model.rs",
         "engine/tests/render_runtime_inspect.rs",
     ],
-
 
     fallible_authoring_inventory: [
         "apps/runenwerk_draw/src/runtime/app.rs",
