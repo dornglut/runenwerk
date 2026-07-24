@@ -176,7 +176,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
     require_text(
         root,
         ".github/workflows/ci.yml",
-        "uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@79405c457b5b99d5cb9957c9bcdc475109e1e3bf",
+        "uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@b6caad377102ca73794efaf734a65903b8efa829",
         "CI must invoke the accepted shared orchestration through an immutable revision",
     )?;
     require_text(
