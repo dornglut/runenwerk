@@ -69,7 +69,7 @@ jobs:
 
           text = runner.decode("utf-8")
           list_marker = '''    (\n        "ce780b1ba050d147cee61b314d8b84730aa860c9",\n        1_437,\n        "881b81e70509c4715d4d64cfa57c82f00656bf5e17a802495748a9f969e400f0",\n        "g1a-procedural-test-corrections.patch",\n    ),\n]'''
-          list_replacement = '''    (\n        "ce780b1ba050d147cee61b314d8b84730aa860c9",\n        1_437,\n        "881b81e70509c4715d4d64cfa57c82f00656bf5e17a802495748a9f969e400f0",\n        "g1a-procedural-test-corrections.patch",\n    ),\n    (\n        "671c59166087672796484dae804b7e7f0e8a41c3",\n        548,\n        "6e7bf52207a5427000ce7fe93e662787d8aebea19ed9a064663648eb94d52007",\n        "g1a-draw-test-correction.patch",\n    ),\n    (\n        "6d68ba0be6d720833316b61894dd67cf68ddc144",\n        2_859,\n        "832149b7e83b262fab4b5a750b2696f0adb1299859649941b838accf7c3efa2b",\n        "g1a-editor-architecture-correction.patch",\n    ),\n]'''
+          list_replacement = '''    (\n        "ce780b1ba050d147cee61b314d8b84730aa860c9",\n        1_437,\n        "881b81e70509c4715d4d64cfa57c82f00656bf5e17a802495748a9f969e400f0",\n        "g1a-procedural-test-corrections.patch",\n    ),\n    (\n        "671c59166087672796484dae804b7e7f0e8a41c3",\n        548,\n        "6e7bf52207a5427000ce7fe93e662787d8aebea19ed9a064663648eb94d52007",\n        "g1a-draw-test-correction.patch",\n    ),\n    (\n        "6d68ba0be6d720833316b61894dd67cf68ddc144",\n        2_859,\n        "832149b7e83b262fab4b5a750b2696f0adb1299859649941b838accf7c3efa2b",\n        "g1a-editor-architecture-correction.patch",\n    ),\n    (\n        "871a7b02dfd69aecf01e4e66c7fb48326aaf992c",\n        564,\n        "894e83df544362d07b36e96e8828557feedb03de24e06b1d7c57dc26d228d93e",\n        "g1a-editor-cfg-import-correction.patch",\n    ),\n]'''
           if text.count(list_marker) != 1:
               raise SystemExit("runner correction-list marker mismatch")
           text = text.replace(list_marker, list_replacement, 1)
@@ -79,16 +79,17 @@ jobs:
               apply_marker
               + 'patch -p1 --batch < "$RUNNER_TEMP/g1a-draw-test-correction.patch"\n'
               + 'patch -p1 --batch < "$RUNNER_TEMP/g1a-editor-architecture-correction.patch"\n'
+              + 'patch -p1 --batch < "$RUNNER_TEMP/g1a-editor-cfg-import-correction.patch"\n'
           )
           if text.count(apply_marker) != 1:
               raise SystemExit("runner patch-application marker mismatch")
           text = text.replace(apply_marker, apply_replacement, 1)
 
           runner = text.encode("utf-8")
-          if len(runner) != 11_471:
+          if len(runner) != 11_749:
               raise SystemExit(f"unexpected derived runner length: {len(runner)}")
           actual = hashlib.sha256(runner).hexdigest()
-          expected = "8267ac81c7eeb947cded3909dab693fd847867bb75b27f50e7b945c6a12efd67"
+          expected = "6910f2ac7461cc09405359fba4286af1d15a18569b05bcf6de30110720e740cc"
           if actual != expected:
               raise SystemExit(f"derived runner mismatch: expected={expected} actual={actual}")
 
@@ -124,5 +125,6 @@ jobs:
             ${{ runner.temp }}/g1a-procedural-test-corrections.patch
             ${{ runner.temp }}/g1a-draw-test-correction.patch
             ${{ runner.temp }}/g1a-editor-architecture-correction.patch
+            ${{ runner.temp }}/g1a-editor-cfg-import-correction.patch
           if-no-files-found: warn
           retention-days: 2
