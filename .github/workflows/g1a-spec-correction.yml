@@ -1,0 +1,73 @@
+name: G1A Specification Correction
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/g1a-spec-correction.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'docs/pt-runengpu-g1a-fallible-authoring-correction' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact specification branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: docs/pt-runengpu-g1a-fallible-authoring-correction
+          clean: true
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply exact corrected specification
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          test "$(git merge-base HEAD origin/main)" = "f171c5bad51fa476d1875b3b88807e202088f692"
+
+          python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          blob = "80172af130dac67cc9ad32babed0dea54c57d874"
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/dornglut/runenwerk/git/blobs/{blob}",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request) as response:
+              patch = base64.b64decode(json.load(response)["content"])
+          if len(patch) != 13603:
+              raise SystemExit(f"unexpected patch length: {len(patch)}")
+          actual = hashlib.sha256(patch).hexdigest()
+          expected = "f54af27079a1ba472e93425d8109ed083ed866ec89f21d85865d4db16bcded69"
+          if actual != expected:
+              raise SystemExit(f"patch mismatch: expected={expected} actual={actual}")
+          Path(os.environ["RUNNER_TEMP"], "g1a-spec.patch").write_bytes(patch)
+          PY
+
+          patch -p1 --batch < "$RUNNER_TEMP/g1a-spec.patch"
+          rm -f .github/workflows/g1a-spec-correction.yml
+          test "$(git hash-object docs-site/src/content/docs/workspace/specs/pt-runengpu-g1a-logical-work-resource-identity.ron)" = "28fc63670a4230a8959bb49144c168e99011c1aa"
+          test "$(git diff --name-only origin/main | sort)" = "docs-site/src/content/docs/workspace/specs/pt-runengpu-g1a-logical-work-resource-identity.ron"
+          git diff --check
+          git add -A
+          git commit -m "Correct G1A fallible authoring scope"
+          git push origin HEAD:docs/pt-runengpu-g1a-fallible-authoring-correction
