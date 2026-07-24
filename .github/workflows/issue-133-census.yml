@@ -1,20 +1,24 @@
 name: Issue 133 Apply SDF Retirement
 
 on:
-  push:
+  pull_request:
     branches:
-      - impl/pt-runensdf-004-retire-internal-sdf
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
 
 concurrency:
-  group: issue-133-retirement-${{ github.ref }}
+  group: issue-133-retirement-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'impl/pt-runensdf-004-retire-internal-sdf' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -23,6 +27,7 @@ jobs:
       - name: Check out implementation branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: impl/pt-runensdf-004-retire-internal-sdf
           clean: true
           fetch-depth: 0
           persist-credentials: true
