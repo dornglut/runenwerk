@@ -37,7 +37,7 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
           rustup toolchain install 1.93.0 --profile minimal --component rustfmt,clippy
 
-      - name: Reconstruct corrected implementation patch
+      - name: Reconstruct corrected implementation patches
         shell: bash
         run: |
           set -euo pipefail
@@ -50,14 +50,7 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          blobs = [
-              "e06e452b60b76a8636e5fe8436f030e17f8a5cb0",
-              "eeccf0476086dc3cdf2e4be62692942ad09da67e",
-              "6c29a3e10072eb3bbae54355e541c8a2783c4fdb",
-              "7937e30ed51a02776ee2616eae3a67893157942b",
-          ]
-          chunks = []
-          for blob in blobs:
+          def fetch_blob(blob: str) -> bytes:
               request = urllib.request.Request(
                   f"https://api.github.com/repos/dornglut/runenwerk/git/blobs/{blob}",
                   headers={
@@ -67,8 +60,14 @@ jobs:
                   },
               )
               with urllib.request.urlopen(request) as response:
-                  chunks.append(base64.b64decode(json.load(response)["content"]))
+                  return base64.b64decode(json.load(response)["content"])
 
+          chunks = [
+              fetch_blob("e06e452b60b76a8636e5fe8436f030e17f8a5cb0"),
+              fetch_blob("eeccf0476086dc3cdf2e4be62692942ad09da67e"),
+              fetch_blob("6c29a3e10072eb3bbae54355e541c8a2783c4fdb"),
+              fetch_blob("7937e30ed51a02776ee2616eae3a67893157942b"),
+          ]
           compressed = b"".join(chunks)
           if len(compressed) != 29_771:
               raise SystemExit(f"unexpected compressed patch length: {len(compressed)}")
@@ -83,6 +82,15 @@ jobs:
           if actual != expected:
               raise SystemExit(f"patch mismatch: expected={expected} actual={actual}")
           Path(os.environ["RUNNER_TEMP"], "g1a.patch").write_bytes(patch)
+
+          correction = fetch_blob("f5a2d78cbd0491398d1a795d59d13d9ad4222504")
+          if len(correction) != 2_318:
+              raise SystemExit(f"unexpected correction patch length: {len(correction)}")
+          actual = hashlib.sha256(correction).hexdigest()
+          expected = "e829ec961101cbad20266fcac7c827cd4d68d24b80ade333f255dd448bcb7438"
+          if actual != expected:
+              raise SystemExit(f"correction patch mismatch: expected={expected} actual={actual}")
+          Path(os.environ["RUNNER_TEMP"], "g1a-compiler-corrections.patch").write_bytes(correction)
           PY
 
       - name: Apply, format, and enforce scope
@@ -91,6 +99,7 @@ jobs:
           set -euo pipefail
           exec > >(tee "$RUNNER_TEMP/g1a.log") 2>&1
           patch -p1 --batch < "$RUNNER_TEMP/g1a.patch"
+          patch -p1 --batch < "$RUNNER_TEMP/g1a-compiler-corrections.patch"
           cargo +stable fmt --all
           git diff --check
 
@@ -298,5 +307,6 @@ jobs:
           path: |
             ${{ runner.temp }}/g1a.log
             ${{ runner.temp }}/g1a.patch
+            ${{ runner.temp }}/g1a-compiler-corrections.patch
           if-no-files-found: warn
           retention-days: 2
