@@ -1,0 +1,47 @@
+name: Issue 131 G1A Source Snapshot
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/issue-131-snapshot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Capture exact G1A source and census
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/issue-131"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/head.txt"
+          git status --short > "$out/status-before.txt"
+          cargo metadata --format-version 1 --locked --no-deps > "$out/cargo-metadata-no-deps.json"
+          git grep -n -I -E 'RenderResourceId|RenderResourceIdSequence|GpuWorkResourceId|GpuWorkResourceIdAllocator|try_from_raw|diagnostic_parts|\.raw\(' -- \
+            'engine/**/*.rs' 'apps/**/*.rs' 'domain/**/*.rs' 'net/**/*.rs' 'adapters/**/*.rs' \
+            > "$out/g1a-symbol-census.txt" || true
+          git archive --format=tar.gz -o "$out/runenwerk-head.tar.gz" HEAD
+          git status --short > "$out/status-after.txt"
+
+      - name: Upload exact source snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: issue-131-g1a-source-snapshot
+          path: ${{ runner.temp }}/issue-131
+          if-no-files-found: error
+          retention-days: 3
