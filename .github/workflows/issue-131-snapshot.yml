@@ -1,4 +1,4 @@
-name: Issue 131 Apply G1A
+name: Issue 131 Recover Provisional Patch
 
 on:
   pull_request:
@@ -10,34 +10,17 @@ on:
       - reopened
 
 permissions:
-  contents: write
-
-concurrency:
-  group: issue-131-g1a-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  apply:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'impl/pt-runengpu-g1a-owner-scoped-resource-id' && github.actor != 'github-actions[bot]'
+  recover:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'impl/pt-runengpu-g1a-owner-scoped-resource-id'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout exact implementation branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: impl/pt-runengpu-g1a-owner-scoped-resource-id
-          clean: true
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Install maintained Rust toolchains
-        run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy
-          rustup toolchain install 1.93.0 --profile minimal --component rustfmt,clippy
-
-      - name: Run exact guarded implementation
+      - name: Recover previously reviewed provisional patch
         shell: bash
         run: |
           set -euo pipefail
@@ -50,7 +33,16 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          def fetch_blob(blob: str) -> bytes:
+          blobs = [
+              "7b9b40ced053a3a7d1c17c0c7fa5ed46ec1b08bc",
+              "58e77e8042b1a6a311058afec76c18de1c3c642e",
+              "abdf244c271353bb74ea13b67736d4874aad7765",
+              "e711629943b6d3becd8f8829cc1769597a2fac5a",
+              "11e7e4b58f04e325a6c3ecb7c3811687341aff51",
+          ]
+
+          chunks = []
+          for blob in blobs:
               request = urllib.request.Request(
                   f"https://api.github.com/repos/dornglut/runenwerk/git/blobs/{blob}",
                   headers={
@@ -60,43 +52,31 @@ jobs:
                   },
               )
               with urllib.request.urlopen(request) as response:
-                  return base64.b64decode(json.load(response)["content"])
+                  chunks.append(base64.b64decode(json.load(response)["content"]))
 
-          compressed = fetch_blob("a35b6a295571e4d5586d8b48e104403cd6e12190")
-          if len(compressed) != 2402:
-              raise SystemExit(f"unexpected runner length: {len(compressed)}")
+          compressed = b"".join(chunks)
+          expected = "b0d117c0ca955458907e6269afc869bdfb3b1d713ea6fbc7c43020c0a07d8bb8"
           actual = hashlib.sha256(compressed).hexdigest()
-          expected = "e698ed6a961dc32392cd1fc963e51bbdf669d4939a723d059bdd212e2d21997e"
           if actual != expected:
-              raise SystemExit(f"runner mismatch: expected={expected} actual={actual}")
+              raise SystemExit(f"compressed patch mismatch: expected={expected} actual={actual}")
 
-          correction = fetch_blob("b82f27ded2ec02b367816e067dc6ea2a331d98e6")
-          if len(correction) != 1813:
-              raise SystemExit(f"unexpected correction length: {len(correction)}")
-          actual = hashlib.sha256(correction).hexdigest()
-          expected = "f021554e8dbe8ff1ff5773dfa23b7837e102279977d7f9ca50a0ee1ca75e16bb"
-          if actual != expected:
-              raise SystemExit(f"correction mismatch: expected={expected} actual={actual}")
-
-          correction_path = Path(os.environ["RUNNER_TEMP"], "g1a-correction.patch")
-          correction_path.write_bytes(correction)
-          script = bz2.decompress(compressed).decode("utf-8")
-          marker = "cargo +stable fmt --all\n"
-          insertion = 'patch -p1 --batch < "$RUNNER_TEMP/g1a-correction.patch"\n'
-          if script.count(marker) != 1:
-              raise SystemExit("runner formatting marker mismatch")
-          script = script.replace(marker, insertion + marker, 1)
-          path = Path(os.environ["RUNNER_TEMP"], "g1a_runner.sh")
-          path.write_text(script, encoding="utf-8")
-          path.chmod(0o700)
+          patch = bz2.decompress(compressed).decode("utf-8")
+          marker = "diff -ruN runenwerk-g1a-base/apps/"
+          patch = patch[patch.index(marker):]
+          out = Path(os.environ["RUNNER_TEMP"], "issue-131-provisional.patch")
+          out.write_text(patch, encoding="utf-8")
+          Path(os.environ["RUNNER_TEMP"], "sha256.txt").write_text(
+              hashlib.sha256(patch.encode("utf-8")).hexdigest() + "  issue-131-provisional.patch\n",
+              encoding="utf-8",
+          )
           PY
-          "$RUNNER_TEMP/g1a_runner.sh"
 
-      - name: Upload implementation diagnostics
-        if: failure()
+      - name: Upload recovered patch
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: issue-131-g1a-diagnostics
-          path: ${{ runner.temp }}/issue-131.log
+          name: issue-131-provisional-patch
+          path: |
+            ${{ runner.temp }}/issue-131-provisional.patch
+            ${{ runner.temp }}/sha256.txt
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 1
