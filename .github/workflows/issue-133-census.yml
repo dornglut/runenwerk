@@ -102,6 +102,20 @@ jobs:
               raise SystemExit("expected exactly one internal sdf lockfile package")
           path.write_text(text.replace(retired, "", 1), encoding="utf-8")
           PY
+
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tools/xtask/src/main.rs")
+          text = path.read_text(encoding="utf-8")
+          usage_index = text.index("fn print_usage()")
+          usage = text[usage_index:].rstrip() + "\n\n"
+          without_usage = text[:usage_index].rstrip() + "\n"
+          test_index = without_usage.index("#[cfg(test)]")
+          path.write_text(
+              without_usage[:test_index] + usage + without_usage[test_index:],
+              encoding="utf-8",
+          )
+          PY
           git status --short
 
       - name: Verify exact retirement target
@@ -143,7 +157,7 @@ jobs:
           47d61e7a55675058efaa320de368fc93929e491b  docs-site/src/content/docs/workspace/planning/completed-work.md
           72d726e47282a291aff329e6fc3eac4da216aace  docs-site/src/content/docs/workspace/planning/roadmap.md
           d2e1c558547168cb09fa726350b04b55a2524cd9  docs-site/src/content/docs/workspace/repo-execution-priority-checklist.md
-          22d6d26d05b99ce799febe86a7e2c04afb591439  tools/xtask/src/main.rs
+          f13289d515d61b47b822422aba70e90a9cbcfd8d  tools/xtask/src/main.rs
           EXPECTED_BLOBS
           while read -r expected path; do
             actual="$(git hash-object "$path")"
