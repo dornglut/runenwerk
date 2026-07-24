@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-23
+last_reviewed: 2026-07-24
 related_docs:
   - ../engineering-workflow.md
   - ./roadmap.md
@@ -20,37 +20,9 @@ GitHub issues and pull requests own live delivery. This page is only a concise c
 
 ## Active
 
-### RunenSDF clean cutover
-
-Issue `#133` owns retirement of the duplicate internal `domain/sdf` authority after the standalone source transfer and repository-identity correction.
-
-Current evidence indicates that `domain/sdf` remains a workspace member but may have no live product consumer. The implementation must begin with a complete Cargo, Rust, test, adapter, documentation, and persisted-format census.
-
-If the census confirms zero consumers, the accepted result is retirement-only:
-
-```text
-delete domain/sdf
-remove workspace and lockfile authority
-remove stale active duplicate-source authority
-add a durable no-return guard
-add no standalone dependency
-```
-
-If a real consumer is found, stop and record it before adding the exact standalone dependency. No compatibility package, alias, forwarding namespace, source include, submodule, branch dependency, or duplicate source may remain.
-
-Canonical standalone authority:
-
-```text
-repository: dornglut/runen-sdf
-maintained revision: ffa970f3eb7fd9ebaa1cfc67665e3e3128cd0676
-source-transfer revision: d52badefc640d6dc6dcdd40268af3aea1bb8eefe
-```
-
-## Next implementation
-
 ### RunenGPU G1A
 
-Issue `#131` owns the first internal RunenGPU implementation after the SDF cutover merges.
+Issue `#131` owns the first internal RunenGPU implementation from the accepted post-RunenSDF current `main`.
 
 The corrected target is owner-scoped rather than scalar-only:
 
@@ -83,4 +55,4 @@ G1A is intentionally isolated from WGPU, graph semantics, surfaces, shaders, ren
 - GPU/render architecture correction: issue `#125`, PR `#126`;
 - GPU/render S0 inventory: issue `#127`, PR `#128`;
 - original G1A implementation specification: issue `#129`, PR `#130`;
-- RunenSDF standalone transfer and maintained authority: Runenwerk PR `#118`, `dornglut/runen-sdf` PRs `#1`, `#2`, `#4`, and `#5`.
+- RunenSDF standalone transfer, maintained authority, and Runenwerk duplicate-source retirement: Runenwerk PRs `#118` and `#157`, issue `#133`, and `dornglut/runen-sdf` PRs `#1`, `#2`, `#4`, `#5`, and `#6`.

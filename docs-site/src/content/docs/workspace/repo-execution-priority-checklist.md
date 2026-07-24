@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-15
+last_reviewed: 2026-07-24
 related:
   - ./planning-methods.md
   - ./roadmap-decision-register.md
@@ -156,5 +156,5 @@ Remaining near-term blockers:
 - [x] Improve inspector/component authoring breadth for common 3D flows. Status: implemented and test-covered for M3; common reflected primitive fields are editable through typed inspector edit values, and component add/remove remains routed through scene command intents (source: `apps/runenwerk-editor/execution-priority-checklist.md` and `apps/runenwerk-editor/roadmap.md`).
 - [x] Build the editor SDF/field-first asset pipeline foundation and import workflow. Status: M4A-M4I complete as of 2026-05-09; `domain/asset`, asset taxonomy, import plans, field-product formation contracts, generic product invalidation, app-owned catalog/import jobs, asset browser/import inspector/field-product viewer/SDF brush browser providers, and failed-artifact preservation exist. Mesh/GLB import remains a foreign-reference path, not the primary world substrate (source: `apps/runenwerk-editor/roadmap.md` and `design/active/editor-asset-pipeline-and-content-workflow-design.md`).
 - [x] Continue Editor Design/self-authoring polish for UI/editor layout design, creation, and management. Status: 2026-05-08 maturity pass complete; reusable field/control polish, no-payload ECS enum inspector mutation, versioned export packaging, non-theme live activation, active UI/editor catalogs, and panel/tool-surface replacement guards are implemented before M4 starts (source: `design/implemented/editor-self-authoring-and-final-ui-design.md`, `apps/runenwerk-editor/roadmap.md`, and `domain/ui/roadmap.md`).
-- [x] Foundation SDF roadmap baseline is implemented (source: `domain/sdf/implementation-roadmap.md`).
+- [x] Foundation SDF roadmap baseline was transferred to standalone `dornglut/runen-sdf`; Runenwerk duplicate source was retired under issue `#133`.
 - [x] Domain ECS Phase 6 closeout roadmap package is complete (source: `domain/ecs/roadmaps/phase6-closeout-roadmap.md`).

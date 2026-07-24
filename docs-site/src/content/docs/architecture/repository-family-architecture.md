@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-24
 related_docs:
   - ../workspace/planning/active-work.md
   - ../workspace/planning/roadmap.md
@@ -31,12 +31,12 @@ dependency direction, and cutover rules. Framework designs own subsystem contrac
 
 ```text
 product       repository                 package       crate
-RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
-RunenECS      target Crystonix/runen-ecs package topology governed separately
-RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
-RunenRender   Crystonix/runen-render     runen-render  runen_render
-RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
-Runenwerk     Crystonix/runenwerk        workspace      integration/product
+RunenSDF      dornglut/runen-sdf         runen-sdf     runen_sdf
+RunenECS      target dornglut/runen-ecs  package topology governed separately
+RunenGPU      target dornglut/runen-gpu  runen-gpu     runen_gpu
+RunenRender   target dornglut/runen-render runen-render runen_render
+RunenUI       dornglut/runen-ui          existing workspace; current packages include runenui_core and runenui_runtime
+Runenwerk     dornglut/runenwerk         workspace      integration/product
 ```
 
 RunenGPU and RunenRender each begin with one public package. This decision does not redefine RunenUI package topology or settle RunenECS package topology. Internal modules
@@ -74,7 +74,7 @@ No dependency cycle is allowed.
 
 | Framework | Current state | Authorized work |
 |---|---|---|
-| RunenSDF | standalone transfer complete at `d52badefc640d6dc6dcdd40268af3aea1bb8eefe`; Runenwerk clean cutover not recorded complete | separately reviewed consumer audit/cutover only |
+| RunenSDF | standalone framework maintained in `dornglut/runen-sdf`; Runenwerk duplicate internal authority retired under issue `#133` / PR `#157` | standalone roadmap and independently authorized adapters only |
 | RunenECS | internal ownership and safety repair required | investigation/design and bounded accepted repairs |
 | RunenGPU | architecture accepted; current implementation still mixed into renderer | S0 inventory only until first phase is specified |
 | RunenRender | architecture corrected to consume RunenGPU | S0 inventory and design only |

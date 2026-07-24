@@ -5,7 +5,7 @@ status: active
 owner: sdf
 layer: domain/sdf
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-24
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -28,15 +28,15 @@ cutover sequence are decision-complete.
 `PT-RUNENSDF-002` completed the boundary correction in Runenwerk through merge
 commit `8de096259eab30f8d67672010df9190970d0bfc4`.
 
-`PT-RUNENSDF-003` is authorized to create and prove the standalone repository.
-It may not change Runenwerk dependencies, remove `domain/sdf`, or introduce a
-compatibility package. Those operations belong to `PT-RUNENSDF-004`.
+`PT-RUNENSDF-003` created and proved the standalone repository without changing
+Runenwerk. `PT-RUNENSDF-004` later proved zero real consumers and completed the
+retirement-only cutover without introducing a compatibility package or unused dependency.
 
 ## Canonical identity
 
 ```text
 product: RunenSDF
-repository: Crystonix/runen-sdf
+repository: dornglut/runen-sdf
 package: runen-sdf
 crate: runen_sdf
 version: 0.1.0
@@ -46,7 +46,7 @@ license: MIT OR Apache-2.0
 publication: disabled until a separate release gate
 ```
 
-The former `Crystonix/RunenSDF` and `runensdf` spellings are superseded. No
+The former `Crystonix/RunenSDF`, `Crystonix/runen-sdf`, and `runensdf` spellings are superseded. No
 compatibility alias preserves them.
 
 ## Repository shape
@@ -184,7 +184,7 @@ Primary normal estimation reports unusable gradients and never fabricates
 The only source baseline for PT-RUNENSDF-003 is:
 
 ```text
-repository: Crystonix/runenwerk
+repository: dornglut/runenwerk
 commit: 8de096259eab30f8d67672010df9190970d0bfc4
 source path: domain/sdf/src/**
 test path: domain/sdf/tests/**
@@ -317,5 +317,6 @@ all nine package tests and downstream conformance pass, repository policy proves
 independence, provenance is closed, and PT-RUNENSDF-004 can consume that exact
 revision.
 
-RunenSDF extraction completes only after PT-RUNENSDF-004 deletes the original
-implementation and proves no compatibility or duplicate source authority remains.
+RunenSDF extraction is complete. PT-RUNENSDF-004 deleted the original implementation
+and proved no compatibility or duplicate source authority remains. The exact closeout
+is recorded in `reports/closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md`.

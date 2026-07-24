@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-07-24
 ---
 
 # Domain Map
@@ -29,7 +29,7 @@ This map tracks crate ownership and allowed dependency direction for the active 
 - `domain/product`: shared formed-product descriptors, product jobs, query snapshots, render product selection, diagnostics, policies, and ratification contracts
 - `domain/geometry`: explicit geometric primitives and geometric queries
 - `domain/spatial`, `domain/spatial_index`, and `domain/chunking`: spatial coordinate, index, and streaming contracts
-- `domain/sdf`: signed-distance-field primitives, transforms, composition, and queries
+- signed-field mathematics and CPU reference queries are owned by standalone `dornglut/runen-sdf`; Runenwerk retains only integration and `domain/world_sdf` product/world contracts
 - `domain/world_ops`: chunk/world operation logs, dirty tracking, build queues, invalidation, and replication deltas
 - `domain/world_sdf`: SDF chunk payloads, collision query contracts, formed field-product descriptors, ratification, and cave/sector storage summaries
 - `domain/graph`: domain-neutral graph definitions, typed ports, validation, traversal, and cycle policy

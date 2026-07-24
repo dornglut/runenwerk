@@ -5,7 +5,7 @@ status: active
 owner: gameplay
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-05
+last_reviewed: 2026-07-24
 related_designs:
   - ./semantic-graph-ir-and-compilation-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
@@ -20,7 +20,6 @@ related:
   - ../../domain/ecs/README.md
   - ../../domain/ecs/03-queries.md
   - ../../domain/scheduler/README.md
-  - ../../domain/sdf/query-model.md
   - ../../domain/world-sdf/README.md
 ---
 
@@ -48,7 +47,7 @@ Implemented today:
 - `docs-site/src/content/docs/design/active/semantic-graph-ir-and-compilation-design.md` defines the generic semantic graph pipeline and the `SELECT`, `RELATE`, `TRANSFORM` primitive family.
 - `domain/ecs` owns live ECS state, queries, systems, events, schedules, and deferred ECS commands.
 - `domain/scheduler` owns deterministic execution ordering contracts.
-- `domain/sdf` owns SDF field queries, including raymarch, projection, classification, and sweep foundations.
+- Standalone `dornglut/runen-sdf` owns reusable SDF field queries, including raymarch, projection, classification, and sweep foundations.
 - `domain/world_sdf` owns world-scale SDF payloads and collision query readiness contracts.
 - Deferred gameplay action/power designs exist, but they do not define an active gameplay graph compiler.
 
@@ -194,7 +193,7 @@ Initial relation families:
 
 SDF physics integration belongs here. A `HIT` relation may be sourced from:
 
-- `domain/sdf` sweep/query foundations;
+- standalone RunenSDF sweep/query foundations;
 - `domain/world_sdf` collision query products;
 - future `domain/physics` collision products;
 - engine physics runtime events derived from SDF/world-field products.
@@ -306,7 +305,7 @@ Gameplay graph lowering may emit ECS query descriptors, event descriptors, syste
 
 ### Boundary With SDF Physics
 
-SDF/world-field collision and query truth belongs to `domain/sdf`, `domain/world_sdf`, future `domain/physics`, and engine runtime adapters.
+Reusable SDF query truth belongs to standalone RunenSDF; Runenwerk world-field collision and product truth belongs to `domain/world_sdf`, future `domain/physics`, and engine runtime adapters.
 
 Gameplay graph may declare `HIT`, `IN_RANGE`, `ON_SURFACE`, or `INSIDE_FIELD` relations. Lowering must bind those relations to formed collision/query products or runtime events with readiness diagnostics.
 
