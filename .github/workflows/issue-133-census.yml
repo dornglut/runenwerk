@@ -1,64 +1,148 @@
-name: Issue 133 SDF Census
+name: Issue 133 Apply SDF Retirement
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
-    paths:
-      - '.github/workflows/issue-133-census.yml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'domain/sdf/**'
-      - 'tools/xtask/**'
-      - 'docs-site/**'
+      - impl/pt-runensdf-004-retire-internal-sdf
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: issue-133-retirement-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  census:
+  apply:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout exact revision
-        uses: actions/checkout@v6
+      - name: Check out implementation branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           clean: true
-          fetch-depth: 1
+          fetch-depth: 0
+          persist-credentials: true
 
-      - name: Collect complete SDF authority census
+      - name: Install maintained Rust toolchains
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup toolchain install 1.93.0 --profile minimal --component rustfmt,clippy
+
+      - name: Apply exact retirement target
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/issue-133-census"
-          out="$RUNNER_TEMP/issue-133-census"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
 
-          git rev-parse HEAD > "$out/head.txt"
-          git status --short > "$out/status-before.txt"
-          cargo metadata --format-version 1 --locked > "$out/cargo-metadata.json"
-          cargo metadata --format-version 1 --locked --no-deps > "$out/cargo-metadata-no-deps.json"
-          cargo tree -i sdf --workspace --locked > "$out/cargo-tree-inverse-sdf.txt"
-          find domain/sdf -type f -print | sort > "$out/domain-sdf-files.txt"
-          find . -name Cargo.toml -not -path './target/*' -print | sort > "$out/manifest-inventory.txt"
-          git ls-files -s > "$out/git-index.txt"
-          git submodule status > "$out/submodules.txt" || true
+          python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
 
-          git grep -n -I -E 'domain/sdf|runen[-_]sdf|Crystonix/runen-sdf|dornglut/runen-sdf|(^|[^A-Za-z0-9_])sdf([^A-Za-z0-9_]|$)' -- \
-            ':!domain/sdf/**' \
-            ':!Cargo.lock' \
-            > "$out/references-outside-package.txt" || true
+          url = "https://api.github.com/repos/dornglut/runenwerk/git/blobs/d21faf3b10ea8ee45c27b2950c8228cac60a0459"
+          request = urllib.request.Request(
+              url,
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request) as response:
+              encoded = json.load(response)["content"]
+          malformed = base64.b64decode(encoded)
+          if len(malformed) != 16_320:
+              raise SystemExit(f"unexpected patch blob length: {len(malformed)}")
+          patch_gzip = malformed[:8250] + bytes.fromhex("ae173d") + malformed[8250:]
+          header = f"blob {len(patch_gzip)}\0".encode()
+          actual = hashlib.sha1(header + patch_gzip).hexdigest()
+          expected = "300442bb3b3f54ab4bf0e38830ab9fe9bb710bed"
+          if actual != expected:
+              raise SystemExit(f"patch blob mismatch: expected={expected} actual={actual}")
+          Path(os.environ["RUNNER_TEMP"], "issue-133.patch.gz").write_bytes(patch_gzip)
+          PY
 
-          git grep -n -I -E 'use[[:space:]]+sdf::|extern[[:space:]]+crate[[:space:]]+sdf|sdf::|package[[:space:]]*=[[:space:]]*"sdf"|name[[:space:]]*=[[:space:]]*"sdf"|path[[:space:]]*=[[:space:]]*"[^"]*domain/sdf' -- \
-            ':!domain/sdf/**' \
-            > "$out/consumer-patterns-outside-package.txt" || true
+          gzip --decompress --stdout "$RUNNER_TEMP/issue-133.patch.gz" > "$RUNNER_TEMP/issue-133.patch"
+          git apply --index --whitespace=nowarn "$RUNNER_TEMP/issue-133.patch"
+          rm -rf domain/sdf docs-site/src/content/docs/domain/sdf
+          rm -f .github/workflows/issue-133-census.yml
 
-          git archive --format=tar.gz -o "$out/runenwerk-head.tar.gz" HEAD
-          git status --short > "$out/status-after.txt"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("Cargo.lock")
+          text = path.read_text(encoding="utf-8")
+          retired = "\n".join([
+              '[[package]]',
+              'name = "sdf"',
+              'version = "0.1.0"',
+              'dependencies = [',
+              ' "glam 0.31.1",',
+              ' "thiserror 2.0.18",',
+              ']',
+              '',
+              '',
+          ])
+          if text.count(retired) != 1:
+              raise SystemExit("expected exactly one internal sdf lockfile package")
+          path.write_text(text.replace(retired, "", 1), encoding="utf-8")
+          PY
 
-      - name: Upload census evidence
-        uses: actions/upload-artifact@v7
-        with:
-          name: issue-133-sdf-census
-          path: ${{ runner.temp }}/issue-133-census
-          if-no-files-found: error
-          retention-days: 7
+          cargo +stable fmt --all --check
+          cargo metadata --format-version 1 --locked --no-deps > "$RUNNER_TEMP/metadata.json"
+          cargo +stable validate
+          git diff --check
+          test ! -e domain/sdf
+          test ! -e docs-site/src/content/docs/domain/sdf
+          test ! -e .github/workflows/issue-133-census.yml
+          ! grep -F '"domain/sdf"' Cargo.toml
+          ! grep -F 'name = "sdf"' Cargo.lock
+          grep -F 'reusable-rust-cargo-validate.yml@b6caad377102ca73794efaf734a65903b8efa829' .github/workflows/ci.yml
+
+          cat > "$RUNNER_TEMP/expected-blobs.txt" <<'EXPECTED_BLOBS'
+          c267397ca19f0a553dfa21c067cb19daf79786c5  Cargo.lock
+          459499fa6db402bd246d43504236d61a049e54ab  Cargo.toml
+          91b24a5d393d1d2c3b9ec046e8558a19b700549c  docs-site/src/content/docs/apps/runenwerk-editor/README.md
+          8ccc9f2563277139d4459d9baeb050bfc77bfa14  docs-site/src/content/docs/apps/runenwerk-editor/roadmap.md
+          0e4faa3833472ca27ea0d35de74c2cdaa81dca0f  docs-site/src/content/docs/architecture/repository-family-architecture.md
+          9a65cf54978861440644da099ee0411166a19a86  docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md
+          ed9d9f6c99bf6862e915bf4d4e55d0578973d5bc  docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md
+          034019d70130ed19386d172343d0bc9645caf290  docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md
+          e2079d6a50ff8e18f353f572b9dd5c8b4b4b1625  docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md
+          cbdce7412fe9c5e9c2a03e5ecea3a21a80f3a5ee  docs-site/src/content/docs/design/active/runensdf-extraction-design.md
+          69b2a8ecac66ccef1cfc21661e0109528e92145b  docs-site/src/content/docs/design/active/runensdf-repository-identity-decision.md
+          8f17e391e4b95fcf30bdb366b49513b4aeb5d1a5  docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md
+          18b3f43f2e0fc54775f9c5ca3a265616a20fb741  docs-site/src/content/docs/domain/00-overview.md
+          b4997b2f437399d7daf97113c79555f4abc45ea3  docs-site/src/content/docs/engine/plugins/render/docs/roadmap.md
+          8c8662c9ed78a60a85293317941ff78b30ec46bd  docs-site/src/content/docs/guidelines/domain-map.md
+          e63bba9d482b4666f87e883d283d8006f0d8a980  docs-site/src/content/docs/reports/closeouts/p1-sdf-modeling-core/closeout.md
+          be08d4246b5e5bb1a9d41b205cc406afea187cf5  docs-site/src/content/docs/reports/closeouts/p1-sdf-operation-layer/closeout.md
+          44623754ab030c9891b38d1d670431f47506c5da  docs-site/src/content/docs/reports/closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md
+          fc0cdc595e6181761c0622569528d91494c33a2e  docs-site/src/content/docs/reports/investigations/repository-family-current-state-investigation.md
+          65b4ebaf6fae040a5b2f2040cd375cfdb2ed66bf  docs-site/src/content/docs/reports/investigations/runensdf-extraction-investigation.md
+          254b5cbc219650fdb04b65a07db571702783ab0b  docs-site/src/content/docs/workspace/crate-docs-status.md
+          f71aabda34e39115b7a50d16b1778a0afe99af9d  docs-site/src/content/docs/workspace/crate-inventory.md
+          494ed815eb6199b2c9009162f6b2c1e611f617c1  docs-site/src/content/docs/workspace/planning/active-work.md
+          47d61e7a55675058efaa320de368fc93929e491b  docs-site/src/content/docs/workspace/planning/completed-work.md
+          72d726e47282a291aff329e6fc3eac4da216aace  docs-site/src/content/docs/workspace/planning/roadmap.md
+          d2e1c558547168cb09fa726350b04b55a2524cd9  docs-site/src/content/docs/workspace/repo-execution-priority-checklist.md
+          22d6d26d05b99ce799febe86a7e2c04afb591439  tools/xtask/src/main.rs
+          EXPECTED_BLOBS
+          while read -r expected path; do
+            actual="$(git hash-object "$path")"
+            test "$actual" = "$expected" || { echo "blob mismatch: $path expected=$expected actual=$actual"; exit 1; }
+          done < "$RUNNER_TEMP/expected-blobs.txt"
+
+          git add -A
+          git status --short
+          git commit -m "Retire duplicate internal SDF authority"
+          git push origin HEAD:impl/pt-runensdf-004-retire-internal-sdf
