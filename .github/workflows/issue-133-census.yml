@@ -41,6 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          exec > >(tee -a "$RUNNER_TEMP/issue-133.log") 2>&1
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
@@ -101,11 +102,13 @@ jobs:
               raise SystemExit("expected exactly one internal sdf lockfile package")
           path.write_text(text.replace(retired, "", 1), encoding="utf-8")
           PY
+          git status --short
 
-          cargo +stable fmt --all --check
-          cargo metadata --format-version 1 --locked --no-deps > "$RUNNER_TEMP/metadata.json"
-          cargo +stable validate
-          git diff --check
+      - name: Verify exact retirement target
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$RUNNER_TEMP/issue-133.log") 2>&1
           test ! -e domain/sdf
           test ! -e docs-site/src/content/docs/domain/sdf
           test ! -e .github/workflows/issue-133-census.yml
@@ -147,7 +150,31 @@ jobs:
             test "$actual" = "$expected" || { echo "blob mismatch: $path expected=$expected actual=$actual"; exit 1; }
           done < "$RUNNER_TEMP/expected-blobs.txt"
 
+      - name: Run canonical repository validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$RUNNER_TEMP/issue-133.log") 2>&1
+          cargo +stable fmt --all --check
+          cargo metadata --format-version 1 --locked --no-deps > "$RUNNER_TEMP/metadata.json"
+          cargo +stable validate
+          git diff --check
+
+      - name: Commit and publish retirement
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$RUNNER_TEMP/issue-133.log") 2>&1
           git add -A
           git status --short
           git commit -m "Retire duplicate internal SDF authority"
           git push origin HEAD:impl/pt-runensdf-004-retire-internal-sdf
+
+      - name: Upload application diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: issue-133-application-diagnostics
+          path: ${{ runner.temp }}/issue-133.log
+          if-no-files-found: error
+          retention-days: 3
