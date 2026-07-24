@@ -61,11 +61,33 @@ jobs:
           with urllib.request.urlopen(request) as response:
               runner = base64.b64decode(json.load(response)["content"])
           if len(runner) != 10_925:
-              raise SystemExit(f"unexpected runner length: {len(runner)}")
+              raise SystemExit(f"unexpected base runner length: {len(runner)}")
           actual = hashlib.sha256(runner).hexdigest()
           expected = "80645b2951066d0650fe24612b3771a9b04466848da0f74a174d22e90b79efc0"
           if actual != expected:
-              raise SystemExit(f"runner mismatch: expected={expected} actual={actual}")
+              raise SystemExit(f"base runner mismatch: expected={expected} actual={actual}")
+
+          text = runner.decode("utf-8")
+          list_marker = '''    (\n        "ce780b1ba050d147cee61b314d8b84730aa860c9",\n        1_437,\n        "881b81e70509c4715d4d64cfa57c82f00656bf5e17a802495748a9f969e400f0",\n        "g1a-procedural-test-corrections.patch",\n    ),\n]'''
+          list_replacement = '''    (\n        "ce780b1ba050d147cee61b314d8b84730aa860c9",\n        1_437,\n        "881b81e70509c4715d4d64cfa57c82f00656bf5e17a802495748a9f969e400f0",\n        "g1a-procedural-test-corrections.patch",\n    ),\n    (\n        "671c59166087672796484dae804b7e7f0e8a41c3",\n        548,\n        "6e7bf52207a5427000ce7fe93e662787d8aebea19ed9a064663648eb94d52007",\n        "g1a-draw-test-correction.patch",\n    ),\n]'''
+          if text.count(list_marker) != 1:
+              raise SystemExit("runner correction-list marker mismatch")
+          text = text.replace(list_marker, list_replacement, 1)
+
+          apply_marker = 'patch -p1 --batch < "$RUNNER_TEMP/g1a-procedural-test-corrections.patch"\n'
+          apply_replacement = apply_marker + 'patch -p1 --batch < "$RUNNER_TEMP/g1a-draw-test-correction.patch"\n'
+          if text.count(apply_marker) != 1:
+              raise SystemExit("runner patch-application marker mismatch")
+          text = text.replace(apply_marker, apply_replacement, 1)
+
+          runner = text.encode("utf-8")
+          if len(runner) != 11_187:
+              raise SystemExit(f"unexpected derived runner length: {len(runner)}")
+          actual = hashlib.sha256(runner).hexdigest()
+          expected = "81f33784e1d3678dc5170b55e316ded66106282606ae30d4738eb105b0ae497b"
+          if actual != expected:
+              raise SystemExit(f"derived runner mismatch: expected={expected} actual={actual}")
+
           path = Path(os.environ["RUNNER_TEMP"], "g1a-prepublication-runner.sh")
           path.write_bytes(runner)
           path.chmod(0o700)
@@ -96,5 +118,6 @@ jobs:
             ${{ runner.temp }}/g1a.patch
             ${{ runner.temp }}/g1a-compiler-corrections.patch
             ${{ runner.temp }}/g1a-procedural-test-corrections.patch
+            ${{ runner.temp }}/g1a-draw-test-correction.patch
           if-no-files-found: warn
           retention-days: 2
