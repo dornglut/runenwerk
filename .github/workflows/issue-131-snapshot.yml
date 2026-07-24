@@ -93,12 +93,35 @@ jobs:
           patch -p1 --batch < "$RUNNER_TEMP/g1a.patch"
           cargo +stable fmt --all
           git diff --check
-          ! rg -n 'RenderResourceId|RenderResourceIdSequence' engine apps domain net adapters --glob '*.rs'
-          ! rg -n 'GpuWorkResourceId::try_from_raw|TryFrom<u64> for GpuWorkResourceId|From<u64> for GpuWorkResourceId' engine apps --glob '*.rs'
-          ! rg -n 'wgpu::|winit::|ecs::|plugins::render|material_graph|world_sdf|runenui|ui_|editor|procgen|scene|product' engine/src/plugins/gpu --glob '*.rs'
 
           python - <<'PY'
           import subprocess
+          from pathlib import Path
+
+          roots = [Path(name) for name in ("engine", "apps", "domain", "net", "adapters") if Path(name).exists()]
+          rust_files = [path for root in roots for path in root.rglob("*.rs")]
+          old_tokens = ("RenderResourceId", "RenderResourceIdSequence")
+          forbidden_constructors = (
+              "GpuWorkResourceId::try_from_raw",
+              "TryFrom<u64> for GpuWorkResourceId",
+              "From<u64> for GpuWorkResourceId",
+          )
+          violations = []
+          for path in rust_files:
+              text = path.read_text(encoding="utf-8")
+              for token in old_tokens + forbidden_constructors:
+                  if token in text:
+                      violations.append(f"{path}: forbidden token {token}")
+          gpu_forbidden = (
+              "wgpu::", "winit::", "ecs::", "plugins::render", "material_graph",
+              "world_sdf", "runenui", "ui_", "editor", "procgen", "scene", "product",
+          )
+          for path in Path("engine/src/plugins/gpu").rglob("*.rs"):
+              for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                  if line.lstrip().startswith("use ") and any(token in line for token in gpu_forbidden):
+                      violations.append(f"{path}:{line_number}: forbidden GPU import: {line}")
+          if violations:
+              raise SystemExit("\n".join(violations))
 
           expected = {
               "apps/runenwerk_draw/src/runtime/app.rs",
@@ -169,14 +192,20 @@ jobs:
               "engine/tests/render_resource_model.rs",
               "engine/tests/render_runtime_inspect.rs",
           }
-          changed = set(subprocess.check_output(
+          tracked = set(subprocess.check_output(
               ["git", "diff", "--name-only", "88e9de3c94145c39391550efaf82a341630f081a"],
               text=True,
           ).splitlines())
+          untracked = set(subprocess.check_output(
+              ["git", "ls-files", "--others", "--exclude-standard"],
+              text=True,
+          ).splitlines())
+          changed = tracked | untracked
           if changed != expected:
               raise SystemExit(
                   f"G1A changed-file boundary mismatch\nmissing={sorted(expected - changed)}\nunexpected={sorted(changed - expected)}"
               )
+          Path("/tmp/g1a-paths.txt").write_text("\n".join(sorted(changed)) + "\n", encoding="utf-8")
           PY
 
       - name: Run focused and canonical validation
@@ -211,10 +240,7 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          paths = subprocess.check_output(
-              ["git", "diff", "--name-only", "88e9de3c94145c39391550efaf82a341630f081a"],
-              text=True,
-          ).splitlines()
+          paths = Path("/tmp/g1a-paths.txt").read_text(encoding="utf-8").splitlines()
           manifest = []
           for path_text in paths:
               path = Path(path_text)
@@ -244,12 +270,13 @@ jobs:
               "accepted_base": "88e9de3c94145c39391550efaf82a341630f081a",
               "files": manifest,
           }, indent=2) + "\n", encoding="utf-8")
-          subprocess.run(
-              ["git", "diff", "--stat", "88e9de3c94145c39391550efaf82a341630f081a"],
-              check=True,
-              stdout=Path(os.environ["RUNNER_TEMP"], "g1a-diff-stat.txt").open("w"),
-              text=True,
-          )
+          with Path(os.environ["RUNNER_TEMP"], "g1a-diff-stat.txt").open("w", encoding="utf-8") as handle:
+              subprocess.run(
+                  ["git", "diff", "--stat", "88e9de3c94145c39391550efaf82a341630f081a", "--", *paths],
+                  check=True,
+                  stdout=handle,
+                  text=True,
+              )
           PY
 
       - name: Upload validated blob manifest
