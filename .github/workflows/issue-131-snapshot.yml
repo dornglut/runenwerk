@@ -50,17 +50,19 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          blob = "a35b6a295571e4d5586d8b48e104403cd6e12190"
-          request = urllib.request.Request(
-              f"https://api.github.com/repos/dornglut/runenwerk/git/blobs/{blob}",
-              headers={
-                  "Accept": "application/vnd.github+json",
-                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
-                  "X-GitHub-Api-Version": "2022-11-28",
-              },
-          )
-          with urllib.request.urlopen(request) as response:
-              compressed = base64.b64decode(json.load(response)["content"])
+          def fetch_blob(blob: str) -> bytes:
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/dornglut/runenwerk/git/blobs/{blob}",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urllib.request.urlopen(request) as response:
+                  return base64.b64decode(json.load(response)["content"])
+
+          compressed = fetch_blob("a35b6a295571e4d5586d8b48e104403cd6e12190")
           if len(compressed) != 2402:
               raise SystemExit(f"unexpected runner length: {len(compressed)}")
           actual = hashlib.sha256(compressed).hexdigest()
@@ -68,92 +70,22 @@ jobs:
           if actual != expected:
               raise SystemExit(f"runner mismatch: expected={expected} actual={actual}")
 
+          correction = fetch_blob("b82f27ded2ec02b367816e067dc6ea2a331d98e6")
+          if len(correction) != 1813:
+              raise SystemExit(f"unexpected correction length: {len(correction)}")
+          actual = hashlib.sha256(correction).hexdigest()
+          expected = "f021554e8dbe8ff1ff5773dfa23b7837e102279977d7f9ca50a0ee1ca75e16bb"
+          if actual != expected:
+              raise SystemExit(f"correction mismatch: expected={expected} actual={actual}")
+
+          correction_path = Path(os.environ["RUNNER_TEMP"], "g1a-correction.patch")
+          correction_path.write_bytes(correction)
           script = bz2.decompress(compressed).decode("utf-8")
           marker = "cargo +stable fmt --all\n"
-          correction = r'''python - <<'PYFIX'
-          from pathlib import Path
-          path=Path('engine/src/plugins/gpu/api/work_resource_id.rs')
-          text=path.read_text(encoding='utf-8')
-          old=''' + "'''" + r'''        let source = include_str!("work_resource_id.rs");
-                  let forbidden = [
-                      ["try_from", "_raw"].concat(),
-                      ["from", "_raw"].concat(),
-                      ["new", "_unchecked"].concat(),
-                      ["TryFrom", "<u64>"].concat(),
-                      ["From", "<u64>"].concat(),
-                      "pub fn new(".to_string(),
-                      "pub const fn new(".to_string(),
-                  ];
-
-                  for token in forbidden {
-                      assert!(
-                          !source.contains(&token),
-                          "arbitrary scalar constructor must not be exposed: {token}"
-                      );
-                  }
-          ''' + "'''" + r'''
-          new=''' + "'''" + r'''        let source = include_str!("work_resource_id.rs");
-                  let identity_impl = source
-                      .split_once("impl GpuWorkResourceId {")
-                      .expect("identity implementation must exist")
-                      .1
-                      .split_once("impl fmt::Debug for GpuWorkResourceId")
-                      .expect("identity implementation must end before Debug")
-                      .0;
-                  let forbidden = [
-                      ["try_from", "_raw"].concat(),
-                      ["from", "_raw"].concat(),
-                      ["new", "_unchecked"].concat(),
-                      ["TryFrom", "<u64>"].concat(),
-                      ["From", "<u64>"].concat(),
-                      "pub fn new(".to_string(),
-                      "pub const fn new(".to_string(),
-                  ];
-
-                  for token in forbidden {
-                      assert!(
-                          !identity_impl.contains(&token),
-                          "arbitrary scalar constructor must not be exposed: {token}"
-                      );
-                  }
-          ''' + "'''" + r'''
-          if old not in text:
-              raise SystemExit('constructor source guard block not found')
-          path.write_text(text.replace(old,new,1),encoding='utf-8')
-
-          path=Path('engine/src/plugins/render/api/flow.rs')
-          text=path.read_text(encoding='utf-8')
-          old=''' + "'''" + r'''        assert!(error.issues.iter().any(|issue| matches!(
-                      issue,
-                      RenderFlowValidationIssue::UnknownResourceReference { resource_id, .. }
-                          if *resource_id == foreign_id
-                  )));
-                  drop(first_flow);
-              }
-
-              #[test]
-              fn foreign_storage_handle_is_rejected_even_when_local_components_match() {
-          ''' + "'''" + r'''
-          new=''' + "'''" + r'''        assert!(error.issues.iter().any(|issue| matches!(
-                      issue,
-                      RenderFlowValidationIssue::MissingUniformBuffer { uniform_id, .. }
-                          if *uniform_id == foreign_id
-                  )));
-                  drop(first_flow);
-              }
-
-              #[test]
-              fn foreign_storage_handle_is_rejected_even_when_local_components_match() {
-          ''' + "'''" + r'''
-          if old not in text:
-              raise SystemExit('foreign uniform assertion block not found')
-          path.write_text(text.replace(old,new,1),encoding='utf-8')
-          PYFIX
-
-          '''
+          insertion = 'patch -p1 --batch < "$RUNNER_TEMP/g1a-correction.patch"\n'
           if script.count(marker) != 1:
               raise SystemExit("runner formatting marker mismatch")
-          script = script.replace(marker, correction + marker, 1)
+          script = script.replace(marker, insertion + marker, 1)
           path = Path(os.environ["RUNNER_TEMP"], "g1a_runner.sh")
           path.write_text(script, encoding="utf-8")
           path.chmod(0o700)
