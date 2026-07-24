@@ -1,4 +1,4 @@
-name: Issue 131 Recover Provisional Patch
+name: Issue 131 G1A Prepublication
 
 on:
   pull_request:
@@ -10,17 +10,34 @@ on:
       - reopened
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: issue-131-prepublication
+  cancel-in-progress: true
 
 jobs:
-  recover:
+  validate-and-stage:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'impl/pt-runengpu-g1a-owner-scoped-resource-id'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Recover previously reviewed provisional patch
+      - name: Checkout accepted implementation base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 88e9de3c94145c39391550efaf82a341630f081a
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install maintained Rust toolchains
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup toolchain install 1.93.0 --profile minimal --component rustfmt,clippy
+
+      - name: Reconstruct corrected implementation patch
         shell: bash
         run: |
           set -euo pipefail
@@ -34,13 +51,11 @@ jobs:
           from pathlib import Path
 
           blobs = [
-              "7b9b40ced053a3a7d1c17c0c7fa5ed46ec1b08bc",
-              "58e77e8042b1a6a311058afec76c18de1c3c642e",
-              "abdf244c271353bb74ea13b67736d4874aad7765",
-              "e711629943b6d3becd8f8829cc1769597a2fac5a",
-              "11e7e4b58f04e325a6c3ecb7c3811687341aff51",
+              "e06e452b60b76a8636e5fe8436f030e17f8a5cb0",
+              "eeccf0476086dc3cdf2e4be62692942ad09da67e",
+              "6c29a3e10072eb3bbae54355e541c8a2783c4fdb",
+              "7937e30ed51a02776ee2616eae3a67893157942b",
           ]
-
           chunks = []
           for blob in blobs:
               request = urllib.request.Request(
@@ -55,28 +70,206 @@ jobs:
                   chunks.append(base64.b64decode(json.load(response)["content"]))
 
           compressed = b"".join(chunks)
-          expected = "b0d117c0ca955458907e6269afc869bdfb3b1d713ea6fbc7c43020c0a07d8bb8"
+          if len(compressed) != 29_771:
+              raise SystemExit(f"unexpected compressed patch length: {len(compressed)}")
           actual = hashlib.sha256(compressed).hexdigest()
+          expected = "5aeffb99b8323af03ad26c6dd05624f5b5add0b6e59e072eaacfc5a208c4ee1d"
           if actual != expected:
               raise SystemExit(f"compressed patch mismatch: expected={expected} actual={actual}")
 
-          patch = bz2.decompress(compressed).decode("utf-8")
-          marker = "diff -ruN runenwerk-g1a-base/apps/"
-          patch = patch[patch.index(marker):]
-          out = Path(os.environ["RUNNER_TEMP"], "issue-131-provisional.patch")
-          out.write_text(patch, encoding="utf-8")
-          Path(os.environ["RUNNER_TEMP"], "sha256.txt").write_text(
-              hashlib.sha256(patch.encode("utf-8")).hexdigest() + "  issue-131-provisional.patch\n",
-              encoding="utf-8",
+          patch = bz2.decompress(compressed)
+          actual = hashlib.sha256(patch).hexdigest()
+          expected = "91b38cd1f10fdc8a159974b20fe49444e777ed85d26b7908150a96c701dfcada"
+          if actual != expected:
+              raise SystemExit(f"patch mismatch: expected={expected} actual={actual}")
+          Path(os.environ["RUNNER_TEMP"], "g1a.patch").write_bytes(patch)
+          PY
+
+      - name: Apply, format, and enforce scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee "$RUNNER_TEMP/g1a.log") 2>&1
+          patch -p1 --batch < "$RUNNER_TEMP/g1a.patch"
+          cargo +stable fmt --all
+          git diff --check
+          ! rg -n 'RenderResourceId|RenderResourceIdSequence' engine apps domain net adapters --glob '*.rs'
+          ! rg -n 'GpuWorkResourceId::try_from_raw|TryFrom<u64> for GpuWorkResourceId|From<u64> for GpuWorkResourceId' engine apps --glob '*.rs'
+          ! rg -n 'wgpu::|winit::|ecs::|plugins::render|material_graph|world_sdf|runenui|ui_|editor|procgen|scene|product' engine/src/plugins/gpu --glob '*.rs'
+
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              "apps/runenwerk_draw/src/runtime/app.rs",
+              "apps/runenwerk_draw/src/runtime/gpu_ink.rs",
+              "apps/runenwerk_draw/tests/app_shell.rs",
+              "apps/runenwerk_editor/src/runtime/app.rs",
+              "apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs",
+              "apps/runenwerk_editor/tests/region_compass_visual_capture.rs",
+              "apps/runenwerk_editor/tests/startup_render_smoke.rs",
+              "apps/runenwerk_editor/tests/viewport_architecture_guards.rs",
+              "apps/runenwerk_editor/tests/viewport_branch_truth_smoke.rs",
+              "apps/runenwerk_editor/tests/viewport_gpu_truth_smoke.rs",
+              "engine/benches/render_flow_planning.rs",
+              "engine/examples/boids_render_flow/rendering/graph.rs",
+              "engine/examples/game_of_life_sdf/rendering/graph.rs",
+              "engine/examples/procedural_sky_sdf_terrain/rendering/graph.rs",
+              "engine/examples/render_flow_debug_inspect/main.rs",
+              "engine/examples/render_flow_fullscreen_minimal/main.rs",
+              "engine/examples/render_flow_postprocess_compositor/main.rs",
+              "engine/examples/sdf_render_flow/rendering/graph.rs",
+              "engine/src/plugins/gpu/api/mod.rs",
+              "engine/src/plugins/gpu/api/work_resource_id.rs",
+              "engine/src/plugins/gpu/mod.rs",
+              "engine/src/plugins/mod.rs",
+              "engine/src/plugins/render/api/bindings.rs",
+              "engine/src/plugins/render/api/errors.rs",
+              "engine/src/plugins/render/api/flow.rs",
+              "engine/src/plugins/render/api/handles.rs",
+              "engine/src/plugins/render/api/ids.rs",
+              "engine/src/plugins/render/api/mod.rs",
+              "engine/src/plugins/render/api/passes.rs",
+              "engine/src/plugins/render/backend/resource_allocator.rs",
+              "engine/src/plugins/render/frame/packet.rs",
+              "engine/src/plugins/render/gpu_primitives/compaction.rs",
+              "engine/src/plugins/render/gpu_primitives/counters.rs",
+              "engine/src/plugins/render/gpu_primitives/draw_args.rs",
+              "engine/src/plugins/render/gpu_primitives/plan.rs",
+              "engine/src/plugins/render/gpu_primitives/scan.rs",
+              "engine/src/plugins/render/graph/capabilities.rs",
+              "engine/src/plugins/render/graph/diagnostics.rs",
+              "engine/src/plugins/render/graph/execution_plan.rs",
+              "engine/src/plugins/render/graph/merge.rs",
+              "engine/src/plugins/render/graph/pass_graph.rs",
+              "engine/src/plugins/render/graph/planning.rs",
+              "engine/src/plugins/render/graph/prepared_validation.rs",
+              "engine/src/plugins/render/graph/resource_graph.rs",
+              "engine/src/plugins/render/graph/resource_lifetimes.rs",
+              "engine/src/plugins/render/graph/validation.rs",
+              "engine/src/plugins/render/procedural/authoring.rs",
+              "engine/src/plugins/render/procedural/descriptors.rs",
+              "engine/src/plugins/render/procedural/lowering.rs",
+              "engine/src/plugins/render/procedural/population/uniform_grid.rs",
+              "engine/src/plugins/render/renderer/render_flow/execute.rs",
+              "engine/src/plugins/render/renderer/render_flow/execute_passes.rs",
+              "engine/src/plugins/render/renderer/render_flow/preflight_cache.rs",
+              "engine/src/plugins/render/renderer/render_flow/runtime_resources.rs",
+              "engine/src/plugins/render/renderer/render_flow/runtime_resources/realize.rs",
+              "engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs",
+              "engine/src/plugins/render/resource/descriptors.rs",
+              "engine/src/plugins/render/resource/import.rs",
+              "engine/src/plugins/render/resource/transient.rs",
+              "engine/src/plugins/render/resource/usages.rs",
+              "engine/src/plugins/render/runtime/frame_prepare.rs",
+              "engine/tests/procedural_instance.rs",
+              "engine/tests/render_dynamic_targets.rs",
+              "engine/tests/render_flow_v2.rs",
+              "engine/tests/render_import_contract.rs",
+              "engine/tests/render_resource_model.rs",
+              "engine/tests/render_runtime_inspect.rs",
+          }
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", "88e9de3c94145c39391550efaf82a341630f081a"],
+              text=True,
+          ).splitlines())
+          if changed != expected:
+              raise SystemExit(
+                  f"G1A changed-file boundary mismatch\nmissing={sorted(expected - changed)}\nunexpected={sorted(changed - expected)}"
+              )
+          PY
+
+      - name: Run focused and canonical validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec >> >(tee -a "$RUNNER_TEMP/g1a.log") 2>&1
+          cargo test -p engine gpu_work_resource_id --locked
+          cargo test -p engine foreign_uniform_handle --locked
+          cargo test -p engine foreign_storage_handle --locked
+          cargo test -p engine render_resource --locked
+          cargo test -p engine render_flow_authoring_error --locked
+          cargo test -p engine --lib --locked
+          cargo test -p engine --tests --locked
+          cargo test -p runenwerk_draw --locked
+          cargo test -p runenwerk_editor --locked
+          cargo clippy -p engine --all-targets --locked -- -D warnings
+          cargo clippy -p runenwerk_draw -p runenwerk_editor --all-targets --locked -- -D warnings
+          cargo +stable validate
+          git diff --check
+
+      - name: Stage unreferenced validated blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import stat
+          import subprocess
+          import urllib.request
+          from pathlib import Path
+
+          paths = subprocess.check_output(
+              ["git", "diff", "--name-only", "88e9de3c94145c39391550efaf82a341630f081a"],
+              text=True,
+          ).splitlines()
+          manifest = []
+          for path_text in paths:
+              path = Path(path_text)
+              data = path.read_bytes()
+              payload = json.dumps({
+                  "content": base64.b64encode(data).decode("ascii"),
+                  "encoding": "base64",
+              }).encode("utf-8")
+              request = urllib.request.Request(
+                  "https://api.github.com/repos/dornglut/runenwerk/git/blobs",
+                  data=payload,
+                  method="POST",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                      "Content-Type": "application/json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urllib.request.urlopen(request) as response:
+                  blob_sha = json.load(response)["sha"]
+              mode = "100755" if path.stat().st_mode & stat.S_IXUSR else "100644"
+              manifest.append({"path": path_text, "mode": mode, "type": "blob", "sha": blob_sha})
+
+          out = Path(os.environ["RUNNER_TEMP"], "g1a-validated-blobs.json")
+          out.write_text(json.dumps({
+              "accepted_base": "88e9de3c94145c39391550efaf82a341630f081a",
+              "files": manifest,
+          }, indent=2) + "\n", encoding="utf-8")
+          subprocess.run(
+              ["git", "diff", "--stat", "88e9de3c94145c39391550efaf82a341630f081a"],
+              check=True,
+              stdout=Path(os.environ["RUNNER_TEMP"], "g1a-diff-stat.txt").open("w"),
+              text=True,
           )
           PY
 
-      - name: Upload recovered patch
+      - name: Upload validated blob manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: issue-131-provisional-patch
+          name: issue-131-g1a-validated-blobs
           path: |
-            ${{ runner.temp }}/issue-131-provisional.patch
-            ${{ runner.temp }}/sha256.txt
+            ${{ runner.temp }}/g1a-validated-blobs.json
+            ${{ runner.temp }}/g1a-diff-stat.txt
+            ${{ runner.temp }}/g1a.log
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 2
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: issue-131-g1a-prepublication-diagnostics
+          path: |
+            ${{ runner.temp }}/g1a.log
+            ${{ runner.temp }}/g1a.patch
+          if-no-files-found: warn
+          retention-days: 2
