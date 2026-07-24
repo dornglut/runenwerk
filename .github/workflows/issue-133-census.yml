@@ -52,6 +52,7 @@ jobs:
             ':!domain/sdf/**' \
             > "$out/consumer-patterns-outside-package.txt" || true
 
+          git archive --format=tar.gz -o "$out/runenwerk-head.tar.gz" HEAD
           git status --short > "$out/status-after.txt"
 
       - name: Upload census evidence
