@@ -1,3 +1,4 @@
+# Temporary exact-head validation trigger; reverted in the next commit.
 [alias]
 validate = "run --manifest-path tools/xtask/Cargo.toml --locked -- validate"
 xtask = "run --manifest-path tools/xtask/Cargo.toml --locked --"
