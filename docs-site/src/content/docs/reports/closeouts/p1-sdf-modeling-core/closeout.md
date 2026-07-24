@@ -15,7 +15,6 @@ related_domains:
   - ../../../domain/editor/README.md
   - ../../../domain/world-ops/README.md
   - ../../../domain/world-sdf/README.md
-  - ../../../domain/sdf/README.md
 ---
 
 # P1 SDF Modeling Core Closeout

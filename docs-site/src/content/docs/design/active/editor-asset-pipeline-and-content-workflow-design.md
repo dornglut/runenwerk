@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: domain
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-07-24
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-rendered-world-and-multi-entity-viewport-design.md
@@ -23,7 +23,6 @@ related_roadmaps:
 related_reports:
   - ../../reports/audits/editor-ui-priority-code-audit-2026-05-05.md
 related:
-  - ../../domain/sdf/README.md
   - ../../domain/world-sdf/README.md
   - ../../domain/world-ops/README.md
   - ../../domain/spatial/README.md
@@ -47,7 +46,7 @@ Implemented today:
 - Scene persistence uses `SceneFileV2` in `domain/editor/editor_persistence/src/scene_file.rs`.
 - Scene load follows migration, normalization, formation, and apply in `apps/runenwerk_editor/src/persistence/files.rs::load_scene_file_into_runtime_classified`.
 - Project persistence has `ProjectFileV2` in `domain/editor/editor_persistence/src/project_file.rs`, with migration from V1 scene-list projects.
-- SDF primitives, composition, transforms, sampling, gradients/normals, and query helpers exist in `domain/sdf/src/field.rs::SdfField3`, `domain/sdf/src/primitives/`, `domain/sdf/src/ops/`, and `domain/sdf/src/queries/`.
+- Reusable SDF primitives, composition, transforms, sampling, gradients/normals, and CPU query helpers are owned by standalone `dornglut/runen-sdf`.
 - World edit operation records, dirty-region tracking, build queues, and invalidation contracts exist in `domain/world_ops/src/operation_log.rs`, `domain/world_ops/src/dirty.rs`, `domain/world_ops/src/build_queue.rs`, and `domain/world_ops/src/region_invalidation.rs`.
 - Generic field-product invalidation and build helper contracts exist in `domain/world_ops/src/product_invalidation.rs`.
 - World-scale SDF chunk/page payload records and collision query contracts exist in `domain/world_sdf/src/storage.rs::SdfChunkStore` and `domain/world_sdf/src/collision.rs::CollisionQueryService`.
@@ -96,9 +95,9 @@ The asset domain crate owns engine-agnostic asset truth:
 
 It must not execute external tools, read arbitrary host files, allocate GPU resources, own app UI, own SDF field math, own world edit invalidation semantics, or own `world_sdf` payload storage.
 
-### `domain/sdf`
+### Standalone RunenSDF
 
-Owns analytic SDF primitives, composition, transforms, sampling, gradients/normals, and query behavior. The asset pipeline may reference SDF-authored sources and formed products, but it must not redefine SDF field semantics.
+`dornglut/runen-sdf` owns analytic SDF primitives, composition, transforms, sampling, gradients/normals, and CPU query behavior. The asset pipeline may reference SDF-authored sources and formed products, but it must not redefine reusable field semantics or duplicate the framework source.
 
 ### `domain/world_ops`
 

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-23
+last_reviewed: 2026-07-24
 related_docs:
   - ./roadmap.md
   - ./active-work.md
@@ -46,7 +46,9 @@ PR `#132` was closed without merge because it contained only temporary automatio
 - `dornglut/runen-sdf` PR `#4`: shared validation workflow adoption.
 - `dornglut/runen-sdf` PR `#5`: current `dornglut/*` repository authority and durable namespace validation, merged as `ffa970f3eb7fd9ebaa1cfc67665e3e3128cd0676`.
 
-The later Runenwerk consumer census and `domain/sdf` retirement remain issue `#133` work. Standalone source transfer completion does not itself remove the duplicate internal workspace package.
+- Issue `#133` / PR `#157`: complete consumer census proved zero real internal-package consumers; retired `domain/sdf`, workspace and lockfile authority, stale local framework docs, and the transient census workflow; added durable no-return validation without adding an unused external dependency. See [PT-RUNENSDF-004 closeout](../../reports/closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md).
+
+Runenwerk now has one reusable SDF source authority: `dornglut/runen-sdf`. Runenwerk retains only product/world integration such as `domain/world_sdf`.
 
 ## UI history
 

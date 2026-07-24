@@ -6,7 +6,7 @@ owner: workspace
 layer: cross-domain
 canonical: true
 lifecycle_exception: active_phase_evidence
-last_reviewed: 2026-05-09
+last_reviewed: 2026-07-24
 related_designs:
   - ../accepted/sdf-first-field-world-platform-design.md
   - ./editor-asset-pipeline-and-content-workflow-design.md
@@ -19,7 +19,6 @@ related_roadmaps:
   - ../../apps/runenwerk-editor/roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md
 related:
-  - ../../domain/sdf/README.md
   - ../../domain/world-sdf/README.md
   - ../../domain/world-ops/README.md
   - ../../domain/spatial/README.md
@@ -56,8 +55,8 @@ This plan is SDF-first and field-world-first. Mesh, GLB, and imported material w
 
 Implemented today:
 
-- `domain/sdf/src/field.rs::SdfField3` owns analytic SDF sampling.
-- `domain/sdf/src/primitives/`, `domain/sdf/src/ops/`, and `domain/sdf/src/queries/` own primitives, composition, transforms, raymarch, projection, classification, and sweep foundations.
+- Standalone `dornglut/runen-sdf` owns reusable analytic SDF sampling.
+- Standalone `dornglut/runen-sdf` owns reusable primitives, composition, transforms, raymarch, projection, classification, and sweep foundations.
 - `domain/world_ops/src/operations.rs::Operation` has SDF/world operation vocabulary for legacy `CsgAdd`/`CsgSubtract`, normalized `CsgBrushOperation` modes for P1 Add/Subtract/Intersect/SmoothAdd/SmoothSubtract/SmoothIntersect, `Smooth`, `Stamp`, `StructurePlace`, `MaterialFieldEdit`, and `DensityFieldDeform`.
 - `domain/world_ops/src/build_graph.rs::BuildGraphPhase` already includes `SdfFieldBuild`, `SummaryBuild`, `DerivedRenderBuild`, and `Publish`.
 - `engine/src/plugins/world/build/jobs.rs::dispatch_world_build_jobs_system` builds deterministic chunk payloads from operation windows and tracks material channel masks.
@@ -159,10 +158,10 @@ Before implementation starts on a feature track, create or update the owning des
 
 Owning domains:
 
-- `domain/sdf` for field math and queries;
+- standalone `dornglut/runen-sdf` for reusable field math and CPU queries;
 - `domain/world_ops` for edit operation records, invalidation, and build queues;
 - `domain/world_sdf` for formed chunk/page/brick payloads;
-- future `domain/sdf_authoring` only if scene/editor SDF authoring grows beyond `domain/editor/editor_scene`.
+- a future Runenwerk-owned authoring package only if scene/editor SDF authoring grows beyond `domain/editor/editor_scene`; it must not duplicate RunenSDF field semantics.
 
 Required features:
 

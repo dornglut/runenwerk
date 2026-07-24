@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-06-20
+last_reviewed: 2026-07-24
 ---
 
 # Runenwerk Editor
@@ -35,7 +35,7 @@ last_reviewed: 2026-06-20
 
 - [`../../domain/ui/README.md`](../../domain/ui/README.md)
 - [`../../domain/editor/README.md`](../../domain/editor/README.md)
-- [`../../domain/sdf/README.md`](../../domain/sdf/README.md)
+- Standalone signed-field mathematics: [RunenSDF](https://github.com/dornglut/runen-sdf)
 - [`../../domain/world-sdf/README.md`](../../domain/world-sdf/README.md)
 - [`../../design/active/editor-asset-pipeline-and-content-workflow-design.md`](../../design/active/editor-asset-pipeline-and-content-workflow-design.md)
 - [`../../design/active/editor-procedural-content-and-simulation-workflow-plan.md`](../../design/active/editor-procedural-content-and-simulation-workflow-plan.md)

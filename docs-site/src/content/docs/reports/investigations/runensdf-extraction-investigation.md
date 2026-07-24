@@ -5,18 +5,16 @@ status: active
 owner: sdf
 layer: investigation
 canonical: true
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-24
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../design/active/runensdf-extraction-design.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/specs/pt-runensdf-002-boundary-correction.ron
-  - ../../domain/sdf/README.md
-  - ../../domain/sdf/api-notes.md
-  - ../../domain/sdf/query-model.md
-  - ../../domain/sdf/numerics.md
-  - ../../domain/sdf/ownership-boundary.md
+  - ../closeouts/pt-runensdf-002-boundary-correction-closeout.md
+  - ../closeouts/pt-runensdf-003-standalone-transfer-closeout.md
+  - ../closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md
 ---
 
 # RunenSDF Extraction Investigation

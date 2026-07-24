@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-25
+last_reviewed: 2026-07-24
 related_docs:
   - ../../../CRATES.md
   - ./crate-docs-status.md
@@ -45,7 +45,6 @@ This document records active workspace crates and their intended layer. Update i
 | `world_streaming` | `domain/world_streaming` | domain | Payload-neutral chunk lifecycle and stream requests. | evolving |
 | `asset` | `domain/asset` | domain | Asset identity, descriptors, import planning, dependency graph, diagnostics, and ratification contracts. | evolving |
 | `product` | `domain/product` | domain | Shared formed-product descriptors, product jobs, query snapshots, diagnostics, policies, and ratification contracts. | evolving |
-| `sdf` | `domain/sdf` | domain | Signed-distance-field primitives, transforms, composition, and queries. | evolving |
 | `world_ops` | `domain/world_ops` | domain | Chunk/world operation logs, dirty tracking, build queues, invalidation, and replication deltas. | evolving |
 | `world_sdf` | `domain/world_sdf` | domain | SDF chunk payloads and collision query contracts. | evolving |
 | `scheduler` | `domain/scheduler` | domain | Deterministic schedule planning, graph validation, labels, access, and system execution plans. | evolving |

@@ -10,7 +10,6 @@ members = [
     "domain/world_streaming",
     "domain/asset",
     "domain/product",
-    "domain/sdf",
     "domain/world_ops",
     "domain/world_sdf",
     "domain/scheduler",

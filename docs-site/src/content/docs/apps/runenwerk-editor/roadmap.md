@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-05-17
+last_reviewed: 2026-07-24
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
   - ../../design/implemented/ui-definition-formation-foundation-design.md
@@ -39,7 +39,6 @@ related:
   - ./mvp/first-3d-editor-mvp.md
   - ./mvp/acceptance-criteria.md
   - ./mvp/implementation-sequence.md
-  - ../../domain/sdf/README.md
   - ../../domain/world-sdf/README.md
   - ../../domain/world-ops/README.md
   - ../../domain/spatial/README.md
@@ -77,7 +76,7 @@ Current implemented baseline:
 - Concrete app providers exist in `apps/runenwerk_editor/src/shell/providers/mod.rs::EditorSurfaceProviderRegistry`.
 - Retained UI substrate and widgets exist in `domain/ui/*`, including select, tree, table, tabs, toggle, numeric input, text input, scroll, split, and viewport embed.
 - Scene file migration, normalization, and formation exist in `domain/editor/editor_persistence/src/scene_migration.rs`, `domain/editor/editor_persistence/src/scene_normalization.rs`, and `domain/editor/editor_persistence/src/scene_formation.rs`.
-- SDF primitives, composition, transforms, sampling, gradients/normals, and queries exist in `domain/sdf/src/field.rs::SdfField3`, `domain/sdf/src/primitives/`, `domain/sdf/src/ops/`, and `domain/sdf/src/queries/`.
+- Reusable SDF primitives, composition, transforms, sampling, gradients/normals, and CPU queries are owned by standalone `dornglut/runen-sdf`; Runenwerk consumes product/world contracts through `domain/world_sdf` and editor-owned authoring projections.
 - World edit operation logs, dirty-region tracking, build queues, and invalidation contracts exist in `domain/world_ops/src/operation_log.rs`, `domain/world_ops/src/dirty.rs`, `domain/world_ops/src/build_queue.rs`, and `domain/world_ops/src/region_invalidation.rs`.
 - World-scale SDF chunk/page payload records and collision query contracts exist in `domain/world_sdf/src/storage.rs::SdfChunkStore` and `domain/world_sdf/src/collision.rs::CollisionQueryService`.
 - Spatial coordinates, chunk coordinates, clipmap windows, and chunk residency planning exist in `domain/spatial/src/` and `domain/chunking/src/`.
@@ -626,7 +625,7 @@ Exit criteria:
 - Asset pipeline architecture is captured in `docs-site/src/content/docs/design/active/editor-asset-pipeline-and-content-workflow-design.md`.
 - Procedural authoring, material/texturing, particles, physics, animation, and simulation workflows are captured in `docs-site/src/content/docs/design/active/editor-procedural-content-and-simulation-workflow-plan.md`.
 - Gameplay graph ATR IR, compiler passes, SDF physics relations, and ECS query/event/schedule lowering are captured in `docs-site/src/content/docs/design/active/gameplay-graph-atr-ir-and-ecs-lowering-design.md`.
-- The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md`, `docs-site/src/content/docs/domain/sdf/README.md`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
+- The roadmap explicitly follows the SDF-first field-world direction in `docs-site/src/content/docs/design/accepted/sdf-first-field-world-platform-design.md`, standalone `dornglut/runen-sdf`, and `docs-site/src/content/docs/domain/world-sdf/README.md`.
 - UI execution strategy is closed for M1 through M7 and M3.5/M3.6: retained tree UI plus tool-surface/canvas hybrid is the implementation path. Compiled-reactive or ECS-driven UI execution remains deferred and may not enter self-authoring as a first-time decision.
 - ADR 0009 makes Interaction V2 the shared editor UI behavior contract before further popup, scroll, chrome, docking, status-overflow, and viewport-input work. The required spine is definition vocabulary, validation rule, `FormedInteractionModel`, retained UI formation adapter, `ui_runtime` enforcement, and editor/app guard. The `IV2-menu-stack`, `IV2-scroll-ownership`, `IV2-menu-sizing`, `IV2-chrome-slots`, `IV2-dock-drop-zones`, and `IV2-status-and-viewport-arbitration` runtime-backed slices are implemented and doctrine-repaired; downstream implementation must consume the named contract slice it depends on instead of defining local policy. `docs-site/src/content/docs/reports/closeouts/wr-025-interaction-v2-doctrine-repair/closeout.md` closes the invalid dock/drop target and viewport/status behavior evidence.
 - Existing MVP, UI, editor, render, and runtime design docs link to this roadmap without restating stale phase order.
@@ -717,7 +716,7 @@ Implementation targets:
 - `domain/editor/editor_inspector/src/model/`, `domain/editor/editor_inspector/src/editing.rs`, and `apps/runenwerk_editor/src/editor_panels/inspector_panel.rs`
   - make common reflected fields editable through reusable controls and typed inspector edit values.
 - `domain/editor/editor_scene/src/sdf_authoring/`
-  - add scene-authoring contracts for SDF primitives, boolean composition intent, brush/layer metadata, and SDF preview diagnostics without making scene graph ownership replace `domain/sdf` or `domain/world_sdf`.
+  - add scene-authoring contracts for SDF primitives, boolean composition intent, brush/layer metadata, and SDF preview diagnostics without making scene graph ownership replace standalone RunenSDF semantics or `domain/world_sdf`.
 - `apps/runenwerk_editor/src/editor_features/viewport/sdf_tools.rs`
   - expose SDF brush, add/subtract, smooth/blend, and surface-pick interactions as editor tools routed through scene/world commands.
 - `domain/editor/editor_shell/src/composition/build_outliner_panel.rs`
@@ -1119,7 +1118,7 @@ Implementation targets:
 - `apps/runenwerk_editor/src/shell/providers/field_layer_stack.rs::FieldLayerStackProvider`
   - show and edit authored field-world layers, SDF operation ordering, and material channel bindings through commands.
 - `apps/runenwerk_editor/src/shell/providers/sdf_graph_canvas.rs::SdfGraphCanvasProvider`
-  - host SDF graph documents while using `domain/sdf` for field semantics and `domain/graph` only for graph substrate behavior.
+  - host SDF graph documents while using standalone RunenSDF for reusable field semantics and `domain/graph` only for graph substrate behavior.
 - `apps/runenwerk_editor/src/shell/providers/material_graph_canvas.rs::MaterialGraphCanvasProvider`
   - edit material graphs without making graph canvas state material truth.
 - `apps/runenwerk_editor/src/shell/providers/material_inspector.rs::MaterialInspectorProvider`

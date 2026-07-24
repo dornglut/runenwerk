@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-07-24
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
@@ -77,7 +77,7 @@ formation, or runtime execution.
 Domain crates own engine-agnostic product contracts, descriptors, ratifiers,
 query contracts, mutation requests, and invariants. Current owners remain:
 
-- `domain/sdf`: analytic SDF math, primitives, composition, sampling, and core
+- standalone `dornglut/runen-sdf`: analytic SDF math, primitives, composition, sampling, and core
   SDF queries.
 - `domain/spatial`: world, chunk, region, clipmap, ring, and coordinate
   vocabulary.

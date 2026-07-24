@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-23
+last_reviewed: 2026-07-24
 related_docs:
   - ../engineering-workflow.md
   - ./active-work.md
@@ -37,14 +37,13 @@ Runenwerk remains the integration and product repository. Framework repositories
 
 ## Current priorities
 
-1. Complete the RunenSDF retirement-only cutover gate under issue `#133`.
-2. Implement corrected owner-scoped RunenGPU G1A under issue `#131` from the resulting current `main`.
-3. Continue internal RunenGPU boundary proof through one decision-complete implementation slice at a time.
-4. Extract RunenGPU and perform a clean Runenwerk cutover only after G2-G8 and conformance gates pass.
-5. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
-6. Resume RunenECS boundary repair as separately bounded work.
+1. Implement corrected owner-scoped RunenGPU G1A under issue `#131` from accepted post-RunenSDF `main`.
+2. Continue internal RunenGPU boundary proof through one decision-complete implementation slice at a time.
+3. Extract RunenGPU and perform a clean Runenwerk cutover only after G2-G8 and conformance gates pass.
+4. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
+5. Resume RunenECS boundary repair as separately bounded work.
 
-The SDF and GPU tasks are serialized to keep canonical planning, repository-audit, and exact-base authority simple. Read-only investigation may still proceed independently.
+The RunenSDF cutover gate is complete. GPU implementation now owns the serialized active queue; read-only investigation may still proceed independently.
 
 ## RunenSDF
 
@@ -58,18 +57,14 @@ package: runen-sdf
 crate: runen_sdf
 ```
 
-Current Runenwerk manifest evidence shows `domain/sdf` remains a workspace member, while the likely product consumers inspected during the authority audit do not declare the package as a dependency. Issue `#133` must still perform the complete reverse-dependency and source-reference census.
+Issue `#133` completed the retirement-only cutover after an exact-head census proved zero real consumers of the internal package. Runenwerk now contains no `domain/sdf` package, workspace member, lockfile package, local framework documentation mirror, compatibility namespace, submodule, source include, or unused external dependency.
 
-If that census confirms zero live consumers, the clean cutover is retirement-only:
+Current authority is split deliberately:
 
-1. delete `domain/sdf`;
-2. remove workspace membership and lockfile authority;
-3. remove stale active duplicate-source documentation;
-4. add a durable repository guard preventing return of the internal package;
-5. add no unused dependency on standalone RunenSDF;
-6. pass exact-head validation and prove zero aliases, source mirrors, includes, submodules, branch dependencies, or duplicate implementations.
+- reusable signed-field mathematics and CPU reference queries: `dornglut/runen-sdf`;
+- Runenwerk world/product integration and payloads: `domain/world_sdf` and Runenwerk-owned adapters.
 
-An exact standalone dependency is added only if the complete census discovers a real consumer that must retain the public framework contract.
+The repository audit rejects return of the retired internal package and duplicate authority. Detailed evidence is recorded in the PT-RUNENSDF-004 closeout report.
 
 ## RunenGPU and RunenRender
 

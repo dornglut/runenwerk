@@ -5,7 +5,7 @@ status: active
 owner: domain
 layer: domain
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-07-24
 ---
 
 # Domain Layer Overview
@@ -37,7 +37,6 @@ Domain crates must not depend on:
 | Scene | `domain/scene` | [`scene/README.md`](./scene/README.md) |
 | Asset and product contracts | `domain/asset`, `domain/product` | Workspace-level current-state contract summaries live in [`../workspace/sdf-first-execution-roadmap.md`](../workspace/sdf-first-execution-roadmap.md), [`../design/accepted/field-product-contracts-diagnostics-and-residency-design.md`](../design/accepted/field-product-contracts-diagnostics-and-residency-design.md), and [`../design/accepted/sdf-first-production-capability-map.md`](../design/accepted/sdf-first-production-capability-map.md) until deeper crate guides are written. |
 | Geometry | `domain/geometry` | [`geometry/README.md`](./geometry/README.md), [`geometry/ownership-boundary.md`](./geometry/ownership-boundary.md), [`geometry/api-notes.md`](./geometry/api-notes.md) |
-| SDF | `domain/sdf` | [`sdf/index.md`](./sdf/index.md), [`sdf/README.md`](./sdf/README.md), [`sdf/query-model.md`](./sdf/query-model.md) |
 | Materials and textures | `domain/material_graph`, `domain/texture` | [`material-graph/README.md`](./material-graph/README.md), [`texture/README.md`](./texture/README.md) |
 | Procedural generation | `domain/procgen` | [`procgen/README.md`](./procgen/README.md) for generator documents, planning lifecycle, reservations, deterministic lowering, and product-output boundaries |
 | Drawing | `domain/drawing` | [`drawing/README.md`](./drawing/README.md) |
@@ -92,7 +91,7 @@ Start here when working in the domain layer:
 - Scheduler: [`scheduler/README.md`](./scheduler/README.md)
 - Geometry: [`geometry/README.md`](./geometry/README.md)
 - Asset/product contracts: [`../design/accepted/field-product-contracts-diagnostics-and-residency-design.md`](../design/accepted/field-product-contracts-diagnostics-and-residency-design.md)
-- SDF: [`sdf/index.md`](./sdf/index.md)
+- Signed-field mathematics: standalone [RunenSDF](https://github.com/dornglut/runen-sdf); Runenwerk retains only product/world integration such as [`world-sdf/README.md`](./world-sdf/README.md).
 - Material graph: [`material-graph/README.md`](./material-graph/README.md)
 - Texture: [`texture/README.md`](./texture/README.md)
 - Procgen contract: [`procgen/README.md`](./procgen/README.md)

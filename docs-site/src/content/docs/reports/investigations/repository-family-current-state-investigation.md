@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: investigation
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-24
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -31,12 +31,12 @@ safely in parallel?
 
 ```text
 product       repository                 package       crate
-RunenSDF      Crystonix/runen-sdf        runen-sdf     runen_sdf
-RunenECS      target Crystonix/runen-ecs package topology governed separately
-RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
-RunenRender   Crystonix/runen-render     runen-render  runen_render
-RunenUI       Crystonix/runen-ui         existing workspace; current packages include runenui_core and runenui_runtime
-Runenwerk     Crystonix/runenwerk        workspace      integration/product
+RunenSDF      dornglut/runen-sdf         runen-sdf     runen_sdf
+RunenECS      target dornglut/runen-ecs  package topology governed separately
+RunenGPU      target dornglut/runen-gpu  runen-gpu     runen_gpu
+RunenRender   target dornglut/runen-render runen-render runen_render
+RunenUI       dornglut/runen-ui          existing workspace; current packages include runenui_core and runenui_runtime
+Runenwerk     dornglut/runenwerk         workspace      integration/product
 ```
 
 RunenSDF and RunenUI exist as independent repositories. RunenECS, RunenGPU, and
@@ -64,7 +64,7 @@ implementation by itself.
 
 | Candidate | Current location/state | Readiness | Next allowed work |
 |---|---|---|---|
-| RunenSDF | standalone repository accepted at `d52badefc640d6dc6dcdd40268af3aea1bb8eefe`; `domain/sdf` still present on current Runenwerk `main` | standalone complete; Runenwerk cutover separate | exact consumer audit and separately reviewed clean cutover |
+| RunenSDF | standalone repository maintained in `dornglut/runen-sdf`; internal Runenwerk duplicate retired under issue `#133` / PR `#157` | standalone and Runenwerk cutover complete | standalone roadmap or independently authorized adapter work |
 | RunenECS | `domain/ecs`, `domain/ecs_macros`, parts of `domain/scheduler` | internal ownership/safety repair required | bounded R1 implementation after current-main review |
 | RunenGPU | GPU execution mixed into `engine/src/plugins/render` and related packages | architecture accepted; S0 incomplete | read-only S0 inventory only |
 | RunenRender | image formation mixed with GPU/host/domain/product code | architecture accepted; depends on RunenGPU extraction | read-only S0 inventory only |
@@ -77,7 +77,7 @@ implementation by itself.
 The in-workspace boundary correction completed through Runenwerk PR `#116`.
 
 The standalone repository transfer completed through Runenwerk PR `#118` and
-`Crystonix/runen-sdf` PR `#1` at:
+`dornglut/runen-sdf` PR `#1` at:
 
 ```text
 d52badefc640d6dc6dcdd40268af3aea1bb8eefe
@@ -94,20 +94,11 @@ Accepted standalone ownership includes:
 RunenSDF does not own Runenwerk geometry, world streaming, ECS, rendering, GPU,
 materials, UI, or product policy.
 
-### Remaining Runenwerk state
+### Runenwerk cutover result
 
-Current Runenwerk `main` still contains `domain/sdf`. No merged Runenwerk evidence
-currently records the clean-cutover deletion as complete.
+Issue `#133` / PR `#157` completed the exact Cargo, source, manifest, index, submodule, documentation, and persisted-format census. The inverse dependency tree contained only the internal package itself, no other manifest declared it, and code-pattern matches outside the package were `world_sdf` or documentation terminology rather than consumers.
 
-The next decision must inventory every code, test, manifest, adapter, document, and
-persisted consumer, then either:
-
-- pin the accepted external revision for real active consumers and delete the
-  internal authority; or
-- delete the internal package without adding an unused external dependency.
-
-No forwarding package, source include, mirror, alias, submodule, or branch
-dependency may survive.
+Runenwerk therefore completed the retirement-only path: the internal source, workspace and lockfile authority, stale local framework documentation, and transient census workflow were removed. No standalone dependency, forwarding package, source include, mirror, alias, submodule, or moving-branch dependency was added.
 
 ## RunenECS
 
@@ -296,7 +287,7 @@ Allowed in parallel:
 - independently scoped RunenECS repair work that does not share manifests,
   identities, or lifecycle ownership;
 - RunenUI work in its repository;
-- separately reviewed RunenSDF consumer/cutover investigation;
+- separately reviewed RunenSDF adapter or consumer investigation after a real use case exists;
 - unrelated product work with no shared architecture files.
 
 Must be serialized or explicitly rebased:
@@ -319,7 +310,7 @@ planning authorities.
 
 ## Conclusion
 
-RunenSDF standalone transfer is complete; its Runenwerk clean cutover remains a
-separate decision. RunenECS requires ordered repair. RunenGPU and RunenRender have
+RunenSDF standalone transfer and its Runenwerk retirement-only clean cutover are
+complete. RunenECS requires ordered repair. RunenGPU and RunenRender have
 accepted ownership architecture, but S0 is the only safe next action. No GPU or
 renderer implementation or external source movement is authorized yet.

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-07-24
 ---
 
 # Crate Documentation Status
@@ -44,7 +44,6 @@ Status labels:
 | `world_streaming` | `domain/world_streaming` | current | [`../domain/world-streaming/README.md`](../domain/world-streaming/README.md) |
 | `asset` | `domain/asset` | thin | [`../domain/00-overview.md`](../domain/00-overview.md) |
 | `product` | `domain/product` | thin | [`../domain/00-overview.md`](../domain/00-overview.md) |
-| `sdf` | `domain/sdf` | current | [`../domain/sdf/README.md`](../domain/sdf/README.md) |
 | `world_ops` | `domain/world_ops` | thin | [`../domain/world-ops/README.md`](../domain/world-ops/README.md) |
 | `world_sdf` | `domain/world_sdf` | thin | [`../domain/world-sdf/README.md`](../domain/world-sdf/README.md) |
 | `scheduler` | `domain/scheduler` | thin | [`../domain/scheduler/README.md`](../domain/scheduler/README.md) |

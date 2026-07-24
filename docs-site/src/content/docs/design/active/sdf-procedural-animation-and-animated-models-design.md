@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-07-24
 related_adrs:
   - ../../adr/accepted/0004-separate-description-from-execution.md
   - ../../adr/accepted/0005-projections-are-derived-state.md
@@ -114,7 +114,7 @@ ARCHITECTURE.md
 DOMAIN_MAP.md
 AI_GUIDE.md
 domain/animation/
-domain/sdf/
+standalone dornglut/runen-sdf
 domain/editor/
 future domain/physics/
 future domain/rendering/
@@ -410,7 +410,7 @@ domain/animation/
 ├── animation-events.md
 └── procedural-animation-and-sdf-models.md
 
-domain/sdf/
+dornglut/runen-sdf/docs/
 ├── sdf-models.md
 ├── sdf-shape-graph.md
 ├── semantic-sdf-regions.md
@@ -1391,8 +1391,8 @@ Create/update:
 
 ```text
 docs-site/src/content/docs/design/active/sdf-procedural-animation-and-animated-models-design.md
-domain/sdf/sdf-deformation.md
-domain/sdf/semantic-sdf-regions.md
+standalone dornglut/runen-sdf docs for sdf-deformation
+standalone dornglut/runen-sdf docs for semantic-sdf-regions
 domain/editor/procedural-animation-editor.md
 future domain/physics/interaction-fields.md
 future domain/rendering/animated-sdf-rendering.md

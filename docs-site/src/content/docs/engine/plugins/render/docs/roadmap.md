@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-07-24
 related_designs:
   - ../../../../design/accepted/sdf-product-renderer-and-gpu-residency-design.md
   - ../../../../design/accepted/editor-native-multi-window-presentation-design.md
@@ -676,7 +676,7 @@ You explicitly want this engine to be strong for:
 - SDF rendering
 - raymarching
 - procedural rendering
-- hybrid future with `domain/sdf`, `domain/spatial`, and `domain/geometry`
+- hybrid future with standalone RunenSDF, `domain/spatial`, and `domain/geometry`
 
 ## Domains
 
