@@ -50,7 +50,7 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          blob = "a35b6a295571e4d5586d8b48e104403cd6e12190"
+          blob = "6b76c79f7f2b906039ea3eb86238ebd6cd3057cc"
           request = urllib.request.Request(
               f"https://api.github.com/repos/dornglut/runenwerk/git/blobs/{blob}",
               headers={
@@ -61,10 +61,10 @@ jobs:
           )
           with urllib.request.urlopen(request) as response:
               compressed = base64.b64decode(json.load(response)["content"])
-          if len(compressed) != 2402:
+          if len(compressed) != 2787:
               raise SystemExit(f"unexpected runner length: {len(compressed)}")
           actual = hashlib.sha256(compressed).hexdigest()
-          expected = "e698ed6a961dc32392cd1fc963e51bbdf669d4939a723d059bdd212e2d21997e"
+          expected = "6f33c534cec89b9a561eb0660fcda71606edfef78cb675c8e93bdcc06a380594"
           if actual != expected:
               raise SystemExit(f"runner mismatch: expected={expected} actual={actual}")
           script = bz2.decompress(compressed)
