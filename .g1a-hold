@@ -1,0 +1,1 @@
+Publication is intentionally blocked until RenderFlow allocation exhaustion is propagated without panic, expect, unwrap, or silent fallback.
