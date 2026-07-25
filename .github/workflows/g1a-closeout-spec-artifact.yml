@@ -1,0 +1,59 @@
+name: G1A Closeout Spec Artifact
+
+on:
+  pull_request:
+    branches:
+      - validation/pt-runengpu-g1a-closeout-spec
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  produce:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'validation/pt-runengpu-g1a-closeout-trigger'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout accepted G1A merge
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 5bbdab36ae661d99432bfe5d215062c397aac975
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Produce exact completed phase specification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs-site/src/content/docs/workspace/specs/pt-runengpu-g1a-logical-work-resource-identity.ron")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              'lifecycle_state: "active-planning"': 'lifecycle_state: "completed"',
+              'implementation_authorization_status: "authorized-after-transitive-caller-correction-merge"': 'implementation_authorization_status: "implemented-and-merged"',
+              'source_baseline: "7ac6fe8cd1f404bd54a3c5bb93d72ac2e45664f5"': 'source_baseline: "88e9de3c94145c39391550efaf82a341630f081a"',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f"phase-spec replacement mismatch: {old}")
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          test "$(git diff --name-only)" = "docs-site/src/content/docs/workspace/specs/pt-runengpu-g1a-logical-work-resource-identity.ron"
+          git diff --check
+          python tools/docs/validate_docs.py
+
+      - name: Upload completed phase specification
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: g1a-completed-phase-spec
+          path: docs-site/src/content/docs/workspace/specs/pt-runengpu-g1a-logical-work-resource-identity.ron
+          if-no-files-found: error
+          retention-days: 2
