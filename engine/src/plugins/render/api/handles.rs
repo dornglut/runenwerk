@@ -1,4 +1,5 @@
-use crate::plugins::render::{RenderPassId, RenderResourceId};
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::RenderPassId;
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -18,13 +19,13 @@ impl PassHandle {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StorageArrayHandle<T> {
-    id: RenderResourceId,
+    id: GpuWorkResourceId,
     len: u64,
     _marker: PhantomData<fn() -> T>,
 }
 
 impl<T> StorageArrayHandle<T> {
-    pub(crate) fn new(id: RenderResourceId, len: u64) -> Self {
+    pub(crate) fn new(id: GpuWorkResourceId, len: u64) -> Self {
         Self {
             id,
             len,
@@ -32,7 +33,7 @@ impl<T> StorageArrayHandle<T> {
         }
     }
 
-    pub fn id(&self) -> &RenderResourceId {
+    pub fn id(&self) -> &GpuWorkResourceId {
         &self.id
     }
 
@@ -47,19 +48,19 @@ impl<T> StorageArrayHandle<T> {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UniformHandle<U> {
-    id: RenderResourceId,
+    id: GpuWorkResourceId,
     _marker: PhantomData<fn() -> U>,
 }
 
 impl<U> UniformHandle<U> {
-    pub(crate) fn new(id: RenderResourceId) -> Self {
+    pub(crate) fn new(id: GpuWorkResourceId) -> Self {
         Self {
             id,
             _marker: PhantomData,
         }
     }
 
-    pub fn id(&self) -> &RenderResourceId {
+    pub fn id(&self) -> &GpuWorkResourceId {
         &self.id
     }
 }

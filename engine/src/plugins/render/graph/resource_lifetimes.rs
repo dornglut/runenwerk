@@ -1,8 +1,9 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::graph::{
     CompiledPassDescriptor, RenderExecutionGraphDiagnostic, RenderExecutionGraphDiagnosticKind,
 };
 use crate::plugins::render::resource::ResourceLifetime;
-use crate::plugins::render::{RenderFlowId, RenderResourceDescriptor, RenderResourceId};
+use crate::plugins::render::{RenderFlowId, RenderResourceDescriptor};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -22,7 +23,7 @@ pub enum CompiledResourceAccessKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledResourceLifetimeWindow {
-    pub resource_id: RenderResourceId,
+    pub resource_id: GpuWorkResourceId,
     pub resource_label: Option<String>,
     pub lifetime: ResourceLifetime,
     pub first_use: Option<usize>,
@@ -36,7 +37,7 @@ pub struct CompiledResourceLifetimeWindow {
 
 impl CompiledResourceLifetimeWindow {
     fn new(
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_label: Option<String>,
         lifetime: ResourceLifetime,
     ) -> Self {
@@ -87,7 +88,7 @@ impl CompiledResourceLifetimeWindow {
 
 pub fn compile_resource_lifetime_windows(
     resources: &[RenderResourceDescriptor],
-    resource_labels: &BTreeMap<RenderResourceId, String>,
+    resource_labels: &BTreeMap<GpuWorkResourceId, String>,
     pass_order: &[CompiledPassDescriptor],
 ) -> Vec<CompiledResourceLifetimeWindow> {
     let mut windows = resources
@@ -219,8 +220,8 @@ pub fn diagnose_resource_lifetime_windows(
 }
 
 fn observe(
-    windows: &mut BTreeMap<RenderResourceId, CompiledResourceLifetimeWindow>,
-    resource_id: RenderResourceId,
+    windows: &mut BTreeMap<GpuWorkResourceId, CompiledResourceLifetimeWindow>,
+    resource_id: GpuWorkResourceId,
     index: usize,
     access: CompiledResourceAccessKind,
 ) {

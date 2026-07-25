@@ -1,6 +1,7 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::graph::{RenderPassNode, ResourceGraph};
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
-use crate::plugins::render::{GpuParams, GpuUniform, RenderPassId, RenderResourceId};
+use crate::plugins::render::{GpuParams, GpuUniform, RenderPassId};
 use bytemuck::{Pod, Zeroable};
 use std::any::{Any, TypeId, type_name};
 use std::collections::BTreeMap;
@@ -10,7 +11,7 @@ use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct ProjectedUniformBuffer {
-    pub buffer_id: RenderResourceId,
+    pub buffer_id: GpuWorkResourceId,
     pub params_type_name: &'static str,
     pub bytes: Vec<u8>,
 }
@@ -163,7 +164,7 @@ pub enum ParamProjectionError {
         pass_label: String,
         state_type_name: &'static str,
         params_type_name: &'static str,
-        uniform_id: RenderResourceId,
+        uniform_id: GpuWorkResourceId,
     },
 
     #[error(
@@ -182,7 +183,7 @@ pub enum ParamProjectionError {
         pass_label: String,
         state_type_name: &'static str,
         params_type_name: &'static str,
-        uniform_id: RenderResourceId,
+        uniform_id: GpuWorkResourceId,
     },
 }
 
@@ -197,7 +198,7 @@ pub trait ParamProjection: Send + Sync {
 
 #[derive(Clone)]
 pub struct PassParamBinding {
-    uniform_id: RenderResourceId,
+    uniform_id: GpuWorkResourceId,
     projection: Arc<dyn ParamProjection>,
 }
 
@@ -213,7 +214,7 @@ impl std::fmt::Debug for PassParamBinding {
 }
 
 impl PassParamBinding {
-    pub fn uniform_state<S, P, F>(uniform_id: RenderResourceId, build: F) -> Self
+    pub fn uniform_state<S, P, F>(uniform_id: GpuWorkResourceId, build: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         P: GpuParams + Send + Sync + 'static,
@@ -228,7 +229,7 @@ impl PassParamBinding {
         }
     }
 
-    pub fn uniform_state_with_surface<S, P, F>(uniform_id: RenderResourceId, build: F) -> Self
+    pub fn uniform_state_with_surface<S, P, F>(uniform_id: GpuWorkResourceId, build: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         P: GpuParams + Send + Sync + 'static,
@@ -243,7 +244,7 @@ impl PassParamBinding {
         }
     }
 
-    pub fn uniform_id(&self) -> &RenderResourceId {
+    pub fn uniform_id(&self) -> &GpuWorkResourceId {
         &self.uniform_id
     }
 
@@ -367,7 +368,7 @@ pub fn project_uniform_bindings_for_pass(
     surface_size: (u32, u32),
 ) -> Result<Vec<ProjectedUniformBuffer>, Vec<ParamProjectionError>> {
     let mut outputs = Vec::<ProjectedUniformBuffer>::new();
-    let mut projected_by_buffer = BTreeMap::<RenderResourceId, usize>::new();
+    let mut projected_by_buffer = BTreeMap::<GpuWorkResourceId, usize>::new();
     let mut errors = Vec::<ParamProjectionError>::new();
 
     for binding in &pass.uniform_bindings {

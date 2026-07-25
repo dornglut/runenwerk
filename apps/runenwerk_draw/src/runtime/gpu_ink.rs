@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Result;
+
 use drawing::DrawingInkTileProduct;
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderDebugConfigResource,
@@ -52,24 +54,25 @@ struct DrawingInkGpuValidationCandidate {
     product: DrawingInkTileProduct,
 }
 
-pub fn register_drawing_ink_gpu_flow(app: &mut engine::App) {
-    let (flow, resource) = build_drawing_ink_gpu_flow();
+pub fn register_drawing_ink_gpu_flow(app: &mut engine::App) -> Result<()> {
+    let (flow, resource) = build_drawing_ink_gpu_flow()?;
     app.add_render_flow(flow);
     app.insert_resource(resource);
+    Ok(())
 }
 
-fn build_drawing_ink_gpu_flow() -> (RenderFlow, DrawingInkGpuFlowResource) {
+fn build_drawing_ink_gpu_flow() -> Result<(RenderFlow, DrawingInkGpuFlowResource)> {
     let flow = RenderFlow::new(DRAWING_GPU_INK_FLOW_LABEL)
         .with_target_alias(
             DRAWING_GPU_INK_CPU_INPUT_ALIAS,
             RenderTargetAliasKind::Texture,
-        )
+        )?
         .with_color_target_exact(
             DRAWING_GPU_INK_CPU_REFERENCE_TARGET,
             RenderTextureTargetFormat::Rgba8Unorm,
-        )
-        .with_storage_texture(DRAWING_GPU_INK_SCRATCH_TARGET)
-        .with_target_alias(DRAWING_GPU_INK_OUTPUT_ALIAS, RenderTargetAliasKind::Texture)
+        )?
+        .with_storage_texture(DRAWING_GPU_INK_SCRATCH_TARGET)?
+        .with_target_alias(DRAWING_GPU_INK_OUTPUT_ALIAS, RenderTargetAliasKind::Texture)?
         .copy_pass(DRAWING_GPU_INK_CPU_REFERENCE_PASS)
         .offscreen_products_only()
         .source(DRAWING_GPU_INK_CPU_INPUT_ALIAS)
@@ -97,7 +100,7 @@ fn build_drawing_ink_gpu_flow() -> (RenderFlow, DrawingInkGpuFlowResource) {
             .pass_id(DRAWING_GPU_INK_OUTPUT_COPY_PASS)
             .expect("GPU output copy pass id should be registered"),
     };
-    (flow, resource)
+    Ok((flow, resource))
 }
 
 pub fn process_drawing_ink_gpu_validation_report_system(
@@ -493,7 +496,8 @@ mod tests {
 
     #[test]
     fn cpu_reference_target_is_exact_rgba8_unorm_proof_data() {
-        let (flow, _resource) = build_drawing_ink_gpu_flow();
+        let (flow, _resource) =
+            build_drawing_ink_gpu_flow().expect("drawing ink GPU flow authoring should succeed");
         let id = flow
             .resource_id(DRAWING_GPU_INK_CPU_REFERENCE_TARGET)
             .expect("CPU reference target should be registered");

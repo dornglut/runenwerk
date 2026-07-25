@@ -1,3 +1,4 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledPassExecutionPlan, CompiledRenderFlowPlan,
     RenderExecutionGraphDiagnostic, RenderExecutionGraphDiagnosticKind,
@@ -359,7 +360,7 @@ fn validate_resource_descriptor_capabilities(
 
 fn validate_texture_format_capability(
     flow: &CompiledRenderFlowPlan,
-    resource_id: crate::plugins::render::RenderResourceId,
+    resource_id: GpuWorkResourceId,
     format: RenderTextureFormatPolicy,
     supported: &BTreeSet<RenderTextureTargetFormat>,
     profile: &RenderBackendCapabilityProfile,
@@ -385,7 +386,7 @@ fn validate_texture_format_capability(
 
 fn resource_capability_diagnostic(
     flow: &CompiledRenderFlowPlan,
-    resource_id: crate::plugins::render::RenderResourceId,
+    resource_id: GpuWorkResourceId,
     capability: impl Into<String>,
     message: impl Into<String>,
 ) -> RenderExecutionGraphDiagnostic {

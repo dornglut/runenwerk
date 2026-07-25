@@ -3,7 +3,8 @@ use super::{
     IndirectDrawArgsGenerationDescriptor, PrefixScanMode, U32PrefixScanDescriptor,
     U32ScatterDescriptor,
 };
-use crate::plugins::render::{RenderResourceId, RenderShaderConstant};
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::RenderShaderConstant;
 
 pub const GPU_PRIMITIVE_WORKGROUP_SIZE: u32 = 64;
 pub const GPU_PRIMITIVE_COUNTER_RESET_SHADER: &str =
@@ -25,19 +26,19 @@ pub enum GpuPrimitiveResourceAccessKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuPrimitiveResourceAccess {
-    pub resource_id: RenderResourceId,
+    pub resource_id: GpuWorkResourceId,
     pub kind: GpuPrimitiveResourceAccessKind,
 }
 
 impl GpuPrimitiveResourceAccess {
-    pub const fn read(resource_id: RenderResourceId) -> Self {
+    pub const fn read(resource_id: GpuWorkResourceId) -> Self {
         Self {
             resource_id,
             kind: GpuPrimitiveResourceAccessKind::Read,
         }
     }
 
-    pub const fn write(resource_id: RenderResourceId) -> Self {
+    pub const fn write(resource_id: GpuWorkResourceId) -> Self {
         Self {
             resource_id,
             kind: GpuPrimitiveResourceAccessKind::Write,
@@ -59,12 +60,12 @@ pub struct GpuPrimitiveTemporaryStorage {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuPrimitiveDispatchResource {
-    Existing(RenderResourceId),
+    Existing(GpuWorkResourceId),
     Temporary(String),
 }
 
 impl GpuPrimitiveDispatchResource {
-    pub const fn existing(resource_id: RenderResourceId) -> Self {
+    pub const fn existing(resource_id: GpuWorkResourceId) -> Self {
         Self::Existing(resource_id)
     }
 
@@ -531,9 +532,12 @@ mod tests {
 
     #[test]
     fn gpu_primitives_execution_plan_exposes_resource_accesses() {
-        let (flow, counters) =
-            RenderFlow::new("test.primitive.plan").storage_array::<U32Counter>("counts", 16);
-        let (flow, offsets) = flow.storage_array::<U32ScanElement>("offsets", 16);
+        let (flow, counters) = RenderFlow::new("test.primitive.plan")
+            .storage_array::<U32Counter>("counts", 16)
+            .expect("render flow authoring should succeed");
+        let (flow, offsets) = flow
+            .storage_array::<U32ScanElement>("offsets", 16)
+            .expect("render flow authoring should succeed");
         let _flow = flow;
         let counters_id = *counters.id();
         let offsets_id = *offsets.id();
@@ -572,12 +576,21 @@ mod tests {
 
     #[test]
     fn gpu_primitives_execution_plan_lowers_to_compute_dispatch_stages() {
-        let (flow, counters) =
-            RenderFlow::new("test.primitive.dispatch").storage_array::<U32Counter>("counts", 130);
-        let (flow, offsets) = flow.storage_array::<U32ScanElement>("offsets", 130);
-        let (flow, source_indices) = flow.storage_array::<U32ScanElement>("source", 130);
-        let (flow, sorted_indices) = flow.storage_array::<U32ScanElement>("sorted", 130);
-        let (_flow, draw_args) = flow.storage_array::<DrawIndirectArgs>("draw.args", 1);
+        let (flow, counters) = RenderFlow::new("test.primitive.dispatch")
+            .storage_array::<U32Counter>("counts", 130)
+            .expect("render flow authoring should succeed");
+        let (flow, offsets) = flow
+            .storage_array::<U32ScanElement>("offsets", 130)
+            .expect("render flow authoring should succeed");
+        let (flow, source_indices) = flow
+            .storage_array::<U32ScanElement>("source", 130)
+            .expect("render flow authoring should succeed");
+        let (flow, sorted_indices) = flow
+            .storage_array::<U32ScanElement>("sorted", 130)
+            .expect("render flow authoring should succeed");
+        let (_flow, draw_args) = flow
+            .storage_array::<DrawIndirectArgs>("draw.args", 1)
+            .expect("render flow authoring should succeed");
 
         let reset = CounterResetDescriptor::new("reset", counters.clone(), 130)
             .expect("valid counter reset");
@@ -632,11 +645,21 @@ mod tests {
     fn gpu_primitives_append_to_render_flow_uses_normal_compute_passes() {
         let (flow, counters) = RenderFlow::new("test.primitive.flow")
             .with_color_target("test.primitive.color")
-            .storage_array::<U32Counter>("counts", 130);
-        let (flow, offsets) = flow.storage_array::<U32ScanElement>("offsets", 130);
-        let (flow, source_indices) = flow.storage_array::<U32ScanElement>("source", 130);
-        let (flow, sorted_indices) = flow.storage_array::<U32ScanElement>("sorted", 130);
-        let (flow, draw_args) = flow.storage_array::<DrawIndirectArgs>("draw.args", 1);
+            .expect("render flow authoring should succeed")
+            .storage_array::<U32Counter>("counts", 130)
+            .expect("render flow authoring should succeed");
+        let (flow, offsets) = flow
+            .storage_array::<U32ScanElement>("offsets", 130)
+            .expect("render flow authoring should succeed");
+        let (flow, source_indices) = flow
+            .storage_array::<U32ScanElement>("source", 130)
+            .expect("render flow authoring should succeed");
+        let (flow, sorted_indices) = flow
+            .storage_array::<U32ScanElement>("sorted", 130)
+            .expect("render flow authoring should succeed");
+        let (flow, draw_args) = flow
+            .storage_array::<DrawIndirectArgs>("draw.args", 1)
+            .expect("render flow authoring should succeed");
 
         let reset = CounterResetDescriptor::new("reset", counters.clone(), 130)
             .expect("valid counter reset");
@@ -753,14 +776,20 @@ mod tests {
         };
         let element_count = 130_u32;
         let (flow, scan_input) = RenderFlow::new("test.primitive.runtime")
-            .storage_array::<U32ScanElement>("scan.input", u64::from(element_count));
-        let (flow, scan_output) =
-            flow.storage_array::<U32ScanElement>("scan.output", u64::from(element_count));
-        let (flow, source_indices) =
-            flow.storage_array::<U32ScanElement>("source.indices", u64::from(element_count));
-        let (flow, sorted_indices) =
-            flow.storage_array::<U32ScanElement>("sorted.indices", u64::from(element_count));
-        let (_flow, draw_args) = flow.storage_array::<DrawIndirectArgs>("draw.args", 1);
+            .storage_array::<U32ScanElement>("scan.input", u64::from(element_count))
+            .expect("render flow authoring should succeed");
+        let (flow, scan_output) = flow
+            .storage_array::<U32ScanElement>("scan.output", u64::from(element_count))
+            .expect("render flow authoring should succeed");
+        let (flow, source_indices) = flow
+            .storage_array::<U32ScanElement>("source.indices", u64::from(element_count))
+            .expect("render flow authoring should succeed");
+        let (flow, sorted_indices) = flow
+            .storage_array::<U32ScanElement>("sorted.indices", u64::from(element_count))
+            .expect("render flow authoring should succeed");
+        let (_flow, draw_args) = flow
+            .storage_array::<DrawIndirectArgs>("draw.args", 1)
+            .expect("render flow authoring should succeed");
 
         let scan = U32PrefixScanDescriptor::new(
             "scan",
@@ -899,9 +928,11 @@ mod tests {
 
     fn prefix_scan_stage_count(element_count: u32) -> usize {
         let (flow, input) = RenderFlow::new("test.primitive.scan.dispatch")
-            .storage_array::<U32ScanElement>("scan.input", u64::from(element_count));
-        let (_flow, output) =
-            flow.storage_array::<U32ScanElement>("scan.output", u64::from(element_count));
+            .storage_array::<U32ScanElement>("scan.input", u64::from(element_count))
+            .expect("render flow authoring should succeed");
+        let (_flow, output) = flow
+            .storage_array::<U32ScanElement>("scan.output", u64::from(element_count))
+            .expect("render flow authoring should succeed");
         let scan = U32PrefixScanDescriptor::new(
             "scan",
             input,

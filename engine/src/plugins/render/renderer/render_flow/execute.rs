@@ -1074,20 +1074,24 @@ mod tests {
     fn fixed_step_test_plan() -> CompiledRenderFlowPlan {
         let (flow, cells) = RenderFlow::new("fixed.step.schedule")
             .with_state::<TestState>()
-            .storage_array::<TestCell>("cells", 4);
+            .storage_array::<TestCell>("cells", 4)
+            .expect("render flow authoring should succeed");
         let flow = flow
             .compute_pass("step.a")
             .uniform_from_state(TestState::params)
+            .expect("render flow authoring should succeed")
             .bind_storage(cells.clone())
             .dispatch_from_state(TestState::dispatch)
             .finish()
             .compute_pass("step.b")
             .uniform_from_state(TestState::params)
+            .expect("render flow authoring should succeed")
             .bind_storage(cells)
             .dispatch_from_state(TestState::dispatch)
             .depends_on("step.a")
             .finish()
             .fixed_step_region("simulation", 4, ["step.a", "step.b"])
+            .expect("render flow authoring should succeed")
             .validate()
             .expect("fixed-step test flow should validate");
         compile_flow_plan(&flow).expect("fixed-step test flow should compile")

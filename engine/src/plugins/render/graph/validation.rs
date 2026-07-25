@@ -1,3 +1,4 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::RenderResourceDescriptor;
 use crate::plugins::render::api::{SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL};
 use crate::plugins::render::graph::{
@@ -8,9 +9,7 @@ use crate::plugins::render::resource::{
     ImportedBufferSemantic, ImportedTextureSemantic, RenderTextureDescriptor,
     RenderTextureFormatPolicy, RenderTextureSampleMode, RenderTextureTargetFormat,
 };
-use crate::plugins::render::{
-    RenderPassId, RenderResourceId, RenderTargetAliasKind, RenderVertexStepMode,
-};
+use crate::plugins::render::{RenderPassId, RenderTargetAliasKind, RenderVertexStepMode};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error;
 
@@ -22,18 +21,18 @@ pub struct FlowValidationReport {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RenderFlowValidationIssue {
     #[error("duplicate resource id '{resource_id:?}'")]
-    DuplicateResourceId { resource_id: RenderResourceId },
+    DuplicateResourceId { resource_id: GpuWorkResourceId },
 
     #[error(
         "storage_buffer '{resource_id:?}' declares zero elements; element_count must be greater than zero"
     )]
-    ZeroLengthStorageBuffer { resource_id: RenderResourceId },
+    ZeroLengthStorageBuffer { resource_id: GpuWorkResourceId },
 
     #[error(
         "resource '{resource_id:?}' ({resource_kind}) resolves to format '{format:?}', expected {expected_format_class}"
     )]
     InvalidTextureFormatClass {
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
         format: RenderTextureTargetFormat,
         expected_format_class: &'static str,
@@ -43,7 +42,7 @@ pub enum RenderFlowValidationIssue {
         "resource '{resource_id:?}' ({resource_kind}) declares invalid format policy: {reason}"
     )]
     InvalidTextureFormatPolicy {
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
         reason: &'static str,
     },
@@ -52,7 +51,7 @@ pub enum RenderFlowValidationIssue {
         "resource '{resource_id:?}' ({resource_kind}) declares usage that is invalid for format '{format:?}': {reason}"
     )]
     InvalidTextureUsageForFormat {
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
         format: RenderTextureTargetFormat,
         reason: &'static str,
@@ -62,7 +61,7 @@ pub enum RenderFlowValidationIssue {
         "resource '{resource_id:?}' ({resource_kind}) declares sample mode '{sample_mode:?}' that is invalid for format '{format:?}': {reason}"
     )]
     InvalidTextureSampleModeForFormat {
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
         format: RenderTextureTargetFormat,
         sample_mode: RenderTextureSampleMode,
@@ -84,7 +83,7 @@ pub enum RenderFlowValidationIssue {
     #[error("pass '{pass_label}' references unknown resource '{resource_id:?}'")]
     UnknownResourceReference {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
     },
 
     #[error(
@@ -98,7 +97,7 @@ pub enum RenderFlowValidationIssue {
     #[error("pass '{pass_label}' references missing uniform buffer '{uniform_id:?}'")]
     MissingUniformBuffer {
         pass_label: String,
-        uniform_id: RenderResourceId,
+        uniform_id: GpuWorkResourceId,
     },
 
     #[error(
@@ -222,7 +221,7 @@ pub enum RenderFlowValidationIssue {
     InvalidRasterColorOutputResource {
         pass_kind: &'static str,
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
     },
 
@@ -277,7 +276,7 @@ pub enum RenderFlowValidationIssue {
     )]
     GraphicsPassIndirectDrawArgsBufferNotDeclared {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
     },
 
     #[error(
@@ -377,7 +376,7 @@ pub enum RenderFlowValidationIssue {
     )]
     SampledNonTextureResource {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
     },
 
@@ -386,7 +385,7 @@ pub enum RenderFlowValidationIssue {
     )]
     WriteTextureOnInvalidResource {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
     },
 
@@ -395,7 +394,7 @@ pub enum RenderFlowValidationIssue {
     )]
     InvalidDepthTargetResource {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
     },
 
@@ -404,9 +403,9 @@ pub enum RenderFlowValidationIssue {
     )]
     CopyPassMixedResourceClasses {
         pass_label: String,
-        read_id: RenderResourceId,
+        read_id: GpuWorkResourceId,
         read_kind: &'static str,
-        write_id: RenderResourceId,
+        write_id: GpuWorkResourceId,
         write_kind: &'static str,
     },
 
@@ -415,7 +414,7 @@ pub enum RenderFlowValidationIssue {
     )]
     PresentPassReadsNonTexture {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_kind: &'static str,
     },
 
@@ -424,7 +423,7 @@ pub enum RenderFlowValidationIssue {
     )]
     InvalidImportedTextureWriteSemantic {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         semantic: &'static str,
         allowed: &'static str,
     },
@@ -434,7 +433,7 @@ pub enum RenderFlowValidationIssue {
     )]
     UnsupportedImportedTextureWriteKind {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         pass_kind: RenderPassKind,
     },
 
@@ -443,7 +442,7 @@ pub enum RenderFlowValidationIssue {
     )]
     InvalidBufferRoleResource {
         pass_label: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         role: &'static str,
         resource_kind: &'static str,
     },
@@ -451,12 +450,12 @@ pub enum RenderFlowValidationIssue {
     #[error(
         "resource '{resource_id:?}' uses external imported texture semantics; external imports are not supported in active runtime flows"
     )]
-    UnsupportedExternalImportedTexture { resource_id: RenderResourceId },
+    UnsupportedExternalImportedTexture { resource_id: GpuWorkResourceId },
 
     #[error(
         "resource '{resource_id:?}' uses external imported buffer semantics; external imports are not supported in active runtime flows"
     )]
-    UnsupportedExternalImportedBuffer { resource_id: RenderResourceId },
+    UnsupportedExternalImportedBuffer { resource_id: GpuWorkResourceId },
 
     #[error(
         "multiple imported surface-color textures detected; expected zero or one canonical '{canonical_label}' import"
@@ -531,8 +530,8 @@ pub fn validate_flow_graph(
 ) -> Result<FlowValidationReport, RenderFlowValidationError> {
     let mut issues = Vec::<RenderFlowValidationIssue>::new();
 
-    let mut resource_ids = BTreeSet::<RenderResourceId>::new();
-    let mut resources_by_id = BTreeMap::<RenderResourceId, &RenderResourceDescriptor>::new();
+    let mut resource_ids = BTreeSet::<GpuWorkResourceId>::new();
+    let mut resources_by_id = BTreeMap::<GpuWorkResourceId, &RenderResourceDescriptor>::new();
     for resource in &graph.resources.resources {
         let resource_id = *resource.id();
         if !resource_ids.insert(resource_id) {
@@ -934,7 +933,7 @@ fn validate_resource_descriptor_shape(
 }
 
 fn validate_color_target_descriptor_shape(
-    resource_id: RenderResourceId,
+    resource_id: GpuWorkResourceId,
     texture: &RenderTextureDescriptor,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
@@ -952,7 +951,7 @@ fn validate_color_target_descriptor_shape(
 }
 
 fn validate_depth_target_descriptor_shape(
-    resource_id: RenderResourceId,
+    resource_id: GpuWorkResourceId,
     texture: &RenderTextureDescriptor,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
@@ -978,7 +977,7 @@ fn validate_depth_target_descriptor_shape(
 }
 
 fn validate_texture_descriptor_format_usage(
-    resource_id: RenderResourceId,
+    resource_id: GpuWorkResourceId,
     resource_kind: &'static str,
     texture: &RenderTextureDescriptor,
     issues: &mut Vec<RenderFlowValidationIssue>,
@@ -1076,7 +1075,7 @@ fn validate_texture_descriptor_format_usage(
 
 fn validate_pass_resource_usage(
     pass: &RenderPassNode,
-    resources_by_id: &BTreeMap<RenderResourceId, &RenderResourceDescriptor>,
+    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDescriptor>,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
     for sampled in &pass.sampled_textures {
@@ -1345,7 +1344,7 @@ fn validate_fixed_step_regions(
     struct RegionShape {
         label: String,
         max_substeps: u32,
-        iteration_uniform: RenderResourceId,
+        iteration_uniform: GpuWorkResourceId,
         pass_ids: BTreeSet<RenderPassId>,
     }
 
@@ -1610,9 +1609,9 @@ fn is_raster_color_output_resource(resource: &RenderResourceDescriptor) -> bool 
 
 fn validate_buffer_role_resource(
     pass: &RenderPassNode,
-    resource_id: RenderResourceId,
+    resource_id: GpuWorkResourceId,
     role: &'static str,
-    resources_by_id: &BTreeMap<RenderResourceId, &RenderResourceDescriptor>,
+    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDescriptor>,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
     let Some(resource) = resources_by_id.get(&resource_id) else {
@@ -1689,7 +1688,7 @@ fn render_pass_kind_name(kind: RenderPassKind) -> &'static str {
 }
 
 fn validate_imported_resource_descriptors(
-    resources_by_id: &BTreeMap<RenderResourceId, &RenderResourceDescriptor>,
+    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDescriptor>,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
     let mut surface_color_count = 0usize;
@@ -1793,9 +1792,7 @@ fn topological_sort(
     order
 }
 
-fn pass_resource_refs(
-    pass: &RenderPassNode,
-) -> impl Iterator<Item = &crate::plugins::render::RenderResourceId> {
+fn pass_resource_refs(pass: &RenderPassNode) -> impl Iterator<Item = &GpuWorkResourceId> {
     pass.reads
         .iter()
         .chain(pass.writes.iter())

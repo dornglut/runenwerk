@@ -15,6 +15,7 @@ enum CenterBranchClass {
 #[test]
 fn viewport_branch_truth_smoke() {
     let app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(2)
         .expect("headless editor app should run");
 

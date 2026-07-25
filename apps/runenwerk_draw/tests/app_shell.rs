@@ -352,6 +352,7 @@ fn coalesced_pointer_samples_append_ordered_preview_samples_before_current_sampl
 #[test]
 fn winit_fallback_press_motion_starts_at_contact_position_without_precontact_samples() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let (pre_contact, contact, after_contact, current) = {
@@ -416,6 +417,7 @@ fn winit_fallback_press_motion_starts_at_contact_position_without_precontact_sam
 #[test]
 fn winit_fallback_release_motion_ignores_post_release_samples() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let (start, release, post_release) = {
@@ -563,6 +565,7 @@ fn active_stroke_continues_outside_canvas_and_commits_on_outside_release() {
 #[test]
 fn window_touch_history_routes_as_ordered_preview_samples() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let (start, mid, end) = {
@@ -616,6 +619,7 @@ fn window_touch_history_routes_as_ordered_preview_samples() {
 #[test]
 fn native_tablet_move_burst_routes_as_one_coalesced_preview_update() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let positions = {
@@ -692,6 +696,7 @@ fn native_tablet_move_burst_routes_as_one_coalesced_preview_update() {
 #[test]
 fn native_windows_pointer_mouse_history_routes_before_winit_mouse_fallback() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let (start, c1, c2, current) = {
@@ -791,6 +796,7 @@ fn native_windows_pointer_mouse_history_routes_before_winit_mouse_fallback() {
 #[test]
 fn native_tablet_events_route_before_winit_touch_fallback() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let (native_start, fallback_start) = {
@@ -852,6 +858,7 @@ fn native_tablet_events_route_before_winit_touch_fallback() {
 #[test]
 fn native_tablet_hover_does_not_drop_winit_fallback_contact() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let (native_hover, fallback_start) = {
@@ -924,6 +931,7 @@ fn native_tablet_hover_does_not_drop_winit_fallback_contact() {
 #[test]
 fn active_native_contact_suppresses_fallback_without_new_native_samples() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let fallback_start = {
@@ -971,6 +979,7 @@ fn active_native_contact_suppresses_fallback_without_new_native_samples() {
 #[test]
 fn stale_native_contact_allows_winit_fallback_recovery() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let fallback_start = {
@@ -1030,6 +1039,7 @@ fn stale_native_contact_allows_winit_fallback_recovery() {
 #[test]
 fn native_tablet_coalesced_samples_become_ordered_preview_samples() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let (start, c1, c2, current) = {
@@ -1101,6 +1111,7 @@ fn native_tablet_coalesced_samples_become_ordered_preview_samples() {
 #[test]
 fn native_tablet_hover_release_ends_and_commits_active_stroke() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let (start, end) = {
@@ -1175,6 +1186,7 @@ fn native_tablet_hover_release_ends_and_commits_active_stroke() {
 #[test]
 fn native_tablet_hover_down_still_begins_stroke_from_event_kind() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let start = {
@@ -1223,6 +1235,7 @@ fn native_tablet_hover_down_still_begins_stroke_from_event_kind() {
 #[test]
 fn native_tablet_diagnostics_project_into_composition_support_panel() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     {
@@ -1589,6 +1602,7 @@ fn four_committed_strokes_publish_and_remain_drawable() {
 #[test]
 fn runtime_winit_fallback_publishes_four_strokes_through_barriers() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     runtime.insert_resource(RuntimeJobExecutorResource::with_config(
@@ -1656,6 +1670,7 @@ fn runtime_winit_fallback_publishes_four_strokes_through_barriers() {
 #[test]
 fn runtime_winit_fallback_recovers_after_rapid_worker_pool_strokes() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let strokes = [
@@ -1722,6 +1737,7 @@ fn runtime_winit_fallback_recovers_after_rapid_worker_pool_strokes() {
 #[test]
 fn runtime_winit_fallback_keeps_long_stroke_publishing_through_barriers() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     runtime.insert_resource(RuntimeJobExecutorResource::with_config(
@@ -2054,6 +2070,7 @@ fn long_active_immediate_preview_preserves_full_extent_with_bounded_points() {
 #[test]
 fn runtime_uploads_preview_products_only_when_generation_changes() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     runtime.insert_resource(RuntimeJobExecutorResource::with_config(
@@ -2196,6 +2213,7 @@ fn runtime_uploads_preview_products_only_when_generation_changes() {
 #[test]
 fn runtime_bridges_preview_and_final_tiles_to_product_surfaces() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     runtime.insert_resource(RuntimeJobExecutorResource::with_config(
@@ -2303,6 +2321,7 @@ fn runtime_bridges_preview_and_final_tiles_to_product_surfaces() {
 #[test]
 fn runtime_requests_gpu_ink_validation_through_public_render_flow() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let gpu_flow = *runtime
@@ -2463,6 +2482,7 @@ fn stale_gpu_validation_does_not_promote_new_tile_generation() {
 #[test]
 fn runtime_uploads_only_new_committed_products_after_more_strokes() {
     let mut runtime = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run its startup frame");
     let mut publications = ProductPublicationRuntimeResource::default();
@@ -2789,6 +2809,7 @@ fn query_snapshots_wait_for_product_publication() {
 #[test]
 fn headless_runtime_starts_and_submits_canvas_first_frame() {
     let app = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run a headless frame");
     let host = app
@@ -2811,7 +2832,7 @@ fn headless_runtime_starts_and_submits_canvas_first_frame() {
 
 #[test]
 fn drawing_runtime_uses_worker_backed_jobs_by_default() {
-    let app = build_headless_app();
+    let app = build_headless_app().expect("headless app construction should succeed");
     let executor = app
         .world()
         .resource::<RuntimeJobExecutorResource>()
@@ -2826,6 +2847,7 @@ fn drawing_runtime_uses_worker_backed_jobs_by_default() {
 #[test]
 fn headless_runtime_installs_visible_shell_render_prerequisites() {
     let app = build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("drawing app should run a headless frame");
 

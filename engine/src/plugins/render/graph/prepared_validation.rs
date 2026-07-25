@@ -1,3 +1,4 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::features::FeatureFallbackPolicy;
 use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledBuiltinImport, CompiledDispatchPlan, CompiledPassBindings,
@@ -10,7 +11,7 @@ use crate::plugins::render::graph::{
 use crate::plugins::render::{
     PreparedFlowInvocation, PreparedFlowInvocationId, PreparedRenderFrame, PreparedTargetBinding,
     PreparedViewFrame, RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
-    RenderResourceDescriptor, RenderResourceId, RenderTargetAliasKind,
+    RenderResourceDescriptor, RenderTargetAliasKind,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
@@ -843,7 +844,7 @@ fn validate_flow_owned_alias_binding(
     pass: &CompiledPassExecutionPlan,
     invocation: &PreparedFlowInvocation,
     requirement: &AliasRequirement,
-    resource_id: RenderResourceId,
+    resource_id: GpuWorkResourceId,
     diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
 ) {
     let Some(descriptor) = flow.resource_descriptor(resource_id) else {
@@ -1043,7 +1044,7 @@ fn pass_feature_id(
     }
 }
 
-fn pass_uniform_order(pass: &CompiledPassExecutionPlan) -> &[RenderResourceId] {
+fn pass_uniform_order(pass: &CompiledPassExecutionPlan) -> &[GpuWorkResourceId] {
     match pass {
         CompiledPassExecutionPlan::Compute(value) => &value.bindings.uniform_order,
         CompiledPassExecutionPlan::Fullscreen(value)

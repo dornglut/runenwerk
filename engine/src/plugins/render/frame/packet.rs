@@ -2,10 +2,11 @@ use super::{
     PreparedFrameContext, PreparedFrameContributions, PreparedUiFrameContribution,
     PreparedViewFrame,
 };
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId, RenderPassId,
-    RenderResourceId, backend::RenderSurfaceId,
+    backend::RenderSurfaceId,
 };
 use crate::runtime::NativeWindowId;
 use product::RenderProductSelection;
@@ -200,7 +201,7 @@ impl PreparedSurfaceInfo {
 
 #[derive(Debug, Clone, Default)]
 pub struct PreparedFlowInputs {
-    pub projected_uniform_bytes: BTreeMap<RenderResourceId, Vec<u8>>,
+    pub projected_uniform_bytes: BTreeMap<GpuWorkResourceId, Vec<u8>>,
     pub projected_dispatch_workgroups: BTreeMap<RenderPassId, [u32; 3]>,
     pub required_state_types: Vec<PreparedStateTypeInfo>,
 }
@@ -260,7 +261,7 @@ pub enum PreparedTargetBinding {
     DynamicTexture(RenderDynamicTextureTargetKey),
     SurfaceColor,
     SurfaceDepth,
-    FlowOwned(RenderResourceId),
+    FlowOwned(GpuWorkResourceId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,7 +270,7 @@ pub struct PreparedFlowInvocationRequest {
     pub flow_id: RenderFlowId,
     pub view_id: String,
     pub target_alias_bindings: BTreeMap<String, PreparedTargetBinding>,
-    pub uniform_overrides: BTreeMap<RenderResourceId, Vec<u8>>,
+    pub uniform_overrides: BTreeMap<GpuWorkResourceId, Vec<u8>>,
     pub history_signature: Option<String>,
 }
 
@@ -317,7 +318,7 @@ impl PreparedFlowInvocationRequest {
     pub fn bind_flow_owned_alias(
         self,
         alias: impl Into<String>,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
     ) -> Self {
         self.bind_target_alias(alias, PreparedTargetBinding::FlowOwned(resource_id))
     }
@@ -327,7 +328,7 @@ impl PreparedFlowInvocationRequest {
         self
     }
 
-    pub fn with_uniform_override(mut self, uniform_id: RenderResourceId, bytes: Vec<u8>) -> Self {
+    pub fn with_uniform_override(mut self, uniform_id: GpuWorkResourceId, bytes: Vec<u8>) -> Self {
         self.uniform_overrides.insert(uniform_id, bytes);
         self
     }

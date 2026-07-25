@@ -1,15 +1,32 @@
-use engine::plugins::render::api::{RenderPassId, RenderResourceId};
+use engine::plugins::gpu::GpuWorkResourceId;
+use engine::plugins::render::api::RenderPassId;
 use engine::plugins::render::resource::{RenderResourceDescriptor, detect_duplicate_resource_ids};
-use engine::plugins::render::{GpuParams, GpuUniform};
+use engine::plugins::render::{GpuParams, GpuUniform, RenderFlow};
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
 struct ResourceTestParams {
     value: u32,
 }
 
+fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
+    let labels = (0..count)
+        .map(|index| format!("test.resource.{index}"))
+        .collect::<Vec<_>>();
+    let flow = labels
+        .iter()
+        .fold(RenderFlow::new("test.resource.ids"), |flow, label| {
+            flow.with_color_target(label.clone())
+                .expect("render flow authoring should succeed")
+        });
+    labels
+        .iter()
+        .map(|label| flow.resource_id(label).expect("test resource should exist"))
+        .collect()
+}
+
 #[test]
 fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
-    let id = RenderResourceId::try_from_raw(42).unwrap();
+    let id = test_resource_ids(1)[0];
     let descriptor = RenderResourceDescriptor::uniform_buffer::<ResourceTestParams>(id);
 
     match descriptor {
@@ -30,23 +47,28 @@ fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
 }
 
 #[test]
-fn typed_ids_roundtrip_and_sort_by_raw_value() {
+fn typed_ids_preserve_pass_raw_value_and_sort_resources_by_owner_local_identity() {
     let pass = RenderPassId::try_from_raw(7).unwrap();
     let raw: u64 = pass.into();
     assert_eq!(raw, 7);
 
-    let a = RenderResourceId::try_from_raw(1).unwrap();
-    let b = RenderResourceId::try_from_raw(2).unwrap();
+    let ids = test_resource_ids(2);
+    let a = ids[0];
+    let b = ids[1];
     assert!(a < b);
-    assert_eq!(a.to_string(), "1");
+    let (owner, local) = a.diagnostic_parts();
+    assert_ne!(owner, 0);
+    assert_eq!(local, 1);
+    assert_eq!(a.to_string(), format!("{owner}:1"));
 }
 
 #[test]
 fn duplicate_resource_detection_finds_collisions() {
-    let duplicate = RenderResourceId::try_from_raw(9).unwrap();
+    let ids = test_resource_ids(2);
+    let duplicate = ids[0];
     let descriptors = vec![
         RenderResourceDescriptor::sampled_texture(duplicate),
-        RenderResourceDescriptor::color_target(RenderResourceId::try_from_raw(10).unwrap()),
+        RenderResourceDescriptor::color_target(ids[1]),
         RenderResourceDescriptor::imported_texture(duplicate),
     ];
 

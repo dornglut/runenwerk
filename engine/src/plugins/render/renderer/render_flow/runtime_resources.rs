@@ -1,7 +1,7 @@
 use super::*;
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::{
     PreparedTargetBinding, RenderDynamicTextureTargetKey, RenderFlowId, RenderPassId,
-    RenderResourceId,
 };
 use std::fmt;
 
@@ -55,14 +55,14 @@ pub struct BufferAllocationSpec {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RuntimeResourceKey {
-    FlowOwned(RenderResourceId),
+    FlowOwned(GpuWorkResourceId),
     InvocationUniform {
         invocation_id: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
     },
     InvocationHistory {
         invocation_id: String,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
     },
     DynamicTexture(RenderDynamicTextureTargetKey),
     SurfaceColor,
@@ -90,14 +90,14 @@ impl fmt::Display for RuntimeResourceKey {
 
 #[derive(Debug, Default)]
 pub struct FlowRuntimeResources {
-    pub textures: BTreeMap<RenderResourceId, RuntimeTextureResource>,
-    pub buffers: BTreeMap<RenderResourceId, RuntimeBufferResource>,
-    pub invocation_uniform_buffers: BTreeMap<(String, RenderResourceId), RuntimeBufferResource>,
-    pub invocation_history_textures: BTreeMap<(String, RenderResourceId), RuntimeTextureResource>,
+    pub textures: BTreeMap<GpuWorkResourceId, RuntimeTextureResource>,
+    pub buffers: BTreeMap<GpuWorkResourceId, RuntimeBufferResource>,
+    pub invocation_uniform_buffers: BTreeMap<(String, GpuWorkResourceId), RuntimeBufferResource>,
+    pub invocation_history_textures: BTreeMap<(String, GpuWorkResourceId), RuntimeTextureResource>,
     pub active_invocation_uniform_scope: Option<String>,
-    pub kinds: BTreeMap<RenderResourceId, RuntimeResourceKind>,
-    pub descriptors: BTreeMap<RenderResourceId, RenderResourceDescriptor>,
-    pub resource_ids_by_label: BTreeMap<String, RenderResourceId>,
+    pub kinds: BTreeMap<GpuWorkResourceId, RuntimeResourceKind>,
+    pub descriptors: BTreeMap<GpuWorkResourceId, RenderResourceDescriptor>,
+    pub resource_ids_by_label: BTreeMap<String, GpuWorkResourceId>,
     pub target_alias_bindings: BTreeMap<String, PreparedTargetBinding>,
 }
 
@@ -154,18 +154,31 @@ mod resolve;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::GpuWorkResourceIdAllocator;
+    use std::num::NonZeroU64;
+
+    fn resource(local: u64) -> GpuWorkResourceId {
+        let mut allocator = GpuWorkResourceIdAllocator::for_owner_scope(
+            NonZeroU64::new(1).expect("test owner scope is nonzero"),
+        );
+        (1..=local)
+            .map(|_| {
+                allocator
+                    .allocate()
+                    .expect("test allocation should succeed")
+            })
+            .last()
+            .expect("test local value is nonzero")
+    }
 
     #[test]
     fn kind_of_resolves_label_alias_to_runtime_id() {
         let mut resources = FlowRuntimeResources::default();
-        resources.kinds.insert(
-            RenderResourceId::try_from_raw(42).unwrap(),
-            RuntimeResourceKind::TextureLike,
-        );
-        resources.resource_ids_by_label.insert(
-            "editor.viewport.v1.scene_color".to_string(),
-            RenderResourceId::try_from_raw(42).unwrap(),
-        );
+        let id = resource(42);
+        resources.kinds.insert(id, RuntimeResourceKind::TextureLike);
+        resources
+            .resource_ids_by_label
+            .insert("editor.viewport.v1.scene_color".to_string(), id);
 
         assert_eq!(
             resources.kind_of("editor.viewport.v1.scene_color"),
@@ -177,13 +190,12 @@ mod tests {
     fn capture_texture_class_resolves_label_alias_to_descriptor() {
         let mut resources = FlowRuntimeResources::default();
         resources.descriptors.insert(
-            RenderResourceId::try_from_raw(7).unwrap(),
-            RenderResourceDescriptor::color_target(RenderResourceId::try_from_raw(7).unwrap()),
+            resource(7),
+            RenderResourceDescriptor::color_target(resource(7)),
         );
-        resources.resource_ids_by_label.insert(
-            "editor.viewport.v1.overlay".to_string(),
-            RenderResourceId::try_from_raw(7).unwrap(),
-        );
+        resources
+            .resource_ids_by_label
+            .insert("editor.viewport.v1.overlay".to_string(), resource(7));
 
         assert_eq!(
             resources.capture_texture_class(
@@ -196,7 +208,7 @@ mod tests {
 
     #[test]
     fn flow_owned_texture_allocation_honors_fixed_size_exact_format_and_usage() {
-        let id = RenderResourceId::try_from_raw(11).unwrap();
+        let id = resource(11);
         let descriptor = RenderResourceDescriptor::StorageTexture(
             crate::plugins::render::resource::StorageTextureDescriptor {
                 id,
@@ -240,7 +252,7 @@ mod tests {
 
     #[test]
     fn flow_owned_texture_allocation_resolves_surface_policy_from_frame() {
-        let id = RenderResourceId::try_from_raw(12).unwrap();
+        let id = resource(12);
         let descriptor = RenderResourceDescriptor::color_target(id);
 
         let spec = FlowRuntimeResources::texture_allocation_spec(
@@ -258,7 +270,7 @@ mod tests {
 
     #[test]
     fn exact_color_target_allocation_ignores_surface_format_policy() {
-        let id = RenderResourceId::try_from_raw(13).unwrap();
+        let id = resource(13);
         let descriptor = RenderResourceDescriptor::color_target_exact(
             id,
             crate::plugins::render::RenderTextureTargetFormat::Rgba8Unorm,

@@ -35,7 +35,8 @@ fn capture() -> anyhow::Result<()> {
     eprintln!("region-compass-capture: create-gfx");
     let gfx = Gfx::new(window)?;
     eprintln!("region-compass-capture: build-app");
-    let mut app = runenwerk_editor::runtime::build_headless_app();
+    let mut app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed");
     activate_region_compass(&mut app)?;
     app.world_mut().insert_resource(gfx);
     app.update_render_debug_control(|control| {

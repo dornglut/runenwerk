@@ -1,9 +1,10 @@
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::StorageArrayHandle;
 use crate::plugins::render::gpu_primitives::{
     CounterResetDescriptor, GpuPrimitiveExecutionPlan, GpuPrimitiveStep,
     GpuPrimitiveValidationError, PrefixScanMode, U32Counter, U32PrefixScanDescriptor,
     U32ScanElement, validate_capacity,
 };
-use crate::plugins::render::{RenderResourceId, StorageArrayHandle};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,10 +129,10 @@ impl BoundedUniformGrid2dStagePlan {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundedUniformGrid2dResources {
-    pub cell_counts: RenderResourceId,
-    pub cell_offsets: RenderResourceId,
-    pub scatter_cursors: RenderResourceId,
-    pub sorted_indices: RenderResourceId,
+    pub cell_counts: GpuWorkResourceId,
+    pub cell_offsets: GpuWorkResourceId,
+    pub scatter_cursors: GpuWorkResourceId,
+    pub sorted_indices: GpuWorkResourceId,
     pub cell_capacity: u32,
     pub sorted_index_capacity: u32,
 }
@@ -350,11 +351,18 @@ mod tests {
 
     #[test]
     fn bounded_uniform_grid_plan_is_total_count_sized() {
-        let (flow, counts) =
-            RenderFlow::new("test.population.grid").storage_array::<U32Counter>("grid.counts", 256);
-        let (flow, offsets) = flow.storage_array::<U32ScanElement>("grid.offsets", 256);
-        let (flow, cursors) = flow.storage_array::<U32Counter>("grid.cursors", 256);
-        let (_flow, sorted) = flow.storage_array::<U32ScanElement>("grid.sorted", 1024);
+        let (flow, counts) = RenderFlow::new("test.population.grid")
+            .storage_array::<U32Counter>("grid.counts", 256)
+            .expect("render flow authoring should succeed");
+        let (flow, offsets) = flow
+            .storage_array::<U32ScanElement>("grid.offsets", 256)
+            .expect("render flow authoring should succeed");
+        let (flow, cursors) = flow
+            .storage_array::<U32Counter>("grid.cursors", 256)
+            .expect("render flow authoring should succeed");
+        let (_flow, sorted) = flow
+            .storage_array::<U32ScanElement>("grid.sorted", 1024)
+            .expect("render flow authoring should succeed");
 
         let plan = BoundedUniformGrid2dBuildPlan::new(
             "grid",

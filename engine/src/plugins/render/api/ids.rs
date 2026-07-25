@@ -7,9 +7,6 @@ pub struct RenderFlowId;
 pub struct RenderPassId;
 
 #[id]
-pub struct RenderResourceId;
-
-#[id]
 pub struct RenderFeatureId;
 
 #[id]

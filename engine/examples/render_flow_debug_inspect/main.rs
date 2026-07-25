@@ -15,8 +15,10 @@ struct InspectCell {
 fn main() -> Result<()> {
     let flow = RenderFlow::new(FLOW_ID)
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .with_builtin_ui()
         .double_buffer_storage_array::<InspectCell>("inspect.cells", 16)
+        .expect("render flow authoring should succeed")
         .compute_pass("inspect.sim")
         .shader_asset("assets/shaders/world_compute_basic.wgsl")
         .bind_ping_pong_storage("inspect.cells")
@@ -26,9 +28,11 @@ fn main() -> Result<()> {
         .shader_asset("assets/shaders/tonemap.wgsl")
         .bind_ping_pong_storage("inspect.cells")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .depends_on("inspect.sim")
         .finish()
         .builtin_ui_composite_pass("inspect.ui")
+        .expect("render flow authoring should succeed")
         .depends_on("inspect.compose")
         .finish()
         .validate()?;

@@ -2,14 +2,14 @@ use super::{
     ImportedBufferSemantic, ImportedTextureSemantic, RenderTextureSampleMode,
     RenderTextureTargetFormat, RenderTextureTargetUsage, ResourceLifetime,
 };
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::GpuParams;
-use crate::plugins::render::api::RenderResourceId;
 use std::any::{TypeId, type_name};
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UniformBufferDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub params_type_id: TypeId,
     pub params_type_name: &'static str,
     pub size_bytes: u64,
@@ -18,7 +18,7 @@ pub struct UniformBufferDescriptor {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageBufferDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub params_type_id: TypeId,
     pub params_type_name: &'static str,
     pub element_count: u64,
@@ -28,47 +28,47 @@ pub struct StorageBufferDescriptor {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SampledTextureDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub lifetime: ResourceLifetime,
     pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageTextureDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub lifetime: ResourceLifetime,
     pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColorTargetDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub lifetime: ResourceLifetime,
     pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepthTargetDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub lifetime: ResourceLifetime,
     pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryTextureDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub texture: RenderTextureDescriptor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportedTextureDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub semantic: ImportedTextureSemantic,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportedBufferDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub semantic: ImportedBufferSemantic,
 }
 
@@ -148,7 +148,7 @@ pub enum RenderTargetAliasKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TargetAliasDescriptor {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub label: String,
     pub kind: RenderTargetAliasKind,
 }
@@ -168,7 +168,7 @@ pub enum RenderResourceDescriptor {
 }
 
 impl RenderResourceDescriptor {
-    pub fn uniform_buffer<T>(id: impl Into<RenderResourceId>) -> Self
+    pub fn uniform_buffer<T>(id: impl Into<GpuWorkResourceId>) -> Self
     where
         T: GpuParams + 'static,
     {
@@ -176,7 +176,7 @@ impl RenderResourceDescriptor {
     }
 
     pub fn uniform_buffer_with_lifetime<T>(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         lifetime: ResourceLifetime,
     ) -> Self
     where
@@ -191,7 +191,7 @@ impl RenderResourceDescriptor {
         })
     }
 
-    pub fn storage_buffer<T>(id: impl Into<RenderResourceId>) -> Self
+    pub fn storage_buffer<T>(id: impl Into<GpuWorkResourceId>) -> Self
     where
         T: GpuParams + 'static,
     {
@@ -199,7 +199,7 @@ impl RenderResourceDescriptor {
     }
 
     pub fn storage_buffer_with_lifetime<T>(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         lifetime: ResourceLifetime,
     ) -> Self
     where
@@ -208,7 +208,7 @@ impl RenderResourceDescriptor {
         Self::storage_buffer_array_with_lifetime::<T>(id, 1, lifetime)
     }
 
-    pub fn storage_buffer_array<T>(id: impl Into<RenderResourceId>, element_count: u64) -> Self
+    pub fn storage_buffer_array<T>(id: impl Into<GpuWorkResourceId>, element_count: u64) -> Self
     where
         T: GpuParams + 'static,
     {
@@ -220,7 +220,7 @@ impl RenderResourceDescriptor {
     }
 
     pub fn storage_buffer_array_with_lifetime<T>(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         element_count: u64,
         lifetime: ResourceLifetime,
     ) -> Self
@@ -243,12 +243,12 @@ impl RenderResourceDescriptor {
         })
     }
 
-    pub fn sampled_texture(id: impl Into<RenderResourceId>) -> Self {
+    pub fn sampled_texture(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::sampled_texture_with_lifetime(id, ResourceLifetime::Persistent)
     }
 
     pub fn sampled_texture_with_lifetime(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         lifetime: ResourceLifetime,
     ) -> Self {
         Self::SampledTexture(SampledTextureDescriptor {
@@ -258,12 +258,12 @@ impl RenderResourceDescriptor {
         })
     }
 
-    pub fn storage_texture(id: impl Into<RenderResourceId>) -> Self {
+    pub fn storage_texture(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::storage_texture_with_lifetime(id, ResourceLifetime::Persistent)
     }
 
     pub fn storage_texture_with_lifetime(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         lifetime: ResourceLifetime,
     ) -> Self {
         Self::StorageTexture(StorageTextureDescriptor {
@@ -273,19 +273,19 @@ impl RenderResourceDescriptor {
         })
     }
 
-    pub fn color_target(id: impl Into<RenderResourceId>) -> Self {
+    pub fn color_target(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::color_target_with_lifetime(id, ResourceLifetime::Persistent)
     }
 
     pub fn color_target_exact(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         format: RenderTextureTargetFormat,
     ) -> Self {
         Self::color_target_exact_with_lifetime(id, format, ResourceLifetime::Persistent)
     }
 
     pub fn color_target_with_lifetime(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         lifetime: ResourceLifetime,
     ) -> Self {
         Self::ColorTarget(ColorTargetDescriptor {
@@ -296,7 +296,7 @@ impl RenderResourceDescriptor {
     }
 
     pub fn color_target_exact_with_lifetime(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         format: RenderTextureTargetFormat,
         lifetime: ResourceLifetime,
     ) -> Self {
@@ -307,12 +307,12 @@ impl RenderResourceDescriptor {
         })
     }
 
-    pub fn depth_target(id: impl Into<RenderResourceId>) -> Self {
+    pub fn depth_target(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::depth_target_with_lifetime(id, ResourceLifetime::Persistent)
     }
 
     pub fn depth_target_with_lifetime(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         lifetime: ResourceLifetime,
     ) -> Self {
         Self::DepthTarget(DepthTargetDescriptor {
@@ -322,39 +322,39 @@ impl RenderResourceDescriptor {
         })
     }
 
-    pub fn imported_surface_color(id: impl Into<RenderResourceId>) -> Self {
+    pub fn imported_surface_color(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::ImportedTexture(ImportedTextureDescriptor {
             id: id.into(),
             semantic: ImportedTextureSemantic::SurfaceColor,
         })
     }
 
-    pub fn imported_surface_depth(id: impl Into<RenderResourceId>) -> Self {
+    pub fn imported_surface_depth(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::ImportedTexture(ImportedTextureDescriptor {
             id: id.into(),
             semantic: ImportedTextureSemantic::SurfaceDepth,
         })
     }
 
-    pub fn imported_history_texture(id: impl Into<RenderResourceId>) -> Self {
+    pub fn imported_history_texture(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::ImportedTexture(ImportedTextureDescriptor {
             id: id.into(),
             semantic: ImportedTextureSemantic::HistoryTexture,
         })
     }
 
-    pub fn imported_external_texture(id: impl Into<RenderResourceId>) -> Self {
+    pub fn imported_external_texture(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::ImportedTexture(ImportedTextureDescriptor {
             id: id.into(),
             semantic: ImportedTextureSemantic::External,
         })
     }
 
-    pub fn imported_texture(id: impl Into<RenderResourceId>) -> Self {
+    pub fn imported_texture(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::imported_external_texture(id)
     }
 
-    pub fn history_texture(id: impl Into<RenderResourceId>) -> Self {
+    pub fn history_texture(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::HistoryTexture(HistoryTextureDescriptor {
             id: id.into(),
             texture: RenderTextureDescriptor::surface_color(),
@@ -362,7 +362,7 @@ impl RenderResourceDescriptor {
     }
 
     pub fn target_alias(
-        id: impl Into<RenderResourceId>,
+        id: impl Into<GpuWorkResourceId>,
         label: impl Into<String>,
         kind: RenderTargetAliasKind,
     ) -> Self {
@@ -373,25 +373,25 @@ impl RenderResourceDescriptor {
         })
     }
 
-    pub fn imported_history_buffer(id: impl Into<RenderResourceId>) -> Self {
+    pub fn imported_history_buffer(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::ImportedBuffer(ImportedBufferDescriptor {
             id: id.into(),
             semantic: ImportedBufferSemantic::HistoryBuffer,
         })
     }
 
-    pub fn imported_external_buffer(id: impl Into<RenderResourceId>) -> Self {
+    pub fn imported_external_buffer(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::ImportedBuffer(ImportedBufferDescriptor {
             id: id.into(),
             semantic: ImportedBufferSemantic::External,
         })
     }
 
-    pub fn imported_buffer(id: impl Into<RenderResourceId>) -> Self {
+    pub fn imported_buffer(id: impl Into<GpuWorkResourceId>) -> Self {
         Self::imported_external_buffer(id)
     }
 
-    pub fn id(&self) -> &RenderResourceId {
+    pub fn id(&self) -> &GpuWorkResourceId {
         match self {
             Self::UniformBuffer(value) => &value.id,
             Self::StorageBuffer(value) => &value.id,
@@ -437,9 +437,9 @@ impl RenderResourceDescriptor {
 
 pub fn detect_duplicate_resource_ids(
     descriptors: &[RenderResourceDescriptor],
-) -> Vec<RenderResourceId> {
-    let mut seen = BTreeSet::<RenderResourceId>::new();
-    let mut duplicates = BTreeSet::<RenderResourceId>::new();
+) -> Vec<GpuWorkResourceId> {
+    let mut seen = BTreeSet::<GpuWorkResourceId>::new();
+    let mut duplicates = BTreeSet::<GpuWorkResourceId>::new();
 
     for descriptor in descriptors {
         let id = *descriptor.id();

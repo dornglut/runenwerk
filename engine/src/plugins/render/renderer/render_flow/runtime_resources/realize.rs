@@ -1,4 +1,5 @@
 use super::*;
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::renderer::dynamic_targets::{
     dynamic_format_to_wgpu, dynamic_usage_to_wgpu,
 };
@@ -15,7 +16,7 @@ impl FlowRuntimeResources {
         surface_format: TextureFormat,
     ) {
         let frame_size = (surface_size.0.max(1), surface_size.1.max(1));
-        let mut declared_ids = BTreeSet::<RenderResourceId>::new();
+        let mut declared_ids = BTreeSet::<GpuWorkResourceId>::new();
 
         self.kinds.clear();
         self.descriptors.clear();
@@ -247,7 +248,7 @@ impl FlowRuntimeResources {
         &mut self,
         device: &Device,
         invocation_id: &str,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         size: u64,
     ) -> Result<&RuntimeBufferResource> {
         let descriptor = self.descriptors.get(&resource_id).ok_or_else(|| {

@@ -241,9 +241,11 @@ fn run_warm_cached_preflight(
 
 fn run_prefix_scan_primitive_plan(element_count: u32) {
     let (flow, input) = RenderFlow::new("bench.population.scan")
-        .storage_array::<U32ScanElement>("bench.population.scan.input", u64::from(element_count));
+        .storage_array::<U32ScanElement>("bench.population.scan.input", u64::from(element_count))
+        .expect("render flow authoring should succeed");
     let (flow, output) = flow
-        .storage_array::<U32ScanElement>("bench.population.scan.output", u64::from(element_count));
+        .storage_array::<U32ScanElement>("bench.population.scan.output", u64::from(element_count))
+        .expect("render flow authoring should succeed");
     let scan = U32PrefixScanDescriptor::new(
         "bench.population.scan",
         input,
@@ -279,17 +281,23 @@ fn run_scan_compaction_indirect_args_plan(element_count: u32) {
         .storage_array::<U32ScanElement>(
             "bench.population.primitives.source_indices",
             u64::from(element_count),
-        );
-    let (flow, prefix_offsets) = flow.storage_array::<U32ScanElement>(
-        "bench.population.primitives.prefix_offsets",
-        u64::from(element_count),
-    );
-    let (flow, output_indices) = flow.storage_array::<U32ScanElement>(
-        "bench.population.primitives.output_indices",
-        u64::from(element_count),
-    );
-    let (flow, draw_args) =
-        flow.storage_array::<DrawIndirectArgs>("bench.population.primitives.draw_args", 1);
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, prefix_offsets) = flow
+        .storage_array::<U32ScanElement>(
+            "bench.population.primitives.prefix_offsets",
+            u64::from(element_count),
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, output_indices) = flow
+        .storage_array::<U32ScanElement>(
+            "bench.population.primitives.output_indices",
+            u64::from(element_count),
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, draw_args) = flow
+        .storage_array::<DrawIndirectArgs>("bench.population.primitives.draw_args", 1)
+        .expect("render flow authoring should succeed");
 
     let scan = U32PrefixScanDescriptor::new(
         "bench.population.primitives.scan",
@@ -346,13 +354,17 @@ fn run_bounded_grid_build_plan(agent_count: u32) {
         .checked_cell_count()
         .expect("benchmark grid dimensions should validate");
     let (flow, counts) = RenderFlow::new("bench.population.grid")
-        .storage_array::<U32Counter>("bench.population.grid.counts", u64::from(cell_count));
+        .storage_array::<U32Counter>("bench.population.grid.counts", u64::from(cell_count))
+        .expect("render flow authoring should succeed");
     let (flow, offsets) = flow
-        .storage_array::<U32ScanElement>("bench.population.grid.offsets", u64::from(cell_count));
-    let (flow, cursors) =
-        flow.storage_array::<U32Counter>("bench.population.grid.cursors", u64::from(cell_count));
+        .storage_array::<U32ScanElement>("bench.population.grid.offsets", u64::from(cell_count))
+        .expect("render flow authoring should succeed");
+    let (flow, cursors) = flow
+        .storage_array::<U32Counter>("bench.population.grid.cursors", u64::from(cell_count))
+        .expect("render flow authoring should succeed");
     let (_flow, sorted) = flow
-        .storage_array::<U32ScanElement>("bench.population.grid.sorted", u64::from(agent_count));
+        .storage_array::<U32ScanElement>("bench.population.grid.sorted", u64::from(agent_count))
+        .expect("render flow authoring should succeed");
     let plan = BoundedUniformGrid2dBuildPlan::new(
         "bench.population.grid",
         config,
@@ -898,8 +910,10 @@ fn ray_input(
 fn build_simple_fullscreen_flow() -> RenderFlow {
     RenderFlow::new("bench.fullscreen")
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("bench.compose")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .finish()
         .validate()
         .expect("fullscreen flow should validate")
@@ -909,9 +923,11 @@ fn build_boids_flow() -> RenderFlow {
     RenderFlow::new("bench.boids")
         .with_state::<BenchState>()
         .double_buffer_storage_array::<BoidInstance>("boids.instances", 4096)
+        .expect("render flow authoring should succeed")
         .compute_pass("boids.simulate")
         .bind_ping_pong_storage("boids.instances")
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_workgroups)
         .finish()
         .validate()
@@ -922,27 +938,38 @@ fn build_procedural_boids_flow() -> RenderFlow {
     let (flow, boid_instances) = RenderFlow::new("bench.procedural_boids")
         .with_state::<BenchState>()
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .with_color_target("bench.procedural_boids.color")
+        .expect("render flow authoring should succeed")
         .double_buffer_storage_array_with_handle::<ProceduralBoidInstance>(
             "bench.procedural_boids.instances",
             u64::from(BENCH_BOID_COUNT),
-        );
-    let (flow, grid_cell_counts) = flow.storage_array::<U32Counter>(
-        "bench.procedural_boids.grid.cell_counts",
-        u64::from(BENCH_GRID_CELL_COUNT),
-    );
-    let (flow, grid_cell_offsets) = flow.storage_array::<U32ScanElement>(
-        "bench.procedural_boids.grid.cell_offsets",
-        u64::from(BENCH_GRID_CELL_COUNT),
-    );
-    let (flow, grid_scatter_cursors) = flow.storage_array::<U32Counter>(
-        "bench.procedural_boids.grid.scatter_cursors",
-        u64::from(BENCH_GRID_CELL_COUNT),
-    );
-    let (flow, grid_sorted_indices) = flow.storage_array::<U32ScanElement>(
-        "bench.procedural_boids.grid.sorted_indices",
-        u64::from(BENCH_BOID_COUNT),
-    );
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, grid_cell_counts) = flow
+        .storage_array::<U32Counter>(
+            "bench.procedural_boids.grid.cell_counts",
+            u64::from(BENCH_GRID_CELL_COUNT),
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, grid_cell_offsets) = flow
+        .storage_array::<U32ScanElement>(
+            "bench.procedural_boids.grid.cell_offsets",
+            u64::from(BENCH_GRID_CELL_COUNT),
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, grid_scatter_cursors) = flow
+        .storage_array::<U32Counter>(
+            "bench.procedural_boids.grid.scatter_cursors",
+            u64::from(BENCH_GRID_CELL_COUNT),
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, grid_sorted_indices) = flow
+        .storage_array::<U32ScanElement>(
+            "bench.procedural_boids.grid.sorted_indices",
+            u64::from(BENCH_BOID_COUNT),
+        )
+        .expect("render flow authoring should succeed");
     let grid_plan = BoundedUniformGrid2dBuildPlan::new(
         "bench.procedural_boids.grid",
         BoundedUniformGrid2dConfig::new(BENCH_GRID_CELLS_X, BENCH_GRID_CELLS_Y, BENCH_BOID_COUNT),
@@ -976,6 +1003,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .finish()
         .compute_pass(clear_counts.clone())
@@ -985,6 +1013,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_grid_workgroups)
         .depends_on("bench.procedural_boids.seed_or_hold")
         .finish()
@@ -995,6 +1024,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .depends_on(clear_counts.as_str())
         .finish()
@@ -1005,6 +1035,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_scan_workgroups)
         .depends_on(count_cells.as_str())
         .finish()
@@ -1015,6 +1046,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_grid_workgroups)
         .depends_on(scan_counts.as_str())
         .finish()
@@ -1025,6 +1057,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .depends_on(reset_cursors.as_str())
         .finish()
@@ -1035,6 +1068,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .depends_on(scatter_indices.as_str())
         .finish()
@@ -1045,6 +1079,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors)
         .bind_storage(grid_sorted_indices)
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .depends_on(simulate_neighbors.as_str())
         .finish();
@@ -1064,10 +1099,12 @@ fn build_procedural_boids_flow() -> RenderFlow {
         )
         .expect("procedural boids builder should be valid")
         .uniform_from_state_with_surface(BenchState::procedural_boids_draw_params)
+        .expect("render flow authoring should succeed")
         .finish()
         .expect("procedural boids pass should lower");
 
     flow.present_pass("bench.procedural_boids.present")
+        .expect("render flow authoring should succeed")
         .source("bench.procedural_boids.color")
         .depends_on("bench.procedural_boids.draw")
         .finish()
@@ -1094,20 +1131,26 @@ fn build_compositor_flow() -> RenderFlow {
     RenderFlow::new("bench.compositor")
         .with_state::<BenchState>()
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .with_builtin_ui()
         .double_buffer_storage_array::<BoidInstance>("post.history", 2048)
+        .expect("render flow authoring should succeed")
         .compute_pass("post.extract")
         .bind_ping_pong_storage("post.history")
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch([8, 8, 1])
         .finish()
         .fullscreen_pass("post.compose")
         .bind_ping_pong_storage("post.history")
         .uniform_from_state_with_surface(BenchState::compose_params)
+        .expect("render flow authoring should succeed")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .depends_on("post.extract")
         .finish()
         .builtin_ui_composite_pass("post.ui")
+        .expect("render flow authoring should succeed")
         .depends_on("post.compose")
         .finish()
         .validate()
@@ -1115,19 +1158,24 @@ fn build_compositor_flow() -> RenderFlow {
 }
 
 fn build_sdf_like_flow() -> RenderFlow {
-    let (flow, field) =
-        RenderFlow::new("bench.sdf").storage_array::<BoidInstance>("sdf.field", 2048);
+    let (flow, field) = RenderFlow::new("bench.sdf")
+        .storage_array::<BoidInstance>("sdf.field", 2048)
+        .expect("render flow authoring should succeed");
     flow.with_state::<BenchState>()
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .compute_pass("sdf.compute")
         .bind_storage(field.clone())
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch([8, 8, 1])
         .finish()
         .fullscreen_pass("sdf.compose")
         .bind_storage(field)
         .uniform_from_state_with_surface(BenchState::compose_params)
+        .expect("render flow authoring should succeed")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .depends_on("sdf.compute")
         .finish()
         .validate()
@@ -1138,20 +1186,26 @@ fn build_mixed_ui_flow() -> RenderFlow {
     RenderFlow::new("bench.mixed_ui")
         .with_state::<BenchState>()
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .with_builtin_ui()
         .double_buffer_storage_array::<BoidInstance>("mixed.cells", 1024)
+        .expect("render flow authoring should succeed")
         .compute_pass("mixed.simulate")
         .bind_ping_pong_storage("mixed.cells")
         .uniform_from_state(BenchState::compute_params)
+        .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_workgroups)
         .finish()
         .fullscreen_pass("mixed.compose")
         .bind_ping_pong_storage("mixed.cells")
         .uniform_from_state_with_surface(BenchState::compose_params)
+        .expect("render flow authoring should succeed")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .depends_on("mixed.simulate")
         .finish()
         .builtin_ui_composite_pass("mixed.ui")
+        .expect("render flow authoring should succeed")
         .depends_on("mixed.compose")
         .finish()
         .validate()

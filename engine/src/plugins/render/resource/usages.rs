@@ -1,4 +1,4 @@
-use crate::plugins::render::api::RenderResourceId;
+use crate::plugins::gpu::GpuWorkResourceId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResourceAccess {
@@ -21,14 +21,14 @@ pub enum ResourceUsageKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceUsage {
-    pub resource_id: RenderResourceId,
+    pub resource_id: GpuWorkResourceId,
     pub access: ResourceAccess,
     pub kind: ResourceUsageKind,
 }
 
 impl ResourceUsage {
     pub fn new(
-        resource_id: impl Into<RenderResourceId>,
+        resource_id: impl Into<GpuWorkResourceId>,
         access: ResourceAccess,
         kind: ResourceUsageKind,
     ) -> Self {

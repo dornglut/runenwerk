@@ -1,4 +1,5 @@
-use crate::plugins::render::{RenderResourceDescriptor, RenderResourceId};
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::RenderResourceDescriptor;
 use std::any::{TypeId, type_name};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,7 +36,7 @@ impl ResourceGraph {
         self.resources.push(descriptor);
     }
 
-    pub fn uniform_buffer_ids_by_params_type(&self, type_id: TypeId) -> Vec<RenderResourceId> {
+    pub fn uniform_buffer_ids_by_params_type(&self, type_id: TypeId) -> Vec<GpuWorkResourceId> {
         self.resources
             .iter()
             .filter_map(|resource| match resource {
@@ -55,7 +56,7 @@ impl ResourceGraph {
             .any(|resource| resource.type_id == type_id)
     }
 
-    pub fn has_uniform_buffer(&self, id: &RenderResourceId) -> bool {
+    pub fn has_uniform_buffer(&self, id: &GpuWorkResourceId) -> bool {
         self.resources.iter().any(|resource| {
             matches!(
                 resource,

@@ -4,8 +4,10 @@ use engine::plugins::render::RenderFlow;
 fn main() -> Result<()> {
     let flow = RenderFlow::new("minimal.flow")
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("minimal.compose")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .finish()
         .validate()?;
 
