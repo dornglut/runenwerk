@@ -3,7 +3,7 @@ name: G1A Prepublication Serialized
 on:
   pull_request:
     branches:
-      - main
+      - validation/pt-runengpu-g1a-prepublication-serialized
     types:
       - opened
       - synchronize
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   validate-and-stage:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'validation/pt-runengpu-g1a-prepublication-serialized'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'validation/pt-runengpu-g1a-trigger'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -40,7 +40,7 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
           rustup toolchain install 1.93.0 --profile minimal --component rustfmt,clippy
 
-      - name: Fetch exact prepublication runner
+      - name: Fetch exact final validation runner
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +52,7 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          blob = "41e619540572450d3cf61b3c808d120aa3645232"
+          blob = "e5188f95b980835e65ceca41534105ce50543292"
           request = urllib.request.Request(
               f"https://api.github.com/repos/dornglut/runenwerk/git/blobs/{blob}",
               headers={
@@ -63,77 +63,20 @@ jobs:
           )
           with urllib.request.urlopen(request) as response:
               runner = base64.b64decode(json.load(response)["content"])
-          if len(runner) != 10_925:
-              raise SystemExit(f"unexpected base runner length: {len(runner)}")
+          if len(runner) != 3_220:
+              raise SystemExit(f"unexpected wrapper length: {len(runner)}")
           actual = hashlib.sha256(runner).hexdigest()
-          expected = "80645b2951066d0650fe24612b3771a9b04466848da0f74a174d22e90b79efc0"
+          expected = "5f3de032a229f3ba333253c0da71025e31b6c94f554224a610043411f368cacd"
           if actual != expected:
-              raise SystemExit(f"base runner mismatch: expected={expected} actual={actual}")
-
-          text = runner.decode("utf-8")
-          list_marker = '''    (
-        "ce780b1ba050d147cee61b314d8b84730aa860c9",
-        1_437,
-        "881b81e70509c4715d4d64cfa57c82f00656bf5e17a802495748a9f969e400f0",
-        "g1a-procedural-test-corrections.patch",
-    ),
-]'''
-          list_replacement = '''    (
-        "ce780b1ba050d147cee61b314d8b84730aa860c9",
-        1_437,
-        "881b81e70509c4715d4d64cfa57c82f00656bf5e17a802495748a9f969e400f0",
-        "g1a-procedural-test-corrections.patch",
-    ),
-    (
-        "671c59166087672796484dae804b7e7f0e8a41c3",
-        548,
-        "6e7bf52207a5427000ce7fe93e662787d8aebea19ed9a064663648eb94d52007",
-        "g1a-draw-test-correction.patch",
-    ),
-    (
-        "6d68ba0be6d720833316b61894dd67cf68ddc144",
-        2_859,
-        "832149b7e83b262fab4b5a750b2696f0adb1299859649941b838accf7c3efa2b",
-        "g1a-editor-architecture-correction.patch",
-    ),
-    (
-        "871a7b02dfd69aecf01e4e66c7fb48326aaf992c",
-        564,
-        "894e83df544362d07b36e96e8828557feedb03de24e06b1d7c57dc26d228d93e",
-        "g1a-editor-cfg-import-correction.patch",
-    ),
-]'''
-          if text.count(list_marker) != 1:
-              raise SystemExit("runner correction-list marker mismatch")
-          text = text.replace(list_marker, list_replacement, 1)
-
-          apply_marker = 'patch -p1 --batch < "$RUNNER_TEMP/g1a-procedural-test-corrections.patch"\n'
-          apply_replacement = (
-              apply_marker
-              + 'patch -p1 --batch < "$RUNNER_TEMP/g1a-draw-test-correction.patch"\n'
-              + 'patch -p1 --batch < "$RUNNER_TEMP/g1a-editor-architecture-correction.patch"\n'
-              + 'patch -p1 --batch < "$RUNNER_TEMP/g1a-editor-cfg-import-correction.patch"\n'
-          )
-          if text.count(apply_marker) != 1:
-              raise SystemExit("runner patch-application marker mismatch")
-          text = text.replace(apply_marker, apply_replacement, 1)
-
-          runner = text.encode("utf-8")
-          if len(runner) != 11_749:
-              raise SystemExit(f"unexpected derived runner length: {len(runner)}")
-          actual = hashlib.sha256(runner).hexdigest()
-          expected = "6910f2ac7461cc09405359fba4286af1d15a18569b05bcf6de30110720e740cc"
-          if actual != expected:
-              raise SystemExit(f"derived runner mismatch: expected={expected} actual={actual}")
-
-          path = Path(os.environ["RUNNER_TEMP"], "g1a-prepublication-runner.sh")
+              raise SystemExit(f"wrapper mismatch: expected={expected} actual={actual}")
+          path = Path(os.environ["RUNNER_TEMP"], "g1a-final-wrapper.sh")
           path.write_bytes(runner)
           path.chmod(0o700)
           PY
 
       - name: Validate and stage unreferenced source blobs
         shell: bash
-        run: "$RUNNER_TEMP/g1a-prepublication-runner.sh"
+        run: "$RUNNER_TEMP/g1a-final-wrapper.sh"
 
       - name: Upload validated blob manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
