@@ -123,6 +123,7 @@ fn runtime_viewport_resources_start_empty_before_bootstrap() {
 #[test]
 fn bootstrap_seeding_is_explicit_and_main_viewport_scoped() {
     let app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("headless editor app should run");
     let surface_sets = app
@@ -147,6 +148,7 @@ fn bootstrap_seeding_is_explicit_and_main_viewport_scoped() {
 #[test]
 fn runtime_mounts_tool_surfaces_through_ui_surface_contracts() {
     let app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("headless editor app should run");
     let definitions = app
@@ -282,6 +284,7 @@ fn viewport_picking_results_do_not_overwrite_across_viewports() {
 #[test]
 fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
     let app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("headless editor app should run");
     let flow_registry = app
@@ -327,6 +330,7 @@ fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
 #[test]
 fn viewport_scene_and_overlay_products_clear_before_drawing() {
     let app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("headless editor app should run");
     let flow_registry = app
@@ -358,6 +362,7 @@ fn viewport_scene_and_overlay_products_clear_before_drawing() {
 #[test]
 fn shell_frame_uses_viewport_embed_primitive_instead_of_raw_image_path() {
     let app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("headless editor app should run");
     let submissions = app

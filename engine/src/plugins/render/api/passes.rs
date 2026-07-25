@@ -1,14 +1,15 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::{
     ComputeDispatchBinding, ComputeDispatchDescriptor, PassParamBinding, RenderFlow,
-    StorageArrayHandle, UniformHandle,
+    RenderFlowAuthoringError, StorageArrayHandle, UniformHandle,
 };
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
     DrawIndexedIndirectArgs, GpuParams, IndirectDrawArgsBuffer, RenderDrawDescriptor,
     RenderIndirectDrawResource, RenderPassId, RenderPassKind, RenderPassNode,
-    RenderPassShapeIntent, RenderPassViewScope, RenderRasterState, RenderResourceId,
-    RenderVertexBufferLayout, ShaderHandle,
+    RenderPassShapeIntent, RenderPassViewScope, RenderRasterState, RenderVertexBufferLayout,
+    ShaderHandle,
 };
 
 #[derive(Debug)]
@@ -48,15 +49,18 @@ impl ComputePassBuilder {
         self
     }
 
-    pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
+    pub fn uniform_from_state<S, U, F>(
+        mut self,
+        projection: F,
+    ) -> Result<Self, RenderFlowAuthoringError>
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
         add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
-        self
+        Ok(self)
     }
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
@@ -170,26 +174,32 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
+    pub fn uniform_from_state<S, U, F>(
+        mut self,
+        projection: F,
+    ) -> Result<Self, RenderFlowAuthoringError>
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
         add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
-        self
+        Ok(self)
     }
 
-    pub fn uniform_from_state_with_surface<S, U, F>(mut self, projection: F) -> Self
+    pub fn uniform_from_state_with_surface<S, U, F>(
+        mut self,
+        projection: F,
+    ) -> Result<Self, RenderFlowAuthoringError>
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
-        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
         add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
-        self
+        Ok(self)
     }
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
@@ -243,10 +253,10 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn write_surface_color(mut self) -> Self {
-        let id = self.flow.ensure_surface_color_resource();
+    pub fn write_surface_color(mut self) -> Result<Self, RenderFlowAuthoringError> {
+        let id = self.flow.ensure_surface_color_resource()?;
         push_unique_resource(&mut self.pass.writes, id);
-        self
+        Ok(self)
     }
 
     /// Writes this pass into a raster color attachment.
@@ -321,26 +331,32 @@ impl GraphicsPassBuilder {
         self
     }
 
-    pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
+    pub fn uniform_from_state<S, U, F>(
+        mut self,
+        projection: F,
+    ) -> Result<Self, RenderFlowAuthoringError>
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
         add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
-        self
+        Ok(self)
     }
 
-    pub fn uniform_from_state_with_surface<S, U, F>(mut self, projection: F) -> Self
+    pub fn uniform_from_state_with_surface<S, U, F>(
+        mut self,
+        projection: F,
+    ) -> Result<Self, RenderFlowAuthoringError>
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
-        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass);
+        let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
         add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
-        self
+        Ok(self)
     }
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
@@ -394,10 +410,10 @@ impl GraphicsPassBuilder {
         self
     }
 
-    pub fn write_surface_color(mut self) -> Self {
-        let id = self.flow.ensure_surface_color_resource();
+    pub fn write_surface_color(mut self) -> Result<Self, RenderFlowAuthoringError> {
+        let id = self.flow.ensure_surface_color_resource()?;
         push_unique_resource(&mut self.pass.writes, id);
-        self
+        Ok(self)
     }
 
     /// Writes this pass into a raster color attachment.
@@ -571,7 +587,7 @@ impl GraphicsPassBuilder {
 
     pub(crate) fn push_vertex_buffer_resource(
         mut self,
-        id: RenderResourceId,
+        id: GpuWorkResourceId,
         layout: RenderVertexBufferLayout,
     ) -> Self {
         push_unique_resource(&mut self.pass.reads, id);
@@ -580,7 +596,7 @@ impl GraphicsPassBuilder {
         self
     }
 
-    pub(crate) fn push_index_buffer_resource(mut self, id: RenderResourceId) -> Self {
+    pub(crate) fn push_index_buffer_resource(mut self, id: GpuWorkResourceId) -> Self {
         push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.index_buffers, id);
         self
@@ -588,7 +604,7 @@ impl GraphicsPassBuilder {
 
     pub(crate) fn push_instance_buffer_resource(
         mut self,
-        id: RenderResourceId,
+        id: GpuWorkResourceId,
         layout: RenderVertexBufferLayout,
     ) -> Self {
         push_unique_resource(&mut self.pass.reads, id);
@@ -672,10 +688,13 @@ pub struct PresentPassBuilder {
 }
 
 impl PresentPassBuilder {
-    pub(crate) fn new(mut flow: RenderFlow, label: String) -> Self {
-        flow.ensure_surface_color_resource();
+    pub(crate) fn new(
+        mut flow: RenderFlow,
+        label: String,
+    ) -> Result<Self, RenderFlowAuthoringError> {
+        flow.ensure_surface_color_resource()?;
         let pass = new_pass(&mut flow, label, RenderPassKind::Present);
-        Self { flow, pass }
+        Ok(Self { flow, pass })
     }
 
     pub fn main_surface_only(mut self) -> Self {
@@ -690,11 +709,11 @@ impl PresentPassBuilder {
         self
     }
 
-    pub fn surface_color(mut self) -> Self {
-        let id = self.flow.ensure_surface_color_resource();
+    pub fn surface_color(mut self) -> Result<Self, RenderFlowAuthoringError> {
+        let id = self.flow.ensure_surface_color_resource()?;
         self.pass.reads.clear();
         self.pass.reads.push(id);
-        self
+        Ok(self)
     }
 
     pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
@@ -714,11 +733,14 @@ pub struct BuiltinUiCompositePassBuilder {
 }
 
 impl BuiltinUiCompositePassBuilder {
-    pub(crate) fn new(mut flow: RenderFlow, label: String) -> Self {
-        let color_output = flow.ensure_surface_color_resource();
+    pub(crate) fn new(
+        mut flow: RenderFlow,
+        label: String,
+    ) -> Result<Self, RenderFlowAuthoringError> {
+        let color_output = flow.ensure_surface_color_resource()?;
         let mut pass = new_pass(&mut flow, label, RenderPassKind::BuiltinUiComposite);
         push_unique_resource(&mut pass.writes, color_output);
-        Self { flow, pass }
+        Ok(Self { flow, pass })
     }
 
     pub fn main_surface_only(mut self) -> Self {
@@ -741,18 +763,21 @@ fn new_pass(flow: &mut RenderFlow, label: String, kind: RenderPassKind) -> Rende
     RenderPassNode::new(pass_id, pass_label, kind)
 }
 
-fn allocate_uniform_id<U>(flow: &mut RenderFlow, pass: &RenderPassNode) -> RenderResourceId
+fn allocate_uniform_id<U>(
+    flow: &mut RenderFlow,
+    pass: &RenderPassNode,
+) -> Result<GpuWorkResourceId, RenderFlowAuthoringError>
 where
     U: GpuParams + 'static,
 {
-    *flow
-        .allocate_uniform_resource::<U>(pass.label.as_str())
-        .id()
+    Ok(*flow
+        .allocate_uniform_resource::<U>(pass.label.as_str())?
+        .id())
 }
 
 fn add_uniform_state_binding<S, U, F>(
     pass: &mut RenderPassNode,
-    uniform_id: RenderResourceId,
+    uniform_id: GpuWorkResourceId,
     projection: F,
 ) where
     S: ecs::Resource + Send + Sync + 'static,
@@ -765,7 +790,7 @@ fn add_uniform_state_binding<S, U, F>(
 
 fn add_uniform_state_with_surface_binding<S, U, F>(
     pass: &mut RenderPassNode,
-    uniform_id: RenderResourceId,
+    uniform_id: GpuWorkResourceId,
     projection: F,
 ) where
     S: ecs::Resource + Send + Sync + 'static,
@@ -786,7 +811,7 @@ fn add_dependency_by_label(flow: &RenderFlow, pass: &mut RenderPassNode, pass_la
 fn require_ping_pong_storage(
     flow: &RenderFlow,
     label: &str,
-) -> (RenderResourceId, RenderResourceId) {
+) -> (GpuWorkResourceId, GpuWorkResourceId) {
     flow.ping_pong_storage_ids(label).unwrap_or_else(|| {
         panic!(
             "ping-pong storage '{}' is not registered in flow '{}'",
@@ -796,7 +821,7 @@ fn require_ping_pong_storage(
     })
 }
 
-fn require_resource_id(flow: &RenderFlow, label: &str) -> RenderResourceId {
+fn require_resource_id(flow: &RenderFlow, label: &str) -> GpuWorkResourceId {
     flow.resolve_resource_id(label).unwrap_or_else(|| {
         panic!(
             "resource label '{}' is not registered in flow '{}'",
@@ -816,7 +841,7 @@ fn require_pass_id(flow: &RenderFlow, label: &str) -> RenderPassId {
     })
 }
 
-fn push_unique_resource(resources: &mut Vec<RenderResourceId>, id: RenderResourceId) {
+fn push_unique_resource(resources: &mut Vec<GpuWorkResourceId>, id: GpuWorkResourceId) {
     if resources.iter().all(|existing| *existing != id) {
         resources.push(id);
     }

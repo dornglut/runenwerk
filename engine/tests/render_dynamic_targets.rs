@@ -1,3 +1,4 @@
+use engine::plugins::gpu::GpuWorkResourceId;
 use engine::plugins::render::{
     PreparedFlowInputs, PreparedFlowInvocation, PreparedFlowInvocationId,
     PreparedFlowInvocationRequest, PreparedFrameContext, PreparedFrameContributions,
@@ -10,10 +11,9 @@ use engine::plugins::render::{
     RenderExecutionGraphDiagnosticKind, RenderFlow, RenderFlowId, RenderFrameProducerId,
     RenderProductSurfaceDiagnosticKind, RenderProductSurfaceDiagnosticSeverity,
     RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
-    RenderProductSurfaceRequestKind, RenderProductSurfaceStatusKind, RenderResourceId,
-    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
-    RenderTextureUploadAlphaMode, compile_flow_plan, prepared_render_frame_preflight_cache_key,
-    validate_prepared_render_frame,
+    RenderProductSurfaceRequestKind, RenderProductSurfaceStatusKind, RenderTextureSampleMode,
+    RenderTextureTargetFormat, RenderTextureTargetUsage, RenderTextureUploadAlphaMode,
+    compile_flow_plan, prepared_render_frame_preflight_cache_key, validate_prepared_render_frame,
 };
 use std::collections::BTreeMap;
 use ui_render_data::{ProductSurfaceTextureBindingSource, ViewportSurfaceBindingRegistry};
@@ -56,6 +56,22 @@ fn upload_descriptor(
 
 fn producer(raw: u64) -> RenderFrameProducerId {
     RenderFrameProducerId::try_from_raw(raw).unwrap()
+}
+
+fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
+    let labels = (0..count)
+        .map(|index| format!("test.dynamic.resource.{index}"))
+        .collect::<Vec<_>>();
+    let flow = labels
+        .iter()
+        .fold(RenderFlow::new("test.dynamic.resources"), |flow, label| {
+            flow.with_color_target(label.clone())
+                .expect("render flow authoring should succeed")
+        });
+    labels
+        .iter()
+        .map(|label| flow.resource_id(label).expect("test resource should exist"))
+        .collect()
 }
 
 fn prepared_frame_for_invocations(
@@ -349,6 +365,7 @@ fn render_dynamic_targets_descriptor_validation_rejects_invalid_shapes() {
 fn render_dynamic_targets_preflight_reports_missing_target_alias_binding() {
     let flow = RenderFlow::new("preflight.alias.missing")
         .with_color_target_alias("scene_color")
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("compose")
         .offscreen_products_only()
         .write_target_alias("scene_color")
@@ -387,7 +404,9 @@ fn render_dynamic_targets_preflight_reports_missing_target_alias_binding() {
 fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_sampled() {
     let flow = RenderFlow::new("preflight.dynamic.sampled")
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .with_color_target_alias("scene_color")
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("draw_scene")
         .offscreen_products_only()
         .write_target_alias("scene_color")
@@ -396,6 +415,7 @@ fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_s
         .offscreen_products_only()
         .sample_texture("scene_color")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .depends_on("draw_scene")
         .finish()
         .validate()
@@ -445,6 +465,7 @@ fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_s
 fn render_dynamic_targets_preflight_reports_typed_history_signature_conflicts() {
     let flow = RenderFlow::new("preflight.history")
         .with_color_target_alias("scene_color")
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("draw_scene")
         .offscreen_products_only()
         .write_target_alias("scene_color")
@@ -503,6 +524,7 @@ fn render_dynamic_targets_preflight_reports_typed_history_signature_conflicts() 
 fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_uniform_values() {
     let flow = RenderFlow::new("preflight.cache.stable")
         .with_color_target_alias("scene_color")
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("draw_scene")
         .offscreen_products_only()
         .write_target_alias("scene_color")
@@ -525,10 +547,11 @@ fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_unifor
         PreparedTargetBinding::DynamicTexture(key),
     );
     let mut invocation = invocation("viewport.cache", compiled.flow_id, "viewport.1", bindings);
-    invocation.inputs.projected_uniform_bytes.insert(
-        RenderResourceId::try_from_raw(77).expect("test resource id"),
-        vec![1, 2, 3, 4],
-    );
+    let uniform_id = test_resource_ids(1)[0];
+    invocation
+        .inputs
+        .projected_uniform_bytes
+        .insert(uniform_id, vec![1, 2, 3, 4]);
     let mut frame = prepared_frame_for_invocations(
         vec![PreparedViewFrame::offscreen_product(
             "viewport.1",
@@ -548,7 +571,7 @@ fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_unifor
     frame.flow_invocations[0]
         .inputs
         .projected_uniform_bytes
-        .get_mut(&RenderResourceId::try_from_raw(77).expect("test resource id"))
+        .get_mut(&uniform_id)
         .expect("uniform should exist")
         .copy_from_slice(&[9, 8, 7, 6]);
     let changed_values = prepared_render_frame_preflight_cache_key(
@@ -564,6 +587,7 @@ fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_unifor
 fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inputs() {
     let flow = RenderFlow::new("preflight.cache.invalidates")
         .with_color_target_alias("scene_color")
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("draw_scene")
         .offscreen_products_only()
         .write_target_alias("scene_color")
@@ -592,10 +616,11 @@ fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inpu
         bindings,
     );
     invocation.history_signature = Some("history:a".to_string());
-    invocation.inputs.projected_uniform_bytes.insert(
-        RenderResourceId::try_from_raw(78).expect("test resource id"),
-        vec![1, 2, 3, 4],
-    );
+    let uniform_id = test_resource_ids(1)[0];
+    invocation
+        .inputs
+        .projected_uniform_bytes
+        .insert(uniform_id, vec![1, 2, 3, 4]);
     let frame = prepared_frame_for_invocations(
         vec![PreparedViewFrame::offscreen_product(
             "viewport.1",
@@ -628,7 +653,7 @@ fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inpu
     uniform_shape_changed.flow_invocations[0]
         .inputs
         .projected_uniform_bytes
-        .get_mut(&RenderResourceId::try_from_raw(78).expect("test resource id"))
+        .get_mut(&uniform_id)
         .expect("uniform should exist")
         .push(5);
 
@@ -740,8 +765,9 @@ fn render_dynamic_targets_request_registry_rejects_cross_producer_key_collisions
 #[test]
 fn render_dynamic_targets_prepared_frame_requests_carry_offscreen_view_and_target_alias_data() {
     let flow_id = RenderFlowId::try_from_raw(7).unwrap();
-    let uniform_id = RenderResourceId::try_from_raw(11).unwrap();
-    let flow_owned_id = RenderResourceId::try_from_raw(12).unwrap();
+    let resource_ids = test_resource_ids(2);
+    let uniform_id = resource_ids[0];
+    let flow_owned_id = resource_ids[1];
     let dynamic_key = RenderDynamicTextureTargetKey::new("test.dynamic", "viewport.7.scene");
     let descriptor = RenderDynamicTextureTargetDescriptor::color_sampled(
         dynamic_key.clone(),

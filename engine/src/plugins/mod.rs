@@ -5,6 +5,7 @@
 pub mod debug_metrics;
 pub mod diagnostics;
 pub mod fixed_step;
+pub mod gpu;
 pub mod grid;
 pub mod input;
 pub mod net;
@@ -23,6 +24,7 @@ pub use diagnostics::{
     DiagnosticsSeverity, DiagnosticsStatus, DiagnosticsSummary, ResolvedDiagnosticsPlan,
 };
 pub use fixed_step::*;
+pub use gpu::{GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator};
 pub use grid::*;
 pub use input::*;
 pub use render::*;

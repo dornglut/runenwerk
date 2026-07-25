@@ -32,6 +32,7 @@ const fn ui_frame_producer_id(raw: u64) -> RenderFrameProducerId {
 #[test]
 fn startup_render_smoke_publishes_editor_shell_submission() {
     let app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(2)
         .expect("headless editor app should run");
 
@@ -288,6 +289,7 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
 #[test]
 fn static_composition_keeps_viewport_product_sized_without_structural_mutation() {
     let mut app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed")
         .run_for_frames(1)
         .expect("headless editor app should run");
     let definition_before = {

@@ -4,11 +4,11 @@
 use std::collections::BTreeMap;
 
 use editor_viewport::{ExpressionDimensions, ViewportId, ViewportSurfacePresentationSlot};
+use engine::plugins::gpu::GpuWorkResourceId;
 use engine::plugins::render::{
     PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource, PreparedViewFrame,
     RenderDynamicTextureTargetKey, RenderFlowId, RenderFlowRegistryResource,
     RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
-    RenderResourceId,
 };
 use engine::runtime::{Res, ResMut};
 use ui_math::UiRect;
@@ -121,7 +121,7 @@ pub fn sync_viewport_render_jobs_system(
 
 fn build_viewport_render_job(
     flow_id: RenderFlowId,
-    scene_uniform_id: RenderResourceId,
+    scene_uniform_id: GpuWorkResourceId,
     viewport_render: &crate::runtime::resources::EditorViewportRenderState,
     viewport_id: ViewportId,
     bounds: UiRect,
@@ -193,7 +193,7 @@ pub fn prepared_view_id(viewport_id: ViewportId) -> String {
 
 fn editor_main_flow_ids(
     flow_registry: &RenderFlowRegistryResource,
-) -> Option<(RenderFlowId, RenderResourceId)> {
+) -> Option<(RenderFlowId, GpuWorkResourceId)> {
     let flow = flow_registry
         .compiled_flows()
         .iter()
@@ -208,6 +208,7 @@ fn editor_main_flow_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::app::test_gpu_work_resource_id;
     use crate::runtime::resources::EditorViewportRenderState;
     use crate::runtime::viewport::{
         ViewportProductRegistryResource, ViewportProductTargetRegistryResource,
@@ -275,8 +276,7 @@ mod tests {
                 .expect("descriptors should exist"),
         );
         let flow_id = RenderFlowId::try_from_raw(1).expect("test flow id should be valid");
-        let scene_uniform_id =
-            RenderResourceId::try_from_raw(9).expect("test uniform id should be valid");
+        let scene_uniform_id = test_gpu_work_resource_id("scene_uniform");
         let viewport_render = EditorViewportRenderState::default();
         let job = build_viewport_render_job(
             flow_id,
@@ -355,8 +355,7 @@ mod tests {
             &descriptors,
         );
         let flow_id = RenderFlowId::try_from_raw(1).expect("test flow id should be valid");
-        let scene_uniform_id =
-            RenderResourceId::try_from_raw(9).expect("test uniform id should be valid");
+        let scene_uniform_id = test_gpu_work_resource_id("scene_uniform");
         let viewport_render = EditorViewportRenderState::default();
 
         let job = build_viewport_render_job(

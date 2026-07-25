@@ -1,6 +1,7 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::{ComputeDispatchDescriptor, PassParamBinding};
-use crate::plugins::render::{GpuParams, GpuStorage, RenderPassId, RenderResourceId, ShaderHandle};
+use crate::plugins::render::{GpuParams, GpuStorage, RenderPassId, ShaderHandle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RenderPassKind {
@@ -201,7 +202,7 @@ impl RenderVertexBufferLayout {
 pub enum RenderDrawSource {
     Direct,
     Indirect {
-        args_buffer: RenderResourceId,
+        args_buffer: GpuWorkResourceId,
         args_kind: RenderIndirectDrawArgsKind,
         args_element_count: u64,
         args_element_size: u64,
@@ -211,7 +212,7 @@ pub enum RenderDrawSource {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RenderIndirectDrawResource {
-    pub args_buffer: RenderResourceId,
+    pub args_buffer: GpuWorkResourceId,
     pub args_kind: RenderIndirectDrawArgsKind,
     pub args_element_count: u64,
     pub args_element_size: u64,
@@ -220,7 +221,7 @@ pub struct RenderIndirectDrawResource {
 
 impl RenderIndirectDrawResource {
     pub const fn new(
-        args_buffer: RenderResourceId,
+        args_buffer: GpuWorkResourceId,
         args_kind: RenderIndirectDrawArgsKind,
         args_element_count: u64,
         args_element_size: u64,
@@ -238,7 +239,7 @@ impl RenderIndirectDrawResource {
 
 impl RenderDrawSource {
     pub const fn indirect(
-        args_buffer: RenderResourceId,
+        args_buffer: GpuWorkResourceId,
         args_kind: RenderIndirectDrawArgsKind,
         args_element_count: u64,
         args_element_size: u64,
@@ -292,7 +293,7 @@ pub struct RenderFixedStepRegionMembership {
     pub region_id: RenderFixedStepRegionId,
     pub region_label: String,
     pub max_substeps: u32,
-    pub iteration_uniform: RenderResourceId,
+    pub iteration_uniform: GpuWorkResourceId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, GpuStorage)]
@@ -448,26 +449,26 @@ pub struct RenderPassNode {
     pub shape_intent: RenderPassShapeIntent,
     pub shader: Option<RenderShaderReference>,
     pub shader_constants: Vec<RenderShaderConstant>,
-    pub reads: Vec<RenderResourceId>,
-    pub writes: Vec<RenderResourceId>,
+    pub reads: Vec<GpuWorkResourceId>,
+    pub writes: Vec<GpuWorkResourceId>,
     pub depends_on: Vec<RenderPassId>,
     pub workgroup_size: Option<[u32; 3]>,
     pub clear_color: Option<[f32; 4]>,
     pub compute_dispatch: Option<ComputeDispatchDescriptor>,
-    pub sampled_textures: Vec<RenderResourceId>,
-    pub write_textures: Vec<RenderResourceId>,
-    pub vertex_buffers: Vec<RenderResourceId>,
+    pub sampled_textures: Vec<GpuWorkResourceId>,
+    pub write_textures: Vec<GpuWorkResourceId>,
+    pub vertex_buffers: Vec<GpuWorkResourceId>,
     pub vertex_buffer_layouts: Vec<RenderVertexBufferLayout>,
-    pub index_buffers: Vec<RenderResourceId>,
-    pub instance_buffers: Vec<RenderResourceId>,
+    pub index_buffers: Vec<GpuWorkResourceId>,
+    pub instance_buffers: Vec<GpuWorkResourceId>,
     pub instance_buffer_layouts: Vec<RenderVertexBufferLayout>,
-    pub indirect_buffers: Vec<RenderResourceId>,
-    pub depth_target: Option<RenderResourceId>,
+    pub indirect_buffers: Vec<GpuWorkResourceId>,
+    pub depth_target: Option<GpuWorkResourceId>,
     pub raster_state: RenderRasterState,
     pub draw: Option<RenderDrawDescriptor>,
     pub uniform_bindings: Vec<PassParamBinding>,
     pub fixed_step_region: Option<RenderFixedStepRegionMembership>,
-    pub fixed_step_iteration_uniforms: Vec<RenderResourceId>,
+    pub fixed_step_iteration_uniforms: Vec<GpuWorkResourceId>,
 }
 
 impl RenderPassNode {

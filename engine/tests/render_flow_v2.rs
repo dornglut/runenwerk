@@ -75,22 +75,28 @@ fn build_flow() -> RenderFlow {
     RenderFlow::new("v2.flow")
         .with_state::<FlowState>()
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .with_builtin_ui()
         .double_buffer_storage_array::<Cell>("cells", 16 * 9)
+        .expect("render flow authoring should succeed")
         .compute_pass("simulate")
         .shader_asset("assets/shaders/game_of_life_compute.wgsl")
         .uniform_from_state(FlowState::compute_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage("cells")
         .dispatch_from_state(FlowState::dispatch)
         .finish()
         .fullscreen_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
         .uniform_from_state_with_surface(FlowState::compose_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage("cells")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .depends_on("simulate")
         .finish()
         .builtin_ui_composite_pass("ui")
+        .expect("render flow authoring should succeed")
         .depends_on("compose")
         .finish()
         .validate()
@@ -136,11 +142,14 @@ fn prepared_frame_for_flow(flow_id: engine::plugins::render::RenderFlowId) -> Pr
 fn instanced_fullscreen_style_flow(instance_count: u32) -> RenderFlow {
     let (flow, cells) = RenderFlow::new("v2.pass-shape.fullscreen-instanced")
         .with_surface_color()
-        .storage_array::<Cell>("cells", 64);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Cell>("cells", 64)
+        .expect("render flow authoring should succeed");
     flow.graphics_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
         .bind_storage(cells)
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .draw(3, instance_count)
         .finish()
         .validate()
@@ -189,11 +198,14 @@ fn v2_flow_keeps_graph_contract_inspectable() {
 fn render_flow_compiler_reports_typed_static_resource_diagnostics() {
     let (flow, _cells) = RenderFlow::new("v2.invalid.compiler")
         .with_surface_color()
-        .storage_array::<Cell>("cells", 4);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Cell>("cells", 4)
+        .expect("render flow authoring should succeed");
     let flow = flow
         .fullscreen_pass("compose")
         .sample_texture("cells")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .finish();
 
     let err = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
@@ -209,6 +221,7 @@ fn render_flow_compiler_reports_typed_static_resource_diagnostics() {
 fn render_flow_compiler_reports_backend_capability_mismatches() {
     let flow = RenderFlow::new("v2.compiler.capability")
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .compute_pass("simulate")
         .dispatch([1, 1, 1])
         .finish()
@@ -245,12 +258,15 @@ fn render_flow_compiler_rejects_instanced_fullscreen_style_graphics_by_default()
 fn render_flow_compiler_accepts_bounded_instanced_fullscreen_intent() {
     let (flow, cells) = RenderFlow::new("v2.pass-shape.explicit")
         .with_surface_color()
-        .storage_array::<Cell>("cells", 64);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Cell>("cells", 64)
+        .expect("render flow authoring should succeed");
     let flow = flow
         .graphics_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
         .bind_storage(cells)
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .draw(3, 512)
         .allow_instanced_fullscreen(1024, "bounded diagnostic stress pass")
         .finish()
@@ -280,12 +296,15 @@ fn render_flow_compiler_accepts_bounded_instanced_fullscreen_intent() {
 fn render_flow_compiler_rejects_instanced_fullscreen_intent_over_limit() {
     let (flow, cells) = RenderFlow::new("v2.pass-shape.explicit-over-limit")
         .with_surface_color()
-        .storage_array::<Cell>("cells", 64);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Cell>("cells", 64)
+        .expect("render flow authoring should succeed");
     let flow = flow
         .graphics_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
         .bind_storage(cells)
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .draw(3, 2048)
         .allow_instanced_fullscreen(1024, "bounded diagnostic stress pass")
         .finish()
@@ -306,8 +325,12 @@ fn render_flow_compiler_rejects_instanced_fullscreen_intent_over_limit() {
 fn render_flow_compiler_preserves_instanced_graphics_with_local_geometry() {
     let (flow, vertices) = RenderFlow::new("v2.pass-shape.local-geometry")
         .with_surface_color()
-        .storage_array::<Vertex>("vertices", 3);
-    let (flow, instances) = flow.storage_array::<Cell>("instances", 512);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Vertex>("vertices", 3)
+        .expect("render flow authoring should succeed");
+    let (flow, instances) = flow
+        .storage_array::<Cell>("instances", 512)
+        .expect("render flow authoring should succeed");
     let flow = flow
         .graphics_pass("sprites")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
@@ -320,6 +343,7 @@ fn render_flow_compiler_preserves_instanced_graphics_with_local_geometry() {
             RenderVertexBufferLayout::instance(1, 16).attribute(1, 0, RenderVertexFormat::Uint32),
         )
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .draw(3, 512)
         .finish()
         .validate()
@@ -348,6 +372,7 @@ fn render_flow_runtime_guard_rejects_cached_instanced_fullscreen_hazard() {
 fn render_flow_compiler_exposes_resource_lifetime_windows() {
     let flow = RenderFlow::new("v2.compiler.lifetimes")
         .with_color_target("color")
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("compose")
         .write_color_target("color")
         .finish()
@@ -390,7 +415,8 @@ fn v2_uniform_projection_uses_state_bindings() {
 fn v2_named_uniform_buffers_support_prepared_invocation_overrides() {
     let (flow, handle) = RenderFlow::new("v2.named-uniform")
         .with_state::<FlowState>()
-        .uniform_buffer::<ComposeParams>("compose.per_invocation");
+        .uniform_buffer::<ComposeParams>("compose.per_invocation")
+        .expect("render flow authoring should succeed");
 
     assert_eq!(
         flow.resource_id("compose.per_invocation"),
@@ -408,7 +434,8 @@ fn v2_named_uniform_buffers_support_prepared_invocation_overrides() {
 #[test]
 fn v2_exact_color_target_is_surface_sized_with_exact_format() {
     let flow = RenderFlow::new("v2.exact-color")
-        .with_color_target_exact("proof.bytes", RenderTextureTargetFormat::Rgba8Unorm);
+        .with_color_target_exact("proof.bytes", RenderTextureTargetFormat::Rgba8Unorm)
+        .expect("render flow authoring should succeed");
     let id = flow
         .resource_id("proof.bytes")
         .expect("exact color target should register a resource");
@@ -434,6 +461,7 @@ fn v2_exact_color_target_is_surface_sized_with_exact_format() {
 fn v2_exact_color_target_rejects_depth_format() {
     let err = RenderFlow::new("v2.exact-color-depth")
         .with_color_target_exact("proof.bytes", RenderTextureTargetFormat::Depth32Float)
+        .expect("render flow authoring should succeed")
         .validation_report()
         .expect_err("exact color targets cannot resolve to depth formats");
 
@@ -452,16 +480,21 @@ fn v2_uniform_projection_infers_types_from_method_items() {
     let flow = RenderFlow::new("v2.inference")
         .with_state::<FlowState>()
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .double_buffer_storage_array::<Cell>("cells", 16 * 9)
+        .expect("render flow authoring should succeed")
         .compute_pass("simulate")
         .uniform_from_state(FlowState::compute_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage("cells")
         .dispatch_from_state(FlowState::dispatch)
         .finish()
         .fullscreen_pass("compose")
         .uniform_from_state_with_surface(FlowState::compose_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage("cells")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .depends_on("simulate")
         .finish()
         .validate()

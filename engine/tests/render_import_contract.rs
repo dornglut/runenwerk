@@ -1,7 +1,24 @@
+use engine::plugins::gpu::GpuWorkResourceId;
 use engine::plugins::render::{
-    RenderFlowGraph, RenderFlowId, RenderFlowValidationIssue, RenderPassId, RenderPassKind,
-    RenderPassNode, RenderResourceDescriptor, RenderResourceId, validate_flow_graph,
+    RenderFlow, RenderFlowGraph, RenderFlowId, RenderFlowValidationIssue, RenderPassId,
+    RenderPassKind, RenderPassNode, RenderResourceDescriptor, validate_flow_graph,
 };
+
+fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
+    let labels = (0..count)
+        .map(|index| format!("test.import.resource.{index}"))
+        .collect::<Vec<_>>();
+    let flow = labels
+        .iter()
+        .fold(RenderFlow::new("test.import.resources"), |flow, label| {
+            flow.with_color_target(label.clone())
+                .expect("render flow authoring should succeed")
+        });
+    labels
+        .iter()
+        .map(|label| flow.resource_id(label).expect("test resource should exist"))
+        .collect()
+}
 
 #[test]
 fn external_imported_texture_is_rejected_in_active_runtime_path() {
@@ -9,7 +26,7 @@ fn external_imported_texture_is_rejected_in_active_runtime_path() {
         RenderFlowId::try_from_raw(1).unwrap(),
         "import.contract.external",
     );
-    let external_id = RenderResourceId::try_from_raw(1).unwrap();
+    let external_id = test_resource_ids(1)[0];
     graph.add_resource(RenderResourceDescriptor::imported_texture(external_id));
 
     let mut pass = RenderPassNode::new(
@@ -35,8 +52,9 @@ fn external_imported_texture_is_rejected_in_active_runtime_path() {
 fn builtin_ui_composite_requires_canonical_read_write_contract() {
     let mut graph =
         RenderFlowGraph::new(RenderFlowId::try_from_raw(2).unwrap(), "import.contract.ui");
-    let surface_color = RenderResourceId::try_from_raw(10).unwrap();
-    let ui_output = RenderResourceId::try_from_raw(11).unwrap();
+    let ids = test_resource_ids(2);
+    let surface_color = ids[0];
+    let ui_output = ids[1];
     graph.add_resource(RenderResourceDescriptor::imported_surface_color(
         surface_color,
     ));
@@ -67,12 +85,9 @@ fn typed_surface_imports_require_canonical_resource_ids() {
         RenderFlowId::try_from_raw(3).unwrap(),
         "import.contract.canonical",
     );
-    graph.add_resource(RenderResourceDescriptor::imported_surface_color(
-        RenderResourceId::try_from_raw(20).unwrap(),
-    ));
-    graph.add_resource(RenderResourceDescriptor::imported_surface_color(
-        RenderResourceId::try_from_raw(21).unwrap(),
-    ));
+    let ids = test_resource_ids(2);
+    graph.add_resource(RenderResourceDescriptor::imported_surface_color(ids[0]));
+    graph.add_resource(RenderResourceDescriptor::imported_surface_color(ids[1]));
 
     let err = validate_flow_graph(&graph).expect_err("flow must enforce unique surface imports");
     assert!(

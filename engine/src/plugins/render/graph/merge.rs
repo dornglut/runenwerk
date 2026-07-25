@@ -5,8 +5,8 @@ use crate::plugins::render::composition::{
     RenderFragmentProvenanceRecord, RenderFragmentResourceKind, validate_fragment_package,
 };
 use crate::plugins::render::{
-    RenderBackendCapabilityProfile, RenderFlow, RenderPassViewScope, RenderTargetAliasKind,
-    compile_flow_plan_checked,
+    RenderBackendCapabilityProfile, RenderFlow, RenderFlowAuthoringError, RenderPassViewScope,
+    RenderTargetAliasKind, compile_flow_plan_checked,
 };
 
 #[derive(Debug)]
@@ -20,6 +20,8 @@ pub struct RenderFragmentMergeResult {
 pub struct RenderFragmentMergeError {
     pub diagnostics: Vec<RenderFragmentDiagnostic>,
     pub message: String,
+    #[source]
+    authoring_error: Option<RenderFlowAuthoringError>,
 }
 
 impl RenderFragmentMergeError {
@@ -38,6 +40,26 @@ impl RenderFragmentMergeError {
         Self {
             diagnostics,
             message,
+            authoring_error: None,
+        }
+    }
+
+    fn from_authoring(
+        error: RenderFlowAuthoringError,
+        package: &RenderFragmentPackageDescriptor,
+        fragment: &RenderFragmentDescriptor,
+    ) -> Self {
+        let diagnostic = RenderFragmentDiagnostic::error(
+            RenderFragmentDiagnosticKind::CompileValidationFailed,
+            error.to_string(),
+        )
+        .with_package(package)
+        .with_fragment(fragment);
+        let message = format!("render fragment merge failed: {error}");
+        Self {
+            diagnostics: vec![diagnostic],
+            message,
+            authoring_error: Some(error),
         }
     }
 }
@@ -69,7 +91,8 @@ pub fn merge_fragment_package_into_flow(
         if diagnostics.iter().any(RenderFragmentDiagnostic::is_error) {
             return Err(RenderFragmentMergeError::new(diagnostics));
         }
-        flow = merge_fragment_into_flow(flow, package, fragment, &mut report);
+        flow = merge_fragment_into_flow(flow, package, fragment, &mut report)
+            .map_err(|error| RenderFragmentMergeError::from_authoring(error, package, fragment))?;
     }
 
     match compile_flow_plan_checked(&flow, profile) {
@@ -158,7 +181,7 @@ fn merge_fragment_into_flow(
     package: &RenderFragmentPackageDescriptor,
     fragment: &RenderFragmentDescriptor,
     report: &mut RenderFragmentMergeReport,
-) -> RenderFlow {
+) -> Result<RenderFlow, RenderFlowAuthoringError> {
     for resource in &fragment.resources {
         let generated_label = resource.generated_label(&fragment.namespace);
         flow = match resource.kind {
@@ -185,7 +208,7 @@ fn merge_fragment_into_flow(
             RenderFragmentResourceKind::TargetAlias(kind) => {
                 flow.with_target_alias(generated_label.clone(), kind)
             }
-        };
+        }?;
         report.provenance.push(provenance_record(
             package,
             fragment,
@@ -197,7 +220,7 @@ fn merge_fragment_into_flow(
 
     for pass in &fragment.passes {
         let generated_label = pass.generated_label(&fragment.namespace);
-        flow = merge_pass_into_flow(flow, pass, &fragment.namespace);
+        flow = merge_pass_into_flow(flow, pass, &fragment.namespace)?;
         report.provenance.push(provenance_record(
             package,
             fragment,
@@ -215,14 +238,14 @@ fn merge_fragment_into_flow(
             ));
         }
     }
-    flow
+    Ok(flow)
 }
 
 fn merge_pass_into_flow(
     flow: RenderFlow,
     pass: &RenderFragmentPassDescriptor,
     namespace: &crate::plugins::render::composition::RenderFragmentNamespace,
-) -> RenderFlow {
+) -> Result<RenderFlow, RenderFlowAuthoringError> {
     let label = pass.generated_label(namespace);
     match pass.kind {
         RenderFragmentPassKind::Compute => {
@@ -243,7 +266,7 @@ fn merge_pass_into_flow(
             for dependency in &pass.dependencies {
                 builder = builder.depends_on(dependency.resolve(namespace));
             }
-            builder.finish()
+            Ok(builder.finish())
         }
         RenderFragmentPassKind::Fullscreen => {
             let mut builder = flow.fullscreen_pass(label);
@@ -268,7 +291,7 @@ fn merge_pass_into_flow(
                 builder = builder.write_color_target(color.resolve(namespace));
             }
             if pass.write_surface_color {
-                builder = builder.write_surface_color();
+                builder = builder.write_surface_color()?;
             }
             if let Some(clear_color) = pass.clear_color {
                 builder = builder.clear_color(clear_color);
@@ -276,7 +299,7 @@ fn merge_pass_into_flow(
             for dependency in &pass.dependencies {
                 builder = builder.depends_on(dependency.resolve(namespace));
             }
-            builder.finish()
+            Ok(builder.finish())
         }
         RenderFragmentPassKind::Graphics => {
             let mut builder = flow.graphics_pass(label);
@@ -301,7 +324,7 @@ fn merge_pass_into_flow(
                 builder = builder.write_color_target(color.resolve(namespace));
             }
             if pass.write_surface_color {
-                builder = builder.write_surface_color();
+                builder = builder.write_surface_color()?;
             }
             if let Some(depth_target) = &pass.depth_target {
                 builder = builder.depth_target(depth_target.resolve(namespace));
@@ -320,7 +343,7 @@ fn merge_pass_into_flow(
             for dependency in &pass.dependencies {
                 builder = builder.depends_on(dependency.resolve(namespace));
             }
-            builder.finish()
+            Ok(builder.finish())
         }
         RenderFragmentPassKind::Copy => {
             let mut builder = flow.copy_pass(label);
@@ -334,15 +357,15 @@ fn merge_pass_into_flow(
             for dependency in &pass.dependencies {
                 builder = builder.depends_on(dependency.resolve(namespace));
             }
-            builder.finish()
+            Ok(builder.finish())
         }
         RenderFragmentPassKind::Present => {
-            let mut builder = flow.present_pass(label);
+            let mut builder = flow.present_pass(label)?;
             if pass.view_scope == RenderPassViewScope::MainSurfaceOnly {
                 builder = builder.main_surface_only();
             }
             if pass.write_surface_color {
-                builder = builder.surface_color();
+                builder = builder.surface_color()?;
             }
             if let Some(source) = &pass.present_source {
                 builder = builder.source(source.resolve(namespace));
@@ -350,17 +373,17 @@ fn merge_pass_into_flow(
             for dependency in &pass.dependencies {
                 builder = builder.depends_on(dependency.resolve(namespace));
             }
-            builder.finish()
+            Ok(builder.finish())
         }
         RenderFragmentPassKind::BuiltinUiComposite => {
-            let mut builder = flow.builtin_ui_composite_pass(label);
+            let mut builder = flow.builtin_ui_composite_pass(label)?;
             if pass.view_scope == RenderPassViewScope::MainSurfaceOnly {
                 builder = builder.main_surface_only();
             }
             for dependency in &pass.dependencies {
                 builder = builder.depends_on(dependency.resolve(namespace));
             }
-            builder.finish()
+            Ok(builder.finish())
         }
     }
 }

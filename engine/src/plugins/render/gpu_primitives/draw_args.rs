@@ -1,8 +1,9 @@
 use super::{GpuPrimitiveValidationError, validate_capacity};
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::StorageArrayHandle;
 pub use crate::plugins::render::graph::{
     DrawIndexedIndirectArgs, DrawIndirectArgs, IndirectDrawArgsBuffer,
 };
-use crate::plugins::render::{RenderResourceId, StorageArrayHandle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeneratedIndirectDrawArgs {
@@ -13,7 +14,7 @@ pub enum GeneratedIndirectDrawArgs {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndirectDrawArgsGenerationDescriptor {
     pub label: String,
-    pub output: RenderResourceId,
+    pub output: GpuWorkResourceId,
     pub output_index: u32,
     pub args: GeneratedIndirectDrawArgs,
 }
@@ -51,7 +52,7 @@ impl IndirectDrawArgsGenerationDescriptor {
 
     fn new(
         label: impl Into<String>,
-        output: RenderResourceId,
+        output: GpuWorkResourceId,
         output_capacity: u64,
         output_index: u32,
         args: GeneratedIndirectDrawArgs,
@@ -101,7 +102,8 @@ mod tests {
     #[test]
     fn draw_args_generation_rejects_out_of_range_output_index() {
         let (flow, args) = crate::plugins::render::RenderFlow::new("test.draw.args")
-            .storage_array::<DrawIndirectArgs>("draw.args", 1);
+            .storage_array::<DrawIndirectArgs>("draw.args", 1)
+            .expect("render flow authoring should succeed");
         let _flow = flow;
 
         assert!(matches!(

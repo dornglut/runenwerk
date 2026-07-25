@@ -1,6 +1,7 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderPrimitiveTopology, RenderRasterState,
-    RenderResourceId, RenderVertexBufferLayout, ShaderHandle, StorageArrayHandle,
+    RenderVertexBufferLayout, ShaderHandle, StorageArrayHandle,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,7 +22,7 @@ impl ProceduralShader {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProceduralBufferBinding {
-    pub resource_id: RenderResourceId,
+    pub resource_id: GpuWorkResourceId,
     pub layout: RenderVertexBufferLayout,
 }
 
@@ -36,7 +37,7 @@ impl ProceduralBufferBinding {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProceduralIndexBuffer {
-    pub resource_id: RenderResourceId,
+    pub resource_id: GpuWorkResourceId,
 }
 
 impl ProceduralIndexBuffer {

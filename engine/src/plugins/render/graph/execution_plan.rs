@@ -1,6 +1,7 @@
 use super::{
     CompiledPassDescriptor, RenderPassKind, RenderPassNode, RenderPassViewScope, ResourceGraph,
 };
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::api::ComputeDispatchDescriptor;
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
@@ -8,8 +9,8 @@ use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{
     RenderDrawDescriptor, RenderDrawSource, RenderFixedStepRegionId, RenderIndirectDrawArgsKind,
     RenderPassId, RenderPrimitiveTopology, RenderRasterState, RenderResourceDescriptor,
-    RenderResourceId, RenderShaderConstant, RenderShaderReference, RenderTargetAliasKind,
-    RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
+    RenderShaderConstant, RenderShaderReference, RenderTargetAliasKind, RenderVertexAttribute,
+    RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use std::any::TypeId;
 use std::collections::BTreeMap;
@@ -34,7 +35,7 @@ pub struct CompiledFixedStepRegion {
     pub region_id: RenderFixedStepRegionId,
     pub region_label: String,
     pub max_substeps: u32,
-    pub iteration_uniform: RenderResourceId,
+    pub iteration_uniform: GpuWorkResourceId,
     pub pass_ids: Vec<RenderPassId>,
 }
 
@@ -138,7 +139,7 @@ impl CompiledViewMask {
 #[derive(Debug, Clone, Default)]
 pub struct CompiledPassBindings {
     pub bind_group: CompiledBindGroupPlan,
-    pub uniform_order: Vec<RenderResourceId>,
+    pub uniform_order: Vec<GpuWorkResourceId>,
     pub storage_order: Vec<CompiledStorageBinding>,
 }
 
@@ -158,7 +159,7 @@ pub enum CompiledBindingEntry {
         access: CompiledStorageAccess,
     },
     UniformBuffer {
-        resource: RenderResourceId,
+        resource: GpuWorkResourceId,
     },
     StorageBuffer {
         resource: CompiledResourceRef,
@@ -216,7 +217,7 @@ pub struct CompiledDrawPlan {
 pub enum CompiledDrawSource {
     Direct,
     Indirect {
-        args_buffer: RenderResourceId,
+        args_buffer: GpuWorkResourceId,
         args_kind: RenderIndirectDrawArgsKind,
         args_element_count: u64,
         args_element_size: u64,
@@ -252,15 +253,15 @@ pub enum CompiledDispatchPlan {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompiledResourceRef {
-    FlowOwned(RenderResourceId),
+    FlowOwned(GpuWorkResourceId),
     TargetAlias(CompiledTargetAliasRef),
     ImportedBuiltin(CompiledBuiltinImport),
-    Imported(RenderResourceId),
+    Imported(GpuWorkResourceId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledTargetAliasRef {
-    pub resource_id: RenderResourceId,
+    pub resource_id: GpuWorkResourceId,
     pub label: String,
     pub kind: RenderTargetAliasKind,
 }
@@ -445,9 +446,9 @@ fn compile_dispatch_plan(node: &RenderPassNode) -> Option<CompiledDispatchPlan> 
 
 fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> CompiledPassBindings {
     let mut bind_group = CompiledBindGroupPlan::default();
-    let mut uniform_order = Vec::<RenderResourceId>::new();
+    let mut uniform_order = Vec::<GpuWorkResourceId>::new();
     let mut storage_order = Vec::<CompiledStorageBinding>::new();
-    let mut seen_uniforms = BTreeSet::<RenderResourceId>::new();
+    let mut seen_uniforms = BTreeSet::<GpuWorkResourceId>::new();
 
     for resource in &node.sampled_textures {
         bind_group
@@ -512,15 +513,15 @@ fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> Co
 fn collect_storage_usage(
     node: &RenderPassNode,
     resources: &ResourceGraph,
-) -> Vec<(RenderResourceId, CompiledStorageAccess)> {
+) -> Vec<(GpuWorkResourceId, CompiledStorageAccess)> {
     let writable_storage = node
         .writes
         .iter()
         .copied()
         .filter(|resource| is_buffer_like_resource(resources, resource))
         .collect::<BTreeSet<_>>();
-    let mut seen_storage = BTreeSet::<RenderResourceId>::new();
-    let mut usage = Vec::<(RenderResourceId, CompiledStorageAccess)>::new();
+    let mut seen_storage = BTreeSet::<GpuWorkResourceId>::new();
+    let mut usage = Vec::<(GpuWorkResourceId, CompiledStorageAccess)>::new();
     for resource in node.reads.iter().chain(node.writes.iter()).copied() {
         if !is_buffer_like_resource(resources, &resource) {
             continue;
@@ -538,7 +539,7 @@ fn collect_storage_usage(
     usage
 }
 
-fn is_buffer_like_resource(resources: &ResourceGraph, resource: &RenderResourceId) -> bool {
+fn is_buffer_like_resource(resources: &ResourceGraph, resource: &GpuWorkResourceId) -> bool {
     matches!(
         resources
             .resources
@@ -660,7 +661,7 @@ impl CompiledDrawBufferPlan {
 }
 
 fn compile_resource_ref(
-    resource: &RenderResourceId,
+    resource: &GpuWorkResourceId,
     resources: &ResourceGraph,
 ) -> CompiledResourceRef {
     match resources
@@ -696,13 +697,25 @@ fn compile_resource_ref(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::GpuWorkResourceIdAllocator;
     use crate::plugins::render::{RenderPassKind, RenderPassNode};
+    use std::num::NonZeroU64;
 
-    fn resource(id: u64) -> RenderResourceId {
-        RenderResourceId::try_from_raw(id).unwrap()
+    fn resource(local: u64) -> GpuWorkResourceId {
+        let mut allocator = GpuWorkResourceIdAllocator::for_owner_scope(
+            NonZeroU64::new(1).expect("test owner scope is nonzero"),
+        );
+        (1..=local)
+            .map(|_| {
+                allocator
+                    .allocate()
+                    .expect("test allocation should succeed")
+            })
+            .last()
+            .expect("test local value is nonzero")
     }
 
-    fn storage_read_write_pass() -> (RenderPassNode, ResourceGraph, RenderResourceId) {
+    fn storage_read_write_pass() -> (RenderPassNode, ResourceGraph, GpuWorkResourceId) {
         let storage_id = resource(7);
         let mut resources = ResourceGraph::default();
         resources.add_resource(RenderResourceDescriptor::imported_external_buffer(

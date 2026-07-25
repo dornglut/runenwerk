@@ -1,3 +1,4 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::backend::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::render::inspect::RenderDebugTimingsState;
 use crate::plugins::render::*;
@@ -676,7 +677,7 @@ fn build_prepared_flow_inputs(
     let mut outputs = BTreeMap::<RenderFlowId, PreparedFlowInputs>::new();
 
     for flow in compiled_flows {
-        let mut projected_uniform_bytes = BTreeMap::<RenderResourceId, Vec<u8>>::new();
+        let mut projected_uniform_bytes = BTreeMap::<GpuWorkResourceId, Vec<u8>>::new();
 
         for pass in &flow.pass_order {
             for binding in &pass.node().uniform_bindings {
@@ -769,7 +770,7 @@ fn build_prepared_flow_inputs(
 fn project_fixed_step_region_uniforms(
     flow: &CompiledRenderFlowPlan,
     extracted_state: &ExtractedRenderStateMap<'_>,
-    projected_uniform_bytes: &mut BTreeMap<RenderResourceId, Vec<u8>>,
+    projected_uniform_bytes: &mut BTreeMap<GpuWorkResourceId, Vec<u8>>,
 ) -> anyhow::Result<()> {
     if flow.execution.fixed_step_regions.is_empty() {
         return Ok(());
@@ -933,9 +934,11 @@ mod tests {
     fn requested_offscreen_invocations_prepare_before_main_invocation() {
         let flow = RenderFlow::new("prepare.order")
             .with_surface_color()
+            .expect("render flow authoring should succeed")
             .fullscreen_pass("main")
             .main_surface_only()
             .write_surface_color()
+            .expect("render flow authoring should succeed")
             .finish()
             .validate()
             .expect("test flow should validate");

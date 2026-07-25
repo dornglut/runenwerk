@@ -3,9 +3,9 @@ use engine::plugins::render::{
     DrawIndexedIndirectArgs, DrawIndirectArgs, GpuStorage, ProceduralBufferBinding,
     ProceduralPassDescriptor, ProceduralRenderPolicy, ProceduralValidationError,
     RenderBackendCapabilityProfile, RenderBlendMode, RenderCullMode, RenderDepthPolicy,
-    RenderFlowValidationIssue, RenderIndirectDrawArgsKind, RenderPassKind, RenderPrimitiveTopology,
-    RenderVertexBufferLayout, RenderVertexFormat, SURFACE_COLOR_RESOURCE_LABEL,
-    compile_flow_plan_checked,
+    RenderFlowAuthoringError, RenderFlowValidationIssue, RenderIndirectDrawArgsKind,
+    RenderPassKind, RenderPrimitiveTopology, RenderVertexBufferLayout, RenderVertexFormat,
+    SURFACE_COLOR_RESOURCE_LABEL, compile_flow_plan_checked,
 };
 
 #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -43,7 +43,9 @@ fn vertex_layout(slot: u32) -> RenderVertexBufferLayout {
 fn procedural_instance_quad_sprite_descriptor_builds_pass_shape_safe_graphics_pass() {
     let (flow, instances) = RenderFlow::new("procedural.quad")
         .with_surface_color()
-        .storage_array::<Instance>("instances", 64);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 64)
+        .expect("render flow authoring should succeed");
 
     let flow = flow
         .procedural_pass(
@@ -81,8 +83,12 @@ fn procedural_instance_quad_sprite_descriptor_builds_pass_shape_safe_graphics_pa
 fn procedural_instance_mesh_sprite_descriptor_preserves_vertex_and_instance_buffers() {
     let (flow, vertices) = RenderFlow::new("procedural.mesh")
         .with_surface_color()
-        .storage_array::<Vertex>("vertices", 6);
-    let (flow, instances) = flow.storage_array::<Instance>("instances", 16);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Vertex>("vertices", 6)
+        .expect("render flow authoring should succeed");
+    let (flow, instances) = flow
+        .storage_array::<Instance>("instances", 16)
+        .expect("render flow authoring should succeed");
 
     let flow = flow
         .procedural_pass(
@@ -116,8 +122,12 @@ fn procedural_instance_mesh_sprite_descriptor_preserves_vertex_and_instance_buff
 fn procedural_pass_builder_authors_indirect_draw_without_exposing_graphics_builder() {
     let (flow, instances) = RenderFlow::new("procedural.builder.indirect")
         .with_surface_color()
-        .storage_array::<Instance>("instances", 32);
-    let (flow, args) = flow.storage_array::<DrawIndirectArgs>("draw.args", 1);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndirectArgs>("draw.args", 1)
+        .expect("render flow authoring should succeed");
 
     let flow = flow
         .procedural_pass_builder(
@@ -158,9 +168,15 @@ fn procedural_pass_builder_authors_indirect_draw_without_exposing_graphics_build
 fn graphics_indexed_indirect_draw_preserves_typed_args_kind() {
     let (flow, vertices) = RenderFlow::new("graphics.indexed.indirect")
         .with_surface_color()
-        .storage_array::<Vertex>("vertices", 6);
-    let (flow, indices) = flow.storage_array::<Index>("indices", 6);
-    let (flow, args) = flow.storage_array::<DrawIndexedIndirectArgs>("draw.indexed.args", 1);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Vertex>("vertices", 6)
+        .expect("render flow authoring should succeed");
+    let (flow, indices) = flow
+        .storage_array::<Index>("indices", 6)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndexedIndirectArgs>("draw.indexed.args", 1)
+        .expect("render flow authoring should succeed");
 
     let flow = flow
         .graphics_pass("draw.indexed.indirect")
@@ -198,8 +214,12 @@ fn graphics_indexed_indirect_draw_preserves_typed_args_kind() {
 fn procedural_indirect_draw_rejects_indexed_args_without_index_buffer() {
     let (flow, instances) = RenderFlow::new("procedural.indirect.wrong_args")
         .with_surface_color()
-        .storage_array::<Instance>("instances", 32);
-    let (flow, args) = flow.storage_array::<DrawIndexedIndirectArgs>("draw.indexed.args", 1);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndexedIndirectArgs>("draw.indexed.args", 1)
+        .expect("render flow authoring should succeed");
 
     let flow = flow
         .procedural_pass_builder(
@@ -230,8 +250,12 @@ fn procedural_indirect_draw_rejects_indexed_args_without_index_buffer() {
 fn graphics_indirect_draw_rejects_out_of_bounds_byte_offset() {
     let (flow, instances) = RenderFlow::new("graphics.indirect.oob")
         .with_surface_color()
-        .storage_array::<Instance>("instances", 32);
-    let (flow, args) = flow.storage_array::<DrawIndirectArgs>("draw.args", 1);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndirectArgs>("draw.args", 1)
+        .expect("render flow authoring should succeed");
 
     let err = flow
         .graphics_pass("draw.oob")
@@ -252,8 +276,12 @@ fn graphics_indirect_draw_rejects_out_of_bounds_byte_offset() {
 fn graphics_indirect_draw_rejects_cpu_side_offsets() {
     let (flow, instances) = RenderFlow::new("graphics.indirect.cpu_offsets")
         .with_surface_color()
-        .storage_array::<Instance>("instances", 32);
-    let (flow, args) = flow.storage_array::<DrawIndirectArgs>("draw.args", 1);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
+    let (flow, args) = flow
+        .storage_array::<DrawIndirectArgs>("draw.args", 1)
+        .expect("render flow authoring should succeed");
 
     let err = flow
         .graphics_pass("draw.cpu_offsets")
@@ -274,7 +302,9 @@ fn graphics_indirect_draw_rejects_cpu_side_offsets() {
 fn procedural_instance_local_sdf_2d_impostor_descriptor_is_local_2d_and_pass_shape_safe() {
     let (flow, instances) = RenderFlow::new("procedural.sdf2d")
         .with_surface_color()
-        .storage_array::<Instance>("instances", 32);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 32)
+        .expect("render flow authoring should succeed");
 
     let flow = flow
         .procedural_pass(
@@ -296,8 +326,11 @@ fn procedural_instance_local_sdf_2d_impostor_descriptor_is_local_2d_and_pass_sha
 fn procedural_instance_policy_survives_compilation() {
     let (flow, instances) = RenderFlow::new("procedural.policy")
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .with_depth_target("procedural.depth")
-        .storage_array::<Instance>("instances", 8);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 8)
+        .expect("render flow authoring should succeed");
 
     let policy = ProceduralRenderPolicy::default()
         .blend_mode(RenderBlendMode::Replace)
@@ -353,7 +386,9 @@ fn procedural_instance_policy_survives_compilation() {
 fn procedural_instance_descriptor_rejects_vertex_step_mode_for_instance_buffer() {
     let (flow, instances) = RenderFlow::new("procedural.invalid")
         .with_surface_color()
-        .storage_array::<Instance>("instances", 4);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 4)
+        .expect("render flow authoring should succeed");
 
     let err = flow
         .procedural_pass(
@@ -376,10 +411,12 @@ fn procedural_instance_descriptor_rejects_vertex_step_mode_for_instance_buffer()
 
     assert!(matches!(
         err,
-        ProceduralValidationError::InvalidStepMode {
-            role: "instance",
-            ..
-        }
+        RenderFlowAuthoringError::ProceduralValidation(
+            ProceduralValidationError::InvalidStepMode {
+                role: "instance",
+                ..
+            }
+        )
     ));
 }
 
@@ -387,7 +424,9 @@ fn procedural_instance_descriptor_rejects_vertex_step_mode_for_instance_buffer()
 fn procedural_instance_descriptor_rejects_depth_policy_without_depth_target() {
     let (flow, instances) = RenderFlow::new("procedural.invalid_depth")
         .with_surface_color()
-        .storage_array::<Instance>("instances", 4);
+        .expect("render flow authoring should succeed")
+        .storage_array::<Instance>("instances", 4)
+        .expect("render flow authoring should succeed");
 
     let err = flow
         .procedural_pass(
@@ -404,6 +443,8 @@ fn procedural_instance_descriptor_rejects_depth_policy_without_depth_target() {
 
     assert!(matches!(
         err,
-        ProceduralValidationError::MissingDepthTargetForPolicy { .. }
+        RenderFlowAuthoringError::ProceduralValidation(
+            ProceduralValidationError::MissingDepthTargetForPolicy { .. }
+        )
     ));
 }

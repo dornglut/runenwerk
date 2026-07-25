@@ -1,5 +1,6 @@
 use super::GpuPrimitiveValidationError;
-use crate::plugins::render::{RenderResourceId, StorageArrayHandle};
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::StorageArrayHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, crate::plugins::render::GpuStorage)]
 pub struct U32Counter {
@@ -9,7 +10,7 @@ pub struct U32Counter {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CounterResetDescriptor {
     pub label: String,
-    pub counters: RenderResourceId,
+    pub counters: GpuWorkResourceId,
     pub counter_count: u32,
     pub reset_value: u32,
 }

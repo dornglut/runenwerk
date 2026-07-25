@@ -3,8 +3,8 @@ use super::descriptors::{
     ProceduralPassDescriptor, ProceduralShader, ProceduralTargetDescriptor,
     ProceduralVisualDescriptor,
 };
-use super::validation::{ProceduralValidationError, validate_procedural_pass};
-use crate::plugins::render::api::PassParamBinding;
+use super::validation::validate_procedural_pass;
+use crate::plugins::render::api::{PassParamBinding, RenderFlowAuthoringError};
 use crate::plugins::render::{RenderFlow, RenderIndirectDrawResource};
 
 pub(crate) struct ProceduralPassLowering {
@@ -24,7 +24,7 @@ impl Default for ProceduralPassLowering {
 pub fn build_procedural_pass(
     flow: RenderFlow,
     descriptor: ProceduralPassDescriptor,
-) -> Result<RenderFlow, ProceduralValidationError> {
+) -> Result<RenderFlow, RenderFlowAuthoringError> {
     lower_procedural_pass(flow, descriptor, ProceduralPassLowering::default())
 }
 
@@ -32,7 +32,7 @@ pub(crate) fn lower_procedural_pass(
     flow: RenderFlow,
     descriptor: ProceduralPassDescriptor,
     lowering: ProceduralPassLowering,
-) -> Result<RenderFlow, ProceduralValidationError> {
+) -> Result<RenderFlow, RenderFlowAuthoringError> {
     validate_procedural_pass(&descriptor)?;
 
     let ProceduralPassDescriptor {

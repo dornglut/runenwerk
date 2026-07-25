@@ -1,34 +1,34 @@
-use crate::plugins::render::RenderResourceId;
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::graph::RenderFlowGraph;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransientResourceWindow {
-    pub resource_id: RenderResourceId,
+    pub resource_id: GpuWorkResourceId,
     pub first_pass_index: usize,
     pub last_pass_index: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransientAliasCandidate {
-    pub left: RenderResourceId,
-    pub right: RenderResourceId,
+    pub left: GpuWorkResourceId,
+    pub right: GpuWorkResourceId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransientAliasAssignment {
-    pub resource_id: RenderResourceId,
+    pub resource_id: GpuWorkResourceId,
     pub slot_index: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransientAliasSlot {
     pub slot_index: usize,
-    pub resources: Vec<RenderResourceId>,
+    pub resources: Vec<GpuWorkResourceId>,
 }
 
 pub fn build_transient_windows(graph: &RenderFlowGraph) -> Vec<TransientResourceWindow> {
-    let mut pass_usages = BTreeMap::<RenderResourceId, (usize, usize)>::new();
+    let mut pass_usages = BTreeMap::<GpuWorkResourceId, (usize, usize)>::new();
     let transient_ids = graph
         .resources
         .resources
@@ -124,7 +124,7 @@ pub fn build_transient_alias_assignments(
 pub fn build_transient_alias_slots(
     assignments: &[TransientAliasAssignment],
 ) -> Vec<TransientAliasSlot> {
-    let mut slots = BTreeMap::<usize, Vec<RenderResourceId>>::new();
+    let mut slots = BTreeMap::<usize, Vec<GpuWorkResourceId>>::new();
     for assignment in assignments {
         slots
             .entry(assignment.slot_index)
@@ -143,7 +143,7 @@ pub fn build_transient_alias_slots(
 
 fn pass_resource_ids(
     pass: &crate::plugins::render::RenderPassNode,
-) -> impl Iterator<Item = &crate::plugins::render::RenderResourceId> {
+) -> impl Iterator<Item = &GpuWorkResourceId> {
     pass.reads
         .iter()
         .chain(pass.writes.iter())

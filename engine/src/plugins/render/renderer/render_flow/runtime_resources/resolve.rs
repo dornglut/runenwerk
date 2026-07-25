@@ -1,4 +1,5 @@
 use super::*;
+use crate::plugins::gpu::GpuWorkResourceId;
 
 impl FlowRuntimeResources {
     pub(crate) fn resolve_resource_key_from_input(
@@ -21,11 +22,7 @@ impl FlowRuntimeResources {
             return Some(RuntimeResourceKey::FlowOwned(*id));
         }
 
-        value
-            .parse::<u64>()
-            .ok()
-            .and_then(|raw| RenderResourceId::try_from_raw(raw).ok())
-            .map(RuntimeResourceKey::FlowOwned)
+        None
     }
 
     fn kind_of_key(&self, key: &RuntimeResourceKey) -> Option<RuntimeResourceKind> {
@@ -478,7 +475,7 @@ impl FlowRuntimeResources {
     pub fn resolve_uniform_buffer_for_pass<'a>(
         &'a self,
         pass_id: RenderPassId,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
     ) -> Result<ResolvedBufferRef<'a>> {
         if let Some(scope) = self.active_invocation_uniform_scope.as_ref()
             && let Some(buffer) = self

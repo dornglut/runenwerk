@@ -1,12 +1,11 @@
 use super::descriptors::ProceduralPassDescriptor;
 use super::lowering::{ProceduralPassLowering, lower_procedural_pass};
-use super::validation::{ProceduralValidationError, validate_procedural_pass};
+use super::validation::validate_procedural_pass;
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::api::{
-    PassParamBinding, RenderFlow, StorageArrayHandle, UniformHandle,
+    PassParamBinding, RenderFlow, RenderFlowAuthoringError, StorageArrayHandle, UniformHandle,
 };
-use crate::plugins::render::{
-    GpuParams, IndirectDrawArgsBuffer, RenderIndirectDrawArgsKind, RenderResourceId,
-};
+use crate::plugins::render::{GpuParams, IndirectDrawArgsBuffer, RenderIndirectDrawArgsKind};
 
 #[derive(Debug)]
 pub struct ProceduralPassBuilder {
@@ -20,7 +19,7 @@ pub struct ProceduralPassBuilder {
 pub(crate) enum ProceduralDrawSource {
     Direct,
     Indirect {
-        args_buffer: RenderResourceId,
+        args_buffer: GpuWorkResourceId,
         args_kind: RenderIndirectDrawArgsKind,
         args_element_count: u64,
         args_element_size: u64,
@@ -32,7 +31,7 @@ impl ProceduralPassBuilder {
     pub(crate) fn new(
         flow: RenderFlow,
         descriptor: ProceduralPassDescriptor,
-    ) -> Result<Self, ProceduralValidationError> {
+    ) -> Result<Self, RenderFlowAuthoringError> {
         validate_procedural_pass(&descriptor)?;
         Ok(Self {
             flow,
@@ -42,7 +41,10 @@ impl ProceduralPassBuilder {
         })
     }
 
-    pub fn uniform_from_state<S, U, F>(mut self, projection: F) -> Self
+    pub fn uniform_from_state<S, U, F>(
+        mut self,
+        projection: F,
+    ) -> Result<Self, RenderFlowAuthoringError>
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
@@ -50,13 +52,16 @@ impl ProceduralPassBuilder {
     {
         let uniform = self
             .flow
-            .allocate_uniform_resource::<U>(self.descriptor.label.as_str());
+            .allocate_uniform_resource::<U>(self.descriptor.label.as_str())?;
         self.uniform_bindings
             .push(PassParamBinding::uniform_state(*uniform.id(), projection));
-        self
+        Ok(self)
     }
 
-    pub fn uniform_from_state_with_surface<S, U, F>(mut self, projection: F) -> Self
+    pub fn uniform_from_state_with_surface<S, U, F>(
+        mut self,
+        projection: F,
+    ) -> Result<Self, RenderFlowAuthoringError>
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
@@ -64,13 +69,13 @@ impl ProceduralPassBuilder {
     {
         let uniform = self
             .flow
-            .allocate_uniform_resource::<U>(self.descriptor.label.as_str());
+            .allocate_uniform_resource::<U>(self.descriptor.label.as_str())?;
         self.uniform_bindings
             .push(PassParamBinding::uniform_state_with_surface(
                 *uniform.id(),
                 projection,
             ));
-        self
+        Ok(self)
     }
 
     pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
@@ -124,7 +129,7 @@ impl ProceduralPassBuilder {
         self
     }
 
-    pub fn finish(self) -> Result<RenderFlow, ProceduralValidationError> {
+    pub fn finish(self) -> Result<RenderFlow, RenderFlowAuthoringError> {
         lower_procedural_pass(
             self.flow,
             self.descriptor,

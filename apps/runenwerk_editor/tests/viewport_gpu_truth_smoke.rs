@@ -94,7 +94,8 @@ fn viewport_gpu_truth_smoke() {
     let window = create_hidden_window();
     let gfx = Gfx::new(window).expect("gfx should initialize for smoke test");
 
-    let mut app = runenwerk_editor::runtime::build_headless_app();
+    let mut app = runenwerk_editor::runtime::build_headless_app()
+        .expect("headless app construction should succeed");
     configure_wr028_sdf_two_slot_scene(&mut app);
     app.world_mut().insert_resource(gfx);
 

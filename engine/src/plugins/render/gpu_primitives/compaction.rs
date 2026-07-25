@@ -1,12 +1,13 @@
 use super::{GpuPrimitiveValidationError, U32ScanElement, validate_capacity};
-use crate::plugins::render::{RenderResourceId, StorageArrayHandle};
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::StorageArrayHandle;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct U32ScatterDescriptor {
     pub label: String,
-    pub source_indices: RenderResourceId,
-    pub prefix_offsets: RenderResourceId,
-    pub output_indices: RenderResourceId,
+    pub source_indices: GpuWorkResourceId,
+    pub prefix_offsets: GpuWorkResourceId,
+    pub output_indices: GpuWorkResourceId,
     pub element_count: u32,
     pub output_capacity: u32,
 }
@@ -81,9 +82,12 @@ mod tests {
 
     #[test]
     fn gpu_primitives_scatter_rejects_aliased_buffers() {
-        let (flow, indices) =
-            RenderFlow::new("test.primitive.scatter.alias").storage_array("scatter.indices", 4);
-        let (flow, offsets) = flow.storage_array("scatter.offsets", 4);
+        let (flow, indices) = RenderFlow::new("test.primitive.scatter.alias")
+            .storage_array("scatter.indices", 4)
+            .expect("render flow authoring should succeed");
+        let (flow, offsets) = flow
+            .storage_array("scatter.offsets", 4)
+            .expect("render flow authoring should succeed");
         let _flow = flow;
 
         assert!(matches!(
@@ -94,10 +98,15 @@ mod tests {
 
     #[test]
     fn gpu_primitives_scatter_rejects_output_capacity_drift() {
-        let (flow, indices) =
-            RenderFlow::new("test.primitive.scatter.capacity").storage_array("scatter.indices", 4);
-        let (flow, offsets) = flow.storage_array("scatter.offsets", 4);
-        let (_flow, output) = flow.storage_array("scatter.output", 3);
+        let (flow, indices) = RenderFlow::new("test.primitive.scatter.capacity")
+            .storage_array("scatter.indices", 4)
+            .expect("render flow authoring should succeed");
+        let (flow, offsets) = flow
+            .storage_array("scatter.offsets", 4)
+            .expect("render flow authoring should succeed");
+        let (_flow, output) = flow
+            .storage_array("scatter.output", 3)
+            .expect("render flow authoring should succeed");
 
         assert!(matches!(
             U32ScatterDescriptor::new("scatter", indices, offsets, output, 4, 4),

@@ -145,6 +145,7 @@ mod tests {
     fn alias_flow() -> CompiledRenderFlowPlan {
         let flow = RenderFlow::new("cache.alias")
             .with_color_target_alias("scene_color")
+            .expect("render flow authoring should succeed")
             .fullscreen_pass("draw")
             .offscreen_products_only()
             .write_target_alias("scene_color")
@@ -157,6 +158,7 @@ mod tests {
     fn dispatch_flow() -> (CompiledRenderFlowPlan, RenderPassId) {
         let flow = RenderFlow::new("cache.dispatch")
             .with_color_target_alias("scene_color")
+            .expect("render flow authoring should succeed")
             .compute_pass("simulate")
             .dispatch([1, 1, 1])
             .finish()

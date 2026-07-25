@@ -1,4 +1,5 @@
-use crate::plugins::render::{GpuStorage, RenderResourceId, StorageArrayHandle};
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::{GpuStorage, StorageArrayHandle};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, GpuStorage)]
@@ -15,8 +16,8 @@ pub enum PrefixScanMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct U32PrefixScanDescriptor {
     pub label: String,
-    pub input: RenderResourceId,
-    pub output: RenderResourceId,
+    pub input: GpuWorkResourceId,
+    pub output: GpuWorkResourceId,
     pub total_count: u32,
     pub mode: PrefixScanMode,
 }
@@ -117,9 +118,12 @@ mod tests {
 
     #[test]
     fn gpu_primitives_prefix_scan_uses_real_storage_lengths() {
-        let (flow, input) =
-            RenderFlow::new("test.primitive.scan").storage_array::<U32ScanElement>("scan.input", 4);
-        let (_flow, output) = flow.storage_array::<U32ScanElement>("scan.output", 3);
+        let (flow, input) = RenderFlow::new("test.primitive.scan")
+            .storage_array::<U32ScanElement>("scan.input", 4)
+            .expect("render flow authoring should succeed");
+        let (_flow, output) = flow
+            .storage_array::<U32ScanElement>("scan.output", 3)
+            .expect("render flow authoring should succeed");
 
         assert!(matches!(
             U32PrefixScanDescriptor::new("scan", input, output, 4, PrefixScanMode::Exclusive,),
@@ -130,7 +134,8 @@ mod tests {
     #[test]
     fn gpu_primitives_prefix_scan_rejects_aliased_output() {
         let (flow, input) = RenderFlow::new("test.primitive.scan.alias")
-            .storage_array::<U32ScanElement>("scan.input", 4);
+            .storage_array::<U32ScanElement>("scan.input", 4)
+            .expect("render flow authoring should succeed");
         let _flow = flow;
 
         assert!(matches!(

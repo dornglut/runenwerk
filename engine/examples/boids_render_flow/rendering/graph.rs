@@ -12,19 +12,26 @@ pub(crate) fn build_render_flow() -> RenderFlow {
     let (flow, boid_instances) = RenderFlow::new("boids_render_flow")
         .with_state::<BoidsRenderState>()
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .with_color_target("boids.color")
+        .expect("render flow authoring should succeed")
         .double_buffer_storage_array_with_handle::<BoidAgent>(
             "boids.instances",
             DEFAULT_BOID_COUNT as u64,
-        );
-    let (flow, grid_cell_counts) =
-        flow.storage_array::<U32Counter>("boids.grid.cell_counts", grid_cell_count);
-    let (flow, grid_cell_offsets) =
-        flow.storage_array::<U32ScanElement>("boids.grid.cell_offsets", grid_cell_count);
-    let (flow, grid_scatter_cursors) =
-        flow.storage_array::<U32Counter>("boids.grid.scatter_cursors", grid_cell_count);
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, grid_cell_counts) = flow
+        .storage_array::<U32Counter>("boids.grid.cell_counts", grid_cell_count)
+        .expect("render flow authoring should succeed");
+    let (flow, grid_cell_offsets) = flow
+        .storage_array::<U32ScanElement>("boids.grid.cell_offsets", grid_cell_count)
+        .expect("render flow authoring should succeed");
+    let (flow, grid_scatter_cursors) = flow
+        .storage_array::<U32Counter>("boids.grid.scatter_cursors", grid_cell_count)
+        .expect("render flow authoring should succeed");
     let (flow, grid_sorted_indices) = flow
-        .storage_array::<U32ScanElement>("boids.grid.sorted_indices", DEFAULT_BOID_COUNT as u64);
+        .storage_array::<U32ScanElement>("boids.grid.sorted_indices", DEFAULT_BOID_COUNT as u64)
+        .expect("render flow authoring should succeed");
     let grid_plan = BoundedUniformGrid2dBuildPlan::new(
         "boids.grid",
         BoundedUniformGrid2dConfig::new(
@@ -57,6 +64,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .compute_pass("boids.seed_or_hold")
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::seed_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage(boid_instances.name())
         .bind_storage(grid_cell_counts.clone())
         .bind_storage(grid_cell_offsets.clone())
@@ -67,6 +75,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .compute_pass(clear_counts.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::clear_counts_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage(boid_instances.name())
         .bind_storage(grid_cell_counts.clone())
         .bind_storage(grid_cell_offsets.clone())
@@ -78,6 +87,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .compute_pass(count_cells.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::count_cells_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage(boid_instances.name())
         .bind_storage(grid_cell_counts.clone())
         .bind_storage(grid_cell_offsets.clone())
@@ -89,6 +99,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .compute_pass(scan_counts.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::scan_counts_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage(boid_instances.name())
         .bind_storage(grid_cell_counts.clone())
         .bind_storage(grid_cell_offsets.clone())
@@ -100,6 +111,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .compute_pass(reset_cursors.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::reset_cursors_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage(boid_instances.name())
         .bind_storage(grid_cell_counts.clone())
         .bind_storage(grid_cell_offsets.clone())
@@ -111,6 +123,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .compute_pass(scatter_indices.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::scatter_indices_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage(boid_instances.name())
         .bind_storage(grid_cell_counts.clone())
         .bind_storage(grid_cell_offsets.clone())
@@ -122,6 +135,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .compute_pass(simulate_neighbors.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::compute_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage(boid_instances.name())
         .bind_storage(grid_cell_counts.clone())
         .bind_storage(grid_cell_offsets.clone())
@@ -133,6 +147,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .compute_pass(publish_draw.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
         .uniform_from_state(BoidsRenderState::publish_params)
+        .expect("render flow authoring should succeed")
         .bind_ping_pong_storage(boid_instances.name())
         .bind_storage(grid_cell_counts)
         .bind_storage(grid_cell_offsets)
@@ -142,20 +157,22 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .depends_on(simulate_neighbors.as_str())
         .finish();
 
-    let flow = flow.fixed_step_region(
-        "boids.fixed_step",
-        4,
-        [
-            "boids.seed_or_hold",
-            clear_counts.as_str(),
-            count_cells.as_str(),
-            scan_counts.as_str(),
-            reset_cursors.as_str(),
-            scatter_indices.as_str(),
-            simulate_neighbors.as_str(),
-            publish_draw.as_str(),
-        ],
-    );
+    let flow = flow
+        .fixed_step_region(
+            "boids.fixed_step",
+            4,
+            [
+                "boids.seed_or_hold",
+                clear_counts.as_str(),
+                count_cells.as_str(),
+                scan_counts.as_str(),
+                reset_cursors.as_str(),
+                scatter_indices.as_str(),
+                simulate_neighbors.as_str(),
+                publish_draw.as_str(),
+            ],
+        )
+        .expect("render flow authoring should succeed");
 
     let flow = flow
         .procedural_pass_builder(
@@ -173,10 +190,12 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         )
         .expect("boids.draw procedural builder should be valid")
         .uniform_from_state_with_surface(BoidsRenderState::draw_params)
+        .expect("render flow authoring should succeed")
         .finish()
         .expect("boids.draw procedural pass should lower");
 
     flow.present_pass("boids.present")
+        .expect("render flow authoring should succeed")
         .source("boids.color")
         .depends_on("boids.draw")
         .finish()

@@ -1,3 +1,4 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::RenderFlowValidationError;
 use crate::plugins::render::api::RenderFlow;
 use crate::plugins::render::graph::{
@@ -7,14 +8,14 @@ use crate::plugins::render::graph::{
     diagnose_compiled_pass_shapes, diagnose_resource_lifetime_windows,
     validate_compiled_flow_capabilities,
 };
-use crate::plugins::render::{RenderFlowId, RenderPassId, RenderResourceId};
+use crate::plugins::render::{RenderFlowId, RenderPassId};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct CompiledRenderFlowPlan {
     pub flow_id: RenderFlowId,
     pub flow_label: String,
-    pub resource_ids_by_label: BTreeMap<String, RenderResourceId>,
+    pub resource_ids_by_label: BTreeMap<String, GpuWorkResourceId>,
     pub resources: ResourceGraph,
     pub pass_order: Vec<CompiledPassDescriptor>,
     pub execution: CompiledFlowExecutionPlan,
@@ -23,7 +24,7 @@ pub struct CompiledRenderFlowPlan {
 }
 
 impl CompiledRenderFlowPlan {
-    pub fn resource_label(&self, resource_id: RenderResourceId) -> Option<String> {
+    pub fn resource_label(&self, resource_id: GpuWorkResourceId) -> Option<String> {
         self.resource_ids_by_label
             .iter()
             .find_map(|(label, id)| (*id == resource_id).then(|| label.clone()))
@@ -31,7 +32,7 @@ impl CompiledRenderFlowPlan {
 
     pub fn resource_descriptor(
         &self,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
     ) -> Option<&crate::plugins::render::RenderResourceDescriptor> {
         self.resources
             .resources

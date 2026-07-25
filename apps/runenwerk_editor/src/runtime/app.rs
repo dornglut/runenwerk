@@ -1,4 +1,6 @@
 use anyhow::Result;
+#[cfg(test)]
+use engine::plugins::GpuWorkResourceId;
 use engine::plugins::{
     DiagnosticsConfigResource, RenderFlow, RenderPlugin, ScenePlugin, SchedulerDiagnosticsPlugin,
     default_plugins,
@@ -70,17 +72,26 @@ impl RunenwerkRuntimeWorkbench {
     }
 }
 
-fn configure_app(app: &mut App) {
-    configure_app_for_workbench(app, RunenwerkRuntimeWorkbench::FullEditor);
+#[cfg(test)]
+pub(crate) fn test_gpu_work_resource_id(label: &str) -> GpuWorkResourceId {
+    let flow = RenderFlow::new("editor.runtime.test-resource")
+        .with_color_target(label.to_string())
+        .expect("test render flow authoring should succeed");
+    flow.resource_id(label)
+        .expect("test render resource should exist")
 }
 
-fn configure_app_for_workbench(app: &mut App, workbench: RunenwerkRuntimeWorkbench) {
+fn configure_app(app: &mut App) -> Result<()> {
+    configure_app_for_workbench(app, RunenwerkRuntimeWorkbench::FullEditor)
+}
+
+fn configure_app_for_workbench(app: &mut App, workbench: RunenwerkRuntimeWorkbench) -> Result<()> {
     app.set_title(workbench.window_title());
     app.add_plugins(default_plugins());
     app.add_plugin(SchedulerDiagnosticsPlugin);
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
-    register_editor_render_flow(app);
+    register_editor_render_flow(app)?;
     if workbench == RunenwerkRuntimeWorkbench::UiGallery {
         app.init_resource::<EditorViewportRenderState>();
         app.add_plugin(UiGalleryPlugin);
@@ -100,6 +111,7 @@ fn configure_app_for_workbench(app: &mut App, workbench: RunenwerkRuntimeWorkben
         (ACTION_EDITOR_VIEWPORT_FOCUS, KeyCode::KeyF),
         (ACTION_EDITOR_VIEWPORT_TOOL_RADIAL, KeyCode::Tab),
     ]);
+    Ok(())
 }
 
 fn configure_editor_diagnostics(app: &mut App) {
@@ -122,21 +134,21 @@ fn env_flag_or(key: &str, default: bool) -> bool {
         .unwrap_or(default)
 }
 
-fn register_editor_render_flow(app: &mut App) {
+fn register_editor_render_flow(app: &mut App) -> Result<()> {
     let (flow, scene_product_uniform) = RenderFlow::new(EDITOR_MAIN_FLOW_ID)
         .with_state::<EditorViewportRenderState>()
         .uniform_buffer::<crate::runtime::resources::EditorViewportSceneProductUniform>(
             EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID,
-        );
+        )?;
     let flow = flow
-        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_SCENE_COLOR)
-        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_PICKING_IDS)
-        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_OVERLAY)
-        .with_surface_color()
+        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_SCENE_COLOR)?
+        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_PICKING_IDS)?
+        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_OVERLAY)?
+        .with_surface_color()?
         .fullscreen_pass(EDITOR_SURFACE_CLEAR_PASS_ID)
         .main_surface_only()
         .clear_color(EDITOR_VIEWPORT_BACKGROUND_CLEAR)
-        .write_surface_color()
+        .write_surface_color()?
         .finish()
         .fullscreen_pass(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .offscreen_products_only()
@@ -169,7 +181,7 @@ fn register_editor_render_flow(app: &mut App) {
         )
         .write_target_alias(VIEWPORT_TARGET_ALIAS_OVERLAY)
         .finish()
-        .builtin_ui_composite_pass(EDITOR_MAIN_UI_PASS_ID)
+        .builtin_ui_composite_pass(EDITOR_MAIN_UI_PASS_ID)?
         .main_surface_only()
         .depends_on(EDITOR_SURFACE_CLEAR_PASS_ID)
         .depends_on(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)
@@ -179,7 +191,7 @@ fn register_editor_render_flow(app: &mut App) {
     app.add_render_flow(flow);
 
     let material_preview_flow = RenderFlow::new(EDITOR_MATERIAL_PREVIEW_FLOW_ID)
-        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW)
+        .with_color_target_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW)?
         .fullscreen_pass(EDITOR_MATERIAL_PREVIEW_PASS_ID)
         .offscreen_products_only()
         .shader_asset(EDITOR_MATERIAL_PREVIEW_SHADER_ID)
@@ -189,51 +201,52 @@ fn register_editor_render_flow(app: &mut App) {
         .validate()
         .expect("editor material preview render flow should validate");
     app.add_render_flow(material_preview_flow);
+    Ok(())
 }
 
-pub fn build_headless_app() -> App {
+pub fn build_headless_app() -> Result<App> {
     build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::FullEditor)
 }
 
-pub fn build_headless_app_for_workbench(workbench: RunenwerkRuntimeWorkbench) -> App {
+pub fn build_headless_app_for_workbench(workbench: RunenwerkRuntimeWorkbench) -> Result<App> {
     let mut app = App::headless();
-    configure_app_for_workbench(&mut app, workbench);
-    app
+    configure_app_for_workbench(&mut app, workbench)?;
+    Ok(app)
 }
 
-pub fn build_material_lab_workbench_headless_app() -> App {
+pub fn build_material_lab_workbench_headless_app() -> Result<App> {
     build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::MaterialLab)
 }
 
-pub fn build_ui_designer_workbench_headless_app() -> App {
+pub fn build_ui_designer_workbench_headless_app() -> Result<App> {
     build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::UiDesigner)
 }
 
-pub fn build_ui_gallery_workbench_headless_app() -> App {
+pub fn build_ui_gallery_workbench_headless_app() -> Result<App> {
     build_headless_app_for_workbench(RunenwerkRuntimeWorkbench::UiGallery)
 }
 
 pub fn run() -> Result<()> {
     let mut app = App::new();
-    configure_app(&mut app);
+    configure_app(&mut app)?;
     app.run()
 }
 
 pub fn run_material_lab_workbench() -> Result<()> {
     let mut app = App::new();
-    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::MaterialLab);
+    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::MaterialLab)?;
     app.run()
 }
 
 pub fn run_ui_designer_workbench() -> Result<()> {
     let mut app = App::new();
-    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiDesigner);
+    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiDesigner)?;
     app.run()
 }
 
 pub fn run_ui_gallery_workbench() -> Result<()> {
     let mut app = App::new();
-    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiGallery);
+    configure_app_for_workbench(&mut app, RunenwerkRuntimeWorkbench::UiGallery)?;
     app.run()
 }
 
@@ -251,7 +264,8 @@ mod tests {
 
     #[test]
     fn material_lab_headless_app_installs_material_lab_workbench_host() {
-        let app = build_material_lab_workbench_headless_app();
+        let app = build_material_lab_workbench_headless_app()
+            .expect("headless app construction should succeed");
         let host = app
             .world()
             .resource::<EditorHostResource>()
@@ -273,7 +287,8 @@ mod tests {
 
     #[test]
     fn ui_designer_headless_app_installs_ui_designer_workbench_host() {
-        let app = build_ui_designer_workbench_headless_app();
+        let app = build_ui_designer_workbench_headless_app()
+            .expect("headless app construction should succeed");
         let host = app
             .world()
             .resource::<EditorHostResource>()
@@ -295,7 +310,8 @@ mod tests {
 
     #[test]
     fn ui_gallery_headless_app_installs_gallery_resource_without_editor_host() {
-        let app = build_ui_gallery_workbench_headless_app();
+        let app = build_ui_gallery_workbench_headless_app()
+            .expect("headless app construction should succeed");
 
         assert!(
             app.world()
@@ -312,6 +328,7 @@ mod tests {
     #[test]
     fn ui_gallery_headless_app_submits_artifact_backed_frame() {
         let app = build_ui_gallery_workbench_headless_app()
+            .expect("headless app construction should succeed")
             .run_for_frames(1)
             .expect("UI gallery headless app should run");
         let gallery = app

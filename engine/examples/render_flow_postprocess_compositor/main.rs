@@ -9,7 +9,9 @@ struct BloomCell {
 fn main() -> Result<()> {
     let flow = RenderFlow::new("post.flow")
         .with_surface_color()
+        .expect("render flow authoring should succeed")
         .double_buffer_storage_array::<BloomCell>("post.bloom", 64)
+        .expect("render flow authoring should succeed")
         .compute_pass("post.bloom_extract")
         .shader_asset("assets/shaders/bloom_extract.wgsl")
         .bind_ping_pong_storage("post.bloom")
@@ -19,6 +21,7 @@ fn main() -> Result<()> {
         .shader_asset("assets/shaders/blur_y.wgsl")
         .bind_ping_pong_storage("post.bloom")
         .write_surface_color()
+        .expect("render flow authoring should succeed")
         .depends_on("post.bloom_extract")
         .finish()
         .validate()?;

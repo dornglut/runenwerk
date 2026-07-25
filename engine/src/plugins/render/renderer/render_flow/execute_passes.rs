@@ -1,4 +1,6 @@
 use super::*;
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::{
     CompiledDrawBufferPlan, CompiledDrawSource, CompiledResourceRef,
 };
@@ -7,7 +9,6 @@ use crate::plugins::render::{
     RenderPrimitiveTopology, RenderRasterState, RenderShaderConstant, RenderVertexFormat,
     RenderVertexStepMode,
 };
-use crate::plugins::render::{RenderPassId, RenderResourceId};
 
 impl Renderer {
     #[allow(clippy::too_many_arguments)]
@@ -1353,7 +1354,7 @@ fn render_vertex_format_to_wgpu(value: RenderVertexFormat) -> VertexFormat {
 
 fn compiled_resource_ref_matches_id(
     resource: &CompiledResourceRef,
-    expected: RenderResourceId,
+    expected: GpuWorkResourceId,
 ) -> bool {
     match resource {
         CompiledResourceRef::FlowOwned(id) | CompiledResourceRef::Imported(id) => *id == expected,

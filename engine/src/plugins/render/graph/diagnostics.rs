@@ -1,6 +1,7 @@
+use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::{
     PreparedFlowInvocationId, RenderDynamicTextureTargetKey, RenderFlowId, RenderPassId,
-    RenderResourceId, RenderTargetAliasKind,
+    RenderTargetAliasKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -45,7 +46,7 @@ pub struct RenderExecutionGraphDiagnostic {
     pub flow_label: Option<String>,
     pub pass_id: Option<RenderPassId>,
     pub pass_label: Option<String>,
-    pub resource_id: Option<RenderResourceId>,
+    pub resource_id: Option<GpuWorkResourceId>,
     pub resource_label: Option<String>,
     pub invocation_id: Option<PreparedFlowInvocationId>,
     pub view_id: Option<String>,
@@ -109,7 +110,7 @@ impl RenderExecutionGraphDiagnostic {
 
     pub fn with_resource(
         mut self,
-        resource_id: RenderResourceId,
+        resource_id: GpuWorkResourceId,
         resource_label: Option<impl Into<String>>,
     ) -> Self {
         self.resource_id = Some(resource_id);

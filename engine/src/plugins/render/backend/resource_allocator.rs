@@ -1,33 +1,34 @@
-use crate::plugins::render::{RenderPassId, RenderResourceId};
+use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::RenderPassId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextureResourceEntry {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BufferResourceEntry {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransientResourceClaim {
-    pub id: RenderResourceId,
+    pub id: GpuWorkResourceId,
     pub owner_pass: RenderPassId,
 }
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct BackendResourceAllocatorResource {
-    textures: BTreeMap<RenderResourceId, TextureResourceEntry>,
-    buffers: BTreeMap<RenderResourceId, BufferResourceEntry>,
-    transients: BTreeMap<RenderResourceId, TransientResourceClaim>,
+    textures: BTreeMap<GpuWorkResourceId, TextureResourceEntry>,
+    buffers: BTreeMap<GpuWorkResourceId, BufferResourceEntry>,
+    transients: BTreeMap<GpuWorkResourceId, TransientResourceClaim>,
 }
 
 impl BackendResourceAllocatorResource {
-    pub fn upsert_texture(&mut self, id: RenderResourceId, label: impl Into<String>) {
+    pub fn upsert_texture(&mut self, id: GpuWorkResourceId, label: impl Into<String>) {
         self.textures.insert(
             id,
             TextureResourceEntry {
@@ -37,7 +38,7 @@ impl BackendResourceAllocatorResource {
         );
     }
 
-    pub fn upsert_buffer(&mut self, id: RenderResourceId, label: impl Into<String>) {
+    pub fn upsert_buffer(&mut self, id: GpuWorkResourceId, label: impl Into<String>) {
         self.buffers.insert(
             id,
             BufferResourceEntry {
@@ -47,32 +48,32 @@ impl BackendResourceAllocatorResource {
         );
     }
 
-    pub fn claim_transient(&mut self, id: RenderResourceId, owner_pass: RenderPassId) {
+    pub fn claim_transient(&mut self, id: GpuWorkResourceId, owner_pass: RenderPassId) {
         self.transients
             .insert(id, TransientResourceClaim { id, owner_pass });
     }
 
-    pub fn release_transient(&mut self, id: RenderResourceId) -> bool {
+    pub fn release_transient(&mut self, id: GpuWorkResourceId) -> bool {
         self.transients.remove(&id).is_some()
     }
 
-    pub fn remove_texture(&mut self, id: RenderResourceId) -> bool {
+    pub fn remove_texture(&mut self, id: GpuWorkResourceId) -> bool {
         self.textures.remove(&id).is_some()
     }
 
-    pub fn remove_buffer(&mut self, id: RenderResourceId) -> bool {
+    pub fn remove_buffer(&mut self, id: GpuWorkResourceId) -> bool {
         self.buffers.remove(&id).is_some()
     }
 
-    pub fn texture_entry(&self, id: RenderResourceId) -> Option<&TextureResourceEntry> {
+    pub fn texture_entry(&self, id: GpuWorkResourceId) -> Option<&TextureResourceEntry> {
         self.textures.get(&id)
     }
 
-    pub fn buffer_entry(&self, id: RenderResourceId) -> Option<&BufferResourceEntry> {
+    pub fn buffer_entry(&self, id: GpuWorkResourceId) -> Option<&BufferResourceEntry> {
         self.buffers.get(&id)
     }
 
-    pub fn transient_claim(&self, id: RenderResourceId) -> Option<&TransientResourceClaim> {
+    pub fn transient_claim(&self, id: GpuWorkResourceId) -> Option<&TransientResourceClaim> {
         self.transients.get(&id)
     }
 

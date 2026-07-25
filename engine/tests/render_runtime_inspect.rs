@@ -1,3 +1,4 @@
+use engine::plugins::gpu::GpuWorkResourceId;
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, PreparedRenderFrameInspection,
     ProductSurfaceDiagnosticInspectionEntry, RenderCaptureIdentity, RenderCapturePointIdentity,
@@ -35,7 +36,7 @@ use engine::plugins::render::{
     RenderPreparedFramePreflightCacheStatus, RenderPreparedFramePreflightMode,
     RenderPreparedFramePreflightReportSource, RenderProductSurfaceManifest,
     RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch, RenderProductSurfaceStatusKind,
-    RenderResourceDescriptor, RenderResourceId, RenderTextureSampleMode, RenderTextureTargetFormat,
+    RenderResourceDescriptor, RenderTextureSampleMode, RenderTextureTargetFormat,
     RenderTextureUploadAlphaMode, RendererFrameTimings, ShaderReloadPollReport,
     ShaderReloadPollStatus, StaticRegisteredFeaturePayload, compile_flow_plan,
     merge_fragment_package_into_flow, validate_prepared_render_frame,
@@ -54,6 +55,22 @@ use wgpu::TextureFormat;
 #[derive(Debug, Clone, Copy, engine::plugins::render::GpuStorage)]
 struct InspectStorage {
     value: u32,
+}
+
+fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
+    let labels = (0..count)
+        .map(|index| format!("test.inspect.resource.{index}"))
+        .collect::<Vec<_>>();
+    let flow = labels
+        .iter()
+        .fold(RenderFlow::new("test.inspect.resources"), |flow, label| {
+            flow.with_color_target(label.clone())
+                .expect("render flow authoring should succeed")
+        });
+    labels
+        .iter()
+        .map(|label| flow.resource_id(label).expect("test resource should exist"))
+        .collect()
 }
 
 #[test]
@@ -570,9 +587,8 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
 
 #[test]
 fn render_runtime_inspect_resource_kind_label_matches_descriptor_kind() {
-    let descriptor = RenderResourceDescriptor::storage_buffer::<InspectStorage>(
-        RenderResourceId::try_from_raw(1).unwrap(),
-    );
+    let descriptor =
+        RenderResourceDescriptor::storage_buffer::<InspectStorage>(test_resource_ids(1)[0]);
     assert_eq!(resource_kind_name(&descriptor), "storage_buffer");
 }
 
@@ -580,7 +596,9 @@ fn render_runtime_inspect_resource_kind_label_matches_descriptor_kind() {
 fn render_runtime_inspect_resource_inspection_exposes_target_alias_metadata() {
     let flow = RenderFlow::new("inspect.alias")
         .with_color_target_alias("viewport.scene_color")
-        .with_depth_target_alias("viewport.depth");
+        .expect("render flow authoring should succeed")
+        .with_depth_target_alias("viewport.depth")
+        .expect("render flow authoring should succeed");
 
     let resources = inspect_resources(&flow);
     let color_alias = resources
@@ -603,6 +621,7 @@ fn render_runtime_inspect_resource_inspection_exposes_target_alias_metadata() {
 fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
     let flow = RenderFlow::new("inspect.compiler")
         .with_color_target_alias("scene_color")
+        .expect("render flow authoring should succeed")
         .fullscreen_pass("compose")
         .offscreen_products_only()
         .write_target_alias("scene_color")
@@ -743,7 +762,7 @@ fn render_runtime_inspect_prepared_frame_inspection_exposes_render_product_selec
  {
     let target_key = RenderDynamicTextureTargetKey::new("editor.viewport.1", "scene_color");
     let flow_id = engine::plugins::render::RenderFlowId::try_from_raw(3).unwrap();
-    let resource_id = RenderResourceId::try_from_raw(9).unwrap();
+    let resource_id = test_resource_ids(1)[0];
     let product_surface_request = RenderProductSurfaceRequest::new(
         PreparedViewFrame::offscreen_product("viewport.1", (640, 360))
             .with_history_signature("camera:v1"),
