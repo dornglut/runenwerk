@@ -4,11 +4,11 @@
 PhaseImplementationSpec(
     phase_id: "PT-RUNENGPU-G1A",
     title: "Owner-Scoped Logical GPU Work-Resource Identity",
-    lifecycle_state: "active-planning",
-    implementation_authorization_status: "authorized-after-transitive-caller-correction-merge",
+    lifecycle_state: "completed",
+    implementation_authorization_status: "implemented-and-merged",
     owner: "RunenGPU contract owner",
 
-    source_baseline: "7ac6fe8cd1f404bd54a3c5bb93d72ac2e45664f5",
+    source_baseline: "88e9de3c94145c39391550efaf82a341630f081a",
 
     authority_docs: [
         "ARCHITECTURE.md",
