@@ -30,7 +30,7 @@ GitHub issues and pull requests own live delivery. This page is only a concise c
 
 ### RunenGPU G2 implementation
 
-RunenGPU S0 and G1A are complete. Issue `#168` and PR `#171` bind the G2 investigation and decision-complete specification. Issue `#172` is the single bounded implementation slice and remains blocked until the planning PR merges.
+RunenGPU S0 and G1A are complete. Issue `#168` and PR `#171` completed the G2 investigation and decision-complete specification. Issue `#172` is the single bounded G2 implementation slice and owns the next serialized GPU/render change.
 
 The implementation must:
 
@@ -44,6 +44,8 @@ The implementation must:
 - preserve the common automatic-validation path and the inspectable advanced path as one future authority;
 - add focused unit, rustdoc compile-pass, rustdoc compile-fail, source-guard, and dependency-guard evidence;
 - stop rather than widening into G3 hazards/work graphs, G4 backend realization, G5 execution/readback, G6 graphics, G7 surfaces, or external extraction.
+
+The implementation starts by verifying the actual post-planning `main`; the planning baseline is evidence, not an immutable implementation base.
 
 The target external repository remains `dornglut/runen-gpu`, but no external package is created during G2.
 
