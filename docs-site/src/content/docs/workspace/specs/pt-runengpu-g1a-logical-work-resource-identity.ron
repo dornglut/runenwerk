@@ -181,7 +181,7 @@ PhaseImplementationSpec(
 
     forbidden_scope: [
         "RenderPassId, RenderFeatureId, RenderFrameProducerId, RenderSurfaceId, RenderFixedStepRegionId, or any unrelated identity migration",
-        "redesign of RenderFlowId allocation beyond using its existing validated nonzero value the temporary owner-scope seed",
+        "redesign of RenderFlowId allocation beyond using its existing validated nonzero value as the temporary owner-scope seed",
         "a separately public GpuWorkGraphId API",
         "foundation/id or foundation/id_macros redesign",
         "GpuPlugin creation or plugin lifecycle behavior",
