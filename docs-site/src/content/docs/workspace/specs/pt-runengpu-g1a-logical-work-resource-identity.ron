@@ -79,4 +79,237 @@ PhaseImplementationSpec(
     error_contract: [
         "GpuWorkResourceIdAllocationError::Exhausted or an equivalently precise owned variant.",
         "RenderFlowAuthoringError owns a transparent ResourceIdAllocation variant and composes existing procedural or GPU-primitive authoring failures where one operation can produce either category.",
-        "Errors are structured, source-preserving, comparable where us²È="24°((€€€É•ÅÕ¥É•‘}Ñ•ÍÑÌèl(€€€€€€€€‰™¥ÉÍÐ±½…°…±±½…Ñ¥½¸¥Ì¹½¹é•É¼ˆ°(€€€€€€€€‰‘•Ñ•Éµ¥¹¥ÍÑ¥Œµ½¹½Ñ½¹¥Œ…±±½…Ñ¥½¸½É‘•ÈÝ¥Ñ¡¥¸½¹”½Ý¹•ÈÍ½Á”ˆ°(€€€€€€€€‰µÕ±Ñ¥Á±”…±±½…Ñ¥½¹Ì™É½´½¹”…±±½…Ñ½È…É”‘¥ÍÑ¥¹Ðˆ°(€€€€€€€€‰•ÅÕ…°±½…°…±±½…Ñ¥½¹Ì¥¸ÑÝ¼½Ý¹•ÈÍ½Á•ÌÁÉ½‘Õ”‘¥ÍÑ¥¹Ð™Õ±°¥‘•¹Ñ¥Ñ¥•Ìˆ°(€€€€€€€€‰™½É•¥¸U¹¥™½Éµ!…¹‘±”ÕÍ”¥ÌÉ•©•Ñ••Ù•¸Ý¡•¸Ñ¡”É••¥Ù¥¹œ™±½Ü½Ý¹ÌÑ¡”Í…µ”±½…°Í•ÅÕ•¹”Ù…±Õ”ˆ°(€€€€€€€€‰™½É•¥¸MÑ½É…•ÉÉ…å!…¹‘±”ÕÍ”¥ÌÉ•©•Ñ••Ù•¸Ý¡•¸Ñ¡”É••¥Ù¥¹œ™±½Ü½Ý¹ÌÑ¡”Í…µ”±½…°Í•ÅÕ•¹”Ù…±Õ”ˆ°(€€€€€€€€‰•áÁ±¥¥Ð±½…°•á¡…ÕÍÑ¥½¸Ý¥Ñ¡½ÕÐÝÉ…À°Í…ÑÕÉ…Ñ¥½¸°É•ÕÍ”°½ÈÁ…¹¥Œˆ°(€€€€€€€€‰I•¹‘•É±½ÜÉ•Í½ÕÉ”…ÕÑ¡½É¥¹œÁÉ½Á……Ñ•Ì…±±½…Ñ½È•á¡…ÕÍÑ¥½¸…ÌI•¹‘•É±½ÝÕÑ¡½É¥¹ÉÉ½ÈèéI•Í½ÕÉ•%‘±±½…Ñ¥½¸ˆ°(€€€€€€€€‰ÁÉ½•‘ÕÉ…°…¹ATµÁÉ¥µ¥Ñ¥Ù”…ÕÑ¡½É¥¹œÁÉ•Í•ÉÙ”Ñ¡•¥È•á¥ÍÑ¥¹œ‘½µ…¥¸•ÉÉ½ÉÌÝ¡¥±”½µÁ½Í¥¹œ…±±½…Ñ¥½¸™…¥±ÕÉ”ÍÑÉÕÑÕÉ…±±äˆ°(€€€€€€€€‰¥‘•¹Ñ¥Ñä•ÅÕ…±¥Ñä°½É‘•É¥¹œ°¡…Í¡¥¹œ°•‰Õœ°…¹¥ÍÁ±…äˆ°(€€€€€€€€‰¹¼ÁÕ‰±¥Œ…É‰¥ÑÉ…ÉäÉ…Üµ½¹ÍÑÉÕÑ¥½¸½È™É•”…±±½…Ñ½Èµ½¹ÍÑÉÕÑ¥½¸A$Ñ¡É½Õ ½µÁ¥±”µ™…¥°½ÈÍ½ÕÉ”Õ…Éˆ°(€€€€€€€€‰ÑåÁ”‘¥ÍÑ¥¹Ñ¥½¸™É½´É•µ…¥¹¥¹œI•¹‘•É±½Ý%°I•¹‘•ÉA…ÍÍ%°…¹‰…­•¹¡…¹‘±•Ìˆ°(€€€€€€€€‰•á¥ÍÑ¥¹œÑåÁ•¡…¹‘±”Ñ•ÍÑÌ…™Ñ•Èµ¥É…Ñ¥½¸ˆ°(€€€€€€€€‰•á¥ÍÑ¥¹œÉ•Í½ÕÉ”‘•ÍÉ¥ÁÑ½È°¥µÁ½ÉÐ°±¥™•Ñ¥µ”°É…Á °…¹ÉÕ¹Ñ¥µ”Ñ•ÍÑÌÉ•µ…¥¸‰•¡…Ù¥½É…±±äÕ¹¡…¹•ˆ°(€€€€€€€€‰Í½ÕÉ”Õ…ÉÉ•©•ÑÌ™½É‰¥‘‘•¸¥µÁ½ÉÑÌ¥¸•¹¥¹”½ÍÉŒ½Á±Õ¥¹Ì½ÁÔˆ°(€€€€€€€€‰É•Á½Í¥Ñ½ÉäÍ•…É ÁÉ½Ù•Ìé•É¼É•µ…¥¹¥¹œI•¹‘•ÉI•Í½ÕÉ•%…¹I•¹‘•ÉI•Í½ÕÉ•%‘M•ÅÕ•¹”É•™•É•¹•Ìˆ°(€€€t°((€€€…•ÁÑ…¹•}É¥Ñ•É¥„èl(€€€€€€€€‰•¹¥¹”èéÁ±Õ¥¹ÌèéÁÔ½Ý¹ÌÁÕ]½É­I•Í½ÕÉ•%°¥ÑÌÁÉ¥Ù…Ñ”½Ý¹•ÈµÍ½Á”É•ÁÉ•Í•¹Ñ…Ñ¥½¸°½Ý¹•Èµ½¹ÑÉ½±±•…±±½…Ñ½È°…¹ÍÑÉÕÑÕÉ•…±±½…Ñ¥½¸•ÉÉ½È¸ˆ°(€€€€€€€€‰I•¹‘•ÉI•Í½ÕÉ•%…¹I•¹‘•ÉI•Í½ÕÉ•%‘M•ÅÕ•¹”…É”‘•±•Ñ•Ý¥Ñ¡½ÕÐ…±¥…Í•Ì¸ˆ°(€€€€€€€€‰±°€Ìà¥¹Ù•¹Ñ½É¥•¥‘•¹Ñ¥Ñä½¹ÍÕµ•È™¥±•Ì…É”•¥Ñ¡•Èµ•¡…¹¥…±±äµ¥É…Ñ•½ÈÁÉ½Ù•¸¹½ÐÑ¼É•ÅÕ¥É”„‘¥™˜…™Ñ•ÈÕÉÉ•¹Ðµµ…¥¸É•¡•¬¸ˆ°(€€€€€€€€‰±°€ÈÜ¥¹Ù•¹Ñ½É¥•™…±±¥‰±”µ…ÕÑ¡½É¥¹œ™¥±•Ì…É”µ¥É…Ñ•½ÈÁÉ½Ù•¸¹½ÐÑ¼É•ÅÕ¥É”„‘¥™˜…™Ñ•È½µÁ¥±•Èµ‰…­•ÕÉÉ•¹Ðµµ…¥¸É•¡•¬¸ˆ°(€€€€€€€€‰±°€Ø¥¹Ù•¹Ñ½É¥•ÑÉ…¹Í¥Ñ¥Ù”…ÁÀµ‰Õ¥±‘•È…±±•ÉÌ…É”µ¥É…Ñ•Ñ¼•áÁ±¥¥ÐÍÕ•ÍÍ™Õ°µ½¹ÍÑÉÕÑ¥½¸…ÍÍ•ÉÑ¥½¹Ì¸ˆ°(€€€€€€€€‰9¼…‘‘¥Ñ¥½¹…°¥‘•¹Ñ¥Ñä°…±±½…Ñ¥¹œµ…ÕÑ¡½É¥¹œ°½ÈÑÉ…¹Í¥Ñ¥Ù”…ÁÀµ‰Õ¥±‘•È…±±•È¥Ì‘¥Í½Ù•É•½ÕÑÍ¥‘”Ñ¡”Ñ¡É•”•á…Ð¥¹Ù•¹Ñ½É¥•Ìì¥˜½¹”•á¥ÍÑÌ°Ñ¡”¥µÁ±•µ•¹Ñ…Ñ¥½¸AHÕÁ‘…Ñ•ÌÑ¡”ÍÁ•¥™¥…Ñ¥½¸‰•™½É”½‘”¡…¹•Ì½¹Ñ¥¹Õ”¸ˆ°(€€€€€€€€‰9¼ÁÉ½‘ÕÑ¥½¸…±±½…Ñ¥½¸Á…Ñ ½¹Ñ…¥¹ÌÁ…¹¥Œ°Õ¹ÝÉ…À°•áÁ•Ð°Õ¹É•…¡…‰±”™…±±‰…¬°‘ÕÁ±¥…Ñ”¥‘•¹Ñ¥Ñä°Í•¹Ñ¥¹•°¥‘•¹Ñ¥Ñä°½È‘•™•ÉÉ•Í¥±•¹Ð™…¥±ÕÉ”¸ˆ°(€€€€€€€€‰É½ÍÌµ™±½Ü¡…¹‘±”½±±¥Í¥½¹Ì…É”ÁÉ½Ù•¸¥µÁ½ÍÍ¥‰±”½ÈÍÑÉÕÑÕÉ…±±äÉ•©•Ñ•¸ˆ°(€€€€€€€€‰9¼ÍÑ…‰±”µ™½Éµ…ÐÕÍ”½˜Ñ¡”½±É…ÜÙ…±Õ”•á¥ÍÑÌ¸ˆ°(€€€€€€€€‰±°™½ÕÍ•°•¹¥¹”°Ý½É­ÍÁ…”°‘½Õµ•¹Ñ…Ñ¥½¸°…¹É•Á½Í¥Ñ½Éäµ…Õ‘¥ÐÙ…±¥‘…Ñ¥½¸Á…ÍÍ•Ì¸ˆ°(€€€€€€€€‰Q¡”¥µÁ±•µ•¹Ñ…Ñ¥½¸‘¥™˜½¹Ñ…¥¹Ì¹¼™½É‰¥‘‘•¸µÍ½Á”‰•¡…Ù¥½È½ÈÕ¹É•±…Ñ•¥‘•¹Ñ¥Ñäµ¥É…Ñ¥½¸¸ˆ°(€€€t°((€€€Ù…±¥‘…Ñ¥½¹}½µµ…¹‘Ìèl(€€€€€€€€‰¥ÐÍÑ…ÑÕÌ€´µÍ¡½ÉÐ€´µ‰É…¹ ˆ°(€€€€€€€€‰¥ÐÉ•ØµÁ…ÉÍ”!ˆ°(€€€€€€€€‰…É¼µ•Ñ…‘…Ñ„€´µ™½Éµ…ÐµÙ•ÉÍ¥½¸€Ä€´µ±½­•€´µ¹¼µ‘•ÁÌˆ°(€€€€€€€€‰Éœ€µ¸€I•¹‘•ÉI•Í½ÕÉ•%‘ñI•¹‘•ÉI•Í½ÕÉ•%‘M•ÅÕ•¹•ñÁÕ]½É­I•Í½ÕÉ•%‘ñÁÕ]½É­I•Í½ÕÉ•%‘±±½…Ñ½ÉñÑÉå}™É½µ}É…Ýñ‘¥…¹½ÍÑ¥}Á…ÉÑÍñqp¹É…Ýqp œ•¹¥¹”…ÁÁÌ‘½µ…¥¸¹•Ð…‘…ÁÑ•ÉÌ€´µ±½ˆ€œ¨¹ÉÌœˆ°(€€€€€€€€‰Éœ€µ¸€ÝÁÔèéñÝ¥¹¥Ðèéñ•ÌèéñÁ±Õ¥¹ÌèéÉ•¹‘•Éñµ…Ñ•É¥…±}É…Á¡ñÝ½É±‘}Í‘™ñÉÕ¹•¹Õ¥ñÕ¥}ñ•‘¥Ñ½ÉñÁÉ½•¹ñÍ•¹•ñÁÉ½‘ÕÐœ•¹¥¹”½ÍÉŒ½Á±Õ¥¹Ì½ÁÔˆ°(€€€€€€€€‰…É¼€­ÍÑ…‰±”™µÐ€´µ…±°€´µ¡•¬ˆ°(€€€€€€€€‰…É¼Ñ•ÍÐ€µÀ•¹¥¹”ÁÕ}Ý½É­}É•Í½ÕÉ•}¥€´µ±½­•ˆ°(€€€€€€€€‰…É¼Ñ•ÍÐ€µÀ•¹¥¹”™½É•¥¹}É•Í½ÕÉ•}¡…¹‘±”€´µ±½­•ˆ°(€€€€€€€€‰…É¼Ñ•ÍÐ€µÀ•¹¥¹”É•¹‘•É}É•Í½ÕÉ”€´µ±½­•ˆ°(€€€€€€€€‰…É¼Ñ•ÍÐ€µÀ•¹¥¹”É•¹‘•É}™±½Ý}…ÕÑ¡½É¥¹}•ÉÉ½È€´µ±½­•ˆ°(€€€€€€€€‰…É¼Ñ•ÍÐ€µÀ•¹¥¹”€´µ±¥ˆ€´µ±½­•ˆ°(€€€€€€€€‰…É¼Ñ•ÍÐ€µÀ•¹¥¹”€´µÑ•ÍÑÌ€´µ±½­•ˆ°(€€€€€€€€‰…É¼±¥ÁÁä€µÀ•¹¥¹”€´µ…±°µÑ…É•ÑÌ€´µ±½­•€´´€µÝ…É¹¥¹Ìˆ°(€€€€€€€€‰…É¼Ù…±¥‘…Ñ”ˆ°(€€€€€€€€‰ÁåÑ¡½¸Ñ½½±Ì½‘½Ì½Ù…±¥‘…Ñ•}‘½Ì¹Áäˆ°(€€€€€€€€‰Á¹Á´€´µ‘¥È‘½ÌµÍ¥Ñ”‰Õ¥±ˆ°(€€€€€€€€‰¥Ð‘¥™˜€´µ¡•¬ˆ°(€€€€€€€€‰¥Ð‘¥™˜€´µ¡•¬µ…¥¸¸¸¹!ˆ°(€€€€€€€€‰¥ÐÍÑ…ÑÕÌ€´µÍ¡½ÉÐ€´µ‰É…¹ ˆ°(€€€€€€€€‰¥Ð‘¥™˜€´µÍÑ…Ðµ…¥¸¸¸¹!ˆ°(€€€t°((€€€•Ù¥‘•¹•}•áÁ•Ñ…Ñ¥½¹Ìèl(€€€€€€€€‰I•Á½ÉÐÑ¡”•á…ÐÕÉÉ•¹Ðµµ…¥¸‘•±…É…Ñ¥½¸°Í•ÅÕ•¹”°…±±½…Ñ¥½¸°½Ý¹•ÈµÍ½Á”°¥µÁ½ÉÐ°•áÁ½ÉÐ°¡…¹‘±”°‘•ÍÉ¥ÁÑ½È°É…Á °É•¹‘•É•È°…ÁÁ±¥…Ñ¥½¸°…¹Ñ•ÍÐ¥¹Ù•¹Ñ½Éä‰•™½É”•‘¥Ñ¥¹œIÕÍÐ¸ˆ°(€€€€€€€€‰I•Á½ÉÐ…¹ä½¹ÍÕµ•È…‘‘•½ÈÉ•µ½Ù•Í¥¹”Ñ¡”ÍÁ•¥™¥…Ñ¥½¸‰…Í•±¥¹”¸ˆ°(€€€€€€€€‰I•Á½ÉÐÑ¡”™¥¹…°¥‘•¹Ñ¥ÑäÉ•ÁÉ•Í•¹Ñ…Ñ¥½¸…¹…±±½…Ñ½ÈÙ¥Í¥‰¥±¥ÑäÝ¥Ñ¡½ÕÐ•áÁ½Í¥¹œ…É‰¥ÑÉ…Éä½¹ÍÑÉÕÑ¥½¸¸ˆ°(€€€€€€€€‰I•Á½ÉÐÝ¡äÑ¡”Í•±•Ñ•½Ý¹•ÈµÍ½Á”Í••¥ÌÕ¹¥ÅÕ”™½ÈÍ¥µÕ±Ñ…¹•½ÕÍ±ä±¥Ù”™±½ÝÌ…¹¡½ÜÑ¡”ATµ½‘Õ±”É•µ…¥¹ÌÉ•¹‘•É•Èµ¥¹‘•Á•¹‘•¹Ð¸ˆ°(€€€€€€€€‰I•Á½ÉÐ…±±½…Ñ¥½¸°É½ÍÌµ™±½ÜÉ•©•Ñ¥½¸°…¹•á¡…ÕÍÑ¥½¸Ñ•ÍÑÌ°¥¹±Õ‘¥¹œÑ¡”Ñ•¡¹¥ÅÕ”ÕÍ•Ñ¼É•… •á¡…ÕÍÑ¥½¸Ý¥Ñ¡½ÕÐÝ¥‘•¹¥¹œÁÉ½‘ÕÑ¥½¸A$¸ˆ°(€€€€€€€€‰I•Á½ÉÐ•Ù•Éäµ•¡…¹¥…°¥‘•¹Ñ¥Ñäµ½¹ÍÕµ•Èµ¥É…Ñ¥½¸…¹•Ù•ÉäÕ¹¡…¹•¥¹Ù•¹Ñ½É¥•™¥±”Ý¥Ñ ©ÕÍÑ¥™¥…Ñ¥½¸¸ˆ°(€€€€€€€€‰I•Á½ÉÐ•Ù•Éä™…±±¥‰±”µ…ÕÑ¡½É¥¹œÍ¥¹…ÑÕÉ”¡…¹”°ÁÉ½‘ÕÑ¥½¸ÁÉ½Á……Ñ¥½¸Á…Ñ °Ñ•ÍÐ…ÍÍ•ÉÑ¥½¸°Õ¹¡…¹•…ÕÑ¡½É¥¹œ™¥±”°…¹ÑÉ…¹Í¥Ñ¥Ù”…ÁÀµ‰Õ¥±‘•È…±±•Èµ¥É…Ñ¥½¸Ý¥Ñ ©ÕÍÑ¥™¥…Ñ¥½¸¸ˆ°(€€€€€€€€‰I•Á½ÉÐÑ¡”‘•Á•¹‘•¹ä½Í½ÕÉ”Õ…É…¹…±°™½É‰¥‘‘•¸µ¥µÁ½ÉÐÉ•ÍÕ±ÑÌ¸ˆ°(€€€€€€€€‰I•Á½ÉÐé•É¼É•µ…¥¹¥¹œ½±µ¹…µ”É•™•É•¹•Ì…¹é•É¼½µÁ…Ñ¥‰¥±¥Ñä…±¥…Í•Ì¸ˆ°(€€€€€€€€‰M•Á…É…Ñ”‘•Ñ•Éµ¥¹¥ÍÑ¥Œ½¹ÑÉ…Ð•Ù¥‘•¹”™É½´Õ¹…Ù…¥±…‰±”•¹Ù¥É½¹µ•¹Ðµ‘•Á•¹‘•¹ÐAT•Ù¥‘•¹”¸ˆ°(€€€t°((€€€ÍÑ½Á}½¹‘¥Ñ¥½¹Ìèl(€€€€€€€€‰¹ä½¹ÍÕµ•È¥¹Ñ•¹Ñ¥½¹…±±äÁ•ÉÍ¥ÍÑÌ°Í•É¥…±¥é•Ì°É•Á±…åÌ°ÑÉ…¹Íµ¥ÑÌ°½ÈÕÍ•ÌÉ…ÜI•¹‘•ÉI•Í½ÕÉ•%…Ì„ÍÑ…‰±”É½ÍÌµÁÉ½•ÍÌÙ…±Õ”¸ˆ°(€€€€€€€€‰Q¡”ÕÉÉ•¹ÐI•¹‘•É±½Ü½Ý¹•ÈÙ…±Õ”…¹¹½ÐÁÉ½Ù¥‘”Õ¹¥ÅÕ”Í½Á”™½ÈÍ¥µÕ±Ñ…¹•½ÕÍ±ä±¥Ù”™±½ÝÌÝ¥Ñ¡½ÕÐÉ•‘•Í¥¹¥¹œI•¹‘•É±½Ü¥‘•¹Ñ¥Ñä¸ˆ°(€€€€€€€€‰™½É•¥¸¡…¹‘±”…¸ÍÑ¥±°½±±¥‘”Ý¥Ñ ½ÈÉ•Í½±Ù”Ñ¼…¸Õ¹É•±…Ñ•±½…°É•Í½ÕÉ”…™Ñ•ÈÑ¡”ÁÉ½Á½Í•É•ÁÉ•Í•¹Ñ…Ñ¥½¸¸ˆ°(€€€€€€€€‰Q¡”µ¥É…Ñ¥½¸É•ÅÕ¥É•ÌI•¹‘•ÉA…ÍÍ%°I•¹‘•ÉMÕÉ™…•%°½È…¹½Ñ¡•ÈÕ¹É•±…Ñ•¥‘•¹Ñ¥ÑäÉ•‘•Í¥¸¸ˆ°(€€€€€€€€‰Q¡”µ¥É…Ñ¥½¸É•ÅÕ¥É•ÌÉ…Á Í•µ…¹Ñ¥Œ°]ATÉ•…±¥é…Ñ¥½¸°Í¡…‘•È°ÍÕÉ™…”°Ý¥¹‘½Ü°½ÈÉ•¹‘•É•È‰•¡…Ù¥½È¡…¹•Ì¸ˆ°(€€€€€€€€‰½µÁ…Ñ¥‰¥±¥Ñä…±¥…Ì½È‘ÕÁ±¥…Ñ”½±½¹•Ü…±±½…Ñ½È¥ÌÉ•ÅÕ¥É•Ñ¼­••ÀÑ¡”‰É…¹ ½µÁ¥±¥¹œ¸ˆ°(€€€€€€€€‰Q¡”¹•ÜÁÔµ½‘Õ±”Ý½Õ±‘•Á•¹½¸É•¹‘•É•È°L°]AT°]¥¹¥Ð°½È‘½µ…¥¸½ÁÉ½‘ÕÐÑåÁ•Ì¸ˆ°(€€€€€€€€‰ÕÉÉ•¹Ðµ…¥¸™…¥±ÌÑ¡”…¹½¹¥…°‰…Í•±¥¹”™½ÈÕ¹É•±…Ñ•É•…Í½¹Ì¸ˆ°(€€€€€€€€‰¹ä•á…Ð¥‘•¹Ñ¥Ñä°™…±±¥‰±”µ…ÕÑ¡½É¥¹œ°½ÈÑÉ…¹Í¥Ñ¥Ù”µ…±±•È¥¹Ù•¹Ñ½Éä¥Ì¥¹½µÁ±•Ñ”½Èµ…Ñ•É¥…±±ä¡…¹•‰•™½É”¥µÁ±•µ•¹Ñ…Ñ¥½¸‰•¥¹Ì¸ˆ°(€€€t°((€€€±½Í•½ÕÑ}•áÁ•Ñ…Ñ¥½¹Ìèl(€€€€€€€€‰I•½É™¥¹…°µ½‘Õ±”½A$Í¡…Á”°½Ý¹•ÈµÍ½Á”µ•¡…¹¥Í´°•á…Ð¡…¹•™¥±•Ì°½¹ÍÕµ•Èµ¥É…Ñ¥½¹Ì°™½É•¥¸µ¡…¹‘±”É•©•Ñ¥½¸°…±±½…Ñ½È‰•¡…Ù¥½È°Ñ•ÍÑÌ°‘•Á•¹‘•¹äÕ…É‘Ì°Ù…±¥‘…Ñ¥½¸•Ù¥‘•¹”°Í½Á”ÁÉ½½˜°­¹½Ý¸…ÁÌ°…¹¹•áÐÍ…™”…Ñ¥½¸¸ˆ°(€€€€€€€€‰MÑ…Ñ”•áÁ±¥¥Ñ±äÑ¡…ÐÅ¥Ì…¸¥¹Ñ•É¹…°™ÕÑÕÉ”µÑÉ…¹Í™•É…‰±”Í±¥”…¹‘½•Ì¹½Ðµ…­”IÕ¹•¹ATÉ•…‘ä™½È•áÑ•É¹…°•áÑÉ…Ñ¥½¸¸ˆ°(€€€€€€€€‰¼¹½Ð…Ñ¥Ù…Ñ”Å½ÈÕ¹Ñ¥°Å¥ÌÉ•Ù¥•Ý•°µ•É•°…¹±½Í•……¥¹ÍÐÕÉÉ•¹Ðµ…¥¸¸ˆ°(€€€€€€€€‰]É¥Ñ”Ñ¡”¹•áÐÍÁ•¥™¥…Ñ¥½¸½¹±ä™É½´µ•É•Å™…ÑÌÉ…Ñ¡•ÈÑ¡…¸ÁÉ”µ…ÕÑ¡½É¥¹œ±…Ñ•ÈAT½¹ÑÉ…ÑÌ¸ˆ°(€€€t°((€€€¹•áÑ}Á¡…Í•}…Ñ¥Ù…Ñ¥½¹}½¹‘¥Ñ¥½¸è€‰±…Ñ•ÈIÕ¹•¹ATÁ¡…Í”µ…ä•¹Ñ•ÈÁ±…¹¹¥¹œ½¹±ä…™Ñ•ÈAPµIU99ATµÅ¥µÁ±•µ•¹Ñ…Ñ¥½¸¥Ì•á…Ðµ¡•…Ù…±¥‘…Ñ•°É•Ù¥•Ý•°µ•É•°…¹±½Í•Ý¥Ñ ½Ý¹•ÈµÍ½Á•¥‘•¹Ñ¥Ñä°™½É•¥¸µ¡…¹‘±”É•©•Ñ¥½¸°…¹¹¼½±¥‘•¹Ñ¥Ñä…ÕÑ¡½É¥ÑäÉ•µ…¥¹¥¹œ¸ˆ°(¤(
+        "Errors are structured, source-preserving, comparable where useful, and Display-capable without caller branching on strings.",
+        "No anyhow, boxed dynamic error, panic, unwrap, expect, or silent fallback in the allocation path.",
+        "Invalid zero owner scope is prevented by the bridge type and is not normalized silently.",
+        "Foreign-flow handles use existing unknown-resource validation or an equivalently structured rejection; they must never resolve to an unrelated local resource.",
+    ],
+
+    exact_consumer_inventory: [
+        "apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs",
+        "engine/src/plugins/render/api/bindings.rs",
+        "engine/src/plugins/render/api/flow.rs",
+        "engine/src/plugins/render/api/handles.rs",
+        "engine/src/plugins/render/api/ids.rs",
+        "engine/src/plugins/render/api/passes.rs",
+        "engine/src/plugins/render/backend/resource_allocator.rs",
+        "engine/src/plugins/render/frame/packet.rs",
+        "engine/src/plugins/render/gpu_primitives/compaction.rs",
+        "engine/src/plugins/render/gpu_primitives/counters.rs",
+        "engine/src/plugins/render/gpu_primitives/draw_args.rs",
+        "engine/src/plugins/render/gpu_primitives/plan.rs",
+        "engine/src/plugins/render/gpu_primitives/scan.rs",
+        "engine/src/plugins/render/graph/capabilities.rs",
+        "engine/src/plugins/render/graph/diagnostics.rs",
+        "engine/src/plugins/render/graph/execution_plan.rs",
+        "engine/src/plugins/render/graph/pass_graph.rs",
+        "engine/src/plugins/render/graph/planning.rs",
+        "engine/src/plugins/render/graph/prepared_validation.rs",
+        "engine/src/plugins/render/graph/resource_graph.rs",
+        "engine/src/plugins/render/graph/resource_lifetimes.rs",
+        "engine/src/plugins/render/graph/validation.rs",
+        "engine/src/plugins/render/procedural/authoring.rs",
+        "engine/src/plugins/render/procedural/descriptors.rs",
+        "engine/src/plugins/render/procedural/population/uniform_grid.rs",
+        "engine/src/plugins/render/renderer/render_flow/execute_passes.rs",
+        "engine/src/plugins/render/renderer/render_flow/runtime_resources.rs",
+        "engine/src/plugins/render/renderer/render_flow/runtime_resources/realize.rs",
+        "engine/src/plugins/render/renderer/render_flow/runtime_resources/resolve.rs",
+        "engine/src/plugins/render/resource/descriptors.rs",
+        "engine/src/plugins/render/resource/import.rs",
+        "engine/src/plugins/render/resource/transient.rs",
+        "engine/src/plugins/render/resource/usages.rs",
+        "engine/src/plugins/render/runtime/frame_prepare.rs",
+        "engine/tests/render_dynamic_targets.rs",
+        "engine/tests/render_import_contract.rs",
+        "engine/tests/render_resource_model.rs",
+        "engine/tests/render_runtime_inspect.rs",
+    ],
+
+    fallible_authoring_inventory: [
+        "apps/runenwerk_draw/src/runtime/app.rs",
+        "apps/runenwerk_draw/src/runtime/gpu_ink.rs",
+        "apps/runenwerk_editor/src/runtime/app.rs",
+        "engine/benches/render_flow_planning.rs",
+        "engine/examples/boids_render_flow/rendering/graph.rs",
+        "engine/examples/game_of_life_sdf/rendering/graph.rs",
+        "engine/examples/procedural_sky_sdf_terrain/rendering/graph.rs",
+        "engine/examples/render_flow_debug_inspect/main.rs",
+        "engine/examples/render_flow_fullscreen_minimal/main.rs",
+        "engine/examples/render_flow_postprocess_compositor/main.rs",
+        "engine/examples/sdf_render_flow/rendering/graph.rs",
+        "engine/src/plugins/render/api/flow.rs",
+        "engine/src/plugins/render/api/passes.rs",
+        "engine/src/plugins/render/gpu_primitives/draw_args.rs",
+        "engine/src/plugins/render/gpu_primitives/plan.rs",
+        "engine/src/plugins/render/gpu_primitives/scan.rs",
+        "engine/src/plugins/render/graph/merge.rs",
+        "engine/src/plugins/render/procedural/authoring.rs",
+        "engine/src/plugins/render/procedural/lowering.rs",
+        "engine/src/plugins/render/procedural/population/uniform_grid.rs",
+        "engine/src/plugins/render/renderer/render_flow/execute.rs",
+        "engine/src/plugins/render/renderer/render_flow/preflight_cache.rs",
+        "engine/src/plugins/render/runtime/frame_prepare.rs",
+        "engine/tests/procedural_instance.rs",
+        "engine/tests/render_dynamic_targets.rs",
+        "engine/tests/render_flow_v2.rs",
+        "engine/tests/render_runtime_inspect.rs",
+    ],
+
+    transitive_authoring_caller_inventory: [
+        "apps/runenwerk_draw/tests/app_shell.rs",
+        "apps/runenwerk_editor/tests/region_compass_visual_capture.rs",
+        "apps/runenwerk_editor/tests/startup_render_smoke.rs",
+        "apps/runenwerk_editor/tests/viewport_architecture_guards.rs",
+        "apps/runenwerk_editor/tests/viewport_branch_truth_smoke.rs",
+        "apps/runenwerk_editor/tests/viewport_gpu_truth_smoke.rs",
+    ],
+
+    allowed_paths: [
+        "engine/src/plugins/gpu/** for the new identity, private owner scope, allocator, focused tests, and dependency guards",
+        "engine/src/plugins/mod.rs for gpu module exposure and reviewed identity re-export",
+        "engine/src/plugins/render/api/ids.rs only to remove RenderResourceId while retaining unrelated current IDs",
+        "the exact 38 identity consumer files listed in exact_consumer_inventory for mechanical type/import/owner-scope migration",
+        "the exact 27 core and direct authoring files listed in fallible_authoring_inventory for structured allocation-error propagation and callsite migration",
+        "the exact 6 integration-test files listed in transitive_authoring_caller_inventory for explicit successful headless-app construction assertions",
+        "engine/src/prelude.rs only if current RenderResourceId is publicly re-exported there and the replacement must preserve current public reachability",
+        "focused compile-fail, cross-flow rejection, and source-guard tests owned by engine",
+        "docs-site/src/content/docs/reports/proofs/pt-runengpu-g1a-*.md",
+        "docs-site/src/content/docs/reports/closeouts/pt-runengpu-g1a-closeout.md only after implementation merges",
+        "roadmap, active-work, decision-register, and phase-spec status updates required for closeout",
+    ],
+
+    forbidden_scope: [
+        "RenderPassId, RenderFeatureId, RenderFrameProducerId, RenderSurfaceId, RenderFixedStepRegionId, or any unrelated identity migration",
+        "redesign of RenderFlowId allocation beyond using its existing validated nonzero value the temporary owner-scope seed",
+        "a separately public GpuWorkGraphId API",
+        "foundation/id or foundation/id_macros redesign",
+        "GpuPlugin creation or plugin lifecycle behavior",
+        "render graph node, pass, dependency, capability, hazard, validation, scheduling, fixed-step, or product semantic redesign beyond return-type and error propagation required by fallible resource authoring",
+        "WGPU instance, adapter, device, queue, resource, pipeline, command, upload, readback, surface, or device-loss behavior",
+        "shader, pipeline, macro ABI, material, SDF, UI, editor, procgen, world, cave, VFX, capture, diagnostics presentation, or product feature redesign",
+        "external runen-gpu or runen-render repository source movement",
+        "Cargo package creation, workspace member changes, dependency additions, or lockfile changes unless an existing now-unused render-only dependency is proven removable and separately reviewed",
+        "compatibility aliases, deprecated parallel names, forwarding modules, source includes, or duplicate allocators",
+        ".github/** and workflow changes",
+    ],
+
+    mechanical_migration: [
+        "RenderResourceId -> GpuWorkResourceId",
+        "RenderResourceIdSequence -> GpuWorkResourceIdAllocator",
+        "RenderFlow::new creates the RenderFlowId first and seeds the resource allocator with that validated nonzero owner value through a crate-private GPU API.",
+        "Per-flow local resource allocation still starts at one, but the full identity includes the flow-owner scope.",
+        "Typed handles continue to store the logical resource identity and existing metadata without semantic redesign.",
+        "Resource descriptors, imports, usages, lifetimes, graph records, execution plans, runtime resource maps, and diagnostics migrate to the owner-scoped identity.",
+        "Tests and application consumers migrate imports and constructors without compatibility shims.",
+        "Resource-allocating RenderFlow, pass-builder, procedural, fragment-merge, GPU-primitive, application, example, benchmark, and test callsites migrate atomically to Result propagation or explicit test-only success assertions.",
+        "Production callers use ? or structured error mapping; no production caller restores an infallible wrapper around allocation.",
+        "Public product app builders return Result and the six inventoried integration-test callers use explicit successful-construction assertions.",
+        "Raw test construction is replaced by allocation through focused module helpers or real flow construction; production arbitrary construction is not retained for test convenience.",
+    ],
+
+    invariants: [
+        "Zero is never a valid owner scope or local GpuWorkResourceId component.",
+        "Two successful allocations from one allocator are distinct and monotonically ordered by local component.",
+        "The same explicit owner scope, allocator state, and operation sequence produces the same identities.",
+        "Equal local components from different owner scopes are unequal.",
+        "A handle created by one RenderFlow cannot resolve to a resource owned by another RenderFlow, including when both flows allocate the same local sequence value.",
+        "Exhaustion returns a structured error and leaves no reused or wrapped valid identity.",
+        "Safe external code cannot forge an arbitrary GpuWorkResourceId from integers or construct a free-standing allocator scope.",
+        "Diagnostic components are not stable source, persistence, replay, network, wire, ABI, or cache identities.",
+        "GpuWorkResourceId remains distinct from every render, product, surface, shader, pipeline, and backend handle type.",
+        "No current graph, rendering, WGPU, application, or product behavior changes beyond identity ownership, foreign-handle rejection, and allocation error propagation required by the migration.",
+        "The new gpu identity module imports no render module, ECS, WGPU, Winit, RunenSDF, RunenUI, scene, material, editor, procgen, world, application, or product type.",
+        "No old RenderResourceId or RenderResourceIdSequence declaration, alias, import, export, or consumer remains after completion.",
+    ],
+
+    required_tests: [
+        "first local allocation is nonzero",
+        "deterministic monotonic allocation order within one owner scope",
+        "multiple allocations from one allocator are distinct",
+        "equal local allocations in two owner scopes produce distinct full identities",
+        "foreign UniformHandle use is rejected even when the receiving flow owns the same local sequence value",
+        "foreign StorageArrayHandle use is rejected even when the receiving flow owns the same local sequence value",
+        "explicit local exhaustion without wrap, saturation, reuse, or panic",
+        "RenderFlow resource authoring propagates allocator exhaustion as RenderFlowAuthoringError::ResourceIdAllocation",
+        "procedural and GPU-primitive authoring preserve their existing domain errors while composing allocation failure structurally",
+        "identity equality, ordering, hashing, Debug, and Display",
+        "no public arbitrary raw-construction or free allocator-construction API through compile-fail or source guard",
+        "type distinction from remaining RenderFlowId, RenderPassId, and backend handles",
+        "existing typed handle tests after migration",
+        "existing resource descriptor, import, lifetime, graph, and runtime tests remain behaviorally unchanged",
+        "source guard rejects forbidden imports in engine/src/plugins/gpu",
+        "repository search proves zero remaining RenderResourceId and RenderResourceIdSequence references",
+    ],
+
+    acceptance_criteria: [
+        "engine::plugins::gpu owns GpuWorkResourceId, its private owner-scope representation, owner-controlled allocator, and structured allocation error.",
+        "RenderResourceId and RenderResourceIdSequence are deleted without aliases.",
+        "All 38 inventoried identity consumer files are either mechanically migrated or proven not to require a diff after current-main recheck.",
+        "All 27 inventoried fallible-authoring files are migrated or proven not to require a diff after compiler-backed current-main recheck.",
+        "All 6 inventoried transitive app-builder callers are migrated to explicit successful-construction assertions.",
+        "No additional identity, allocating-authoring, or transitive app-builder caller is discovered outside the three exact inventories; if one exists, the implementation PR updates the specification before code changes continue.",
+        "No production allocation path contains panic, unwrap, expect, unreachable fallback, duplicate identity, sentinel identity, or deferred silent failure.",
+        "Cross-flow handle collisions are proven impossible or structurally rejected.",
+        "No stable-format use of the old raw value exists.",
+        "All focused, engine, workspace, documentation, and repository-audit validation passes.",
+        "The implementation diff contains no forbidden-scope behavior or unrelated identity migration.",
+    ],
+
+    validation_commands: [
+        "git status --short --branch",
+        "git rev-parse HEAD",
+        "cargo metadata --format-version 1 --locked --no-deps",
+        "rg -n 'RenderResourceId|RenderResourceIdSequence|GpuWorkResourceId|GpuWorkResourceIdAllocator|try_from_raw|diagnostic_parts|\\.raw\\(' engine apps domain net adapters --glob '*.rs'",
+        "rg -n 'wgpu::|winit::|ecs::|plugins::render|material_graph|world_sdf|runenui|ui_|editor|procgen|scene|product' engine/src/plugins/gpu",
+        "cargo +stable fmt --all --check",
+        "cargo test -p engine gpu_work_resource_id --locked",
+        "cargo test -p engine foreign_resource_handle --locked",
+        "cargo test -p engine render_resource --locked",
+        "cargo test -p engine render_flow_authoring_error --locked",
+        "cargo test -p engine --lib --locked",
+        "cargo test -p engine --tests --locked",
+        "cargo clippy -p engine --all-targets --locked -- -D warnings",
+        "cargo validate",
+        "python tools/docs/validate_docs.py",
+        "pnpm --dir docs-site build",
+        "git diff --check",
+        "git diff --check main...HEAD",
+        "git status --short --branch",
+        "git diff --stat main...HEAD",
+    ],
+
+    evidence_expectations: [
+        "Report the exact current-main declaration, sequence, allocation, owner-scope, import, export, handle, descriptor, graph, renderer, application, and test inventory before editing Rust.",
+        "Report any consumer added or removed since the specification baseline.",
+        "Report the final identity representation and allocator visibility without exposing arbitrary construction.",
+        "Report why the selected owner-scope seed is unique for simultaneously live flows and how the GPU module remains renderer-independent.",
+        "Report allocation, cross-flow rejection, and exhaustion tests, including the technique used to reach exhaustion without widening production API.",
+        "Report every mechanical identity-consumer migration and every unchanged inventoried file with justification.",
+        "Report every fallible-authoring signature change, production propagation path, test assertion, unchanged authoring file, and transitive app-builder caller migration with justification.",
+        "Report the dependency/source guard and all forbidden-import results.",
+        "Report zero remaining old-name references and zero compatibility aliases.",
+        "Separate deterministic contract evidence from unavailable environment-dependent GPU evidence.",
+    ],
+
+    stop_conditions: [
+        "Any consumer intentionally persists, serializes, replays, transmits, or uses raw RenderResourceId as a stable cross-process value.",
+        "The current RenderFlow owner value cannot provide unique scope for simultaneously live flows without redesigning RenderFlow identity.",
+        "A foreign handle can still collide with or resolve to an unrelated local resource after the proposed representation.",
+        "The migration requires RenderPassId, RenderSurfaceId, or another unrelated identity redesign.",
+        "The migration requires graph semantic, WGPU realization, shader, surface, window, or renderer behavior changes.",
+        "A compatibility alias or duplicate old/new allocator is required to keep the branch compiling.",
+        "The new gpu module would depend on renderer, ECS, WGPU, Winit, or domain/product types.",
+        "Current main fails the canonical baseline for unrelated reasons.",
+        "Any exact identity, fallible-authoring, or transitive-caller inventory is incomplete or materially changed before implementation begins.",
+    ],
+
+    closeout_expectations: [
+        "Record final module/API shape, owner-scope mechanism, exact changed files, consumer migrations, foreign-handle rejection, allocator behavior, tests, dependency guards, validation evidence, scope proof, known gaps, and next safe action.",
+        "State explicitly that G1A is an internal future-transferable slice and does not make RunenGPU ready for external extraction.",
+        "Do not activate G1B/G2 until G1A is reviewed, merged, and closed against current main.",
+        "Write the next specification only from merged G1A facts rather than pre-authoring later GPU contracts.",
+    ],
+
+    next_phase_activation_condition: "A later RunenGPU phase may enter planning only after PT-RUNENGPU-G1A implementation is exact-head validated, reviewed, merged, and closed with owner-scoped identity, foreign-handle rejection, and no old identity authority remaining.",
+)
