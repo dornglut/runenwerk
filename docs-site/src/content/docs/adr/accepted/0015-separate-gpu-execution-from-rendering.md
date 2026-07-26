@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-26
 related_designs:
   - ../../architecture/repository-family-architecture.md
   - ../../design/active/runengpu-architecture-design.md
@@ -23,240 +23,251 @@ related_roadmaps:
 Create two independent framework repositories with one public package each:
 
 ```text
-product       repository                 package       crate
-RunenGPU      Crystonix/runen-gpu        runen-gpu     runen_gpu
-RunenRender   Crystonix/runen-render     runen-render  runen_render
+product       repository                  package       crate
+RunenGPU      dornglut/runen-gpu          runen-gpu     runen_gpu
+RunenRender   dornglut/runen-render       runen-render  runen_render
 ```
 
 The required dependency direction is:
 
 ```text
-RunenRender -> RunenGPU
+Runenwerk adapters and host policy
+    -> RunenRender semantic image planning
+        -> RunenGPU generic GPU execution
+            -> WGPU backend
 ```
 
-RunenGPU may use WGPU as its initial internal backend. RunenRender must not own a
-WGPU device, queue, surface, allocator, command encoder, or competing GPU resource
-and error model.
+Non-render consumers may use RunenGPU directly.
 
-Each repository begins with one public package. Internal modules provide ownership
-boundaries until a second backend, independently reusable consumer, release unit,
-or dependency graph proves that another package is necessary.
+RunenGPU may use WGPU as its first internal backend. RunenRender must not own a WGPU device, queue, surface, allocator, command encoder, or competing GPU resource/error model.
 
-Do not initially create:
+## Context
 
-```text
-runengpu_core
-runengpu_wgpu
-runengpu_macros
-runengpu_testing
-runenrender_core
-runenrender_gpu
-runenrender_macros
-runenrender_testing
-facade or compatibility packages
-```
+The current Runenwerk renderer grew as one operational subsystem. It combines:
 
-This ADR amends the RunenRender backend ownership in ADR 0014. ADR 0014 remains
-authoritative for repository independence, Runenwerk integration ownership, clean
-cutover, provenance, and removal of duplicate source authority.
+- generic GPU resource and execution mechanics;
+- renderer semantics;
+- ECS and application projection;
+- window and surface policy;
+- shader-file discovery and hot reload;
+- fixed-step scheduling;
+- built-in UI composition;
+- capture and artifact policy;
+- product diagnostics and recovery.
+
+That combined shape is useful historical implementation evidence but is not a reusable framework boundary.
+
+A renderer-only extraction would leave simulations, procedural generation, image processing, tools, and future independent consumers either dependent on renderer vocabulary or using WGPU through parallel ad hoc paths. A WGPU-only wrapper would not provide the ownership, validation, typed work composition, lifecycle, and diagnostics required by Dornglut consumers.
+
+The accepted split therefore places a general validated GPU execution framework below a semantic renderer.
 
 ## RunenGPU ownership
 
-RunenGPU owns validated execution of GPU resources and workloads:
+RunenGPU owns:
 
-- context, adapter, device, queue, and execution epochs;
-- normalized capabilities and requirements;
-- buffers, textures, views, samplers, pipelines, and query resources;
-- resource access, initialization, lifetime, hazard, and retirement validation;
-- compute, render, copy, clear, resolve, and present workloads;
-- shader admission and backend pipeline realization;
-- uploads, asynchronous readback, submission, and completion;
-- headless compute and offscreen graphics;
-- low-level surface creation, configuration, acquisition, and presentation;
-- backend and device outcomes;
-- GPU diagnostics, timings, and provenance.
+- normalized capabilities, limits, format facts, and requirements;
+- backend-neutral logical resources and typed handles;
+- generic access, initialization, hazard, lifetime, and retirement validation;
+- immutable generic GPU work and deterministic preparation;
+- context/device/backend admission;
+- WGPU resource, shader, pipeline, command, submission, completion, readback, and low-level surface realization;
+- structured backend and lifecycle facts.
 
-RunenGPU does not own image formation, visibility semantics, lighting, material
-meaning, field mathematics, simulations, ECS, UI, world generation, window/event
-loop policy, or product recovery.
+RunenGPU does not own scenes, views, logical render targets, materials, lighting, transport, reconstruction, overlays, ECS, windows, shader-file policy, capture policy, image encoding, video encoding, or product recovery.
 
 ## RunenRender ownership
 
-RunenRender owns how prepared render-facing data becomes one or more images:
+RunenRender owns:
 
-- prepared render scenes and deterministic contribution composition;
+- prepared scenes and renderer identities;
 - views and logical targets;
-- providers, instances, and interaction contracts;
 - materials, media, emitters, and environments;
-- visibility and provider intersection policy;
-- light transport and estimator policy;
-- radiance caches and bounded history;
-- reconstruction, overlays, color, and presentation intent;
-- render quality profiles and diagnostics;
-- lowering render work into RunenGPU workloads.
+- visibility and interaction semantics;
+- lighting and transport;
+- reconstruction and history semantics;
+- overlays and image-formation semantics;
+- lowering renderer plans into generic RunenGPU work.
 
-RunenRender does not own ECS extraction, source authoring, procedural world policy,
-field/SDF mathematics, simulations, UI state/layout/hit testing/accessibility,
-windows/event loops, shader filesystem watching, general GPU execution, or product
-recovery.
+RunenRender depends on RunenGPU. It does not expose or own WGPU execution authority.
 
 ## Runenwerk ownership
 
-Runenwerk retains:
+Runenwerk owns:
 
-- application and engine lifecycle;
-- frame and domain scheduling;
-- windows, event loops, DPI, monitor, resize, and visibility policy;
-- ECS, scene, world, material-authoring, field/SDF, UI, editor, and simulation
-  extraction/adapters;
-- shader source discovery, revision, filesystem watching, and hot-reload policy;
-- product quality and capability selection;
-- cross-framework work composition;
-- diagnostics presentation, artifact policy, and product recovery;
-- integration and runtime evidence.
+- ECS and domain extraction;
+- application scheduling and fixed-time policy;
+- windows and event-loop integration;
+- shader-file discovery, watching, revision, and hot reload;
+- built-in product/UI integration;
+- capture selection and artifact policy;
+- offline jobs, ordered frame output, PNG/EXR encoding, and external codec invocation;
+- recovery and diagnostics presentation.
 
-Runenwerk may create one shared RunenGPU context and compose work from RunenRender
-and non-render consumers. Runenwerk does not gain ownership of reusable GPU or
-rendering semantics merely because it performs composition.
+Reusable adapters may be extracted later only after an independent consumer proves stable ownership.
 
-## Framework independence
+## Public API consequence
 
-RunenSDF, RunenECS, and RunenUI do not depend on RunenGPU or RunenRender merely
-because an application may accelerate or display their outputs.
+The validated work graph is RunenGPU's internal correctness and inspection model. It is not mandatory common-path ceremony.
 
-The default shape is:
+Ordinary use is conceptually:
 
-```text
-RunenSDF ----+
-RunenECS ----+--> Runenwerk adapters/integration
-RunenUI -----+
-                  |
-                  +--> RunenRender --> RunenGPU
-                  +--> non-render RunenGPU workloads
+```rust
+let simulation = simulation.gpu_work(&gpu, &state)?;
+let rendering = renderer.gpu_work(&gpu, &scene, request)?;
+let submission = gpu.submit("frame 42", [simulation, rendering])?;
 ```
 
-A reusable adapter package may be extracted only after both public contracts are
-stable and at least one consumer outside Runenwerk proves independent value. Until
-then, cross-framework translation remains Runenwerk-owned.
+Advanced inspection is conceptually:
 
-## RunenUI relationship
-
-RunenUI owns semantic UI, state, actions, focus, accessibility, layout, style, text
-shaping, hit testing, and renderer-neutral paint output.
-
-A future Runenwerk-owned bridge may translate accepted paint primitives into a
-RunenRender overlay contribution:
-
-```text
-RunenUI paint scene
-    -> Runenwerk bridge
-    -> RunenRender overlay contribution
-    -> RunenGPU workloads
+```rust
+let prepared = gpu.prepare("frame 42", [simulation, rendering])?;
+inspect(prepared.diagnostics());
+let submission = gpu.submit_prepared(prepared)?;
 ```
 
-The bridge does not expose RunenUI widget state to RunenRender. RunenRender does
-not perform UI hit testing or text shaping. RunenUI remains usable with independent
-standalone backends.
+Both paths use one preparation and validation authority. Ordinary submission validates automatically.
 
-## RunenSDF relationship
+## Resource consequence
 
-RunenSDF remains a CPU/backend-neutral field framework. It owns field values,
-numerical contracts, bounds, operators, transforms, capabilities, and reference
-queries.
-
-Rendering or GPU realization is derived integration state. A future reusable
-adapter may depend on RunenSDF and RunenRender/RunenGPU, but RunenSDF never depends
-back on it.
-
-## Rationale
-
-The current Runenwerk renderer aggregates two distinct responsibilities:
+RunenGPU must model these dimensions independently:
 
 ```text
-general GPU execution
-image formation
+kind
+    buffer, texture, texture view, sampler, query set
+
+lifetime
+    transient, retained
+
+ownership
+    RunenGPU-owned, imported, surface-acquired
+
+transfer and observation
+    initial data, update/upload, copy, readback, export relationship
+
+reconstruction
+    source-backed, externally reconstructed, non-reconstructable
 ```
 
-Both use GPU resources and command submission, but only image formation owns
-views, visibility, materials, emitters, transport, reconstruction, overlays, and
-presentation intent.
+Imported, exported, readback, and surface-acquired are not interchangeable lifetime classes.
 
-Keeping generic compute inside RunenRender would force field compilers, simulation
-solvers, procedural tools, bakers, and offline workloads to depend on a renderer.
-Renaming the entire renderer to RunenGPU would erase image-formation ownership and
-create another broad repository magnet.
+## Typed-data consequence
 
-The one-way split permits:
+The required boundary is:
 
 ```text
-domain algorithm -> GPU workload -> RunenGPU
-prepared render scene -> render plan -> GPU workloads -> RunenGPU -> image
+Runenwerk or source-domain adapter
+    ECS or domain state
+        -> explicit prepared typed value or bytes
+            -> RunenGPU upload/update contract
 ```
 
-## Sequencing
+Uniform, storage, vertex, indirect, transfer, and readback layouts are distinct. No universal derive may imply one valid representation for every purpose.
 
-No implementation phase is authorized by this ADR.
+G2 binds semantic ownership. G4 binds backend layout and derive/macro realization. G5 performs uploads and readback.
 
-The required sequence is:
+## RenderFlow consequence
 
-1. **S0 inventory:** classify every current file, consumer, identity, shader,
-   pipeline, resource, surface, macro, test, example, benchmark, persistence risk,
-   and lifecycle path.
-2. **Internal RunenGPU proof:** separate reusable GPU execution behind the intended
-   one-package public boundary while still inside Runenwerk.
-3. **External RunenGPU cutover:** create `runen-gpu`, prove independent conformance,
-   pin Runenwerk to an exact revision, migrate consumers, and delete the original
-   Runenwerk implementation.
-4. **Internal RunenRender proof:** separate image-formation semantics from
-   Runenwerk adapters and consume RunenGPU only through its public API.
-5. **External RunenRender cutover:** create/populate `runen-render`, prove
-   conformance, pin exact revisions, migrate consumers, and delete the original
-   implementation.
-6. **Adapters and advanced rendering:** extract reusable bridges only after proof;
-   then develop advanced field-ray transport on stable foundations.
+Current `RenderFlow` is a transitional combined facade. It is decomposed rather than moved, renamed, or wrapped wholesale.
 
-A first implementation specification is written only after S0 names exact current
-files and consumers. The stale renderer-first identity specification is retired.
+| Current responsibility | Target owner |
+|---|---|
+| GPU resource identity, descriptions, access, generic work | RunenGPU |
+| WGPU context, resources, pipelines, submission | RunenGPU backend |
+| views, targets, rendering, image-formation semantics | RunenRender |
+| ECS projection and fixed-step scheduling | Runenwerk adapters |
+| shader-file paths, hot reload, windows, built-in UI, capture/export policy | Runenwerk adapters |
 
-## Consequences
+Useful readability may be reproduced only where it does not retain mixed ownership.
 
-- RunenGPU becomes a lower-level independent framework peer.
-- RunenRender may directly depend on RunenGPU because the dependency is
-  independently useful and lower-level, not a disguised Runenwerk adapter.
-- WGPU remains an implementation detail of RunenGPU until another backend creates
-  real package pressure.
-- GPU execution planning and render semantic planning remain different models.
-- Runtime identities are classified by semantic owner before migration.
-- External source movement remains blocked until internal public-boundary and
-  anti-cheating conformance passes.
-- No compatibility package, forwarding namespace, source mirror, or duplicate
-  execution path survives a completed cutover.
+## Extraction sequence
+
+The accepted RunenGPU sequence is:
+
+```text
+S0 complete inventory
+G1A owner-scoped logical work-resource identity
+G2 capabilities, resources, typed handles, prepared-data boundary
+G3 access, hazards, generic work, dependency inference, internal graph
+G4 context/device admission, WGPU mapping, shaders, pipelines, binding/layout realization
+G5 execution, uploads, completion, readback, cancellation, retirement
+G6 offscreen graphics and shared compute/render proof
+G7 surfaces and device outcomes
+G8 final diagnostics, shutdown, conformance, and residual audit
+GX external dornglut/runen-gpu clean cutover
+```
+
+S0 and G1A are complete. G2 is active. G2-G7 migrate and delete replaced authority incrementally. G8 is the final conformance and residual audit, not a delayed bulk cleanup phase.
+
+The temporary `RenderFlowId` bridge used to seed logical resource owner scope is removed through G3/G4.
+
+## Proof consequence
+
+Evidence remains separated into:
+
+```text
+deterministic conformance
+boundary integration
+visual showcase
+benchmark or stress evidence
+```
+
+The primary deterministic compute proof is exact `u32` prefix scan/readback. Headless Game of Life is stateful integration. A known-pattern offscreen draw is graphics conformance. Compute-generated indirect draw is GPU-driven composition. Boids is a representative showcase, not the correctness oracle. Surface proof reuses accepted offscreen workloads.
+
+## External cutover rule
+
+External repositories are populated only after the corresponding internal boundary is accepted.
+
+The cutover must:
+
+- preserve source provenance and license;
+- establish independent validation and downstream conformance;
+- pin consumers to exact accepted revisions;
+- migrate all active consumers;
+- delete the original internal authority and temporary seams;
+- leave no source mirror, forwarding package, compatibility namespace, submodule, or parallel runtime path.
 
 ## Rejected alternatives
 
-Rejected:
+### Keep WGPU ownership in Runenwerk and extract only helpers
 
-- keep general GPU compute inside RunenRender;
-- rename the entire renderer to RunenGPU;
-- create separate GPU contexts and resource systems per domain;
-- make RunenSDF, RunenECS, or RunenUI core depend on RunenGPU;
-- create speculative `core`, `wgpu`, `gpu`, facade, macro, capture, or testing
-  packages before dependency pressure exists;
-- move `engine/src/plugins/render` unchanged;
-- implement renderer-local identities before classifying GPU, renderer, and
-  Runenwerk-owned identities;
-- preserve both old and new GPU/render paths after cutover.
+Rejected because it preserves application ownership of the generic GPU execution layer and prevents independent non-render consumers.
 
-## Fitness functions
+### Put GPU execution inside RunenRender
 
-The decision is successful only when:
+Rejected because simulations, tools, and image processing would depend on renderer semantics or create competing WGPU paths.
 
-- one RunenGPU context can serve RunenRender and at least one non-render workload;
-- RunenGPU contains no renderer or domain meaning;
-- RunenRender contains no direct WGPU ownership;
-- Runenwerk consumes both through public boundaries;
-- headless compute and offscreen rendering work independently;
-- RunenUI and RunenSDF remain independent;
-- window/product recovery remains Runenwerk-owned;
-- each external repository validates independently;
-- no duplicate GPU or render implementation survives cutover.
+### Copy RenderFlow into one of the new repositories
+
+Rejected because RenderFlow combines GPU mechanics, renderer semantics, ECS projection, scheduling, windows, UI, capture, and product policy.
+
+### Wrap every WGPU type one-for-one
+
+Rejected because abstraction is justified only where it adds normalized semantics, ownership, validation, lifecycle, composition, or diagnostics value.
+
+### Create both external repositories immediately
+
+Rejected because clean repository transfer requires accepted internal boundaries, current consumer migration evidence, and deletion readiness.
+
+### Preserve compatibility aliases during migration
+
+Rejected because aliases and forwarding modules would retain duplicate authority and weaken the clean cutover.
+
+## Consequences
+
+### Positive
+
+- rendering and non-render compute share one validated execution framework;
+- RunenRender remains semantic and backend-independent;
+- WGPU ownership is centralized;
+- public resources and lifecycle facts become typed and inspectable;
+- independent conformance becomes possible before external extraction;
+- later backend or platform evolution is contained behind one boundary.
+
+### Costs
+
+- the current combined renderer must be decomposed incrementally;
+- temporary Runenwerk adapters are required while later phases are incomplete;
+- current examples and applications must migrate as declaration and execution authority moves;
+- external extraction waits for conformance rather than optimizing for immediate repository creation.
+
+These costs are accepted because they remove mixed ownership instead of institutionalizing it.
