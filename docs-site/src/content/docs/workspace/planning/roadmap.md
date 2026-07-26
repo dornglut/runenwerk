@@ -45,15 +45,14 @@ Runenwerk remains the integration and product repository. Framework repositories
 
 ## Current priorities
 
-1. Merge the decision-complete RunenGPU G2 planning PR `#171`, closing issue `#168`.
-2. Execute issue `#172` as the only G2 implementation slice after the planning authority is accepted.
-3. Migrate and delete the capability/resource authority replaced by G2 without compatibility aliases, forwarding modules, or duplicate descriptors.
-4. Continue G3-G8 as individually specified internal boundary slices, migrating and deleting replaced authority in each phase rather than deferring a broad cutover to G8.
-5. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
-6. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
-7. Resume RunenECS boundary repair as separately bounded work.
+1. Execute issue `#172` as the only G2 implementation slice from the accepted issue `#168` / PR `#171` authority.
+2. Migrate and delete the capability/resource authority replaced by G2 without compatibility aliases, forwarding modules, or duplicate descriptors.
+3. Continue G3-G8 as individually specified internal boundary slices, migrating and deleting replaced authority in each phase rather than deferring a broad cutover to G8.
+4. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
+5. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
+6. Resume RunenECS boundary repair as separately bounded work.
 
-The RunenSDF cutover, RunenGPU S0, and RunenGPU G1A gates are complete. G2 implementation owns the serialized active queue after PR `#171` merges; read-only investigation may still proceed independently.
+The RunenSDF cutover, RunenGPU S0, RunenGPU G1A, and RunenGPU G2 decision gates are complete. G2 implementation owns the serialized active queue; read-only investigation may still proceed independently. The implementation issue must verify the actual current `main` before changing Rust.
 
 ## RunenSDF
 
