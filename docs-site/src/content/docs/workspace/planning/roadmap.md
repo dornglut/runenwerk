@@ -15,6 +15,7 @@ related_docs:
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
+  - ../../reports/investigations/runengpu-industry-comparison.md
   - ../../reports/investigations/runengpu-render-s0-inventory.md
   - ../../reports/investigations/runengpu-render-s0-file-disposition.md
   - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
@@ -89,6 +90,8 @@ Runenwerk adapters and host policy
 ```
 
 Non-render consumers may lower directly into RunenGPU workloads without depending on RunenRender.
+
+The [industry comparison](../../reports/investigations/runengpu-industry-comparison.md) confirms the intended middle ground: a backend-neutral device layer similar in placement to Godot RenderingDevice or bgfx, plus a validated workload graph informed by Unreal, Unity, and Filament, without making render semantics or ECS integration part of the GPU framework.
 
 ### Current RenderFlow disposition
 
