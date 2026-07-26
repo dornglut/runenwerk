@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-26
 related_docs:
   - ../engineering-workflow.md
   - ./active-work.md
@@ -16,6 +16,7 @@ related_docs:
   - ../../reports/investigations/runengpu-render-s0-inventory.md
   - ../../reports/investigations/runengpu-render-s0-file-disposition.md
   - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
+  - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
 ---
 
 # Roadmap
@@ -37,13 +38,14 @@ Runenwerk remains the integration and product repository. Framework repositories
 
 ## Current priorities
 
-1. Implement corrected owner-scoped RunenGPU G1A under issue `#131` from accepted post-RunenSDF `main`.
-2. Continue internal RunenGPU boundary proof through one decision-complete implementation slice at a time.
-3. Extract RunenGPU and perform a clean Runenwerk cutover only after G2-G8 and conformance gates pass.
-4. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
-5. Resume RunenECS boundary repair as separately bounded work.
+1. Specify RunenGPU G2 capabilities and resource descriptors from accepted G1A main-branch facts.
+2. Implement G2 only after its decision-complete specification and owning issue are accepted.
+3. Continue the internal RunenGPU boundary proof through G3-G8, one decision-complete slice at a time.
+4. Extract RunenGPU and perform a clean Runenwerk cutover only after G2-G8 and conformance gates pass.
+5. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
+6. Resume RunenECS boundary repair as separately bounded work.
 
-The RunenSDF cutover gate is complete. GPU implementation now owns the serialized active queue; read-only investigation may still proceed independently.
+The RunenSDF cutover and RunenGPU G1A gates are complete. G2 planning now owns the serialized active queue; read-only investigation may still proceed independently.
 
 ## RunenSDF
 
@@ -74,14 +76,16 @@ Accepted dependency:
 RunenRender -> RunenGPU
 ```
 
-Completed prerequisites:
+Completed prerequisites and slices:
 
 - architecture correction through PR `#126`;
 - deterministic S0 inventory through PR `#128`;
 - original G1A implementation specification through PR `#130`;
-- cross-flow identity review and corrected owner-scoped G1A specification.
+- corrected owner-scoped and fallible-authoring G1A specification;
+- G1A implementation through PR `#164`, merged as `5bbdab36ae661d99432bfe5d215062c397aac975`;
+- G1A completion evidence in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md).
 
-The corrected G1A target is:
+G1A delivered:
 
 ```text
 RenderResourceId
@@ -91,14 +95,12 @@ RenderResourceIdSequence
     -> owner-controlled GpuWorkResourceIdAllocator
 ```
 
-The owner scope is required because public resource handles can cross flow boundaries and independent flows currently allocate identical local sequence values. G1A must make foreign-flow handles structurally rejectable rather than allowing an accidental collision with an unrelated local resource.
-
-G1A remains a behavior-preserving internal ownership correction. It does not create an external package, GpuPlugin, public graph identity, WGPU redesign, graph-semantic redesign, surface change, shader/pipeline redesign, or renderer behavior change.
+The owner scope closes the confirmed cross-flow collision seam. Resource-allocating authoring now propagates structured failure, foreign-flow handles are rejected, and the renderer-owned identity names and allocator authority are deleted without aliases.
 
 The extraction sequence remains:
 
 ```text
-G1A owner-scoped logical GPU work-resource identity
+G1A owner-scoped logical GPU work-resource identity (completed)
 -> G2 capabilities and resource descriptors
 -> G3 access, lifetime, hazard validation, and work fragments
 -> G4 shader/pipeline admission and WGPU realization
@@ -111,7 +113,7 @@ G1A owner-scoped logical GPU work-resource identity
 -> external runen-render transfer and cutover
 ```
 
-G1A is future-transferable but does not by itself make RunenGPU extraction-ready.
+G1A is a completed internal future-transferable slice. It does not by itself make RunenGPU extraction-ready, authorize an external package, or predefine G2-G8 contracts.
 
 ## RunenECS
 

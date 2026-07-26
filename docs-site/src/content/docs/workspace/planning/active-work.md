@@ -5,13 +5,14 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-26
 related_docs:
   - ../engineering-workflow.md
   - ./roadmap.md
   - ./completed-work.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../reports/investigations/runengpu-render-s0-inventory.md
+  - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
 ---
 
 # Active Work
@@ -20,28 +21,26 @@ GitHub issues and pull requests own live delivery. This page is only a concise c
 
 ## Active
 
-### RunenGPU G1A
+### RunenGPU G2 planning
 
-Issue `#131` owns the first internal RunenGPU implementation from the accepted post-RunenSDF current `main`.
+RunenGPU G1A is implemented, merged, and closed against current `main`. The next bounded decision is G2: capabilities and resource descriptors.
 
-The corrected target is owner-scoped rather than scalar-only:
+G2 planning must begin from merged G1A facts rather than pre-authored assumptions. Its specification must establish:
 
-```text
-RenderResourceId
-    -> GpuWorkResourceId { private owner scope, nonzero local value }
+- the exact current capability and resource-descriptor inventory;
+- the future-transferable ownership boundary between GPU work contracts and renderer policy;
+- public and internal type placement;
+- structured validation and error contracts;
+- migration scope, dependency guards, tests, and stop conditions;
+- explicit exclusions for later hazards, WGPU realization, compute, surfaces, and external extraction.
 
-RenderResourceIdSequence
-    -> owner-controlled GpuWorkResourceIdAllocator
-```
-
-The owner scope closes a confirmed collision seam: independent flows allocate the same local sequence values, while public uniform and storage handles can be passed into another flow. The implementation must prove that a foreign handle cannot resolve to an unrelated local resource.
-
-G1A is intentionally isolated from WGPU, graph semantics, surfaces, shaders, renderer behavior, package creation, and external source movement. It is a future-transferable internal slice, not the RunenGPU extraction.
+No G2 source implementation is authorized until a decision-complete specification and owning issue are accepted.
 
 ## Queued
 
-- further internal RunenGPU phases only after G1A merges and closes against current `main`;
-- external RunenGPU transfer only after G2-G8 and conformance;
+- G2 implementation after its specification is accepted;
+- G3-G8 as individually specified and reviewed internal RunenGPU slices;
+- external RunenGPU transfer only after G2-G8 and standalone conformance;
 - internal then external RunenRender work on the accepted RunenGPU boundary;
 - RunenECS boundary repair as a separately scheduled, non-conflicting workstream.
 
@@ -55,4 +54,6 @@ G1A is intentionally isolated from WGPU, graph semantics, surfaces, shaders, ren
 - GPU/render architecture correction: issue `#125`, PR `#126`;
 - GPU/render S0 inventory: issue `#127`, PR `#128`;
 - original G1A implementation specification: issue `#129`, PR `#130`;
+- corrected G1A owner-scoped identity and fallible-authoring authority;
+- G1A implementation: issue `#131`, PR `#164`, merge `5bbdab36ae661d99432bfe5d215062c397aac975`, and [closeout report](../../reports/closeouts/pt-runengpu-g1a-closeout.md);
 - RunenSDF standalone transfer, maintained authority, and Runenwerk duplicate-source retirement: Runenwerk PRs `#118` and `#157`, issue `#133`, and `dornglut/runen-sdf` PRs `#1`, `#2`, `#4`, `#5`, and `#6`.
