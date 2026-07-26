@@ -15,8 +15,11 @@ related_docs:
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/runengpu-industry-comparison.md
   - ../../reports/investigations/runengpu-public-api-ergonomics-review.md
+  - ../../reports/investigations/runengpu-proof-workload-strategy.md
+  - ../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md
   - ../../reports/investigations/runengpu-render-s0-inventory.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
 ---
 
 # Active Work
@@ -25,44 +28,44 @@ GitHub issues and pull requests own live delivery. This page is only a concise c
 
 ## Active
 
-### RunenGPU G2 planning
+### RunenGPU G2 implementation
 
-RunenGPU G1A is implemented, merged, and closed against current `main`. The next bounded decision is G2: capabilities, resource descriptors, the typed GPU-data seam, public API ergonomics, and the first explicit decomposition of the transitional `RenderFlow` authority.
+RunenGPU S0 and G1A are complete. Issue `#168` and PR `#171` bind the G2 investigation and decision-complete specification. Issue `#172` is the single bounded implementation slice and remains blocked until the planning PR merges.
 
-G2 planning must begin from merged G1A facts rather than pre-authored assumptions. Its specification must establish:
+The implementation must:
 
-- the exact current capability and resource-descriptor inventory;
-- the exact disposition of current `RenderFlow` resource, handle, capability, typed-data, ECS-projection, and backend-realization seams;
-- the future-transferable ownership boundary between RunenGPU work contracts, RunenRender policy, and Runenwerk adapters;
-- independent resource dimensions for kind, lifetime, ownership, transfer, and reconstruction;
-- public and internal type placement;
-- a one-call ordinary submission path that validates automatically;
-- a separate inspectable prepare/submit path for diagnostics and tooling;
-- typed resource and binding references, with strings limited to human labels;
-- lexical/closure-scoped builders rather than nested `finish()` ladders;
-- inferred dependency ordering from declared access, with explicit ordering only for non-data dependencies;
-- RAII public handles with safe delayed backend retirement;
-- human-readable structured errors that include operation, label, cause, provenance, and corrective action;
-- the `GpuParams`/`GpuUniform`/`GpuStorage` byte-layout and macro evidence that must be decided in G4 rather than copied from engine-specific paths;
-- the prepared-value/upload boundary replacing direct ECS projection inside future framework APIs;
-- exact render, non-render compute, and Runenwerk-adapter proof-consumer candidates;
-- migration scope, dependency guards, tests, and stop conditions;
-- explicit exclusions for later access hazards, work graphs, WGPU realization, execution, surfaces, and external extraction.
+- create future-transferable capability, logical-resource, kind-typed-handle, prepared-data, provenance, and structured-error authority under `engine::plugins::gpu`;
+- model resource kind, lifetime, ownership, transfer/observation, reconstruction, and memory intent independently;
+- distinguish buffer initialization from texture initialization, including checked texture format, extent, `bytes_per_row`, and `rows_per_image`;
+- keep texture-view validity bounded by the parent texture lease and checked subresources;
+- keep ECS/domain projection, render target/history/surface meaning, shader-file policy, fixed-time scheduling, UI, capture, artifacts, and product recovery outside RunenGPU;
+- migrate every inventoried declaration and consumer of the authority G2 replaces;
+- delete the old capability profile, combined lifetime/import, generic descriptor, and render-owned generic handle authority without aliases or forwarding paths;
+- preserve the common automatic-validation path and the inspectable advanced path as one future authority;
+- add focused unit, rustdoc compile-pass, rustdoc compile-fail, source-guard, and dependency-guard evidence;
+- stop rather than widening into G3 hazards/work graphs, G4 backend realization, G5 execution/readback, G6 graphics, G7 surfaces, or external extraction.
 
-The common public path must not require callers to understand `GpuWorkGraph`, execution epochs, admission, realization, or retirement terminology. Those remain internal or advanced concepts unless a caller explicitly requests inspection or lower-level control.
+The target external repository remains `dornglut/runen-gpu`, but no external package is created during G2.
 
-The same planning PR must correct stale active authority that still describes S0 or G1 as pending, correct the repository identity to `dornglut/runen-gpu`, and align the phase sequence so context/device admission belongs with G4 backend realization while G5 owns headless execution and transfers.
+The proof portfolio is already bound and remains separated:
 
-The [industry comparison](../../reports/investigations/runengpu-industry-comparison.md) and [public API ergonomics review](../../reports/investigations/runengpu-public-api-ergonomics-review.md) are supporting evidence. Together they constrain the target to be broader and safer than a direct WGPU wrapper, more general than a render-only frame graph, simpler than a mature AAA render dependency graph, and understandable without exposing framework internals in ordinary code.
-
-No G2 source implementation is authorized until a decision-complete specification and owning implementation issue are accepted.
+- G5 deterministic conformance: exact inclusive/exclusive 4,097-element `u32` prefix scan;
+- G5 stateful integration: headless fixed-seed Game of Life with full-grid CPU oracle, live-cell count, checksum, and selected-cell assertions;
+- G6 graphics conformance: offscreen known-pattern draw;
+- G6 GPU-driven composition: compute-generated indirect draw;
+- G6 representative showcase: offscreen boids with structural and bounded invariants;
+- G7 surface proof: reuse accepted G6 workloads;
+- first RunenRender semantic proof: procedural sky/SDF terrain.
 
 ## Queued
 
-- G2 implementation after its specification is accepted;
-- G3-G7 as individually specified slices that preserve the simple/advanced API split while migrating and deleting the authority each phase replaces;
-- G8 as diagnostics, shutdown, residual anti-cheating audit, and internal conformance rather than a deferred first migration;
-- external RunenGPU transfer only after G2-G8 and standalone conformance;
+- G3 access, initialization flow, hazards, immutable generic work, inferred dependencies, and internal graph after G2 closeout;
+- G4 context/device admission, WGPU realization, shaders, pipelines, binding keys, backend layout, macro disposition, and removal of the temporary `RenderFlowId` bridge;
+- G5 execution, uploads, staging, completion, asynchronous readback, cancellation, and delayed retirement;
+- G6 offscreen graphics and shared render/non-render proof;
+- G7 surfaces, generations, thread affinity, and device outcomes;
+- G8 final diagnostics, shutdown, residual anti-cheating audit, and internal conformance;
+- external RunenGPU clean cutover only after G2-G8 and standalone conformance;
 - internal then external RunenRender work on the accepted RunenGPU boundary;
 - RunenECS boundary repair as a separately scheduled, non-conflicting workstream.
 
@@ -78,4 +81,6 @@ No G2 source implementation is authorized until a decision-complete specificatio
 - original G1A implementation specification: issue `#129`, PR `#130`;
 - corrected G1A owner-scoped identity and fallible-authoring authority;
 - G1A implementation: issue `#131`, PR `#164`, merge `5bbdab36ae661d99432bfe5d215062c397aac975`, and [closeout report](../../reports/closeouts/pt-runengpu-g1a-closeout.md);
+- G2 public API/industry/proof-workload supporting decisions: PRs `#169` and `#170`;
+- G2 decision phase: issue `#168`, PR `#171`, the [current-main investigation](../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md), and the [implementation specification](../specs/pt-runengpu-g2-capabilities-resource-descriptors.ron);
 - RunenSDF standalone transfer, maintained authority, and Runenwerk duplicate-source retirement: Runenwerk PRs `#118` and `#157`, issue `#133`, and `dornglut/runen-sdf` PRs `#1`, `#2`, `#4`, `#5`, and `#6`.
