@@ -48,8 +48,8 @@ The program proves intended public boundaries inside Runenwerk before each clean
 ```text
 S0 inventory                         complete
 G1A work-resource identity           complete
-G2 decision phase                    issue #168 / PR #171
-G2 implementation                    issue #172, blocked on PR #171
+G2 decision phase                    complete through issue #168 / PR #171
+G2 implementation                    issue #172, current bounded slice
 G3-G8                                pending
 GX                                   blocked on G2-G8
 R1-R8 and RX                         blocked on GX
@@ -146,7 +146,7 @@ The current crate-private allocator bridge is seeded from `RenderFlowId`. It is 
 
 ## G2 — Capabilities, logical resources, typed handles, and prepared data
 
-**State: decision complete in issue `#168` / PR `#171`; implementation issue `#172` is queued and blocked on the planning merge.**
+**State: decision complete through issue `#168` / PR `#171`; implementation issue `#172` is the current bounded slice.**
 
 Goal:
 
@@ -166,6 +166,8 @@ Goal:
 G2 does not create a device, queue, shader/pipeline realization, work graph, submission, upload, readback, surface, or external package.
 
 Prerequisites: accepted S0/G1A and the current-main G2 investigation/specification.
+
+The implementation starts by re-verifying the actual current `main`, declarations, consumers, and stop conditions. The planning baseline is evidence, not an immutable implementation base.
 
 Stop conditions include stable-format evidence, an ADR-level owner conflict, need for a later phase to make G2 coherent, typed-layout safety failure, incomplete consumer census, compatibility/duplicate authority pressure, or unrelated current-main canonical validation failure.
 
