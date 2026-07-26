@@ -13,6 +13,7 @@ related_docs:
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
+  - ../../reports/investigations/runengpu-industry-comparison.md
   - ../../reports/investigations/runengpu-render-s0-inventory.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
 ---
@@ -41,6 +42,8 @@ G2 planning must begin from merged G1A facts rather than pre-authored assumption
 - explicit exclusions for later access hazards, work graphs, WGPU realization, execution, surfaces, and external extraction.
 
 The same planning PR must correct stale active authority that still describes S0 or G1 as pending, correct the repository identity to `dornglut/runen-gpu`, and align the phase sequence so context/device admission belongs with G4 backend realization while G5 owns headless execution and transfers.
+
+The [industry comparison](../../reports/investigations/runengpu-industry-comparison.md) is supporting evidence only. It confirms the intended middle ground: broader and safer than a direct WGPU wrapper, more general than a render-only frame graph, and deliberately narrower than a mature AAA render dependency graph.
 
 No G2 source implementation is authorized until a decision-complete specification and owning implementation issue are accepted.
 
