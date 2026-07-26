@@ -16,6 +16,7 @@ related_docs:
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/runengpu-industry-comparison.md
+  - ../../reports/investigations/runengpu-public-api-ergonomics-review.md
   - ../../reports/investigations/runengpu-render-s0-inventory.md
   - ../../reports/investigations/runengpu-render-s0-file-disposition.md
   - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
@@ -42,12 +43,13 @@ Runenwerk remains the integration and product repository. Framework repositories
 ## Current priorities
 
 1. Complete RunenGPU G2 investigation and the decision-complete capability/resource specification in issue `#168`.
-2. Correct stale active RunenGPU planning authority in the same planning PR before any G2 Rust implementation.
-3. Implement G2 only after the specification and bounded implementation issue are accepted.
-4. Continue G3-G8 as individually specified internal boundary slices, migrating and deleting replaced authority in each phase rather than deferring a broad cutover to G8.
-5. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
-6. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
-7. Resume RunenECS boundary repair as separately bounded work.
+2. Bind the public API experience before concrete G2 types are frozen: simple common path, inspectable advanced path, typed references, automatic validation, RAII, and human-readable diagnostics.
+3. Correct stale active RunenGPU planning authority in the same planning PR before any G2 Rust implementation.
+4. Implement G2 only after the specification and bounded implementation issue are accepted.
+5. Continue G3-G8 as individually specified internal boundary slices, migrating and deleting replaced authority in each phase rather than deferring a broad cutover to G8.
+6. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
+7. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
+8. Resume RunenECS boundary repair as separately bounded work.
 
 The RunenSDF cutover and RunenGPU G1A gates are complete. G2 planning owns the serialized active queue; read-only investigation may still proceed independently.
 
@@ -93,6 +95,63 @@ Non-render consumers may lower directly into RunenGPU workloads without dependin
 
 The [industry comparison](../../reports/investigations/runengpu-industry-comparison.md) confirms the intended middle ground: a backend-neutral device layer similar in placement to Godot RenderingDevice or bgfx, plus a validated workload graph informed by Unreal, Unity, and Filament, without making render semantics or ECS integration part of the GPU framework.
 
+### Public API experience
+
+The internal work graph is a correctness and inspection model, not the required entry point for ordinary callers.
+
+The intended common path is conceptually:
+
+```rust
+let simulation = simulation.gpu_work(&gpu, &simulation_state)?;
+let rendering = renderer.gpu_work(&gpu, &prepared_scene, request)?;
+let submission = gpu.submit("frame 42", [simulation, rendering])?;
+```
+
+The inspectable path is separate:
+
+```rust
+let prepared = gpu.prepare("frame 42", [simulation, rendering])?;
+inspect(prepared.diagnostics());
+let submission = gpu.submit_prepared(prepared)?;
+```
+
+Exact names remain specification decisions. Required qualities are fixed:
+
+- ordinary submission validates automatically;
+- graph, epoch, admission, realization, and retirement terminology remain advanced or internal unless the caller needs them;
+- strings are diagnostic labels, not resource or binding authority;
+- typed handles and validated binding keys replace stringly references;
+- builders use lexical/closure scope rather than repeated nested `finish()` ladders;
+- ordering is inferred from declared resource access, with explicit ordering reserved for non-data dependencies;
+- public handles use safe RAII and delayed backend retirement;
+- errors name the human label, operation, cause, and corrective action;
+- simple and advanced paths compile to the same validated authority.
+
+The [public API ergonomics review](../../reports/investigations/runengpu-public-api-ergonomics-review.md) is binding design pressure for G2-G5 specifications.
+
+### Resource-model correction
+
+Resource kind, lifetime, ownership, transfer, and reconstruction are separate dimensions.
+
+```text
+kind
+    buffer, texture, view, sampler, query set
+
+lifetime
+    transient, retained
+
+ownership
+    RunenGPU-owned, imported, surface-acquired
+
+transfer
+    initial data, update/upload, copy, readback request
+
+reconstruction
+    source-backed, externally reconstructed, non-reconstructable
+```
+
+`Imported`, `Exported`, `Readback`, and `SurfaceOwned` must not be treated as interchangeable lifetime classes. G2 must model the independent concepts explicitly and include only current-evidence variants in the initial stable API.
+
 ### Current RenderFlow disposition
 
 The current `RenderFlow` API is a transitional combined facade. It remains operational during migration but is not copied wholesale into either framework.
@@ -134,7 +193,7 @@ The owner scope closes the confirmed cross-flow collision seam. Resource-allocat
 
 ```text
 G1A owner-scoped logical GPU work-resource identity (completed)
--> G2 capabilities, resource descriptors, typed-data seam, and ownership split
+-> G2 capabilities, resource descriptors, typed-data seam, ergonomics, and ownership split
 -> G3 access, initialization, lifetime, hazards, and generic work fragments
 -> G4 context/device admission, shader/pipeline admission, and WGPU realization
 -> G5 headless execution, uploads, submission, completion, and readback
@@ -152,6 +211,7 @@ Every G2-G7 phase must:
 
 - start from current `main` and an exact declaration/consumer inventory;
 - establish one future-transferable owner boundary;
+- preserve the simple and advanced API paths without exposing lower-level machinery unnecessarily;
 - migrate all consumers of the authority replaced by that phase;
 - delete the replaced authority without aliases or parallel paths;
 - preserve working RenderFlow-facing behavior only through explicit Runenwerk or RunenRender adapters;
