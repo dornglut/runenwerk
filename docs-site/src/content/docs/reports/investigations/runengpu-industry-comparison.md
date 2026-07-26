@@ -11,6 +11,7 @@ related_docs:
   - ../../design/active/runenrender-decomposition-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../workspace/planning/roadmap.md
+  - ./runengpu-public-api-ergonomics-review.md
   - ./runengpu-render-s0-inventory.md
 ---
 
@@ -25,12 +26,14 @@ The comparison supports a three-layer target:
 ```text
 semantic consumer
     RunenRender or a non-render compute adapter
-        -> generic RunenGPU resources and work fragments
+        -> generic RunenGPU resources and work
             -> RunenGPU context, validation, realization, and execution
                 -> WGPU backend
 ```
 
 The current `RenderFlow` API mixes all three layers plus Runenwerk integration. It is retained as a transitional facade and decomposed rather than copied.
+
+The separate [public API ergonomics review](runengpu-public-api-ergonomics-review.md) constrains how this architecture is exposed to ordinary callers: the work graph is an internal correctness and inspection model, not mandatory public ceremony.
 
 ## Compared systems
 
@@ -183,7 +186,7 @@ Sources:
 | Engine independence | bgfx | Standalone one-package Rust framework | Strong target, not yet proven |
 | Rust integration | WGPU, Bevy | Rust-native without ECS coupling | Better independence target than Bevy |
 | Tooling and visualization | Unreal, Unity | Structured diagnostics first; visualization later | Worse initially |
-| Ergonomics | Unity, Unreal, current RenderFlow | Separate high-level facades from neutral core | Current facade useful but mixed |
+| Ergonomics | Unity, Unreal, current RenderFlow | Simple facade plus inspectable advanced path | Must be proven before API freeze |
 | Safety and ownership | no single reference | Typed IDs, explicit provenance, structured errors | Potential differentiator |
 
 ## Design decisions retained
@@ -195,6 +198,7 @@ RunenGPU should retain:
 3. **A generic validated work graph**, informed by Unreal, Unity, and Filament, but usable by compute and rendering consumers.
 4. **A separate renderer semantic layer**, so scenes, views, materials, lighting, transport, overlays, and presentation intent remain in RunenRender.
 5. **Runenwerk adapters outside both frameworks**, especially ECS projection, windows, source discovery, hot reload, scheduling, recovery, and product policy.
+6. **A simple common API over the graph**, so ordinary users submit typed work without manually constructing epochs or invoking validation phases.
 
 ## Guardrails against overengineering
 
@@ -204,6 +208,7 @@ RunenGPU must not:
 - promise multiple backends before a second implementation exists;
 - attempt Unreal-level scheduling, aliasing, multi-queue, and visualization in the initial extraction;
 - make a render graph the universal semantic API for simulations, tools, and renderers;
+- require ordinary users to understand work graphs, execution epochs, admission, realization, or retirement;
 - expose ECS, windows, shader files, scenes, materials, or product policy;
 - preserve current `RenderFlow` as a monolithic compatibility authority;
 - add an unsafe escape hatch until a concrete consumer and containment rule justify it.
@@ -217,7 +222,8 @@ required for GX
     normalized capabilities
     logical resources and typed handles
     explicit access and dependencies
-    deterministic validation
+    deterministic validation behind a simple public path
+    inspectable preparation for tools and tests
     context/device admission
     shader/pipeline realization
     headless compute, upload, readback
