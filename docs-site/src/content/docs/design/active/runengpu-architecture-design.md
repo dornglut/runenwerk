@@ -5,7 +5,7 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-26
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -13,19 +13,34 @@ related_docs:
   - ./runenrender-decomposition-design.md
   - ./runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/runenrender-extraction-investigation.md
+  - ../../reports/investigations/runengpu-render-s0-inventory.md
+  - ../../reports/investigations/runengpu-render-s0-file-disposition.md
+  - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
+  - ../../reports/investigations/runengpu-industry-comparison.md
+  - ../../reports/investigations/runengpu-public-api-ergonomics-review.md
+  - ../../reports/investigations/runengpu-proof-workload-strategy.md
+  - ../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md
+  - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../../workspace/specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
   - ../../workspace/planning/roadmap.md
+  - ../../workspace/planning/active-work.md
 ---
 
 # RunenGPU Architecture Design
 
 ## Status
 
-The repository identity, ownership boundary, initial package shape, dependency
-direction, WGPU placement, host boundary, and extraction sequence are fixed.
+The repository identity, ownership boundary, one-package target shape, dependency direction, WGPU placement, host boundary, and extraction sequence are fixed.
 
-Exact current-file disposition and first implementation scope remain blocked on the
-S0 inventory. This document does not authorize Rust changes, source movement, or
-repository creation.
+```text
+S0 inventory                         complete
+G1A logical work-resource identity   complete
+G2 capabilities and resources        active
+G3-G8                                pending and not authorized early
+GX external extraction               blocked on accepted G2-G8 evidence
+```
+
+The current implementation remains inside Runenwerk until the internal future public boundary is accepted. This document defines architecture; the active phase specification and owning issue authorize bounded implementation.
 
 ## Mission
 
@@ -33,8 +48,7 @@ RunenGPU owns validated execution of GPU resources and workloads.
 
 It answers:
 
-> How are GPU capabilities, resources, accesses, workloads, submissions, results,
-> and backend failures represented and executed safely?
+> How are GPU capabilities, resources, accesses, workloads, submissions, results, and backend failures represented and executed safely?
 
 It does not answer:
 
@@ -43,18 +57,38 @@ It does not answer:
 - how a field, simulation, material, UI, ECS entity, or world object behaves;
 - how an application schedules gameplay;
 - how windows and event loops are managed;
-- how product recovery is presented to users.
+- how product recovery is presented to users;
+- how PNG, EXR, MP4, or WebM artifacts are encoded.
+
+## Architectural position
+
+```text
+Runenwerk adapters and host policy
+    -> RunenRender semantic image planning
+        -> RunenGPU generic GPU execution
+            -> WGPU backend
+```
+
+Independent non-render consumers may use RunenGPU directly:
+
+```text
+field or simulation adapter --+
+procedural/image tool ---------+--> RunenGPU --> WGPU
+baker or offline job ----------+
+```
+
+RunenGPU complements WGPU. It does not reimplement Vulkan, Metal, D3D12, WebGPU, shader compilers, or operating-system window systems.
 
 ## Repository and package
 
 ```text
-repository: Crystonix/runen-gpu
+repository: dornglut/runen-gpu
 package: runen-gpu
 crate: runen_gpu
 initial backend: WGPU, internal implementation detail
 ```
 
-Initial repository shape:
+Directional standalone repository shape:
 
 ```text
 runen-gpu/
@@ -66,6 +100,7 @@ runen-gpu/
 │   ├── lib.rs
 │   ├── capability.rs
 │   ├── context.rs
+│   ├── data.rs
 │   ├── error.rs
 │   ├── graph.rs
 │   ├── pipeline.rs
@@ -83,29 +118,41 @@ runen-gpu/
 └── xtask/
 ```
 
-The module names are directional, not mandatory file names. The public package is
-one release unit until real dependency pressure proves otherwise.
+Module names are directional rather than pre-authorized file names. The public package is one release unit until a second backend, independent consumer, release boundary, or dependency graph proves another package is necessary.
 
-Do not initially create `runengpu_core`, `runengpu_wgpu`, facade, macro, testing,
-capture, or compatibility packages.
+Do not initially create:
+
+```text
+runengpu_core
+runengpu_wgpu
+runengpu_macros
+runengpu_testing
+runengpu_capture
+facade or compatibility packages
+```
+
+The external repository is created only in GX after the internal boundary and extraction-readiness evidence are accepted.
 
 ## Dependency rules
 
-The public package must not depend on:
+The future public package must not depend on or expose:
 
 ```text
 Runenwerk
 RunenRender
-RunenSDF
-RunenECS
+RunenSDF or source-domain types
+RunenECS or another ECS
 RunenUI
 Winit
-scene/world/material/editor/application domains
+scene, view, material, lighting, transport, overlay, editor, or application types
+shader filesystem paths or hot-reload policy
+fixed-time scheduling
+capture or artifact policy
+PNG, EXR, FFmpeg, or another codec
+raw WGPU types as the universal public API
 ```
 
-WGPU may be an internal dependency. Public contracts must not require consumers to
-construct or branch on WGPU types unless an explicitly unstable escape hatch is
-separately accepted.
+WGPU may be an internal dependency. Narrow backend-specific facts or native-handle access require a concrete consumer and separately reviewed containment; they do not become the universal contract.
 
 Consumers depend downward:
 
@@ -117,39 +164,141 @@ procedural tools ----+
 offline bakers ------+
 ```
 
+RunenSDF, RunenECS, and RunenUI remain independent. Cross-framework translation remains Runenwerk-owned until an independently reusable adapter is proven.
+
 ## Ownership
 
-RunenGPU owns:
+### RunenGPU owns
 
 - GPU context and execution-epoch identities;
-- normalized capabilities and requirements;
-- backend-neutral resource descriptors and handles;
+- normalized capabilities, limits, format facts, and requirements;
+- backend-neutral logical buffer, texture, texture-view, sampler, and query-set descriptions;
+- kind-typed logical handles and prepared GPU-data contracts;
 - access, initialization, lifetime, hazard, and retirement validation;
-- shader admission and pipeline realization contracts;
-- compute, render, copy, clear, resolve, and present workloads;
-- deterministic work-graph composition and validation;
-- uploads, asynchronous readback, submission, and completion;
-- headless/offscreen initialization;
-- low-level surface realization and outcomes;
-- WGPU backend mapping;
-- GPU diagnostics, timings, and provenance;
-- terminal shutdown and device-loss facts.
+- immutable compute, render, copy, clear, resolve, and present work;
+- deterministic work composition and validation;
+- context/device/backend admission;
+- shader admission, interface validation, and pipeline realization;
+- WGPU resource, command, submission, completion, readback, and low-level surface realization;
+- headless compute and offscreen graphics execution;
+- structured backend, timing, provenance, device, surface, and shutdown facts.
 
-RunenGPU does not own:
+### RunenGPU does not own
 
-- renderer views, providers, materials, emitters, visibility, transport, or
-  reconstruction;
-- simulation or field algorithms;
-- shader source discovery, file watching, or hot-reload product policy;
+- renderer views, targets, providers, materials, media, emitters, visibility, transport, reconstruction, or overlays;
+- simulation, field, procedural-world, or application algorithms;
+- shader source discovery, file watching, or last-known-good product policy;
 - authoritative CPU/domain state;
 - ECS storage or scheduling;
-- UI semantics or hit testing;
+- UI semantics, layout, focus, accessibility, hit testing, or text shaping;
 - window/event-loop policy;
-- product quality selection, recovery decisions, or diagnostics presentation.
+- product quality selection, recovery decisions, or diagnostics presentation;
+- capture selection, artifact naming, image encoding, or video encoding.
+
+### RunenRender owns
+
+- prepared scenes and renderer identities;
+- views and logical render targets;
+- materials, media, emitters, and environments;
+- visibility and provider interaction semantics;
+- lighting, transport, and estimator policy;
+- reconstruction, radiance caches, and history semantics;
+- overlays, color, output, and image-formation semantics;
+- lowering renderer plans into generic RunenGPU work.
+
+### Runenwerk owns
+
+- ECS and domain extraction;
+- application scheduling and fixed-time policy;
+- windows, event loops, DPI, monitor, resize, and visibility policy;
+- shader source discovery, revision, watching, and hot reload;
+- composition of contributions from multiple framework/domain consumers;
+- capture selection and artifact policy;
+- offline jobs, ordered frames, manifests, retries, and failure policy;
+- PNG/EXR encoding and external FFmpeg or other codec invocation;
+- product recovery and diagnostics presentation.
+
+Runenwerk may create one shared RunenGPU context for rendering and non-render workloads. This composition responsibility does not make reusable GPU or renderer semantics Runenwerk-owned.
+
+## Framework relationships
+
+### RunenUI
+
+RunenUI owns semantic UI, state, actions, focus, accessibility, layout, style, text shaping, hit testing, and renderer-neutral paint output.
+
+A Runenwerk-owned bridge may lower accepted paint primitives into a RunenRender overlay contribution:
+
+```text
+RunenUI paint scene
+    -> Runenwerk bridge
+    -> RunenRender overlay contribution
+    -> RunenGPU work
+```
+
+RunenRender does not receive widget state or perform hit testing/text shaping. RunenUI remains usable with independent backends.
+
+### RunenSDF
+
+RunenSDF remains a CPU/backend-neutral field framework owning field values, numerical contracts, bounds, operators, transforms, capabilities, and reference queries.
+
+GPU or renderer realization is derived integration state. RunenSDF never depends back on RunenGPU or RunenRender merely because an application accelerates or displays its output.
+
+### RunenECS
+
+RunenECS owns generic ECS semantics. Runenwerk adapters extract required state into prepared domain/GPU values. RunenGPU neither stores ECS entities/components nor schedules ECS systems.
+
+## Public experience
+
+The validated work graph is the shared internal correctness and inspection authority. It is not mandatory common-path ceremony.
+
+### Ordinary path
+
+```rust
+let simulation = simulation.gpu_work(&gpu, &state)?;
+let rendering = renderer.gpu_work(&gpu, &scene, request)?;
+
+let submission = gpu.submit("frame 42", [simulation, rendering])?;
+```
+
+Ordinary submission validates automatically.
+
+### Inspectable path
+
+```rust
+let prepared = gpu.prepare("frame 42", [simulation, rendering])?;
+inspect(prepared.diagnostics());
+let submission = gpu.submit_prepared(prepared)?;
+```
+
+Both paths use one preparation, validation, and execution authority. There is no reduced-validation compatibility path or duplicate graph.
+
+### Progressive disclosure
+
+```text
+level 1  domain facade lowers semantic state into GpuWork
+level 2  generic typed work authoring
+level 3  explicit prepare and inspection
+level 4  backend implementation and diagnostics
+```
+
+Graph, epoch, admission, realization, and retirement terminology remains internal or advanced unless explicitly requested.
+
+### Ergonomic invariants
+
+- strings are diagnostic labels, never identity, lookup, binding, or dependency authority;
+- resource references are kind-typed;
+- G4 pipeline interfaces expose validated binding keys;
+- builders use lexical or closure scope rather than nested `.finish()` ladders;
+- G3 infers data dependencies from declared resource access;
+- explicit ordering exists only for real non-data constraints;
+- public handles are `Clone`, non-`Copy` RAII values;
+- G5 connects last-handle drop to backend retirement after relevant submissions complete;
+- errors identify the human operation and resource, preserve typed facts, explain the cause, and suggest correction;
+- public callers do not branch on panic text, log text, `anyhow`, or backend-only enum dumps.
 
 ## Context model
 
-A `GpuContext` represents one admitted backend execution authority.
+A `GpuContext` represents one admitted backend execution authority. G4 creates the context and realizes backend state; G5 executes work through it.
 
 Conceptual state:
 
@@ -175,25 +324,29 @@ Requirements:
 - no process-global mutable context;
 - no implicit product singleton;
 - no authoritative domain state stored only on the device;
-- foreign-context and stale-generation values are rejected.
-
-Runenwerk may create one shared context for rendering and non-render workloads.
-RunenGPU does not decide how many contexts a product should create.
+- foreign-context and stale-generation values are rejected;
+- RunenGPU does not decide how many contexts a product creates.
 
 ## Identity model
 
-Runtime identities are opaque, type-distinct, context-scoped, and fallibly
-allocated.
+Runtime identities are opaque, type-distinct, scope-bound, and fallibly allocated.
 
-Candidate concepts:
+G1A accepted:
+
+```text
+GpuWorkResourceId
+    private owner scope
+    nonzero local value
+    owner-controlled fallible allocator
+```
+
+G1A proves no safe arbitrary raw reconstruction, no wrapping/saturating allocation, explicit exhaustion, reserved-value rejection, deterministic allocation for the same allocator state and operation order, and foreign-owner rejection.
+
+Later phase concepts may include:
 
 ```text
 GpuContextId
 GpuEpochId
-GpuBufferId
-GpuTextureId
-GpuTextureViewId
-GpuSamplerId
 GpuShaderId
 GpuComputePipelineId
 GpuRenderPipelineId
@@ -202,54 +355,37 @@ GpuSubmissionId
 GpuReadbackId
 ```
 
-Exact public names remain S0/implementation decisions. Required semantics are:
+G2 public resource ownership is expressed through distinct logical handles:
 
-- no safe arbitrary raw reconstruction;
-- no wrapping or saturating reuse;
-- explicit exhaustion;
-- reserved values never issued;
-- foreign-context rejection;
-- stale-generation rejection where slots can be reused;
-- raw diagnostic values do not imply persistence, replay, cache, or network
-  stability;
-- deterministic allocation for the same explicit allocator state and operation
-  order.
+```text
+GpuBufferHandle
+GpuTextureHandle
+GpuTextureViewHandle
+GpuSamplerHandle
+GpuQuerySetHandle
+```
 
-Runtime IDs are not source asset IDs or persisted format keys.
+Handles expose no safe raw constructor or cross-kind reinterpretation. Raw diagnostic values never imply persistence, replay, cache, network, wire, or external-format stability.
+
+The temporary crate-private bridge that seeds `GpuWorkResourceIdAllocator` from `RenderFlowId` is removed through G3/G4 when GPU-owned work/context authority exists.
 
 ## Capability model
 
-RunenGPU exposes normalized capability facts rather than leaking raw backend feature
-enums as universal semantics.
-
-```text
-GpuCapabilities
-├── limits
-├── buffer and texture support
-├── format and storage support
-├── shader and subgroup support
-├── indirect execution
-├── timestamps and statistics
-├── presentation support
-├── external-resource support
-├── ray-query support
-├── ray-pipeline support
-└── backend facts
-```
+RunenGPU exposes normalized capability facts rather than raw backend feature enums as universal semantics.
 
 Requirement strength:
 
 ```text
 Required
-Preferred
-Optional
-Forbidden
+Preferred { explicit fallback/degradation }
+Disabled
 ```
 
-Every preferred or optional capability must define a fallback, degradation, or
-structured rejection policy.
+An unmentioned capability is irrelevant. `Optional` is not a fourth state. `Disabled` is an explicit admission constraint, not a synonym for unsupported.
 
-Initial capability profiles:
+Compatible requirement merging is deterministic and commutative. `Required` conflicts with `Disabled`; incompatible preferred fallbacks fail rather than choosing silently.
+
+Profiles are convenience recipes that produce ordinary requirements:
 
 ```text
 ComputeBaseline
@@ -257,56 +393,149 @@ OffscreenGraphicsBaseline
 DesktopPresentationBaseline
 ```
 
-Hardware ray tracing is optional. Compute-based field traversal must remain a
-valid baseline. Experimental backend features do not become stable vocabulary
-without cross-backend or cross-consumer evidence.
+Profiles are not a second authority and cannot silently override explicit requirements.
+
+Initial normalized feature vocabulary is limited to current consumer evidence:
+
+```text
+compute
+render pipelines
+copy operations
+indirect draw
+storage textures
+depth attachments
+timestamp queries
+presentation
+```
+
+Initial normalized limit facts are:
+
+```text
+maximum uniform-buffer binding size
+maximum storage-buffer binding size
+maximum color attachments
+maximum vertex buffers
+maximum bindings per group
+```
+
+Initial format facts include only formats proven by current descriptors/capture consumers. Format support is per use: sampled, filterable, storage read/write, attachment, depth/stencil, and copy.
+
+Deferred until concrete pressure:
+
+```text
+subgroups
+external-resource interop
+ray queries and ray pipelines
+sparse resources
+mesh shaders
+video
+multiple hardware queues
+universal shader IR
+```
+
+Compute-based field traversal remains a valid baseline. Experimental backend features do not enter stable vocabulary without current consumer value.
 
 ## Resource model
 
-Initial resource kinds:
+Unrelated properties are independent.
+
+### Kind
 
 ```text
-Buffer
-Texture
-TextureView
-Sampler
-QuerySet
-ExternalResource
-SurfaceImage
-Readback
+buffer
+texture
+texture view
+sampler
+query set
 ```
+
+### Lifetime
+
+```text
+transient
+retained
+```
+
+### Ownership
+
+```text
+RunenGPU-owned
+imported
+surface-acquired
+```
+
+### Transfer and observation
+
+```text
+initial data
+upload or update
+copy
+readback request
+export relationship
+```
+
+### Reconstruction
+
+```text
+source-backed
+externally reconstructed
+non-reconstructable
+```
+
+### Memory intent
+
+```text
+ordinary device use
+upload staging buffer
+readback buffer
+```
+
+`Imported`, `Exported`, `Readback`, and `SurfaceOwned` are not lifetime classes. Import and surface acquisition are ownership; readback is an operation/result; export is a relationship/final-state contract.
+
+Upload/readback memory intent applies only to buffers. Textures remain device resources and participate in host transfer through explicit copy relationships.
 
 A resource descriptor includes:
 
-- kind, dimensions, and format intent;
+- kind-specific dimensions and format intent;
 - permitted uses;
-- initialization state or initial contents;
-- lifetime class;
-- memory intent;
-- debug label;
-- provenance;
-- reconstruction ownership.
+- initialization contract;
+- independent lifetime, ownership, memory, and reconstruction facts;
+- validated human label;
+- provenance and source-generation facts where applicable.
 
-Lifetime classes:
+Labels and provenance are diagnostics/reconstruction evidence, never identity, lookup, binding, dependency, persistence, replay, wire, or cache authority.
+
+### Buffer and texture initialization
+
+Buffer and texture initialization are distinct.
 
 ```text
-Persistent
-FramePersistent
-Transient
-Imported
-Exported
-Readback
-SurfaceOwned
+buffer
+    uninitialized
+    zeroed
+    prepared transfer data
+
+texture
+    uninitialized
+    zeroed
+    prepared texture data {
+        format,
+        extent,
+        bytes_per_row,
+        rows_per_image,
+        prepared transfer bytes
+    }
 ```
 
-The semantic owner retains authoritative source data and reconstruction policy.
-RunenGPU may cache or realize derived state, but device loss must not destroy the
-only authoritative copy.
+Texture initialization binds row and image layout so G5 does not invent upload semantics. Arithmetic is checked; no saturating multiplication silently normalizes overflow.
+
+### Texture views
+
+A texture view references a typed texture handle and a checked mip/layer/aspect range. Its effective validity cannot exceed its parent texture's logical lifetime, ownership lease, or subresource range.
 
 ### Resource access
 
-Access declarations support buffer ranges and texture subresources where the
-consumer and backend can prove independence.
+G2 descriptors define permitted uses. G3 defines work-time buffer ranges, texture subresources, access categories, initialization flow, and hazards.
 
 Access categories include:
 
@@ -326,30 +555,63 @@ Indirect
 Present
 ```
 
-Validation rejects incompatible overlap, use before initialization, use after
-retirement, invalid view/resource relationships, ambiguous writers, and missing
-capabilities.
+Validation rejects incompatible overlap, use before initialization, use after retirement, invalid view/resource relationships, ambiguous writers, missing capabilities, and invalid ownership/lifetime combinations.
 
 ### Imports and exports
 
-Imported resources require explicit ownership and synchronization facts:
+Imported resources require explicit ownership, provenance, reconstruction, validity, and synchronization facts. Surface-acquired resources are a G7-owned specialized lease and remain transient.
+
+Conceptual import facts:
 
 ```text
-owner
-runtime identity
-access range
+external owner
+logical resource kind
 validity interval
 initial state
 required final state
-synchronization token
+synchronization fact
+reconstruction owner
 retirement rule
 ```
 
 Raw backend handles are not a stable public contract by themselves.
 
+Export identifies a typed resource, consumer-owned export key, required final access state, and provenance. It is not a lifetime or resource kind.
+
+## Typed GPU data
+
+The required boundary is:
+
+```text
+Runenwerk or source-domain adapter
+    ECS or domain state
+        -> explicit prepared value or bytes
+            -> RunenGPU upload/update contract
+```
+
+Prepared data distinguishes:
+
+```text
+uniform
+storage
+vertex
+indirect
+transfer
+```
+
+Readback uses a separate decoder contract. Texture initialization wraps transfer data with format/extent/row-layout evidence.
+
+Prepared data records checked byte length, alignment, stride, element count, and provenance. It does not infer GPU safety from arbitrary Rust memory.
+
+Current `GpuParams`, `GpuUniform`, `GpuStorage`, `ToGpuValue`, `GpuUniformField`, and their derives are transitional Runenwerk/render adapter mechanisms. G2 removes them from new RunenGPU signatures and descriptor-size authority. G4 decides WGPU/WGSL layout, validated binding keys, and macro/derive realization. G5 performs uploads, updates, staging, and readback.
+
+`TypeId` and type names may support process-local diagnostics or adapter lookup. They are not layout, binding, persistence, replay, wire, cache, shader-interface, or cross-process authority.
+
+No universal derive may imply one Rust structure has one valid representation for uniforms, storage, vertices, indirect data, transfer, and readback.
+
 ## Workload model
 
-Consumers contribute immutable `GpuWorkFragment` values.
+Consumers contribute immutable `GpuWorkFragment` values after G3.
 
 Conceptual form:
 
@@ -359,7 +621,7 @@ GpuWorkFragment
 ├── declared resources
 ├── exported resources
 ├── work nodes
-├── explicit dependencies
+├── explicit non-data dependencies
 ├── outputs
 └── provenance
 ```
@@ -388,15 +650,15 @@ Multiple hardware queue primitives
 A work node declares:
 
 - identity and kind;
-- pipeline intent;
-- resource accesses;
+- admitted pipeline/interface reference;
+- typed resource accesses;
 - dispatch, draw, copy, clear, resolve, or present intent;
-- explicit dependencies;
 - capability requirements;
-- execution preference;
-- debug label and provenance.
+- optional execution preference;
+- debug label and provenance;
+- explicit order only when no data dependency represents the constraint.
 
-Execution preferences:
+Execution preferences may include:
 
 ```text
 Automatic
@@ -405,25 +667,23 @@ GraphicsRequired
 TransferPreferred
 ```
 
-Preferences are hints, not concurrency guarantees. The first backend may serialize
-work through one logical queue while preserving dependencies and future scheduling
-information.
+Preferences are hints, not concurrency guarantees. The first backend may serialize through one logical queue while preserving dependencies and future scheduling information.
 
 ## Work graph
 
-A `GpuWorkGraph` composes fragments for one bounded execution epoch.
+A `GpuWorkGraph` composes fragments for one bounded execution epoch after G3. It is internal/advanced authority, not the mandatory user-facing authoring surface.
 
 It owns:
 
-- deterministic identity and dependency resolution;
-- inferred resource hazards;
+- deterministic identity and typed-reference resolution;
+- inferred data dependencies and resource hazards;
 - topological ordering;
 - initialization and lifetime validation;
-- capability admission;
+- capability admission inputs;
 - backend compilation inputs;
 - output and completion contracts.
 
-It must reject:
+It rejects:
 
 - duplicate, unknown, foreign, or stale identities;
 - cycles;
@@ -435,44 +695,46 @@ It must reject:
 - invalid surface-image reuse;
 - missing capabilities;
 - invalid pipeline/resource combinations;
-- inconsistent imports/exports.
+- inconsistent imports/exports;
+- incompatible explicit non-data ordering.
 
-The graph must not contain ECS systems, gameplay actions, UI routes, SDF nodes,
-material graph nodes, renderer feature meaning, or product lifecycle policy.
-Higher-level owners lower semantics into GPU work.
+The graph contains no ECS systems, gameplay actions, UI routes, SDF nodes, material graph nodes, renderer feature meaning, or product lifecycle policy. Higher-level owners lower those semantics first.
 
 ## Epoch and submission lifecycle
 
 ```text
-begin epoch
-    -> collect fragments
-    -> compose
+collect fragments
+    -> prepare and compose
     -> validate
-    -> compile for backend
+    -> admit/realize for backend
     -> encode
     -> submit
     -> publish submission
     -> complete/read back
-    -> retire transient state
+    -> retire transient/backend state safely
 ```
 
-The contract defines:
+Phase ownership:
 
-- maximum configured in-flight epochs;
-- frame-persistent and history retention;
+- G3: fragment composition, accesses, hazards, graph validation;
+- G4: context/device admission and backend resource/shader/pipeline realization;
+- G5: encode/submit, uploads/updates, completion, cancellation, asynchronous readback, and delayed retirement;
+- G7: surface acquisition/presentation and surface generations.
+
+The lifecycle contract defines:
+
+- maximum configured in-flight submissions/epochs;
+- retained/history resource validity;
 - transient retirement;
-- surface-image ownership;
-- asynchronous completion;
-- shutdown and cancellation;
-- structured terminal outcomes.
+- surface-acquired image ownership;
+- asynchronous completion and cancellation;
+- shutdown and terminal outcomes.
 
-Fragment creation may be concurrent. Final context composition and submission
-remain context-owned unless a later backend contract proves otherwise.
+Fragment creation may be concurrent. Final context composition and submission remain context-owned unless a later accepted backend contract proves otherwise.
 
 ## Shader and pipeline boundary
 
-A consumer owns shader or kernel meaning and source. RunenGPU owns admission and
-backend realization.
+A consumer owns shader/kernel meaning and source. RunenGPU owns admission, interface validation, and backend realization in G4.
 
 A source descriptor may include:
 
@@ -492,40 +754,41 @@ RunenGPU owns:
 - source admission and backend validation;
 - module realization;
 - resource-layout and binding realization;
+- validated binding keys;
 - pipeline creation and specialization;
 - backend cache keys;
 - structured failures.
 
-RunenGPU does not own filesystem roots, path discovery, polling, file watching,
-user-facing reload UI, or last-known-good product policy.
+RunenGPU does not own filesystem roots, path discovery, polling, file watching, user-facing reload UI, or last-known-good product policy.
 
-Logical parameters, byte representation, binding representation, and backend
-layout remain distinct. WGSL/WGPU layout is not universal domain semantics.
+Logical parameters, byte representation, binding representation, and backend layout remain distinct. WGSL/WGPU layout is not universal domain semantics.
 
-No macro package is accepted before real consumers prove byte-layout, alignment,
-nested type, package-renaming, compile-pass, and compile-fail requirements.
+No macro package is accepted before G4 proves byte-layout, alignment, nested type, package-renaming, compile-pass, and compile-fail requirements. G2 introduces no universal derive.
 
 ## WGPU backend
 
-The initial implementation may use WGPU internally for:
+G4 may use WGPU internally for:
 
 - instance, adapter, device, and queue;
+- normalized feature, limit, and format mapping;
 - resources and views;
 - shader modules and pipelines;
+- query sets and timing realization.
+
+G5 uses the admitted WGPU backend for:
+
 - command encoding and submission;
-- staging uploads and readback;
-- query sets and timings;
+- staging uploads and updates;
+- completion and cancellation;
+- asynchronous mapping/readback;
+- delayed backend resource retirement.
+
+G7 adds:
+
 - surface creation/configuration/acquisition/presentation;
-- capability mapping;
-- device and surface outcomes.
+- surface and device outcomes.
 
-The public API must separate normalized RunenGPU semantics from WGPU-specific
-facts. Backend-specific extensions may be exposed only through explicitly unstable
-or capability-gated interfaces.
-
-A second backend is not required before the first extraction. The architecture is
-backend-neutral where semantic value exists, not artificially abstract for its own
-sake.
+The public API separates normalized RunenGPU semantics from WGPU-specific facts. A second backend is not required before extraction. The architecture is backend-neutral where semantic value exists, not abstract for its own sake.
 
 ## Surface boundary
 
@@ -537,27 +800,24 @@ Runenwerk or another host owns:
 - DPI, monitor, resize, visibility, and presentation timing policy;
 - product recovery.
 
-RunenGPU owns:
+RunenGPU G7 owns:
 
-- admitting host-provided handles;
+- admitting host-provided raw handles without depending on Winit;
 - low-level surface creation and retirement;
 - capability query and configuration;
 - image acquisition and lifetime;
 - present operation;
-- structured surface outcomes.
+- structured surface/device outcomes.
 
-RunenRender owns output image and color meaning.
+RunenRender owns logical output image and color meaning.
 
-Surface configuration and acquired images use generations. An image acquired from
-an old generation cannot be presented through a newer configuration.
+Surface configuration and acquired images use generations. An image acquired from an old generation cannot be presented through a newer configuration.
 
-S0 and the implementation design must prove thread affinity, handle lifetime,
-drop order, multi-window, headless operation, resize/reconfiguration, and device
-loss.
+G7 proves thread affinity, handle lifetime, drop order, multi-surface behavior where supported, headless independence, resize/reconfiguration, and device/surface outcomes. It reuses accepted G6 execution workloads rather than creating a surface-only architecture.
 
 ## Readback
 
-Readback is asynchronous:
+G5 readback is asynchronous:
 
 ```text
 ReadbackRequest
@@ -566,8 +826,7 @@ ReadbackRequest
     -> Ready(bytes) | Failed(error) | Cancelled
 ```
 
-Readback must not require blocking the submission authority. Callers own decoding
-and semantic interpretation.
+Readback does not require blocking the submission authority. RunenGPU returns normalized bytes/layout/format provenance and completion facts. Callers own semantic decoding and artifact policy.
 
 ## Error model
 
@@ -575,31 +834,33 @@ Required categories include:
 
 ```text
 identity/allocation
-capability admission
-resource validation
+capability requirement/admission
+resource/descriptor validation
+typed-data preparation and decoding
 work-graph validation
 shader/pipeline realization
-submission/completion
+submission/completion/cancellation
 readback
 surface outcomes
 device outcomes
 terminal/shutdown
 ```
 
-Public callers do not branch on generic strings, `anyhow`, panics, or log text.
-Deterministic planning failures remain distinct from backend/environment outcomes.
+Every public error has typed fields for programmatic matching and human-readable presentation containing operation, label, cause, provenance where applicable, and corrective action.
+
+Deterministic planning failures remain distinct from backend/environment outcomes. No panic, generic string matching, `anyhow`, or log text is the normal public contract.
 
 ## Diagnostics
 
 RunenGPU exposes structured facts for:
 
 - backend and adapter selection;
-- requested/granted capabilities;
-- resource creation, residency, and retirement;
+- requested/granted/degraded capabilities;
+- resource creation, realization, use, and retirement;
 - work validation and compilation;
 - shader/pipeline realization;
 - command encoding and submission;
-- uploads and readbacks;
+- uploads, completion, cancellation, and readbacks;
 - timings and statistics;
 - surface and device outcomes;
 - terminal shutdown.
@@ -608,46 +869,146 @@ Every fact retains correlation:
 
 ```text
 GPU fact
-    -> resource/work node
+    -> resource/work node/submission
     -> work fragment
     -> contributing consumer
     -> source provenance
 ```
 
-RunenGPU reports facts. Hosts decide severity, storage, user presentation, and
-recovery policy.
+RunenGPU reports facts. Hosts decide severity, storage, user presentation, retry, and recovery policy.
 
 ## Interaction matrix
 
 | Concern | RunenGPU | RunenRender | Domain/framework | Runenwerk |
 |---|---|---|---|---|
-| Context/device/queue | Owns | Uses | Uses through workloads/adapters | Creates/configures |
+| Context/device/queue | Owns | Uses | Uses through work/adapters | Creates/configures policy |
 | Resources and hazards | Owns/validates | Declares | Declares | Composes |
-| Compute/render/copy execution | Owns | Contributes | Contributes | Orders epochs |
+| Compute/render/copy execution | Owns | Contributes | Contributes | Orders application epochs |
 | Shader realization | Owns | Supplies render shaders | Supplies kernels | Supplies source revisions |
 | Image formation | No | Owns | Supplies prepared data | Selects product policy |
 | Simulation/field algorithms | No | No | Owns | Schedules/integrates |
 | Window lifecycle | Surface facts only | Logical target intent | No | Owns |
+| Capture/artifact encoding | Completion/readback facts | Image meaning | No | Owns |
 | Product recovery | Reports facts | Adds render context | Adds domain context | Owns |
 | UI state/layout/hit testing | No | No | RunenUI owns | Hosts |
+
+## RenderFlow disposition
+
+Current `RenderFlow` is a transitional combined facade. It is decomposed, not moved, renamed, or wrapped wholesale.
+
+| Current responsibility | Target owner |
+|---|---|
+| GPU resource identity, descriptions, access, generic work | RunenGPU |
+| WGPU context, resources, pipelines, submission | RunenGPU backend |
+| views, targets, rendering, image-formation semantics | RunenRender |
+| ECS projection and fixed-step scheduling | Runenwerk adapters |
+| shader-file paths, hot reload, windows, built-in UI, capture/export policy | Runenwerk adapters |
+
+Specific migration rules:
+
+- `with_state`, `uniform_from_state*`, `dispatch_from_state`, and `project_uniforms` remain outside RunenGPU;
+- `shader_asset` paths remain Runenwerk source authority;
+- target aliases, history, fullscreen, graphics, and procedural image meaning remain RunenRender authority;
+- generic resource descriptions and kind-typed handles move to RunenGPU;
+- string maps cease to be resource/binding/dependency authority;
+- broad `.depends_on` chains are replaced by inferred data dependencies in G3;
+- repeated `.finish()` ladders are not retained;
+- ordinary submission does not require a separate `.validate()` call;
+- the temporary `RenderFlowId` owner bridge is removed through G3/G4.
+
+G2-G7 migrate and delete the authority each phase replaces. G8 performs final residual audit; it is not a delayed bulk migration phase.
+
+## Proof portfolio
+
+Evidence is classified separately:
+
+```text
+deterministic conformance
+boundary integration
+visual showcase
+benchmark or stress evidence
+```
+
+A broad visual demo cannot replace exact correctness evidence. Performance measurements are not pass/fail thresholds until hardware, driver, OS, backend, power state, build mode, workload, and method are separately bound.
+
+### G5 deterministic compute conformance
+
+Use existing `u32` prefix-scan machinery:
+
+- 4,097 fixed integer inputs, all one;
+- complete inclusive and exclusive output comparison;
+- exact total 4,097;
+- workgroup-boundary and multi-level temporary storage coverage;
+- upload, multiple dispatches, completion, and asynchronous readback;
+- no renderer, ECS, surface, window, or product types.
+
+Counter reset, scatter/compaction, and indirect-argument primitives remain intended RunenGPU authority with focused exact tests.
+
+### G5 stateful integration
+
+Use headless Game of Life:
+
+```text
+grid: 160 x 90
+seed: 0xC0FF_EE11
+steps after seed: 16
+boundary: toroidal
+expected live cells: 2,063
+FNV-1a-64 over little-endian u32 cells: 0xBD710B88594CD584
+```
+
+The proof compares the full GPU result with a CPU reference and selected cells. Simulation state is prepared outside RunenGPU.
+
+### G5 conditional texture proof
+
+When admitted by G5 scope, use deterministic integer compute-to-texture output, texture-to-buffer copy, row-padding normalization, explicit format handling, selected texels, and Runenwerk-owned PNG encoding.
+
+### G6 graphics conformance
+
+Use an offscreen known-pattern clear/draw, texture readback, and selected-pixel assertions with documented tolerances where normalization/rasterization requires them.
+
+### G6 GPU-driven composition
+
+Use compute-generated count, compacted data, or indirect arguments consumed by graphics. Ordering is inferred from shared resource access through one context. Validate structure, generated arguments, and selected pixels.
+
+### G6 showcase
+
+Use offscreen boids for shared compute/render, bounded-grid primitives, ping-pong state, indirect/generated draw data, and image artifacts. Validate structure, agent counts, finite values, bounded positions/ranges, and overflow. Do not require exact cross-backend boid state or pixels.
+
+### G7 surface proof
+
+Reuse the accepted G6 known-pattern and boids workloads for presentation, resize, reconfiguration, generations, multi-surface behavior where supported, thread affinity, and device/surface outcomes.
+
+### RunenRender proofs
+
+Procedural sky/SDF terrain is the first semantic image-formation proof after standalone RunenGPU acceptance. Boids follows as simulation-to-render integration. The SDF history flow is a later temporal/history ownership proof.
+
+## Offline output boundary
+
+Preferred order:
+
+1. Game of Life PNG sequence after G5.
+2. Offscreen boids PNG sequence after G6.
+3. Procedural sky/SDF/scene sequences after corresponding RunenRender phases.
+
+Runenwerk owns output clock, seeds, job configuration, bounded in-flight readbacks, ordered filenames, manifests, retry/failure policy, PNG/EXR encoding, and external FFmpeg/codec integration. RunenGPU owns completion/readback facts. RunenRender owns image formation. Neither framework owns MP4/WebM codecs.
 
 ## Conformance
 
 Internal proof requires:
 
-1. neutral workload/resource validation can be tested without Runenwerk and without
-   constructing a window;
-2. one shared context executes a render fragment and a non-render compute fragment;
-3. identity tests cover invalid, foreign, stale, exhausted, and non-wrapping use;
-4. work-graph tests cover cycles, hazards, initialization, lifetime, imports,
-   exports, and capability failure;
-5. headless compute and readback pass where the environment supports GPU access;
-6. offscreen graphics passes independently of presentation;
-7. surface/device outcomes are structured and product recovery remains outside;
-8. no renderer/domain meaning appears in RunenGPU public contracts;
-9. no Runenwerk type appears in the future-transferable boundary;
-10. deterministic planning evidence is separated from environment-dependent GPU
-    evidence.
+1. neutral capability/resource/data validation without Runenwerk and without a window;
+2. owner-scoped identity tests covering invalid, foreign, exhausted, and non-wrapping behavior;
+3. G3 graph tests covering cycles, hazards, initialization, lifetime, imports, exports, and capability failure;
+4. G5 headless compute, completion, and asynchronous readback where GPU access is supported;
+5. G6 offscreen graphics independently of presentation;
+6. one shared context executing render and independent non-render work;
+7. G7 structured surface/device outcomes with recovery outside RunenGPU;
+8. no renderer/domain meaning in RunenGPU public contracts;
+9. no Runenwerk type in future-transferable source;
+10. deterministic evidence separated from environment-dependent GPU evidence;
+11. simple and inspectable APIs using the same authority;
+12. source/dependency guards proving no compatibility or duplicate authority.
 
 External repository conformance additionally requires:
 
@@ -655,58 +1016,83 @@ External repository conformance additionally requires:
 - declared Rust edition and MSRV;
 - public downstream consumer proof;
 - license and source provenance;
-- no Runenwerk source include, submodule, mirror, compatibility package, or branch
-  dependency;
-- exact-revision Runenwerk integration and deletion of the original authority.
+- no Runenwerk source include, submodule, mirror, compatibility package, or moving-branch dependency;
+- exact-revision Runenwerk integration and deletion of original authority.
 
 ## S0 inventory gate
 
-Before any G1 implementation specification is written, S0 must produce:
+S0 is complete. Its inventory and disposition reports remain historical evidence for:
 
-- every file under the current GPU/render implementation and macro packages;
-- every shader, test, example, benchmark, and generated artifact;
-- every Cargo dependency and downstream consumer;
-- every current identity, allocator, raw conversion, and handle use;
-- persistence, replay, network, cache, and artifact usage of current IDs;
-- graph, resource, pipeline, shader, surface, device, frame, and shutdown control
-  flows;
+- every current GPU/render file, macro, shader, test, example, benchmark, and generated artifact;
+- Cargo dependencies and downstream consumers;
+- identities, allocators, raw conversions, and handle use;
+- persistence, replay, network, cache, wire, and artifact risk;
+- graph, resource, pipeline, shader, surface, device, frame, and shutdown flows;
 - WGPU/Winit/ECS/scene/world/material/SDF/UI/editor/product dependencies;
-- shader discovery/reload and macro ABI consumers;
-- headless, offscreen, surface, device-loss, shader, benchmark, and runtime command
-  inventory;
 - exact move/stay/redesign/delete classification;
-- current `cargo validate` and relevant GPU/runtime evidence.
+- validation and runtime evidence.
 
-S0 is investigation, not implementation. Unknown ownership blocks G1.
+Each later phase re-verifies its affected current-main subset. S0 completion does not authorize later implementation or override newer evidence.
 
 ## Extraction sequence
 
 ```text
-S0 complete inventory
-G1 identities, errors, and ownership guards
-G2 capabilities and resource descriptors
-G3 access/lifetime/hazard validation and work fragments
-G4 shader/pipeline admission and WGPU realization
-G5 headless compute, uploads, and readback
-G6 offscreen graphics and shared consumer proof
-G7 surfaces, generations, and device outcomes
-G8 diagnostics, shutdown, and anti-cheating conformance
-GX external repository transfer and clean cutover
+S0 complete inventory                                      complete
+G1A owner-scoped logical GPU work-resource identity         complete
+G2 capabilities, resources, typed handles, prepared data    active
+G3 access, initialization flow, hazards, generic work       pending
+G4 context/device, shader/pipeline, binding/layout, WGPU     pending
+G5 execution, uploads, completion, readback, retirement     pending
+G6 offscreen graphics and shared consumer proof             pending
+G7 surfaces, generations, thread affinity, device outcomes  pending
+G8 final diagnostics, shutdown, residual audit              pending
+GX external dornglut/runen-gpu clean cutover                blocked
 ```
 
-Phase names and exact scopes may change after S0. Only one next implementation
-specification is written at a time from current `main`.
+Only one next implementation specification is active at a time and is written from current `main`. G2-G7 migrate and delete replaced authority incrementally. G8 is the final conformance and residual-authority audit.
+
+## External cutover
+
+GX is a clean cutover:
+
+1. create/populate `dornglut/runen-gpu` from accepted internal source;
+2. preserve source provenance and license;
+3. establish independent validation, MSRV, documentation, and downstream conformance;
+4. pin Runenwerk to an exact accepted revision;
+5. migrate every active consumer;
+6. delete internal GPU authority and temporary adapters;
+7. prove no mirror, forwarding package, compatibility namespace, duplicate context, duplicate descriptor, or duplicate execution path remains.
+
+No submodule, source include, moving-branch dependency, or long-lived dual path is accepted.
+
+## Explicit non-goals
+
+The initial extraction does not include:
+
+- a second backend;
+- aggressive transient aliasing;
+- pass fusion;
+- automatic multi-queue scheduling;
+- backend-independent shader IR;
+- graph visualization UI;
+- hardware ray tracing as a baseline;
+- sparse/external-resource interop without current evidence;
+- image/video codec ownership;
+- renderer semantics inside RunenGPU.
 
 ## Definition of done
 
 RunenGPU extraction is complete only when:
 
-- the one-package public boundary validates independently;
+- `dornglut/runen-gpu` contains one independently validated public package;
 - Runenwerk and RunenRender use only public APIs;
-- headless compute and offscreen graphics pass;
+- public contracts contain no Runenwerk, RunenRender, ECS, SDF, UI, Winit, application, product, or domain types;
+- headless compute, uploads, completion, asynchronous readback, offscreen graphics, and surfaces pass;
+- exact conformance and representative showcase evidence remain separate;
 - at least one non-render consumer proves independent value;
-- surface/device lifecycle is accepted;
-- exact revision and provenance are recorded;
+- surface/device lifecycle and terminal shutdown are accepted;
+- simple and inspectable public paths are proven;
+- exact revision, MSRV, license, and provenance are recorded;
 - every active consumer is migrated;
-- the original Runenwerk GPU authority and temporary seams are deleted;
-- no duplicate context/resource/workload path survives.
+- original Runenwerk GPU authority and temporary seams are deleted;
+- no duplicate context/resource/descriptor/workload path survives.

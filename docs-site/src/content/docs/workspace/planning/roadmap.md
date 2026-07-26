@@ -17,10 +17,13 @@ related_docs:
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/runengpu-industry-comparison.md
   - ../../reports/investigations/runengpu-public-api-ergonomics-review.md
+  - ../../reports/investigations/runengpu-proof-workload-strategy.md
+  - ../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md
   - ../../reports/investigations/runengpu-render-s0-inventory.md
   - ../../reports/investigations/runengpu-render-s0-file-disposition.md
   - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
 ---
 
 # Roadmap
@@ -42,16 +45,14 @@ Runenwerk remains the integration and product repository. Framework repositories
 
 ## Current priorities
 
-1. Complete RunenGPU G2 investigation and the decision-complete capability/resource specification in issue `#168`.
-2. Bind the public API experience before concrete G2 types are frozen: simple common path, inspectable advanced path, typed references, automatic validation, RAII, and human-readable diagnostics.
-3. Correct stale active RunenGPU planning authority in the same planning PR before any G2 Rust implementation.
-4. Implement G2 only after the specification and bounded implementation issue are accepted.
-5. Continue G3-G8 as individually specified internal boundary slices, migrating and deleting replaced authority in each phase rather than deferring a broad cutover to G8.
-6. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
-7. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
-8. Resume RunenECS boundary repair as separately bounded work.
+1. Execute issue `#172` as the only G2 implementation slice from the accepted issue `#168` / PR `#171` authority.
+2. Migrate and delete the capability/resource authority replaced by G2 without compatibility aliases, forwarding modules, or duplicate descriptors.
+3. Continue G3-G8 as individually specified internal boundary slices, migrating and deleting replaced authority in each phase rather than deferring a broad cutover to G8.
+4. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
+5. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
+6. Resume RunenECS boundary repair as separately bounded work.
 
-The RunenSDF cutover and RunenGPU G1A gates are complete. G2 planning owns the serialized active queue; read-only investigation may still proceed independently.
+The RunenSDF cutover, RunenGPU S0, RunenGPU G1A, and RunenGPU G2 decision gates are complete. G2 implementation owns the serialized active queue; read-only investigation may still proceed independently. The implementation issue must verify the actual current `main` before changing Rust.
 
 ## RunenSDF
 
@@ -115,7 +116,7 @@ inspect(prepared.diagnostics());
 let submission = gpu.submit_prepared(prepared)?;
 ```
 
-Exact names remain specification decisions. Required qualities are fixed:
+Exact names remain implementation decisions only where the G2 specification leaves them open. Required qualities are fixed:
 
 - ordinary submission validates automatically;
 - graph, epoch, admission, realization, and retirement terminology remain advanced or internal unless the caller needs them;
@@ -131,11 +132,11 @@ The [public API ergonomics review](../../reports/investigations/runengpu-public-
 
 ### Resource-model correction
 
-Resource kind, lifetime, ownership, transfer, and reconstruction are separate dimensions.
+Resource kind, lifetime, ownership, transfer/observation, reconstruction, and memory intent are separate dimensions.
 
 ```text
 kind
-    buffer, texture, view, sampler, query set
+    buffer, texture, texture view, sampler, query set
 
 lifetime
     transient, retained
@@ -143,14 +144,30 @@ lifetime
 ownership
     RunenGPU-owned, imported, surface-acquired
 
-transfer
-    initial data, update/upload, copy, readback request
+transfer and observation
+    initial data, update/upload, copy, readback request, export relationship
 
 reconstruction
     source-backed, externally reconstructed, non-reconstructable
+
+memory intent
+    device, upload buffer, readback buffer
 ```
 
-`Imported`, `Exported`, `Readback`, and `SurfaceOwned` must not be treated as interchangeable lifetime classes. G2 must model the independent concepts explicitly and include only current-evidence variants in the initial stable API.
+`Imported`, `Exported`, `Readback`, and `SurfaceOwned` must not be treated as interchangeable lifetime classes. Upload/readback memory intent applies to buffers; textures remain device resources and participate through explicit copy relationships.
+
+Buffer and texture initialization are distinct. Texture initialization binds format, extent, `bytes_per_row`, and `rows_per_image`. Texture-view validity cannot exceed the parent texture lease or checked subresource range.
+
+### Typed-data boundary
+
+```text
+Runenwerk or source-domain adapter
+    ECS or domain state
+        -> explicit prepared value or bytes
+            -> RunenGPU upload/update contract
+```
+
+Uniform, storage, vertex, indirect, transfer, texture-initialization, and readback-decoding semantics remain distinct. `TypeId` and type names are process-local diagnostics, not layout, binding, persistence, replay, wire, cache, or shader-interface authority. G4 owns backend layout and derive/macro disposition. G5 owns upload/update/readback execution.
 
 ### Current RenderFlow disposition
 
@@ -166,7 +183,7 @@ ECS state projection/fixed-time/application policy  Runenwerk
 shader discovery/hot reload/window/UI integration   Runenwerk adapters
 ```
 
-The current mixed graph is decomposed incrementally. Each phase must migrate the consumers of the authority it replaces and delete that replaced authority in the same accepted slice. G8 is a final conformance and residual-reach-through audit, not the first broad migration.
+The current mixed graph is decomposed incrementally. Each phase migrates consumers of the authority it replaces and deletes that authority in the same accepted slice. G8 is a final conformance and residual-reach-through audit, not the first broad migration.
 
 ### Completed foundation
 
@@ -175,7 +192,9 @@ The current mixed graph is decomposed incrementally. Each phase must migrate the
 - original G1A implementation specification through PR `#130`;
 - corrected owner-scoped and fallible-authoring G1A specification;
 - G1A implementation through PR `#164`, merged as `5bbdab36ae661d99432bfe5d215062c397aac975`;
-- G1A completion evidence in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md).
+- G1A completion evidence in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md);
+- G2 industry/API/proof-workload planning through PRs `#169` and `#170`;
+- G2 current-main census and decision-complete specification through issue `#168` and PR `#171`.
 
 G1A delivered:
 
@@ -193,16 +212,16 @@ The owner scope closes the confirmed cross-flow collision seam. Resource-allocat
 
 ```text
 G1A owner-scoped logical GPU work-resource identity (completed)
--> G2 capabilities, resource descriptors, typed-data seam, ergonomics, and ownership split
--> G3 access, initialization, lifetime, hazards, and generic work fragments
--> G4 context/device admission, shader/pipeline admission, and WGPU realization
--> G5 headless execution, uploads, submission, completion, and readback
+-> G2 capabilities, logical resources, typed handles, prepared-data seam, and ownership split
+-> G3 access, initialization flow, hazards, immutable generic work, and internal graph
+-> G4 context/device admission, shader/pipeline admission, binding/layout, and WGPU realization
+-> G5 headless execution, uploads, updates, submission, completion, readback, cancellation, and retirement
 -> G6 offscreen graphics and shared render/non-render consumer proof
 -> G7 surfaces, generations, thread affinity, and device outcomes
--> G8 diagnostics, shutdown, residual anti-cheating audit, and conformance
--> GX external runen-gpu transfer and clean Runenwerk cutover
+-> G8 final diagnostics, shutdown, residual anti-cheating audit, and conformance
+-> GX external dornglut/runen-gpu transfer and clean Runenwerk cutover
 -> internal RunenRender proof on RunenGPU
--> external runen-render transfer and cutover
+-> external dornglut/runen-render transfer and cutover
 ```
 
 ### Phase closure rules
@@ -220,11 +239,17 @@ Every G2-G7 phase must:
 
 The temporary crate-private bridge that scopes `GpuWorkResourceIdAllocator` from `RenderFlowId` must be replaced by GPU-owned context/work-graph or epoch authority during G3/G4 and must not survive G8.
 
-G2 planning must select exact proof consumers:
+The proof portfolio selected by G2 is:
 
-- one existing render-facing flow for the G6 shared-context proof;
-- one independent non-render compute workload for G5/G6;
-- one Runenwerk adapter path that proves ECS/domain state is prepared outside RunenGPU.
+- G5 deterministic compute conformance: exact inclusive/exclusive 4,097-element `u32` prefix scan with complete output comparison;
+- G5 stateful integration: headless fixed-seed Game of Life with full-grid CPU oracle, exact live count/checksum, and selected-cell assertions;
+- G5 conditional texture proof: deterministic integer compute-to-texture, padded readback normalization, and Runenwerk-owned PNG encoding;
+- G6 graphics conformance: offscreen known-pattern draw with selected-pixel evidence;
+- G6 GPU-driven composition: compute-generated indirect draw with ordering inferred from resource access;
+- G6 visual showcase: offscreen boids with structural, finite, bounded, and overflow evidence rather than exact cross-backend equality;
+- G7 surface proof: reuse accepted G6 workloads;
+- first RunenRender semantic proof: procedural sky/SDF terrain;
+- later temporal/history proof: the SDF history flow.
 
 G1A is a completed internal future-transferable slice. It does not by itself make RunenGPU extraction-ready, authorize an external package, or predefine exact later Rust contracts.
 
