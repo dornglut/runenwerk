@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-27
 ---
 
 # Active Designs
@@ -119,6 +119,7 @@ architecture.
 - [RunenECS Extraction Boundary Design](runenecs-extraction-boundary-design.md)
 - [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
 - [RunenGPU Architecture Design](runengpu-architecture-design.md)
+- [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 

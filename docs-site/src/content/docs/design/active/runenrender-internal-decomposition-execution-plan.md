@@ -5,9 +5,10 @@ status: active
 owner: render
 layer: engine/render
 canonical: true
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 related_docs:
   - ./runengpu-architecture-design.md
+  - ./runengpu-g3-access-work-graph-design.md
   - ./runenrender-decomposition-design.md
   - ../../reports/investigations/runenrender-extraction-investigation.md
   - ../../architecture/repository-family-architecture.md
@@ -16,9 +17,12 @@ related_docs:
   - ../../reports/investigations/runengpu-render-s0-inventory.md
   - ../../reports/investigations/runengpu-render-s0-file-disposition.md
   - ../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md
+  - ../../reports/investigations/runengpu-g3-access-work-graph-investigation.md
   - ../../reports/investigations/runengpu-proof-workload-strategy.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
   - ../../workspace/specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
+  - ../../workspace/specs/pt-runengpu-g3-access-work-graph.ron
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/active-work.md
 ---
@@ -48,9 +52,10 @@ The program proves intended public boundaries inside Runenwerk before each clean
 ```text
 S0 inventory                         complete
 G1A work-resource identity           complete
-G2 decision phase                    complete through issue #168 / PR #171
-G2 implementation                    issue #172, current bounded slice
-G3-G8                                pending
+G2 capabilities/resources            complete through issue #172 / PR #173 / merge 709aa6a
+G3 decision phase                    active through issue #174 / PR #175
+G3 Rust implementation               not authorized until planning acceptance
+G4-G8                                pending
 GX                                   blocked on G2-G8
 R1-R8 and RX                         blocked on GX
 ```
@@ -142,50 +147,57 @@ Delivered:
 
 G1A did not redesign image formation, graph semantics, shaders, resources, WGPU, surfaces, or producers beyond the accepted identity/error migration.
 
-The current crate-private allocator bridge is seeded from `RenderFlowId`. It is temporary and removed through G3/G4 when GPU-owned work/context authority exists.
+The current crate-private allocator bridge is seeded from `RenderFlowId`. It remains exactly one bounded G3 adapter seam because live GPU context/work-scope ownership begins in G4. G4 must delete it.
 
 ## G2 — Capabilities, logical resources, typed handles, and prepared data
 
-**State: decision complete through issue `#168` / PR `#171`; implementation issue `#172` is the current bounded slice.**
+**State: complete through issue `#172`, PR `#173`, and merge `709aa6aced020ee99405e1e1c3dde7703c77a4d4`.**
 
-Goal:
+Delivered:
 
-- define normalized capability facts and `Required`, `Preferred` with explicit fallback, and `Disabled` requirement strength;
-- define backend-neutral buffer, texture, texture-view, sampler, and timestamp query-set descriptors;
-- model resource kind, lifetime, ownership, transfer/observation, reconstruction, and memory intent independently;
-- distinguish buffer initialization from texture initialization, including checked texture format, extent, `bytes_per_row`, and `rows_per_image`;
-- define kind-typed logical handles whose construction and cross-kind conversion remain private;
-- bind texture-view validity to the parent texture lease and checked subresource range;
-- define explicit uniform, storage, vertex, indirect, transfer, texture-initialization, and readback-decoding boundaries;
-- separate ECS/domain preparation from RunenGPU contracts;
-- retain labels and provenance as diagnostics/reconstruction evidence rather than identity/binding authority;
-- split current `RenderFlow` declaration authority without moving the facade wholesale;
-- migrate every declaration/direct/transitive consumer of the authority G2 replaces;
-- delete replaced capability/resource/handle authority without aliases, forwarding modules, or duplicate paths.
+- normalized capability facts and `Required`, `Preferred` with explicit fallback, and `Disabled` requirement strength;
+- backend-neutral buffer, texture, texture-view, sampler, and timestamp query-set descriptors;
+- separate resource kind, lifetime, ownership, transfer/observation, reconstruction, and memory intent;
+- distinct buffer and texture initialization, including checked texture format, extent, `bytes_per_row`, and `rows_per_image`;
+- kind-typed logical handles whose construction and cross-kind conversion remain private;
+- texture-view validity bound to the parent texture lease and checked subresource range;
+- explicit uniform, storage, vertex, indirect, transfer, texture-initialization, and readback-decoding boundaries;
+- separation of ECS/domain preparation from RunenGPU contracts;
+- labels and provenance retained as diagnostics/reconstruction evidence rather than identity/binding authority;
+- current `RenderFlow` declaration authority split without moving the facade wholesale;
+- every declaration and direct/transitive consumer of replaced G2 authority migrated;
+- replaced capability/resource/handle authority deleted without aliases, forwarding modules, or duplicate paths.
 
-G2 does not create a device, queue, shader/pipeline realization, work graph, submission, upload, readback, surface, or external package.
+G2 did not create a device, queue, shader/pipeline realization, work graph, submission, upload, readback, surface, or external package.
 
-Prerequisites: accepted S0/G1A and the current-main G2 investigation/specification.
+## G3 — Access, graph-entry initialization, hazards, immutable work, and internal graph
 
-The implementation starts by re-verifying the actual current `main`, declarations, consumers, and stop conditions. The planning baseline is evidence, not an immutable implementation base.
+**State: decision phase active through issue `#174` and draft PR `#175`; Rust implementation is not authorized.**
 
-Stop conditions include stable-format evidence, an ADR-level owner conflict, need for a later phase to make G2 coherent, typed-layout safety failure, incomplete consumer census, compatibility/duplicate authority pressure, or unrelated current-main canonical validation failure.
+The planning authority must be independently reviewed and merged before one separate bounded G3 implementation issue is created.
 
-## G3 — Access, initialization flow, hazards, immutable work, and internal graph
+Bound direction:
 
-Goal:
+- checked buffer ranges, texture subresources, and query ranges used by work;
+- exact access categories and region-aware graph-entry initialization facts;
+- normalized query-resolve destination buffer usage;
+- exact render color/depth attachments with optional multisample resolve targets inside render operations;
+- immutable generic compute/render/copy/clear/query-resolve/present work fragments and typed operations;
+- operation/access-derived normalized capability requirements;
+- data dependencies inferred from typed accesses;
+- explicit ordering retained only for real non-data constraints, with redundant data edges rejected;
+- typed import/export causality for every cross-fragment overlap with at least one write;
+- one deterministic `GpuPreparedWorkGraph` preparation and inspection authority;
+- rejection of duplicate/foreign identities, cycles, missing cross-fragment causality, ambiguous writers, read-before-graph-entry-initialization, invalid access/operation/requirement combinations, and inconsistent imports/exports;
+- one temporary render/GPU-primitive/timestamp lowering adapter and deletion of replaced renderer-owned generic correctness authority in the implementation slice.
 
-- define buffer ranges and texture subresources used by work;
-- define access categories and initialization facts;
-- define immutable generic compute/render/copy/clear/resolve/present work fragments;
-- infer data dependencies from typed accesses;
-- preserve explicit ordering only for real non-data constraints;
-- compose and validate one deterministic internal graph;
-- reject duplicate/foreign/stale identities, cycles, ambiguous writers, read-before-init, use-after-retire, invalid capability/resource combinations, and inconsistent imports/exports.
+Multisample texture resolve is a render color-attachment relation because that is the accepted WGPU/WebGPU execution model. Standalone `Resolve` work is query-set-to-buffer resolution.
 
-The graph is the shared internal correctness/inspection authority. It is not mandatory common-path ceremony.
+The graph is the shared internal correctness/inspection authority. It is not mandatory common-path ceremony. Fragment collection position, labels, and provenance are not scheduling authority.
 
-Prerequisite: accepted G2 resources/capabilities/handles/prepared-data contracts.
+G3 does not create context generations, backend leases, submissions, or runtime retirement state. Stale-generation and use-after-retirement validation therefore remain G4/G5 responsibilities.
+
+Prerequisite: accepted G2 resources/capabilities/handles/prepared-data contracts. Implementation prerequisite: accepted G3 planning PR and one separate bounded implementation issue.
 
 ## G4 — Context/device admission, shaders, pipelines, binding/layout, and WGPU realization
 
@@ -193,12 +205,15 @@ Goal:
 
 - create GPU-owned context and device admission authority;
 - map WGPU features, limits, and format facts into normalized G2 capabilities;
+- admit the merged operation/access-derived capability requirements produced by G3;
 - separate shader source identity/revision/interface intent from filesystem and hot-reload policy;
 - define shader and pipeline admission and structured realization failures;
 - expose validated binding keys rather than string binding authority;
 - bind backend uniform/storage/vertex/indirect layout and derive/macro realization;
 - realize logical resources, shader modules, and pipelines through WGPU;
+- validate render attachment/resolve compatibility and query-resolve destination alignment against admitted backend facts;
 - contain WGPU-specific facts behind normalized contracts;
+- reject stale-generation/context values;
 - remove the temporary `RenderFlowId` resource-owner bridge.
 
 G4 owns context/device and backend realization. It does not execute the G5 proof portfolio.
@@ -212,9 +227,12 @@ Goal:
 - create/use a context without window, surface, renderer, ECS, or product types;
 - implement ordinary automatic prepare-and-submit and explicit prepare/inspect/submit-prepared through one authority;
 - support initial uploads, full and partial updates, staging, and multiple dispatches;
+- encode render-pass attachments and multisample resolve targets;
+- encode query-set resolution and its later copy/readback path;
 - expose submission completion and cancellation;
 - provide asynchronous buffer and texture readback without blocking submission authority;
 - normalize texture-to-buffer row padding and format provenance;
+- reject runtime use after retirement or invalid backend generation;
 - connect last public handle drop to delayed safe backend retirement after relevant submissions complete;
 - prove terminal and idempotent shutdown;
 - report deterministic planning evidence separately from adapter/device environment evidence.

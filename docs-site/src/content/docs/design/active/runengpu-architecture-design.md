@@ -5,11 +5,12 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
+  - ./runengpu-g3-access-work-graph-design.md
   - ./runenrender-decomposition-design.md
   - ./runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/runenrender-extraction-investigation.md
@@ -20,8 +21,11 @@ related_docs:
   - ../../reports/investigations/runengpu-public-api-ergonomics-review.md
   - ../../reports/investigations/runengpu-proof-workload-strategy.md
   - ../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md
+  - ../../reports/investigations/runengpu-g3-access-work-graph-investigation.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
   - ../../workspace/specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
+  - ../../workspace/specs/pt-runengpu-g3-access-work-graph.ron
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/active-work.md
 ---
@@ -35,12 +39,13 @@ The repository identity, ownership boundary, one-package target shape, dependenc
 ```text
 S0 inventory                         complete
 G1A logical work-resource identity   complete
-G2 capabilities and resources        active
-G3-G8                                pending and not authorized early
+G2 capabilities and resources        complete through issue #172 and PR #173
+G3 decision phase                    active through issue #174; implementation unauthorized
+G4-G8                                pending and not authorized early
 GX external extraction               blocked on accepted G2-G8 evidence
 ```
 
-The current implementation remains inside Runenwerk until the internal future public boundary is accepted. This document defines architecture; the active phase specification and owning issue authorize bounded implementation.
+The current implementation remains inside Runenwerk until the internal future public boundary is accepted. This document defines architecture; the active phase specification and owning issue authorize bounded work. Issue `#174` authorizes G3 planning only and does not authorize Rust implementation.
 
 ## Mission
 
@@ -174,8 +179,10 @@ RunenSDF, RunenECS, and RunenUI remain independent. Cross-framework translation 
 - normalized capabilities, limits, format facts, and requirements;
 - backend-neutral logical buffer, texture, texture-view, sampler, and query-set descriptions;
 - kind-typed logical handles and prepared GPU-data contracts;
-- access, initialization, lifetime, hazard, and retirement validation;
-- immutable compute, render, copy, clear, resolve, and present work;
+- access, graph-entry initialization, lifetime, hazard, and later retirement validation;
+- immutable compute, render, copy, clear, query-resolve, and logical present work;
+- render-attachment and multisample-resolve relationships inside render operations;
+- operation/access-derived capability requirements;
 - deterministic work composition and validation;
 - context/device/backend admission;
 - shader admission, interface validation, and pipeline realization;
@@ -290,7 +297,7 @@ Graph, epoch, admission, realization, and retirement terminology remains interna
 - G4 pipeline interfaces expose validated binding keys;
 - builders use lexical or closure scope rather than nested `.finish()` ladders;
 - G3 infers data dependencies from declared resource access;
-- explicit ordering exists only for real non-data constraints;
+- explicit ordering exists only for real non-data constraints and redundant data edges are rejected;
 - public handles are `Clone`, non-`Copy` RAII values;
 - G5 connects last-handle drop to backend retirement after relevant submissions complete;
 - errors identify the human operation and resource, preserve typed facts, explain the cause, and suggest correction;
@@ -367,7 +374,7 @@ GpuQuerySetHandle
 
 Handles expose no safe raw constructor or cross-kind reinterpretation. Raw diagnostic values never imply persistence, replay, cache, network, wire, or external-format stability.
 
-The temporary crate-private bridge that seeds `GpuWorkResourceIdAllocator` from `RenderFlowId` is removed through G3/G4 when GPU-owned work/context authority exists.
+The temporary crate-private bridge that seeds `GpuWorkResourceIdAllocator` from `RenderFlowId` remains one bounded G3 adapter seam because live context/work-scope ownership begins in G4. G4 must delete it.
 
 ## Capability model
 
@@ -435,6 +442,23 @@ universal shader IR
 
 Compute-based field traversal remains a valid baseline. Experimental backend features do not enter stable vocabulary without current consumer value.
 
+### Operation-derived requirements
+
+G3 derives requirements that follow mechanically from operation and access shape:
+
+```text
+Compute operation                    -> Compute
+Render operation                     -> RenderPipeline
+Copy or standalone Clear             -> Copy
+Indirect draw                        -> IndirectDraw
+Storage texture access               -> StorageTexture
+Depth/stencil attachment             -> DepthAttachment
+Timestamp write or query resolution  -> TimestampQuery
+Present                              -> Presentation
+```
+
+Consumers may add semantic requirements that operation shape cannot infer. Preparation merges derived and caller-declared requirements through the accepted G2 requirement authority. An operation-implied `Required` feature cannot be weakened or neutralized with `Disabled`; contradictory requirements fail before G4 admission.
+
 ## Resource model
 
 Unrelated properties are independent.
@@ -470,6 +494,7 @@ surface-acquired
 initial data
 upload or update
 copy
+query resolution
 readback request
 export relationship
 ```
@@ -529,37 +554,61 @@ texture
 
 Texture initialization binds row and image layout so G5 does not invent upload semantics. Arithmetic is checked; no saturating multiplication silently normalizes overflow.
 
+Query sets have no descriptor-level initialized query contents. They enter graph preparation without initialized indices unless explicit graph-entry query coverage is supplied for an imported or retained prior-epoch source.
+
 ### Texture views
 
 A texture view references a typed texture handle and a checked mip/layer/aspect range. Its effective validity cannot exceed its parent texture's logical lifetime, ownership lease, or subresource range.
 
 ### Resource access
 
-G2 descriptors define permitted uses. G3 defines work-time buffer ranges, texture subresources, access categories, initialization flow, and hazards.
+G2 descriptors define permitted uses. G3 defines work-time buffer ranges, texture/query subresources, access categories, graph-entry initialization flow, and hazards. G3 extends the accepted G2 buffer-usage vocabulary with `GpuBufferUsage::QueryResolve` because the current timestamp path requires a distinct query-resolve destination usage.
 
-Access categories include:
+Initial exact categories are:
 
 ```text
-Read
-Write
-ReadWrite
-Uniform
-StorageRead
-StorageWrite
-Sampled
-CopySource
-CopyDestination
-ColorAttachment
-DepthStencilAttachment
-Indirect
-Present
+buffer
+    UniformRead
+    StorageRead
+    StorageWrite
+    StorageReadWrite
+    VertexRead
+    IndexRead
+    IndirectRead
+    CopySource
+    CopyDestination
+    QueryResolveDestination
+
+texture
+    SampledRead
+    StorageRead
+    StorageWrite
+    StorageReadWrite
+    CopySource
+    CopyDestination
+    ColorAttachment { load, store }
+    MultisampleResolveDestination
+    DepthStencilAttachment { access, load, store }
+    Present
+
+query
+    WriteTimestamp
+    ResolveSource
 ```
 
-Validation rejects incompatible overlap, use before initialization, use after retirement, invalid view/resource relationships, ambiguous writers, missing capabilities, and invalid ownership/lifetime combinations.
+`QueryResolveDestination` is not `CopyDestination`. A typed query resolve consumes initialized query indices and initializes its exact destination buffer byte range. Current timestamp results occupy one `u64` per query; checked destination length is `query_count * 8`. G4/G5 validate backend-specific destination-offset alignment and encode the operation.
+
+Multisample texture resolution is not standalone work. A `GpuRenderColorAttachment` may carry an optional single-sampled resolve target. The render operation derives source color-attachment and destination `MultisampleResolveDestination` access. Source and destination must not alias; the destination is initialized by the resolve regardless of whether the source attachment is stored or discarded.
+
+Attachment `Load` requires initialized source coverage, `Clear` establishes source coverage, `Store` preserves source coverage, and `Discard` removes later readable source coverage. Texture-view hazards normalize to parent storage. D3 hazards initially use whole addressed mip volumes rather than inventing z-slice independence.
+
+Validation rejects incompatible overlap, use before graph-entry initialization, invalid view/resource relationships, invalid render attachment or query-resolve shape/usage, missing cross-fragment causality, ambiguous writers, missing capabilities, and invalid ownership/lifetime combinations knowable before a context exists.
+
+Runtime stale-generation, use-after-retirement, and backend lease validation begins with G4/G5 context and execution authority; G3 does not fabricate live backend state.
 
 ### Imports and exports
 
-Imported resources require explicit ownership, provenance, reconstruction, validity, and synchronization facts. Surface-acquired resources are a G7-owned specialized lease and remain transient.
+Imported resources require explicit ownership, provenance, reconstruction, validity, and later synchronization facts. Surface-acquired resources are a G7-owned specialized lease and remain transient.
 
 Conceptual import facts:
 
@@ -567,8 +616,8 @@ Conceptual import facts:
 external owner
 logical resource kind
 validity interval
-initial state
-required final state
+initialized graph-entry coverage
+required final access
 synchronization fact
 reconstruction owner
 retirement rule
@@ -576,7 +625,7 @@ retirement rule
 
 Raw backend handles are not a stable public contract by themselves.
 
-Export identifies a typed resource, consumer-owned export key, required final access state, and provenance. It is not a lifetime or resource kind.
+Export identifies a typed resource, consumer-owned `GpuExportKey`, required final access state, final initialized coverage, and provenance. It is not a lifetime or resource kind.
 
 ## Typed GPU data
 
@@ -626,16 +675,18 @@ GpuWorkFragment
 └── provenance
 ```
 
-Initial node kinds:
+Initial typed operation variants are:
 
 ```text
 Compute
 Render
 Copy
 Clear
-Resolve
-Present
+Resolve    query set -> buffer
+Present    logical texture consumption
 ```
+
+A `Render` operation owns ordered color attachments, an optional depth/stencil attachment, ordered draw intents, and render-side timestamp writes. Multisample texture resolve is an optional relation on a color attachment, not an independent node.
 
 Deferred until evidence:
 
@@ -649,11 +700,11 @@ Multiple hardware queue primitives
 
 A work node declares:
 
-- identity and kind;
-- admitted pipeline/interface reference;
-- typed resource accesses;
-- dispatch, draw, copy, clear, resolve, or present intent;
-- capability requirements;
+- identity and one typed `GpuWorkOperation`; node kind is derived from the operation rather than stored twice;
+- an admitted pipeline/interface reference after G4, with a temporary render-owned sidecar during G3;
+- typed resource accesses, including accesses derived automatically from render attachments, copy, clear, query resolve, indirect draw, and present operations;
+- merged operation/access-derived and caller-declared capability requirements;
+- backend-neutral dispatch, draw, attachment, copy, clear, query-resolve, or present shape;
 - optional execution preference;
 - debug label and provenance;
 - explicit order only when no data dependency represents the constraint.
@@ -669,36 +720,45 @@ TransferPreferred
 
 Preferences are hints, not concurrency guarantees. The first backend may serialize through one logical queue while preserving dependencies and future scheduling information.
 
+An empty render operation is accepted only when attachment clear or render-side query writes make it meaningful. Attachment `Store` alone preserves prior content and is not work.
+
 ## Work graph
 
-A `GpuWorkGraph` composes fragments for one bounded execution epoch after G3. It is internal/advanced authority, not the mandatory user-facing authoring surface.
+A `GpuPreparedWorkGraph` composes immutable fragments for one bounded execution epoch after G3. It is internal/advanced authority, not the mandatory user-facing authoring surface.
 
 It owns:
 
-- deterministic identity and typed-reference resolution;
+- deterministic typed identity and reference resolution;
+- operation/access/requirement consistency;
 - inferred data dependencies and resource hazards;
 - topological ordering;
-- initialization and lifetime validation;
+- graph-entry initialization and logical lifetime validation;
 - capability admission inputs;
 - backend compilation inputs;
 - output and completion contracts.
 
 It rejects:
 
-- duplicate, unknown, foreign, or stale identities;
+- duplicate, unknown, or foreign identities;
 - cycles;
-- unknown resources or pipelines;
-- read before initialization;
-- use after retirement;
+- unknown resources;
+- read before graph-entry initialization;
 - incompatible accesses;
+- missing cross-fragment causality;
 - ambiguous writers;
-- invalid surface-image reuse;
-- missing capabilities;
-- invalid pipeline/resource combinations;
+- invalid render attachment, copy, clear, query-resolve, or present shape;
+- redundant explicit ordering that duplicates an inferred data edge;
+- missing or contradictory capability requirements;
 - inconsistent imports/exports;
 - incompatible explicit non-data ordering.
 
 The graph contains no ECS systems, gameplay actions, UI routes, SDF nodes, material graph nodes, renderer feature meaning, or product lifecycle policy. Higher-level owners lower those semantics first.
+
+Within one fragment, lexical node order orients access-derived hazards. Fragment collection position does not create dependencies or resolve writer ambiguity.
+
+Across fragments, any overlapping access with at least one write requires a matching typed import/export producer-consumer relation. Preparation does not guess whether an unordered read should precede or follow a write. Multiple possible cross-fragment producers fail as ambiguous.
+
+Timestamp writes followed by query resolution infer a dependency through the query range. Query resolution followed by a buffer copy infers a dependency through the resolved destination byte range.
 
 ## Epoch and submission lifecycle
 
@@ -716,9 +776,9 @@ collect fragments
 
 Phase ownership:
 
-- G3: fragment composition, accesses, hazards, graph validation;
-- G4: context/device admission and backend resource/shader/pipeline realization;
-- G5: encode/submit, uploads/updates, completion, cancellation, asynchronous readback, and delayed retirement;
+- G3: fragment composition, typed operations, render attachments, accesses, graph-entry initialization, hazards, query-resolution intent, derived requirements, and graph validation;
+- G4: context/device admission and backend resource/shader/pipeline realization, including query-resolve alignment admission and stale-generation checks;
+- G5: encode/submit, uploads/updates, query-resolution encoding, completion, cancellation, asynchronous readback, runtime-retirement checks, and delayed retirement;
 - G7: surface acquisition/presentation and surface generations.
 
 The lifecycle contract defines:
@@ -773,12 +833,15 @@ G4 may use WGPU internally for:
 - normalized feature, limit, and format mapping;
 - resources and views;
 - shader modules and pipelines;
-- query sets and timing realization.
+- query sets, query-resolve alignment admission, and timing realization;
+- render attachment and multisample-resolve compatibility admission.
 
 G5 uses the admitted WGPU backend for:
 
 - command encoding and submission;
 - staging uploads and updates;
+- render-pass attachment realization and multisample resolve through attachment `resolve_target`;
+- query-set resolution encoding;
 - completion and cancellation;
 - asynchronous mapping/readback;
 - delayed backend resource retirement.
@@ -828,6 +891,8 @@ ReadbackRequest
 
 Readback does not require blocking the submission authority. RunenGPU returns normalized bytes/layout/format provenance and completion facts. Callers own semantic decoding and artifact policy.
 
+Query resolution is not itself readback. It converts opaque query-set results into a device buffer through typed work. A later copy/readback request and decoder convert those bytes into host-visible timing evidence.
+
 ## Error model
 
 Required categories include:
@@ -837,7 +902,7 @@ identity/allocation
 capability requirement/admission
 resource/descriptor validation
 typed-data preparation and decoding
-work-graph validation
+work-operation and graph validation
 shader/pipeline realization
 submission/completion/cancellation
 readback
@@ -860,7 +925,7 @@ RunenGPU exposes structured facts for:
 - work validation and compilation;
 - shader/pipeline realization;
 - command encoding and submission;
-- uploads, completion, cancellation, and readbacks;
+- uploads, render-attachment resolution, query resolution, completion, cancellation, and readbacks;
 - timings and statistics;
 - surface and device outcomes;
 - terminal shutdown.
@@ -912,9 +977,11 @@ Specific migration rules:
 - generic resource descriptions and kind-typed handles move to RunenGPU;
 - string maps cease to be resource/binding/dependency authority;
 - broad `.depends_on` chains are replaced by inferred data dependencies in G3;
+- redundant explicit data edges are rejected rather than retained beside inferred edges;
+- current render attachment and timestamp declarations lower into exact G3 operation/access/requirement facts;
 - repeated `.finish()` ladders are not retained;
 - ordinary submission does not require a separate `.validate()` call;
-- the temporary `RenderFlowId` owner bridge is removed through G3/G4.
+- the temporary `RenderFlowId` owner bridge remains only through G3 and is removed in G4.
 
 G2-G7 migrate and delete the authority each phase replaces. G8 performs final residual audit; it is not a delayed bulk migration phase.
 
@@ -999,7 +1066,7 @@ Internal proof requires:
 
 1. neutral capability/resource/data validation without Runenwerk and without a window;
 2. owner-scoped identity tests covering invalid, foreign, exhausted, and non-wrapping behavior;
-3. G3 graph tests covering cycles, hazards, initialization, lifetime, imports, exports, and capability failure;
+3. G3 access, render-attachment, operation-derived requirement, query-resolution, graph, cycle, hazard, initialization, cross-fragment causality, import, export, and deterministic-order tests;
 4. G5 headless compute, completion, and asynchronous readback where GPU access is supported;
 5. G6 offscreen graphics independently of presentation;
 6. one shared context executing render and independent non-render work;
@@ -1039,8 +1106,9 @@ Each later phase re-verifies its affected current-main subset. S0 completion doe
 ```text
 S0 complete inventory                                      complete
 G1A owner-scoped logical GPU work-resource identity         complete
-G2 capabilities, resources, typed handles, prepared data    active
-G3 access, initialization flow, hazards, generic work       pending
+G2 capabilities, resources, typed handles, prepared data    complete
+G3 decision-complete planning                               active through issue #174
+G3 access, operations, initialization, hazards, work graph  blocked on planning acceptance
 G4 context/device, shader/pipeline, binding/layout, WGPU     pending
 G5 execution, uploads, completion, readback, retirement     pending
 G6 offscreen graphics and shared consumer proof             pending
@@ -1049,7 +1117,7 @@ G8 final diagnostics, shutdown, residual audit              pending
 GX external dornglut/runen-gpu clean cutover                blocked
 ```
 
-Only one next implementation specification is active at a time and is written from current `main`. G2-G7 migrate and delete replaced authority incrementally. G8 is the final conformance and residual-authority audit.
+Only one next decision or implementation specification is active at a time. Issue `#174` owns G3 planning. Create one separate bounded G3 implementation issue only after the planning PR is independently reviewed and merged. G2-G7 migrate and delete replaced authority incrementally. G8 is the final conformance and residual-authority audit.
 
 ## External cutover
 
