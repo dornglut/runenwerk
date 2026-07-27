@@ -161,7 +161,7 @@ memory intent
 
 `Imported`, `Exported`, `Readback`, and `SurfaceOwned` are not lifetime classes. Upload/readback memory intent applies to buffers; textures remain device resources and participate through explicit copy relationships.
 
-Buffer and texture initialization are distinct. Texture initialization binds format, extent, `bytes_per_row`, and `rows_per_image`. Texture-view validity cannot exceed the parent texture lease or checked subresource range.
+Buffer and texture initialization are distinct. Texture initialization binds format, extent, `bytes_per_row`, and `rows_per_image`. Texture-view validity cannot exceed the parent texture lease or checked subresource range. Query-set indices are initialized only by explicit graph-entry evidence or accepted timestamp writes.
 
 ### Typed-data boundary
 
@@ -184,21 +184,26 @@ checked texture mip/layer/aspect ranges
 checked query ranges
 normalized QueryResolve destination buffer usage
 texture-view normalization to parent storage
+render color/depth attachments
+multisample resolve targets inside render attachments
 attachment Load/Clear and Store/Discard semantics
-region-aware initialized coverage
+region-aware graph-entry initialized coverage
 RAW, WAR, and WAW dependency causes
+operation/access-derived capability requirements
 immutable GpuWorkFragment and GpuWorkNode values
-typed texture and query resolve operations
+standalone typed query-set resolve work
 typed import/export causality
 fragment-local explicit non-data order
 deterministic GpuPreparedWorkGraph preparation
 ```
 
-Within one fragment, lexical node order orients access-derived hazards. Fragment collection position is not semantic scheduling authority. Cross-fragment causality requires shared typed resources plus matching typed imports/exports. Overlapping cross-fragment writers without one unique producer are rejected.
+Within one fragment, lexical node order orients access-derived hazards. Fragment collection position is not semantic scheduling authority. Every cross-fragment overlap with at least one write requires shared typed resources plus matching typed imports/exports. Overlapping cross-fragment writers without one unique producer are rejected.
 
-Timestamp writes initialize exact query indices. Typed query resolution consumes initialized indices and writes an exact device-buffer range; the later copy to a readback buffer is ordinary typed buffer-copy work. G4/G5 retain backend alignment, command encoding, mapping, and completion.
+Multisample texture resolution remains a relation on a render color attachment because that is the accepted WGPU/WebGPU execution shape. Standalone `Resolve` work is query-set-to-buffer resolution.
 
-G3 validates graph-entry initialization evidence but does not claim G5 execution preserved or synchronized content.
+Timestamp writes initialize exact query indices. Typed query resolution consumes initialized indices and writes an exact device-buffer range; the later copy to a readback buffer is ordinary typed buffer-copy work. G4/G5 retain backend alignment, command encoding, mapping, completion, stale-generation, and runtime-retirement authority.
+
+G3 validates graph-time initialization and composition evidence only; it does not claim execution persistence or synchronization.
 
 ### Current RenderFlow disposition
 
