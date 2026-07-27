@@ -24,6 +24,7 @@ related_docs:
   - ../../reports/investigations/runengpu-g3-access-work-graph-investigation.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
   - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
+  - ../../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
   - ../specs/pt-runengpu-g3-access-work-graph.ron
 ---
 
@@ -48,16 +49,15 @@ not depend on Runenwerk.
 
 ## Current priorities
 
-1. Complete documentation-only operational hardening through issue `#176`.
-2. Reverify queued G3 implementation issue `#177` against the exact accepted
-   post-`#176` `main`.
-3. Implement G3 as one bounded migration/deletion slice with no G4/G5/G7 work.
-4. Plan and execute G4-G8 sequentially through their existing owners.
-5. Extract RunenGPU and perform a clean Runenwerk cutover only after internal
+1. Reverify bounded G3 implementation issue `#177` against the exact accepted
+   post-PR-`#178` `main`.
+2. Implement G3 as one bounded migration/deletion slice with no G4/G5/G7 work.
+3. Plan and execute G4-G8 sequentially through their existing owners.
+4. Extract RunenGPU and perform a clean Runenwerk cutover only after internal
    conformance and extraction-readiness gates pass.
-6. Prove RunenRender internally on the accepted external RunenGPU boundary.
-7. Extract and cut over RunenRender only after its own R-phase conformance.
-8. Resume RunenECS boundary repair as separately bounded non-conflicting work.
+5. Prove RunenRender internally on the accepted external RunenGPU boundary.
+6. Extract and cut over RunenRender only after its own R-phase conformance.
+7. Resume RunenECS boundary repair as separately bounded non-conflicting work.
 
 Accepted foundation:
 
@@ -67,7 +67,11 @@ RunenGPU S0 complete
 RunenGPU G1A complete
 RunenGPU G2 complete at 709aa6aced020ee99405e1e1c3dde7703c77a4d4
 RunenGPU G3 planning complete at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
+Runen family operational hardening completed through #176 / PR #178
 ```
+
+The operational-hardening completion becomes authoritative through the merge of PR
+`#178`; this candidate deliberately asserts no merge SHA.
 
 ## RunenSDF
 
@@ -153,11 +157,11 @@ deterministic prepared graph
 explicit non-data order only
 ```
 
-The operational-hardening work does not alter these semantics.
+Operational hardening does not alter these semantics.
 
 ### Operational requirements
 
-The family now requires:
+The family requires:
 
 - accepted work is never silently discarded;
 - queues, staging, readback, history, and captures expose bounds and structured
@@ -184,8 +188,8 @@ The family now requires:
 G1A owner-scoped logical resource identity                 complete
 G2 capabilities/resources/typed handles/prepared data      complete
 G3 decision-complete planning                              complete
-operational hardening #176                                 active
-G3 access/work/graph implementation #177                   queued, blocked on #176
+operational hardening #176 / PR #178                       complete on merge
+G3 access/work/graph implementation #177                   queued for revalidation
 G4 context/device/program/layout/WGPU/cache admission       deferred
 G5 progress/pressure/execution/readback/retirement          deferred
 G6 offscreen graphics/shared consumers/direct baseline     deferred
@@ -245,8 +249,8 @@ all query families on every implementation.
 
 ### G5 correctness
 
-- exact inclusive/exclusive prefix scan and full readback comparison;
-- headless fixed-seed Game of Life with CPU oracle;
+- exact inclusive/exclusive prefix scan over exactly 4,097 elements with full readback comparison;
+- headless fixed-seed 160×90 Game of Life for exactly 16 steps with CPU oracle, exact live count `2,063`, and FNV-1a-64 checksum `0xBD710B88594CD584`;
 - deterministic integer compute-to-texture when accepted.
 
 ### G5 operations
