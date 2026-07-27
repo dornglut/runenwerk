@@ -261,7 +261,7 @@ Diagnostics must be structured enough for tools and closeout evidence:
 - pass id and pass label when relevant;
 - resource id and resource label when known;
 - invocation id and prepared view id for prepared-frame failures;
-- alias label and alias kind for target alias failures;
+- semantic alias binding key and alias kind for target alias failures;
 - dynamic target key and descriptor summary for dynamic target failures;
 - history scope and signature for history failures;
 - backend capability key or limit for capability failures;

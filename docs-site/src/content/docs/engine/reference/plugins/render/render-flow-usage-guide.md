@@ -582,7 +582,7 @@ let flow = RenderFlow::new("product.flow")
     .validate()?;
 ```
 
-Use target aliases when authored flow topology should stay static while prepared invocations bind concrete product targets. This is the intended product-surface API shape. Active runtime execution resolves target aliases per prepared invocation and uses the renderer-owned dynamic target cache for requested product targets:
+Use target aliases when authored flow topology should stay static while prepared invocations bind concrete product targets. This is the intended product-surface API shape. Alias input is validated and normalized into the render-owned semantic `RenderTargetAliasKey`; prepared-frame and runtime maps retain that typed key rather than treating it as a diagnostic label. Active runtime execution resolves target aliases per prepared invocation and uses the renderer-owned dynamic target cache for requested product targets:
 
 ```rust
 use engine::plugins::render::{
@@ -593,7 +593,7 @@ use engine::plugins::render::{
 };
 
 let flow = RenderFlow::new("viewport.product.flow")
-    .with_color_target_alias("viewport.scene_color")
+    .with_color_target_alias("viewport.scene_color")?
     .fullscreen_pass("viewport.compose")
     .offscreen_products_only()
     .write_color_target("viewport.scene_color")
@@ -613,7 +613,7 @@ let request = RenderProductSurfaceRequest::new(
     PreparedViewFrame::offscreen_product("viewport.1", (1280, 720))
         .with_history_signature("camera:v1:1280x720"),
     PreparedFlowInvocationRequest::new("viewport.1.scene", flow.id(), "viewport.1")
-        .bind_dynamic_texture_alias("viewport.scene_color", target_key)
+        .bind_dynamic_texture_alias("viewport.scene_color", target_key)?
         .with_history_signature("camera:v1:1280x720"),
 )
 .with_dynamic_target(target_descriptor);

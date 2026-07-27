@@ -168,7 +168,7 @@ Runenwerk or source-domain adapter
             -> RunenGPU upload/update contract
 ```
 
-Uniform, storage, vertex, indirect, transfer, texture-initialization, and readback-decoding semantics remain distinct. `TypeId` and type names are process-local diagnostics, not layout, binding, persistence, replay, wire, cache, or shader-interface authority. G4 owns backend layout and derive/macro disposition. G5 owns upload/update/readback execution.
+Uniform, storage, vertex, indirect, transfer, texture-initialization, and readback-decoding semantics remain distinct. Transitional render-adapter `TypeId` is process-local declared-Rust-type compatibility evidence for current uniform projection and indirect argument checks; it is not normalized GPU layout, descriptor, persistence, replay, wire, cache, or shader-interface authority. Type names are diagnostic display only. G4 owns backend layout and derive/macro disposition. G5 owns upload/update/readback execution.
 
 ### Current RenderFlow disposition
 

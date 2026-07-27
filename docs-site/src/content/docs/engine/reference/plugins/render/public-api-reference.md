@@ -696,6 +696,9 @@ Production readiness inspection contract:
 
 These APIs are for dynamic product surfaces, viewport products, material/asset previews, and debug texture viewers:
 
+Target-alias declaration and prepared-binding builders are fallible because caller-provided keys are validated. Compiled references, prepared invocation maps, diagnostics, inspection, and runtime resolution preserve `RenderTargetAliasKey`; display labels are not alias identity.
+
+- `RenderTargetAliasKey::new` validates, trims, and rejects empty semantic target-binding keys.
 - `RenderFlow::with_color_target_alias`
 - `RenderFlow::with_depth_target_alias`
 - `RenderFlow::with_target_alias`

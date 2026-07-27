@@ -45,6 +45,8 @@ G3 implementation is not active or authorized. It requires its own accepted plan
 
 The [G2 implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md) records the completed authority, exact reviewed implementation head, validation contract, equality audit, explicit import-lowering boundary, and deliberate later-phase seams.
 
+The final independent review corrected two render-adapter semantics: target-alias binding keys are validated render-owned semantic authority carried through prepared/runtime lookup, while transitional render `TypeId` is explicit process-local declared-type compatibility evidence rather than normalized GPU authority. Diagnostic type names and display labels remain non-semantic, and compound render declarations expose no universal equality.
+
 The target external repository remains `dornglut/runen-gpu`, but no external package is created during G2.
 
 The proof portfolio is already bound and remains separated:

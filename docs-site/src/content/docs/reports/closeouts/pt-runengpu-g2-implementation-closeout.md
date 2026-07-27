@@ -35,11 +35,12 @@ G2 creates no external package and implements no G3 hazards/work graph, G4 backe
 | Branch | `codex/runengpu-g2-capabilities-resources` |
 | Accepted implementation base | `48d3e26dd29e7a20b8a4e3978e8e8465d24e6f84` |
 | Contract commit | `8753dc0ab75269b78c357df6392ed6b61ac33e50` |
-| Final reviewed code candidate head | `e0ee749f7a9f1c6e24abaf48ff92a0abb814818d` |
+| Previous reviewed pull-request head | `b861fd2f65f5d264f241b47fe70c2667eb5ae6b0` |
+| Final reviewed code candidate head | `bddc8aa2f4a990142244a8eaa1520fa7a0bc1c9e` |
 | Merge base against `origin/main` at publication | exact accepted implementation base |
 | Acceptance record | repository Git history plus closed issue `#172` and merged PR `#173`; no merge SHA asserted here |
 
-At reviewed code candidate `e0ee749f7a9f1c6e24abaf48ff92a0abb814818d`, the accepted-base diff contained exactly 78 changed files with 7,804 additions and 2,022 deletions. The final PR body owns the later documentation-head SHA, final aggregate statistics, exact-head Actions URLs and conclusions because those publication facts occur after this self-contained report is committed.
+At reviewed code candidate `bddc8aa2f4a990142244a8eaa1520fa7a0bc1c9e`, the accepted-base diff contained exactly 83 changed files with 8,264 additions and 2,122 deletions. The final PR body owns the later documentation-head SHA, final aggregate statistics, exact-head Actions URLs and conclusions because those publication facts occur after this self-contained report is committed.
 
 ## Delivered public authority
 
@@ -78,14 +79,17 @@ Corrections made:
 
 - `GpuExportRelationship` now compares exactly its kind-preserving resource reference, consumer-owned export key, and required final access intent. Stored provenance—including producer label, source generation, and source revision—remains inspectable but is excluded.
 - `GpuCapabilityAdmission` excludes diagnostic message text while comparing granted required facts, preferred availability/degradation facts, and verified-disabled facts.
-- `RenderGpuParamsLayout` excludes process-local `TypeId` and diagnostic type name while comparing the checked normalized data layout.
-- Render texture, imported texture, imported buffer, and target-alias intent equality excludes diagnostic labels while retaining logical ID and the owned semantic fields.
+- `RenderGpuParamsLayout` no longer implements universal equality. `gpu_layout()` exposes normalized allocation facts, `is_allocation_compatible_with(...)` compares only those facts, and `declares_same_params_type_as(...)` compares transitional process-local `TypeId` compatibility evidence. The stored type name is diagnostic display only.
+- `RenderUniformDeclaration`, `RenderStorageDeclaration`, and the compound `RenderResourceDeclaration` no longer implement universal equality, so resource identity, allocation compatibility, declared Rust type, and display metadata cannot be conflated by one operator.
+- Render texture intent equality excludes its diagnostic label, and imported texture/buffer intent equality excludes display labels while retaining logical ID and the explicit import semantic.
+- `RenderTargetAliasKey` is a validated, trimmed, non-empty render-owned semantic key. `RenderTargetAliasDeclaration` equality, ordering, and hashing include logical ID, binding key, and alias kind; the key is not a diagnostic label.
 
 Confirmed intentional contracts:
 
 - `PreparedGpuData` already excludes provenance and diagnostic type name; `GpuResourceCommon` already excludes label and provenance; descriptors inherit those semantic implementations.
 - Typed handle equality, ordering, and hashing use the private in-process lease ID and kind so distinct live resource references remain distinct. This is an explicitly bounded handle-reference contract, not persistence, replay, wire, cache, binding, or descriptor-semantic authority; descriptor and diagnostic payloads remain excluded.
 - `GpuResourceLabel` and `GpuResourceProvenance` retain value equality for direct diagnostic inspection, and structured error types retain value equality as error DTOs. Neither equality is inherited by resource semantic contracts after this correction.
+- `RenderGpuResourceLowering` retains equality because each variant is unambiguous: normalized descriptor facts, imported ID plus semantic, or target-alias ID plus binding key plus kind. `CurrentRuntimeResourceDisposition` likewise remains an explicit private runtime classification.
 
 No other semantic inconsistency was found, and useful equality implementations were retained.
 
@@ -116,7 +120,7 @@ Rustdoc compile-pass and compile-fail cases prove purpose separation, non-Pod tr
 
 ## Render migration and temporary adapters
 
-The current render facade returns `GpuBufferHandle` for uniform and storage declarations and uses render-owned `RenderDoubleBuffer` only for the semantic pair. Uniform projection and indirect argument paths retain transitional `TypeId` diagnostics where current render behavior requires them; normalized GPU descriptors do not treat `TypeId`, type names, or labels as layout, identity, binding, persistence, replay, wire, or cache authority.
+The current render facade returns `GpuBufferHandle` for uniform and storage declarations and uses render-owned `RenderDoubleBuffer` only for the semantic pair. Uniform projection and indirect argument paths retain transitional process-local `TypeId` compatibility checks where current render behavior requires declared Rust types to match. Normalized GPU descriptors contain no `TypeId`; diagnostic type names and display labels do not become layout, identity, persistence, replay, wire, or cache authority.
 
 Exactly three temporary adapter responsibilities exist under `engine/src/plugins/render/adapters`:
 
@@ -141,7 +145,9 @@ pub enum RenderGpuResourceLowering {
 
 `Normalized` is returned only for render uniform/storage declarations and owned sampled, storage, color, depth, and history textures whose checked G2 descriptor facts are complete. The boxed field is only storage for the already-authoritative `GpuResourceDescriptor`; it is not a second descriptor type or compatibility layer.
 
-Imported declarations retain only logical ID, validated non-empty diagnostic label, and explicit render semantic. They do not invent extent, format, usage, size, memory layout, reconstruction source, surface acquisition, backend realization, or unsupported ownership facts. G4 resolves ordinary imported texture/buffer admission and realization. G7 resolves surface acquisition and presentation-owned facts. Render history stays render-owned policy while generic imported-resource realization moves to its owning phase. Target aliases remain explicit render-graph relationships.
+Imported declarations retain only logical ID, validated non-empty diagnostic display label, and explicit render semantic. They do not invent extent, format, usage, size, memory layout, reconstruction source, surface acquisition, backend realization, or unsupported ownership facts. G4 resolves ordinary imported texture/buffer admission and realization. G7 resolves surface acquisition and presentation-owned facts. Render history stays render-owned policy while generic imported-resource realization moves to its owning phase.
+
+Target aliases remain explicit render-graph relationships, but their binding key is semantic rather than diagnostic. `RenderTargetAliasKey` validates and trims author input once, rejects empty keys with structured correction text, and is carried through `RenderTargetAliasDeclaration`, `CompiledTargetAliasRef`, prepared invocation maps, preflight hashing and diagnostics, inspection DTOs, and runtime lookup. Alias display fields are named as binding keys rather than labels, and no alias key enters `engine::plugins::gpu`.
 
 The temporary legacy runtime exhaustively consumes this outcome into buffer, flow-texture, invocation-history, imported-texture, imported-buffer, or target-alias dispositions. It allocates only normalized buffers and owned textures, preserves invocation-scoped history and current surface-format behavior, leaves imports and aliases unallocated for their existing paths, and returns a structured unsupported-current-runtime error for normalized texture views, samplers, or query sets if they become reachable. No wildcard or optional result silently discards a future variant.
 
@@ -184,6 +190,8 @@ Repository guards scan the complete G2 GPU source subtree for forbidden renderer
 ### Modified code consumers and guards
 
 - `apps/runenwerk_draw/src/runtime/gpu_ink.rs`
+- `apps/runenwerk_editor/src/runtime/systems/material_preview.rs`
+- `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs`
 - `apps/runenwerk_editor/tests/startup_render_smoke.rs`
 - `apps/runenwerk_editor/tests/viewport_architecture_guards.rs`
 - `engine/benches/render_flow_planning.rs`
@@ -199,6 +207,7 @@ Repository guards scan the complete G2 GPU source subtree for forbidden renderer
 - `engine/src/plugins/render/api/handles.rs`
 - `engine/src/plugins/render/api/mod.rs`
 - `engine/src/plugins/render/api/passes.rs`
+- `engine/src/plugins/render/frame/packet.rs`
 - `engine/src/plugins/render/composition/fragment_registry.rs`
 - `engine/src/plugins/render/composition/integration.rs`
 - `engine/src/plugins/render/gpu_primitives/compaction.rs`
@@ -207,6 +216,7 @@ Repository guards scan the complete G2 GPU source subtree for forbidden renderer
 - `engine/src/plugins/render/gpu_primitives/plan.rs`
 - `engine/src/plugins/render/gpu_primitives/scan.rs`
 - `engine/src/plugins/render/graph/execution_plan.rs`
+- `engine/src/plugins/render/graph/diagnostics.rs`
 - `engine/src/plugins/render/graph/flow_graph.rs`
 - `engine/src/plugins/render/graph/merge.rs`
 - `engine/src/plugins/render/graph/mod.rs`
@@ -217,6 +227,7 @@ Repository guards scan the complete G2 GPU source subtree for forbidden renderer
 - `engine/src/plugins/render/graph/validation.rs`
 - `engine/src/plugins/render/inspect/graph_dump.rs`
 - `engine/src/plugins/render/inspect/plan.rs`
+- `engine/src/plugins/render/inspect/prepared_frame.rs`
 - `engine/src/plugins/render/inspect/resource_inspector.rs`
 - `engine/src/plugins/render/inspect/texture_view.rs`
 - `engine/src/plugins/render/mod.rs`
@@ -270,7 +281,7 @@ cargo validate
 git diff --check
 ```
 
-Focused evidence includes 32 GPU unit and source-guard tests, 67 named render integration tests across the five required binaries, 9 focused runtime-disposition unit tests, 8 passing rustdoc examples, and 12 passing compile-fail rustdoc cases. Canonical `cargo validate` also passed workspace tests, workspace doctests, strict workspace Clippy, docs validation, and the repository audit.
+Focused evidence includes 32 GPU unit and source-guard tests, 73 named render integration tests across the five required binaries, 10 focused runtime-disposition unit tests, 8 passing rustdoc examples, and 12 passing compile-fail rustdoc cases. Canonical `cargo validate` also passed workspace tests, workspace doctests, strict workspace Clippy, docs validation, and the repository audit.
 
 Exact-head permanent Actions remain pull-request delivery evidence rather than self-referential branch-document content. Pull request `#173` records its final remote SHA, workflow URLs, and conclusions after this documentation commit is pushed and checked. Maintainer acceptance is represented by the eventual merge and issue closure; this report does not invent either an exact-head result before it exists or a merge SHA before merge.
 
@@ -286,8 +297,9 @@ The complete code diff was reviewed against the accepted investigation and desig
 - validating uniform projection type identity and rejecting uniform buffers used as storage;
 - validating normalized vertex, index, and indirect usage roles;
 - keeping target aliases retained and render-owned rather than falsely imported;
+- replacing target-alias display-label identity with validated semantic `RenderTargetAliasKey` values across declaration, compilation, prepared-frame hashing, diagnostics, and runtime lookup;
 - removing normalized-GPU-to-WGPU and WGPU-to-normalized mapping authority from G2 adapters;
-- excluding provenance from `GpuExportRelationship` semantic equality and excluding remaining diagnostic-only admission, type, and label fields found by the complete equality audit;
+- excluding provenance from `GpuExportRelationship` semantic equality, removing ambiguous equality from compound render parameter/resource declarations, retaining transitional `TypeId` only as an explicit declared-type compatibility predicate, and keeping diagnostic type names/display labels non-semantic;
 - replacing ambiguous optional render lowering with the explicit `RenderGpuResourceLowering` outcome;
 - retaining imported texture and buffer declarations as unresolved render-owned intent until sufficient G4/G7 facts exist instead of fabricating normalized descriptors;
 - exhaustively consuming every lowering outcome in the current runtime, with explicit non-allocation for imports/aliases, invocation-scoped history, and structured unsupported-kind failures;
@@ -297,7 +309,7 @@ No unresolved correctness finding remains in the locally reviewed candidate.
 
 ## Remaining risks and deliberate boundaries
 
-- G2 generic buffer handles intentionally do not retain one universal compile-time Rust element/layout view. G4 owns typed binding and layout views. Current render adapters preserve `TypeId` checks for uniform projection and indirect arguments, but a GPU-primitive call using a same-size wrong element type cannot be diagnosed from the G2 generic handle alone.
+- G2 generic buffer handles intentionally do not retain one universal compile-time Rust element/layout view. G4 owns typed binding and layout views. Current render adapters preserve process-local `TypeId` compatibility checks for uniform projection and indirect arguments, but a GPU-primitive call using a same-size wrong element type cannot be diagnosed from the G2 generic handle alone.
 - `current_runtime_gpu_capabilities()` is a fixed translation of legacy renderer assumptions, not backend-admission evidence. G4 must replace it with real normalized facts.
 - Handle leases establish clone/drop ownership shape only. G5 must connect last drop to delayed backend retirement.
 - Ordinary imported resource facts intentionally remain unresolved. G4 must supply admission and realization facts; the current external-import rejection and prepared-resource paths remain unchanged until then.
