@@ -12,6 +12,7 @@ related_docs:
   - ./completed-work.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runengpu-architecture-design.md
+  - ../../design/active/runengpu-g3-access-work-graph-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/runengpu-industry-comparison.md
   - ../../reports/investigations/runengpu-public-api-ergonomics-review.md
@@ -38,11 +39,13 @@ Issue `#174` is the one active serialized decision slice. Its documentation-only
 
 - checked work-time buffer byte ranges, texture subresources, and query ranges;
 - attachment load/store and region-aware initialization flow;
+- typed compute, render, copy, clear, texture/query resolve, and logical present operations;
+- normalized query-resolve destination buffer usage and exact destination byte coverage;
 - read/write overlap, hazards, and access-derived dependency inference;
 - typed import/export causality across independent fragments;
 - immutable generic work fragments and nodes;
 - deterministic `GpuPreparedWorkGraph` preparation and inspection;
-- exact render/GPU-primitive adapter, migration, and deletion inventories.
+- exact render/GPU-primitive/timestamp adapter, migration, and deletion inventories.
 
 The accepted planning direction is:
 
@@ -50,12 +53,15 @@ The accepted planning direction is:
 - fragment collection position is not semantic scheduling authority;
 - cross-fragment causality requires shared typed resources plus typed import/export relationships;
 - overlapping cross-fragment writers without one unique producer fail as ambiguous;
-- explicit order remains typed, fragment-local, and limited to non-data constraints;
+- explicit order remains typed, fragment-local, and limited to non-data constraints; redundant data edges fail;
+- timestamp writes initialize query indices, typed query resolution consumes them, and a later buffer copy consumes the resolved byte range;
 - attachment `Load` requires initialized coverage, `Clear` establishes coverage, `Store` preserves it, and `Discard` removes later readable coverage;
-- G3 validates graph-entry evidence but does not claim G5 execution persistence or synchronization.
+- attachment `Store` alone does not make an empty render operation meaningful;
+- G3 validates graph-entry evidence but does not claim G5 execution persistence, query-resolution encoding, mapping, or synchronization.
 
 The current planning artifacts are:
 
+- [G3 focused design](../../design/active/runengpu-g3-access-work-graph-design.md);
 - [G3 investigation](../../reports/investigations/runengpu-g3-access-work-graph-investigation.md);
 - [G3 implementation specification](../specs/pt-runengpu-g3-access-work-graph.ron).
 
@@ -78,8 +84,8 @@ The proof portfolio remains separated:
 ## Queued
 
 - one bounded G3 implementation issue only after issue `#174` and its planning PR are accepted;
-- G4 context/device admission, WGPU realization, shaders, pipelines, binding keys, backend layout, macro disposition, and removal of the temporary `RenderFlowId` resource-owner bridge;
-- G5 execution, uploads, staging, completion, asynchronous readback, cancellation, preserved execution state, and delayed retirement;
+- G4 context/device admission, WGPU realization, shaders, pipelines, binding keys, backend layout, query-resolve offset-alignment admission, macro disposition, and removal of the temporary `RenderFlowId` resource-owner bridge;
+- G5 execution, uploads, staging, query-resolution encoding, completion, asynchronous readback, cancellation, preserved execution state, and delayed retirement;
 - G6 offscreen graphics and shared render/non-render proof;
 - G7 surfaces, generations, thread affinity, and device outcomes;
 - G8 final diagnostics, shutdown, residual anti-cheating audit, and internal conformance;
