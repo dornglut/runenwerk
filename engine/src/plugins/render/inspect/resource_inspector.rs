@@ -55,7 +55,7 @@ pub struct ResourceInspectionEntry {
     pub kind: String,
     pub lifetime: GpuResourceLifetime,
     pub imported: bool,
-    pub target_alias_label: Option<String>,
+    pub target_alias_binding_key: Option<String>,
     pub target_alias_kind: Option<String>,
 }
 
@@ -92,7 +92,7 @@ pub fn resource_kind_name(resource: &RenderResourceDeclaration) -> &'static str 
         RenderResourceDeclaration::DepthAttachment(_) => "depth_target",
         RenderResourceDeclaration::History(_) => "history_texture",
         RenderResourceDeclaration::TargetAlias(value) => {
-            target_alias_kind_resource_name(value.kind)
+            target_alias_kind_resource_name(value.kind())
         }
         RenderResourceDeclaration::ImportedTexture(value) => match value.semantic {
             RenderImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
@@ -135,16 +135,18 @@ pub fn inspect_resources(flow: &RenderFlow) -> Vec<ResourceInspectionEntry> {
                 kind: resource_kind_name(resource).to_string(),
                 lifetime,
                 imported: resource.is_imported(),
-                target_alias_label: target_alias_label(resource),
+                target_alias_binding_key: target_alias_binding_key(resource),
                 target_alias_kind: target_alias_kind(resource),
             }
         })
         .collect()
 }
 
-fn target_alias_label(resource: &RenderResourceDeclaration) -> Option<String> {
+fn target_alias_binding_key(resource: &RenderResourceDeclaration) -> Option<String> {
     match resource {
-        RenderResourceDeclaration::TargetAlias(value) => Some(value.label.clone()),
+        RenderResourceDeclaration::TargetAlias(value) => {
+            Some(value.binding_key().as_str().to_string())
+        }
         _ => None,
     }
 }
@@ -152,7 +154,7 @@ fn target_alias_label(resource: &RenderResourceDeclaration) -> Option<String> {
 fn target_alias_kind(resource: &RenderResourceDeclaration) -> Option<String> {
     match resource {
         RenderResourceDeclaration::TargetAlias(value) => {
-            Some(target_alias_kind_name(value.kind).to_string())
+            Some(target_alias_kind_name(value.kind()).to_string())
         }
         _ => None,
     }

@@ -14,8 +14,8 @@ use engine::plugins::render::{
     PreparedFlowInvocationId, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
     PreparedTargetBinding, PreparedViewFrame, RenderDynamicTextureRetention,
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey, RenderFlow, RenderFlowId,
-    RenderFrameProducerId, RenderPassId, RenderTargetAliasKind, RenderTextureSampleMode,
-    RenderTextureTargetFormat, RenderTextureTargetUsage,
+    RenderFrameProducerId, RenderPassId, RenderTargetAliasKey, RenderTargetAliasKind,
+    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
 };
 use engine::runtime::{Res, ResMut};
 
@@ -276,14 +276,16 @@ fn replace_gpu_validation_invocation(
     let view_id = gpu_validation_view_id(candidate);
     let mut aliases = BTreeMap::new();
     aliases.insert(
-        DRAWING_GPU_INK_CPU_INPUT_ALIAS.to_string(),
+        RenderTargetAliasKey::new(DRAWING_GPU_INK_CPU_INPUT_ALIAS)
+            .expect("drawing CPU input alias key is a valid constant"),
         PreparedTargetBinding::DynamicTexture(cpu_target_key(
             candidate.surface_kind,
             &candidate.product,
         )),
     );
     aliases.insert(
-        DRAWING_GPU_INK_OUTPUT_ALIAS.to_string(),
+        RenderTargetAliasKey::new(DRAWING_GPU_INK_OUTPUT_ALIAS)
+            .expect("drawing output alias key is a valid constant"),
         PreparedTargetBinding::DynamicTexture(gpu_target_key(
             candidate.surface_kind,
             &candidate.product,

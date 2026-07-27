@@ -3,7 +3,8 @@ use crate::plugins::gpu::{GpuTextureDimension, GpuWorkResourceId, PreparedGpuDat
 use crate::plugins::render::{
     PreparedTargetBinding, RenderDynamicTextureTargetKey, RenderFlowId,
     RenderGpuResourceAdapterError, RenderImportedBufferIntent, RenderImportedTextureIntent,
-    RenderPassId, RenderTargetAliasDeclaration, prepare_projected_uniform_bytes,
+    RenderPassId, RenderTargetAliasDeclaration, RenderTargetAliasKey,
+    prepare_projected_uniform_bytes,
 };
 use std::fmt;
 
@@ -138,7 +139,7 @@ pub struct FlowRuntimeResources {
     pub kinds: BTreeMap<GpuWorkResourceId, RuntimeResourceKind>,
     pub descriptors: BTreeMap<GpuWorkResourceId, RenderResourceDeclaration>,
     pub resource_ids_by_label: BTreeMap<String, GpuWorkResourceId>,
-    pub target_alias_bindings: BTreeMap<String, PreparedTargetBinding>,
+    pub target_alias_bindings: BTreeMap<RenderTargetAliasKey, PreparedTargetBinding>,
 }
 
 impl FlowRuntimeResources {
@@ -231,7 +232,7 @@ mod tests {
         GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
     };
     use crate::plugins::render::{
-        GpuParams, RenderGpuResourceLowering, RenderImportedBufferSemantic,
+        CompiledTargetAliasRef, GpuParams, RenderGpuResourceLowering, RenderImportedBufferSemantic,
         RenderImportedTextureSemantic, RenderTargetAliasKind, RenderTextureIntent,
     };
     use std::num::NonZeroU64;
@@ -339,6 +340,46 @@ mod tests {
             ),
             CaptureTextureClass::ColorTarget,
         );
+    }
+
+    #[test]
+    fn runtime_target_alias_lookup_distinguishes_binding_keys() {
+        let mut resources = FlowRuntimeResources::default();
+        let color_key = RenderTargetAliasKey::new("viewport.color").unwrap();
+        let depth_key = RenderTargetAliasKey::new("viewport.depth").unwrap();
+        resources
+            .target_alias_bindings
+            .insert(color_key.clone(), PreparedTargetBinding::SurfaceColor);
+        resources
+            .target_alias_bindings
+            .insert(depth_key.clone(), PreparedTargetBinding::SurfaceDepth);
+        let pass_id = RenderPassId::try_from_raw(1).unwrap();
+
+        let color = resources
+            .resolve_resource_key(
+                pass_id,
+                &CompiledResourceRef::TargetAlias(CompiledTargetAliasRef {
+                    resource_id: resource(8),
+                    binding_key: color_key,
+                    kind: RenderTargetAliasKind::Color,
+                }),
+                "color_output",
+            )
+            .unwrap();
+        let depth = resources
+            .resolve_resource_key(
+                pass_id,
+                &CompiledResourceRef::TargetAlias(CompiledTargetAliasRef {
+                    resource_id: resource(9),
+                    binding_key: depth_key,
+                    kind: RenderTargetAliasKind::Depth,
+                }),
+                "depth_output",
+            )
+            .unwrap();
+
+        assert_eq!(color, RuntimeResourceKey::SurfaceColor);
+        assert_eq!(depth, RuntimeResourceKey::SurfaceDepth);
     }
 
     #[test]
@@ -475,7 +516,8 @@ mod tests {
             ids[2],
             "color alias",
             RenderTargetAliasKind::Color,
-        );
+        )
+        .expect("target alias declaration should be valid");
 
         assert!(matches!(
             FlowRuntimeResources::current_runtime_resource_disposition(
@@ -509,9 +551,9 @@ mod tests {
             )
             .unwrap(),
             CurrentRuntimeResourceDisposition::TargetAlias(value)
-                if value.id == ids[2]
-                    && value.label == "color alias"
-                    && value.kind == RenderTargetAliasKind::Color
+                if value.id() == ids[2]
+                    && value.binding_key().as_str() == "color alias"
+                    && value.kind() == RenderTargetAliasKind::Color
         ));
     }
 

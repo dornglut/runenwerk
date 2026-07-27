@@ -15,6 +15,7 @@ use crate::plugins::render::{
 };
 use std::any::TypeId;
 use std::collections::BTreeSet;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RenderGpuResourceAdapterError {
@@ -22,9 +23,16 @@ pub enum RenderGpuResourceAdapterError {
     Data(#[from] GpuDataPreparationError),
     #[error(transparent)]
     Descriptor(#[from] GpuResourceDescriptorError),
+    #[error(
+        "cannot declare render target alias binding key {value:?}: the key is empty after trimming; correction: {correction}"
+    )]
+    InvalidTargetAliasBindingKey {
+        value: String,
+        correction: &'static str,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RenderUniformDeclaration {
     handle: GpuBufferHandle,
     layout: RenderGpuParamsLayout,
@@ -56,7 +64,7 @@ impl RenderUniformDeclaration {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RenderStorageDeclaration {
     handle: GpuBufferHandle,
     layout: RenderGpuParamsLayout,
@@ -80,7 +88,7 @@ impl RenderStorageDeclaration {
     }
 
     pub const fn element_count(&self) -> u64 {
-        self.layout.gpu().element_count()
+        self.layout.gpu_layout().element_count()
     }
 
     pub const fn params_type_id(&self) -> TypeId {
@@ -193,27 +201,75 @@ impl RenderTextureIntent {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RenderTargetAliasKind {
     Color,
     Depth,
     Texture,
 }
 
-#[derive(Debug, Clone)]
-pub struct RenderTargetAliasDeclaration {
-    pub id: GpuWorkResourceId,
-    pub label: String,
-    pub kind: RenderTargetAliasKind,
-}
+/// Validated render-owned semantic key for resolving one target-alias binding.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RenderTargetAliasKey(String);
 
-impl PartialEq for RenderTargetAliasDeclaration {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.kind == other.kind
+impl RenderTargetAliasKey {
+    pub fn new(value: impl Into<String>) -> Result<Self, RenderGpuResourceAdapterError> {
+        let value = value.into();
+        let normalized = value.trim();
+        if normalized.is_empty() {
+            return Err(
+                RenderGpuResourceAdapterError::InvalidTargetAliasBindingKey {
+                    value,
+                    correction: "provide at least one non-whitespace character",
+                },
+            );
+        }
+        Ok(Self(normalized.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 }
 
-impl Eq for RenderTargetAliasDeclaration {}
+impl fmt::Display for RenderTargetAliasKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RenderTargetAliasDeclaration {
+    id: GpuWorkResourceId,
+    binding_key: RenderTargetAliasKey,
+    kind: RenderTargetAliasKind,
+}
+
+impl RenderTargetAliasDeclaration {
+    pub fn new(
+        id: GpuWorkResourceId,
+        binding_key: impl Into<String>,
+        kind: RenderTargetAliasKind,
+    ) -> Result<Self, RenderGpuResourceAdapterError> {
+        Ok(Self {
+            id,
+            binding_key: RenderTargetAliasKey::new(binding_key)?,
+            kind,
+        })
+    }
+
+    pub const fn id(&self) -> GpuWorkResourceId {
+        self.id
+    }
+
+    pub fn binding_key(&self) -> &RenderTargetAliasKey {
+        &self.binding_key
+    }
+
+    pub const fn kind(&self) -> RenderTargetAliasKind {
+        self.kind
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderImportedTextureSemantic {
@@ -298,6 +354,9 @@ impl Eq for RenderImportedBufferIntent {}
 /// Only `Normalized` contains complete checked G2 descriptor facts. Imports
 /// retain their render-owned admission intent until G4 or G7 supplies the
 /// missing facts, and target aliases remain render-graph relationships.
+/// Equality is intentionally retained because every variant has an explicit
+/// semantic contract: normalized descriptor facts, import ID plus semantic,
+/// or target-alias ID plus binding key plus kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenderGpuResourceLowering {
     Normalized(Box<GpuResourceDescriptor>),
@@ -306,7 +365,7 @@ pub enum RenderGpuResourceLowering {
     TargetAlias(RenderTargetAliasDeclaration),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum RenderResourceDeclaration {
     Uniform(RenderUniformDeclaration),
     Storage(RenderStorageDeclaration),
@@ -346,7 +405,7 @@ impl RenderResourceDeclaration {
         )?;
         let descriptor = GpuBufferDescriptor::new(
             common,
-            layout.gpu().byte_len(),
+            layout.gpu_layout().byte_len(),
             usages,
             GpuBufferInitialization::Uninitialized,
         )?;
@@ -398,7 +457,7 @@ impl RenderResourceDeclaration {
         )?;
         let descriptor = GpuBufferDescriptor::new(
             common,
-            layout.gpu().byte_len(),
+            layout.gpu_layout().byte_len(),
             usages,
             GpuBufferInitialization::Uninitialized,
         )?;
@@ -514,11 +573,23 @@ impl RenderResourceDeclaration {
 
     pub fn declare_target_alias(
         id: GpuWorkResourceId,
-        label: impl Into<String>,
+        binding_key: impl Into<String>,
+        kind: RenderTargetAliasKind,
+    ) -> Result<Self, RenderGpuResourceAdapterError> {
+        let binding_key = RenderTargetAliasKey::new(binding_key)?;
+        Ok(Self::declare_target_alias_with_key(id, binding_key, kind))
+    }
+
+    pub(crate) fn declare_target_alias_with_key(
+        id: GpuWorkResourceId,
+        binding_key: RenderTargetAliasKey,
         kind: RenderTargetAliasKind,
     ) -> Self {
-        let label = label.into();
-        Self::TargetAlias(RenderTargetAliasDeclaration { id, label, kind })
+        Self::TargetAlias(RenderTargetAliasDeclaration {
+            id,
+            binding_key,
+            kind,
+        })
     }
 
     pub fn declare_imported_surface_color(id: GpuWorkResourceId, label: impl Into<String>) -> Self {
@@ -646,8 +717,7 @@ impl RenderResourceDeclaration {
     }
 
     pub fn params_type_id(&self) -> Option<TypeId> {
-        self.params_layout()
-            .map(RenderGpuParamsLayout::params_type_id)
+        self.params_layout().map(|layout| layout.params_type_id())
     }
 
     pub fn texture_intent(&self) -> Option<&RenderTextureIntent> {
@@ -692,10 +762,7 @@ impl RenderResourceDeclaration {
                 validate_unresolved_intent_label(&value.label)?;
                 Ok(RenderGpuResourceLowering::ImportedBuffer(value.clone()))
             }
-            Self::TargetAlias(value) => {
-                validate_unresolved_intent_label(&value.label)?;
-                Ok(RenderGpuResourceLowering::TargetAlias(value.clone()))
-            }
+            Self::TargetAlias(value) => Ok(RenderGpuResourceLowering::TargetAlias(value.clone())),
         }
     }
 }

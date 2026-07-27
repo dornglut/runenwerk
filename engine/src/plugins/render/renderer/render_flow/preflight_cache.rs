@@ -103,7 +103,8 @@ mod tests {
         let key = RenderDynamicTextureTargetKey::new("cache.test", "scene");
         let mut bindings = BTreeMap::new();
         bindings.insert(
-            "scene_color".to_string(),
+            crate::plugins::render::RenderTargetAliasKey::new("scene_color")
+                .expect("test alias key should be valid"),
             PreparedTargetBinding::DynamicTexture(key.clone()),
         );
         PreparedRenderFrame {

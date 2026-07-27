@@ -317,7 +317,7 @@ fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
             matches!(
                 resource,
                 engine::plugins::render::RenderResourceDeclaration::TargetAlias(alias)
-                    if alias.kind == engine::plugins::render::RenderTargetAliasKind::Color
+                    if alias.kind() == engine::plugins::render::RenderTargetAliasKind::Color
             )
         })
         .count();

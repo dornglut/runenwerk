@@ -1255,7 +1255,7 @@ fn validate_pass_resource_usage(
             || matches!(
                 resource,
                 RenderResourceDeclaration::TargetAlias(value)
-                    if value.kind == RenderTargetAliasKind::Depth
+                    if value.kind() == RenderTargetAliasKind::Depth
             );
         if !depth_ok {
             issues.push(RenderFlowValidationIssue::InvalidDepthTargetResource {
@@ -1697,7 +1697,9 @@ fn vertex_step_mode_name(value: RenderVertexStepMode) -> &'static str {
 fn is_raster_color_output_resource(resource: &RenderResourceDeclaration) -> bool {
     match resource {
         RenderResourceDeclaration::ColorAttachment(_) => true,
-        RenderResourceDeclaration::TargetAlias(value) => value.kind == RenderTargetAliasKind::Color,
+        RenderResourceDeclaration::TargetAlias(value) => {
+            value.kind() == RenderTargetAliasKind::Color
+        }
         RenderResourceDeclaration::ImportedTexture(value) => {
             value.semantic == RenderImportedTextureSemantic::SurfaceColor
         }
@@ -1773,7 +1775,7 @@ fn resource_kind_name(resource: &RenderResourceDeclaration) -> &'static str {
         RenderResourceDeclaration::ColorAttachment(_) => "color_target",
         RenderResourceDeclaration::DepthAttachment(_) => "depth_target",
         RenderResourceDeclaration::History(_) => "history_texture",
-        RenderResourceDeclaration::TargetAlias(value) => match value.kind {
+        RenderResourceDeclaration::TargetAlias(value) => match value.kind() {
             RenderTargetAliasKind::Color => "target_alias(color)",
             RenderTargetAliasKind::Depth => "target_alias(depth)",
             RenderTargetAliasKind::Texture => "target_alias(texture)",

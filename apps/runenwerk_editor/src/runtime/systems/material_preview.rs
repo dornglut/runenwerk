@@ -3,6 +3,8 @@
 
 use editor_scene::SceneMaterialAssignmentState;
 use editor_viewport::ViewportSurfacePresentationSlot;
+#[cfg(test)]
+use engine::plugins::render::RenderTargetAliasKey;
 use engine::plugins::render::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedFlowInvocationRequest,
     PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource, PreparedViewFrame,
@@ -642,6 +644,7 @@ pub(crate) fn material_preview_scene_surface_flow_request(
         view_id,
     )
     .bind_dynamic_texture_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, target)
+    .expect("material preview alias key is a valid constant")
     .with_history_signature(format!(
         "material-preview-surface:{}",
         preview.shader_identity
@@ -678,6 +681,7 @@ pub(crate) fn material_preview_flow_requests(
                 view_id,
             )
             .bind_dynamic_texture_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, target)
+            .expect("material preview alias key is a valid constant")
             .with_history_signature(preview.shader_identity.clone());
             RenderProductSurfaceRequest::new(view, request)
         })
@@ -780,10 +784,10 @@ mod tests {
             .expect("preview target should exist")
             .dynamic_key();
         assert_eq!(
-            requests[0]
-                .flow_invocation()
-                .target_alias_bindings
-                .get(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW),
+            requests[0].flow_invocation().target_alias_bindings.get(
+                &RenderTargetAliasKey::new(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW)
+                    .expect("material preview alias key is a valid constant"),
+            ),
             Some(&PreparedTargetBinding::DynamicTexture(target))
         );
     }
@@ -827,9 +831,10 @@ mod tests {
             "editor.material.preview.surface.3.shader-identity"
         );
         assert_eq!(
-            request
-                .target_alias_bindings
-                .get(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW),
+            request.target_alias_bindings.get(
+                &RenderTargetAliasKey::new(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW)
+                    .expect("material preview alias key is a valid constant"),
+            ),
             Some(&PreparedTargetBinding::DynamicTexture(target))
         );
         assert_eq!(

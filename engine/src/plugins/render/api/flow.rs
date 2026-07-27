@@ -14,7 +14,7 @@ use crate::plugins::render::{
     GpuPrimitiveExecutionPlan, GpuPrimitiveTemporaryStorageKind, IndirectDrawArgsBuffer,
     RenderFixedStepRegionId, RenderFixedStepRegionMembership, RenderFlowGraph, RenderFlowId,
     RenderFlowValidationError, RenderPassId, RenderPassIdSequence, RenderPassKind, RenderPassNode,
-    RenderResourceDeclaration, RenderShaderReference, RenderTargetAliasKind,
+    RenderResourceDeclaration, RenderShaderReference, RenderTargetAliasKey, RenderTargetAliasKind,
     RenderTextureTargetFormat, U32ScanElement, validate_flow_graph,
 };
 use crate::runtime::{CatchupBudget, FixedTimeConfig, FixedTimeState};
@@ -621,15 +621,16 @@ impl RenderFlow {
         label: String,
         kind: RenderTargetAliasKind,
     ) -> Result<GpuWorkResourceId, RenderFlowAuthoringError> {
-        if let Some(id) = self.resolve_resource_id(label.as_str()) {
+        let binding_key = RenderTargetAliasKey::new(label)?;
+        if let Some(id) = self.resolve_resource_id(binding_key.as_str()) {
             return Ok(id);
         }
 
         let id = self.allocate_resource_id()?;
         self.upsert_labeled_resource(
-            label.clone(),
+            binding_key.as_str().to_string(),
             id,
-            RenderResourceDeclaration::declare_target_alias(id, label, kind),
+            RenderResourceDeclaration::declare_target_alias_with_key(id, binding_key, kind),
         );
         Ok(id)
     }

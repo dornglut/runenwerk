@@ -651,7 +651,7 @@ fn validate_alias_requirement(
 ) {
     let Some(binding) = invocation
         .target_alias_bindings
-        .get(requirement.alias.label.as_str())
+        .get(&requirement.alias.binding_key)
     else {
         diagnostics.push(
             RenderExecutionGraphDiagnostic::error(
@@ -659,13 +659,13 @@ fn validate_alias_requirement(
                 format!(
                     "prepared invocation '{}' does not bind target alias '{}' required by pass '{}'",
                     invocation.invocation_id.0,
-                    requirement.alias.label,
+                    requirement.alias.binding_key,
                     pass_id(pass)
                 ),
             )
             .with_flow(flow.flow_id, flow.flow_label.clone())
             .with_pass(pass_id(pass), pass_id(pass).to_string())
-            .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+            .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
             .with_invocation(invocation.invocation_id.clone())
             .with_view(invocation.view_id.clone()),
         );
@@ -682,13 +682,13 @@ fn validate_alias_requirement(
                         format!(
                             "prepared invocation '{}' binds alias '{}' to dynamic target '{}' but no descriptor was requested this frame",
                             invocation.invocation_id.0,
-                            requirement.alias.label,
+                            requirement.alias.binding_key,
                             key
                         ),
                     )
                     .with_flow(flow.flow_id, flow.flow_label.clone())
                     .with_pass(pass_id(pass), pass_id(pass).to_string())
-                    .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+                    .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
                     .with_dynamic_target(key.clone())
                     .with_invocation(invocation.invocation_id.clone())
                     .with_view(invocation.view_id.clone()),
@@ -718,12 +718,12 @@ fn validate_alias_requirement(
                 format!(
                     "prepared invocation '{}' binds alias '{}' to surface depth, but surface-depth imports are not supported by active runtime execution",
                     invocation.invocation_id.0,
-                    requirement.alias.label
+                    requirement.alias.binding_key
                 ),
             )
             .with_flow(flow.flow_id, flow.flow_label.clone())
             .with_pass(pass_id(pass), pass_id(pass).to_string())
-            .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+            .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
             .with_invocation(invocation.invocation_id.clone())
             .with_view(invocation.view_id.clone()),
         ),
@@ -778,14 +778,14 @@ fn validate_alias_kind_binding(
             format!(
                 "prepared invocation '{}' binds alias '{}' with incompatible role {:?} and binding {:?}",
                 invocation.invocation_id.0,
-                requirement.alias.label,
+                requirement.alias.binding_key,
                 requirement.role,
                 binding
             ),
         )
         .with_flow(flow.flow_id, flow.flow_label.clone())
         .with_pass(pass_id(pass), pass_id(pass).to_string())
-        .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+        .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
         .with_invocation(invocation.invocation_id.clone())
         .with_view(invocation.view_id.clone()),
     );
@@ -824,14 +824,17 @@ fn validate_dynamic_target_usage(
             format!(
                 "dynamic target '{}' is incompatible with alias '{}' role {:?} in pass '{}'",
                 descriptor.key,
-                requirement.alias.label,
+                requirement.alias.binding_key,
                 requirement.role,
                 pass_id(pass)
             ),
         )
         .with_flow(flow.flow_id, flow.flow_label.clone())
         .with_pass(pass_id(pass), pass_id(pass).to_string())
-        .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+        .with_alias(
+            requirement.alias.binding_key.clone(),
+            requirement.alias.kind,
+        )
         .with_dynamic_target(descriptor.key.clone())
         .with_invocation(invocation.invocation_id.clone())
         .with_view(invocation.view_id.clone()),
@@ -852,13 +855,16 @@ fn validate_flow_owned_alias_binding(
                 RenderExecutionGraphDiagnosticKind::InvalidResource,
                 format!(
                     "prepared invocation '{}' binds alias '{}' to unknown flow-owned resource '{}'",
-                    invocation.invocation_id.0, requirement.alias.label, resource_id
+                    invocation.invocation_id.0, requirement.alias.binding_key, resource_id
                 ),
             )
             .with_flow(flow.flow_id, flow.flow_label.clone())
             .with_pass(pass_id(pass), pass_id(pass).to_string())
             .with_resource(resource_id, Option::<String>::None)
-            .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+            .with_alias(
+                requirement.alias.binding_key.clone(),
+                requirement.alias.kind,
+            )
             .with_invocation(invocation.invocation_id.clone())
             .with_view(invocation.view_id.clone()),
         );
@@ -892,7 +898,7 @@ fn validate_flow_owned_alias_binding(
             format!(
                 "prepared invocation '{}' binds alias '{}' to resource '{}' with incompatible role {:?}",
                 invocation.invocation_id.0,
-                requirement.alias.label,
+                requirement.alias.binding_key,
                 resource_id,
                 requirement.role
             ),
@@ -900,7 +906,7 @@ fn validate_flow_owned_alias_binding(
         .with_flow(flow.flow_id, flow.flow_label.clone())
         .with_pass(pass_id(pass), pass_id(pass).to_string())
         .with_resource(resource_id, flow.resource_label(resource_id))
-        .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+        .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
         .with_invocation(invocation.invocation_id.clone())
         .with_view(invocation.view_id.clone()),
     );
@@ -1292,7 +1298,7 @@ fn hash_compiled_resource_ref(resource: Option<&CompiledResourceRef>, hasher: &m
         Some(CompiledResourceRef::TargetAlias(alias)) => {
             "target_alias".hash(hasher);
             alias.resource_id.hash(hasher);
-            alias.label.hash(hasher);
+            alias.binding_key.hash(hasher);
             alias.kind.hash(hasher);
         }
         Some(CompiledResourceRef::ImportedBuiltin(value)) => {

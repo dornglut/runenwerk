@@ -9,8 +9,8 @@ use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::{
     RenderDrawDescriptor, RenderDrawSource, RenderFixedStepRegionId, RenderIndirectDrawArgsKind,
     RenderPassId, RenderPrimitiveTopology, RenderRasterState, RenderResourceDeclaration,
-    RenderShaderConstant, RenderShaderReference, RenderTargetAliasKind, RenderVertexAttribute,
-    RenderVertexBufferLayout, RenderVertexStepMode,
+    RenderShaderConstant, RenderShaderReference, RenderTargetAliasKey, RenderTargetAliasKind,
+    RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use std::any::TypeId;
 use std::collections::BTreeMap;
@@ -262,7 +262,7 @@ pub enum CompiledResourceRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledTargetAliasRef {
     pub resource_id: GpuWorkResourceId,
-    pub label: String,
+    pub binding_key: RenderTargetAliasKey,
     pub kind: RenderTargetAliasKind,
 }
 
@@ -667,9 +667,9 @@ fn compile_resource_ref(
     {
         Some(RenderResourceDeclaration::TargetAlias(value)) => {
             CompiledResourceRef::TargetAlias(CompiledTargetAliasRef {
-                resource_id: value.id,
-                label: value.label.clone(),
-                kind: value.kind,
+                resource_id: value.id(),
+                binding_key: value.binding_key().clone(),
+                kind: value.kind(),
             })
         }
         Some(RenderResourceDeclaration::ImportedTexture(value)) => match value.semantic {

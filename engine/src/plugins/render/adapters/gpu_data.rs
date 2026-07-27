@@ -11,17 +11,11 @@ use std::any::{TypeId, type_name};
 #[derive(Debug, Clone, Copy)]
 pub struct RenderGpuParamsLayout {
     gpu: GpuDataLayout,
+    // Transitional render-side compatibility evidence; never normalized GPU authority.
     params_type_id: TypeId,
+    // Diagnostic display only.
     params_type_name: &'static str,
 }
-
-impl PartialEq for RenderGpuParamsLayout {
-    fn eq(&self, other: &Self) -> bool {
-        self.gpu == other.gpu
-    }
-}
-
-impl Eq for RenderGpuParamsLayout {}
 
 impl RenderGpuParamsLayout {
     pub fn uniform<Params: GpuParams + 'static>(
@@ -74,15 +68,28 @@ impl RenderGpuParamsLayout {
         })
     }
 
-    pub const fn gpu(self) -> GpuDataLayout {
+    /// Returns the normalized GPU allocation layout.
+    pub const fn gpu_layout(&self) -> GpuDataLayout {
         self.gpu
     }
 
-    pub const fn params_type_id(self) -> TypeId {
+    /// Reports whether two declarations can share the same GPU allocation shape.
+    pub fn is_allocation_compatible_with(&self, other: &Self) -> bool {
+        self.gpu == other.gpu
+    }
+
+    /// Reports whether two declarations name the same transitional render parameter type.
+    pub fn declares_same_params_type_as(&self, other: &Self) -> bool {
+        self.params_type_id == other.params_type_id
+    }
+
+    /// Returns transitional render-side declared-type compatibility evidence.
+    pub const fn params_type_id(&self) -> TypeId {
         self.params_type_id
     }
 
-    pub const fn params_type_name(self) -> &'static str {
+    /// Returns a diagnostic-only type name; it is not semantic authority.
+    pub const fn params_type_name(&self) -> &'static str {
         self.params_type_name
     }
 }
@@ -95,7 +102,7 @@ impl<Params: GpuParams + 'static> GpuDataEncoder<UniformData, Params> for Render
         label: &str,
         source: &Params,
     ) -> Result<(Vec<u8>, GpuDataLayout), GpuDataPreparationError> {
-        let layout = RenderGpuParamsLayout::uniform::<Params>(label)?.gpu();
+        let layout = RenderGpuParamsLayout::uniform::<Params>(label)?.gpu_layout();
         let raw = source.to_gpu();
         Ok((bytemuck::bytes_of(&raw).to_vec(), layout))
     }
@@ -113,7 +120,7 @@ impl<Params: GpuParams + 'static> GpuDataEncoder<StorageData, Params> for Render
         label: &str,
         source: &Params,
     ) -> Result<(Vec<u8>, GpuDataLayout), GpuDataPreparationError> {
-        let layout = RenderGpuParamsLayout::storage::<Params>(label, 1)?.gpu();
+        let layout = RenderGpuParamsLayout::storage::<Params>(label, 1)?.gpu_layout();
         let raw = source.to_gpu();
         Ok((bytemuck::bytes_of(&raw).to_vec(), layout))
     }
@@ -172,7 +179,7 @@ pub(crate) fn prepare_projected_uniform_bytes(
     PreparedGpuData::<UniformData>::from_render_adapter(
         label,
         bytes,
-        layout.gpu(),
+        layout.gpu_layout(),
         provenance,
         Some(layout.params_type_name()),
     )
@@ -203,11 +210,14 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_type_identity_does_not_change_render_layout_equality() {
+    fn allocation_compatibility_is_distinct_from_declared_parameter_type() {
         let first = RenderGpuParamsLayout::uniform::<FirstParams>("first").unwrap();
         let second = RenderGpuParamsLayout::uniform::<SecondParams>("second").unwrap();
+        let same_type = RenderGpuParamsLayout::uniform::<FirstParams>("same type").unwrap();
 
-        assert_eq!(first, second);
+        assert!(first.is_allocation_compatible_with(&second));
+        assert!(!first.declares_same_params_type_as(&second));
+        assert!(first.declares_same_params_type_as(&same_type));
         assert_ne!(first.params_type_id(), second.params_type_id());
         assert_ne!(first.params_type_name(), second.params_type_name());
     }

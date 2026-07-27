@@ -77,7 +77,7 @@ pub struct RenderExecutionGraphDiagnosticInspection {
     pub resource_label: Option<String>,
     pub invocation_id: Option<String>,
     pub view_id: Option<String>,
-    pub alias_label: Option<String>,
+    pub alias_binding_key: Option<String>,
     pub alias_kind: Option<String>,
     pub dynamic_target_key: Option<String>,
     pub history_signature: Option<String>,
@@ -159,7 +159,10 @@ pub fn inspect_render_execution_graph_diagnostic(
         resource_label: diagnostic.resource_label.clone(),
         invocation_id: diagnostic.invocation_id.as_ref().map(|id| id.0.clone()),
         view_id: diagnostic.view_id.clone(),
-        alias_label: diagnostic.alias_label.clone(),
+        alias_binding_key: diagnostic
+            .alias_binding_key
+            .as_ref()
+            .map(|key| key.as_str().to_string()),
         alias_kind: diagnostic.alias_kind.map(|kind| format!("{:?}", kind)),
         dynamic_target_key: diagnostic
             .dynamic_target_key

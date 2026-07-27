@@ -15,7 +15,7 @@ impl FlowRuntimeResources {
 
         if let Some(id) = self.resource_ids_by_label.get(value) {
             if let Some(RenderResourceDeclaration::TargetAlias(alias)) = self.descriptors.get(id)
-                && let Some(binding) = self.target_alias_bindings.get(alias.label.as_str())
+                && let Some(binding) = self.target_alias_bindings.get(alias.binding_key())
             {
                 return Some(runtime_resource_key_for_target_binding(binding));
             }
@@ -130,12 +130,12 @@ impl FlowRuntimeResources {
             CompiledResourceRef::TargetAlias(alias) => {
                 let binding = self
                     .target_alias_bindings
-                    .get(alias.label.as_str())
+                    .get(&alias.binding_key)
                     .ok_or_else(|| {
                         anyhow::anyhow!(
                             "pass '{}' references unbound target alias '{}'",
                             pass_id,
-                            alias.label
+                            alias.binding_key
                         )
                     })?;
                 match binding {
