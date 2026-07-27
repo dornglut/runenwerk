@@ -5,16 +5,19 @@ status: active
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-27
 related_docs:
   - ../workspace/planning/active-work.md
   - ../workspace/planning/roadmap.md
   - ../reports/investigations/repository-family-current-state-investigation.md
   - ../reports/investigations/runenrender-extraction-investigation.md
+  - ../reports/investigations/runengpu-g3-access-work-graph-investigation.md
   - ../design/active/runensdf-extraction-design.md
   - ../design/active/runenecs-extraction-boundary-design.md
   - ../design/active/runengpu-architecture-design.md
+  - ../design/active/runengpu-g3-access-work-graph-design.md
   - ../design/active/runenrender-decomposition-design.md
+  - ../workspace/specs/pt-runengpu-g3-access-work-graph.ron
   - ../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../adr/accepted/0015-separate-gpu-execution-from-rendering.md
 ---
@@ -76,8 +79,8 @@ No dependency cycle is allowed.
 |---|---|---|
 | RunenSDF | standalone framework maintained in `dornglut/runen-sdf`; Runenwerk duplicate internal authority retired under issue `#133` / PR `#157` | standalone roadmap and independently authorized adapters only |
 | RunenECS | internal ownership and safety repair required | investigation/design and bounded accepted repairs |
-| RunenGPU | architecture accepted; current implementation still mixed into renderer | S0 inventory only until first phase is specified |
-| RunenRender | architecture corrected to consume RunenGPU | S0 inventory and design only |
+| RunenGPU | S0 and G1A complete; G2 accepted through issue `#172` / PR `#173` at merge `709aa6aced020ee99405e1e1c3dde7703c77a4d4`; G3 decision phase active through issue `#174` / PR `#175` | G3 planning only until PR `#175` is independently accepted; Rust implementation requires one separate bounded issue |
+| RunenRender | architecture corrected to consume RunenGPU | S0 inventory and design only; internal proof remains blocked on accepted external RunenGPU cutover |
 | RunenUI | independent repository/workstream | governed in RunenUI |
 
 Current source location is implementation evidence, not permanent ownership.
