@@ -5,7 +5,7 @@ status: accepted
 owner: engine
 layer: engine-runtime / render graph compiler
 canonical: true
-last_reviewed: 2026-05-21
+last_reviewed: 2026-07-27
 related_designs:
   - ./render-product-graph-platform-design.md
   - ./feature-owned-render-contributions-design.md
@@ -193,8 +193,8 @@ Expected concepts:
   diagnostics;
 - `RenderExecutionGraphDiagnosticKind` with stable machine-readable categories;
 - `RenderExecutionGraphPreparedReport` for prepared-frame execution preflight;
-- `RenderBackendCapabilityProfile` for backend-neutral limits and support
-  flags;
+- `GpuCapabilities` for normalized backend-neutral limits, feature facts, and
+  texture-format support;
 - `CompiledResourceLifetimeWindow` for read/write/last-use windows;
 - prepared-frame compiler inspection fields for alias bindings, history scopes,
   dynamic target compatibility, resource windows, and backend capability

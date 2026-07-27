@@ -5,12 +5,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 related_docs:
   - ./roadmap.md
   - ./active-work.md
   - ../../reports/closeouts/README.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
 ---
 
 # Completed Work
@@ -47,8 +48,11 @@ PR `#132` was closed without merge because it contained only temporary automatio
 - Foreign uniform and storage handles are rejected even when independent flows allocate equal local components.
 - The GPU identity module remains independent of renderer, ECS, WGPU, Winit, application, and domain types.
 - Detailed scope, inventory, validation, and remaining-boundary evidence is recorded in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md).
+- Issue `#172` / draft PR `#173` is the code-complete G2 review candidate: normalized capability facts and requirements, validated logical resource descriptors, kind-typed handles, prepared-data boundaries, three bounded render adapters, full consumer migration, and deletion of replaced declaration authority.
+- The G2 candidate changed no manifest, dependency, lockfile, workflow, or external-package authority and introduced no G3-G7 execution behavior or compatibility path.
+- Detailed candidate scope, validation, deletion, adapter-disposition, and remaining-boundary evidence is recorded in the [PT-RUNENGPU-G2 implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md).
 
-G1A does not create an external package or authorize G2-G8. The next accepted action is a decision-complete G2 capabilities and resource-descriptor specification based on merged G1A facts.
+G2 is implemented but is not yet completed work in the acceptance sense: PR `#173` remains draft and unmerged. The next action is critical review and merge-readiness verification, not G3 implementation.
 
 ## RunenSDF
 

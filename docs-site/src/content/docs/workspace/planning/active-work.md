@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 related_docs:
   - ../engineering-workflow.md
   - ./roadmap.md
@@ -19,6 +19,7 @@ related_docs:
   - ../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md
   - ../../reports/investigations/runengpu-render-s0-inventory.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
   - ../specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
 ---
 
@@ -28,24 +29,22 @@ GitHub issues and pull requests own live delivery. This page is only a concise c
 
 ## Active
 
-### RunenGPU G2 implementation
+### RunenGPU G2 implementation review
 
-RunenGPU S0 and G1A are complete. Issue `#168` and PR `#171` completed the G2 investigation and decision-complete specification. Issue `#172` is the single bounded G2 implementation slice and owns the next serialized GPU/render change.
+RunenGPU S0 and G1A are complete. Issue `#168` and PR `#171` completed the G2 investigation and decision-complete specification. Issue `#172` is implemented on draft PR `#173` from accepted base `48d3e26dd29e7a20b8a4e3978e8e8465d24e6f84`; acceptance and merge remain pending critical review and exact-head Actions.
 
-The implementation must:
+The review candidate:
 
-- create future-transferable capability, logical-resource, kind-typed-handle, prepared-data, provenance, and structured-error authority under `engine::plugins::gpu`;
-- model resource kind, lifetime, ownership, transfer/observation, reconstruction, and memory intent independently;
-- distinguish buffer initialization from texture initialization, including checked texture format, extent, `bytes_per_row`, and `rows_per_image`;
-- keep texture-view validity bounded by the parent texture lease and checked subresources;
-- keep ECS/domain projection, render target/history/surface meaning, shader-file policy, fixed-time scheduling, UI, capture, artifacts, and product recovery outside RunenGPU;
-- migrate every inventoried declaration and consumer of the authority G2 replaces;
-- delete the old capability profile, combined lifetime/import, generic descriptor, and render-owned generic handle authority without aliases or forwarding paths;
-- preserve the common automatic-validation path and the inspectable advanced path as one future authority;
-- add focused unit, rustdoc compile-pass, rustdoc compile-fail, source-guard, and dependency-guard evidence;
-- stop rather than widening into G3 hazards/work graphs, G4 backend realization, G5 execution/readback, G6 graphics, G7 surfaces, or external extraction.
+- creates future-transferable capability, logical-resource, kind-typed-handle, prepared-data, provenance, and structured-error authority under `engine::plugins::gpu`;
+- models resource kind, lifetime, ownership, transfer/observation, reconstruction, and memory intent independently;
+- distinguishes buffer initialization from texture initialization, including checked texture format, extent, `bytes_per_row`, and `rows_per_image`;
+- bounds texture-view validity by the parent texture lease and checked subresources;
+- keeps ECS/domain projection, render target/history/surface meaning, shader-file policy, fixed-time scheduling, UI, capture, artifacts, and product recovery outside RunenGPU;
+- migrates the inventoried declaration and consumer authority and deletes the replaced profile, combined lifetime/import, generic descriptor, and render-owned generic handles without aliases or forwarding paths;
+- adds focused unit, rustdoc compile-pass/fail, source-guard, dependency-guard, and canonical validation evidence;
+- does not widen into G3-G7 implementation or external extraction.
 
-The implementation starts by verifying the actual post-planning `main`; the planning baseline is evidence, not an immutable implementation base.
+Review must still confirm the complete final diff, exact remote head, permanent Actions conclusion, unresolved review state, and merge-readiness evidence. The [G2 implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md) records the bounded candidate and its deliberate later-phase seams.
 
 The target external repository remains `dornglut/runen-gpu`, but no external package is created during G2.
 
@@ -61,7 +60,7 @@ The proof portfolio is already bound and remains separated:
 
 ## Queued
 
-- G3 access, initialization flow, hazards, immutable generic work, inferred dependencies, and internal graph after G2 closeout;
+- one decision-complete G3 planning slice for access, initialization flow, hazards, immutable generic work, inferred dependencies, and the internal graph only after G2 acceptance and merge;
 - G4 context/device admission, WGPU realization, shaders, pipelines, binding keys, backend layout, macro disposition, and removal of the temporary `RenderFlowId` bridge;
 - G5 execution, uploads, staging, completion, asynchronous readback, cancellation, and delayed retirement;
 - G6 offscreen graphics and shared render/non-render proof;
@@ -85,4 +84,5 @@ The proof portfolio is already bound and remains separated:
 - G1A implementation: issue `#131`, PR `#164`, merge `5bbdab36ae661d99432bfe5d215062c397aac975`, and [closeout report](../../reports/closeouts/pt-runengpu-g1a-closeout.md);
 - G2 public API/industry/proof-workload supporting decisions: PRs `#169` and `#170`;
 - G2 decision phase: issue `#168`, PR `#171`, the [current-main investigation](../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md), and the [implementation specification](../specs/pt-runengpu-g2-capabilities-resource-descriptors.ron);
+- G2 bounded implementation candidate: issue `#172`, draft PR `#173`, and the [implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md); acceptance remains pending.
 - RunenSDF standalone transfer, maintained authority, and Runenwerk duplicate-source retirement: Runenwerk PRs `#118` and `#157`, issue `#133`, and `dornglut/runen-sdf` PRs `#1`, `#2`, `#4`, `#5`, and `#6`.

@@ -1,13 +1,13 @@
 // Decision-complete implementation specification for the second internal RunenGPU boundary.
-// Planning issue #168 changes no Rust. Exactly one later implementation issue owns this specification.
+// Issue #172 implements this authority in draft PR #173; acceptance and merge remain pending review.
 
 PhaseImplementationSpec(
     phase_id: "PT-RUNENGPU-G2",
     title: "Normalized Capabilities, Logical Resources, Typed Handles, and Prepared GPU Data",
-    lifecycle_state: "planned",
-    implementation_authorization_status: "awaiting-owning-implementation-issue",
+    lifecycle_state: "implementation-complete-pending-review",
+    implementation_authorization_status: "implemented-by-owning-issue-172-pending-pr-173-review",
     owner: "RunenGPU contract owner",
-    source_baseline: "d1dfd2518c988ed1ffa9ff40f2d6df5fe7f5a9b1",
+    source_baseline: "48d3e26dd29e7a20b8a4e3978e8e8465d24e6f84",
     planning_issue: "dornglut/runenwerk#168",
     parent_issue: "dornglut/runenwerk#167",
     target_repository_after_internal_conformance: "dornglut/runen-gpu",
@@ -510,5 +510,5 @@ PhaseImplementationSpec(
         "multiple backends and advanced scheduling/aliasing/visualization until concrete pressure exists",
     ],
 
-    next_safe_action: "After this planning specification merges, create exactly one bounded G2 implementation issue. It re-verifies current main and the inventories, implements this specification, and stops on any bound stop condition. No parallel G2 descriptor or capability issue is permitted.",
+    next_safe_action: "Critically review draft PR #173, require exact-head Actions and complete merge-readiness evidence, and accept or correct the bounded G2 implementation. Only after G2 merges may one decision-complete G3 planning slice be opened; do not begin G3 implementation from this specification.",
 )

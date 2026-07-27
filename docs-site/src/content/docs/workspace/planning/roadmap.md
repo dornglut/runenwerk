@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 related_docs:
   - ../engineering-workflow.md
   - ./active-work.md
@@ -23,6 +23,7 @@ related_docs:
   - ../../reports/investigations/runengpu-render-s0-file-disposition.md
   - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
   - ../specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
 ---
 
@@ -45,14 +46,14 @@ Runenwerk remains the integration and product repository. Framework repositories
 
 ## Current priorities
 
-1. Execute issue `#172` as the only G2 implementation slice from the accepted issue `#168` / PR `#171` authority.
-2. Migrate and delete the capability/resource authority replaced by G2 without compatibility aliases, forwarding modules, or duplicate descriptors.
-3. Continue G3-G8 as individually specified internal boundary slices, migrating and deleting replaced authority in each phase rather than deferring a broad cutover to G8.
+1. Critically review issue `#172` / draft PR `#173`, including the complete migration/deletion diff, exact-head Actions, and merge readiness.
+2. Accept or correct the bounded G2 implementation without adding compatibility aliases, forwarding modules, duplicate descriptors, or later-phase behavior.
+3. After G2 merges, create one decision-complete G3 planning slice; continue G3-G8 as individually specified internal boundaries that migrate and delete replaced authority.
 4. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
 5. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
 6. Resume RunenECS boundary repair as separately bounded work.
 
-The RunenSDF cutover, RunenGPU S0, RunenGPU G1A, and RunenGPU G2 decision gates are complete. G2 implementation owns the serialized active queue; read-only investigation may still proceed independently. The implementation issue must verify the actual current `main` before changing Rust.
+The RunenSDF cutover, RunenGPU S0, RunenGPU G1A, and RunenGPU G2 decision gates are complete. The G2 implementation is code-complete on draft PR `#173` and owns the serialized review queue; it is not accepted or merged yet. G3 implementation is not authorized by this state.
 
 ## RunenSDF
 
@@ -195,6 +196,7 @@ The current mixed graph is decomposed incrementally. Each phase migrates consume
 - G1A completion evidence in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md);
 - G2 industry/API/proof-workload planning through PRs `#169` and `#170`;
 - G2 current-main census and decision-complete specification through issue `#168` and PR `#171`.
+- G2 bounded implementation candidate through issue `#172` and draft PR `#173`, with acceptance pending and evidence in the [implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md).
 
 G1A delivered:
 
