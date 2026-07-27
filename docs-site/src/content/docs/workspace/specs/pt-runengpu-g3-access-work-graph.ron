@@ -24,6 +24,7 @@ PhaseImplementationSpec(
         "DOMAIN_MAP.md",
         "docs-site/src/content/docs/adr/accepted/0015-separate-gpu-execution-from-rendering.md",
         "docs-site/src/content/docs/design/active/runengpu-architecture-design.md",
+        "docs-site/src/content/docs/design/active/runengpu-g3-access-work-graph-design.md",
         "docs-site/src/content/docs/design/active/runenrender-internal-decomposition-execution-plan.md",
         "docs-site/src/content/docs/reports/investigations/runengpu-industry-comparison.md",
         "docs-site/src/content/docs/reports/investigations/runengpu-public-api-ergonomics-review.md",
@@ -114,7 +115,7 @@ PhaseImplementationSpec(
 
     initial_state_public_types: [
         "pub enum GpuInitialCoverage { DescriptorInitialization, BufferRanges(Vec<GpuBufferRange>), TextureSubresources(Vec<GpuTextureSubresourceRange>), QueryRanges(Vec<GpuQueryRange>) } with private normalized storage and fallible constructors",
-        "pub enum GpuInitialAccessState { Unknown, Readable, Writable, ReadWrite } for explicit imported/retained graph-entry evidence only",
+        "pub enum GpuInitialAccessState { Unknown, Readable, Writable, ReadWrite } for explicit imported/retained graph-entry evidence only; it is logical evidence and never a backend barrier or WGPU state",
         "pub struct GpuWorkResourceInput containing a kind-preserving GpuResourceRef, checked initial coverage, initial access state, and provenance",
     ],
 
@@ -161,6 +162,7 @@ PhaseImplementationSpec(
 
     work_semantics: [
         "GpuWorkFragment::build(label, closure) allocates fragment-local node IDs and returns one immutable fragment or a structured authoring error.",
+        "The fragment label is diagnostic only; it does not determine composition, dependency direction, or prepared identity.",
         "Node builders use lexical closure scope and return Result; no repeated finish ladder, panic, unwrap, silent fallback, or partially valid public node exists.",
         "G3 node operation facts include dispatch/draw/copy/clear/resolve/present shape only where backend-independent and required to validate access consistency.",
         "Shader source, shader entry points, pipeline identities, binding keys/layouts, WGPU modules, and realization remain G4 or adapter-owned.",
@@ -188,7 +190,7 @@ PhaseImplementationSpec(
     graph_preparation: [
         "GpuPreparedWorkGraph::prepare(label, fragments) is the single advanced composition and validation entry point.",
         "Preparation does not mutate input fragments.",
-        "Preparation assigns deterministic fragment ordinals and prepared node IDs from stable input fragment identity/provenance order after rejecting duplicate semantic exports; input array position never resolves a writer conflict.",
+        "Input enumeration assigns process-local diagnostic fragment ordinals and deterministic tie order among otherwise independent ready nodes only; it never creates a dependency, resolves a writer conflict, changes initialization truth, or gives fragment labels/provenance semantic ordering authority.",
         "Preparation validates duplicate, unknown, and foreign identities; descriptor kind/usages; normalized ranges; texture-view parent/range relationships; query ranges; import/export contracts; and explicit-edge endpoints.",
         "Preparation computes initialized coverage, infers data dependencies, adds explicit non-data edges, rejects conflicting explicit/inferred order, rejects cycles and ambiguous writers, and produces deterministic topological order.",
         "Ties between independent ready nodes use deterministic prepared node identity only; this affects inspection order, not a claimed parallel execution guarantee.",
@@ -291,6 +293,7 @@ PhaseImplementationSpec(
         "initialization from Uninitialized, Zeroed, Prepared, imported/retained explicit input, partial writes, Clear, Load, Store, and Discard tests",
         "RAW, WAR, WAW, read/read, disjoint range, disjoint subresource, ReadWrite, and same-node conflict truth-table tests",
         "fragment-local lexical hazard orientation and cross-fragment import/export inference tests",
+        "input-fragment reordering tests proving semantic edges/errors remain unchanged while diagnostic prepared ordinals may change",
         "cross-fragment overlapping writer ambiguity and duplicate/mismatched export tests",
         "explicit non-data edge success, conflict, duplicate, unknown endpoint, and cycle tests",
         "deterministic prepared node IDs, edge order, ready-node tie order, diagnostics, and repeated preparation equality tests",
