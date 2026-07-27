@@ -145,7 +145,7 @@ architecture.
 
 ### Workspace / Cross-Domain
 
-- [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-comic-layout-platform-design.md)
+- [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
 - [Field Visualizer Product Workflow Design](field-visualizer-product-workflow-design.md)
 - [Material Lab And Material Preview Design](material-lab-and-material-preview-design.md)
