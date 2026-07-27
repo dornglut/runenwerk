@@ -33,9 +33,9 @@ planning issue: #174
 planning branch: docs/runengpu-g3-access-work-graph
 ```
 
-G2 is accepted through issue `#172` and merged PR `#173`. G3 extends its normalized descriptors, typed resource handles, initialization declarations, and export relationships. It must not recreate resource or backend authority.
+G2 is accepted through issue `#172` and merged PR `#173`. G3 extends its normalized descriptors, typed resource handles, initialization declarations, capability requirements, and export relationships. It must not recreate resource or backend authority.
 
-The current renderer contains useful correctness evidence, but generic access is split across broad pass reads/writes, role-specific pass fields, whole-resource lifetime windows, explicit dependency lists, a second GPU-primitive plan, and renderer-owned GPU timestamp resolution. Buffer ranges, texture subresources, partial initialization, normalized texture-view overlap, query-resolution work, and cross-fragment causality are absent from the future-transferable authority.
+The current renderer contains useful correctness evidence, but generic access is split across broad pass reads/writes, role-specific pass fields, whole-resource lifetime windows, explicit dependency lists, a second GPU-primitive plan, and renderer-owned GPU timestamp resolution. Buffer ranges, texture subresources, partial initialization, normalized texture-view overlap, query-resolution work, operation-implied capability requirements, and cross-fragment causality are absent from the future-transferable authority.
 
 ## Ownership boundary
 
@@ -45,10 +45,12 @@ G3 owns:
 - graph-entry initialization evidence and region-aware initialized coverage;
 - overlap, hazards, inferred data dependencies, and explicit non-data order;
 - immutable generic work fragments and nodes;
+- exact render attachment and multisample-resolve relationships;
 - backend-neutral query-set resolution intent and exact logical destination coverage;
+- operation/access-derived normalized capability requirements;
 - deterministic preparation and inspection facts.
 
-G3 does not own shader files, pipeline/binding admission, WGPU objects, realization, command encoding, submission, completion, readback decoding, retirement, surfaces, renderer meaning, ECS projection, fixed-time scheduling, timing presentation, or product policy.
+G3 does not own shader files, pipeline/binding admission, WGPU objects, realization, command encoding, submission, completion, readback decoding, runtime retirement, surfaces, renderer meaning, ECS projection, fixed-time scheduling, timing presentation, or product policy.
 
 ## Current declaration census
 
@@ -94,11 +96,36 @@ Missing authority:
 
 Disposition: replace it with prepared-graph initialized-coverage and dependency summaries and delete the file in the G3 implementation slice.
 
+Runtime use-after-retirement is not a G3 graph-time fact because no live context, backend generation, submission state, or retirement authority exists yet. G3 validates descriptor lifetime/ownership consistency and explicit graph-entry evidence. G4/G5 later reject stale-generation or retired backend values during admission/submission.
+
 ### Compiled render planning
 
 `engine/src/plugins/render/graph/planning.rs` embeds renderer resources, explicit pass order, execution data, lifetime windows, and diagnostics.
 
 Disposition: a temporary adapter produces one `GpuPreparedWorkGraph`; the render plan maps prepared node order to render-owned execution payloads. No second lifetime/hazard result remains.
+
+### Render attachments and multisample resolution
+
+WGPU/WebGPU multisample texture resolution is part of a render-pass color attachment through `resolve_target`; it is not a standalone command-encoder operation.
+
+Official evidence:
+
+- <https://docs.rs/wgpu/latest/wgpu/struct.RenderPassColorAttachment.html>
+- <https://docs.rs/wgpu/latest/wgpu/struct.TextureFormatFeatureFlags.html#associatedconstant.MULTISAMPLE_RESOLVE>
+
+The first planning draft incorrectly modeled multisample texture resolve as a standalone `Resolve` operation. That shape would not map honestly to the accepted first backend.
+
+Disposition:
+
+- `GpuRenderOperation` owns ordered color-attachment operations, optional depth/stencil attachment operation, draw intents, and render-side query writes;
+- each color attachment may name an optional resolve destination;
+- the operation derives source attachment and destination resolve accesses;
+- source must be multisampled, destination single-sampled, and format/extent/subresources compatible;
+- source and destination cannot alias;
+- resolve destination is written regardless of source store policy;
+- standalone `Resolve` work remains justified by query-set-to-buffer resolution.
+
+This preserves backend-neutral operation meaning without fabricating an unavailable command.
 
 ### GPU primitives
 
@@ -141,7 +168,7 @@ Disposition:
 - extend `GpuBufferUsage` with normalized `QueryResolve` during G3 implementation;
 - add `GpuBufferAccessKind::QueryResolveDestination`;
 - model timestamp writes as exact query-index writes that initialize those indices;
-- model query-set resolution as a typed `Resolve` operation consuming initialized query indices and writing an exact destination buffer range;
+- model query-set resolution as a typed standalone `Resolve` operation consuming initialized query indices and writing an exact destination buffer range;
 - calculate timestamp destination size as checked `query_count * 8` bytes;
 - require the destination descriptor to admit `QueryResolve` usage;
 - leave backend-specific destination-offset alignment and encoding to G4/G5;
@@ -149,6 +176,25 @@ Disposition:
 - retain polling, map completion, timestamp-period conversion, artifacts, and diagnostic presentation outside G3.
 
 This preserves one generic correctness graph without pulling execution or timing policy into RunenGPU prematurely.
+
+### Capability requirements
+
+The first planning draft allowed nodes to store capability requirements but did not bind which requirements follow mechanically from typed operations and accesses. Requiring every caller or adapter to restate obvious requirements would create another duplicate authority and permit impossible combinations such as timestamp work with timestamp queries explicitly disabled.
+
+Disposition: G3 derives structural requirements and merges them through the accepted G2 requirement authority:
+
+```text
+Compute operation                    -> Compute
+Render operation                     -> RenderPipeline
+Copy or standalone Clear             -> Copy
+Indirect draw                        -> IndirectDraw
+Storage texture access               -> StorageTexture
+Depth/stencil attachment             -> DepthAttachment
+Timestamp write or query resolution  -> TimestampQuery
+Present                              -> Presentation
+```
+
+Callers may add semantic requirements not inferable from operation shape. Operation-implied requirements cannot be disabled; incompatible merges fail before G4 admission.
 
 ### G2 seams
 
@@ -178,7 +224,7 @@ Timestamp consumers justify a checked `GpuQueryRange`. Samplers are immutable in
 
 Buffer access distinguishes uniform, storage read/write/read-write, vertex, index, indirect, copy source/destination, and query-resolve destination.
 
-Texture access distinguishes sampled, storage read/write/read-write, copy source/destination, color attachment, depth/stencil attachment, and present.
+Texture access distinguishes sampled, storage read/write/read-write, copy source/destination, color attachment, multisample resolve destination, depth/stencil attachment, and present.
 
 Query access distinguishes timestamp writes from resolve-source reads.
 
@@ -199,10 +245,12 @@ store: Store | Discard
 - pure writes and copy destinations initialize only covered regions;
 - timestamp writes initialize exact query indices;
 - query resolution requires initialized source indices and initializes its exact destination byte range;
+- render attachment load requires prior initialized coverage;
+- render attachment clear establishes source coverage;
+- render draw/write preserves or updates source attachment coverage;
+- a multisample resolve establishes destination coverage regardless of source store policy;
+- attachment discard invalidates only the source attachment's post-node readable coverage;
 - read-write requires prior initialized coverage;
-- attachment `Load` requires prior coverage;
-- attachment `Clear` establishes coverage before work;
-- attachment `Discard` invalidates post-node readable coverage;
 - imported and retained prior-epoch contents require explicit graph-entry evidence;
 - G3 validates evidence but does not claim G5 actually preserved, uploaded, synchronized, resolved, copied, mapped, or retired content.
 
@@ -222,7 +270,7 @@ Disjoint byte ranges and disjoint mip/layer/aspect/query ranges do not conflict.
 
 Within one fragment, lexical node order orients data hazards. Callers do not restate those edges.
 
-Fragment collection position is not semantic scheduling authority. Cross-fragment causality requires the same typed resource plus a matching typed import/export relation. Overlapping cross-fragment writers without one unique producer are rejected as ambiguous.
+Fragment collection position is not semantic scheduling authority. Any cross-fragment conflict with at least one write requires a matching typed import/export producer-consumer relation. Read/write conflicts without that relation fail as missing causality rather than being oriented by access kind or input position. Overlapping cross-fragment writers without one unique producer are rejected as ambiguous.
 
 Timestamp write -> query resolve ordering is inferred through the query range. Query resolve -> readback copy ordering is inferred through the destination buffer range.
 
@@ -232,7 +280,7 @@ Explicit order is fragment-local, typed, and only for non-data constraints. A re
 
 `GpuWorkFragment` is immutable after closure-scoped construction. It contains resources, imports, exports, nodes, explicit non-data edges, outputs, and provenance.
 
-G3 nodes are immutable pre-admission operation intent. They contain node kind, exact accesses, capability requirements, backend-neutral operation shape, execution preference, label, and provenance. Render shader/pipeline/draw payload remains in a temporary render-owned sidecar keyed by prepared node ID. G4 replaces that seam with admitted generic program/interface authority.
+G3 nodes are immutable pre-admission operation intent. They contain node kind, exact accesses, derived and caller-declared capability requirements, backend-neutral operation shape, execution preference, label, and provenance. Render shader/pipeline payload remains in a temporary render-owned sidecar keyed by prepared node ID. G4 replaces that seam with admitted generic program/interface authority.
 
 Initial node kinds remain:
 
@@ -245,9 +293,9 @@ Resolve
 Present
 ```
 
-`Resolve` has separate typed variants for multisample texture resolution and query-set-to-buffer resolution.
+`Resolve` is query-set-to-buffer work. Multisample texture resolution is an optional relation on a render color attachment.
 
-The single advanced authority is `GpuPreparedWorkGraph::prepare(...)`. It composes immutable fragments, validates and normalizes accesses and operation shape, tracks initialized coverage, infers edges, incorporates only non-redundant explicit non-data order, rejects ambiguity/cycles, and produces deterministic prepared node order plus structured diagnostics. It performs no backend admission or execution.
+The single advanced authority is `GpuPreparedWorkGraph::prepare(...)`. It composes immutable fragments, validates and normalizes accesses and operation shape, derives capability requirements, tracks initialized coverage, infers edges, incorporates only non-redundant explicit non-data order, rejects missing causality/ambiguity/cycles, and produces deterministic prepared node order plus structured diagnostics. It performs no backend admission or execution.
 
 G5 ordinary submission must call the same preparation authority internally.
 
@@ -298,7 +346,7 @@ engine/src/plugins/render/gpu_primitives/plan.rs
 engine/src/plugins/render/renderer/render_flow/gpu_timing.rs
 ```
 
-Transitive consumers include render runtime/preflight/inspection, fragment composition, procedural code, boids, Game of Life, SDF flows, compositor examples, editor/draw applications, render-flow tests, primitive tests, timing evidence, and the planning benchmark. The implementation issue must bind an exact current-main file inventory before source changes.
+Transitive consumers include render runtime/preflight/inspection, attachment construction, fragment composition, procedural code, boids, Game of Life, SDF flows, compositor examples, editor/draw applications, render-flow tests, primitive tests, timing evidence, and the planning benchmark. The implementation issue must bind an exact current-main file inventory before source changes.
 
 ## Required deletion target
 
@@ -322,9 +370,13 @@ Render-only shape, execution payload, timing decoding, and diagnostics presentat
 
 - Keep explicit pass dependencies: duplicates resource knowledge and remains renderer-shaped.
 - Preserve a duplicate explicit edge alongside an inferred edge: violates the non-data-only rule and leaves two dependency authorities.
+- Infer cross-fragment read/write direction without import/export causality: silently chooses between consuming initial contents and consuming another fragment's output.
+- Model multisample texture resolve as standalone work: not realizable through the accepted WGPU backend, where resolve is a render color-attachment relation.
 - Treat query resolution as `CopyDestination`: incorrect because WGPU requires dedicated query-resolve usage.
 - Defer query resolution entirely to G5: leaves current timestamp work absent from the G3 graph and cannot infer write -> resolve -> copy dependencies.
 - Put polling, mapping, or timing conversion in G3: crosses into G5 execution and Runenwerk presentation ownership.
+- Require callers to restate operation-implied capabilities: creates duplicate authority and permits contradictory work/requirement combinations.
+- Claim runtime use-after-retirement validation in G3: no context generation, backend registry, submission, or retirement state exists yet.
 - Whole-resource inference only: over-serializes disjoint work and cannot validate partial initialization.
 - Treat input array order as cross-fragment semantics: hides writer ambiguity and couples scheduling to collection order.
 - Mandatory public graph DSL: violates progressive disclosure.
@@ -333,7 +385,7 @@ Render-only shape, execution payload, timing decoding, and diagnostics presentat
 
 ## Stable-format and dependency audit
 
-No current evidence makes G3 ranges, nodes, edges, graphs, query resolve operations, or prepared diagnostics persisted, replay, network, wire, cache, or external formats. Inspection output is process-local.
+No current evidence makes G3 ranges, nodes, edges, graphs, render attachment operations, query resolve operations, capability derivation, or prepared diagnostics persisted, replay, network, wire, cache, or external formats. Inspection output is process-local.
 
 No dependency, package, workflow, lockfile, raw WGPU public type, ECS type, renderer semantic type, Winit type, SDF/UI/product type, or codec is required.
 
