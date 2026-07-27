@@ -1,5 +1,80 @@
 use core::fmt;
 
+use super::GpuWorkResourceId;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuAccessCause {
+    ZeroRange,
+    ArithmeticOverflow,
+    OutOfBounds,
+    InvalidDescriptorUsage,
+    InvalidTextureAspect,
+    InvalidViewIntersection,
+    InvalidD3Interpretation,
+    ParentLeaseMismatch,
+    WrongResourceKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GpuAccessError {
+    Invalid {
+        operation: &'static str,
+        label: String,
+        resource: Option<GpuWorkResourceId>,
+        cause: GpuAccessCause,
+        correction: &'static str,
+    },
+}
+
+impl GpuAccessError {
+    pub(crate) fn invalid(
+        operation: &'static str,
+        label: impl Into<String>,
+        resource: Option<GpuWorkResourceId>,
+        cause: GpuAccessCause,
+        correction: &'static str,
+    ) -> Self {
+        Self::Invalid {
+            operation,
+            label: label.into(),
+            resource,
+            cause,
+            correction,
+        }
+    }
+
+    pub const fn cause(&self) -> GpuAccessCause {
+        match self {
+            Self::Invalid { cause, .. } => *cause,
+        }
+    }
+
+    pub const fn resource(&self) -> Option<GpuWorkResourceId> {
+        match self {
+            Self::Invalid { resource, .. } => *resource,
+        }
+    }
+}
+
+impl fmt::Display for GpuAccessError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self::Invalid {
+            operation,
+            label,
+            resource,
+            cause,
+            correction,
+        } = self;
+        write!(f, "cannot {operation} '{label}'")?;
+        if let Some(resource) = resource {
+            write!(f, " for resource {resource}")?;
+        }
+        write!(f, ": {cause:?}; correction: {correction}")
+    }
+}
+
+impl std::error::Error for GpuAccessError {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuCapabilityRequirementCause {
     ConflictingStrength,

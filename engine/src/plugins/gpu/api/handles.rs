@@ -160,7 +160,7 @@ impl GpuWorkResourceIdAllocator {
 /// A kind-preserving reference for export relationships and diagnostics.
 ///
 /// Ordinary APIs should accept a kind-specific handle instead.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuResourceRef {
     Buffer(GpuBufferHandle),
     Texture(GpuTextureHandle),
@@ -177,6 +177,16 @@ impl GpuResourceRef {
             Self::TextureView(handle) => handle.diagnostic_identity(),
             Self::Sampler(handle) => handle.diagnostic_identity(),
             Self::QuerySet(handle) => handle.diagnostic_identity(),
+        }
+    }
+
+    pub fn common(&self) -> &super::GpuResourceCommon {
+        match self {
+            Self::Buffer(handle) => handle.descriptor().common(),
+            Self::Texture(handle) => handle.descriptor().common(),
+            Self::TextureView(handle) => handle.descriptor().common(),
+            Self::Sampler(handle) => handle.descriptor().common(),
+            Self::QuerySet(handle) => handle.descriptor().common(),
         }
     }
 

@@ -1,5 +1,6 @@
 //! Future-transferable, backend-neutral RunenGPU contracts.
 
+mod access;
 mod capability;
 mod data;
 mod errors;
@@ -7,6 +8,7 @@ mod handles;
 mod resource;
 mod work_resource_id;
 
+pub use access::*;
 pub use capability::*;
 pub use data::*;
 pub use errors::*;
