@@ -147,7 +147,7 @@ bricks, and memory pressure.
 
 - fixed integer input;
 - inclusive and exclusive expected outputs;
-- 4,097 elements or another accepted size that crosses workgroup hierarchy;
+- exactly 4,097 elements so the proof crosses the accepted workgroup hierarchy;
 - temporary scan storage;
 - exact full-output and total-count verification;
 - no window, renderer, ECS, or product types.
@@ -156,11 +156,14 @@ bricks, and memory pressure.
 
 **Headless Game of Life**
 
-- fixed seed, dimensions, and tick count;
+- fixed accepted seed;
+- dimensions exactly 160×90;
+- exactly 16 steps;
 - ping-pong storage;
 - full-grid CPU oracle;
-- exact live-cell count and checksum;
-- selected-cell assertions;
+- exact live-cell count `2,063`;
+- exact FNV-1a-64 checksum `0xBD710B88594CD584`;
+- accepted selected-cell assertions;
 - asynchronous completion and readback;
 - source state prepared outside RunenGPU.
 
