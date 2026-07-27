@@ -76,6 +76,115 @@ impl fmt::Display for GpuAccessError {
 impl std::error::Error for GpuAccessError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuWorkOperationCause {
+    ZeroDispatch,
+    ZeroDrawCount,
+    InvalidDraw,
+    InvalidCopyRegion,
+    InvalidCopyLayout,
+    NonFiniteClearValue,
+    OutOfRangeClearValue,
+    InvalidAttachment,
+    InvalidMultisampleResolve,
+    InvalidBufferZero,
+    InvalidQueryRange,
+    InvalidQueryResolution,
+    QueryDestinationOverflow,
+    QueryDestinationOutOfBounds,
+    ZeroWork,
+    OperationAccessContradiction,
+    MechanicalCapabilityContradiction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GpuWorkOperationError {
+    Invalid {
+        operation: &'static str,
+        label: String,
+        resource: Option<GpuWorkResourceId>,
+        cause: GpuWorkOperationCause,
+        correction: &'static str,
+        source: Option<Box<GpuAccessError>>,
+    },
+}
+
+impl GpuWorkOperationError {
+    pub(crate) fn invalid(
+        operation: &'static str,
+        label: impl Into<String>,
+        resource: Option<GpuWorkResourceId>,
+        cause: GpuWorkOperationCause,
+        correction: &'static str,
+    ) -> Self {
+        Self::Invalid {
+            operation,
+            label: label.into(),
+            resource,
+            cause,
+            correction,
+            source: None,
+        }
+    }
+
+    pub(crate) fn from_access(
+        operation: &'static str,
+        label: impl Into<String>,
+        cause: GpuWorkOperationCause,
+        correction: &'static str,
+        source: GpuAccessError,
+    ) -> Self {
+        Self::Invalid {
+            operation,
+            label: label.into(),
+            resource: source.resource(),
+            cause,
+            correction,
+            source: Some(Box::new(source)),
+        }
+    }
+
+    pub const fn cause(&self) -> GpuWorkOperationCause {
+        match self {
+            Self::Invalid { cause, .. } => *cause,
+        }
+    }
+
+    pub const fn resource(&self) -> Option<GpuWorkResourceId> {
+        match self {
+            Self::Invalid { resource, .. } => *resource,
+        }
+    }
+}
+
+impl fmt::Display for GpuWorkOperationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self::Invalid {
+            operation,
+            label,
+            resource,
+            cause,
+            correction,
+            ..
+        } = self;
+        write!(f, "cannot {operation} '{label}'")?;
+        if let Some(resource) = resource {
+            write!(f, " for resource {resource}")?;
+        }
+        write!(f, ": {cause:?}; correction: {correction}")
+    }
+}
+
+impl std::error::Error for GpuWorkOperationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Invalid { source, .. } => source
+                .as_deref()
+                .map(|source| source as &(dyn std::error::Error + 'static)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuCapabilityRequirementCause {
     ConflictingStrength,
     AmbiguousPreferredFallback,

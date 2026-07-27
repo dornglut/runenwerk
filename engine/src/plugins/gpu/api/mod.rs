@@ -6,6 +6,7 @@ mod data;
 mod errors;
 mod handles;
 mod resource;
+mod work;
 mod work_resource_id;
 
 pub use access::*;
@@ -14,6 +15,7 @@ pub use data::*;
 pub use errors::*;
 pub use handles::*;
 pub use resource::*;
+pub use work::*;
 pub use work_resource_id::{
     GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
