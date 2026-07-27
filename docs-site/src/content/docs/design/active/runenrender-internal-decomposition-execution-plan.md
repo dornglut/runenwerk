@@ -170,7 +170,7 @@ Delivered:
 
 G2 did not create a device, queue, shader/pipeline realization, work graph, submission, upload, readback, surface, or external package.
 
-## G3 — Access, initialization flow, hazards, immutable work, and internal graph
+## G3 — Access, graph-entry initialization, hazards, immutable work, and internal graph
 
 **State: decision phase active through issue `#174` and draft PR `#175`; Rust implementation is not authorized.**
 
@@ -180,15 +180,22 @@ Bound direction:
 
 - checked buffer ranges, texture subresources, and query ranges used by work;
 - exact access categories and region-aware graph-entry initialization facts;
-- immutable generic compute/render/copy/clear/resolve/present work fragments and typed operations;
+- normalized query-resolve destination buffer usage;
+- exact render color/depth attachments with optional multisample resolve targets inside render operations;
+- immutable generic compute/render/copy/clear/query-resolve/present work fragments and typed operations;
+- operation/access-derived normalized capability requirements;
 - data dependencies inferred from typed accesses;
-- explicit ordering retained only for real non-data constraints;
-- typed import/export causality across independent fragments;
+- explicit ordering retained only for real non-data constraints, with redundant data edges rejected;
+- typed import/export causality for every cross-fragment overlap with at least one write;
 - one deterministic `GpuPreparedWorkGraph` preparation and inspection authority;
-- rejection of duplicate/foreign identities, cycles, ambiguous writers, read-before-initialization, invalid access/operation combinations, and inconsistent imports/exports;
-- one temporary render/GPU-primitive lowering adapter and deletion of replaced renderer-owned generic correctness authority in the implementation slice.
+- rejection of duplicate/foreign identities, cycles, missing cross-fragment causality, ambiguous writers, read-before-graph-entry-initialization, invalid access/operation/requirement combinations, and inconsistent imports/exports;
+- one temporary render/GPU-primitive/timestamp lowering adapter and deletion of replaced renderer-owned generic correctness authority in the implementation slice.
+
+Multisample texture resolve is a render color-attachment relation because that is the accepted WGPU/WebGPU execution model. Standalone `Resolve` work is query-set-to-buffer resolution.
 
 The graph is the shared internal correctness/inspection authority. It is not mandatory common-path ceremony. Fragment collection position, labels, and provenance are not scheduling authority.
+
+G3 does not create context generations, backend leases, submissions, or runtime retirement state. Stale-generation and use-after-retirement validation therefore remain G4/G5 responsibilities.
 
 Prerequisite: accepted G2 resources/capabilities/handles/prepared-data contracts. Implementation prerequisite: accepted G3 planning PR and one separate bounded implementation issue.
 
@@ -198,12 +205,15 @@ Goal:
 
 - create GPU-owned context and device admission authority;
 - map WGPU features, limits, and format facts into normalized G2 capabilities;
+- admit the merged operation/access-derived capability requirements produced by G3;
 - separate shader source identity/revision/interface intent from filesystem and hot-reload policy;
 - define shader and pipeline admission and structured realization failures;
 - expose validated binding keys rather than string binding authority;
 - bind backend uniform/storage/vertex/indirect layout and derive/macro realization;
 - realize logical resources, shader modules, and pipelines through WGPU;
+- validate render attachment/resolve compatibility and query-resolve destination alignment against admitted backend facts;
 - contain WGPU-specific facts behind normalized contracts;
+- reject stale-generation/context values;
 - remove the temporary `RenderFlowId` resource-owner bridge.
 
 G4 owns context/device and backend realization. It does not execute the G5 proof portfolio.
@@ -217,9 +227,12 @@ Goal:
 - create/use a context without window, surface, renderer, ECS, or product types;
 - implement ordinary automatic prepare-and-submit and explicit prepare/inspect/submit-prepared through one authority;
 - support initial uploads, full and partial updates, staging, and multiple dispatches;
+- encode render-pass attachments and multisample resolve targets;
+- encode query-set resolution and its later copy/readback path;
 - expose submission completion and cancellation;
 - provide asynchronous buffer and texture readback without blocking submission authority;
 - normalize texture-to-buffer row padding and format provenance;
+- reject runtime use after retirement or invalid backend generation;
 - connect last public handle drop to delayed safe backend retirement after relevant submissions complete;
 - prove terminal and idempotent shutdown;
 - report deterministic planning evidence separately from adapter/device environment evidence.
