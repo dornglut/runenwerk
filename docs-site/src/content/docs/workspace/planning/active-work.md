@@ -23,6 +23,7 @@ related_docs:
   - ../../reports/investigations/runengpu-g3-access-work-graph-investigation.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
   - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
+  - ../../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
   - ../specs/pt-runengpu-g3-access-work-graph.ron
 ---
 
@@ -32,7 +33,7 @@ GitHub issues and pull requests own live delivery. This page is a concise cross-
 
 ## Active
 
-### Runen family operational hardening — issue `#176`
+### G3 implementation revalidation — issue `#177`
 
 Accepted foundation:
 
@@ -41,31 +42,43 @@ RunenGPU G1A  complete
 RunenGPU G2   complete through #172 / PR #173
 RunenGPU G3 planning accepted through #174 / PR #175
 accepted G3 planning merge 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
+Runen family operational hardening completed through #176 / PR #178
 ```
 
-Issue `#176` is the active documentation-only slice. It owns:
+The operational-hardening completion becomes authoritative through the merge of PR
+`#178`; this branch deliberately asserts no merge SHA.
 
-- evidence-based classification of external GPU/renderer weaknesses and complaints;
-- distinction between Runen mitigation, inherited backend limitation, and new Runen risk;
-- family-wide accepted-work, pressure, cache, compatibility, recovery, and reproducibility doctrine;
-- G4-G8 operational requirements without changing accepted G3 semantics;
-- RunenRender provider maturity, narrow capability, incremental scene, cache, and performance requirements;
-- operational proof workloads for progress, saturation, cancellation, shutdown, cache compatibility, device loss, reconstruction, capture, and direct-WGPU comparison;
-- ranked application-domain fit and explicit domain non-ownership;
-- stale index and planning reconciliation.
+Issue `#177` owns the bounded G3 Rust implementation. Source changes remain
+unauthorized until the issue is reverified against the exact post-`#178` `main`.
 
-The active branch is:
+Before source changes it must:
 
-```text
-docs/runen-family-operational-hardening
-```
+1. record the exact accepted implementation base;
+2. run `cargo validate` and `git diff --check`;
+3. repeat the current declaration/direct/transitive consumer census;
+4. verify no accepted G3 value became a persisted, replay, wire, cache, network, or
+   external format;
+5. confirm no new ADR, package, dependency, compatibility path, or G4/G5/G7 authority
+   is required;
+6. update the issue with the exact revalidation evidence.
 
-This slice changes documentation only. It does not authorize Rust, package,
-dependency, lockfile, workflow, external repository, G3 API, or new G/R phase changes.
+The G3 implementation remains limited to:
 
-### Current operational findings
+- checked buffer, texture-subresource, and query access;
+- graph-entry initialization;
+- render attachments and canonical clear values;
+- checked buffer zero and typed query resolution;
+- operation-derived requirements;
+- RAW/WAR/WAW hazards and typed cross-fragment causality;
+- immutable work fragments/nodes and deterministic prepared-graph authority;
+- one temporary render/GPU-primitive/timing adapter;
+- complete current-consumer migration;
+- deletion of replaced generic renderer correctness authority without aliases or
+  parallel paths.
 
-Current timing readback:
+### Retained operational findings
+
+Current timing readback remains:
 
 ```text
 map_async
@@ -84,25 +97,6 @@ claiming to remove them.
 
 ## Queued
 
-### Bounded G3 implementation — issue `#177`
-
-Issue `#177` owns the accepted G3 Rust implementation but is explicitly blocked on
-accepted completion of `#176`.
-
-Before source changes it must:
-
-1. record the exact post-`#176` `main` as implementation base;
-2. run `cargo validate` and `git diff --check`;
-3. repeat the current declaration/consumer census;
-4. verify no persisted or external contract changed;
-5. confirm no G4/G5/G7 ownership is required.
-
-The G3 implementation remains limited to checked access, graph-entry initialization,
-render attachments and clear values, buffer zero, query resolution, hazards,
-import/export causality, derived requirements, immutable work, deterministic
-preparation, one temporary adapter, full migration, and deletion of replaced generic
-renderer authority.
-
 ### Later RunenGPU phases
 
 - G4: context/device admission, portability classes, cache compatibility, WGPU realization, shaders/pipelines/binding layout, generations, stale-generation validation, and removal of the temporary renderer-derived owner bridge;
@@ -116,15 +110,17 @@ renderer authority.
 
 RunenRender remains S0/design only until accepted external RunenGPU cutover.
 Near-term proof pressure is procedural/analytic field content and overlays. Volume,
-population, and regional summaries are research candidates. Fiber, liquid, broad
+population, regional summaries, and liquid are research candidates. Fiber, broad
 hardware-specialized providers, and universal provider unification remain deferred.
 
 ## Retained proof portfolio
 
 ```text
 G5 correctness
-    exact prefix scan/readback
-    headless Game of Life
+    exact 4,097-element prefix scan/readback
+    160×90 Game of Life for 16 steps
+    exact live count 2,063
+    exact FNV-1a-64 0xBD710B88594CD584
     deterministic compute-to-texture
 
 G5 operations
@@ -167,4 +163,5 @@ RunenRender
 - G1A implementation: issue `#131`, PR `#164`, merge `5bbdab36ae661d99432bfe5d215062c397aac975`;
 - G2 decision and implementation: issues `#168` and `#172`, PRs `#171` and `#173`, merge `709aa6aced020ee99405e1e1c3dde7703c77a4d4`;
 - G3 decision phase: issue `#174`, PR `#175`, merge `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`;
+- Runen family operational hardening: issue `#176`, PR `#178`; authoritative on merge, with no merge SHA asserted in this candidate;
 - RunenSDF standalone transfer and Runenwerk duplicate-source retirement: issue `#133`, Runenwerk PRs `#118` and `#157`, and accepted `dornglut/runen-sdf` work.
