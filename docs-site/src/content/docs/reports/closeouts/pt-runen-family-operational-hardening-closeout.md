@@ -1,9 +1,9 @@
 ---
 title: Runen Family Operational Hardening Closeout
 description: Closeout record for the documentation-only external-lessons, operational-contract, application-domain, proof-strategy, and planning reconciliation slice.
-status: active
+status: completed
 owner: workspace
-layer: closeout
+layer: reports
 canonical: true
 last_reviewed: 2026-07-27
 related_docs:
