@@ -92,7 +92,10 @@ IndexRead
 IndirectRead
 CopySource
 CopyDestination
+QueryResolveDestination
 ```
+
+`QueryResolveDestination` is distinct from `CopyDestination`. G3 extends the accepted G2 buffer-usage vocabulary with normalized `GpuBufferUsage::QueryResolve` because the current timestamp consumer resolves opaque query data into a buffer before an ordinary copy/readback path.
 
 ### Textures and views
 
@@ -132,24 +135,40 @@ store: Store | Discard
 
 ### Queries and samplers
 
-Timestamp query use has a checked query-index range. Samplers are immutable input evidence and do not create data hazards by themselves.
+Timestamp query use has a checked query-index range.
+
+```text
+WriteTimestamp
+    writes and initializes exact query indices
+
+ResolveSource
+    reads initialized query indices through a typed query-set resolve operation
+```
+
+A query-set resolve writes an exact destination buffer byte range. Timestamp results occupy one `u64` per query, so the logical range size is checked as `query_count * 8`. G3 validates count, overflow, destination bounds, `QueryResolve` usage, and source initialization. G4/G5 validate backend-specific offset alignment and encode the operation.
+
+Samplers are immutable input evidence and do not create data hazards by themselves.
 
 ## Initialization flow
 
 Graph-time initialization is region-aware:
 
 ```text
-Zeroed descriptor         -> complete initialized coverage
-Prepared descriptor       -> checked prepared coverage
-Uninitialized descriptor  -> no initialized coverage
-pure write                -> initialize written coverage
-copy destination          -> initialize destination coverage
-read-write                -> require prior coverage, then preserve/write it
-attachment Load           -> require prior coverage
-attachment Clear          -> establish full attachment coverage
-attachment Store          -> preserve coverage
-attachment Discard        -> remove later readable coverage
+Zeroed descriptor             -> complete initialized coverage
+Prepared descriptor           -> checked prepared coverage
+Uninitialized descriptor      -> no initialized coverage
+pure write                    -> initialize written coverage
+copy destination              -> initialize destination coverage
+query timestamp write         -> initialize written query indices
+query resolve destination     -> initialize exact destination buffer bytes
+read-write                    -> require prior coverage, then preserve/write it
+attachment Load               -> require prior coverage
+attachment Clear              -> establish full attachment coverage
+attachment Store              -> preserve coverage
+attachment Discard            -> remove later readable coverage
 ```
+
+Query sets begin with no initialized indices unless explicit graph-entry evidence exists. `ResolveSource` requires initialized coverage established by accepted timestamp writes or explicit input evidence.
 
 Imported or retained prior-epoch content enters only through explicit `GpuWorkResourceInput` evidence. Lifetime, labels, or the presence of a current runtime allocation never imply initialized content.
 
@@ -186,6 +205,8 @@ shared typed resource
 
 Overlapping cross-fragment writers without one unique producer are rejected as ambiguous rather than ordered by array position.
 
+A timestamp write followed by query resolution produces a data dependency through the query-set range. Query resolution followed by a buffer copy produces a data dependency through the resolved destination byte range.
+
 ## Same-node access
 
 The authoring boundary normalizes repeated access declarations:
@@ -219,9 +240,13 @@ Resolve
 Present
 ```
 
+`Resolve` contains distinct typed operation variants for multisample texture resolution and query-set-to-buffer resolution. These variants share a node kind but do not share one ambiguous payload.
+
 G3 nodes are pre-admission work intent. They include operation kind, exact access, capability requirements, backend-neutral operation shape, execution preference, label, and provenance.
 
 Current render shader/pipeline/draw payload remains in a temporary render-owned sidecar keyed by prepared node identity. G4 replaces this seam with admitted generic shader/pipeline/interface authority. The sidecar cannot alter G3 hazard truth.
+
+An empty render draw list is valid only when an attachment `Clear` or another explicit non-attachment side effect makes the node meaningful. `Store` alone preserves content and is not work.
 
 ## Identity
 
@@ -262,7 +287,7 @@ Preparation rejects duplicate export keys, kind mismatch, access mismatch, cover
 
 `GpuExplicitOrder` is fragment-local and references typed node IDs. A non-empty reason is required for diagnostics.
 
-It is only for constraints not representable by data access. An explicit edge that opposes an inferred data edge or creates a cycle fails.
+It is only for constraints not representable by data access. An explicit edge that duplicates an inferred data edge is rejected as redundant; the correction is to remove the explicit edge and rely on typed access. An explicit edge that opposes an inferred data edge or creates a cycle also fails.
 
 Cross-fragment explicit node edges are deferred. Existing render passes needing explicit non-data order lower into one fragment. Independent fragments compose through resources and exports.
 
@@ -273,12 +298,12 @@ Cross-fragment explicit node edges are deferred. Existing render passes needing 
 Preparation:
 
 1. accepts immutable fragments;
-2. validates identities, descriptors, usages, ranges, view parents, queries, and imports/exports;
+2. validates identities, descriptors, usages, ranges, view parents, queries, query resolves, and imports/exports;
 3. normalizes access;
 4. derives initial coverage;
 5. infers RAW/WAR/WAW edges;
-6. adds explicit non-data edges;
-7. rejects ambiguity, conflict, and cycles;
+6. adds non-redundant explicit non-data edges;
+7. rejects ambiguity, conflict, redundant explicit order, and cycles;
 8. produces deterministic prepared IDs and topological order;
 9. publishes normalized access, edges with typed causes, coverage summaries, exports, diagnostics, and provenance.
 
@@ -299,12 +324,15 @@ It:
 - lowers current render role fields into exact G3 access;
 - maps current whole-resource authoring to checked whole ranges only where no narrower fact exists;
 - translates history/import/runtime-entry assumptions into explicit input evidence;
+- maps current pass timestamp writes to exact query-index writes;
+- emits a typed query-set resolve operation and exact destination buffer range for current timing resolution;
+- maps the later resolve-buffer-to-readback copy through ordinary typed buffer-copy work;
 - groups passes requiring explicit non-data order into one fragment;
 - maps prepared node order back to render-owned execution payload;
 - lowers primitive temporary storage to typed G2 transient resources;
 - removes primitive string resource/dependency authority.
 
-It does not move renderer semantics, shader paths, fixed-time policy, UI/product meaning, or WGPU behavior into RunenGPU.
+It does not move renderer semantics, shader paths, fixed-time policy, UI/product meaning, timing presentation/readback decoding, or WGPU behavior into RunenGPU.
 
 ## Deletion boundary
 
@@ -333,6 +361,7 @@ G3 stops before:
 - shader/pipeline/interface and binding-layout authority;
 - WGPU resource realization and barriers;
 - encoding, submission, upload/update, completion, readback, cancellation, and retirement;
+- backend query-resolve offset alignment and command encoding;
 - surface acquisition and presentation execution;
 - extraction or a new package;
 - aliasing, pass fusion, multi-queue scheduling, or graph visualization.
