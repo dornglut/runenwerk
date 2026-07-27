@@ -22,250 +22,165 @@ related_docs:
 
 ## Outcome
 
-G3 can be specified without a new ADR, external package, dependency, or premature G4/G5/G7 implementation.
-
-The verified source baseline is:
+G3 can proceed as a documentation and specification phase without a new ADR, external package, dependency, or premature G4/G5/G7 implementation.
 
 ```text
 repository: dornglut/runenwerk
 branch inspected: main
-commit: 709aa6aced020ee99405e1e1c3dde7703c77a4d4
+baseline: 709aa6aced020ee99405e1e1c3dde7703c77a4d4
 planning issue: #174
 planning branch: docs/runengpu-g3-access-work-graph
 ```
 
-G2 is accepted through issue `#172` and merged PR `#173`. Its normalized capabilities, logical descriptors, typed handles, prepared-data contracts, diagnostic/provenance rules, and render adapters are the required input. G3 must extend that authority rather than recreating resource descriptions or backend execution.
+G2 is accepted through issue `#172` and merged PR `#173`. G3 extends its normalized descriptors, typed resource handles, initialization declarations, and export relationships. It must not recreate resource or backend authority.
 
-The current renderer contains useful correctness evidence, but not a transferable work model. Access is split across broad `reads`/`writes`, role-specific pass fields, whole-resource lifetime windows, explicit pass dependencies, and a second GPU-primitive access model. Buffer ranges, texture subresources, partial initialization, overlap, and cross-fragment causality are absent.
+The current renderer contains useful correctness evidence, but generic access is split across broad pass reads/writes, role-specific pass fields, whole-resource lifetime windows, explicit dependency lists, and a second GPU-primitive plan. Buffer ranges, texture subresources, partial initialization, normalized texture-view overlap, and cross-fragment causality are absent.
 
-## Binding ownership
+## Ownership boundary
 
-```text
-Runenwerk adapters and host policy
-    -> RunenRender semantic image planning
-        -> RunenGPU generic work and validation
-            -> G4/G5 WGPU admission and execution
-```
+G3 owns:
 
-G3 owns immutable generic work intent, work-time access ranges, initialization-flow facts, hazards, inferred data dependencies, explicit non-data ordering, deterministic graph preparation, and inspection facts.
+- checked work-time buffer ranges and texture/query subranges;
+- graph-entry initialization evidence and region-aware initialized coverage;
+- overlap, hazards, inferred data dependencies, and explicit non-data order;
+- immutable generic work fragments and nodes;
+- deterministic preparation and inspection facts.
 
-G3 does not own shader files, pipeline realization, binding-layout admission, WGPU objects, command encoding, submission, completion, readback, retirement, surfaces, renderer semantics, ECS projection, fixed-time scheduling, or product policy.
+G3 does not own shader files, pipeline/binding admission, WGPU objects, realization, encoding, submission, completion, readback, retirement, surfaces, renderer meaning, ECS projection, fixed-time scheduling, or product policy.
 
 ## Current declaration census
 
 ### Render pass graph
 
-`engine/src/plugins/render/graph/pass_graph.rs` currently defines renderer-shaped nodes with:
+`engine/src/plugins/render/graph/pass_graph.rs` stores generic and render facts together:
 
 ```text
-reads / writes
-depends_on
+reads / writes / depends_on
 sampled_textures / write_textures
-vertex_buffers / index_buffers / instance_buffers / indirect_buffers
-depth_target
-uniform_bindings
-render shader, draw, raster, view, fixed-step, and product-facing fields
+uniform / vertex / index / instance / indirect roles
+depth target
+shader, raster, draw, view, fixed-step, and feature meaning
 ```
 
-Useful evidence:
+This proves the required access roles but is not the target authority. It has no byte ranges or texture subresources, can express contradictory role lists, and uses renderer pass IDs plus strings for order.
 
-- access roles already matter independently from broad read/write classification;
-- compute, graphics, copy, and present consumers exist;
-- vertex, index, indirect, uniform, storage, sampled, storage-texture, attachment, and present uses are required;
-- explicit order and data order are currently conflated.
+Disposition: `RenderPassNode` may remain temporary render authoring input. One render-owned adapter lowers it into G3 work. It cannot remain final access, initialization, hazard, dependency, or graph authority.
 
-Defects:
+### Validation and ordering
 
-- no buffer byte ranges;
-- no texture mip/layer/aspect access ranges;
-- a texture view is not normalized to its parent resource for hazards;
-- role lists can disagree with broad reads/writes;
-- strings and renderer pass IDs own dependency authoring;
-- renderer meaning and generic GPU correctness share one node.
+`engine/src/plugins/render/graph/validation.rs` validates render shape and resource roles, then topologically sorts only explicit `depends_on` edges. Data order must be repeated manually.
 
-Disposition: retain `RenderPassNode` only as transitional render authoring. Lower it through one render-owned G3 adapter into generic immutable work. It must not remain competing access, initialization, hazard, or ordering authority.
-
-### Flow validation and ordering
-
-`engine/src/plugins/render/graph/validation.rs` validates renderer pass shape, resource kind/usage, explicit `depends_on`, and then topologically sorts only those explicit edges.
-
-Useful evidence:
-
-- duplicate/unknown/foreign references, cycles, invalid roles, copy class mismatches, present constraints, and capability errors already need structured reporting;
-- deterministic topological order is required by runtime planning.
-
-Defects:
-
-- data dependencies are not inferred;
-- declaration order and explicit edges can accidentally hide hazards;
-- a caller must manually reproduce ordering already implied by accesses;
-- renderer-specific diagnostics are the only graph error authority.
-
-Disposition: preserve renderer-only shape validation above the boundary. Move generic resource/use validation, initialization, hazard inference, cycle detection, and deterministic generic order to RunenGPU. Delete the local generic topological/lifetime authority when all consumers use the prepared GPU graph.
+Disposition: retain render-only shape checks above the boundary. Move generic resource/use validation, initialized coverage, hazards, inferred edges, cycles, and deterministic generic order to RunenGPU. Remove local generic topological authority after cutover.
 
 ### Whole-resource lifetime windows
 
-`engine/src/plugins/render/graph/resource_lifetimes.rs` defines `CompiledResourceAccessKind` and `CompiledResourceLifetimeWindow`. It records first/last use/read/write by pass index and reports only transient read-before-first-write.
+`engine/src/plugins/render/graph/resource_lifetimes.rs` records whole-resource first/last read/write and reports only transient read-before-write.
 
 Useful invariant: uninitialized transient content cannot be read.
 
-Defects:
+Missing authority:
 
-- whole-resource only;
-- write classification is incomplete;
-- no initialized-region coverage;
-- no read-after-write, write-after-read, or write-after-write edge cause;
-- no texture-view parent normalization;
-- no cross-fragment composition;
-- first/last windows are observations after an explicit order, not the authority that derives order.
+- byte and subresource coverage;
+- partial initialization;
+- RAW, WAR, and WAW causes;
+- texture-view parent normalization;
+- cross-fragment composition;
+- order inference.
 
-Disposition: replace with G3 initialized-coverage and dependency summaries. Delete this renderer-owned generic authority in the G3 implementation slice without forwarding types or aliases.
+Disposition: replace it with prepared-graph initialized-coverage and dependency summaries and delete the file in the G3 implementation slice.
 
 ### Compiled render planning
 
-`engine/src/plugins/render/graph/planning.rs` embeds renderer resources, pass order, execution plan, lifetime windows, and diagnostics in `CompiledRenderFlowPlan`.
+`engine/src/plugins/render/graph/planning.rs` embeds renderer resources, explicit pass order, execution data, lifetime windows, and diagnostics.
 
-Disposition: the temporary render adapter produces one `GpuPreparedWorkGraph`, then maps its prepared node order back to render-owned execution payloads. `CompiledRenderFlowPlan` may retain render execution data, but it must consume rather than duplicate G3 correctness.
+Disposition: a temporary adapter produces one `GpuPreparedWorkGraph`; the render plan maps prepared node order to render-owned execution payloads. No second lifetime/hazard result remains.
 
 ### GPU primitives
 
-`engine/src/plugins/render/gpu_primitives/plan.rs` defines:
+`engine/src/plugins/render/gpu_primitives/plan.rs` defines a duplicate generic access model, string temporary-resource references, string stage dependencies, and sequential stage chaining.
 
-```text
-GpuPrimitiveResourceAccessKind { Read, Write }
-GpuPrimitiveResourceAccess
-GpuPrimitiveDispatchResource::Temporary(String)
-GpuPrimitiveDispatchStage { reads, writes, depends_on: Vec<String> }
-GpuPrimitiveDispatchPlan
-GpuPrimitiveExecutionPlan
-```
+The prefix-scan hierarchy proves that typed transient resources and inferred multi-stage dependencies are required outside rendering.
 
-Useful evidence:
+Disposition: primitive descriptors remain source conveniences but lower to G3 typed work. Delete primitive-local access types, `Temporary(String)`, and string stage dependency authority. Shader asset discovery remains outside RunenGPU until G4 program admission.
 
-- multi-stage prefix scan requires typed temporary storage;
-- counter reset, scan, scatter, and indirect-argument generation require deterministic compute stages;
-- temporary resources and access-derived stage order are real non-render use cases.
+### G2 seams
 
-Defects:
+`GpuResourceAccessIntent` currently represents only export final access; its source explicitly defers ranges, subresources, and hazards to G3.
 
-- second generic access model outside RunenGPU;
-- string temporary-resource identity;
-- stage labels used as dependency authority;
-- broad sequential chaining instead of resource-derived dependencies;
-- render shader asset paths embedded in otherwise generic planning.
+`GpuExportRelationship` correctly treats export identity as semantic and provenance as diagnostic. G3 should replace its raw `String` export key with a validated `GpuExportKey` newtype because the key participates in composition.
 
-Disposition: primitive descriptors remain source-domain conveniences, but lower to G3 typed resources and nodes. Delete primitive-local access and string dependency authority in the G3 implementation slice. Shader source/pipeline realization remains G4/Runenwerk adapter ownership.
+`GpuWorkResourceId` remains the one resource identity. The current `RenderFlowId`-derived owner-scope bridge cannot honestly become context-owned before G4. G3 retains exactly one crate-private adapter bridge and requires G4 to delete it. No global mutable context or public owner-scope constructor is introduced.
 
-### G2 resource access and export seam
+## Decision synthesis
 
-`GpuResourceAccessIntent` currently represents only an export relationship's required final read/write intent. Its source comment explicitly defers ranges, subresources, hazards, and work-time validation to G3.
+### Checked ranges
 
-`GpuExportRelationship` already proves that provenance is non-semantic and the consumer-owned export key is semantic. G3 should replace its raw `String` key with a validated `GpuExportKey` newtype because it participates in fragment composition and is not a diagnostic label.
-
-### Resource identity bridge
-
-`GpuWorkResourceId` is owner-scoped and accepted. The allocator's owner-scope constructor remains crate-private. Current render authoring derives the scope from `RenderFlowId`.
-
-G3 cannot honestly replace this bridge with a live `GpuContext`, because context/device authority begins in G4. The accepted bounded decision is:
-
-- do not add a process-global mutable context or public owner-scope constructor;
-- retain exactly one crate-private render-adapter bridge during G3;
-- allow G3 fragment-local node allocation without creating a second resource identity;
-- require G4 context/work-scope authority to delete the `RenderFlowId` bridge.
-
-## Required G3 model
-
-### Access ranges
-
-Buffer access uses a checked concrete half-open byte range:
+Buffer access uses a concrete checked half-open interval:
 
 ```text
 GpuBufferRange { offset, size }
 ```
 
-`whole(&GpuBufferHandle)` resolves immediately to `offset = 0` and the descriptor size. `new(&GpuBufferHandle, offset, size)` rejects zero size, arithmetic overflow, and out-of-bounds coverage. No saturating arithmetic or unchecked `Range<u64>` becomes authority.
+`whole(&GpuBufferHandle)` resolves to descriptor size. Partial construction rejects zero size, overflow, and out-of-bounds coverage.
 
-Texture access reuses `GpuTextureSubresourceRange`, extended with semantic ordering/hashing and descriptor-bound validation. Texture-view access is normalized to:
+Texture access reuses `GpuTextureSubresourceRange`, adds semantic ordering/hashing and descriptor-bound checks, and normalizes texture-view accesses to the parent texture plus the checked range intersection.
 
-```text
-parent texture handle + intersection of view range and requested range
-```
+Timestamp consumers justify a checked `GpuQueryRange`. Samplers are immutable input evidence and create no write hazard.
 
-Hazards are evaluated on the normalized parent texture, not the view handle alone.
+### Exact access roles
 
-Timestamp query use requires a checked `GpuQueryRange { first, count }`; sampler use is immutable input evidence and creates no write hazard.
+Buffer access distinguishes uniform, storage read/write/read-write, vertex, index, indirect, and copy source/destination.
 
-### Access categories
+Texture access distinguishes sampled, storage read/write/read-write, copy source/destination, color attachment, depth/stencil attachment, and present.
 
-One broad read/write enum is insufficient. Exact buffer categories:
+Attachment semantics require separate load and store facts:
 
 ```text
-UniformRead
-StorageRead
-StorageWrite
-StorageReadWrite
-VertexRead
-IndexRead
-IndirectRead
-CopySource
-CopyDestination
+load:  Load | Clear
+store: Store | Discard
 ```
 
-Exact texture categories:
+`Load` requires initialized coverage. `Clear` establishes full initialized coverage for the attachment subresources. `Store` preserves post-node coverage. `Discard` removes later readable coverage. Discard is not a load mode.
 
-```text
-SampledRead
-StorageRead
-StorageWrite
-StorageReadWrite
-CopySource
-CopyDestination
-ColorAttachment { load }
-DepthStencilAttachment { access, load }
-Present
-```
+### Initialization flow
 
-Attachment load is `Load`, `Clear`, or `Discard`. `Load` requires initialized coverage. `Clear` and `Discard` do not read prior content and initialize the written coverage. Depth/stencil access distinguishes read-only from read-write.
+- `Zeroed` and complete G2 `Prepared` initialization begin initialized.
+- `Uninitialized` begins with no initialized coverage.
+- pure writes and copy destinations initialize only covered regions;
+- read-write requires prior initialized coverage;
+- attachment `Load` requires prior coverage;
+- attachment `Clear` establishes coverage before work;
+- attachment `Discard` invalidates post-node readable coverage;
+- imported and retained prior-epoch contents require explicit graph-entry evidence;
+- G3 validates evidence but does not claim G5 actually preserved, uploaded, synchronized, or retired content.
 
-### Initialization coverage
-
-Initialization is region-aware and graph-time only:
-
-- G2 `Zeroed` and complete `Prepared` initialization begin fully initialized;
-- `Uninitialized` begins with no initialized coverage;
-- pure write, clear, copy destination, and discard initialize only their covered range/subresources;
-- read, read-write, attachment load, indirect, vertex, index, uniform, sampled, copy source, and present require initialized coverage;
-- imported or retained prior-epoch content is accepted only through explicit initial-state evidence supplied by the adapter/consumer;
-- G3 validates the evidence but does not claim G5 execution actually preserved or synchronized it;
-- initialization state is not persisted, serialized, or inferred from a diagnostic label.
-
-### Hazard and dependency rules
+### Hazard rules
 
 For overlapping normalized regions:
 
-| Earlier access | Later access | Result |
+| Earlier | Later | Result |
 |---|---|---|
 | read | read | no edge |
-| write | read | inferred RAW edge |
-| read | write | inferred WAR edge |
-| write | write | inferred WAW edge only when a unique order exists; otherwise ambiguous-writer error |
-| read-write | any overlap | treat as both read and write |
+| write | read | RAW edge |
+| read | write | WAR edge |
+| write | write | WAW edge only with unique producer order; otherwise error |
+| read-write | overlap | acts as both read and write |
 
-Disjoint buffer ranges and disjoint texture mip/layer/aspect ranges do not conflict.
+Disjoint byte ranges and disjoint mip/layer/aspect ranges do not conflict.
 
-Within one fragment, lexical node declaration order is the stable orientation for access-derived hazards. This is not an extra manual dependency API.
+Within one fragment, lexical node order orients data hazards. Callers do not restate those edges.
 
-Fragments are not ordered by their position in an input array. Cross-fragment causality must come from shared typed resources plus explicit import/export relationships. An overlapping cross-fragment write with no unique producer/export relation is rejected rather than ordered arbitrarily.
+Fragment collection position is not semantic scheduling authority. Cross-fragment causality requires the same typed resource plus a matching typed import/export relation. Overlapping cross-fragment writers without one unique producer are rejected as ambiguous.
 
-Explicit ordering is accepted only as `GpuExplicitOrder` between typed node IDs in the same fragment and must carry a non-empty diagnostic reason. It is for non-data constraints. If an explicit edge conflicts with inferred data order or creates a cycle, preparation fails.
+Explicit order is fragment-local, typed, and only for non-data constraints. Contradiction with inferred order or a cycle is an error.
 
-### Immutable work and graph preparation
+### Work and graph shape
 
-`GpuWorkFragment` is immutable after construction. It contains declared/imported/exported resources, nodes, explicit non-data edges, outputs, and provenance.
+`GpuWorkFragment` is immutable after closure-scoped construction. It contains resources, imports, exports, nodes, explicit non-data edges, outputs, and provenance.
 
-G3 nodes are immutable pre-admission operation intent. They own operation kind, access facts, capability requirements, execution-shape facts already independent of a backend, label, and provenance. Current render shader/pipeline/draw payload remains in a render-owned sidecar keyed by the prepared node ID. G4 replaces that sidecar seam with admitted generic program/interface authority.
+G3 nodes are immutable pre-admission operation intent. They contain node kind, exact accesses, capability requirements, backend-neutral operation shape, execution preference, label, and provenance. Render shader/pipeline/draw payload remains in a temporary render-owned sidecar keyed by prepared node ID. G4 replaces that seam with admitted generic program/interface authority.
 
-The initial node kinds remain:
+Initial node kinds remain:
 
 ```text
 Compute
@@ -276,19 +191,19 @@ Resolve
 Present
 ```
 
-The single advanced preparation authority is `GpuPreparedWorkGraph::prepare(...)`. There is no public mutable graph and no separate reduced-validation graph. It produces deterministic prepared node IDs/order, dependency edges with typed causes, normalized accesses, initialized-coverage summaries, exports, and structured diagnostics.
+The single advanced authority is `GpuPreparedWorkGraph::prepare(...)`. It composes immutable fragments, validates and normalizes accesses, tracks initialized coverage, infers edges, incorporates explicit non-data order, rejects ambiguity/cycles, and produces deterministic prepared node order plus structured diagnostics. It performs no backend admission or execution.
 
-Ordinary G5 submission must later invoke this same preparation authority internally.
+G5 ordinary submission must call the same preparation authority internally.
 
-## Identity decision
+### Identity
 
-`GpuWorkNodeId` is fragment-local, nonzero, private-construction identity allocated by the fragment builder. Composition derives `GpuPreparedWorkNodeId { fragment_ordinal, local_node }` deterministically. Neither identity is stable persistence, replay, wire, ABI, network, or cache authority.
+`GpuWorkNodeId` is private-construction, nonzero, and fragment-local. Composition deterministically creates `GpuPreparedWorkNodeId { fragment_ordinal, local_node }`.
 
-This avoids a process-global allocator and avoids reusing `GpuWorkResourceId` as a node ID. Resources continue to use the one accepted G2 identity.
+Node identities are process-local diagnostics and typed references, not persistence, replay, network, wire, ABI, or cache formats. They do not reuse `GpuWorkResourceId`.
 
-Cross-fragment explicit node-ID edges are not accepted in G3. Current render flows that require explicit non-data order lower all involved passes into one fragment. Independent fragments compose through typed resources and exports.
+Cross-fragment explicit node edges are deferred. Current render passes requiring explicit non-data order lower into one fragment; independent fragments compose through resources and imports/exports.
 
-## Proposed module boundary
+## Module and adapter boundary
 
 Future-transferable source:
 
@@ -297,6 +212,7 @@ engine/src/plugins/gpu/api/access.rs
 engine/src/plugins/gpu/api/work.rs
 engine/src/plugins/gpu/api/graph.rs
 engine/src/plugins/gpu/api/errors.rs
+engine/src/plugins/gpu/api/resource.rs
 engine/src/plugins/gpu/api/mod.rs
 engine/src/plugins/gpu/mod.rs
 ```
@@ -307,11 +223,11 @@ Temporary integration:
 engine/src/plugins/render/adapters/gpu_work.rs
 ```
 
-The G3 adapter is a fourth temporary render adapter. It lowers current render pass/resource declarations and primitive plans into G3 work, keeps render execution payloads outside RunenGPU, and is deleted incrementally through G4-G6. It is not future RunenGPU source.
+This is a fourth temporary render adapter. It owns translation only, keeps render execution payload outside RunenGPU, and is deleted incrementally through G4-G6.
 
-## Consumer and migration census
+## Consumer inventory to reverify at implementation start
 
-Direct declaration/validation consumers include:
+Direct generic/render graph consumers:
 
 ```text
 engine/src/plugins/render/api/passes.rs
@@ -325,70 +241,41 @@ engine/src/plugins/render/graph/merge.rs
 engine/src/plugins/render/gpu_primitives/plan.rs
 ```
 
-Runtime/inspection consumers include:
+Transitive consumers include render runtime/preflight/inspection, fragment composition, procedural code, boids, Game of Life, SDF flows, compositor examples, editor/draw applications, render-flow tests, primitive tests, and the planning benchmark. The implementation issue must bind an exact current-main file inventory before source changes.
 
-```text
-engine/src/plugins/render/renderer/render_flow/execute.rs
-engine/src/plugins/render/renderer/render_flow/preflight_cache.rs
-engine/src/plugins/render/renderer/render_flow/runtime_resources.rs
-engine/src/plugins/render/inspect/plan.rs
-engine/src/plugins/render/inspect/resource_inspector.rs
-engine/src/plugins/render/inspect/graph_dump.rs
-```
-
-Representative tests/examples/benchmarks include render-flow, dynamic-target, fragment, primitive, boids, SDF, compositor, editor, and draw consumers. The implementation specification must bind the exact current-main file inventory before source changes because G2 altered this surface substantially.
-
-## Deletion target
-
-The G3 implementation slice must delete or remove as generic authority:
+## Required deletion target
 
 ```text
 CompiledResourceAccessKind
 CompiledResourceLifetimeWindow
 compile_resource_lifetime_windows
 diagnose_resource_lifetime_windows
-renderer-local generic topological sorting
+renderer-local generic topological sorting as final authority
 GpuPrimitiveResourceAccessKind
 GpuPrimitiveResourceAccess
 GpuPrimitiveDispatchResource::Temporary(String)
-string stage dependency authority
-broad RenderPassNode access/lifetime correctness as final authority
+string primitive stage dependencies
+generic RenderPassNode depends_on authority
+broad renderer access/lifetime correctness as final authority
 ```
 
-Render-only shape and execution payload types may remain until their owning phases, but they must consume the one G3 prepared graph.
+Render-only shape and execution payload may remain until their owner phases, but they must consume the one prepared G3 graph.
 
 ## Alternatives rejected
 
-### Keep explicit render pass dependencies
-
-Rejected. It preserves renderer-shaped ceremony, duplicates data knowledge, and cannot compose independent non-render fragments safely.
-
-### Infer only whole-resource dependencies
-
-Rejected. It unnecessarily serializes disjoint buffer ranges and texture subresources and cannot validate partial initialization.
-
-### Make composition array order semantic
-
-Rejected. It silently converts caller collection order into cross-consumer scheduling policy and hides ambiguous writers.
-
-### Build a mandatory public graph DSL
-
-Rejected. The graph remains advanced/inspectable authority; ordinary consumers contribute immutable fragments through domain or generic builders.
-
-### Implement backend barriers in G3
-
-Rejected. G3 produces backend-neutral dependencies and access facts. G4 maps them to WGPU realization and G5 encodes/submits them.
-
-### Introduce resource aliasing or pass fusion
-
-Rejected. They are optimizations without current correctness pressure and would obscure the initial hazard model.
+- Keep explicit pass dependencies: duplicates resource knowledge and remains renderer-shaped.
+- Whole-resource inference only: over-serializes disjoint work and cannot validate partial initialization.
+- Treat input array order as cross-fragment semantics: hides writer ambiguity and couples scheduling to collection order.
+- Mandatory public graph DSL: violates progressive disclosure.
+- Backend barriers in G3: belongs to G4/G5 translation and execution.
+- Aliasing, pass fusion, or multi-queue scheduling: premature optimization without correctness evidence.
 
 ## Stable-format and dependency audit
 
-No current evidence makes the proposed ranges, node IDs, edges, or prepared graph a persisted, replay, network, wire, or external format. Existing inspection and diagnostic output is process-local. The specification must explicitly deny stability promises and add source guards.
+No current evidence makes G3 ranges, nodes, edges, or prepared graphs persisted, replay, network, wire, cache, or external formats. Inspection output is process-local.
 
-No new dependency, package, workflow, lockfile change, raw WGPU public type, ECS type, renderer semantic type, Winit type, SDF/UI/product type, or codec is required.
+No dependency, package, workflow, lockfile, raw WGPU public type, ECS type, renderer semantic type, Winit type, SDF/UI/product type, or codec is required.
 
-## Planning conclusion
+## Conclusion
 
-Proceed with one decision-complete G3 specification and documentation-only planning PR. Do not create the implementation issue until that planning authority is independently reviewed and merged. Do not start G3 Rust implementation from issue `#174`.
+Proceed with the decision-complete G3 specification and one documentation-only planning PR. Do not create the implementation issue until this planning authority is independently reviewed and merged. Issue `#174` does not authorize Rust implementation.
