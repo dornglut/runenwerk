@@ -38,9 +38,11 @@ RunenGPU S0, G1A, and G2 are accepted. G2 merged through PR `#173` as `709aa6ace
 Issue `#174` is the one active serialized decision slice. Its documentation-only branch is `docs/runengpu-g3-access-work-graph`. It owns:
 
 - checked work-time buffer byte ranges, texture subresources, and query ranges;
-- attachment load/store and region-aware initialization flow;
-- typed compute, render, copy, clear, texture/query resolve, and logical present operations;
+- render color/depth attachments and multisample resolve targets inside render operations;
+- attachment load/store and region-aware graph-entry initialization flow;
+- typed compute, render, copy, clear, standalone query-resolve, and logical present operations;
 - normalized query-resolve destination buffer usage and exact destination byte coverage;
+- operation/access-derived capability requirements;
 - read/write overlap, hazards, and access-derived dependency inference;
 - typed import/export causality across independent fragments;
 - immutable generic work fragments and nodes;
@@ -51,13 +53,16 @@ The accepted planning direction is:
 
 - lexical node order orients data hazards within one fragment;
 - fragment collection position is not semantic scheduling authority;
-- cross-fragment causality requires shared typed resources plus typed import/export relationships;
+- every cross-fragment overlap with at least one write requires matching typed import/export causality;
 - overlapping cross-fragment writers without one unique producer fail as ambiguous;
 - explicit order remains typed, fragment-local, and limited to non-data constraints; redundant data edges fail;
 - timestamp writes initialize query indices, typed query resolution consumes them, and a later buffer copy consumes the resolved byte range;
-- attachment `Load` requires initialized coverage, `Clear` establishes coverage, `Store` preserves it, and `Discard` removes later readable coverage;
+- multisample texture resolution is a render color-attachment relation, not a standalone command;
+- operation shape derives required normalized capabilities; callers cannot disable a mechanically required feature;
+- attachment `Load` requires initialized source coverage, `Clear` establishes it, `Store` preserves it, and `Discard` removes later-readable source coverage;
+- an attachment resolve target is initialized independently of source `Store` or `Discard`;
 - attachment `Store` alone does not make an empty render operation meaningful;
-- G3 validates graph-entry evidence but does not claim G5 execution persistence, query-resolution encoding, mapping, or synchronization.
+- G3 validates graph-time facts only and does not claim G4/G5 admission, stale-generation checks, execution persistence, query-resolution encoding, mapping, synchronization, or runtime retirement.
 
 The current planning artifacts are:
 
@@ -84,8 +89,8 @@ The proof portfolio remains separated:
 ## Queued
 
 - one bounded G3 implementation issue only after issue `#174` and its planning PR are accepted;
-- G4 context/device admission, WGPU realization, shaders, pipelines, binding keys, backend layout, query-resolve offset-alignment admission, macro disposition, and removal of the temporary `RenderFlowId` resource-owner bridge;
-- G5 execution, uploads, staging, query-resolution encoding, completion, asynchronous readback, cancellation, preserved execution state, and delayed retirement;
+- G4 context/device admission, WGPU realization, shaders, pipelines, binding keys, backend layout, query-resolve alignment, capability admission, stale-generation validation, macro disposition, and removal of the temporary `RenderFlowId` resource-owner bridge;
+- G5 execution, uploads, staging, render-pass/query-resolution encoding, completion, asynchronous readback, cancellation, runtime-retirement validation, preserved execution state, and delayed retirement;
 - G6 offscreen graphics and shared render/non-render proof;
 - G7 surfaces, generations, thread affinity, and device outcomes;
 - G8 final diagnostics, shutdown, residual anti-cheating audit, and internal conformance;
