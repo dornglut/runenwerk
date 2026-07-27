@@ -179,8 +179,10 @@ RunenSDF, RunenECS, and RunenUI remain independent. Cross-framework translation 
 - normalized capabilities, limits, format facts, and requirements;
 - backend-neutral logical buffer, texture, texture-view, sampler, and query-set descriptions;
 - kind-typed logical handles and prepared GPU-data contracts;
-- access, initialization, lifetime, hazard, and retirement validation;
-- immutable compute, render, copy, clear, texture/query resolve, and present work;
+- access, graph-entry initialization, lifetime, hazard, and later retirement validation;
+- immutable compute, render, copy, clear, query-resolve, and logical present work;
+- render-attachment and multisample-resolve relationships inside render operations;
+- operation/access-derived capability requirements;
 - deterministic work composition and validation;
 - context/device/backend admission;
 - shader admission, interface validation, and pipeline realization;
@@ -440,6 +442,23 @@ universal shader IR
 
 Compute-based field traversal remains a valid baseline. Experimental backend features do not enter stable vocabulary without current consumer value.
 
+### Operation-derived requirements
+
+G3 derives requirements that follow mechanically from operation and access shape:
+
+```text
+Compute operation                    -> Compute
+Render operation                     -> RenderPipeline
+Copy or standalone Clear             -> Copy
+Indirect draw                        -> IndirectDraw
+Storage texture access               -> StorageTexture
+Depth/stencil attachment             -> DepthAttachment
+Timestamp write or query resolution  -> TimestampQuery
+Present                              -> Presentation
+```
+
+Consumers may add semantic requirements that operation shape cannot infer. Preparation merges derived and caller-declared requirements through the accepted G2 requirement authority. An operation-implied `Required` feature cannot be weakened or neutralized with `Disabled`; contradictory requirements fail before G4 admission.
+
 ## Resource model
 
 Unrelated properties are independent.
@@ -535,13 +554,15 @@ texture
 
 Texture initialization binds row and image layout so G5 does not invent upload semantics. Arithmetic is checked; no saturating multiplication silently normalizes overflow.
 
+Query sets have no descriptor-level initialized query contents. They enter graph preparation without initialized indices unless explicit graph-entry query coverage is supplied for an imported or retained prior-epoch source.
+
 ### Texture views
 
 A texture view references a typed texture handle and a checked mip/layer/aspect range. Its effective validity cannot exceed its parent texture's logical lifetime, ownership lease, or subresource range.
 
 ### Resource access
 
-G2 descriptors define permitted uses. G3 defines work-time buffer ranges, texture/query subresources, access categories, initialization flow, and hazards. G3 extends the accepted G2 buffer usage vocabulary with `GpuBufferUsage::QueryResolve` because the current timestamp path requires a distinct query-resolve destination usage.
+G2 descriptors define permitted uses. G3 defines work-time buffer ranges, texture/query subresources, access categories, graph-entry initialization flow, and hazards. G3 extends the accepted G2 buffer-usage vocabulary with `GpuBufferUsage::QueryResolve` because the current timestamp path requires a distinct query-resolve destination usage.
 
 Initial exact categories are:
 
@@ -566,6 +587,7 @@ texture
     CopySource
     CopyDestination
     ColorAttachment { load, store }
+    MultisampleResolveDestination
     DepthStencilAttachment { access, load, store }
     Present
 
@@ -576,13 +598,17 @@ query
 
 `QueryResolveDestination` is not `CopyDestination`. A typed query resolve consumes initialized query indices and initializes its exact destination buffer byte range. Current timestamp results occupy one `u64` per query; checked destination length is `query_count * 8`. G4/G5 validate backend-specific destination-offset alignment and encode the operation.
 
-Attachment `Load` requires initialized coverage, `Clear` establishes coverage, `Store` preserves it, and `Discard` removes later readable coverage. Texture-view hazards normalize to parent storage. D3 hazards initially use whole addressed mip volumes rather than inventing z-slice independence.
+Multisample texture resolution is not standalone work. A `GpuRenderColorAttachment` may carry an optional single-sampled resolve target. The render operation derives source color-attachment and destination `MultisampleResolveDestination` access. Source and destination must not alias; the destination is initialized by the resolve regardless of whether the source attachment is stored or discarded.
 
-Validation rejects incompatible overlap, use before initialization, use after retirement, invalid view/resource relationships, invalid query resolve shape or usage, ambiguous writers, missing capabilities, and invalid ownership/lifetime combinations.
+Attachment `Load` requires initialized source coverage, `Clear` establishes source coverage, `Store` preserves source coverage, and `Discard` removes later readable source coverage. Texture-view hazards normalize to parent storage. D3 hazards initially use whole addressed mip volumes rather than inventing z-slice independence.
+
+Validation rejects incompatible overlap, use before graph-entry initialization, invalid view/resource relationships, invalid render attachment or query-resolve shape/usage, missing cross-fragment causality, ambiguous writers, missing capabilities, and invalid ownership/lifetime combinations knowable before a context exists.
+
+Runtime stale-generation, use-after-retirement, and backend lease validation begins with G4/G5 context and execution authority; G3 does not fabricate live backend state.
 
 ### Imports and exports
 
-Imported resources require explicit ownership, provenance, reconstruction, validity, and synchronization facts. Surface-acquired resources are a G7-owned specialized lease and remain transient.
+Imported resources require explicit ownership, provenance, reconstruction, validity, and later synchronization facts. Surface-acquired resources are a G7-owned specialized lease and remain transient.
 
 Conceptual import facts:
 
@@ -656,12 +682,11 @@ Compute
 Render
 Copy
 Clear
-Resolve {
-    Texture
-    QuerySet
-}
-Present
+Resolve    query set -> buffer
+Present    logical texture consumption
 ```
+
+A `Render` operation owns ordered color attachments, an optional depth/stencil attachment, ordered draw intents, and render-side timestamp writes. Multisample texture resolve is an optional relation on a color attachment, not an independent node.
 
 Deferred until evidence:
 
@@ -677,9 +702,9 @@ A work node declares:
 
 - identity and one typed `GpuWorkOperation`; node kind is derived from the operation rather than stored twice;
 - an admitted pipeline/interface reference after G4, with a temporary render-owned sidecar during G3;
-- typed resource accesses, including accesses derived automatically from copy, clear, texture/query resolve, indirect draw, and present operations;
-- backend-neutral dispatch, draw, copy, clear, resolve, or present shape;
-- capability requirements;
+- typed resource accesses, including accesses derived automatically from render attachments, copy, clear, query resolve, indirect draw, and present operations;
+- merged operation/access-derived and caller-declared capability requirements;
+- backend-neutral dispatch, draw, attachment, copy, clear, query-resolve, or present shape;
 - optional execution preference;
 - debug label and provenance;
 - explicit order only when no data dependency represents the constraint.
@@ -695,7 +720,7 @@ TransferPreferred
 
 Preferences are hints, not concurrency guarantees. The first backend may serialize through one logical queue while preserving dependencies and future scheduling information.
 
-An empty render operation is accepted only when attachment clear or another explicit side effect makes it meaningful. Attachment `Store` alone preserves prior content and is not work.
+An empty render operation is accepted only when attachment clear or render-side query writes make it meaningful. Attachment `Store` alone preserves prior content and is not work.
 
 ## Work graph
 
@@ -704,34 +729,34 @@ A `GpuPreparedWorkGraph` composes immutable fragments for one bounded execution 
 It owns:
 
 - deterministic typed identity and reference resolution;
-- operation/access consistency;
+- operation/access/requirement consistency;
 - inferred data dependencies and resource hazards;
 - topological ordering;
-- initialization and lifetime validation;
+- graph-entry initialization and logical lifetime validation;
 - capability admission inputs;
 - backend compilation inputs;
 - output and completion contracts.
 
 It rejects:
 
-- duplicate, unknown, foreign, or stale identities;
+- duplicate, unknown, or foreign identities;
 - cycles;
-- unknown resources or pipelines;
-- read before initialization;
-- use after retirement;
+- unknown resources;
+- read before graph-entry initialization;
 - incompatible accesses;
+- missing cross-fragment causality;
 - ambiguous writers;
-- invalid copy, clear, texture resolve, query resolve, or present shape;
+- invalid render attachment, copy, clear, query-resolve, or present shape;
 - redundant explicit ordering that duplicates an inferred data edge;
-- invalid surface-image reuse;
-- missing capabilities;
-- invalid pipeline/resource combinations;
+- missing or contradictory capability requirements;
 - inconsistent imports/exports;
 - incompatible explicit non-data ordering.
 
 The graph contains no ECS systems, gameplay actions, UI routes, SDF nodes, material graph nodes, renderer feature meaning, or product lifecycle policy. Higher-level owners lower those semantics first.
 
-Within one fragment, lexical node order orients access-derived hazards. Fragment collection position does not create dependencies or resolve writer ambiguity. Cross-fragment causality requires shared typed resources plus matching typed imports/exports.
+Within one fragment, lexical node order orients access-derived hazards. Fragment collection position does not create dependencies or resolve writer ambiguity.
+
+Across fragments, any overlapping access with at least one write requires a matching typed import/export producer-consumer relation. Preparation does not guess whether an unordered read should precede or follow a write. Multiple possible cross-fragment producers fail as ambiguous.
 
 Timestamp writes followed by query resolution infer a dependency through the query range. Query resolution followed by a buffer copy infers a dependency through the resolved destination byte range.
 
@@ -751,9 +776,9 @@ collect fragments
 
 Phase ownership:
 
-- G3: fragment composition, typed operations, accesses, initialization, hazards, query-resolution intent, and graph validation;
-- G4: context/device admission and backend resource/shader/pipeline realization, including query-resolve alignment admission;
-- G5: encode/submit, uploads/updates, query-resolution encoding, completion, cancellation, asynchronous readback, and delayed retirement;
+- G3: fragment composition, typed operations, render attachments, accesses, graph-entry initialization, hazards, query-resolution intent, derived requirements, and graph validation;
+- G4: context/device admission and backend resource/shader/pipeline realization, including query-resolve alignment admission and stale-generation checks;
+- G5: encode/submit, uploads/updates, query-resolution encoding, completion, cancellation, asynchronous readback, runtime-retirement checks, and delayed retirement;
 - G7: surface acquisition/presentation and surface generations.
 
 The lifecycle contract defines:
@@ -808,12 +833,14 @@ G4 may use WGPU internally for:
 - normalized feature, limit, and format mapping;
 - resources and views;
 - shader modules and pipelines;
-- query sets, query-resolve alignment admission, and timing realization.
+- query sets, query-resolve alignment admission, and timing realization;
+- render attachment and multisample-resolve compatibility admission.
 
 G5 uses the admitted WGPU backend for:
 
 - command encoding and submission;
 - staging uploads and updates;
+- render-pass attachment realization and multisample resolve through attachment `resolve_target`;
 - query-set resolution encoding;
 - completion and cancellation;
 - asynchronous mapping/readback;
@@ -898,7 +925,7 @@ RunenGPU exposes structured facts for:
 - work validation and compilation;
 - shader/pipeline realization;
 - command encoding and submission;
-- uploads, query resolution, completion, cancellation, and readbacks;
+- uploads, render-attachment resolution, query resolution, completion, cancellation, and readbacks;
 - timings and statistics;
 - surface and device outcomes;
 - terminal shutdown.
@@ -951,6 +978,7 @@ Specific migration rules:
 - string maps cease to be resource/binding/dependency authority;
 - broad `.depends_on` chains are replaced by inferred data dependencies in G3;
 - redundant explicit data edges are rejected rather than retained beside inferred edges;
+- current render attachment and timestamp declarations lower into exact G3 operation/access/requirement facts;
 - repeated `.finish()` ladders are not retained;
 - ordinary submission does not require a separate `.validate()` call;
 - the temporary `RenderFlowId` owner bridge remains only through G3 and is removed in G4.
@@ -1038,7 +1066,7 @@ Internal proof requires:
 
 1. neutral capability/resource/data validation without Runenwerk and without a window;
 2. owner-scoped identity tests covering invalid, foreign, exhausted, and non-wrapping behavior;
-3. G3 access, typed-operation, query-resolution, graph, cycle, hazard, initialization, import, export, and deterministic-order tests;
+3. G3 access, render-attachment, operation-derived requirement, query-resolution, graph, cycle, hazard, initialization, cross-fragment causality, import, export, and deterministic-order tests;
 4. G5 headless compute, completion, and asynchronous readback where GPU access is supported;
 5. G6 offscreen graphics independently of presentation;
 6. one shared context executing render and independent non-render work;
