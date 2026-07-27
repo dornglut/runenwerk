@@ -1297,17 +1297,16 @@ impl Eq for GpuExportRelationship {}
 impl GpuExportRelationship {
     pub fn new(
         resource: GpuResourceRef,
-        export_key: impl Into<String>,
+        export_key: GpuExportKey,
         required_final_access: GpuResourceAccessIntent,
         provenance: GpuResourceProvenance,
-    ) -> Result<Self, GpuResourceDescriptorError> {
-        let export_key = GpuExportKey::new(export_key)?;
-        Ok(Self {
+    ) -> Self {
+        Self {
             resource,
             export_key,
             required_final_access,
             provenance,
-        })
+        }
     }
 
     pub fn resource(&self) -> &GpuResourceRef {
@@ -1392,7 +1391,12 @@ mod tests {
         required_final_access: GpuResourceAccessIntent,
         provenance: GpuResourceProvenance,
     ) -> GpuExportRelationship {
-        GpuExportRelationship::new(resource, export_key, required_final_access, provenance).unwrap()
+        GpuExportRelationship::new(
+            resource,
+            GpuExportKey::new(export_key).unwrap(),
+            required_final_access,
+            provenance,
+        )
     }
 
     fn buffer_resource_refs() -> (GpuResourceRef, GpuResourceRef) {

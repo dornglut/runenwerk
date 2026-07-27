@@ -1,6 +1,6 @@
 use core::fmt;
 
-use super::GpuWorkResourceId;
+use super::{GpuPreparedWorkNodeId, GpuResourceProvenance, GpuWorkNodeId, GpuWorkResourceId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuAccessCause {
@@ -181,6 +181,353 @@ impl std::error::Error for GpuWorkOperationError {
                 .as_deref()
                 .map(|source| source as &(dyn std::error::Error + 'static)),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuWorkAuthoringCause {
+    InvalidCoverage,
+    InvalidResourceKind,
+    DuplicateResource,
+    DuplicateInput,
+    DuplicateImport,
+    DuplicateOutput,
+    DuplicateExportKey,
+    UnknownIdentity,
+    ForeignIdentity,
+    IdentityExhausted,
+    InvalidExplicitOrder,
+    DuplicateExplicitOrder,
+    IncompatibleSameNodeAccess,
+    OperationAccessContradiction,
+    MechanicalCapabilityContradiction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GpuWorkAuthoringErrorSource {
+    Access(GpuAccessError),
+    Operation(GpuWorkOperationError),
+    Capability(GpuCapabilityRequirementError),
+}
+
+impl fmt::Display for GpuWorkAuthoringErrorSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Access(source) => source.fmt(f),
+            Self::Operation(source) => source.fmt(f),
+            Self::Capability(source) => source.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for GpuWorkAuthoringErrorSource {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Access(source) => Some(source),
+            Self::Operation(source) => Some(source),
+            Self::Capability(source) => Some(source),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuWorkAuthoringError {
+    details: Box<GpuWorkAuthoringErrorDetails>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GpuWorkAuthoringErrorDetails {
+    operation: &'static str,
+    fragment_label: Option<String>,
+    node_label: Option<String>,
+    node: Option<GpuWorkNodeId>,
+    resource: Option<GpuWorkResourceId>,
+    cause: GpuWorkAuthoringCause,
+    correction: &'static str,
+    provenance: Option<GpuResourceProvenance>,
+    source: Option<Box<GpuWorkAuthoringErrorSource>>,
+}
+
+impl GpuWorkAuthoringError {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn invalid(
+        operation: &'static str,
+        fragment_label: Option<String>,
+        node_label: Option<String>,
+        node: Option<GpuWorkNodeId>,
+        resource: Option<GpuWorkResourceId>,
+        cause: GpuWorkAuthoringCause,
+        correction: &'static str,
+        provenance: Option<GpuResourceProvenance>,
+    ) -> Self {
+        Self {
+            details: Box::new(GpuWorkAuthoringErrorDetails {
+                operation,
+                fragment_label,
+                node_label,
+                node,
+                resource,
+                cause,
+                correction,
+                provenance,
+                source: None,
+            }),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_source(
+        operation: &'static str,
+        fragment_label: Option<String>,
+        node_label: Option<String>,
+        node: Option<GpuWorkNodeId>,
+        resource: Option<GpuWorkResourceId>,
+        cause: GpuWorkAuthoringCause,
+        correction: &'static str,
+        provenance: Option<GpuResourceProvenance>,
+        source: GpuWorkAuthoringErrorSource,
+    ) -> Self {
+        let mut error = Self::invalid(
+            operation,
+            fragment_label,
+            node_label,
+            node,
+            resource,
+            cause,
+            correction,
+            provenance,
+        );
+        error.details.source = Some(Box::new(source));
+        error
+    }
+
+    pub const fn cause(&self) -> GpuWorkAuthoringCause {
+        self.details.cause
+    }
+
+    pub const fn resource(&self) -> Option<GpuWorkResourceId> {
+        self.details.resource
+    }
+
+    pub fn node(&self) -> Option<&GpuWorkNodeId> {
+        self.details.node.as_ref()
+    }
+}
+
+impl fmt::Display for GpuWorkAuthoringError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let details = &self.details;
+        write!(f, "cannot {}", details.operation)?;
+        if let Some(fragment) = &details.fragment_label {
+            write!(f, " in fragment '{fragment}'")?;
+        }
+        if let Some(node_label) = &details.node_label {
+            write!(f, " at node '{node_label}'")?;
+        }
+        if let Some(node) = &details.node {
+            write!(f, " ({node})")?;
+        }
+        if let Some(resource) = details.resource {
+            write!(f, " for resource {resource}")?;
+        }
+        if let Some(provenance) = &details.provenance {
+            write!(f, " from '{}'", provenance.producer().as_str())?;
+        }
+        write!(
+            f,
+            ": {:?}; correction: {}",
+            details.cause, details.correction
+        )
+    }
+}
+
+impl std::error::Error for GpuWorkAuthoringError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.details
+            .source
+            .as_deref()
+            .map(|source| source as &(dyn std::error::Error + 'static))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuWorkGraphCause {
+    ReadBeforeInitialization,
+    IncompatibleSameNodeAccess,
+    OperationAccessContradiction,
+    MechanicalCapabilityContradiction,
+    MissingCrossFragmentCausality,
+    AmbiguousWriter,
+    DuplicateExportKey,
+    ImportExportMismatch,
+    UnknownIdentity,
+    ForeignIdentity,
+    RedundantExplicitDataOrder,
+    ExplicitOrderConflict,
+    Cycle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GpuWorkGraphErrorSource {
+    Authoring(GpuWorkAuthoringError),
+    Operation(GpuWorkOperationError),
+    Capability(GpuCapabilityRequirementError),
+}
+
+impl fmt::Display for GpuWorkGraphErrorSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Authoring(source) => source.fmt(f),
+            Self::Operation(source) => source.fmt(f),
+            Self::Capability(source) => source.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for GpuWorkGraphErrorSource {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Authoring(source) => Some(source),
+            Self::Operation(source) => Some(source),
+            Self::Capability(source) => Some(source),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuWorkGraphError {
+    details: Box<GpuWorkGraphErrorDetails>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GpuWorkGraphErrorDetails {
+    operation: &'static str,
+    graph_label: String,
+    fragment_label: Option<String>,
+    node_label: Option<String>,
+    node: Option<GpuPreparedWorkNodeId>,
+    resource: Option<GpuWorkResourceId>,
+    region: Option<String>,
+    cause: GpuWorkGraphCause,
+    correction: &'static str,
+    provenance: Option<GpuResourceProvenance>,
+    source: Option<Box<GpuWorkGraphErrorSource>>,
+}
+
+impl GpuWorkGraphError {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn invalid(
+        operation: &'static str,
+        graph_label: impl Into<String>,
+        fragment_label: Option<String>,
+        node_label: Option<String>,
+        node: Option<GpuPreparedWorkNodeId>,
+        resource: Option<GpuWorkResourceId>,
+        region: Option<String>,
+        cause: GpuWorkGraphCause,
+        correction: &'static str,
+        provenance: Option<GpuResourceProvenance>,
+    ) -> Self {
+        Self {
+            details: Box::new(GpuWorkGraphErrorDetails {
+                operation,
+                graph_label: graph_label.into(),
+                fragment_label,
+                node_label,
+                node,
+                resource,
+                region,
+                cause,
+                correction,
+                provenance,
+                source: None,
+            }),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_source(
+        operation: &'static str,
+        graph_label: impl Into<String>,
+        fragment_label: Option<String>,
+        node_label: Option<String>,
+        node: Option<GpuPreparedWorkNodeId>,
+        resource: Option<GpuWorkResourceId>,
+        region: Option<String>,
+        cause: GpuWorkGraphCause,
+        correction: &'static str,
+        provenance: Option<GpuResourceProvenance>,
+        source: GpuWorkGraphErrorSource,
+    ) -> Self {
+        let mut error = Self::invalid(
+            operation,
+            graph_label,
+            fragment_label,
+            node_label,
+            node,
+            resource,
+            region,
+            cause,
+            correction,
+            provenance,
+        );
+        error.details.source = Some(Box::new(source));
+        error
+    }
+
+    pub const fn cause(&self) -> GpuWorkGraphCause {
+        self.details.cause
+    }
+
+    pub const fn node(&self) -> Option<GpuPreparedWorkNodeId> {
+        self.details.node
+    }
+
+    pub const fn resource(&self) -> Option<GpuWorkResourceId> {
+        self.details.resource
+    }
+}
+
+impl fmt::Display for GpuWorkGraphError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let details = &self.details;
+        write!(
+            f,
+            "cannot {} graph '{}'",
+            details.operation, details.graph_label
+        )?;
+        if let Some(fragment) = &details.fragment_label {
+            write!(f, " in fragment '{fragment}'")?;
+        }
+        if let Some(node_label) = &details.node_label {
+            write!(f, " at node '{node_label}'")?;
+        }
+        if let Some(node) = details.node {
+            write!(f, " ({node})")?;
+        }
+        if let Some(resource) = details.resource {
+            write!(f, " for resource {resource}")?;
+        }
+        if let Some(region) = &details.region {
+            write!(f, " over {region}")?;
+        }
+        if let Some(provenance) = &details.provenance {
+            write!(f, " from '{}'", provenance.producer().as_str())?;
+        }
+        write!(
+            f,
+            ": {:?}; correction: {}",
+            details.cause, details.correction
+        )
+    }
+}
+
+impl std::error::Error for GpuWorkGraphError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.details
+            .source
+            .as_deref()
+            .map(|source| source as &(dyn std::error::Error + 'static))
     }
 }
 

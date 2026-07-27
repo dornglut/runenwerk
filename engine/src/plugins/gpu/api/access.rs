@@ -1,7 +1,8 @@
 use super::{
     GpuAccessCause, GpuAccessError, GpuBufferHandle, GpuBufferUsage, GpuQuerySetHandle,
-    GpuSamplerHandle, GpuTextureAspect, GpuTextureDimension, GpuTextureHandle,
-    GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewHandle, GpuWorkResourceId,
+    GpuResourceAccessIntent, GpuSamplerHandle, GpuTextureAspect, GpuTextureDimension,
+    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewHandle,
+    GpuWorkResourceId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -739,6 +740,15 @@ pub enum GpuResourceAccess {
 }
 
 impl GpuResourceAccess {
+    pub fn declared_resource_identity(&self) -> GpuWorkResourceId {
+        match self {
+            Self::Buffer(access) => access.buffer().diagnostic_identity(),
+            Self::Texture(access) => access.resource().diagnostic_identity(),
+            Self::Query(access) => access.query_set().diagnostic_identity(),
+            Self::Sampler(access) => access.sampler().diagnostic_identity(),
+        }
+    }
+
     pub fn resource_identity(&self) -> GpuWorkResourceId {
         match self {
             Self::Buffer(access) => access.resource_identity(),
@@ -763,6 +773,15 @@ impl GpuResourceAccess {
             Self::Texture(access) => access.kind().writes(),
             Self::Query(access) => access.kind().writes(),
             Self::Sampler(_) => false,
+        }
+    }
+
+    pub const fn intent(&self) -> GpuResourceAccessIntent {
+        match (self.reads(), self.writes()) {
+            (true, false) => GpuResourceAccessIntent::Read,
+            (false, true) => GpuResourceAccessIntent::Write,
+            (true, true) => GpuResourceAccessIntent::ReadWrite,
+            (false, false) => GpuResourceAccessIntent::Read,
         }
     }
 }

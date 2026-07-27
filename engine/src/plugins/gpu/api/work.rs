@@ -688,6 +688,9 @@ impl GpuRenderOperation {
         let color_attachments = color_attachments.into_iter().collect::<Vec<_>>();
         let draws = draws.into_iter().collect::<Vec<_>>();
         let timestamp_writes = timestamp_writes.into_iter().collect::<Vec<_>>();
+        for draw in &draws {
+            draw.derived_access()?;
+        }
         if timestamp_writes
             .iter()
             .any(|access| access.kind() != GpuQueryAccessKind::WriteTimestamp)
@@ -717,12 +720,31 @@ impl GpuRenderOperation {
                 "add a draw, attachment clear, or timestamp write",
             ));
         }
-        Ok(Self {
+        let operation = Self {
             color_attachments,
             depth_stencil_attachment,
             draws,
             timestamp_writes,
-        })
+        };
+        let accesses = operation.derived_accesses()?;
+        for left_index in 0..accesses.len() {
+            for right in &accesses[(left_index + 1)..] {
+                let left = &accesses[left_index];
+                if left.resource_identity() == right.resource_identity()
+                    && work_accesses_overlap(left, right)
+                    && (left.writes() || right.writes())
+                {
+                    return Err(GpuWorkOperationError::invalid(
+                        "construct GPU render operation",
+                        "render access",
+                        Some(left.resource_identity()),
+                        GpuWorkOperationCause::OperationAccessContradiction,
+                        "use non-overlapping attachment, resolve, and timestamp-write roles inside one render operation",
+                    ));
+                }
+            }
+        }
+        Ok(operation)
     }
 
     pub fn color_attachments(&self) -> &[GpuRenderColorAttachment] {
@@ -768,6 +790,28 @@ impl GpuRenderOperation {
                 .map(GpuResourceAccess::Query),
         );
         Ok(accesses)
+    }
+}
+
+fn work_accesses_overlap(left: &GpuResourceAccess, right: &GpuResourceAccess) -> bool {
+    match (left, right) {
+        (GpuResourceAccess::Buffer(left), GpuResourceAccess::Buffer(right)) => {
+            left.range().overlaps(right.range())
+        }
+        (GpuResourceAccess::Texture(left), GpuResourceAccess::Texture(right)) => {
+            let parent_aspect = if left.normalized_texture().descriptor().format().is_depth() {
+                GpuTextureAspect::DepthOnly
+            } else {
+                GpuTextureAspect::Color
+            };
+            left.normalized_subresources()
+                .overlaps(right.normalized_subresources(), parent_aspect)
+        }
+        (GpuResourceAccess::Query(left), GpuResourceAccess::Query(right)) => {
+            left.range().overlaps(right.range())
+        }
+        (GpuResourceAccess::Sampler(_), GpuResourceAccess::Sampler(_)) => true,
+        _ => false,
     }
 }
 
@@ -1616,6 +1660,45 @@ impl GpuWorkOperation {
         }
     }
 
+    pub(crate) fn validate_shape(&self) -> Result<(), GpuWorkOperationError> {
+        match self {
+            Self::Compute(_) | Self::Resolve(_) | Self::Present(_) => {
+                self.derived_accesses().map(|_| ())
+            }
+            Self::Render(operation) => {
+                for draw in operation.draws() {
+                    draw.derived_access()?;
+                }
+                self.derived_accesses().map(|_| ())
+            }
+            Self::Copy(operation) => match operation {
+                GpuCopyOperation::BufferToBuffer {
+                    source,
+                    destination,
+                } => GpuCopyOperation::buffer_to_buffer(source.clone(), destination.clone())
+                    .map(|_| ()),
+                GpuCopyOperation::BufferToTexture {
+                    source,
+                    destination,
+                } => GpuCopyOperation::buffer_to_texture(source.clone(), destination.clone())
+                    .map(|_| ()),
+                GpuCopyOperation::TextureToBuffer {
+                    source,
+                    destination,
+                } => GpuCopyOperation::texture_to_buffer(source.clone(), destination.clone())
+                    .map(|_| ()),
+                GpuCopyOperation::TextureToTexture {
+                    source,
+                    destination,
+                } => GpuCopyOperation::texture_to_texture(source.clone(), destination.clone())
+                    .map(|_| ()),
+            },
+            Self::Clear(GpuClearOperation::BufferZero(region)) => {
+                GpuClearOperation::buffer_zero(region.clone()).map(|_| ())
+            }
+        }
+    }
+
     pub fn derived_requirements(
         &self,
     ) -> Result<GpuCapabilityRequirements, GpuCapabilityRequirementError> {
@@ -1794,6 +1877,10 @@ mod tests {
         let draw = GpuDrawIntent::indirect(&arguments, range, false).unwrap();
         assert!(draw.derived_access().unwrap().is_some());
         assert!(GpuDrawIntent::indirect(&arguments, range, true).is_err());
+        let elements = GpuDrawRange::new(3, 9).unwrap();
+        let instances = GpuDrawRange::new(0, 2).unwrap();
+        assert!(!GpuDrawIntent::direct(elements, instances).is_indexed());
+        assert!(GpuDrawIntent::indexed(elements, -2, instances).is_indexed());
     }
 
     #[test]
@@ -1830,6 +1917,112 @@ mod tests {
         .unwrap();
         let operation = GpuRenderOperation::new([attachment], None, [], []).unwrap();
         assert_eq!(operation.derived_accesses().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn multisample_resolve_rejects_sample_format_and_alias_mismatches() {
+        let mut allocator = allocator();
+        let single_source = texture(
+            &mut allocator,
+            "single source",
+            1,
+            GpuTextureFormat::Rgba8Unorm,
+            [GpuTextureUsage::ColorAttachment],
+        );
+        let single_destination = texture(
+            &mut allocator,
+            "single destination",
+            1,
+            GpuTextureFormat::Rgba8Unorm,
+            [GpuTextureUsage::ColorAttachment],
+        );
+        let source_range = GpuTextureSubresourceRange::whole(&single_source).unwrap();
+        let destination_range = GpuTextureSubresourceRange::whole(&single_destination).unwrap();
+        let resolve = GpuMultisampleResolveTarget::new(
+            GpuTextureAccessResource::Texture(single_destination),
+            destination_range,
+        )
+        .unwrap();
+        assert!(GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(single_source),
+            source_range,
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Store,
+            Some(resolve),
+        )
+        .is_err());
+
+        let multisampled = texture(
+            &mut allocator,
+            "multisampled",
+            4,
+            GpuTextureFormat::Rgba8Unorm,
+            [GpuTextureUsage::ColorAttachment],
+        );
+        let wrong_samples = texture(
+            &mut allocator,
+            "wrong samples",
+            4,
+            GpuTextureFormat::Rgba8Unorm,
+            [GpuTextureUsage::ColorAttachment],
+        );
+        let source_range = GpuTextureSubresourceRange::whole(&multisampled).unwrap();
+        let resolve = GpuMultisampleResolveTarget::new(
+            GpuTextureAccessResource::Texture(wrong_samples.clone()),
+            GpuTextureSubresourceRange::whole(&wrong_samples).unwrap(),
+        )
+        .unwrap();
+        assert!(GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(multisampled.clone()),
+            source_range,
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Store,
+            Some(resolve),
+        )
+        .is_err());
+
+        let wrong_format = texture(
+            &mut allocator,
+            "wrong format",
+            1,
+            GpuTextureFormat::Bgra8Unorm,
+            [GpuTextureUsage::ColorAttachment],
+        );
+        let resolve = GpuMultisampleResolveTarget::new(
+            GpuTextureAccessResource::Texture(wrong_format.clone()),
+            GpuTextureSubresourceRange::whole(&wrong_format).unwrap(),
+        )
+        .unwrap();
+        assert!(GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(multisampled.clone()),
+            source_range,
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Store,
+            Some(resolve),
+        )
+        .is_err());
+
+        let alias = GpuMultisampleResolveTarget::new(
+            GpuTextureAccessResource::Texture(multisampled.clone()),
+            source_range,
+        )
+        .unwrap();
+        assert!(GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(multisampled),
+            source_range,
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Store,
+            Some(alias),
+        )
+        .is_err());
     }
 
     #[test]
@@ -1938,6 +2131,21 @@ mod tests {
             GpuCopyOperation::texture_to_buffer(source_region.clone(), destination_layout).is_ok()
         );
         assert!(GpuCopyOperation::texture_to_texture(source_region, destination_region).is_ok());
+        let invalid_layout = GpuBufferTextureLayout::new(&source, 0, 63, 0).unwrap();
+        assert!(
+            GpuCopyOperation::buffer_to_texture(
+                invalid_layout,
+                GpuTextureCopyRegion::new(
+                    &texture_destination,
+                    0,
+                    GpuTextureOrigin::new(0, 0, 0),
+                    GpuTextureAspect::Color,
+                    extent,
+                )
+                .unwrap(),
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1977,6 +2185,58 @@ mod tests {
         assert_eq!(
             operation.destination_access().kind(),
             GpuBufferAccessKind::QueryResolveDestination
+        );
+
+        let wrong_usage = buffer(
+            &mut allocator,
+            "wrong resolve usage",
+            64,
+            [GpuBufferUsage::CopyDestination],
+        );
+        assert_eq!(
+            GpuQueryResolveOperation::new(
+                &queries,
+                GpuQueryRange::new(&queries, 0, 1).unwrap(),
+                &wrong_usage,
+                0,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuWorkOperationCause::InvalidQueryResolution
+        );
+        let too_small = buffer(
+            &mut allocator,
+            "small resolve",
+            8,
+            [GpuBufferUsage::QueryResolve],
+        );
+        assert_eq!(
+            GpuQueryResolveOperation::new(
+                &queries,
+                GpuQueryRange::new(&queries, 0, 2).unwrap(),
+                &too_small,
+                0,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuWorkOperationCause::QueryDestinationOutOfBounds
+        );
+        let huge = buffer(
+            &mut allocator,
+            "huge resolve",
+            u64::MAX,
+            [GpuBufferUsage::QueryResolve],
+        );
+        assert_eq!(
+            GpuQueryResolveOperation::new(
+                &queries,
+                GpuQueryRange::new(&queries, 0, 2).unwrap(),
+                &huge,
+                u64::MAX - 7,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuWorkOperationCause::QueryDestinationOverflow
         );
     }
 
