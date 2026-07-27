@@ -128,7 +128,7 @@ Required qualities are fixed:
 - strings are diagnostic labels or reasons, not resource/node/dependency authority;
 - typed handles, typed node identities, `GpuExportKey`, and validated binding keys replace stringly authority;
 - builders use lexical/closure scope rather than repeated nested `finish()` ladders;
-- ordering is inferred from declared resource access, with explicit ordering reserved for non-data dependencies;
+- ordering is inferred from declared resource access, with explicit ordering reserved for non-data dependencies and redundant data edges rejected;
 - public handles use safe RAII and delayed backend retirement;
 - errors name the human label, operation, cause, and corrective action;
 - simple and advanced paths compile to the same validated authority.
@@ -150,7 +150,7 @@ ownership
     RunenGPU-owned, imported, surface-acquired
 
 transfer and observation
-    initial data, update/upload, copy, readback request, export relationship
+    initial data, update/upload, copy, query resolution, readback request, export relationship
 
 reconstruction
     source-backed, externally reconstructed, non-reconstructable
@@ -182,17 +182,21 @@ The G3 planning authority binds:
 checked buffer byte ranges
 checked texture mip/layer/aspect ranges
 checked query ranges
+normalized QueryResolve destination buffer usage
 texture-view normalization to parent storage
 attachment Load/Clear and Store/Discard semantics
 region-aware initialized coverage
 RAW, WAR, and WAW dependency causes
 immutable GpuWorkFragment and GpuWorkNode values
+typed texture and query resolve operations
 typed import/export causality
 fragment-local explicit non-data order
 deterministic GpuPreparedWorkGraph preparation
 ```
 
 Within one fragment, lexical node order orients access-derived hazards. Fragment collection position is not semantic scheduling authority. Cross-fragment causality requires shared typed resources plus matching typed imports/exports. Overlapping cross-fragment writers without one unique producer are rejected.
+
+Timestamp writes initialize exact query indices. Typed query resolution consumes initialized indices and writes an exact device-buffer range; the later copy to a readback buffer is ordinary typed buffer-copy work. G4/G5 retain backend alignment, command encoding, mapping, and completion.
 
 G3 validates graph-entry initialization evidence but does not claim G5 execution preserved or synchronized content.
 
