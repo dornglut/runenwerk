@@ -122,6 +122,7 @@ architecture.
 - [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
+- [Runen Family Operational Hardening Design](runen-family-operational-hardening-design.md)
 
 ### Domain Authoring And Standalone UI Framework
 

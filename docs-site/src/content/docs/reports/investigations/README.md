@@ -3,6 +3,7 @@ title: Investigations
 status: active
 owner: workspace
 layer: reports
+last_reviewed: 2026-07-27
 ---
 
 # Investigations
@@ -31,6 +32,19 @@ Investigations do not authorize implementation by themselves.
 - [GPU and Render S0 File Disposition](runengpu-render-s0-file-disposition.md)
 - [GPU and Render S0 Identity, Consumer, and Lifecycle Inventory](runengpu-render-s0-identity-consumer-lifecycle.md)
 
-## Other current investigations
+## RunenGPU planning and review
 
-No additional investigation reports are currently retained in this directory.
+- [RunenGPU Industry Architecture Comparison](runengpu-industry-comparison.md)
+- [RunenGPU Public API Ergonomics Review](runengpu-public-api-ergonomics-review.md)
+- [RunenGPU Proof Workload Strategy](runengpu-proof-workload-strategy.md)
+- [RunenGPU G2 Capabilities and Resources Investigation](runengpu-g2-capabilities-resources-investigation.md)
+- [RunenGPU G3 Access and Work Graph Investigation](runengpu-g3-access-work-graph-investigation.md)
+- [Runen Family Operational Hardening Investigation](runen-family-operational-hardening-investigation.md)
+
+## RunenRender and application pressure
+
+- [RunenGPU and RunenRender Application-Domain Fit](runengpu-runenrender-application-domain-fit.md)
+
+Reports in this directory remain supporting evidence. Canonical ownership and phase
+requirements live in accepted ADRs, architecture documents, active designs, and
+implementation specifications.

@@ -12,6 +12,12 @@ related_docs:
   - ../../reports/closeouts/README.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
   - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
+  - ../../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
+  - ../../design/active/runengpu-g3-access-work-graph-design.md
+  - ../../design/active/runen-family-operational-hardening-design.md
+  - ../../reports/investigations/runengpu-g3-access-work-graph-investigation.md
+  - ../../reports/investigations/runen-family-operational-hardening-investigation.md
+  - ../specs/pt-runengpu-g3-access-work-graph.ron
 ---
 
 # Completed Work
@@ -41,19 +47,42 @@ PR `#132` was closed without merge because it contained only temporary automatio
 
 ## RunenGPU
 
+### G1A
+
 - Issue `#131` / PR `#164`: implemented the first internal future-transferable RunenGPU slice at merge `5bbdab36ae661d99432bfe5d215062c397aac975`.
-- `engine::plugins::gpu` now owns owner-scoped `GpuWorkResourceId`, its owner-controlled fallible allocator, and structured allocation exhaustion.
+- `engine::plugins::gpu` owns owner-scoped `GpuWorkResourceId`, its owner-controlled fallible allocator, and structured allocation exhaustion.
 - `RenderResourceId` and `RenderResourceIdSequence` were deleted without aliases, forwarding exports, or duplicate authority.
-- Resource-allocating render-flow, pass, procedural, GPU-primitive, application, example, benchmark, and test authoring paths now propagate structured `RenderFlowAuthoringError`.
+- Resource-allocating render-flow, pass, procedural, GPU-primitive, application, example, benchmark, and test authoring paths propagate structured `RenderFlowAuthoringError`.
 - Foreign uniform and storage handles are rejected even when independent flows allocate equal local components.
 - The GPU identity module remains independent of renderer, ECS, WGPU, Winit, application, and domain types.
-- Detailed scope, inventory, validation, and remaining-boundary evidence is recorded in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md).
-- Issue `#172` / PR `#173` implemented the bounded G2 authority: normalized capability facts and requirements, validated logical resource descriptors, kind-typed handles, prepared-data boundaries, explicit non-optional render lowering, three bounded render adapters, full consumer migration, and deletion of replaced declaration authority.
-- G2 changed no manifest, dependency, lockfile, workflow, or external-package authority and introduced no G3-G7 execution behavior or compatibility path.
-- Final independent review corrected target aliases to use validated semantic binding keys end to end and replaced ambiguous render parameter/resource equality with explicit GPU allocation-compatibility and transitional declared-Rust-type predicates. Diagnostic names and display labels remain non-semantic; normalized GPU types remain free of `TypeId` and alias authority.
-- Detailed scope, validation, equality audit, explicit imported-resource boundary, deletion, adapter disposition, and remaining-boundary evidence is recorded in the [PT-RUNENGPU-G2 implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md).
+- Detailed evidence is recorded in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md).
 
-This G2 entry becomes authoritative through the merge of PR `#173`. Repository Git history and the closed issue/merged PR represent acceptance; this branch content does not assert a merge SHA before one exists. The next action is one decision-complete G3 planning issue and specification, not G3 implementation.
+### G2
+
+- Issue `#172` / PR `#173` implemented normalized capability facts and requirements, validated logical resource descriptors, kind-typed handles, prepared-data boundaries, explicit non-optional render lowering, bounded adapters, full consumer migration, and deletion of replaced declaration authority.
+- G2 changed no manifest, dependency, lockfile, workflow, or external-package authority and introduced no G3-G7 execution behavior or compatibility path.
+- Independent review corrected target aliases to validated semantic binding keys and replaced ambiguous equality with explicit GPU allocation-compatibility and transitional declared-Rust-type predicates.
+- G2 merged as `709aa6aced020ee99405e1e1c3dde7703c77a4d4`.
+- Detailed evidence is recorded in the [PT-RUNENGPU-G2 implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md).
+
+### G3 planning
+
+- Issue `#174` / PR `#175` completed the decision phase for checked buffer, texture, and query access; render attachments and canonical clear values; buffer zero; query-set-to-buffer resolution; graph-entry initialization; RAW/WAR/WAW hazards; typed import/export causality; operation-derived capabilities; immutable work fragments/nodes; and deterministic prepared-graph authority.
+- Review corrected multisample texture resolution to a render-attachment relation, limited standalone clear work to buffer zeroing, added the real timestamp query-resolution path, rejected redundant explicit data edges, and kept runtime generations/retirement in G4/G5.
+- G3 planning merged as `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`.
+- Accepted authority is recorded in the [G3 design](../../design/active/runengpu-g3-access-work-graph-design.md), [investigation](../../reports/investigations/runengpu-g3-access-work-graph-investigation.md), and [implementation specification](../specs/pt-runengpu-g3-access-work-graph.ron).
+- This planning completion does not prove Rust G3 implementation. Issue `#177` owns that work and must be reverified against the exact post-PR-`#178` `main` before source changes.
+
+### Operational hardening
+
+- Issue `#176` / PR `#178` completed the documentation-only current-source audit and operational-contract reconciliation after accepted G3 planning.
+- The slice classified external-system weaknesses, inherited backend limits, and Runen-introduced risks; retained direct WGPU as the strongest substitute; and added strategic reevaluation gates.
+- Family authority now binds accepted-work integrity, structured pressure, derived-cache doctrine, Runenwerk-owned compatibility/recovery/persisted reproducibility, and performance anti-cheating rules.
+- Existing G4-G8 phases now own portability/cache compatibility, progress/pressure/completion/shutdown, direct-WGPU comparisons, device generations/loss/reconstruction, and operational conformance.
+- RunenRender authority now uses `dornglut/runen-render`, narrow provider capabilities, deterministic incremental prepared-scene lifecycle, generation/changed-region cache invalidation, and R8 performance/capture proof.
+- The proof portfolio retains exact 4,097-element prefix scan and 160×90/16-step Game-of-Life vectors with live count `2,063` and FNV-1a-64 `0xBD710B88594CD584`.
+- Detailed evidence is recorded in the [Runen family operational-hardening closeout](../../reports/closeouts/pt-runen-family-operational-hardening-closeout.md).
+- This entry becomes authoritative through the merge of PR `#178`; the candidate deliberately asserts no merge SHA.
 
 ## RunenSDF
 
@@ -63,7 +92,7 @@ This G2 entry becomes authoritative through the merge of PR `#173`. Repository G
 - `dornglut/runen-sdf` PR `#2`: standalone authority closeout.
 - `dornglut/runen-sdf` PR `#4`: shared validation workflow adoption.
 - `dornglut/runen-sdf` PR `#5`: current `dornglut/*` repository authority and durable namespace validation, merged as `ffa970f3eb7fd9ebaa1cfc67665e3e3128cd0676`.
-- Issue `#133` / PR `#157`: complete consumer census proved zero real internal-package consumers; retired `domain/sdf`, workspace and lockfile authority, stale local framework docs, and the transient census workflow; added durable no-return validation without adding an unused external dependency. See [PT-RUNENSDF-004 closeout](../../reports/closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md).
+- Issue `#133` / PR `#157`: complete consumer census proved zero real internal-package consumers; retired `domain/sdf`, workspace and lockfile authority, stale local framework docs, and transient census workflow; added durable no-return validation without adding an unused external dependency. See [PT-RUNENSDF-004 closeout](../../reports/closeouts/pt-runensdf-004-internal-sdf-retirement-closeout.md).
 
 Runenwerk now has one reusable SDF source authority: `dornglut/runen-sdf`. Runenwerk retains only product/world integration such as `domain/world_sdf`.
 
@@ -71,7 +100,7 @@ Runenwerk now has one reusable SDF source authority: `dornglut/runen-sdf`. Runen
 
 The former Runenwerk UI component and runtime-platform programs established substantial internal implementation and closeout evidence through PRs `#37`–`#107`. Reusable UI framework authority subsequently moved to `dornglut/runen-ui`.
 
-Detailed historical Runenwerk UI evidence remains in `reports/closeouts`, accepted architecture/design documents, and Git history. It does not authorize new RunenUI framework work in Runenwerk.
+Detailed historical Runenwerk UI evidence remains in closeouts, accepted designs, and Git history. It does not authorize new RunenUI framework work in Runenwerk.
 
 ## Evidence rule
 

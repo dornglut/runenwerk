@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: reports
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-07-27
 related_docs:
   - ../../workspace/workflow-lifecycle.md
   - ../../workspace/planning/completed-work.md
@@ -17,6 +17,13 @@ related_docs:
 Use this folder for detailed historical completion evidence.
 
 `completed-work.md` remains the short completion index. Closeout reports keep larger evidence records out of planning files.
+
+## Current repository-family closeouts
+
+- [RunenGPU G1A Closeout](pt-runengpu-g1a-closeout.md)
+- [RunenGPU G2 Implementation Closeout](pt-runengpu-g2-implementation-closeout.md)
+- [Runen Family Operational Hardening Closeout](pt-runen-family-operational-hardening-closeout.md)
+- [RunenSDF Internal Retirement Closeout](pt-runensdf-004-internal-sdf-retirement-closeout.md)
 
 ## Use when
 
