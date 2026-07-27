@@ -1,19 +1,22 @@
 ---
 title: RunenGPU Proof Workload Strategy
-description: Critical workload selection for deterministic conformance, boundary integration, visual showcases, offline output, and later RunenRender proofs.
+description: Critical workload selection for deterministic conformance, boundary integration, operational pressure, recovery, performance characterization, visual showcases, offline output, and later RunenRender proofs.
 status: active
 owner: gpu
 layer: investigation
 canonical: false
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 related_docs:
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
+  - ../../design/active/runen-family-operational-hardening-design.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/active-work.md
   - ./runengpu-render-s0-file-disposition.md
   - ./runengpu-public-api-ergonomics-review.md
+  - ./runengpu-industry-comparison.md
+  - ./runengpu-runenrender-application-domain-fit.md
 ---
 
 # RunenGPU Proof Workload Strategy
@@ -21,333 +24,484 @@ related_docs:
 ## Decision summary
 
 RunenGPU must not rely on one visually impressive example as proof of correctness.
-
-The proof portfolio has four distinct roles:
+The proof portfolio has six distinct roles:
 
 ```text
 deterministic conformance
-    exact results, narrow failure diagnosis, required gate
+    exact results and narrow failure diagnosis
 
 boundary integration
-    multiple resources and work stages, required gate
+    multiple resources and stages crossing accepted owners
+
+operational pressure
+    quotas, saturation, progress, cancellation, and shutdown
+
+recovery and reproducibility
+    generations, loss, reconstruction, and capture bundles
+
+performance characterization
+    cost dimensions and narrow direct-WGPU comparison
 
 visual showcase
-    representative application value, tolerant evidence
-
-benchmark or stress workload
-    scale and performance evidence, never correctness authority
+    representative application value with tolerant evidence
 ```
 
-The earlier proposal to use only cellular automata for G5 and boids for G6 was directionally useful but incomplete. Cellular automata and boids remain valuable, but neither should carry all phase acceptance responsibility.
+Correctness gates are never replaced by performance or visual evidence.
 
 ## Selection criteria
 
-A proof workload is evaluated against:
+A workload is evaluated against:
 
-1. **Determinism** — whether expected output can be checked exactly or only within tolerance.
-2. **Boundary coverage** — which capabilities, resources, accesses, transfers, pipelines, and lifecycle paths it exercises.
-3. **Isolation** — whether a failure identifies one framework contract or a large mixed application.
-4. **Portability** — whether the proof is reasonable across WGPU backends and common GPU classes.
-5. **Current reuse** — whether Runenwerk already contains accepted code, shaders, tests, or consumers for the workload.
-6. **Human value** — whether the result is understandable without specialized tooling.
-7. **Complexity cost** — how much unrelated domain or rendering policy must be introduced.
+1. determinism;
+2. boundary coverage;
+3. isolation and diagnosis quality;
+4. portability across WGPU backends and WebGPU where relevant;
+5. current repository reuse;
+6. human interpretability;
+7. complexity cost;
+8. pressure/recovery coverage;
+9. ability to compare the framework path with a narrow direct backend path;
+10. freedom from product, ECS, window, codec, and domain ownership.
 
-No single workload scores best across all criteria. The portfolio therefore uses a ladder rather than a winner-takes-all example.
+No single workload scores best across all criteria. The portfolio is deliberately a
+ladder.
 
 ## Current repository candidates
 
-### Prefix scan, counters, compaction, and indirect arguments
+### Prefix scan and compaction
 
-Current generic GPU primitives already define:
+Current GPU primitives already include counters, inclusive/exclusive `u32` prefix
+scan, compaction/scatter support, generated indirect arguments, temporary storage,
+and multi-stage dispatch plans.
 
-- counter reset;
-- inclusive and exclusive `u32` prefix scan;
-- scatter/compaction building blocks;
-- generated indirect draw arguments;
-- explicit resource access declarations;
-- temporary scan storage;
-- multi-stage dispatch plans.
+**Role:** required deterministic G5 conformance and G6 GPU-driven composition.
 
-The S0 disposition assigns these primitives to RunenGPU.
-
-**Best use:** deterministic G5 conformance and G6 GPU-driven drawing.
-
-**Strengths:**
-
-- integer results are exactly checkable;
-- exercises uploads, multiple dispatches, temporary resources, dependencies, completion, and readback;
-- directly proves authority already intended to move to RunenGPU;
-- reusable by boids, procedural generation, culling, visibility, and GPU-driven rendering.
-
-**Weakness:** not visually compelling by itself.
+**Why:** exact integer output, current ownership fit, multiple stages, temporary
+resources, completion, and readback.
 
 ### Game of Life
 
-The current `game_of_life_sdf` example already has:
+The current example provides deterministic integer state, fixed seed/tick behavior,
+ping-pong storage, compute dispatch, and a simple visualization.
 
-- a fixed-size integer grid;
-- deterministic seed and tick state;
-- ping-pong storage;
-- compute dispatch;
-- fullscreen composition;
-- windowed Runenwerk integration.
+**Role:** required stateful G5 integration and first deterministic offline sequence.
 
-**Best use:** G5 stateful-compute integration and the first deterministic offline sequence.
+**Why:** repeated submissions, exact CPU oracle, checksums, selected cells, and clear
+source/runtime ownership separation.
 
-**Strengths:**
+### Known image processing
 
-- exact state checksums and selected-cell assertions are possible;
-- proves repeated submission and ping-pong ownership;
-- easy to explain and visually inspect;
-- can produce images with either host-side conversion or compute-written texture output.
+A known-image convolution, Sobel filter, or small reconstruction pipeline exercises
+texture upload, storage/sampled use, intermediates, copies, padded readback, and
+artifact encoding without a scene renderer.
 
-**Weakness:** by itself it does not sufficiently exercise generic multi-stage GPU primitives or graphics composition.
+**Role:** conditional G5 texture proof and narrow direct-WGPU performance comparison.
+
+### Known-pattern offscreen draw
+
+A small offscreen render with known clear and selected pixels isolates graphics
+pipeline creation, attachments, draw, copy, and readback.
+
+**Role:** required G6 graphics conformance.
+
+### Compute-generated indirect draw
+
+Compute produces arguments and data consumed by graphics, with order inferred from
+resource access.
+
+**Role:** required G6 composition proof.
 
 ### Boids
 
-The current `boids_render_flow` example already performs:
+The current boids example exercises fixed-step simulation, double-buffered agents,
+spatial-grid construction, atomic counts, prefix scan, scatter, neighborhood
+simulation, compute-to-graphics sharing, instanced drawing, and presentation.
 
-- fixed-step simulation;
-- double-buffered agents;
-- bounded uniform-grid construction;
-- atomic counting;
-- prefix scan;
-- scatter into sorted indices;
-- neighborhood simulation;
-- compute-to-graphics resource sharing;
-- procedural instanced drawing;
-- presentation.
+**Role:** representative G6 integration and G7 surface showcase.
 
-**Best use:** G6 mixed compute-and-graphics showcase and later G7 interactive proof.
-
-**Strengths:**
-
-- reuses a substantial real workload;
-- covers many resource and scheduling paths;
-- demonstrates why RunenGPU must support non-render compute and rendering on one context;
-- produces an understandable visual result.
-
-**Weaknesses:**
-
-- atomic ordering and floating-point accumulation make exact cross-backend state or pixel equality inappropriate;
-- broad scope makes failures harder to diagnose;
-- the current example also contains ECS projection, shader-file policy, surface behavior, and procedural render semantics that must remain outside RunenGPU.
-
-Boids is therefore a required integration target only after narrow conformance proofs exist. It is not the primary correctness oracle.
-
-### Minimal fullscreen and known-color rendering
-
-The current `render_flow_fullscreen_minimal` example proves graph authoring only. It does not yet provide a sufficient hardware execution artifact.
-
-**Best use after redesign:** minimal G6 offscreen graphics conformance.
-
-The improved proof should render a known integer-friendly pattern or small triangle into an offscreen texture, read it back, and validate selected pixels with documented tolerance.
-
-**Strengths:**
-
-- isolates graphics pipeline, attachment, clear/load/store, draw, copy, and readback behavior;
-- failure diagnosis remains narrow;
-- establishes a graphics baseline before boids.
-
-### Post-process compositor
-
-The current `render_flow_postprocess_compositor` combines compute and fullscreen work, but currently demonstrates planning rather than a complete executable artifact.
-
-**Best use after redesign:** G6 texture-processing integration.
-
-An executable variant should upload a known source image, apply a small convolution or separable blur, and read back the result.
-
-This proves texture upload, sampled/storage usage, intermediate textures, compute or fullscreen processing, copies, and image readback without requiring a scene renderer.
+Boids is not the primary correctness oracle because atomic and floating-point
+behavior make exact cross-backend state or pixel equality inappropriate.
 
 ### Procedural sky and SDF terrain
 
-The current `procedural_sky_sdf_terrain` example is a single semantic fullscreen image-formation workload.
+The current procedural terrain example is the first bounded RunenRender semantic
+proof after accepted RunenGPU cutover.
 
-**Best use:** first internal RunenRender semantic proof after standalone RunenGPU is accepted.
+**Role:** first image-formation proof. It must not define RunenGPU concepts.
 
-It is simpler than boids as a renderer proof because it needs one prepared view/request and one image-formation pass, but it should not define RunenGPU semantics.
+### Synthetic volume
 
-### SDF flow with history
+A fixed integer volume with a deterministic transfer function and selected CPU ray
+oracle exercises volume providers, interval integration, multi-target output, changed
+bricks, and memory pressure.
 
-The current `sdf_render_flow` includes compute preparation, fullscreen composition, history copy, and presentation.
+**Role:** later RunenRender provider and application-domain proof.
 
-**Best use:** later RunenRender temporal/history-resource proof.
-
-It should not be the first graphics proof because history and temporal ownership add complexity unrelated to basic RunenGPU execution.
-
-## External sample patterns
-
-Mature GPU ecosystems commonly separate small exact samples from larger demonstrations:
-
-- WGPU provides a standalone minimal compute example and separate feature examples such as boids.
-- Bevy lists compute Game of Life and GPU readback as separate examples.
-- Vulkan Samples pairs minimal API samples with a two-pass compute N-body simulation and supports headless screenshot workflows.
-- NVIDIA CUDA samples cover exact data-parallel algorithms such as reduction, histogram, and prefix scan alongside N-body, particles, image filters, Mandelbrot, fluids, and graphics interop.
-
-This supports a portfolio design rather than choosing one universal example.
-
-## Alternative workload assessment
-
-| Candidate | Best role | Decision |
-|---|---|---|
-| Vector addition | minimal compute tutorial | Do not use as a primary gate; too weak and unrelated to current authority. |
-| Reduction or histogram | deterministic compute/readback | Good optional G5 conformance extension after prefix scan. |
-| Prefix scan and compaction | deterministic multi-stage compute | Required G5 gate; best fit with current RunenGPU ownership. |
-| Integer cellular automaton | stateful repeated compute | Required G5 integration proof. |
-| Integer procedural texture | compute-to-texture export | Good G5 texture-readback proof when storage-texture support is in scope. |
-| Image convolution or Sobel filter | texture upload/process/readback | Strong G5/G6 transfer and texture integration proof. |
-| Mandelbrot or Julia set | compute-to-image showcase | Optional; floating-point boundary pixels weaken exact portability. |
-| Reaction-diffusion | stateful texture showcase | Useful later offline showcase; not a conformance oracle. |
-| N-body | compute-and-render showcase | Valid alternative to boids, but duplicative because boids already exists and exercises more current primitives. |
-| Boids | broad compute-and-render integration | Required G6 showcase, checked structurally and with tolerant visual evidence. |
-| Fluid or smoke simulation | multi-pass stress workload | Defer until after extraction; excessive early complexity and float variability. |
-| FFT ocean | compute/graphics stress and spectral processing | Defer; introduces FFT and domain-specific image formation. |
-| GPU mesh generation or marching cubes | procgen-to-render integration | Later RunenGPU/RunenRender/source-domain proof, not initial extraction. |
-| SDF terrain/raymarching | semantic renderer proof | Use for RunenRender, not RunenGPU conformance. |
-| Path tracing | advanced renderer and accumulation | Defer well beyond initial RunenRender proof. |
-
-## Accepted proof ladder
+## Accepted correctness ladder
 
 ### G5 — headless execution and transfers
 
-Required narrow conformance:
+#### Required deterministic conformance
 
-1. **`u32` prefix scan and readback**
-   - fixed integer input;
-   - inclusive and exclusive expected outputs;
-   - multi-workgroup input large enough to require temporary scan storage;
-   - exact output and total-count verification;
-   - no window, renderer, ECS, or product types.
+**`u32` prefix scan and readback**
 
-Required stateful integration:
+- fixed integer input;
+- inclusive and exclusive expected outputs;
+- 4,097 elements or another accepted size that crosses workgroup hierarchy;
+- temporary scan storage;
+- exact full-output and total-count verification;
+- no window, renderer, ECS, or product types.
 
-2. **headless Game of Life**
-   - fixed seed, dimensions, and number of ticks;
-   - ping-pong buffers;
-   - exact checksum plus selected-cell assertions;
-   - asynchronous completion and readback;
-   - source state prepared outside RunenGPU.
+#### Required stateful integration
 
-Conditional texture proof when G5 includes storage-texture readback:
+**Headless Game of Life**
 
-3. **integer compute-to-texture artifact**
-   - deterministic pattern or cellular-automaton visualization;
-   - texture-to-buffer readback;
-   - row-padding normalization;
-   - PNG export performed by a Runenwerk test/tool adapter, not RunenGPU.
+- fixed seed, dimensions, and tick count;
+- ping-pong storage;
+- full-grid CPU oracle;
+- exact live-cell count and checksum;
+- selected-cell assertions;
+- asynchronous completion and readback;
+- source state prepared outside RunenGPU.
 
-Optional extensions:
+#### Conditional texture proof
+
+**Known integer compute-to-texture artifact**
+
+- deterministic pattern;
+- texture-to-buffer readback;
+- row-padding normalization;
+- Runenwerk-owned PNG encoding;
+- exact or documented integer result checks.
+
+#### Optional extensions
 
 - reduction;
 - histogram;
-- image convolution.
+- image convolution;
+- compaction output.
 
 ### G6 — offscreen graphics and shared consumers
 
-Required narrow graphics conformance:
+#### Required graphics conformance
 
-1. **offscreen known-pattern draw**
-   - no surface;
-   - one graphics pipeline;
-   - known clear and draw result;
-   - texture readback and selected-pixel checks.
+**Offscreen known-pattern draw**
 
-Required GPU-driven composition proof:
+- no surface;
+- one graphics pipeline;
+- known clear and draw result;
+- selected-pixel readback;
+- exact attachment/load/store evidence.
 
-2. **compute-generated indirect draw**
-   - counter/scan/compaction or generated draw arguments;
-   - compute writes data consumed by graphics;
-   - dependency inferred from resource access;
-   - structural and selected-pixel assertions.
+#### Required GPU-driven composition
 
-Required representative integration:
+**Compute-generated indirect draw**
 
-3. **offscreen boids**
-   - existing spatial-grid simulation and draw path migrated through accepted adapters;
-   - one shared RunenGPU context;
-   - no surface requirement;
-   - artifact generation succeeds;
-   - validation uses invariants, counts, finite ranges, pass/resource evidence, and tolerant image checks rather than exact cross-backend pixels.
+- compute-generated arguments and source data;
+- graphics consumes them;
+- dependency inferred from accepted G3 access;
+- structural and selected-pixel assertions.
 
-Optional texture-pipeline integration:
+#### Required representative integration
 
-- executable image convolution or post-process compositor.
+**Offscreen boids**
 
-### G7 — surfaces and device outcomes
+- accepted simulation and draw path migrated through adapters;
+- one shared RunenGPU context;
+- no surface requirement;
+- bounded finite state and resource invariants;
+- tolerant artifact comparison;
+- no exact cross-backend floating-point pixel promise.
 
-G7 should reuse accepted G6 workloads instead of introducing another showcase:
+### G7 — surfaces and lifecycle outcomes
 
-- present the known-pattern graphics proof;
+Reuse accepted G6 workloads:
+
+- present known-pattern draw;
 - present boids interactively;
-- test resize, surface reconfiguration, multiple surfaces where supported, and device/surface outcome reporting.
+- resize and reconfigure surfaces;
+- test outdated/lost/out-of-memory outcomes;
+- test multiple surfaces where supported;
+- prove offscreen and surface targets share semantic work rather than duplicate paths.
 
-The same semantic work should be capable of targeting offscreen and surface-backed outputs without duplicate execution authority.
+### G8 and GX — retained conformance
 
-### G8 and GX — conformance and extraction
+The standalone suite retains the narrow G5/G6 proofs. Unsupported hardware paths
+produce structured skip/environment evidence. A showcase never replaces exact
+contract tests.
 
-The standalone conformance suite must retain the narrow G5/G6 proofs. Showcase examples supplement but do not replace them.
+## Operational pressure matrix
 
-Hardware-dependent visual evidence is separate from deterministic contract tests. Unsupported or unavailable hardware paths report structured skips or environment evidence rather than silently passing.
+These proofs begin only in the owning phase.
 
-### RunenRender proof sequence
+### G5 progress and saturation
 
-After standalone RunenGPU and clean Runenwerk cutover:
+#### In-flight submission saturation
 
-1. procedural sky/SDF terrain as the first simple semantic image-formation proof;
-2. boids render adapter as shared simulation-to-render integration;
-3. SDF history flow as a later temporal/history proof;
-4. more advanced scene, material, lighting, reconstruction, or transport examples only as their owning phases require them.
+- configure a small accepted submission quota;
+- fill it with valid work;
+- assert the next submission returns the documented pressure outcome;
+- drive progress;
+- assert capacity becomes available;
+- prove no accepted submission loses its terminal outcome.
 
-## Offline image and video output
+#### Pending-readback saturation
 
-Offline sequencing is a Runenwerk tool/application concern built on RunenGPU readback and optional RunenRender image formation.
+- configure a small readback pool/quota;
+- submit multiple readbacks without consuming completions;
+- assert deterministic rejection or bounded wait behavior;
+- complete and release readbacks;
+- prove backing memory returns to the pool.
 
-Recommended order:
+#### Upload/staging pressure
 
-1. Game of Life PNG sequence after G5 if host-side visualization or storage-texture export is available.
-2. Boids offscreen PNG sequence after G6.
-3. RunenRender-owned SDF or scene sequences after the relevant renderer proof.
+- exceed the configured staging budget with valid data;
+- assert structured pressure rather than unbounded growth or silent drop;
+- prove accepted uploads remain intact.
+
+#### Callback/reentrancy proof
+
+- completion callbacks attempt allowed follow-up work;
+- internal locks are not held during consumer callback invocation;
+- callback ordering and exactly-once delivery are documented;
+- native polling and WebGPU event-loop paths reach equivalent terminal semantics.
+
+#### Shutdown with pending work
+
+- accept submissions and readbacks;
+- begin shutdown at defined lifecycle points;
+- prove every accepted item receives completion, cancellation, loss, or shutdown
+  outcome exactly once;
+- prove no indefinite wait is required by the API contract.
+
+#### Cancellation lifecycle
+
+Test cancellation:
+
+```text
+before preparation
+before backend submission
+after backend submission
+while readback mapping is pending
+during shutdown
+```
+
+The terminal meaning differs by point but is never ambiguous.
+
+## Cache and pipeline characterization
+
+### G4 compatibility proof
+
+- create cache facts for one admitted adapter/context;
+- reject altered WGPU version, backend, adapter, driver, shader, interface,
+  capability, or descriptor facts;
+- accept matching facts where WGPU/backend permits;
+- prove cache rejection falls back safely and preserves semantics.
+
+### G6 cold/warm proof
+
+For known compute and graphics pipelines, record:
+
+- source preparation time;
+- shader admission/translation time;
+- pipeline creation time;
+- first submission latency;
+- warm repeated submission latency;
+- cache hit/miss/rejection facts;
+- artifact equality.
+
+No global performance threshold is a correctness gate. Regressions require separately
+accepted budgets and controlled environments.
+
+## Direct-WGPU comparison
+
+At least these workloads require a narrow direct-WGPU baseline:
+
+```text
+prefix scan or known compute kernel
+known-image processing
+known-pattern offscreen draw
+```
+
+The direct path and RunenGPU path must use equivalent:
+
+- shaders;
+- resource sizes and formats;
+- dispatch/draw counts;
+- adapter/backend selection;
+- artifact checks;
+- warm-up policy.
+
+Measure:
+
+- CPU preparation and validation time;
+- allocations and bytes;
+- command recording;
+- submission overhead;
+- staging/readback bytes;
+- pipeline cold/warm cost;
+- GPU timestamps where supported.
+
+The comparison answers whether RunenGPU adds acceptable cost for its correctness and
+reuse value. It does not justify bypassing validation.
+
+## Device loss and reconstruction matrix
+
+### G7 required scenarios
+
+#### Source-backed resources
+
+- invalidate one context generation;
+- report the logical resources as reconstructable;
+- recreate backend realizations from accepted source/prepared data;
+- prove old-generation values are rejected.
+
+#### Externally reconstructed imports
+
+- invalidate the device;
+- report the external owner and required reimport facts;
+- reject use until the owner provides a new-generation import.
+
+#### Non-reconstructable resources
+
+- invalidate the device;
+- report permanent loss explicitly;
+- do not fabricate empty or zeroed replacement content.
+
+#### Surface-only outcomes
+
+Separate outdated/reconfigure, lost/recreate, and out-of-memory/product-policy paths.
+RunenGPU reports facts; Runenwerk chooses retry/degrade/exit.
+
+## Reproducibility and capture proof
+
+### G8 bundle
+
+Runenwerk assembles a versioned bundle containing:
+
+- exact framework and adapter revisions;
+- normalized capability/limit facts;
+- permitted adapter/backend/driver facts;
+- prepared-work graph inspection facts;
+- workload labels and typed identities represented through stable capture keys;
+- seeds, fixed-time configuration, and source generations;
+- artifact manifests and checksums;
+- privacy/redaction metadata;
+- schema versions.
+
+Proof requirements:
+
+- the same accepted inputs reproduce equivalent deterministic artifacts;
+- unsupported volatile fields are omitted or marked diagnostic-only;
+- runtime handles and memory addresses are absent;
+- capture growth is bounded;
+- malformed or incompatible bundles fail validation.
+
+## RunenRender proof sequence
+
+### R1/R2 incremental prepared scene
+
+Use a technical-digital-twin style proof:
+
+- insert independent provider/material/overlay contributions;
+- replace one contribution;
+- remove one contribution;
+- retire one producer;
+- compare final output and prepared facts with an equivalent full rebuild;
+- measure affected versus unaffected preparation work;
+- report fallback to full rebuild explicitly when narrow changes are unavailable.
+
+### R3 provider maturity
+
+1. procedural/analytic field terrain;
+2. overlay composition;
+3. synthetic integer volume;
+4. population or regional summary only after an accepted consumer;
+5. fiber/liquid and hardware-specialized providers remain deferred.
+
+Each provider proof uses only the narrow capability interfaces it needs.
+
+### R6 cache/history invalidation
+
+- change one scene/provider/material/view/quality generation at a time;
+- prove affected cache/history entries invalidate;
+- prove unrelated entries remain reusable when correctness facts permit;
+- change device generation and invalidate all GPU-realized entries;
+- reject stale entries rather than using them as quality degradation.
+
+### R8 renderer operational characterization
+
+Record:
+
+- full versus incremental preparation cost;
+- provider query counts and divergence evidence;
+- cache hit/miss/invalidation;
+- current-frame and history-dependent paths;
+- CPU/GPU memory high-water marks;
+- pipeline cold/warm cost inherited through RunenGPU;
+- capture reproducibility;
+- comparison with a simpler renderer/direct path for the same bounded proof.
+
+## Offline image and video ownership
+
+Offline sequencing remains a Runenwerk tool/application concern:
+
+```text
+fixed clock and job configuration
+    -> RunenGPU compute/readback
+    -> optional RunenRender image formation
+    -> ordered PNG/EXR sequence and manifest
+    -> optional external video encoder
+```
 
 The batch runner owns:
 
-- fixed frame/tick timing;
-- seed and input configuration;
-- bounded in-flight readbacks;
-- ordered frame filenames;
-- run and per-frame manifests;
+- seeds and fixed timing;
+- bounded in-flight work/readbacks;
+- filenames and manifests;
 - retry/failure policy;
-- PNG or later EXR encoding.
+- PNG/EXR encoding;
+- external MP4/WebM encoder integration.
 
-RunenGPU owns completion and readback facts. RunenRender owns image-formation semantics. Neither owns MP4/WebM codecs. Video encoding remains an external encoder integration over an accepted image sequence and manifest.
+RunenGPU owns completion/readback facts. RunenRender owns image-formation semantics.
+Neither owns video codecs.
 
-## Final decision
-
-The preferred portfolio is:
+## Final portfolio
 
 ```text
-G5 conformance
+G5 correctness
     prefix scan/readback
-
-G5 stateful integration
     headless Game of Life
+    known integer texture processing
 
-G6 graphics conformance
-    offscreen known-pattern draw
+G5 operations
+    submission/readback/upload saturation
+    progress and callback proof
+    cancellation and pending-work shutdown
 
-G6 GPU-driven composition
+G6 graphics and cost
+    known-pattern offscreen draw
     compute-generated indirect draw
-
-G6 showcase
+    direct-WGPU narrow comparisons
     offscreen boids
 
-G7 surface proof
-    reuse known-pattern draw and boids
+G7 lifecycle
+    surface outcomes
+    device generations
+    reconstruction matrix
 
-RunenRender first proof
-    procedural sky/SDF terrain
+G8 conformance
+    cache behavior
+    reproducibility bundle
+    operational residual audit
 
-Offline output
-    Game of Life sequence first, boids sequence second
+RunenRender
+    procedural terrain
+    incremental prepared scene
+    synthetic volume
+    cache/history invalidation
+    renderer cost characterization
 ```
 
-This portfolio is stronger than using Game of Life and boids alone. It preserves understandable visual results while keeping exact, narrow, portable conformance evidence available for diagnosis and extraction readiness.
+This portfolio preserves exact narrow evidence, adds operational failure-path proof,
+and keeps attractive demonstrations in their proper supporting role.
