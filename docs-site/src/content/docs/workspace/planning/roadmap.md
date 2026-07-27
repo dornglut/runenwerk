@@ -46,14 +46,14 @@ Runenwerk remains the integration and product repository. Framework repositories
 
 ## Current priorities
 
-1. Critically review issue `#172` / draft PR `#173`, including the complete migration/deletion diff, exact-head Actions, and merge readiness.
-2. Accept or correct the bounded G2 implementation without adding compatibility aliases, forwarding modules, duplicate descriptors, or later-phase behavior.
-3. After G2 merges, create one decision-complete G3 planning slice; continue G3-G8 as individually specified internal boundaries that migrate and delete replaced authority.
+1. Create one bounded, decision-complete G3 planning issue and specification for access, initialization flow, hazards, immutable generic work, inferred dependencies, and the internal graph.
+2. Accept or correct that G3 planning authority before authorizing any G3 source implementation.
+3. Keep G4-G7 deferred to their existing owners and implement each only through its own accepted planning slice.
 4. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
 5. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
 6. Resume RunenECS boundary repair as separately bounded work.
 
-The RunenSDF cutover, RunenGPU S0, RunenGPU G1A, and RunenGPU G2 decision gates are complete. The G2 implementation is code-complete on draft PR `#173` and owns the serialized review queue; it is not accepted or merged yet. G3 implementation is not authorized by this state.
+The RunenSDF cutover, RunenGPU S0, RunenGPU G1A, and RunenGPU G2 are complete through PR `#173`. The G2 implementation state becomes authoritative through that PR's merge, with Git history and the closed issue/merged PR as acceptance evidence. G3 planning is next; G3 implementation remains unauthorized until its own issue and specification are decision-complete and accepted.
 
 ## RunenSDF
 
@@ -195,8 +195,8 @@ The current mixed graph is decomposed incrementally. Each phase migrates consume
 - G1A implementation through PR `#164`, merged as `5bbdab36ae661d99432bfe5d215062c397aac975`;
 - G1A completion evidence in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md);
 - G2 industry/API/proof-workload planning through PRs `#169` and `#170`;
-- G2 current-main census and decision-complete specification through issue `#168` and PR `#171`.
-- G2 bounded implementation candidate through issue `#172` and draft PR `#173`, with acceptance pending and evidence in the [implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md).
+- G2 current-main census and decision-complete specification through issue `#168` and PR `#171`;
+- G2 bounded implementation through issue `#172` and PR `#173`, with evidence in the [implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md). This entry becomes authoritative through the merge of PR `#173`.
 
 G1A delivered:
 
@@ -214,12 +214,13 @@ The owner scope closes the confirmed cross-flow collision seam. Resource-allocat
 
 ```text
 G1A owner-scoped logical GPU work-resource identity (completed)
--> G2 capabilities, logical resources, typed handles, prepared-data seam, and ownership split
+-> G2 capabilities, logical resources, typed handles, prepared-data seam, and ownership split (implemented through PR #173)
+-> G3 decision-complete planning (next; implementation requires its own accepted issue and specification)
 -> G3 access, initialization flow, hazards, immutable generic work, and internal graph
--> G4 context/device admission, shader/pipeline admission, binding/layout, and WGPU realization
+-> G4 context/device admission, shader/pipeline admission, binding/layout, and WGPU realization (deferred)
 -> G5 headless execution, uploads, updates, submission, completion, readback, cancellation, and retirement
 -> G6 offscreen graphics and shared render/non-render consumer proof
--> G7 surfaces, generations, thread affinity, and device outcomes
+-> G7 surfaces, generations, thread affinity, and device outcomes (deferred)
 -> G8 final diagnostics, shutdown, residual anti-cheating audit, and conformance
 -> GX external dornglut/runen-gpu transfer and clean Runenwerk cutover
 -> internal RunenRender proof on RunenGPU

@@ -29,22 +29,21 @@ GitHub issues and pull requests own live delivery. This page is only a concise c
 
 ## Active
 
-### RunenGPU G2 implementation review
+### RunenGPU G3 planning
 
-RunenGPU S0 and G1A are complete. Issue `#168` and PR `#171` completed the G2 investigation and decision-complete specification. Issue `#172` is implemented on draft PR `#173` from accepted base `48d3e26dd29e7a20b8a4e3978e8e8465d24e6f84`; acceptance and merge remain pending critical review and exact-head Actions.
+RunenGPU S0, G1A, and the bounded G2 implementation are complete through issue `#172` and PR `#173`. The G2 entry becomes authoritative through the merge of PR `#173`; repository Git history and the closed issue/merged PR represent acceptance without requiring this branch to invent a merge SHA.
 
-The review candidate:
+The one active serialized next action is to create one decision-complete G3 planning issue and specification for:
 
-- creates future-transferable capability, logical-resource, kind-typed-handle, prepared-data, provenance, and structured-error authority under `engine::plugins::gpu`;
-- models resource kind, lifetime, ownership, transfer/observation, reconstruction, and memory intent independently;
-- distinguishes buffer initialization from texture initialization, including checked texture format, extent, `bytes_per_row`, and `rows_per_image`;
-- bounds texture-view validity by the parent texture lease and checked subresources;
-- keeps ECS/domain projection, render target/history/surface meaning, shader-file policy, fixed-time scheduling, UI, capture, artifacts, and product recovery outside RunenGPU;
-- migrates the inventoried declaration and consumer authority and deletes the replaced profile, combined lifetime/import, generic descriptor, and render-owned generic handles without aliases or forwarding paths;
-- adds focused unit, rustdoc compile-pass/fail, source-guard, dependency-guard, and canonical validation evidence;
-- does not widen into G3-G7 implementation or external extraction.
+- work-time buffer access ranges and texture subresources;
+- initialization-flow validation;
+- hazards and dependency inference;
+- immutable generic work;
+- the internal work graph.
 
-Review must still confirm the complete final diff, exact remote head, permanent Actions conclusion, unresolved review state, and merge-readiness evidence. The [G2 implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md) records the bounded candidate and its deliberate later-phase seams.
+G3 implementation is not active or authorized. It requires its own accepted planning issue and specification before source changes. G4-G7 remain deferred to their existing owners, and G2 does not authorize an external package or extraction.
+
+The [G2 implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md) records the completed authority, exact reviewed implementation head, validation contract, equality audit, explicit import-lowering boundary, and deliberate later-phase seams.
 
 The target external repository remains `dornglut/runen-gpu`, but no external package is created during G2.
 
@@ -60,7 +59,7 @@ The proof portfolio is already bound and remains separated:
 
 ## Queued
 
-- one decision-complete G3 planning slice for access, initialization flow, hazards, immutable generic work, inferred dependencies, and the internal graph only after G2 acceptance and merge;
+- G3 implementation only after one bounded planning issue and specification are decision-complete and accepted;
 - G4 context/device admission, WGPU realization, shaders, pipelines, binding keys, backend layout, macro disposition, and removal of the temporary `RenderFlowId` bridge;
 - G5 execution, uploads, staging, completion, asynchronous readback, cancellation, and delayed retirement;
 - G6 offscreen graphics and shared render/non-render proof;
@@ -84,5 +83,5 @@ The proof portfolio is already bound and remains separated:
 - G1A implementation: issue `#131`, PR `#164`, merge `5bbdab36ae661d99432bfe5d215062c397aac975`, and [closeout report](../../reports/closeouts/pt-runengpu-g1a-closeout.md);
 - G2 public API/industry/proof-workload supporting decisions: PRs `#169` and `#170`;
 - G2 decision phase: issue `#168`, PR `#171`, the [current-main investigation](../../reports/investigations/runengpu-g2-capabilities-resources-investigation.md), and the [implementation specification](../specs/pt-runengpu-g2-capabilities-resource-descriptors.ron);
-- G2 bounded implementation candidate: issue `#172`, draft PR `#173`, and the [implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md); acceptance remains pending.
+- G2 bounded implementation: issue `#172`, PR `#173`, and the [implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md). This entry becomes authoritative through the merge of PR `#173`.
 - RunenSDF standalone transfer, maintained authority, and Runenwerk duplicate-source retirement: Runenwerk PRs `#118` and `#157`, issue `#133`, and `dornglut/runen-sdf` PRs `#1`, `#2`, `#4`, `#5`, and `#6`.
