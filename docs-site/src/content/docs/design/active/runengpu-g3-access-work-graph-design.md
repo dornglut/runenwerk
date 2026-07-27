@@ -120,6 +120,7 @@ StorageReadWrite
 CopySource
 CopyDestination
 ColorAttachment { load, store }
+MultisampleResolveDestination
 DepthStencilAttachment { access, load, store }
 Present
 ```
@@ -132,6 +133,8 @@ store: Store | Discard
 ```
 
 `Load` reads prior content. `Clear` establishes complete initialized attachment coverage. `Store` preserves post-node coverage. `Discard` removes later readable coverage.
+
+Multisample texture resolution is not standalone work. A color attachment may name an optional single-sampled resolve destination as part of the same `GpuRenderOperation`. The render operation derives the source color-attachment access and destination `MultisampleResolveDestination` write. The resolve destination is written regardless of source attachment store policy.
 
 ### Queries and samplers
 
@@ -154,25 +157,27 @@ Samplers are immutable input evidence and do not create data hazards by themselv
 Graph-time initialization is region-aware:
 
 ```text
-Zeroed descriptor             -> complete initialized coverage
-Prepared descriptor           -> checked prepared coverage
-Uninitialized descriptor      -> no initialized coverage
-pure write                    -> initialize written coverage
-copy destination              -> initialize destination coverage
-query timestamp write         -> initialize written query indices
-query resolve destination     -> initialize exact destination buffer bytes
-read-write                    -> require prior coverage, then preserve/write it
-attachment Load               -> require prior coverage
-attachment Clear              -> establish full attachment coverage
-attachment Store              -> preserve coverage
-attachment Discard            -> remove later readable coverage
+Zeroed descriptor                 -> complete initialized coverage
+Prepared descriptor               -> checked prepared coverage
+Uninitialized descriptor          -> no initialized coverage
+pure write                        -> initialize written coverage
+copy destination                  -> initialize destination coverage
+query timestamp write             -> initialize written query indices
+query resolve destination         -> initialize exact destination buffer bytes
+attachment Load                   -> require prior attachment coverage
+attachment Clear                  -> establish attachment coverage
+attachment write/draw             -> preserve/write attachment coverage
+multisample resolve destination   -> establish destination coverage
+attachment Store                  -> preserve source attachment coverage
+attachment Discard                -> remove source attachment coverage
+read-write                        -> require prior coverage, then preserve/write it
 ```
 
 Query sets begin with no initialized indices unless explicit graph-entry evidence exists. `ResolveSource` requires initialized coverage established by accepted timestamp writes or explicit input evidence.
 
 Imported or retained prior-epoch content enters only through explicit `GpuWorkResourceInput` evidence. Lifetime, labels, or the presence of a current runtime allocation never imply initialized content.
 
-G3 validates the evidence. G5 later proves whether execution actually uploaded, preserved, synchronized, completed, or retired it.
+G3 validates graph-time evidence. G5 later proves whether execution actually uploaded, preserved, synchronized, completed, resolved, copied, or retired backend state.
 
 ## Overlap and hazards
 
@@ -203,7 +208,9 @@ shared typed resource
     + matching typed export/import relation
 ```
 
-Overlapping cross-fragment writers without one unique producer are rejected as ambiguous rather than ordered by array position.
+Any conflicting cross-fragment access with at least one write and no matching producer/consumer relation is rejected as missing causality. This includes read/write and write/write conflicts; preparation never guesses whether an unordered read should occur before or after a write.
+
+Overlapping cross-fragment writers with more than one possible producer are rejected as ambiguous.
 
 A timestamp write followed by query resolution produces a data dependency through the query-set range. Query resolution followed by a buffer copy produces a data dependency through the resolved destination byte range.
 
@@ -214,7 +221,7 @@ The authoring boundary normalizes repeated access declarations:
 - duplicate identical access is deduplicated;
 - compatible storage read plus storage write over the same range becomes read-write;
 - disjoint accesses remain separate;
-- incompatible overlapping roles fail, including sampled read plus attachment write or overlapping copy source/destination on the same resource unless a later accepted operation proves legality.
+- incompatible overlapping roles fail, including sampled read plus attachment write, source attachment aliasing its resolve destination, or overlapping copy source/destination on the same resource unless a later accepted operation proves legality.
 
 ## Immutable work
 
@@ -240,13 +247,32 @@ Resolve
 Present
 ```
 
-`Resolve` contains distinct typed operation variants for multisample texture resolution and query-set-to-buffer resolution. These variants share a node kind but do not share one ambiguous payload.
+`Resolve` is standalone query-set-to-buffer resolution. Multisample texture resolution belongs to a `Render` node's color-attachment operation because WGPU/WebGPU resolves the multisample attachment into its resolve target as part of that render pass.
+
+`GpuRenderOperation` owns exact ordered color-attachment operations, an optional depth/stencil attachment operation, ordered draw intents, and render-side query writes. Attachment operation constructors derive mandatory access facts; callers do not separately restate attachment reads/writes.
 
 G3 nodes are pre-admission work intent. They include operation kind, exact access, capability requirements, backend-neutral operation shape, execution preference, label, and provenance.
 
-Current render shader/pipeline/draw payload remains in a temporary render-owned sidecar keyed by prepared node identity. G4 replaces this seam with admitted generic shader/pipeline/interface authority. The sidecar cannot alter G3 hazard truth.
+Current render shader/pipeline payload remains in a temporary render-owned sidecar keyed by prepared node identity. G4 replaces this seam with admitted generic shader/pipeline/interface authority. The sidecar cannot alter G3 hazard truth.
 
-An empty render draw list is valid only when an attachment `Clear` or another explicit non-attachment side effect makes the node meaningful. `Store` alone preserves content and is not work.
+An empty render draw list is valid only when an attachment `Clear` or render-side query write makes the pass meaningful. `Store` alone preserves content and is not work.
+
+## Capability requirements
+
+Operations and accesses derive the normalized requirements they structurally need:
+
+```text
+Compute operation                    -> Compute
+Render operation                     -> RenderPipeline
+Copy or standalone Clear             -> Copy
+Indirect draw                        -> IndirectDraw
+Storage texture access               -> StorageTexture
+Depth/stencil attachment             -> DepthAttachment
+Timestamp write or query resolution  -> TimestampQuery
+Present                              -> Presentation
+```
+
+Consumers may add semantic requirements not inferable from operation shape. Preparation merges caller-declared and derived requirements through the accepted G2 requirement authority. A caller cannot neutralize an operation-implied requirement with `Disabled`; conflicts fail deterministically. G4 performs actual capability admission.
 
 ## Identity
 
@@ -298,18 +324,18 @@ Cross-fragment explicit node edges are deferred. Existing render passes needing 
 Preparation:
 
 1. accepts immutable fragments;
-2. validates identities, descriptors, usages, ranges, view parents, queries, query resolves, and imports/exports;
-3. normalizes access;
-4. derives initial coverage;
+2. validates identities, descriptors, usages, ranges, view parents, attachments, queries, query resolves, and imports/exports;
+3. normalizes operation-derived and caller-declared access;
+4. derives initial coverage and merged capability requirements;
 5. infers RAW/WAR/WAW edges;
 6. adds non-redundant explicit non-data edges;
-7. rejects ambiguity, conflict, redundant explicit order, and cycles;
+7. rejects missing cross-fragment causality, ambiguity, conflict, redundant explicit order, and cycles;
 8. produces deterministic prepared IDs and topological order;
-9. publishes normalized access, edges with typed causes, coverage summaries, exports, diagnostics, and provenance.
+9. publishes normalized access, edges with typed causes, coverage summaries, requirements, exports, diagnostics, and provenance.
 
 Independent ready nodes are ordered deterministically for inspection without promising concurrent or parallel execution.
 
-Preparation performs no backend admission or execution. G5 ordinary submission must invoke the same preparation authority internally.
+Preparation performs no context admission, backend realization, command encoding, submission, runtime retirement check, or surface action. G5 ordinary submission must invoke the same preparation authority internally; G4/G5 reject stale-generation or retired backend values at admission/submission time.
 
 ## Render and GPU-primitive adapter
 
@@ -321,7 +347,7 @@ engine/src/plugins/render/adapters/gpu_work.rs
 
 It:
 
-- lowers current render role fields into exact G3 access;
+- lowers current render role and attachment fields into exact G3 operations/access;
 - maps current whole-resource authoring to checked whole ranges only where no narrower fact exists;
 - translates history/import/runtime-entry assumptions into explicit input evidence;
 - maps current pass timestamp writes to exact query-index writes;
@@ -360,7 +386,8 @@ G3 stops before:
 - context/device/backend admission;
 - shader/pipeline/interface and binding-layout authority;
 - WGPU resource realization and barriers;
-- encoding, submission, upload/update, completion, readback, cancellation, and retirement;
+- encoding, submission, upload/update, completion, readback, cancellation, and backend retirement;
+- stale-generation and runtime-retirement admission;
 - backend query-resolve offset alignment and command encoding;
 - surface acquisition and presentation execution;
 - extraction or a new package;
