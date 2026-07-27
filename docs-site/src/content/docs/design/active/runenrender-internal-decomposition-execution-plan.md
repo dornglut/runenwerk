@@ -16,6 +16,7 @@ related_docs:
   - ../../reports/investigations/runengpu-industry-comparison.md
   - ../../reports/investigations/runengpu-proof-workload-strategy.md
   - ../../reports/investigations/runengpu-runenrender-application-domain-fit.md
+  - ../../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
@@ -55,12 +56,15 @@ S0 inventory                         complete
 G1A resource identity                complete
 G2 capabilities/resources            complete at 709aa6aced020ee99405e1e1c3dde7703c77a4d4
 G3 decision phase                    complete at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
-operational hardening                active through issue #176
-G3 Rust implementation               queued through issue #177, blocked on #176
+operational hardening                complete through issue #176 / PR #178 on merge
+G3 Rust implementation               queued through issue #177 for exact-main revalidation
 G4-G8                                pending
 GX                                   blocked on G2-G8
 R1-R8 and RX                         blocked on GX
 ```
+
+The operational-hardening completion becomes authoritative through the merge of PR
+`#178`; this candidate deliberately asserts no merge SHA.
 
 Target repositories:
 
@@ -159,7 +163,9 @@ G2 created no device, graph, submission, surface, or external package.
 
 **Planning state: complete at `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`.**
 
-**Implementation state: issue `#177`, blocked on accepted issue `#176`.**
+**Implementation state: issue `#177`, queued for revalidation against the exact
+post-PR-`#178` `main`. Source changes remain unauthorized until that evidence is
+recorded.**
 
 Accepted scope:
 
@@ -233,9 +239,12 @@ Goal:
 
 Required correctness proof:
 
-1. exact multi-level `u32` prefix scan/readback;
+1. exact inclusive/exclusive `u32` prefix scan over exactly 4,097 elements with full
+   output/readback verification;
 2. focused counter/compaction/indirect-argument evidence;
-3. fixed-seed headless Game of Life with full CPU oracle;
+3. fixed-seed 160×90 Game of Life for exactly 16 steps with full CPU oracle, exact
+   live count `2,063`, FNV-1a-64 checksum `0xBD710B88594CD584`, and selected-cell
+   assertions;
 4. deterministic compute-to-texture/readback when admitted.
 
 Required operational proof:
