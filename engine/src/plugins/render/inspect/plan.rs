@@ -2,9 +2,10 @@ use super::{
     RenderCaptureIdentity, RenderCapturePointIdentity, RenderCaptureSelector,
     RenderCaptureTerminal, RenderCaptureTerminalCode, RenderCaptureTerminalReason,
 };
+use crate::plugins::gpu::GpuCapabilities;
+use crate::plugins::render::current_runtime_gpu_capabilities;
 use crate::plugins::render::graph::{
     CompiledRenderFlowPlan, CompiledResourceAccessKind, CompiledResourceLifetimeWindow,
-    RenderBackendCapabilityInspection, RenderBackendCapabilityProfile,
     RenderExecutionGraphDiagnostic, RenderExecutionGraphPreparedReport,
     RenderPreparedFramePreflightCacheState,
 };
@@ -51,7 +52,7 @@ pub struct RenderExecutionGraphPlanInspection {
     pub resource_count: usize,
     pub compiler_diagnostics: Vec<RenderExecutionGraphDiagnosticInspection>,
     pub resource_lifetime_windows: Vec<RenderResourceLifetimeWindowInspection>,
-    pub backend_capabilities: RenderBackendCapabilityInspection,
+    pub backend_capabilities: GpuCapabilities,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,7 +77,7 @@ pub struct RenderExecutionGraphDiagnosticInspection {
     pub resource_label: Option<String>,
     pub invocation_id: Option<String>,
     pub view_id: Option<String>,
-    pub alias_label: Option<String>,
+    pub alias_binding_key: Option<String>,
     pub alias_kind: Option<String>,
     pub dynamic_target_key: Option<String>,
     pub history_signature: Option<String>,
@@ -116,9 +117,7 @@ pub fn inspect_compiled_render_flow_plan(
             .iter()
             .map(inspect_resource_lifetime_window)
             .collect(),
-        backend_capabilities: RenderBackendCapabilityInspection::from(
-            &RenderBackendCapabilityProfile::runtime_default(),
-        ),
+        backend_capabilities: current_runtime_gpu_capabilities(),
     }
 }
 
@@ -160,7 +159,10 @@ pub fn inspect_render_execution_graph_diagnostic(
         resource_label: diagnostic.resource_label.clone(),
         invocation_id: diagnostic.invocation_id.as_ref().map(|id| id.0.clone()),
         view_id: diagnostic.view_id.clone(),
-        alias_label: diagnostic.alias_label.clone(),
+        alias_binding_key: diagnostic
+            .alias_binding_key
+            .as_ref()
+            .map(|key| key.as_str().to_string()),
         alias_kind: diagnostic.alias_kind.map(|kind| format!("{:?}", kind)),
         dynamic_target_key: diagnostic
             .dynamic_target_key

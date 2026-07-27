@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-25
+last_reviewed: 2026-07-27
 ---
 
 # Render Flow Usage Guide
@@ -582,7 +582,7 @@ let flow = RenderFlow::new("product.flow")
     .validate()?;
 ```
 
-Use target aliases when authored flow topology should stay static while prepared invocations bind concrete product targets. This is the intended product-surface API shape. Active runtime execution resolves target aliases per prepared invocation and uses the renderer-owned dynamic target cache for requested product targets:
+Use target aliases when authored flow topology should stay static while prepared invocations bind concrete product targets. This is the intended product-surface API shape. Alias input is validated and normalized into the render-owned semantic `RenderTargetAliasKey`; prepared-frame and runtime maps retain that typed key rather than treating it as a diagnostic label. Active runtime execution resolves target aliases per prepared invocation and uses the renderer-owned dynamic target cache for requested product targets:
 
 ```rust
 use engine::plugins::render::{
@@ -593,7 +593,7 @@ use engine::plugins::render::{
 };
 
 let flow = RenderFlow::new("viewport.product.flow")
-    .with_color_target_alias("viewport.scene_color")
+    .with_color_target_alias("viewport.scene_color")?
     .fullscreen_pass("viewport.compose")
     .offscreen_products_only()
     .write_color_target("viewport.scene_color")
@@ -613,7 +613,7 @@ let request = RenderProductSurfaceRequest::new(
     PreparedViewFrame::offscreen_product("viewport.1", (1280, 720))
         .with_history_signature("camera:v1:1280x720"),
     PreparedFlowInvocationRequest::new("viewport.1.scene", flow.id(), "viewport.1")
-        .bind_dynamic_texture_alias("viewport.scene_color", target_key)
+        .bind_dynamic_texture_alias("viewport.scene_color", target_key)?
         .with_history_signature("camera:v1:1280x720"),
 )
 .with_dynamic_target(target_descriptor);
@@ -714,7 +714,7 @@ let flow = RenderFlow::new("ui.flow")
 `RenderFlow` keeps contracts inspectable:
 
 - `flow.validation_report()` returns pass order and validation result details.
-- `compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())` returns typed compiler diagnostics for static validation failures, resource lifetime windows, and backend-neutral capability mismatches.
+- `compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())` returns typed compiler diagnostics for static validation failures, resource lifetime windows, and mismatches against normalized `GpuCapabilities` facts.
 - `flow.graph()` exposes declared pass/resource topology for tests and tooling.
 - `flow.project_uniforms(frame_data, surface_size)` verifies state projection at frame time.
 
@@ -728,7 +728,7 @@ Full structural preflight validates the compiled flow against the prepared frame
 - compute dispatch and uniform bytes are prepared for passes that require them;
 - history signatures remain unambiguous for dynamic targets and invocation history scopes;
 - feature-gated passes have prepared contribution status and fallback policy;
-- backend capabilities are checked through `RenderBackendCapabilityProfile` without exposing WGPU handles.
+- backend capabilities are checked through normalized `GpuCapabilities` without exposing WGPU handles. The current render adapter returns the fixed facts the legacy renderer already assumes; G4 replaces it with backend-admission facts.
 
 Use `validate_prepared_render_frame(...)` for tooling/tests that want a report and `preflight_prepared_render_frame(...)` for fail-fast full validation. Runtime submit should go through the renderer-owned cached preflight path. `RenderPreflightValidationConfigResource::strict_every_frame()` or `RUNENWERK_RENDER_STRICT_PREFLIGHT=1` forces full preflight every frame for audits and debugging.
 
@@ -738,11 +738,11 @@ The compiler/preflight path owns render execution correctness only. Product jobs
 
 Import-model contract:
 
-- Use typed imports from the public flow API (`with_surface_color`, `with_builtin_ui`) for active runtime flows.
+- Use typed imports from the public flow API (`with_surface_color`, `with_surface_depth`, `with_builtin_ui`, and `with_history_texture`) for active runtime flows.
 - Use flow-owned `with_depth_target(...)` plus `.depth_target(...)` for runtime-backed graphics depth attachments.
-- `with_surface_depth` / `RenderResourceDescriptor::imported_surface_depth` remain declaration compatibility for the typed import model, but imported surface depth is not accepted as a graphics depth target until the renderer exposes a prepared surface-depth texture.
-- Avoid generic `RenderResourceDescriptor::imported_texture(...)` / `imported_buffer(...)` for active runtime flows.
-- Active validation rejects external/generic import semantics in the runtime path.
+- `with_surface_depth` / `RenderResourceDeclaration::declare_imported_surface_depth` are explicit declarations, but imported surface depth is not accepted as a graphics depth target until the renderer exposes a prepared surface-depth texture.
+- `RenderResourceDeclaration::declare_imported_external_texture` and `declare_imported_external_buffer` remain inspectable explicit semantics; active validation rejects them in the runtime path.
+- The old generic `RenderResourceDescriptor` import constructors and compatibility authority were deleted in G2.
 
 Graphics contract:
 

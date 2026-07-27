@@ -1,9 +1,8 @@
-use crate::plugins::gpu::GpuWorkResourceId;
-use crate::plugins::render::StorageArrayHandle;
+use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
 use crate::plugins::render::gpu_primitives::{
     CounterResetDescriptor, GpuPrimitiveExecutionPlan, GpuPrimitiveStep,
     GpuPrimitiveValidationError, PrefixScanMode, U32Counter, U32PrefixScanDescriptor,
-    U32ScanElement, validate_capacity,
+    U32ScanElement, buffer_capacity, validate_capacity,
 };
 use thiserror::Error;
 
@@ -153,10 +152,10 @@ impl BoundedUniformGrid2dBuildPlan {
     pub fn new(
         label: impl Into<String>,
         config: BoundedUniformGrid2dConfig,
-        cell_counts: StorageArrayHandle<U32Counter>,
-        cell_offsets: StorageArrayHandle<U32ScanElement>,
-        scatter_cursors: StorageArrayHandle<U32Counter>,
-        sorted_indices: StorageArrayHandle<U32ScanElement>,
+        cell_counts: GpuBufferHandle,
+        cell_offsets: GpuBufferHandle,
+        scatter_cursors: GpuBufferHandle,
+        sorted_indices: GpuBufferHandle,
     ) -> Result<Self, PopulationGridValidationError> {
         config.validate()?;
         let label = label.into();
@@ -186,22 +185,38 @@ impl BoundedUniformGrid2dBuildPlan {
 
         validate_capacity(
             format!("{label}.cell_counts"),
-            cell_counts.len(),
+            buffer_capacity(
+                &cell_counts,
+                U32Counter::BYTE_SIZE,
+                format!("{label}.cell_counts"),
+            )?,
             u64::from(cell_count),
         )?;
         validate_capacity(
             format!("{label}.cell_offsets"),
-            cell_offsets.len(),
+            buffer_capacity(
+                &cell_offsets,
+                U32ScanElement::BYTE_SIZE,
+                format!("{label}.cell_offsets"),
+            )?,
             u64::from(cell_count),
         )?;
         validate_capacity(
             format!("{label}.scatter_cursors"),
-            scatter_cursors.len(),
+            buffer_capacity(
+                &scatter_cursors,
+                U32Counter::BYTE_SIZE,
+                format!("{label}.scatter_cursors"),
+            )?,
             u64::from(cell_count),
         )?;
         validate_capacity(
             format!("{label}.sorted_indices"),
-            sorted_indices.len(),
+            buffer_capacity(
+                &sorted_indices,
+                U32ScanElement::BYTE_SIZE,
+                format!("{label}.sorted_indices"),
+            )?,
             u64::from(config.max_agents),
         )?;
 
@@ -219,10 +234,10 @@ impl BoundedUniformGrid2dBuildPlan {
             label,
             config,
             resources: BoundedUniformGrid2dResources {
-                cell_counts: *cell_counts.id(),
-                cell_offsets: *cell_offsets.id(),
-                scatter_cursors: *scatter_cursors.id(),
-                sorted_indices: *sorted_indices.id(),
+                cell_counts: cell_counts.diagnostic_identity(),
+                cell_offsets: cell_offsets.diagnostic_identity(),
+                scatter_cursors: scatter_cursors.diagnostic_identity(),
+                sorted_indices: sorted_indices.diagnostic_identity(),
                 cell_capacity: cell_count,
                 sorted_index_capacity: config.max_agents,
             },

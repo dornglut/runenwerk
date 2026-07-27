@@ -5,7 +5,7 @@ impl FlowRuntimeResources {
         let mut entries = Vec::<RuntimeResourceInspectionEntry>::new();
         for (id, descriptor) in &self.descriptors {
             let lifetime = descriptor.lifetime();
-            let imported = lifetime.is_imported();
+            let imported = descriptor.is_imported();
             let kind = resource_kind_name(descriptor).to_string();
 
             let mut realized = false;
@@ -17,7 +17,7 @@ impl FlowRuntimeResources {
             let mut generation = None::<u64>;
 
             match descriptor {
-                RenderResourceDescriptor::UniformBuffer(_) => {
+                RenderResourceDeclaration::Uniform(_) => {
                     if let Some(buffer) = self.buffers.get(id) {
                         realized = true;
                         reuse = if buffer.reused_last_frame {
@@ -30,7 +30,7 @@ impl FlowRuntimeResources {
                         generation = Some(buffer.generation);
                     }
                 }
-                RenderResourceDescriptor::StorageBuffer(value) => {
+                RenderResourceDeclaration::Storage(value) => {
                     if let Some(buffer) = self.buffers.get(id) {
                         realized = true;
                         reuse = if buffer.reused_last_frame {
@@ -39,16 +39,16 @@ impl FlowRuntimeResources {
                             RuntimeResourceReuse::Created
                         };
                         size_bytes = Some(buffer.size);
-                        element_count = Some(value.element_count);
+                        element_count = Some(value.element_count());
                         generation = Some(buffer.generation);
                     } else {
-                        element_count = Some(value.element_count);
+                        element_count = Some(value.element_count());
                     }
                 }
-                RenderResourceDescriptor::SampledTexture(_)
-                | RenderResourceDescriptor::StorageTexture(_)
-                | RenderResourceDescriptor::ColorTarget(_)
-                | RenderResourceDescriptor::DepthTarget(_) => {
+                RenderResourceDeclaration::Sampled(_)
+                | RenderResourceDeclaration::StorageImage(_)
+                | RenderResourceDeclaration::ColorAttachment(_)
+                | RenderResourceDeclaration::DepthAttachment(_) => {
                     if let Some(texture) = self.textures.get(id) {
                         realized = true;
                         reuse = if texture.reused_last_frame {
@@ -61,10 +61,10 @@ impl FlowRuntimeResources {
                         generation = Some(texture.generation);
                     }
                 }
-                RenderResourceDescriptor::HistoryTexture(_) => {}
-                RenderResourceDescriptor::TargetAlias(_)
-                | RenderResourceDescriptor::ImportedTexture(_)
-                | RenderResourceDescriptor::ImportedBuffer(_) => {}
+                RenderResourceDeclaration::History(_) => {}
+                RenderResourceDeclaration::TargetAlias(_)
+                | RenderResourceDeclaration::ImportedTexture(_)
+                | RenderResourceDeclaration::ImportedBuffer(_) => {}
             }
 
             entries.push(RuntimeResourceInspectionEntry {
@@ -86,7 +86,7 @@ impl FlowRuntimeResources {
             let Some(descriptor) = self.descriptors.get(id) else {
                 continue;
             };
-            if !matches!(descriptor, RenderResourceDescriptor::UniformBuffer(_)) {
+            if !matches!(descriptor, RenderResourceDeclaration::Uniform(_)) {
                 continue;
             }
             entries.push(RuntimeResourceInspectionEntry {
@@ -116,7 +116,7 @@ impl FlowRuntimeResources {
             let Some(descriptor) = self.descriptors.get(id) else {
                 continue;
             };
-            if !matches!(descriptor, RenderResourceDescriptor::HistoryTexture(_)) {
+            if !matches!(descriptor, RenderResourceDeclaration::History(_)) {
                 continue;
             }
             entries.push(RuntimeResourceInspectionEntry {

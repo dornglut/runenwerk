@@ -5,12 +5,13 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 related_docs:
   - ./roadmap.md
   - ./active-work.md
   - ../../reports/closeouts/README.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
 ---
 
 # Completed Work
@@ -47,8 +48,12 @@ PR `#132` was closed without merge because it contained only temporary automatio
 - Foreign uniform and storage handles are rejected even when independent flows allocate equal local components.
 - The GPU identity module remains independent of renderer, ECS, WGPU, Winit, application, and domain types.
 - Detailed scope, inventory, validation, and remaining-boundary evidence is recorded in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md).
+- Issue `#172` / PR `#173` implemented the bounded G2 authority: normalized capability facts and requirements, validated logical resource descriptors, kind-typed handles, prepared-data boundaries, explicit non-optional render lowering, three bounded render adapters, full consumer migration, and deletion of replaced declaration authority.
+- G2 changed no manifest, dependency, lockfile, workflow, or external-package authority and introduced no G3-G7 execution behavior or compatibility path.
+- Final independent review corrected target aliases to use validated semantic binding keys end to end and replaced ambiguous render parameter/resource equality with explicit GPU allocation-compatibility and transitional declared-Rust-type predicates. Diagnostic names and display labels remain non-semantic; normalized GPU types remain free of `TypeId` and alias authority.
+- Detailed scope, validation, equality audit, explicit imported-resource boundary, deletion, adapter disposition, and remaining-boundary evidence is recorded in the [PT-RUNENGPU-G2 implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md).
 
-G1A does not create an external package or authorize G2-G8. The next accepted action is a decision-complete G2 capabilities and resource-descriptor specification based on merged G1A facts.
+This G2 entry becomes authoritative through the merge of PR `#173`. Repository Git history and the closed issue/merged PR represent acceptance; this branch content does not assert a merge SHA before one exists. The next action is one decision-complete G3 planning issue and specification, not G3 implementation.
 
 ## RunenSDF
 

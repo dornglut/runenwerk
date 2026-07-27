@@ -539,8 +539,8 @@ mod tests {
             .storage_array::<U32ScanElement>("offsets", 16)
             .expect("render flow authoring should succeed");
         let _flow = flow;
-        let counters_id = *counters.id();
-        let offsets_id = *offsets.id();
+        let counters_id = counters.diagnostic_identity();
+        let offsets_id = offsets.diagnostic_identity();
 
         let reset = CounterResetDescriptor::new("reset", counters.clone(), 16)
             .expect("valid counter reset descriptor");
@@ -706,6 +706,7 @@ mod tests {
             .graphics_pass("primitive.draw")
             .write_color_target("test.primitive.color")
             .draw_indirect(draw_args.clone(), 6, 130)
+            .expect("declared draw-argument layout should match")
             .depends_on(final_primitive_pass)
             .finish()
             .validate()
@@ -744,7 +745,8 @@ mod tests {
             .expect("graphics pass should preserve indirect draw");
         assert!(matches!(
             draw.source,
-            CompiledDrawSource::Indirect { args_buffer, .. } if args_buffer == *draw_args.id()
+            CompiledDrawSource::Indirect { args_buffer, .. }
+                if args_buffer == draw_args.diagnostic_identity()
         ));
     }
 
@@ -832,19 +834,19 @@ mod tests {
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(*scan_input.id()),
+            GpuPrimitiveDispatchResource::existing(scan_input.diagnostic_identity()),
             &vec![1_u32; element_count as usize],
         );
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(*scan_output.id()),
+            GpuPrimitiveDispatchResource::existing(scan_output.diagnostic_identity()),
             &vec![0_u32; element_count as usize],
         );
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(*source_indices.id()),
+            GpuPrimitiveDispatchResource::existing(source_indices.diagnostic_identity()),
             &(0..element_count)
                 .map(|index| 1000 + index)
                 .collect::<Vec<_>>(),
@@ -852,13 +854,13 @@ mod tests {
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(*sorted_indices.id()),
+            GpuPrimitiveDispatchResource::existing(sorted_indices.diagnostic_identity()),
             &vec![0_u32; element_count as usize],
         );
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(*draw_args.id()),
+            GpuPrimitiveDispatchResource::existing(draw_args.diagnostic_identity()),
             &[0_u32; 4],
         );
         for temporary in &dispatch_plan.temporary_storage {
@@ -883,7 +885,9 @@ mod tests {
             &device,
             &mut encoder,
             buffers
-                .get(&GpuPrimitiveDispatchResource::existing(*scan_output.id()))
+                .get(&GpuPrimitiveDispatchResource::existing(
+                    scan_output.diagnostic_identity(),
+                ))
                 .expect("scan output buffer should exist"),
             u64::from(element_count) * 4,
         );
@@ -892,7 +896,7 @@ mod tests {
             &mut encoder,
             buffers
                 .get(&GpuPrimitiveDispatchResource::existing(
-                    *sorted_indices.id(),
+                    sorted_indices.diagnostic_identity(),
                 ))
                 .expect("scatter output buffer should exist"),
             u64::from(element_count) * 4,
@@ -901,7 +905,9 @@ mod tests {
             &device,
             &mut encoder,
             buffers
-                .get(&GpuPrimitiveDispatchResource::existing(*draw_args.id()))
+                .get(&GpuPrimitiveDispatchResource::existing(
+                    draw_args.diagnostic_identity(),
+                ))
                 .expect("draw args buffer should exist"),
             DrawIndirectArgs::BYTE_SIZE,
         );

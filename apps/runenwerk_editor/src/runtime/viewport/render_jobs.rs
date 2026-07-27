@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 
 use editor_viewport::{ExpressionDimensions, ViewportId, ViewportSurfacePresentationSlot};
 use engine::plugins::gpu::GpuWorkResourceId;
+#[cfg(test)]
+use engine::plugins::render::RenderTargetAliasKey;
 use engine::plugins::render::{
     PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource, PreparedViewFrame,
     RenderDynamicTextureTargetKey, RenderFlowId, RenderFlowRegistryResource,
@@ -164,11 +166,14 @@ fn build_viewport_render_job(
         VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
         scene_color_target.clone(),
     )
+    .expect("scene-color alias key is a valid constant")
     .bind_dynamic_texture_alias(
         VIEWPORT_TARGET_ALIAS_PICKING_IDS,
         picking_ids_target.clone(),
     )
+    .expect("picking-IDs alias key is a valid constant")
     .bind_dynamic_texture_alias(VIEWPORT_TARGET_ALIAS_OVERLAY, overlay_target.clone())
+    .expect("overlay alias key is a valid constant")
     .with_uniform_override(
         scene_uniform_id,
         viewport_render.compose_scene_product_uniform_bytes((dimensions.width, dimensions.height)),
@@ -309,9 +314,10 @@ mod tests {
             .dynamic_key();
         assert_eq!(job.scene_color_target, scene_target);
         assert_eq!(
-            job.prepared_flow_invocation()
-                .target_alias_bindings
-                .get(VIEWPORT_TARGET_ALIAS_SCENE_COLOR),
+            job.prepared_flow_invocation().target_alias_bindings.get(
+                &RenderTargetAliasKey::new(VIEWPORT_TARGET_ALIAS_SCENE_COLOR)
+                    .expect("scene-color alias key is a valid constant"),
+            ),
             Some(&PreparedTargetBinding::DynamicTexture(scene_target)),
         );
         assert_eq!(
@@ -387,9 +393,10 @@ mod tests {
         assert_eq!(job.scene_color_target, scene_target);
         assert_ne!(job.scene_color_target, material_target);
         assert_eq!(
-            job.prepared_flow_invocation()
-                .target_alias_bindings
-                .get(VIEWPORT_TARGET_ALIAS_SCENE_COLOR),
+            job.prepared_flow_invocation().target_alias_bindings.get(
+                &RenderTargetAliasKey::new(VIEWPORT_TARGET_ALIAS_SCENE_COLOR)
+                    .expect("scene-color alias key is a valid constant"),
+            ),
             Some(&PreparedTargetBinding::DynamicTexture(scene_target)),
         );
     }

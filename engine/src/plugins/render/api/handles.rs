@@ -1,6 +1,5 @@
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::GpuBufferHandle;
 use crate::plugins::render::RenderPassId;
-use std::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PassHandle {
@@ -17,63 +16,19 @@ impl PassHandle {
     }
 }
 
+/// Render-owned relationship between two logical GPU buffers.
+///
+/// The individual resources retain kind-safe RunenGPU handles; this type owns
+/// only the render-specific ping-pong relationship and its authoring label.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct StorageArrayHandle<T> {
-    id: GpuWorkResourceId,
-    len: u64,
-    _marker: PhantomData<fn() -> T>,
-}
-
-impl<T> StorageArrayHandle<T> {
-    pub(crate) fn new(id: GpuWorkResourceId, len: u64) -> Self {
-        Self {
-            id,
-            len,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn id(&self) -> &GpuWorkResourceId {
-        &self.id
-    }
-
-    pub const fn len(&self) -> u64 {
-        self.len
-    }
-
-    pub const fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct UniformHandle<U> {
-    id: GpuWorkResourceId,
-    _marker: PhantomData<fn() -> U>,
-}
-
-impl<U> UniformHandle<U> {
-    pub(crate) fn new(id: GpuWorkResourceId) -> Self {
-        Self {
-            id,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn id(&self) -> &GpuWorkResourceId {
-        &self.id
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DoubleBufferHandle<T> {
+pub struct RenderDoubleBuffer {
     name: String,
-    a: StorageArrayHandle<T>,
-    b: StorageArrayHandle<T>,
+    a: GpuBufferHandle,
+    b: GpuBufferHandle,
 }
 
-impl<T> DoubleBufferHandle<T> {
-    pub(crate) fn new(name: String, a: StorageArrayHandle<T>, b: StorageArrayHandle<T>) -> Self {
+impl RenderDoubleBuffer {
+    pub(crate) fn new(name: String, a: GpuBufferHandle, b: GpuBufferHandle) -> Self {
         Self { name, a, b }
     }
 
@@ -81,11 +36,11 @@ impl<T> DoubleBufferHandle<T> {
         self.name.as_str()
     }
 
-    pub fn a(&self) -> &StorageArrayHandle<T> {
+    pub fn a(&self) -> &GpuBufferHandle {
         &self.a
     }
 
-    pub fn b(&self) -> &StorageArrayHandle<T> {
+    pub fn b(&self) -> &GpuBufferHandle {
         &self.b
     }
 }

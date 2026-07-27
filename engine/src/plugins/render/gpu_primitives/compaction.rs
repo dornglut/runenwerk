@@ -1,6 +1,5 @@
-use super::{GpuPrimitiveValidationError, U32ScanElement, validate_capacity};
-use crate::plugins::gpu::GpuWorkResourceId;
-use crate::plugins::render::StorageArrayHandle;
+use super::{GpuPrimitiveValidationError, U32ScanElement, buffer_capacity, validate_capacity};
+use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct U32ScatterDescriptor {
@@ -15,34 +14,46 @@ pub struct U32ScatterDescriptor {
 impl U32ScatterDescriptor {
     pub fn new(
         label: impl Into<String>,
-        source_indices: StorageArrayHandle<U32ScanElement>,
-        prefix_offsets: StorageArrayHandle<U32ScanElement>,
-        output_indices: StorageArrayHandle<U32ScanElement>,
+        source_indices: GpuBufferHandle,
+        prefix_offsets: GpuBufferHandle,
+        output_indices: GpuBufferHandle,
         element_count: u32,
         output_capacity: u32,
     ) -> Result<Self, GpuPrimitiveValidationError> {
         let descriptor = Self {
             label: label.into(),
-            source_indices: *source_indices.id(),
-            prefix_offsets: *prefix_offsets.id(),
-            output_indices: *output_indices.id(),
+            source_indices: source_indices.diagnostic_identity(),
+            prefix_offsets: prefix_offsets.diagnostic_identity(),
+            output_indices: output_indices.diagnostic_identity(),
             element_count,
             output_capacity,
         };
         descriptor.validate()?;
         validate_capacity(
             format!("{}.source_indices", descriptor.label),
-            source_indices.len(),
+            buffer_capacity(
+                &source_indices,
+                U32ScanElement::BYTE_SIZE,
+                format!("{}.source_indices", descriptor.label),
+            )?,
             u64::from(element_count),
         )?;
         validate_capacity(
             format!("{}.prefix_offsets", descriptor.label),
-            prefix_offsets.len(),
+            buffer_capacity(
+                &prefix_offsets,
+                U32ScanElement::BYTE_SIZE,
+                format!("{}.prefix_offsets", descriptor.label),
+            )?,
             u64::from(element_count),
         )?;
         validate_capacity(
             format!("{}.output_indices", descriptor.label),
-            output_indices.len(),
+            buffer_capacity(
+                &output_indices,
+                U32ScanElement::BYTE_SIZE,
+                format!("{}.output_indices", descriptor.label),
+            )?,
             u64::from(output_capacity),
         )?;
         Ok(descriptor)
@@ -83,10 +94,10 @@ mod tests {
     #[test]
     fn gpu_primitives_scatter_rejects_aliased_buffers() {
         let (flow, indices) = RenderFlow::new("test.primitive.scatter.alias")
-            .storage_array("scatter.indices", 4)
+            .storage_array::<U32ScanElement>("scatter.indices", 4)
             .expect("render flow authoring should succeed");
         let (flow, offsets) = flow
-            .storage_array("scatter.offsets", 4)
+            .storage_array::<U32ScanElement>("scatter.offsets", 4)
             .expect("render flow authoring should succeed");
         let _flow = flow;
 
@@ -99,13 +110,13 @@ mod tests {
     #[test]
     fn gpu_primitives_scatter_rejects_output_capacity_drift() {
         let (flow, indices) = RenderFlow::new("test.primitive.scatter.capacity")
-            .storage_array("scatter.indices", 4)
+            .storage_array::<U32ScanElement>("scatter.indices", 4)
             .expect("render flow authoring should succeed");
         let (flow, offsets) = flow
-            .storage_array("scatter.offsets", 4)
+            .storage_array::<U32ScanElement>("scatter.offsets", 4)
             .expect("render flow authoring should succeed");
         let (_flow, output) = flow
-            .storage_array("scatter.output", 3)
+            .storage_array::<U32ScanElement>("scatter.output", 3)
             .expect("render flow authoring should succeed");
 
         assert!(matches!(

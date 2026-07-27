@@ -50,7 +50,7 @@ pub struct PreparedFlowInvocationInspectionEntry {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TargetAliasBindingInspectionEntry {
-    pub alias: String,
+    pub binding_key: String,
     pub binding: String,
 }
 
@@ -362,8 +362,8 @@ fn inspect_prepared_flow_invocation(
         target_alias_bindings: invocation
             .target_alias_bindings
             .iter()
-            .map(|(alias, binding)| TargetAliasBindingInspectionEntry {
-                alias: alias.clone(),
+            .map(|(binding_key, binding)| TargetAliasBindingInspectionEntry {
+                binding_key: binding_key.as_str().to_string(),
                 binding: prepared_target_binding_label(binding),
             })
             .collect(),
@@ -414,8 +414,8 @@ fn inspect_prepared_flow_invocation_request(
         target_alias_bindings: invocation
             .target_alias_bindings
             .iter()
-            .map(|(alias, binding)| TargetAliasBindingInspectionEntry {
-                alias: alias.clone(),
+            .map(|(binding_key, binding)| TargetAliasBindingInspectionEntry {
+                binding_key: binding_key.as_str().to_string(),
                 binding: prepared_target_binding_label(binding),
             })
             .collect(),

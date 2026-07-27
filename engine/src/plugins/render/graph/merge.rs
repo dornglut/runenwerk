@@ -1,3 +1,4 @@
+use crate::plugins::gpu::GpuCapabilities;
 use crate::plugins::render::composition::{
     RenderFragmentDescriptor, RenderFragmentDiagnostic, RenderFragmentDiagnosticKind,
     RenderFragmentLabelRef, RenderFragmentMergeReport, RenderFragmentPackageDescriptor,
@@ -5,8 +6,8 @@ use crate::plugins::render::composition::{
     RenderFragmentProvenanceRecord, RenderFragmentResourceKind, validate_fragment_package,
 };
 use crate::plugins::render::{
-    RenderBackendCapabilityProfile, RenderFlow, RenderFlowAuthoringError, RenderPassViewScope,
-    RenderTargetAliasKind, compile_flow_plan_checked,
+    RenderFlow, RenderFlowAuthoringError, RenderPassViewScope, RenderTargetAliasKind,
+    compile_flow_plan_checked,
 };
 
 #[derive(Debug)]
@@ -67,7 +68,7 @@ impl RenderFragmentMergeError {
 pub fn merge_fragment_package_into_flow(
     mut flow: RenderFlow,
     package: &RenderFragmentPackageDescriptor,
-    profile: &RenderBackendCapabilityProfile,
+    capabilities: &GpuCapabilities,
 ) -> Result<RenderFragmentMergeResult, RenderFragmentMergeError> {
     let validation = validate_fragment_package(package);
     if validation.has_errors() {
@@ -95,7 +96,7 @@ pub fn merge_fragment_package_into_flow(
             .map_err(|error| RenderFragmentMergeError::from_authoring(error, package, fragment))?;
     }
 
-    match compile_flow_plan_checked(&flow, profile) {
+    match compile_flow_plan_checked(&flow, capabilities) {
         Ok(_) => {
             report.generated_flow_id = Some(flow.id().to_string());
             Ok(RenderFragmentMergeResult { flow, report })

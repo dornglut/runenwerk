@@ -15,7 +15,7 @@ use engine::plugins::render::inspect::{
     RenderSdfRuntimeVisualEvidence, inspect_compiled_render_flow_plan,
     inspect_render_sdf_production_evidence, inspect_render_sdf_residency,
 };
-use engine::plugins::render::{RenderBackendCapabilityProfile, compile_flow_plan_checked};
+use engine::plugins::render::{compile_flow_plan_checked, current_runtime_gpu_capabilities};
 use product::{
     ProductAuthorityClass, ProductFreshness, ProductIdentity, ProductQueryPolicy, ProductResidency,
     ProductScaleBand, RenderProductSelection, RenderResidencyRequest, RenderSelectedProduct,
@@ -96,8 +96,8 @@ impl SdfRuntimeEvidenceReport {
 
 pub(crate) fn production_evidence_report() -> Result<SdfRuntimeEvidenceReport> {
     let flow = build_render_flow();
-    let profile = RenderBackendCapabilityProfile::runtime_default();
-    let compiled = compile_flow_plan_checked(&flow, &profile)?;
+    let capabilities = current_runtime_gpu_capabilities();
+    let compiled = compile_flow_plan_checked(&flow, &capabilities)?;
     let compiled_inspection = inspect_compiled_render_flow_plan(&compiled);
     let residency = build_runtime_residency();
     let residency_inspection = inspect_render_sdf_residency(&residency);

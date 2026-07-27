@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 related_docs:
   - ../engineering-workflow.md
   - ./active-work.md
@@ -23,6 +23,7 @@ related_docs:
   - ../../reports/investigations/runengpu-render-s0-file-disposition.md
   - ../../reports/investigations/runengpu-render-s0-identity-consumer-lifecycle.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
   - ../specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
 ---
 
@@ -45,14 +46,14 @@ Runenwerk remains the integration and product repository. Framework repositories
 
 ## Current priorities
 
-1. Execute issue `#172` as the only G2 implementation slice from the accepted issue `#168` / PR `#171` authority.
-2. Migrate and delete the capability/resource authority replaced by G2 without compatibility aliases, forwarding modules, or duplicate descriptors.
-3. Continue G3-G8 as individually specified internal boundary slices, migrating and deleting replaced authority in each phase rather than deferring a broad cutover to G8.
+1. Create one bounded, decision-complete G3 planning issue and specification for access, initialization flow, hazards, immutable generic work, inferred dependencies, and the internal graph.
+2. Accept or correct that G3 planning authority before authorizing any G3 source implementation.
+3. Keep G4-G7 deferred to their existing owners and implement each only through its own accepted planning slice.
 4. Extract RunenGPU and perform a clean Runenwerk cutover only after internal conformance and extraction-readiness gates pass.
 5. Prove RunenRender internally on RunenGPU, then extract and cut over RunenRender.
 6. Resume RunenECS boundary repair as separately bounded work.
 
-The RunenSDF cutover, RunenGPU S0, RunenGPU G1A, and RunenGPU G2 decision gates are complete. G2 implementation owns the serialized active queue; read-only investigation may still proceed independently. The implementation issue must verify the actual current `main` before changing Rust.
+The RunenSDF cutover, RunenGPU S0, RunenGPU G1A, and RunenGPU G2 are complete through PR `#173`. The G2 implementation state becomes authoritative through that PR's merge, with Git history and the closed issue/merged PR as acceptance evidence. G3 planning is next; G3 implementation remains unauthorized until its own issue and specification are decision-complete and accepted.
 
 ## RunenSDF
 
@@ -167,7 +168,7 @@ Runenwerk or source-domain adapter
             -> RunenGPU upload/update contract
 ```
 
-Uniform, storage, vertex, indirect, transfer, texture-initialization, and readback-decoding semantics remain distinct. `TypeId` and type names are process-local diagnostics, not layout, binding, persistence, replay, wire, cache, or shader-interface authority. G4 owns backend layout and derive/macro disposition. G5 owns upload/update/readback execution.
+Uniform, storage, vertex, indirect, transfer, texture-initialization, and readback-decoding semantics remain distinct. Transitional render-adapter `TypeId` is process-local declared-Rust-type compatibility evidence for current uniform projection and indirect argument checks; it is not normalized GPU layout, descriptor, persistence, replay, wire, cache, or shader-interface authority. Type names are diagnostic display only. G4 owns backend layout and derive/macro disposition. G5 owns upload/update/readback execution.
 
 ### Current RenderFlow disposition
 
@@ -194,7 +195,8 @@ The current mixed graph is decomposed incrementally. Each phase migrates consume
 - G1A implementation through PR `#164`, merged as `5bbdab36ae661d99432bfe5d215062c397aac975`;
 - G1A completion evidence in the [PT-RUNENGPU-G1A closeout](../../reports/closeouts/pt-runengpu-g1a-closeout.md);
 - G2 industry/API/proof-workload planning through PRs `#169` and `#170`;
-- G2 current-main census and decision-complete specification through issue `#168` and PR `#171`.
+- G2 current-main census and decision-complete specification through issue `#168` and PR `#171`;
+- G2 bounded implementation through issue `#172` and PR `#173`, with evidence in the [implementation closeout](../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md). This entry becomes authoritative through the merge of PR `#173`.
 
 G1A delivered:
 
@@ -212,12 +214,13 @@ The owner scope closes the confirmed cross-flow collision seam. Resource-allocat
 
 ```text
 G1A owner-scoped logical GPU work-resource identity (completed)
--> G2 capabilities, logical resources, typed handles, prepared-data seam, and ownership split
+-> G2 capabilities, logical resources, typed handles, prepared-data seam, and ownership split (implemented through PR #173)
+-> G3 decision-complete planning (next; implementation requires its own accepted issue and specification)
 -> G3 access, initialization flow, hazards, immutable generic work, and internal graph
--> G4 context/device admission, shader/pipeline admission, binding/layout, and WGPU realization
+-> G4 context/device admission, shader/pipeline admission, binding/layout, and WGPU realization (deferred)
 -> G5 headless execution, uploads, updates, submission, completion, readback, cancellation, and retirement
 -> G6 offscreen graphics and shared render/non-render consumer proof
--> G7 surfaces, generations, thread affinity, and device outcomes
+-> G7 surfaces, generations, thread affinity, and device outcomes (deferred)
 -> G8 final diagnostics, shutdown, residual anti-cheating audit, and conformance
 -> GX external dornglut/runen-gpu transfer and clean Runenwerk cutover
 -> internal RunenRender proof on RunenGPU

@@ -1,6 +1,7 @@
-use crate::plugins::render::resource::{ImportedBufferSemantic, ImportedTextureSemantic};
+use crate::plugins::gpu::GpuResourceLifetime;
 use crate::plugins::render::{
-    RenderFlow, RenderResourceDescriptor, RenderTargetAliasKind, ResourceLifetime,
+    RenderFlow, RenderImportedBufferSemantic, RenderImportedTextureSemantic,
+    RenderResourceDeclaration, RenderTargetAliasKind,
 };
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -52,9 +53,9 @@ impl RenderRuntimeResourceInspectorState {
 pub struct ResourceInspectionEntry {
     pub id: String,
     pub kind: String,
-    pub lifetime: ResourceLifetime,
+    pub lifetime: GpuResourceLifetime,
     pub imported: bool,
-    pub target_alias_label: Option<String>,
+    pub target_alias_binding_key: Option<String>,
     pub target_alias_kind: Option<String>,
 }
 
@@ -70,7 +71,7 @@ pub struct RuntimeResourceInspectionEntry {
     pub flow_id: String,
     pub id: String,
     pub kind: String,
-    pub lifetime: ResourceLifetime,
+    pub lifetime: GpuResourceLifetime,
     pub imported: bool,
     pub realized: bool,
     pub reuse: RuntimeResourceReuse,
@@ -81,25 +82,27 @@ pub struct RuntimeResourceInspectionEntry {
     pub generation: Option<u64>,
 }
 
-pub fn resource_kind_name(resource: &RenderResourceDescriptor) -> &'static str {
+pub fn resource_kind_name(resource: &RenderResourceDeclaration) -> &'static str {
     match resource {
-        RenderResourceDescriptor::UniformBuffer(_) => "uniform_buffer",
-        RenderResourceDescriptor::StorageBuffer(_) => "storage_buffer",
-        RenderResourceDescriptor::SampledTexture(_) => "sampled_texture",
-        RenderResourceDescriptor::StorageTexture(_) => "storage_texture",
-        RenderResourceDescriptor::ColorTarget(_) => "color_target",
-        RenderResourceDescriptor::DepthTarget(_) => "depth_target",
-        RenderResourceDescriptor::HistoryTexture(_) => "history_texture",
-        RenderResourceDescriptor::TargetAlias(value) => target_alias_kind_resource_name(value.kind),
-        RenderResourceDescriptor::ImportedTexture(value) => match value.semantic {
-            ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
-            ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
-            ImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
-            ImportedTextureSemantic::External => "imported_texture(external)",
+        RenderResourceDeclaration::Uniform(_) => "uniform_buffer",
+        RenderResourceDeclaration::Storage(_) => "storage_buffer",
+        RenderResourceDeclaration::Sampled(_) => "sampled_texture",
+        RenderResourceDeclaration::StorageImage(_) => "storage_texture",
+        RenderResourceDeclaration::ColorAttachment(_) => "color_target",
+        RenderResourceDeclaration::DepthAttachment(_) => "depth_target",
+        RenderResourceDeclaration::History(_) => "history_texture",
+        RenderResourceDeclaration::TargetAlias(value) => {
+            target_alias_kind_resource_name(value.kind())
+        }
+        RenderResourceDeclaration::ImportedTexture(value) => match value.semantic {
+            RenderImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
+            RenderImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
+            RenderImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
+            RenderImportedTextureSemantic::External => "imported_texture(external)",
         },
-        RenderResourceDescriptor::ImportedBuffer(value) => match value.semantic {
-            ImportedBufferSemantic::HistoryBuffer => "imported_buffer(history_buffer)",
-            ImportedBufferSemantic::External => "imported_buffer(external)",
+        RenderResourceDeclaration::ImportedBuffer(value) => match value.semantic {
+            RenderImportedBufferSemantic::HistoryBuffer => "imported_buffer(history_buffer)",
+            RenderImportedBufferSemantic::External => "imported_buffer(external)",
         },
     }
 }
@@ -131,25 +134,27 @@ pub fn inspect_resources(flow: &RenderFlow) -> Vec<ResourceInspectionEntry> {
                 id: resource.id().to_string(),
                 kind: resource_kind_name(resource).to_string(),
                 lifetime,
-                imported: lifetime.is_imported(),
-                target_alias_label: target_alias_label(resource),
+                imported: resource.is_imported(),
+                target_alias_binding_key: target_alias_binding_key(resource),
                 target_alias_kind: target_alias_kind(resource),
             }
         })
         .collect()
 }
 
-fn target_alias_label(resource: &RenderResourceDescriptor) -> Option<String> {
+fn target_alias_binding_key(resource: &RenderResourceDeclaration) -> Option<String> {
     match resource {
-        RenderResourceDescriptor::TargetAlias(value) => Some(value.label.clone()),
+        RenderResourceDeclaration::TargetAlias(value) => {
+            Some(value.binding_key().as_str().to_string())
+        }
         _ => None,
     }
 }
 
-fn target_alias_kind(resource: &RenderResourceDescriptor) -> Option<String> {
+fn target_alias_kind(resource: &RenderResourceDeclaration) -> Option<String> {
     match resource {
-        RenderResourceDescriptor::TargetAlias(value) => {
-            Some(target_alias_kind_name(value.kind).to_string())
+        RenderResourceDeclaration::TargetAlias(value) => {
+            Some(target_alias_kind_name(value.kind()).to_string())
         }
         _ => None,
     }

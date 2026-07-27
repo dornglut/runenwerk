@@ -1,14 +1,13 @@
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{GpuCapabilities, GpuWorkResourceId};
 use crate::plugins::render::RenderFlowValidationError;
 use crate::plugins::render::api::RenderFlow;
 use crate::plugins::render::graph::{
-    CompiledFlowExecutionPlan, RenderBackendCapabilityProfile, RenderExecutionGraphCompileError,
-    RenderExecutionGraphDiagnostic, RenderExecutionGraphDiagnosticKind, RenderPassKind,
-    RenderPassNode, ResourceGraph, compile_execution_plan, compile_resource_lifetime_windows,
-    diagnose_compiled_pass_shapes, diagnose_resource_lifetime_windows,
-    validate_compiled_flow_capabilities,
+    CompiledFlowExecutionPlan, RenderExecutionGraphCompileError, RenderExecutionGraphDiagnostic,
+    RenderExecutionGraphDiagnosticKind, RenderPassKind, RenderPassNode, ResourceGraph,
+    compile_execution_plan, compile_resource_lifetime_windows, diagnose_compiled_pass_shapes,
+    diagnose_resource_lifetime_windows,
 };
-use crate::plugins::render::{RenderFlowId, RenderPassId};
+use crate::plugins::render::{RenderFlowId, RenderPassId, validate_compiled_flow_capabilities};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
@@ -33,7 +32,7 @@ impl CompiledRenderFlowPlan {
     pub fn resource_descriptor(
         &self,
         resource_id: GpuWorkResourceId,
-    ) -> Option<&crate::plugins::render::RenderResourceDescriptor> {
+    ) -> Option<&crate::plugins::render::RenderResourceDeclaration> {
         self.resources
             .resources
             .iter()
@@ -132,7 +131,7 @@ pub fn compile_flow_plan(
 
 pub fn compile_flow_plan_checked(
     flow: &RenderFlow,
-    profile: &RenderBackendCapabilityProfile,
+    capabilities: &GpuCapabilities,
 ) -> Result<CompiledRenderFlowPlan, RenderExecutionGraphCompileError> {
     let report = match flow.validation_report() {
         Ok(report) => report,
@@ -159,7 +158,7 @@ pub fn compile_flow_plan_checked(
         &plan.resource_lifetime_windows,
     ));
     diagnostics.extend(diagnose_compiled_pass_shapes(&plan));
-    diagnostics.extend(validate_compiled_flow_capabilities(&plan, profile));
+    diagnostics.extend(validate_compiled_flow_capabilities(&plan, capabilities));
     plan.compiler_diagnostics = diagnostics.clone();
     if diagnostics
         .iter()

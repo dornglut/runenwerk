@@ -1,11 +1,12 @@
+use engine::plugins::gpu::{GpuCapabilities, GpuCapabilityFeature};
 use engine::plugins::render::inspect::{
     inspect_fragment_pass_provenance, inspect_render_fragment_merge_report,
 };
 use engine::plugins::render::{
-    RenderBackendCapabilityProfile, RenderFlow, RenderFragmentDescriptor,
-    RenderFragmentDiagnosticKind, RenderFragmentPackageDescriptor, RenderFragmentPackageId,
-    RenderFragmentPackageStatus, RenderFragmentPassDescriptor, RenderFragmentResourceDescriptor,
-    RenderTextureTargetFormat, merge_fragment_package_into_flow, validate_fragment_package,
+    RenderFlow, RenderFragmentDescriptor, RenderFragmentDiagnosticKind,
+    RenderFragmentPackageDescriptor, RenderFragmentPackageId, RenderFragmentPackageStatus,
+    RenderFragmentPassDescriptor, RenderFragmentResourceDescriptor, RenderTextureTargetFormat,
+    current_runtime_gpu_capabilities, merge_fragment_package_into_flow, validate_fragment_package,
 };
 
 fn compositor_package(revision: u64) -> RenderFragmentPackageDescriptor {
@@ -192,7 +193,7 @@ fn fragment_merge_qualifies_labels_and_compiles_normal_render_flow() {
     let merged = merge_fragment_package_into_flow(
         RenderFlow::new("fragment.flow"),
         &package,
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     )
     .expect("valid fragment package should merge and compile");
 
@@ -237,13 +238,24 @@ fn fragment_merge_reports_backend_capability_failures_as_typed_diagnostics() {
     let error = merge_fragment_package_into_flow(
         RenderFlow::new("fragment.compute"),
         &package,
-        &RenderBackendCapabilityProfile::unsupported_for_tests("compute"),
+        &capabilities_without(GpuCapabilityFeature::Compute),
     )
     .expect_err("unsupported compute backend should reject fragment merge");
 
     assert!(error.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderFragmentDiagnosticKind::BackendCapabilityMismatch
     }));
+}
+
+fn capabilities_without(feature: GpuCapabilityFeature) -> GpuCapabilities {
+    let capabilities = current_runtime_gpu_capabilities();
+    GpuCapabilities::from_normalized_facts(
+        capabilities
+            .features()
+            .filter(|candidate| *candidate != feature),
+        capabilities.limits(),
+        capabilities.formats(),
+    )
 }
 
 #[test]
@@ -271,7 +283,7 @@ fn fragment_registry_preserves_last_good_revision_after_failed_reload() {
     let merged = registry
         .merge_active_packages(
             RenderFlow::new("fragment.registry"),
-            &RenderBackendCapabilityProfile::runtime_default(),
+            &current_runtime_gpu_capabilities(),
         )
         .expect("last-good fragment package should still merge");
     assert!(merged.flow.pass_id("compositor::compose").is_some());
@@ -283,7 +295,7 @@ fn fragment_inspection_exposes_merge_and_pass_provenance() {
     let merged = merge_fragment_package_into_flow(
         RenderFlow::new("fragment.inspect"),
         &package,
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     )
     .expect("valid fragment package should merge and compile");
 

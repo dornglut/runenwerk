@@ -1,7 +1,7 @@
 use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::{
     PreparedFlowInvocationId, RenderDynamicTextureTargetKey, RenderFlowId, RenderPassId,
-    RenderTargetAliasKind,
+    RenderTargetAliasKey, RenderTargetAliasKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -50,7 +50,7 @@ pub struct RenderExecutionGraphDiagnostic {
     pub resource_label: Option<String>,
     pub invocation_id: Option<PreparedFlowInvocationId>,
     pub view_id: Option<String>,
-    pub alias_label: Option<String>,
+    pub alias_binding_key: Option<RenderTargetAliasKey>,
     pub alias_kind: Option<RenderTargetAliasKind>,
     pub dynamic_target_key: Option<RenderDynamicTextureTargetKey>,
     pub history_signature: Option<String>,
@@ -75,7 +75,7 @@ impl RenderExecutionGraphDiagnostic {
             resource_label: None,
             invocation_id: None,
             view_id: None,
-            alias_label: None,
+            alias_binding_key: None,
             alias_kind: None,
             dynamic_target_key: None,
             history_signature: None,
@@ -130,10 +130,10 @@ impl RenderExecutionGraphDiagnostic {
 
     pub fn with_alias(
         mut self,
-        alias_label: impl Into<String>,
+        alias_binding_key: RenderTargetAliasKey,
         alias_kind: RenderTargetAliasKind,
     ) -> Self {
-        self.alias_label = Some(alias_label.into());
+        self.alias_binding_key = Some(alias_binding_key);
         self.alias_kind = Some(alias_kind);
         self
     }

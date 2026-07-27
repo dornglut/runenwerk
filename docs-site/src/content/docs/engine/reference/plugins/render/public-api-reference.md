@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-25
+last_reviewed: 2026-07-27
 ---
 
 # Render Public API Reference
@@ -61,10 +61,14 @@ These are the APIs most users should start with.
   - `PassHandle`
   - `RenderFlowId`
   - `RenderPassId`
-  - `RenderResourceId`
-  - `UniformHandle`
-  - `StorageArrayHandle`
-  - `DoubleBufferHandle`
+  - `GpuWorkResourceId`
+  - `GpuBufferHandle`
+  - `GpuTextureHandle`
+  - `GpuTextureViewHandle`
+  - `GpuSamplerHandle`
+  - `GpuQuerySetHandle`
+  - `GpuResourceRef`
+  - `RenderDoubleBuffer`
 - bindings and projection helpers:
   - `PassParamBinding`
   - `ComputeDispatchBinding`
@@ -348,8 +352,12 @@ These APIs expose graph validation and execution-ready compilation metadata.
   - `preflight_prepared_render_frame`
   - `preflight_prepared_render_frame_runtime_guards`
   - `prepared_render_frame_preflight_cache_key`
-  - `RenderBackendCapabilityProfile`
-  - `RenderBackendCapabilityInspection`
+  - `GpuCapabilities`
+  - `GpuCapabilityRequirements`
+  - `GpuCapabilityRequirement`
+  - `GpuCapabilityProfile`
+  - `GpuCapabilityAdmission`
+  - `current_runtime_gpu_capabilities`
   - `validate_compiled_flow_capabilities`
   - `diagnose_compiled_pass_shapes`
 
@@ -362,7 +370,7 @@ Contract:
 - `RenderFlow::procedural_pass(...)` builds normal graphics passes from renderer-owned procedural descriptors. Mesh sprites, quad sprites, and local 2D SDF impostors use typed storage-backed instance buffers and explicit render policy; the API derives renderer execution resources only and does not own product truth or residency policy.
 - `RenderFlow::procedural_pass_builder(...)` is the advanced procedural authoring path for per-pass uniforms, surface-aware uniforms, and typed indirect draw arguments. It lowers internally to graphics and does not expose `GraphicsPassBuilder` as the public procedural extension surface.
 - `ProceduralCamera2d`, `ProceduralCamera2dAspectPolicy`, `ProceduralCamera2dUniform`, and `ProceduralSpriteSizing` define reusable renderer procedural projection contracts. Producers own camera intent; renderer procedural code derives world-to-clip projection and sprite uniform data from that intent and the target surface size. `PreparedViewFrame` remains render target/view/history metadata and does not own camera truth.
-- `GraphicsPassBuilder::draw(...)` and `draw_with_offsets(...)` remain the direct draw paths. `draw_indirect(...)` and `draw_indirect_with_offsets(...)` author explicit indirect draw sources using typed renderer-owned argument buffers.
+- `GraphicsPassBuilder::draw(...)` and `draw_with_offsets(...)` remain the direct draw paths. `draw_indirect(...)` and `draw_indirect_with_offsets(...)` accept a kind-specific logical `GpuBufferHandle`; render declaration validation checks the indirect argument layout and rejects mismatched uniform/storage roles before submit.
 - `engine/examples/boids_render_flow` is the canonical procedural-consumer example: compute updates storage-backed boids through a bounded wrapping uniform grid, a publish pass makes the current buffer available as instance data, `boids.draw` is built with `ProceduralPassDescriptor::local_sdf_2d_impostors(...)` through the procedural builder, and the compose shader projects world positions through `ProceduralCamera2dUniform` without a fullscreen fragment loop over the whole boid set.
 - `cargo run -p engine --example boids_render_flow -- --evidence` prints the canonical boids production-evidence report, including pass order, local instance geometry, graph fixed-step evidence, procedural camera projection evidence, typed GPU-timing diagnostic evidence, CPU timing fields, and the renderer benchmark command. `cargo bench -p engine --bench render_flow_planning` includes procedural-boids planning and preflight cases.
 - Runtime submit uses cached strict prepared-frame preflight by default. Full structural preflight runs on cold cache, structural key changes, failures, or strict mode; cheap runtime guards still run each frame for flow/view/invocation existence, pass-shape hazards, dispatch validity, uniform presence, and history conflicts.
@@ -595,7 +603,7 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
 - runtime diagnostics policy:
   - `RenderFrameDiagnosticsPolicyResource`
   - `RenderFrameDiagnosticsMode`
-- `RenderResourceDescriptor`
+- `RenderResourceDeclaration`
 - `RenderDynamicTextureTargetDescriptor`
 - `RenderDynamicTextureTargetKey`
 - `RenderDynamicTextureRetention`
@@ -603,23 +611,21 @@ These APIs are for advanced runtime embedding, diagnostics, and inspection.
 - `RenderTextureFormatPolicy`
 - `RenderTextureTargetUsage`
 - `RenderTextureSampleMode`
-- `ImportedTextureSemantic`
-  - `ImportedBufferSemantic`
-  - `ResourceLifetime`
-  - `TransientAliasAssignment`
-  - `TransientAliasCandidate`
-  - `TransientAliasSlot`
-  - `TransientResourceWindow`
+- `RenderImportedTextureSemantic`
+- `RenderImportedBufferSemantic`
+- `GpuResourceLifetime`
+- `TransientAliasAssignment`
+- `TransientAliasCandidate`
+- `TransientAliasSlot`
+- `TransientResourceWindow`
 
 Typed imported-resource contract:
 
-- Prefer typed imports:
-  - `RenderResourceDescriptor::imported_surface_color`
-  - `RenderResourceDescriptor::imported_history_texture`
-  - `RenderResourceDescriptor::imported_history_buffer`
-- `RenderResourceDescriptor::imported_surface_depth` remains a typed declaration compatibility API, but it is not accepted as a runtime graphics depth attachment. Use flow-owned `RenderFlow::with_depth_target(...)` and `GraphicsPassBuilder::depth_target(...)` for executable graphics depth.
-- `imported_texture` / `imported_buffer` remain compatibility constructors and compile to `External` semantics.
-- Active runtime flow validation rejects `External` imports.
+- Prefer the typed public flow methods `RenderFlow::with_surface_color`, `with_surface_depth`, `with_builtin_ui`, and `with_history_texture`.
+- `RenderResourceDeclaration::declare_imported_surface_color`, `declare_imported_surface_depth`, `declare_imported_history_texture`, and `declare_imported_history_buffer` preserve explicit render-owned semantics over normalized GPU descriptors.
+- Imported surface depth is declaration-only until the renderer exposes a prepared surface-depth texture. Use flow-owned `RenderFlow::with_depth_target(...)` and `GraphicsPassBuilder::depth_target(...)` for executable graphics depth.
+- `declare_imported_external_texture` and `declare_imported_external_buffer` are explicit semantic declarations for inspection; active runtime validation rejects them.
+- No `RenderResourceDescriptor` compatibility constructor, alias, forwarding module, or parallel descriptor authority remains.
 
 Pipeline-key specialization/runtime contract:
 
@@ -690,6 +696,9 @@ Production readiness inspection contract:
 
 These APIs are for dynamic product surfaces, viewport products, material/asset previews, and debug texture viewers:
 
+Target-alias declaration and prepared-binding builders are fallible because caller-provided keys are validated. Compiled references, prepared invocation maps, diagnostics, inspection, and runtime resolution preserve `RenderTargetAliasKey`; display labels are not alias identity.
+
+- `RenderTargetAliasKey::new` validates, trims, and rejects empty semantic target-binding keys.
 - `RenderFlow::with_color_target_alias`
 - `RenderFlow::with_depth_target_alias`
 - `RenderFlow::with_target_alias`

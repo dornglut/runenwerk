@@ -1,5 +1,5 @@
 use crate::plugins::gpu::GpuWorkResourceId;
-use crate::plugins::render::RenderResourceDescriptor;
+use crate::plugins::render::RenderResourceDeclaration;
 use std::any::{TypeId, type_name};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,7 +20,7 @@ impl StateResourceDeclaration {
 #[derive(Debug, Clone, Default)]
 pub struct ResourceGraph {
     pub state_resources: Vec<StateResourceDeclaration>,
-    pub resources: Vec<RenderResourceDescriptor>,
+    pub resources: Vec<RenderResourceDeclaration>,
 }
 
 impl ResourceGraph {
@@ -32,7 +32,7 @@ impl ResourceGraph {
             .push(StateResourceDeclaration::of::<T>());
     }
 
-    pub fn add_resource(&mut self, descriptor: RenderResourceDescriptor) {
+    pub fn add_resource(&mut self, descriptor: RenderResourceDeclaration) {
         self.resources.push(descriptor);
     }
 
@@ -40,10 +40,8 @@ impl ResourceGraph {
         self.resources
             .iter()
             .filter_map(|resource| match resource {
-                RenderResourceDescriptor::UniformBuffer(value)
-                    if value.params_type_id == type_id =>
-                {
-                    Some(value.id)
+                RenderResourceDeclaration::Uniform(value) if value.params_type_id() == type_id => {
+                    Some(*value.id())
                 }
                 _ => None,
             })
@@ -57,11 +55,15 @@ impl ResourceGraph {
     }
 
     pub fn has_uniform_buffer(&self, id: &GpuWorkResourceId) -> bool {
-        self.resources.iter().any(|resource| {
-            matches!(
-                resource,
-                RenderResourceDescriptor::UniformBuffer(value) if value.id == *id
-            )
+        self.uniform_buffer_params(id).is_some()
+    }
+
+    pub fn uniform_buffer_params(&self, id: &GpuWorkResourceId) -> Option<(TypeId, &'static str)> {
+        self.resources.iter().find_map(|resource| match resource {
+            RenderResourceDeclaration::Uniform(value) if value.id() == id => {
+                Some((value.params_type_id(), value.params_type_name()))
+            }
+            _ => None,
         })
     }
 }

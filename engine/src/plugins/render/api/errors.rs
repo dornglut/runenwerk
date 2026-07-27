@@ -1,4 +1,5 @@
-use crate::plugins::gpu::GpuWorkResourceIdAllocationError;
+use crate::plugins::gpu::{GpuWorkResourceId, GpuWorkResourceIdAllocationError};
+use crate::plugins::render::RenderGpuResourceAdapterError;
 use crate::plugins::render::gpu_primitives::GpuPrimitiveValidationError;
 use crate::plugins::render::procedural::ProceduralValidationError;
 use thiserror::Error;
@@ -10,8 +11,25 @@ pub enum RenderFlowAuthoringError {
     ResourceIdAllocation(#[from] GpuWorkResourceIdAllocationError),
 
     #[error(transparent)]
+    GpuResourceAdapter(#[from] RenderGpuResourceAdapterError),
+
+    #[error(transparent)]
     ProceduralValidation(#[from] ProceduralValidationError),
 
     #[error(transparent)]
     GpuPrimitiveValidation(#[from] GpuPrimitiveValidationError),
+
+    #[error(
+        "resolve logical GPU buffer handle for resource '{resource_id:?}': declaration is not a buffer; retain the matching kind-specific handle"
+    )]
+    DeclaredBufferHandleMissing { resource_id: GpuWorkResourceId },
+
+    #[error(
+        "validate render buffer layout for resource '{resource_id:?}': expected {expected}, found {actual}; retain the declaration-matching GPU buffer handle"
+    )]
+    BufferLayoutMismatch {
+        resource_id: GpuWorkResourceId,
+        expected: &'static str,
+        actual: &'static str,
+    },
 }

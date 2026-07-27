@@ -1,3 +1,4 @@
+pub mod adapters;
 pub mod api;
 pub mod backend;
 pub mod composition;
@@ -19,6 +20,7 @@ mod texture_upload;
 mod plugin;
 pub mod runtime;
 
+pub use adapters::*;
 pub use api::*;
 pub use bytemuck;
 pub use composition::*;

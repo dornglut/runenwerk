@@ -168,6 +168,18 @@ pub enum ParamProjectionError {
     },
 
     #[error(
+        "pass '{pass_label}' cannot project params '{params_type_name}' into uniform buffer '{uniform_id:?}' declared for '{declared_type_name}'"
+    )]
+    UniformBufferTypeMismatch {
+        pass_id: RenderPassId,
+        pass_label: String,
+        state_type_name: &'static str,
+        params_type_name: &'static str,
+        declared_type_name: &'static str,
+        uniform_id: GpuWorkResourceId,
+    },
+
+    #[error(
         "pass '{pass_label}' failed to project state '{state_type_name}' into params '{params_type_name}'"
     )]
     ProjectionFailed {
@@ -397,15 +409,31 @@ pub fn project_uniform_bindings_for_pass(
             continue;
         };
 
-        if !resources.has_uniform_buffer(binding.uniform_id()) {
-            errors.push(ParamProjectionError::MissingUniformBuffer {
-                pass_id,
-                pass_label: pass_label.clone(),
-                state_type_name,
-                params_type_name,
-                uniform_id: *binding.uniform_id(),
-            });
-            continue;
+        match resources.uniform_buffer_params(binding.uniform_id()) {
+            None => {
+                errors.push(ParamProjectionError::MissingUniformBuffer {
+                    pass_id,
+                    pass_label: pass_label.clone(),
+                    state_type_name,
+                    params_type_name,
+                    uniform_id: *binding.uniform_id(),
+                });
+                continue;
+            }
+            Some((declared_type_id, declared_type_name))
+                if declared_type_id != binding.params_type_id() =>
+            {
+                errors.push(ParamProjectionError::UniformBufferTypeMismatch {
+                    pass_id,
+                    pass_label: pass_label.clone(),
+                    state_type_name,
+                    params_type_name,
+                    declared_type_name,
+                    uniform_id: *binding.uniform_id(),
+                });
+                continue;
+            }
+            Some(_) => {}
         }
 
         let Some(bytes) = binding.project_bytes(state, surface_size) else {

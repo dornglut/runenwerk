@@ -1,17 +1,16 @@
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{GpuCapabilities, GpuWorkResourceId};
 use crate::plugins::render::features::FeatureFallbackPolicy;
 use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledBuiltinImport, CompiledDispatchPlan, CompiledPassBindings,
     CompiledPassExecutionPlan, CompiledRasterExecutionPlan, CompiledRenderFlowPlan,
     CompiledResourceRef, CompiledStorageAccess, CompiledTargetAliasRef, CompiledViewMask,
-    RenderBackendCapabilityProfile, RenderExecutionGraphDiagnostic,
-    RenderExecutionGraphDiagnosticKind, RenderExecutionGraphPreparedError,
-    diagnose_compiled_pass_shapes, validate_compiled_flow_capabilities,
+    RenderExecutionGraphDiagnostic, RenderExecutionGraphDiagnosticKind,
+    RenderExecutionGraphPreparedError, diagnose_compiled_pass_shapes,
 };
 use crate::plugins::render::{
     PreparedFlowInvocation, PreparedFlowInvocationId, PreparedRenderFrame, PreparedTargetBinding,
     PreparedViewFrame, RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
-    RenderResourceDescriptor, RenderTargetAliasKind,
+    RenderResourceDeclaration, RenderTargetAliasKind, validate_compiled_flow_capabilities,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
@@ -145,7 +144,7 @@ impl RenderPreparedFramePreflightCacheStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenderPreparedFramePreflightCacheKey {
-    pub profile_key: String,
+    pub normalized_capabilities: GpuCapabilities,
     pub flow_registry_revision: u64,
     pub shader_registry_revision: u64,
     pub prepared_structure_hash: u64,
@@ -174,10 +173,10 @@ impl Default for RenderPreparedFramePreflightCacheState {
 pub fn prepared_render_frame_preflight_cache_key(
     frame: &PreparedRenderFrame,
     compiled_flows: &[CompiledRenderFlowPlan],
-    profile: &RenderBackendCapabilityProfile,
+    capabilities: &GpuCapabilities,
 ) -> RenderPreparedFramePreflightCacheKey {
     RenderPreparedFramePreflightCacheKey {
-        profile_key: profile.key.clone(),
+        normalized_capabilities: capabilities.clone(),
         flow_registry_revision: frame.context.flow_registry_revision,
         shader_registry_revision: frame.context.shader_registry_revision,
         prepared_structure_hash: hash_prepared_frame_structure(frame),
@@ -206,9 +205,9 @@ struct AliasRequirement {
 pub fn preflight_prepared_render_frame(
     frame: &PreparedRenderFrame,
     compiled_flows: &[CompiledRenderFlowPlan],
-    profile: &RenderBackendCapabilityProfile,
+    capabilities: &GpuCapabilities,
 ) -> Result<RenderExecutionGraphPreparedReport, RenderExecutionGraphPreparedError> {
-    let report = validate_prepared_render_frame(frame, compiled_flows, profile);
+    let report = validate_prepared_render_frame(frame, compiled_flows, capabilities);
     if report.has_errors() {
         Err(RenderExecutionGraphPreparedError::new(report.diagnostics))
     } else {
@@ -296,7 +295,7 @@ pub fn validate_prepared_render_frame_runtime_guards(
 pub fn validate_prepared_render_frame(
     frame: &PreparedRenderFrame,
     compiled_flows: &[CompiledRenderFlowPlan],
-    profile: &RenderBackendCapabilityProfile,
+    capabilities: &GpuCapabilities,
 ) -> RenderExecutionGraphPreparedReport {
     let mut diagnostics = Vec::<RenderExecutionGraphDiagnostic>::new();
     let flows_by_id = compiled_flows
@@ -315,7 +314,7 @@ pub fn validate_prepared_render_frame(
 
     for flow in compiled_flows {
         diagnostics.extend(diagnose_compiled_pass_shapes(flow));
-        diagnostics.extend(validate_compiled_flow_capabilities(flow, profile));
+        diagnostics.extend(validate_compiled_flow_capabilities(flow, capabilities));
     }
 
     for invocation in &frame.flow_invocations {
@@ -652,7 +651,7 @@ fn validate_alias_requirement(
 ) {
     let Some(binding) = invocation
         .target_alias_bindings
-        .get(requirement.alias.label.as_str())
+        .get(&requirement.alias.binding_key)
     else {
         diagnostics.push(
             RenderExecutionGraphDiagnostic::error(
@@ -660,13 +659,13 @@ fn validate_alias_requirement(
                 format!(
                     "prepared invocation '{}' does not bind target alias '{}' required by pass '{}'",
                     invocation.invocation_id.0,
-                    requirement.alias.label,
+                    requirement.alias.binding_key,
                     pass_id(pass)
                 ),
             )
             .with_flow(flow.flow_id, flow.flow_label.clone())
             .with_pass(pass_id(pass), pass_id(pass).to_string())
-            .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+            .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
             .with_invocation(invocation.invocation_id.clone())
             .with_view(invocation.view_id.clone()),
         );
@@ -683,13 +682,13 @@ fn validate_alias_requirement(
                         format!(
                             "prepared invocation '{}' binds alias '{}' to dynamic target '{}' but no descriptor was requested this frame",
                             invocation.invocation_id.0,
-                            requirement.alias.label,
+                            requirement.alias.binding_key,
                             key
                         ),
                     )
                     .with_flow(flow.flow_id, flow.flow_label.clone())
                     .with_pass(pass_id(pass), pass_id(pass).to_string())
-                    .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+                    .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
                     .with_dynamic_target(key.clone())
                     .with_invocation(invocation.invocation_id.clone())
                     .with_view(invocation.view_id.clone()),
@@ -719,12 +718,12 @@ fn validate_alias_requirement(
                 format!(
                     "prepared invocation '{}' binds alias '{}' to surface depth, but surface-depth imports are not supported by active runtime execution",
                     invocation.invocation_id.0,
-                    requirement.alias.label
+                    requirement.alias.binding_key
                 ),
             )
             .with_flow(flow.flow_id, flow.flow_label.clone())
             .with_pass(pass_id(pass), pass_id(pass).to_string())
-            .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+            .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
             .with_invocation(invocation.invocation_id.clone())
             .with_view(invocation.view_id.clone()),
         ),
@@ -779,14 +778,14 @@ fn validate_alias_kind_binding(
             format!(
                 "prepared invocation '{}' binds alias '{}' with incompatible role {:?} and binding {:?}",
                 invocation.invocation_id.0,
-                requirement.alias.label,
+                requirement.alias.binding_key,
                 requirement.role,
                 binding
             ),
         )
         .with_flow(flow.flow_id, flow.flow_label.clone())
         .with_pass(pass_id(pass), pass_id(pass).to_string())
-        .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+        .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
         .with_invocation(invocation.invocation_id.clone())
         .with_view(invocation.view_id.clone()),
     );
@@ -825,14 +824,17 @@ fn validate_dynamic_target_usage(
             format!(
                 "dynamic target '{}' is incompatible with alias '{}' role {:?} in pass '{}'",
                 descriptor.key,
-                requirement.alias.label,
+                requirement.alias.binding_key,
                 requirement.role,
                 pass_id(pass)
             ),
         )
         .with_flow(flow.flow_id, flow.flow_label.clone())
         .with_pass(pass_id(pass), pass_id(pass).to_string())
-        .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+        .with_alias(
+            requirement.alias.binding_key.clone(),
+            requirement.alias.kind,
+        )
         .with_dynamic_target(descriptor.key.clone())
         .with_invocation(invocation.invocation_id.clone())
         .with_view(invocation.view_id.clone()),
@@ -853,13 +855,16 @@ fn validate_flow_owned_alias_binding(
                 RenderExecutionGraphDiagnosticKind::InvalidResource,
                 format!(
                     "prepared invocation '{}' binds alias '{}' to unknown flow-owned resource '{}'",
-                    invocation.invocation_id.0, requirement.alias.label, resource_id
+                    invocation.invocation_id.0, requirement.alias.binding_key, resource_id
                 ),
             )
             .with_flow(flow.flow_id, flow.flow_label.clone())
             .with_pass(pass_id(pass), pass_id(pass).to_string())
             .with_resource(resource_id, Option::<String>::None)
-            .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+            .with_alias(
+                requirement.alias.binding_key.clone(),
+                requirement.alias.kind,
+            )
             .with_invocation(invocation.invocation_id.clone())
             .with_view(invocation.view_id.clone()),
         );
@@ -869,14 +874,17 @@ fn validate_flow_owned_alias_binding(
     let compatible = match requirement.role {
         AliasUseRole::ColorOutput => matches!(
             descriptor,
-            RenderResourceDescriptor::ColorTarget(_) | RenderResourceDescriptor::ImportedTexture(_)
+            RenderResourceDeclaration::ColorAttachment(_)
+                | RenderResourceDeclaration::ImportedTexture(_)
         ),
-        AliasUseRole::DepthOutput => matches!(descriptor, RenderResourceDescriptor::DepthTarget(_)),
+        AliasUseRole::DepthOutput => {
+            matches!(descriptor, RenderResourceDeclaration::DepthAttachment(_))
+        }
         AliasUseRole::SampledTexture | AliasUseRole::PresentSource => {
             is_texture_descriptor(descriptor)
         }
         AliasUseRole::StorageTextureWrite => {
-            matches!(descriptor, RenderResourceDescriptor::StorageTexture(_))
+            matches!(descriptor, RenderResourceDeclaration::StorageImage(_))
         }
         AliasUseRole::CopySource | AliasUseRole::CopyDestination => true,
         AliasUseRole::StorageBuffer => is_buffer_descriptor(descriptor),
@@ -890,7 +898,7 @@ fn validate_flow_owned_alias_binding(
             format!(
                 "prepared invocation '{}' binds alias '{}' to resource '{}' with incompatible role {:?}",
                 invocation.invocation_id.0,
-                requirement.alias.label,
+                requirement.alias.binding_key,
                 resource_id,
                 requirement.role
             ),
@@ -898,7 +906,7 @@ fn validate_flow_owned_alias_binding(
         .with_flow(flow.flow_id, flow.flow_label.clone())
         .with_pass(pass_id(pass), pass_id(pass).to_string())
         .with_resource(resource_id, flow.resource_label(resource_id))
-        .with_alias(requirement.alias.label.clone(), requirement.alias.kind)
+        .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
         .with_invocation(invocation.invocation_id.clone())
         .with_view(invocation.view_id.clone()),
     );
@@ -1290,7 +1298,7 @@ fn hash_compiled_resource_ref(resource: Option<&CompiledResourceRef>, hasher: &m
         Some(CompiledResourceRef::TargetAlias(alias)) => {
             "target_alias".hash(hasher);
             alias.resource_id.hash(hasher);
-            alias.label.hash(hasher);
+            alias.binding_key.hash(hasher);
             alias.kind.hash(hasher);
         }
         Some(CompiledResourceRef::ImportedBuiltin(value)) => {
@@ -1372,18 +1380,18 @@ fn hash_prepared_target_binding(binding: &PreparedTargetBinding, hasher: &mut im
     }
 }
 
-fn hash_resource_descriptor_kind(descriptor: &RenderResourceDescriptor, hasher: &mut impl Hasher) {
+fn hash_resource_descriptor_kind(descriptor: &RenderResourceDeclaration, hasher: &mut impl Hasher) {
     match descriptor {
-        RenderResourceDescriptor::UniformBuffer(_) => "uniform_buffer",
-        RenderResourceDescriptor::StorageBuffer(_) => "storage_buffer",
-        RenderResourceDescriptor::SampledTexture(_) => "sampled_texture",
-        RenderResourceDescriptor::StorageTexture(_) => "storage_texture",
-        RenderResourceDescriptor::ColorTarget(_) => "color_target",
-        RenderResourceDescriptor::DepthTarget(_) => "depth_target",
-        RenderResourceDescriptor::HistoryTexture(_) => "history_texture",
-        RenderResourceDescriptor::TargetAlias(_) => "target_alias",
-        RenderResourceDescriptor::ImportedTexture(_) => "imported_texture",
-        RenderResourceDescriptor::ImportedBuffer(_) => "imported_buffer",
+        RenderResourceDeclaration::Uniform(_) => "uniform_buffer",
+        RenderResourceDeclaration::Storage(_) => "storage_buffer",
+        RenderResourceDeclaration::Sampled(_) => "sampled_texture",
+        RenderResourceDeclaration::StorageImage(_) => "storage_texture",
+        RenderResourceDeclaration::ColorAttachment(_) => "color_target",
+        RenderResourceDeclaration::DepthAttachment(_) => "depth_target",
+        RenderResourceDeclaration::History(_) => "history_texture",
+        RenderResourceDeclaration::TargetAlias(_) => "target_alias",
+        RenderResourceDeclaration::ImportedTexture(_) => "imported_texture",
+        RenderResourceDeclaration::ImportedBuffer(_) => "imported_buffer",
     }
     .hash(hasher);
 }
@@ -1401,25 +1409,25 @@ fn hash_with(f: impl FnOnce(&mut DefaultHasher)) -> u64 {
     hasher.finish()
 }
 
-fn is_texture_descriptor(descriptor: &RenderResourceDescriptor) -> bool {
+fn is_texture_descriptor(descriptor: &RenderResourceDeclaration) -> bool {
     matches!(
         descriptor,
-        RenderResourceDescriptor::SampledTexture(_)
-            | RenderResourceDescriptor::StorageTexture(_)
-            | RenderResourceDescriptor::ColorTarget(_)
-            | RenderResourceDescriptor::DepthTarget(_)
-            | RenderResourceDescriptor::HistoryTexture(_)
-            | RenderResourceDescriptor::TargetAlias(_)
-            | RenderResourceDescriptor::ImportedTexture(_)
+        RenderResourceDeclaration::Sampled(_)
+            | RenderResourceDeclaration::StorageImage(_)
+            | RenderResourceDeclaration::ColorAttachment(_)
+            | RenderResourceDeclaration::DepthAttachment(_)
+            | RenderResourceDeclaration::History(_)
+            | RenderResourceDeclaration::TargetAlias(_)
+            | RenderResourceDeclaration::ImportedTexture(_)
     )
 }
 
-fn is_buffer_descriptor(descriptor: &RenderResourceDescriptor) -> bool {
+fn is_buffer_descriptor(descriptor: &RenderResourceDeclaration) -> bool {
     matches!(
         descriptor,
-        RenderResourceDescriptor::UniformBuffer(_)
-            | RenderResourceDescriptor::StorageBuffer(_)
-            | RenderResourceDescriptor::ImportedBuffer(_)
+        RenderResourceDeclaration::Uniform(_)
+            | RenderResourceDeclaration::Storage(_)
+            | RenderResourceDeclaration::ImportedBuffer(_)
     )
 }
 

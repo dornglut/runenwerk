@@ -3,8 +3,9 @@ use super::{
     RenderFragmentPackageDescriptor, RenderFragmentPackageId, RenderFragmentRevision,
     validate_fragment_package,
 };
+use crate::plugins::gpu::GpuCapabilities;
+use crate::plugins::render::RenderFlow;
 use crate::plugins::render::graph::{RenderFragmentMergeError, merge_fragment_package_into_flow};
-use crate::plugins::render::{RenderBackendCapabilityProfile, RenderFlow};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,11 +149,11 @@ impl RenderFragmentRegistryResource {
     pub fn merge_active_packages(
         &self,
         mut flow: RenderFlow,
-        profile: &RenderBackendCapabilityProfile,
+        capabilities: &GpuCapabilities,
     ) -> Result<RenderFragmentRegistryMerge, RenderFragmentMergeError> {
         let mut reports = Vec::<RenderFragmentMergeReport>::new();
         for package in self.active_packages() {
-            let merged = merge_fragment_package_into_flow(flow, package, profile)?;
+            let merged = merge_fragment_package_into_flow(flow, package, capabilities)?;
             flow = merged.flow;
             reports.push(merged.report);
         }

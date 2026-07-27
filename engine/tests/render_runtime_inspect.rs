@@ -1,4 +1,4 @@
-use engine::plugins::gpu::GpuWorkResourceId;
+use engine::plugins::gpu::{GpuCapabilityFeature, GpuWorkResourceId};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, PreparedRenderFrameInspection,
     ProductSurfaceDiagnosticInspectionEntry, RenderCaptureIdentity, RenderCapturePointIdentity,
@@ -27,18 +27,18 @@ use engine::plugins::render::{
     PreparedFlowInvocation, PreparedFlowInvocationId, PreparedFlowInvocationRequest,
     PreparedFrameContext, PreparedFrameContributions, PreparedRegisteredFeaturePayload,
     PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedTargetBinding,
-    PreparedViewFrame, RenderBackendCapabilityProfile, RenderDynamicTextureRetention,
-    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
-    RenderDynamicTextureUploadDescriptor, RenderFeatureId, RenderFlow, RenderFragmentDescriptor,
-    RenderFragmentPackageDescriptor, RenderFragmentPassDescriptor,
-    RenderFragmentResourceDescriptor, RenderFrameProducerId, RenderGpuResidencyBudgetResource,
-    RenderGpuResidencyResource, RenderPreparedFramePreflightCacheState,
-    RenderPreparedFramePreflightCacheStatus, RenderPreparedFramePreflightMode,
-    RenderPreparedFramePreflightReportSource, RenderProductSurfaceManifest,
-    RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch, RenderProductSurfaceStatusKind,
-    RenderResourceDescriptor, RenderTextureSampleMode, RenderTextureTargetFormat,
-    RenderTextureUploadAlphaMode, RendererFrameTimings, ShaderReloadPollReport,
-    ShaderReloadPollStatus, StaticRegisteredFeaturePayload, compile_flow_plan,
+    PreparedViewFrame, RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
+    RenderDynamicTextureTargetKey, RenderDynamicTextureUploadDescriptor, RenderFeatureId,
+    RenderFlow, RenderFragmentDescriptor, RenderFragmentPackageDescriptor,
+    RenderFragmentPassDescriptor, RenderFragmentResourceDescriptor, RenderFrameProducerId,
+    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource,
+    RenderPreparedFramePreflightCacheState, RenderPreparedFramePreflightCacheStatus,
+    RenderPreparedFramePreflightMode, RenderPreparedFramePreflightReportSource,
+    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
+    RenderProductSurfaceStatusKind, RenderResourceDeclaration, RenderTargetAliasKey,
+    RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureUploadAlphaMode,
+    RendererFrameTimings, ShaderReloadPollReport, ShaderReloadPollStatus,
+    StaticRegisteredFeaturePayload, compile_flow_plan, current_runtime_gpu_capabilities,
     merge_fragment_package_into_flow, validate_prepared_render_frame,
 };
 use engine::runtime::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
@@ -71,6 +71,10 @@ fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
         .iter()
         .map(|label| flow.resource_id(label).expect("test resource should exist"))
         .collect()
+}
+
+fn alias_key(value: &str) -> RenderTargetAliasKey {
+    RenderTargetAliasKey::new(value).expect("test alias key should be valid")
 }
 
 #[test]
@@ -466,7 +470,7 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
             resource_label: None,
             invocation_id: Some("viewport.scene".to_string()),
             view_id: Some("viewport".to_string()),
-            alias_label: Some("scene_color".to_string()),
+            alias_binding_key: Some("scene_color".to_string()),
             alias_kind: Some("Color".to_string()),
             dynamic_target_key: None,
             history_signature: None,
@@ -587,8 +591,11 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
 
 #[test]
 fn render_runtime_inspect_resource_kind_label_matches_descriptor_kind() {
-    let descriptor =
-        RenderResourceDescriptor::storage_buffer::<InspectStorage>(test_resource_ids(1)[0]);
+    let descriptor = RenderResourceDeclaration::declare_storage::<InspectStorage>(
+        test_resource_ids(1)[0],
+        "inspect storage",
+    )
+    .expect("storage declaration should be valid");
     assert_eq!(resource_kind_name(&descriptor), "storage_buffer");
 }
 
@@ -603,7 +610,7 @@ fn render_runtime_inspect_resource_inspection_exposes_target_alias_metadata() {
     let resources = inspect_resources(&flow);
     let color_alias = resources
         .iter()
-        .find(|entry| entry.target_alias_label.as_deref() == Some("viewport.scene_color"))
+        .find(|entry| entry.target_alias_binding_key.as_deref() == Some("viewport.scene_color"))
         .expect("color target alias should be inspectable");
 
     assert_eq!(color_alias.kind, "target_alias(color)");
@@ -612,7 +619,7 @@ fn render_runtime_inspect_resource_inspection_exposes_target_alias_metadata() {
     let textures = inspect_texture_resources(&flow);
     assert!(textures.iter().any(|entry| {
         entry.category == "target_alias(depth)"
-            && entry.target_alias_label.as_deref() == Some("viewport.depth")
+            && entry.target_alias_binding_key.as_deref() == Some("viewport.depth")
             && entry.target_alias_kind.as_deref() == Some("depth")
     }));
 }
@@ -639,9 +646,17 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
             .iter()
             .any(|window| window.resource_label.as_deref() == Some("scene_color"))
     );
+    assert!(
+        plan_inspection
+            .backend_capabilities
+            .supports(GpuCapabilityFeature::RenderPipeline)
+    );
     assert_eq!(
-        plan_inspection.backend_capabilities.profile_key,
-        "wgpu-portable-v1"
+        plan_inspection
+            .backend_capabilities
+            .limits()
+            .max_bindings_per_group(),
+        16
     );
 
     let frame = PreparedRenderFrame {
@@ -674,18 +689,15 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
             registry_revision: 1,
         },
     };
-    let report = validate_prepared_render_frame(
-        &frame,
-        &[compiled],
-        &RenderBackendCapabilityProfile::runtime_default(),
-    );
+    let report =
+        validate_prepared_render_frame(&frame, &[compiled], &current_runtime_gpu_capabilities());
     let preflight = inspect_render_execution_graph_preflight(&report);
 
     assert_eq!(preflight.error_count, 1);
     assert_eq!(preflight.cache_mode, None);
     assert_eq!(preflight.diagnostics[0].kind, "TargetAliasMissingBinding");
     assert_eq!(
-        preflight.diagnostics[0].alias_label.as_deref(),
+        preflight.diagnostics[0].alias_binding_key.as_deref(),
         Some("scene_color")
     );
     assert_eq!(
@@ -736,7 +748,7 @@ fn render_runtime_inspect_fragment_merge_reports_expose_package_revision_and_pas
     let merged = merge_fragment_package_into_flow(
         RenderFlow::new("inspect.fragment.flow"),
         &package,
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     )
     .expect("valid fragment package should merge");
 
@@ -768,7 +780,9 @@ fn render_runtime_inspect_prepared_frame_inspection_exposes_render_product_selec
             .with_history_signature("camera:v1"),
         PreparedFlowInvocationRequest::new("viewport.1.scene", flow_id, "viewport.1")
             .bind_dynamic_texture_alias("viewport.scene_color", target_key.clone())
+            .expect("test alias key should be valid")
             .bind_flow_owned_alias("viewport.fallback", resource_id)
+            .expect("test alias key should be valid")
             .with_history_signature("camera:v1"),
     )
     .with_dynamic_target(RenderDynamicTextureTargetDescriptor::color_sampled(
@@ -881,7 +895,7 @@ fn render_runtime_inspect_prepared_frame_inspection_exposes_render_product_selec
             .target_alias_bindings
             .iter()
             .any(|binding| {
-                binding.alias == "viewport.scene_color"
+                binding.binding_key == "viewport.scene_color"
                     && binding.binding == "dynamic_texture(editor.viewport.1:scene_color)"
             })
     );
@@ -985,9 +999,9 @@ fn render_runtime_inspect_prepared_frame_rejects_conflicting_dynamic_target_hist
     let flow_id = engine::plugins::render::RenderFlowId::try_from_raw(3).unwrap();
     let binding = PreparedTargetBinding::DynamicTexture(target_key);
     let mut first_bindings = BTreeMap::new();
-    first_bindings.insert("viewport.scene_color".to_string(), binding.clone());
+    first_bindings.insert(alias_key("viewport.scene_color"), binding.clone());
     let mut second_bindings = BTreeMap::new();
-    second_bindings.insert("viewport.scene_color".to_string(), binding);
+    second_bindings.insert(alias_key("viewport.scene_color"), binding);
 
     let frame = PreparedRenderFrame {
         context: PreparedFrameContext {

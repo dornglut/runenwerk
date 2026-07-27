@@ -1,8 +1,8 @@
 use anyhow::Result;
 use engine::plugins::render::{
-    RenderBackendCapabilityProfile, RenderFlow, RenderFragmentDescriptor,
-    RenderFragmentPackageDescriptor, RenderFragmentPassDescriptor,
-    RenderFragmentResourceDescriptor, RenderTextureTargetFormat, merge_fragment_package_into_flow,
+    RenderFlow, RenderFragmentDescriptor, RenderFragmentPackageDescriptor,
+    RenderFragmentPassDescriptor, RenderFragmentResourceDescriptor, RenderTextureTargetFormat,
+    current_runtime_gpu_capabilities, merge_fragment_package_into_flow,
 };
 
 fn compositor_package() -> RenderFragmentPackageDescriptor {
@@ -30,7 +30,7 @@ fn build_flow() -> Result<RenderFlow> {
     let merged = merge_fragment_package_into_flow(
         RenderFlow::new("example.fragment_compositor"),
         &compositor_package(),
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     )?;
     Ok(merged.flow)
 }

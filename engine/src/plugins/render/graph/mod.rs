@@ -1,4 +1,3 @@
-pub mod capabilities;
 pub mod diagnostics;
 pub mod execution_plan;
 pub mod flow_graph;
@@ -12,7 +11,6 @@ pub mod resource_lifetimes;
 pub mod validation;
 pub mod validation_builtin_ui;
 
-pub use capabilities::*;
 pub use diagnostics::*;
 pub use execution_plan::*;
 pub use flow_graph::*;

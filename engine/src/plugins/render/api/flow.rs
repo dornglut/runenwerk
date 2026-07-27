@@ -1,9 +1,9 @@
-use crate::plugins::gpu::{GpuWorkResourceId, GpuWorkResourceIdAllocator};
+use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator};
 use crate::plugins::render::api::{
-    BuiltinUiCompositePassBuilder, ComputePassBuilder, CopyPassBuilder, DoubleBufferHandle,
-    FullscreenPassBuilder, GraphicsPassBuilder, ParamProjectionError, PassUniformProjection,
-    PresentPassBuilder, ProjectedUniformSet, RenderFixedStepIterationUniform,
-    RenderFlowAuthoringError, StorageArrayHandle, UniformHandle, project_uniform_bindings_for_pass,
+    BuiltinUiCompositePassBuilder, ComputePassBuilder, CopyPassBuilder, FullscreenPassBuilder,
+    GraphicsPassBuilder, ParamProjectionError, PassUniformProjection, PresentPassBuilder,
+    ProjectedUniformSet, RenderDoubleBuffer, RenderFixedStepIterationUniform,
+    RenderFlowAuthoringError, project_uniform_bindings_for_pass,
 };
 use crate::plugins::render::procedural::{
     ProceduralPassBuilder, ProceduralPassDescriptor, build_procedural_pass,
@@ -11,11 +11,11 @@ use crate::plugins::render::procedural::{
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
     FlowValidationReport, GpuParams, GpuPrimitiveDispatchPlan, GpuPrimitiveDispatchResource,
-    GpuPrimitiveExecutionPlan, GpuPrimitiveTemporaryStorageKind, RenderFixedStepRegionId,
-    RenderFixedStepRegionMembership, RenderFlowGraph, RenderFlowId, RenderFlowValidationError,
-    RenderPassId, RenderPassIdSequence, RenderPassKind, RenderPassNode, RenderResourceDescriptor,
-    RenderShaderReference, RenderTargetAliasKind, RenderTextureTargetFormat, U32ScanElement,
-    validate_flow_graph,
+    GpuPrimitiveExecutionPlan, GpuPrimitiveTemporaryStorageKind, IndirectDrawArgsBuffer,
+    RenderFixedStepRegionId, RenderFixedStepRegionMembership, RenderFlowGraph, RenderFlowId,
+    RenderFlowValidationError, RenderPassId, RenderPassIdSequence, RenderPassKind, RenderPassNode,
+    RenderResourceDeclaration, RenderShaderReference, RenderTargetAliasKey, RenderTargetAliasKind,
+    RenderTextureTargetFormat, U32ScanElement, validate_flow_graph,
 };
 use crate::runtime::{CatchupBudget, FixedTimeConfig, FixedTimeState};
 use std::collections::BTreeMap;
@@ -133,12 +133,13 @@ impl RenderFlow {
     pub fn uniform_buffer<U>(
         mut self,
         label: impl Into<String>,
-    ) -> Result<(Self, UniformHandle<U>), RenderFlowAuthoringError>
+    ) -> Result<(Self, GpuBufferHandle), RenderFlowAuthoringError>
     where
         U: GpuParams + 'static,
     {
         let id = self.register_uniform_buffer::<U>(label.into())?;
-        Ok((self, UniformHandle::new(id)))
+        let handle = self.buffer_handle(id)?;
+        Ok((self, handle))
     }
 
     pub fn with_target_alias(
@@ -172,12 +173,13 @@ impl RenderFlow {
         mut self,
         label: impl Into<String>,
         len: u64,
-    ) -> Result<(Self, StorageArrayHandle<T>), RenderFlowAuthoringError>
+    ) -> Result<(Self, GpuBufferHandle), RenderFlowAuthoringError>
     where
         T: GpuParams + 'static,
     {
         let id = self.register_storage_array::<T>(label.into(), len)?;
-        Ok((self, StorageArrayHandle::new(id, len)))
+        let handle = self.buffer_handle(id)?;
+        Ok((self, handle))
     }
 
     pub fn double_buffer_storage_array<T>(
@@ -196,17 +198,17 @@ impl RenderFlow {
         mut self,
         label: impl Into<String>,
         len: u64,
-    ) -> Result<(Self, DoubleBufferHandle<T>), RenderFlowAuthoringError>
+    ) -> Result<(Self, RenderDoubleBuffer), RenderFlowAuthoringError>
     where
         T: GpuParams + 'static,
     {
         let base_label = label.into();
         let (a_id, b_id) =
             self.register_double_buffer_storage_array::<T>(base_label.clone(), len)?;
-        let handle = DoubleBufferHandle::new(
+        let handle = RenderDoubleBuffer::new(
             base_label,
-            StorageArrayHandle::new(a_id, len),
-            StorageArrayHandle::new(b_id, len),
+            self.buffer_handle(a_id)?,
+            self.buffer_handle(b_id)?,
         );
         Ok((self, handle))
     }
@@ -424,7 +426,7 @@ impl RenderFlow {
     pub(crate) fn allocate_uniform_resource<U>(
         &mut self,
         pass_label: &str,
-    ) -> Result<UniformHandle<U>, RenderFlowAuthoringError>
+    ) -> Result<GpuBufferHandle, RenderFlowAuthoringError>
     where
         U: GpuParams + 'static,
     {
@@ -434,11 +436,11 @@ impl RenderFlow {
             if !self.resource_ids_by_label.contains_key(label.as_str()) {
                 let id = self.allocate_resource_id()?;
                 self.upsert_labeled_resource(
-                    label,
+                    label.clone(),
                     id,
-                    RenderResourceDescriptor::uniform_buffer::<U>(id),
+                    RenderResourceDeclaration::declare_uniform::<U>(id, label)?,
                 );
-                return Ok(UniformHandle::new(id));
+                return self.buffer_handle(id);
             }
             index = index.saturating_add(1);
         }
@@ -464,7 +466,10 @@ impl RenderFlow {
         self.upsert_labeled_resource(
             SURFACE_COLOR_RESOURCE_LABEL.to_string(),
             id,
-            RenderResourceDescriptor::imported_surface_color(id),
+            RenderResourceDeclaration::declare_imported_surface_color(
+                id,
+                SURFACE_COLOR_RESOURCE_LABEL,
+            ),
         );
         Ok(id)
     }
@@ -480,7 +485,10 @@ impl RenderFlow {
         self.upsert_labeled_resource(
             SURFACE_DEPTH_RESOURCE_LABEL.to_string(),
             id,
-            RenderResourceDescriptor::imported_surface_depth(id),
+            RenderResourceDeclaration::declare_imported_surface_depth(
+                id,
+                SURFACE_DEPTH_RESOURCE_LABEL,
+            ),
         );
         Ok(id)
     }
@@ -494,7 +502,11 @@ impl RenderFlow {
         }
 
         let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::color_target(id));
+        self.upsert_labeled_resource(
+            label.clone(),
+            id,
+            RenderResourceDeclaration::declare_color_attachment(id, label),
+        );
         Ok(id)
     }
 
@@ -509,9 +521,9 @@ impl RenderFlow {
 
         let id = self.allocate_resource_id()?;
         self.upsert_labeled_resource(
-            label,
+            label.clone(),
             id,
-            RenderResourceDescriptor::color_target_exact(id, format),
+            RenderResourceDeclaration::declare_color_attachment_exact(id, label, format),
         );
         Ok(id)
     }
@@ -525,7 +537,11 @@ impl RenderFlow {
         }
 
         let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::depth_target(id));
+        self.upsert_labeled_resource(
+            label.clone(),
+            id,
+            RenderResourceDeclaration::declare_depth_attachment(id, label),
+        );
         Ok(id)
     }
 
@@ -538,7 +554,11 @@ impl RenderFlow {
         }
 
         let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::history_texture(id));
+        self.upsert_labeled_resource(
+            label.clone(),
+            id,
+            RenderResourceDeclaration::declare_history_texture(id, label),
+        );
         Ok(id)
     }
 
@@ -551,7 +571,11 @@ impl RenderFlow {
         }
 
         let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::sampled_texture(id));
+        self.upsert_labeled_resource(
+            label.clone(),
+            id,
+            RenderResourceDeclaration::declare_sampled_texture(id, label),
+        );
         Ok(id)
     }
 
@@ -564,7 +588,11 @@ impl RenderFlow {
         }
 
         let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::storage_texture(id));
+        self.upsert_labeled_resource(
+            label.clone(),
+            id,
+            RenderResourceDeclaration::declare_storage_texture(id, label),
+        );
         Ok(id)
     }
 
@@ -580,7 +608,11 @@ impl RenderFlow {
         }
 
         let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(label, id, RenderResourceDescriptor::uniform_buffer::<U>(id));
+        self.upsert_labeled_resource(
+            label.clone(),
+            id,
+            RenderResourceDeclaration::declare_uniform::<U>(id, label)?,
+        );
         Ok(id)
     }
 
@@ -589,15 +621,16 @@ impl RenderFlow {
         label: String,
         kind: RenderTargetAliasKind,
     ) -> Result<GpuWorkResourceId, RenderFlowAuthoringError> {
-        if let Some(id) = self.resolve_resource_id(label.as_str()) {
+        let binding_key = RenderTargetAliasKey::new(label)?;
+        if let Some(id) = self.resolve_resource_id(binding_key.as_str()) {
             return Ok(id);
         }
 
         let id = self.allocate_resource_id()?;
         self.upsert_labeled_resource(
-            label.clone(),
+            binding_key.as_str().to_string(),
             id,
-            RenderResourceDescriptor::target_alias(id, label, kind),
+            RenderResourceDeclaration::declare_target_alias_with_key(id, binding_key, kind),
         );
         Ok(id)
     }
@@ -616,9 +649,9 @@ impl RenderFlow {
 
         let id = self.allocate_resource_id()?;
         self.upsert_labeled_resource(
-            label,
+            label.clone(),
             id,
-            RenderResourceDescriptor::storage_buffer_array::<T>(id, len),
+            RenderResourceDeclaration::declare_storage_array::<T>(id, label, len)?,
         );
         Ok(id)
     }
@@ -641,12 +674,20 @@ impl RenderFlow {
         self.upsert_labeled_resource(
             format!("{base_label}.a"),
             a_id,
-            RenderResourceDescriptor::storage_buffer_array::<T>(a_id, len),
+            RenderResourceDeclaration::declare_storage_array::<T>(
+                a_id,
+                format!("{base_label}.a"),
+                len,
+            )?,
         );
         self.upsert_labeled_resource(
             format!("{base_label}.b"),
             b_id,
-            RenderResourceDescriptor::storage_buffer_array::<T>(b_id, len),
+            RenderResourceDeclaration::declare_storage_array::<T>(
+                b_id,
+                format!("{base_label}.b"),
+                len,
+            )?,
         );
 
         self.ping_pong_storage.insert(
@@ -661,17 +702,60 @@ impl RenderFlow {
         self.next_resource_id.allocate().map_err(Into::into)
     }
 
+    fn buffer_handle(
+        &self,
+        id: GpuWorkResourceId,
+    ) -> Result<GpuBufferHandle, RenderFlowAuthoringError> {
+        self.graph
+            .resources
+            .resources
+            .iter()
+            .find(|resource| *resource.id() == id)
+            .and_then(RenderResourceDeclaration::buffer_handle)
+            .cloned()
+            .ok_or(RenderFlowAuthoringError::DeclaredBufferHandleMissing { resource_id: id })
+    }
+
+    pub(crate) fn indirect_buffer_element_count<T: IndirectDrawArgsBuffer + 'static>(
+        &self,
+        handle: &GpuBufferHandle,
+    ) -> Result<u64, RenderFlowAuthoringError> {
+        let resource_id = handle.diagnostic_identity();
+        let expected = core::any::type_name::<T>();
+        let Some(RenderResourceDeclaration::Storage(storage)) = self
+            .graph
+            .resources
+            .resources
+            .iter()
+            .find(|resource| *resource.id() == resource_id)
+        else {
+            return Err(RenderFlowAuthoringError::BufferLayoutMismatch {
+                resource_id,
+                expected,
+                actual: "non-storage or foreign buffer",
+            });
+        };
+        if storage.params_type_id() != core::any::TypeId::of::<T>() {
+            return Err(RenderFlowAuthoringError::BufferLayoutMismatch {
+                resource_id,
+                expected,
+                actual: storage.params_type_name(),
+            });
+        }
+        Ok(storage.element_count())
+    }
+
     fn upsert_labeled_resource(
         &mut self,
         label: String,
         id: GpuWorkResourceId,
-        descriptor: RenderResourceDescriptor,
+        descriptor: RenderResourceDeclaration,
     ) {
         self.resource_ids_by_label.insert(label, id);
         self.upsert_resource(descriptor);
     }
 
-    fn upsert_resource(&mut self, descriptor: RenderResourceDescriptor) {
+    fn upsert_resource(&mut self, descriptor: RenderResourceDeclaration) {
         let id = *descriptor.id();
         if self
             .graph
@@ -754,9 +838,10 @@ fn push_unique_resource_id<T: PartialEq + Copy>(resources: &mut Vec<T>, resource
 mod tests {
     use super::*;
     use crate::plugins::render::{
-        CompiledDrawSource, CompiledPassDescriptor, DrawIndirectArgs, GpuStorage, GpuUniform,
-        RenderFlowValidationIssue, RenderTextureFormatPolicy, RenderTextureSizePolicy,
-        RenderTextureTargetFormat, RenderVertexBufferLayout, RenderVertexFormat, compile_flow_plan,
+        CompiledDrawSource, CompiledPassDescriptor, DrawIndexedIndirectArgs, DrawIndirectArgs,
+        GpuStorage, GpuUniform, RenderFlowValidationIssue, RenderTextureFormatPolicy,
+        RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
+        RenderVertexFormat, compile_flow_plan,
     };
 
     #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -769,6 +854,11 @@ mod tests {
         value: u32,
     }
 
+    #[derive(Debug, Clone, Copy, GpuUniform)]
+    struct OtherTestParams {
+        value: u32,
+    }
+
     #[derive(Debug, Clone, ecs::Resource)]
     struct TestState {
         value: u32,
@@ -777,6 +867,10 @@ mod tests {
     impl TestState {
         fn params(&self) -> TestParams {
             TestParams { value: self.value }
+        }
+
+        fn other_params(&self) -> OtherTestParams {
+            OtherTestParams { value: self.value }
         }
 
         fn dispatch(&self) -> [u32; 3] {
@@ -821,8 +915,8 @@ mod tests {
         let (receiving_flow, receiving_handle) = RenderFlow::new("receiving.uniform.owner")
             .uniform_buffer::<TestParams>("uniform")
             .expect("render flow authoring should succeed");
-        let foreign_id = *foreign_handle.id();
-        let receiving_id = *receiving_handle.id();
+        let foreign_id = foreign_handle.diagnostic_identity();
+        let receiving_id = receiving_handle.diagnostic_identity();
 
         assert_eq!(
             foreign_id.diagnostic_parts().1,
@@ -848,6 +942,45 @@ mod tests {
     }
 
     #[test]
+    fn uniform_handle_projection_type_mismatch_is_rejected() {
+        let (flow, handle) = RenderFlow::new("uniform.layout.mismatch")
+            .with_state::<TestState>()
+            .uniform_buffer::<TestParams>("uniform")
+            .expect("render flow authoring should succeed");
+        let flow = flow
+            .compute_pass("uniform.layout.mismatch")
+            .uniform_from_state_to(handle, TestState::other_params)
+            .finish();
+
+        let error = flow
+            .validation_report()
+            .expect_err("same-size but different uniform parameter types must be rejected");
+        assert!(error.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::UniformBufferTypeMismatch { .. }
+        )));
+    }
+
+    #[test]
+    fn uniform_handle_cannot_be_bound_as_storage() {
+        let (flow, handle) = RenderFlow::new("uniform.storage.mismatch")
+            .uniform_buffer::<TestParams>("uniform")
+            .expect("render flow authoring should succeed");
+        let flow = flow
+            .compute_pass("uniform.storage.mismatch")
+            .bind_storage(handle)
+            .finish();
+
+        let error = flow
+            .validation_report()
+            .expect_err("uniform handles must not be compiled as storage bindings");
+        assert!(error.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::UniformBufferUsedAsStorage { .. }
+        )));
+    }
+
+    #[test]
     fn foreign_storage_handle_is_rejected_even_when_local_components_match() {
         let (first_flow, foreign_handle) = RenderFlow::new("foreign.storage.owner")
             .storage_array::<TestCell>("storage", 4)
@@ -855,8 +988,8 @@ mod tests {
         let (receiving_flow, receiving_handle) = RenderFlow::new("receiving.storage.owner")
             .storage_array::<TestCell>("storage", 4)
             .expect("render flow authoring should succeed");
-        let foreign_id = *foreign_handle.id();
-        let receiving_id = *receiving_handle.id();
+        let foreign_id = foreign_handle.diagnostic_identity();
+        let receiving_id = receiving_handle.diagnostic_identity();
 
         assert_eq!(
             foreign_id.diagnostic_parts().1,
@@ -1047,7 +1180,7 @@ mod tests {
             .find(|resource| *resource.id() == id)
             .expect("registered target should have a descriptor");
 
-        let RenderResourceDescriptor::ColorTarget(value) = resource else {
+        let RenderResourceDeclaration::ColorAttachment(value) = resource else {
             panic!("exact color target should remain a color target");
         };
         assert_eq!(value.texture.size, RenderTextureSizePolicy::Surface);
@@ -1091,7 +1224,7 @@ mod tests {
             .find(|resource| *resource.id() == id)
             .expect("registered target should have a descriptor");
 
-        let RenderResourceDescriptor::DepthTarget(value) = resource else {
+        let RenderResourceDeclaration::DepthAttachment(value) = resource else {
             panic!("registered resource should be a depth target");
         };
         value.texture.format =
@@ -1147,6 +1280,32 @@ mod tests {
     }
 
     #[test]
+    fn graphics_buffer_roles_require_matching_normalized_usage() {
+        let (flow, uniform) = RenderFlow::new("test.graphics.invalid.buffer.role")
+            .with_color_target("test.color")
+            .expect("render flow authoring should succeed")
+            .uniform_buffer::<TestParams>("test.uniform")
+            .expect("render flow authoring should succeed");
+
+        let error = flow
+            .graphics_pass("test.draw")
+            .vertex_buffer(
+                uniform,
+                RenderVertexBufferLayout::vertex(0, 4).attribute(0, 0, RenderVertexFormat::Uint32),
+            )
+            .write_color_target("test.color")
+            .draw(3, 1)
+            .finish()
+            .validation_report()
+            .expect_err("uniform-only buffers must not validate as vertex buffers");
+
+        assert!(error.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::MissingBufferRoleUsage { .. }
+        )));
+    }
+
+    #[test]
     fn graphics_pass_with_instance_buffer_layout_validates() {
         let (flow, instances) = RenderFlow::new("test.graphics.instance")
             .with_color_target("test.color")
@@ -1182,6 +1341,7 @@ mod tests {
             .graphics_pass("test.draw")
             .write_color_target("test.color")
             .draw_indirect(args, 3, 64)
+            .expect("declared draw-argument layout should match")
             .finish()
             .validate()
             .expect("graphics pass with explicit indirect draw should validate");
@@ -1203,6 +1363,22 @@ mod tests {
     }
 
     #[test]
+    fn graphics_pass_reports_mismatched_indirect_buffer_layout() {
+        let (flow, args) = RenderFlow::new("test.graphics.indirect.layout")
+            .with_color_target("test.color")
+            .expect("render flow authoring should succeed")
+            .storage_array::<DrawIndexedIndirectArgs>("test.draw.indexed_args", 1)
+            .expect("render flow authoring should succeed");
+
+        assert!(matches!(
+            flow.graphics_pass("test.draw")
+                .write_color_target("test.color")
+                .draw_indirect(args, 3, 1),
+            Err(RenderFlowAuthoringError::BufferLayoutMismatch { .. })
+        ));
+    }
+
+    #[test]
     fn graphics_pass_rejects_unaligned_indirect_draw_offset() {
         let (flow, args) = RenderFlow::new("test.graphics.indirect.unaligned")
             .with_color_target("test.color")
@@ -1214,6 +1390,7 @@ mod tests {
             .graphics_pass("test.draw")
             .write_color_target("test.color")
             .draw_indirect_with_offsets(args, 3, 64, 0, 0, 2)
+            .expect("declared draw-argument layout should match")
             .finish()
             .validation_report()
             .expect_err("unaligned indirect draw offset should be rejected");
@@ -1267,8 +1444,8 @@ mod tests {
             .iter_mut()
             .find(|pass| pass.label == "test.draw")
             .expect("draw pass should exist");
-        pass.reads.push(*vertices.id());
-        pass.vertex_buffers.push(*vertices.id());
+        pass.reads.push(vertices.diagnostic_identity());
+        pass.vertex_buffers.push(vertices.diagnostic_identity());
 
         let err = flow
             .validation_report()

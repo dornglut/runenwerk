@@ -1,0 +1,484 @@
+//! Fixed legacy-renderer capability lowering. These facts preserve the current
+//! Runenwerk contract; they do not query a backend. G4 deletes this adapter when
+//! backend admission constructs normalized capability facts directly.
+
+use crate::plugins::gpu::{
+    GpuCapabilities, GpuCapabilityFeature, GpuLimits, GpuTextureFormat,
+    GpuTextureFormatCapabilities,
+};
+use crate::plugins::render::graph::{
+    CompiledBindingEntry, CompiledPassExecutionPlan, CompiledRenderFlowPlan,
+    RenderExecutionGraphDiagnostic, RenderExecutionGraphDiagnosticKind,
+};
+use crate::plugins::render::{
+    RenderPassKind, RenderResourceDeclaration, RenderTextureFormatPolicy, RenderTextureTargetFormat,
+};
+
+/// Returns normalized facts for the fixed capability contract the current
+/// renderer already assumes. This is not backend-admission evidence.
+pub fn current_runtime_gpu_capabilities() -> GpuCapabilities {
+    let features = [
+        GpuCapabilityFeature::Compute,
+        GpuCapabilityFeature::RenderPipeline,
+        GpuCapabilityFeature::Copy,
+        GpuCapabilityFeature::IndirectDraw,
+        GpuCapabilityFeature::StorageTexture,
+        GpuCapabilityFeature::DepthAttachment,
+        GpuCapabilityFeature::Presentation,
+    ]
+    .into_iter();
+    let limits = GpuLimits::from_validated_adapter_facts(64 * 1024, 128 * 1024 * 1024, 1, 8, 16);
+    GpuCapabilities::from_normalized_facts(features, limits, current_format_facts())
+}
+
+fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureFormatCapabilities)>
+{
+    [
+        (
+            GpuTextureFormat::Rgba8Unorm,
+            GpuTextureFormatCapabilities {
+                sampled: true,
+                filterable: true,
+                storage_read: true,
+                storage_write: true,
+                color_attachment: true,
+                depth_stencil: false,
+                copy_source: true,
+                copy_destination: true,
+            },
+        ),
+        (
+            GpuTextureFormat::Rgba8UnormSrgb,
+            GpuTextureFormatCapabilities {
+                sampled: true,
+                filterable: true,
+                storage_read: false,
+                storage_write: false,
+                color_attachment: true,
+                depth_stencil: false,
+                copy_source: true,
+                copy_destination: true,
+            },
+        ),
+        (
+            GpuTextureFormat::Bgra8Unorm,
+            GpuTextureFormatCapabilities {
+                sampled: true,
+                filterable: true,
+                storage_read: false,
+                storage_write: false,
+                color_attachment: true,
+                depth_stencil: false,
+                copy_source: true,
+                copy_destination: true,
+            },
+        ),
+        (
+            GpuTextureFormat::Bgra8UnormSrgb,
+            GpuTextureFormatCapabilities {
+                sampled: true,
+                filterable: true,
+                storage_read: false,
+                storage_write: false,
+                color_attachment: true,
+                depth_stencil: false,
+                copy_source: true,
+                copy_destination: true,
+            },
+        ),
+        (
+            GpuTextureFormat::R32Uint,
+            GpuTextureFormatCapabilities {
+                sampled: true,
+                filterable: false,
+                storage_read: true,
+                storage_write: true,
+                color_attachment: true,
+                depth_stencil: false,
+                copy_source: true,
+                copy_destination: true,
+            },
+        ),
+        (
+            GpuTextureFormat::Depth32Float,
+            GpuTextureFormatCapabilities {
+                sampled: true,
+                filterable: false,
+                storage_read: false,
+                storage_write: false,
+                color_attachment: false,
+                depth_stencil: true,
+                copy_source: true,
+                copy_destination: true,
+            },
+        ),
+    ]
+    .into_iter()
+}
+
+pub fn validate_compiled_flow_capabilities(
+    flow: &CompiledRenderFlowPlan,
+    capabilities: &GpuCapabilities,
+) -> Vec<RenderExecutionGraphDiagnostic> {
+    let mut diagnostics = Vec::<RenderExecutionGraphDiagnostic>::new();
+
+    for pass in &flow.pass_order {
+        let feature = capability_for_pass_kind(pass.node().kind);
+        if !capabilities.supports(feature) {
+            diagnostics.push(
+                RenderExecutionGraphDiagnostic::error(
+                    RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
+                    format!(
+                        "normalized GPU capabilities do not support {:?} pass '{}'",
+                        pass.node().kind,
+                        pass.pass_label()
+                    ),
+                )
+                .with_flow(flow.flow_id, flow.flow_label.clone())
+                .with_pass(pass.pass_id(), pass.pass_label().to_string())
+                .with_capability(format!("feature::{feature:?}")),
+            );
+        }
+    }
+
+    for pass in &flow.execution.passes {
+        validate_execution_pass_capabilities(flow, pass, capabilities, &mut diagnostics);
+    }
+
+    for descriptor in &flow.resources.resources {
+        validate_resource_descriptor_capabilities(flow, descriptor, capabilities, &mut diagnostics);
+    }
+
+    diagnostics
+}
+
+fn capability_for_pass_kind(kind: RenderPassKind) -> GpuCapabilityFeature {
+    match kind {
+        RenderPassKind::Compute => GpuCapabilityFeature::Compute,
+        RenderPassKind::Fullscreen
+        | RenderPassKind::Graphics
+        | RenderPassKind::BuiltinUiComposite => GpuCapabilityFeature::RenderPipeline,
+        RenderPassKind::Copy => GpuCapabilityFeature::Copy,
+        RenderPassKind::Present => GpuCapabilityFeature::Presentation,
+    }
+}
+
+fn validate_execution_pass_capabilities(
+    flow: &CompiledRenderFlowPlan,
+    pass: &CompiledPassExecutionPlan,
+    capabilities: &GpuCapabilities,
+    diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
+) {
+    match pass {
+        CompiledPassExecutionPlan::Compute(value) => validate_bind_group_limit(
+            flow,
+            value.pass_id,
+            value.bindings.bind_group.entries.len(),
+            capabilities,
+            diagnostics,
+        ),
+        CompiledPassExecutionPlan::Fullscreen(value)
+        | CompiledPassExecutionPlan::Graphics(value) => {
+            validate_bind_group_limit(
+                flow,
+                value.pass_id,
+                value.bindings.bind_group.entries.len(),
+                capabilities,
+                diagnostics,
+            );
+            let limits = capabilities.limits();
+            if count_exceeds_limit(
+                value.targets.color_outputs.len(),
+                limits.max_color_attachments(),
+            ) {
+                diagnostics.push(
+                    RenderExecutionGraphDiagnostic::error(
+                        RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
+                        format!(
+                            "pass '{}' declares {} color attachments but normalized GPU capabilities support {}",
+                            value.pass_id,
+                            value.targets.color_outputs.len(),
+                            limits.max_color_attachments()
+                        ),
+                    )
+                    .with_flow(flow.flow_id, flow.flow_label.clone())
+                    .with_pass(value.pass_id, value.pass_id.to_string())
+                    .with_capability("max_color_attachments"),
+                );
+            }
+            if count_exceeds_limit(
+                value.draw_buffers.vertex_buffers.len(),
+                limits.max_vertex_buffers(),
+            ) {
+                diagnostics.push(
+                    RenderExecutionGraphDiagnostic::error(
+                        RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
+                        format!(
+                            "pass '{}' declares {} vertex buffers but normalized GPU capabilities support {}",
+                            value.pass_id,
+                            value.draw_buffers.vertex_buffers.len(),
+                            limits.max_vertex_buffers()
+                        ),
+                    )
+                    .with_flow(flow.flow_id, flow.flow_label.clone())
+                    .with_pass(value.pass_id, value.pass_id.to_string())
+                    .with_capability("max_vertex_buffers"),
+                );
+            }
+            if value.draw.is_some_and(|draw| {
+                matches!(
+                    draw.source,
+                    crate::plugins::render::CompiledDrawSource::Indirect { .. }
+                )
+            }) && !capabilities.supports(GpuCapabilityFeature::IndirectDraw)
+            {
+                diagnostics.push(
+                    RenderExecutionGraphDiagnostic::error(
+                        RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
+                        format!(
+                            "pass '{}' uses indirect draw but normalized GPU capabilities do not support it",
+                            value.pass_id
+                        ),
+                    )
+                    .with_flow(flow.flow_id, flow.flow_label.clone())
+                    .with_pass(value.pass_id, value.pass_id.to_string())
+                    .with_capability("feature::IndirectDraw"),
+                );
+            }
+        }
+        CompiledPassExecutionPlan::Copy(_)
+        | CompiledPassExecutionPlan::Present(_)
+        | CompiledPassExecutionPlan::BuiltinUiComposite(_) => {}
+    }
+}
+
+fn validate_bind_group_limit(
+    flow: &CompiledRenderFlowPlan,
+    pass_id: crate::plugins::render::RenderPassId,
+    entries: usize,
+    capabilities: &GpuCapabilities,
+    diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
+) {
+    let supported = capabilities.limits().max_bindings_per_group();
+    if !count_exceeds_limit(entries, supported) {
+        return;
+    }
+    diagnostics.push(
+        RenderExecutionGraphDiagnostic::error(
+            RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
+            format!(
+                "pass '{}' declares {} bind group entries but normalized GPU capabilities support {}",
+                pass_id, entries, supported
+            ),
+        )
+        .with_flow(flow.flow_id, flow.flow_label.clone())
+        .with_pass(pass_id, pass_id.to_string())
+        .with_capability("max_bindings_per_group"),
+    );
+}
+
+fn count_exceeds_limit(count: usize, limit: u32) -> bool {
+    match u64::try_from(count) {
+        Ok(count) => count > u64::from(limit),
+        Err(_) => true,
+    }
+}
+
+fn validate_resource_descriptor_capabilities(
+    flow: &CompiledRenderFlowPlan,
+    descriptor: &RenderResourceDeclaration,
+    capabilities: &GpuCapabilities,
+    diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
+) {
+    let limits = capabilities.limits();
+    match descriptor {
+        RenderResourceDeclaration::Uniform(value)
+            if value.size_bytes() > limits.max_uniform_buffer_binding_size() =>
+        {
+            diagnostics.push(resource_capability_diagnostic(
+                flow,
+                *descriptor.id(),
+                "max_uniform_buffer_binding_size",
+                format!(
+                    "uniform buffer '{}' requires {} bytes but normalized GPU capabilities support {}",
+                    value.id(),
+                    value.size_bytes(),
+                    limits.max_uniform_buffer_binding_size()
+                ),
+            ));
+        }
+        RenderResourceDeclaration::Storage(value)
+            if value.size_bytes() > limits.max_storage_buffer_binding_size() =>
+        {
+            diagnostics.push(resource_capability_diagnostic(
+                flow,
+                *descriptor.id(),
+                "max_storage_buffer_binding_size",
+                format!(
+                    "storage buffer '{}' requires {} bytes but normalized GPU capabilities support {}",
+                    value.id(),
+                    value.size_bytes(),
+                    limits.max_storage_buffer_binding_size()
+                ),
+            ));
+        }
+        RenderResourceDeclaration::StorageImage(value) => {
+            if !capabilities.supports(GpuCapabilityFeature::StorageTexture) {
+                diagnostics.push(resource_capability_diagnostic(
+                    flow,
+                    *descriptor.id(),
+                    "feature::StorageTexture",
+                    format!(
+                        "storage texture '{}' is not supported by normalized GPU capabilities",
+                        value.id
+                    ),
+                ));
+            }
+            validate_texture_format_capability(
+                flow,
+                *descriptor.id(),
+                value.texture.format,
+                capabilities,
+                TextureCapability::Storage,
+                diagnostics,
+            );
+        }
+        RenderResourceDeclaration::ColorAttachment(value) => validate_texture_format_capability(
+            flow,
+            *descriptor.id(),
+            value.texture.format,
+            capabilities,
+            TextureCapability::ColorAttachment,
+            diagnostics,
+        ),
+        RenderResourceDeclaration::DepthAttachment(value) => {
+            if !capabilities.supports(GpuCapabilityFeature::DepthAttachment) {
+                diagnostics.push(resource_capability_diagnostic(
+                    flow,
+                    *descriptor.id(),
+                    "feature::DepthAttachment",
+                    format!(
+                        "depth target '{}' is not supported by normalized GPU capabilities",
+                        value.id
+                    ),
+                ));
+            }
+            validate_texture_format_capability(
+                flow,
+                *descriptor.id(),
+                value.texture.format,
+                capabilities,
+                TextureCapability::DepthAttachment,
+                diagnostics,
+            );
+        }
+        RenderResourceDeclaration::Sampled(value) => validate_texture_format_capability(
+            flow,
+            *descriptor.id(),
+            value.texture.format,
+            capabilities,
+            TextureCapability::Sampled,
+            diagnostics,
+        ),
+        RenderResourceDeclaration::History(value) => validate_texture_format_capability(
+            flow,
+            *descriptor.id(),
+            value.texture.format,
+            capabilities,
+            TextureCapability::Sampled,
+            diagnostics,
+        ),
+        RenderResourceDeclaration::Uniform(_)
+        | RenderResourceDeclaration::Storage(_)
+        | RenderResourceDeclaration::TargetAlias(_)
+        | RenderResourceDeclaration::ImportedTexture(_)
+        | RenderResourceDeclaration::ImportedBuffer(_) => {}
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TextureCapability {
+    Sampled,
+    Storage,
+    ColorAttachment,
+    DepthAttachment,
+}
+
+fn validate_texture_format_capability(
+    flow: &CompiledRenderFlowPlan,
+    resource_id: crate::plugins::gpu::GpuWorkResourceId,
+    format: RenderTextureFormatPolicy,
+    capabilities: &GpuCapabilities,
+    required: TextureCapability,
+    diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
+) {
+    let RenderTextureFormatPolicy::Exact(format) = format else {
+        return;
+    };
+    let normalized = normalized_render_format(format);
+    let supported = capabilities
+        .format(normalized)
+        .is_some_and(|facts| match required {
+            TextureCapability::Sampled => facts.sampled,
+            TextureCapability::Storage => facts.storage_read && facts.storage_write,
+            TextureCapability::ColorAttachment => facts.color_attachment,
+            TextureCapability::DepthAttachment => facts.depth_stencil,
+        });
+    if supported {
+        return;
+    }
+    diagnostics.push(resource_capability_diagnostic(
+        flow,
+        resource_id,
+        format!("format::{normalized:?}::{required:?}"),
+        format!(
+            "resource '{}' requires {:?} support for normalized format {:?}",
+            resource_id, required, normalized
+        ),
+    ));
+}
+
+pub const fn normalized_render_format(format: RenderTextureTargetFormat) -> GpuTextureFormat {
+    match format {
+        RenderTextureTargetFormat::Rgba8Unorm => GpuTextureFormat::Rgba8Unorm,
+        RenderTextureTargetFormat::Rgba8UnormSrgb => GpuTextureFormat::Rgba8UnormSrgb,
+        RenderTextureTargetFormat::R32Uint => GpuTextureFormat::R32Uint,
+        RenderTextureTargetFormat::Depth32Float => GpuTextureFormat::Depth32Float,
+    }
+}
+
+fn resource_capability_diagnostic(
+    flow: &CompiledRenderFlowPlan,
+    resource_id: crate::plugins::gpu::GpuWorkResourceId,
+    capability: impl Into<String>,
+    message: impl Into<String>,
+) -> RenderExecutionGraphDiagnostic {
+    RenderExecutionGraphDiagnostic::error(
+        RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
+        message,
+    )
+    .with_flow(flow.flow_id, flow.flow_label.clone())
+    .with_resource(resource_id, flow.resource_label(resource_id))
+    .with_capability(capability)
+}
+
+pub fn bind_group_entry_count(pass: &CompiledPassExecutionPlan) -> usize {
+    match pass {
+        CompiledPassExecutionPlan::Compute(value) => value.bindings.bind_group.entries.len(),
+        CompiledPassExecutionPlan::Fullscreen(value)
+        | CompiledPassExecutionPlan::Graphics(value) => value.bindings.bind_group.entries.len(),
+        CompiledPassExecutionPlan::Copy(_)
+        | CompiledPassExecutionPlan::Present(_)
+        | CompiledPassExecutionPlan::BuiltinUiComposite(_) => 0,
+    }
+}
+
+pub fn binding_entry_resource_label(entry: &CompiledBindingEntry) -> &'static str {
+    match entry {
+        CompiledBindingEntry::SampledTexture { .. } => "sampled_texture",
+        CompiledBindingEntry::Sampler => "sampler",
+        CompiledBindingEntry::StorageTexture { .. } => "storage_texture",
+        CompiledBindingEntry::UniformBuffer { .. } => "uniform_buffer",
+        CompiledBindingEntry::StorageBuffer { .. } => "storage_buffer",
+    }
+}

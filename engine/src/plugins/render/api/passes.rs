@@ -1,13 +1,13 @@
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::{
     ComputeDispatchBinding, ComputeDispatchDescriptor, PassParamBinding, RenderFlow,
-    RenderFlowAuthoringError, StorageArrayHandle, UniformHandle,
+    RenderFlowAuthoringError,
 };
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
-    DrawIndexedIndirectArgs, GpuParams, IndirectDrawArgsBuffer, RenderDrawDescriptor,
-    RenderIndirectDrawResource, RenderPassId, RenderPassKind, RenderPassNode,
+    DrawIndexedIndirectArgs, DrawIndirectArgs, GpuParams, IndirectDrawArgsBuffer,
+    RenderDrawDescriptor, RenderIndirectDrawResource, RenderPassId, RenderPassKind, RenderPassNode,
     RenderPassShapeIntent, RenderPassViewScope, RenderRasterState, RenderVertexBufferLayout,
     ShaderHandle,
 };
@@ -63,18 +63,22 @@ impl ComputePassBuilder {
         Ok(self)
     }
 
-    pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
+    pub fn uniform_from_state_to<S, U, F>(mut self, handle: GpuBufferHandle, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        add_uniform_state_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
+        add_uniform_state_binding::<S, U, F>(
+            &mut self.pass,
+            handle.diagnostic_identity(),
+            projection,
+        );
         self
     }
 
-    pub fn bind_storage<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
-        let id = *handle.id();
+    pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
+        let id = handle.diagnostic_identity();
         push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.writes, id);
         self
@@ -202,19 +206,23 @@ impl FullscreenPassBuilder {
         Ok(self)
     }
 
-    pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
+    pub fn uniform_from_state_to<S, U, F>(mut self, handle: GpuBufferHandle, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        add_uniform_state_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
+        add_uniform_state_binding::<S, U, F>(
+            &mut self.pass,
+            handle.diagnostic_identity(),
+            projection,
+        );
         self
     }
 
     pub fn uniform_from_state_with_surface_to<S, U, F>(
         mut self,
-        handle: UniformHandle<U>,
+        handle: GpuBufferHandle,
         projection: F,
     ) -> Self
     where
@@ -222,12 +230,16 @@ impl FullscreenPassBuilder {
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
-        add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
+        add_uniform_state_with_surface_binding::<S, U, F>(
+            &mut self.pass,
+            handle.diagnostic_identity(),
+            projection,
+        );
         self
     }
 
-    pub fn bind_storage<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
-        push_unique_resource(&mut self.pass.reads, *handle.id());
+    pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
+        push_unique_resource(&mut self.pass.reads, handle.diagnostic_identity());
         self
     }
 
@@ -359,19 +371,23 @@ impl GraphicsPassBuilder {
         Ok(self)
     }
 
-    pub fn uniform_from_state_to<S, U, F>(mut self, handle: UniformHandle<U>, projection: F) -> Self
+    pub fn uniform_from_state_to<S, U, F>(mut self, handle: GpuBufferHandle, projection: F) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        add_uniform_state_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
+        add_uniform_state_binding::<S, U, F>(
+            &mut self.pass,
+            handle.diagnostic_identity(),
+            projection,
+        );
         self
     }
 
     pub fn uniform_from_state_with_surface_to<S, U, F>(
         mut self,
-        handle: UniformHandle<U>,
+        handle: GpuBufferHandle,
         projection: F,
     ) -> Self
     where
@@ -379,12 +395,16 @@ impl GraphicsPassBuilder {
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
-        add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, *handle.id(), projection);
+        add_uniform_state_with_surface_binding::<S, U, F>(
+            &mut self.pass,
+            handle.diagnostic_identity(),
+            projection,
+        );
         self
     }
 
-    pub fn bind_storage<T>(mut self, handle: StorageArrayHandle<T>) -> Self {
-        push_unique_resource(&mut self.pass.reads, *handle.id());
+    pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
+        push_unique_resource(&mut self.pass.reads, handle.diagnostic_identity());
         self
     }
 
@@ -435,31 +455,24 @@ impl GraphicsPassBuilder {
         self
     }
 
-    pub fn vertex_buffer<T>(
+    pub fn vertex_buffer(self, handle: GpuBufferHandle, layout: RenderVertexBufferLayout) -> Self {
+        self.push_vertex_buffer_resource(handle.diagnostic_identity(), layout)
+    }
+
+    pub fn index_buffer(self, handle: GpuBufferHandle) -> Self {
+        self.push_index_buffer_resource(handle.diagnostic_identity())
+    }
+
+    pub fn instance_buffer(
         self,
-        handle: StorageArrayHandle<T>,
+        handle: GpuBufferHandle,
         layout: RenderVertexBufferLayout,
     ) -> Self {
-        self.push_vertex_buffer_resource(*handle.id(), layout)
+        self.push_instance_buffer_resource(handle.diagnostic_identity(), layout)
     }
 
-    pub fn index_buffer<T>(self, handle: StorageArrayHandle<T>) -> Self {
-        self.push_index_buffer_resource(*handle.id())
-    }
-
-    pub fn instance_buffer<T>(
-        self,
-        handle: StorageArrayHandle<T>,
-        layout: RenderVertexBufferLayout,
-    ) -> Self {
-        self.push_instance_buffer_resource(*handle.id(), layout)
-    }
-
-    pub fn indirect_buffer<T: IndirectDrawArgsBuffer>(
-        mut self,
-        handle: StorageArrayHandle<T>,
-    ) -> Self {
-        let id = *handle.id();
+    pub fn indirect_buffer(mut self, handle: GpuBufferHandle) -> Self {
+        let id = handle.diagnostic_identity();
         push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.indirect_buffers, id);
         self
@@ -480,30 +493,42 @@ impl GraphicsPassBuilder {
         self
     }
 
-    pub fn draw_indirect<T: IndirectDrawArgsBuffer>(
+    pub fn draw_indirect(
         mut self,
-        args_buffer: StorageArrayHandle<T>,
+        args_buffer: GpuBufferHandle,
         vertex_count: u32,
         instance_count: u32,
-    ) -> Self {
-        let id = *args_buffer.id();
+    ) -> Result<Self, RenderFlowAuthoringError> {
+        let id = args_buffer.diagnostic_identity();
+        let element_count = self
+            .flow
+            .indirect_buffer_element_count::<DrawIndirectArgs>(&args_buffer)?;
         push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.indirect_buffers, id);
         self.pass.draw = Some(RenderDrawDescriptor::indirect(
             vertex_count,
             instance_count,
-            RenderIndirectDrawResource::new(id, T::ARGS_KIND, args_buffer.len(), T::BYTE_SIZE, 0),
+            RenderIndirectDrawResource::new(
+                id,
+                DrawIndirectArgs::ARGS_KIND,
+                element_count,
+                DrawIndirectArgs::BYTE_SIZE,
+                0,
+            ),
         ));
-        self
+        Ok(self)
     }
 
     pub fn draw_indexed_indirect(
         mut self,
-        args_buffer: StorageArrayHandle<DrawIndexedIndirectArgs>,
+        args_buffer: GpuBufferHandle,
         index_count: u32,
         instance_count: u32,
-    ) -> Self {
-        let id = *args_buffer.id();
+    ) -> Result<Self, RenderFlowAuthoringError> {
+        let id = args_buffer.diagnostic_identity();
+        let element_count = self
+            .flow
+            .indirect_buffer_element_count::<DrawIndexedIndirectArgs>(&args_buffer)?;
         push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.indirect_buffers, id);
         self.pass.draw = Some(RenderDrawDescriptor::indirect(
@@ -512,12 +537,12 @@ impl GraphicsPassBuilder {
             RenderIndirectDrawResource::new(
                 id,
                 DrawIndexedIndirectArgs::ARGS_KIND,
-                args_buffer.len(),
+                element_count,
                 DrawIndexedIndirectArgs::BYTE_SIZE,
                 0,
             ),
         ));
-        self
+        Ok(self)
     }
 
     pub fn draw_with_offsets(
@@ -536,16 +561,19 @@ impl GraphicsPassBuilder {
         self
     }
 
-    pub fn draw_indirect_with_offsets<T: IndirectDrawArgsBuffer>(
+    pub fn draw_indirect_with_offsets(
         mut self,
-        args_buffer: StorageArrayHandle<T>,
+        args_buffer: GpuBufferHandle,
         vertex_count: u32,
         instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
         byte_offset: u64,
-    ) -> Self {
-        let id = *args_buffer.id();
+    ) -> Result<Self, RenderFlowAuthoringError> {
+        let id = args_buffer.diagnostic_identity();
+        let element_count = self
+            .flow
+            .indirect_buffer_element_count::<DrawIndirectArgs>(&args_buffer)?;
         push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.indirect_buffers, id);
         self.pass.draw = Some(RenderDrawDescriptor::indirect_with_offsets(
@@ -555,13 +583,13 @@ impl GraphicsPassBuilder {
             first_instance,
             RenderIndirectDrawResource::new(
                 id,
-                T::ARGS_KIND,
-                args_buffer.len(),
-                T::BYTE_SIZE,
+                DrawIndirectArgs::ARGS_KIND,
+                element_count,
+                DrawIndirectArgs::BYTE_SIZE,
                 byte_offset,
             ),
         ));
-        self
+        Ok(self)
     }
 
     pub fn allow_instanced_fullscreen(
@@ -772,7 +800,7 @@ where
 {
     Ok(*flow
         .allocate_uniform_resource::<U>(pass.label.as_str())?
-        .id())
+        .diagnostic_identity_ref())
 }
 
 fn add_uniform_state_binding<S, U, F>(

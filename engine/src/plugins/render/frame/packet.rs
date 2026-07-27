@@ -5,8 +5,8 @@ use super::{
 use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
-    RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId, RenderPassId,
-    backend::RenderSurfaceId,
+    RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId,
+    RenderGpuResourceAdapterError, RenderPassId, RenderTargetAliasKey, backend::RenderSurfaceId,
 };
 use crate::runtime::NativeWindowId;
 use product::RenderProductSelection;
@@ -239,7 +239,7 @@ pub struct PreparedFlowInvocation {
     pub flow_id: RenderFlowId,
     pub view_id: String,
     pub inputs: PreparedFlowInputs,
-    pub target_alias_bindings: BTreeMap<String, PreparedTargetBinding>,
+    pub target_alias_bindings: BTreeMap<RenderTargetAliasKey, PreparedTargetBinding>,
     pub history_signature: Option<String>,
 }
 
@@ -269,7 +269,7 @@ pub struct PreparedFlowInvocationRequest {
     pub invocation_id: PreparedFlowInvocationId,
     pub flow_id: RenderFlowId,
     pub view_id: String,
-    pub target_alias_bindings: BTreeMap<String, PreparedTargetBinding>,
+    pub target_alias_bindings: BTreeMap<RenderTargetAliasKey, PreparedTargetBinding>,
     pub uniform_overrides: BTreeMap<GpuWorkResourceId, Vec<u8>>,
     pub history_signature: Option<String>,
 }
@@ -294,24 +294,31 @@ impl PreparedFlowInvocationRequest {
         mut self,
         alias: impl Into<String>,
         binding: PreparedTargetBinding,
-    ) -> Self {
-        self.target_alias_bindings.insert(alias.into(), binding);
-        self
+    ) -> Result<Self, RenderGpuResourceAdapterError> {
+        self.target_alias_bindings
+            .insert(RenderTargetAliasKey::new(alias)?, binding);
+        Ok(self)
     }
 
     pub fn bind_dynamic_texture_alias(
         self,
         alias: impl Into<String>,
         key: RenderDynamicTextureTargetKey,
-    ) -> Self {
+    ) -> Result<Self, RenderGpuResourceAdapterError> {
         self.bind_target_alias(alias, PreparedTargetBinding::DynamicTexture(key))
     }
 
-    pub fn bind_surface_color_alias(self, alias: impl Into<String>) -> Self {
+    pub fn bind_surface_color_alias(
+        self,
+        alias: impl Into<String>,
+    ) -> Result<Self, RenderGpuResourceAdapterError> {
         self.bind_target_alias(alias, PreparedTargetBinding::SurfaceColor)
     }
 
-    pub fn bind_surface_depth_alias(self, alias: impl Into<String>) -> Self {
+    pub fn bind_surface_depth_alias(
+        self,
+        alias: impl Into<String>,
+    ) -> Result<Self, RenderGpuResourceAdapterError> {
         self.bind_target_alias(alias, PreparedTargetBinding::SurfaceDepth)
     }
 
@@ -319,7 +326,7 @@ impl PreparedFlowInvocationRequest {
         self,
         alias: impl Into<String>,
         resource_id: GpuWorkResourceId,
-    ) -> Self {
+    ) -> Result<Self, RenderGpuResourceAdapterError> {
         self.bind_target_alias(alias, PreparedTargetBinding::FlowOwned(resource_id))
     }
 

@@ -119,7 +119,7 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .filter(|resource| {
             matches!(
                 resource,
-                engine::plugins::render::RenderResourceDescriptor::TargetAlias(_)
+                engine::plugins::render::RenderResourceDeclaration::TargetAlias(_)
             )
         })
         .count();

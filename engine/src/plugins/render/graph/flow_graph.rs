@@ -1,5 +1,5 @@
 use crate::plugins::render::graph::{PassGraph, ResourceGraph};
-use crate::plugins::render::{RenderFlowId, RenderPassNode, RenderResourceDescriptor};
+use crate::plugins::render::{RenderFlowId, RenderPassNode, RenderResourceDeclaration};
 
 #[derive(Debug, Clone)]
 pub struct RenderFlowGraph {
@@ -19,7 +19,7 @@ impl RenderFlowGraph {
         }
     }
 
-    pub fn add_resource(&mut self, descriptor: RenderResourceDescriptor) {
+    pub fn add_resource(&mut self, descriptor: RenderResourceDeclaration) {
         self.resources.add_resource(descriptor);
     }
 

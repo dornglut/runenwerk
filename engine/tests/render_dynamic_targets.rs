@@ -4,16 +4,17 @@ use engine::plugins::render::{
     PreparedFlowInvocationRequest, PreparedFrameContext, PreparedFrameContributions,
     PreparedRenderFrame, PreparedRenderFrameRequestError, PreparedRenderFrameRequestKind,
     PreparedRenderFrameRequestResource, PreparedShaderSnapshot, PreparedSurfaceInfo,
-    PreparedTargetBinding, PreparedViewFrame, PreparedViewKind, RenderBackendCapabilityProfile,
-    RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
-    RenderDynamicTextureTargetDescriptorError, RenderDynamicTextureTargetKey,
-    RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadDescriptor,
-    RenderExecutionGraphDiagnosticKind, RenderFlow, RenderFlowId, RenderFrameProducerId,
-    RenderProductSurfaceDiagnosticKind, RenderProductSurfaceDiagnosticSeverity,
-    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
-    RenderProductSurfaceRequestKind, RenderProductSurfaceStatusKind, RenderTextureSampleMode,
+    PreparedTargetBinding, PreparedViewFrame, PreparedViewKind, RenderDynamicTextureRetention,
+    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetDescriptorError,
+    RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource,
+    RenderDynamicTextureUploadDescriptor, RenderExecutionGraphDiagnosticKind, RenderFlow,
+    RenderFlowId, RenderFrameProducerId, RenderProductSurfaceDiagnosticKind,
+    RenderProductSurfaceDiagnosticSeverity, RenderProductSurfaceManifest,
+    RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch, RenderProductSurfaceRequestKind,
+    RenderProductSurfaceStatusKind, RenderTargetAliasKey, RenderTextureSampleMode,
     RenderTextureTargetFormat, RenderTextureTargetUsage, RenderTextureUploadAlphaMode,
-    compile_flow_plan, prepared_render_frame_preflight_cache_key, validate_prepared_render_frame,
+    compile_flow_plan, current_runtime_gpu_capabilities, prepared_render_frame_preflight_cache_key,
+    validate_prepared_render_frame,
 };
 use std::collections::BTreeMap;
 use ui_render_data::{ProductSurfaceTextureBindingSource, ViewportSurfaceBindingRegistry};
@@ -56,6 +57,10 @@ fn upload_descriptor(
 
 fn producer(raw: u64) -> RenderFrameProducerId {
     RenderFrameProducerId::try_from_raw(raw).unwrap()
+}
+
+fn alias_key(value: &str) -> RenderTargetAliasKey {
+    RenderTargetAliasKey::new(value).expect("test alias key should be valid")
 }
 
 fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
@@ -105,7 +110,7 @@ fn invocation(
     invocation_id: &str,
     flow_id: RenderFlowId,
     view_id: &str,
-    bindings: BTreeMap<String, PreparedTargetBinding>,
+    bindings: BTreeMap<RenderTargetAliasKey, PreparedTargetBinding>,
 ) -> PreparedFlowInvocation {
     PreparedFlowInvocation {
         invocation_id: PreparedFlowInvocationId::new(invocation_id),
@@ -163,6 +168,24 @@ fn render_dynamic_targets_descriptor_constructors_build_valid_common_shapes() {
     assert!(storage.usage.storage);
     assert_eq!(depth.format, RenderTextureTargetFormat::Depth32Float);
     assert!(depth.usage.depth_attachment);
+}
+
+#[test]
+fn prepared_target_alias_bindings_validate_and_normalize_keys() {
+    let flow_id = RenderFlowId::try_from_raw(7).unwrap();
+    let request = PreparedFlowInvocationRequest::new("alias.keys", flow_id, "view")
+        .bind_surface_color_alias("  scene_color  ")
+        .expect("non-empty alias key should be valid");
+
+    assert_eq!(
+        request.target_alias_bindings.get(&alias_key("scene_color")),
+        Some(&PreparedTargetBinding::SurfaceColor)
+    );
+    assert!(
+        PreparedFlowInvocationRequest::new("alias.empty", flow_id, "view")
+            .bind_surface_color_alias("   ")
+            .is_err()
+    );
 }
 
 #[test]
@@ -273,9 +296,11 @@ fn render_dynamic_targets_product_surface_manifest_reports_ui_sampleability_and_
     let flow_id = RenderFlowId::try_from_raw(7).unwrap();
     let first = PreparedFlowInvocationRequest::new("history.a", flow_id, "view.a")
         .bind_dynamic_texture_alias("surface", key.clone())
+        .expect("test alias key should be valid")
         .with_history_signature("camera:a");
     let second = PreparedFlowInvocationRequest::new("history.b", flow_id, "view.b")
         .bind_dynamic_texture_alias("surface", key.clone())
+        .expect("test alias key should be valid")
         .with_history_signature("camera:b");
     let manifest = RenderProductSurfaceManifest::new(producer(79), "test.product.history")
         .with_dynamic_target(descriptor)
@@ -387,15 +412,15 @@ fn render_dynamic_targets_preflight_reports_missing_target_alias_binding() {
         Vec::new(),
     );
 
-    let report = validate_prepared_render_frame(
-        &frame,
-        &[compiled],
-        &RenderBackendCapabilityProfile::runtime_default(),
-    );
+    let report =
+        validate_prepared_render_frame(&frame, &[compiled], &current_runtime_gpu_capabilities());
 
     assert!(report.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::TargetAliasMissingBinding
-            && diagnostic.alias_label.as_deref() == Some("scene_color")
+            && diagnostic
+                .alias_binding_key
+                .as_ref()
+                .is_some_and(|key| key.as_str() == "scene_color")
             && diagnostic.view_id.as_deref() == Some("viewport.1")
     }));
 }
@@ -431,7 +456,7 @@ fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_s
     );
     let mut bindings = BTreeMap::new();
     bindings.insert(
-        "scene_color".to_string(),
+        alias_key("scene_color"),
         PreparedTargetBinding::DynamicTexture(key.clone()),
     );
     let frame = prepared_frame_for_invocations(
@@ -448,16 +473,16 @@ fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_s
         vec![descriptor],
     );
 
-    let report = validate_prepared_render_frame(
-        &frame,
-        &[compiled],
-        &RenderBackendCapabilityProfile::runtime_default(),
-    );
+    let report =
+        validate_prepared_render_frame(&frame, &[compiled], &current_runtime_gpu_capabilities());
 
     assert!(report.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::DynamicTargetUsageMismatch
             && diagnostic.dynamic_target_key.as_ref() == Some(&key)
-            && diagnostic.alias_label.as_deref() == Some("scene_color")
+            && diagnostic
+                .alias_binding_key
+                .as_ref()
+                .is_some_and(|key| key.as_str() == "scene_color")
     }));
 }
 
@@ -487,7 +512,7 @@ fn render_dynamic_targets_preflight_reports_typed_history_signature_conflicts() 
         "viewport.1.a",
         compiled.flow_id,
         "viewport.1",
-        [("scene_color".to_string(), binding.clone())]
+        [(alias_key("scene_color"), binding.clone())]
             .into_iter()
             .collect(),
     );
@@ -496,7 +521,7 @@ fn render_dynamic_targets_preflight_reports_typed_history_signature_conflicts() 
         "viewport.1.b",
         compiled.flow_id,
         "viewport.1",
-        [("scene_color".to_string(), binding)].into_iter().collect(),
+        [(alias_key("scene_color"), binding)].into_iter().collect(),
     );
     second.history_signature = Some("camera:b".to_string());
     let frame = prepared_frame_for_invocations(
@@ -508,11 +533,8 @@ fn render_dynamic_targets_preflight_reports_typed_history_signature_conflicts() 
         vec![descriptor],
     );
 
-    let report = validate_prepared_render_frame(
-        &frame,
-        &[compiled],
-        &RenderBackendCapabilityProfile::runtime_default(),
-    );
+    let report =
+        validate_prepared_render_frame(&frame, &[compiled], &current_runtime_gpu_capabilities());
 
     assert!(report.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::HistorySignatureConflict
@@ -543,7 +565,7 @@ fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_unifor
     );
     let mut bindings = BTreeMap::new();
     bindings.insert(
-        "scene_color".to_string(),
+        alias_key("scene_color"),
         PreparedTargetBinding::DynamicTexture(key),
     );
     let mut invocation = invocation("viewport.cache", compiled.flow_id, "viewport.1", bindings);
@@ -563,7 +585,7 @@ fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_unifor
     let baseline = prepared_render_frame_preflight_cache_key(
         &frame,
         std::slice::from_ref(&compiled),
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     );
 
     frame.context.frame_index += 1;
@@ -577,7 +599,7 @@ fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_unifor
     let changed_values = prepared_render_frame_preflight_cache_key(
         &frame,
         std::slice::from_ref(&compiled),
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     );
 
     assert_eq!(baseline, changed_values);
@@ -606,7 +628,7 @@ fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inpu
     );
     let mut bindings = BTreeMap::new();
     bindings.insert(
-        "scene_color".to_string(),
+        alias_key("scene_color"),
         PreparedTargetBinding::DynamicTexture(key.clone()),
     );
     let mut invocation = invocation(
@@ -632,14 +654,14 @@ fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inpu
     let baseline = prepared_render_frame_preflight_cache_key(
         &frame,
         std::slice::from_ref(&compiled),
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     );
 
     let mut alias_changed = frame.clone();
     alias_changed.flow_invocations[0]
         .target_alias_bindings
         .insert(
-            "scene_color".to_string(),
+            alias_key("scene_color"),
             PreparedTargetBinding::DynamicTexture(RenderDynamicTextureTargetKey::new(
                 "preflight",
                 "cache-other",
@@ -666,7 +688,7 @@ fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inpu
         let changed_key = prepared_render_frame_preflight_cache_key(
             &changed,
             std::slice::from_ref(&compiled),
-            &RenderBackendCapabilityProfile::runtime_default(),
+            &current_runtime_gpu_capabilities(),
         );
         assert_ne!(baseline, changed_key);
     }
@@ -782,8 +804,11 @@ fn render_dynamic_targets_prepared_frame_requests_carry_offscreen_view_and_targe
             .with_history_signature("viewport.7:view"),
         PreparedFlowInvocationRequest::new("viewport.7.editor", flow_id, "viewport.7")
             .bind_dynamic_texture_alias("scene_color", dynamic_key.clone())
+            .expect("test alias key should be valid")
             .bind_surface_color_alias("surface_color")
+            .expect("test alias key should be valid")
             .bind_flow_owned_alias("owned_color", flow_owned_id)
+            .expect("test alias key should be valid")
             .with_uniform_override(uniform_id, vec![1, 2, 3, 4])
             .with_history_signature("viewport.7:v1"),
     )
@@ -814,7 +839,9 @@ fn render_dynamic_targets_prepared_frame_requests_carry_offscreen_view_and_targe
     assert_eq!(invocations[0].flow_id, flow_id);
     assert_eq!(invocations[0].view_id, "viewport.7");
     assert_eq!(
-        invocations[0].target_alias_bindings.get("scene_color"),
+        invocations[0]
+            .target_alias_bindings
+            .get(&alias_key("scene_color")),
         Some(&PreparedTargetBinding::DynamicTexture(dynamic_key))
     );
     assert_eq!(
@@ -822,11 +849,15 @@ fn render_dynamic_targets_prepared_frame_requests_carry_offscreen_view_and_targe
         Some("viewport.7:v1")
     );
     assert_eq!(
-        invocations[0].target_alias_bindings.get("surface_color"),
+        invocations[0]
+            .target_alias_bindings
+            .get(&alias_key("surface_color")),
         Some(&PreparedTargetBinding::SurfaceColor)
     );
     assert_eq!(
-        invocations[0].target_alias_bindings.get("owned_color"),
+        invocations[0]
+            .target_alias_bindings
+            .get(&alias_key("owned_color")),
         Some(&PreparedTargetBinding::FlowOwned(flow_owned_id))
     );
     assert_eq!(

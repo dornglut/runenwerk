@@ -1,10 +1,13 @@
-use super::GpuPrimitiveValidationError;
-use crate::plugins::gpu::GpuWorkResourceId;
-use crate::plugins::render::StorageArrayHandle;
+use super::{GpuPrimitiveValidationError, buffer_capacity};
+use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, crate::plugins::render::GpuStorage)]
 pub struct U32Counter {
     pub value: u32,
+}
+
+impl U32Counter {
+    pub const BYTE_SIZE: u64 = 4;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,7 +21,7 @@ pub struct CounterResetDescriptor {
 impl CounterResetDescriptor {
     pub fn new(
         label: impl Into<String>,
-        counters: StorageArrayHandle<U32Counter>,
+        counters: GpuBufferHandle,
         counter_count: u32,
     ) -> Result<Self, GpuPrimitiveValidationError> {
         Self::with_reset_value(label, counters, counter_count, 0)
@@ -26,20 +29,24 @@ impl CounterResetDescriptor {
 
     pub fn with_reset_value(
         label: impl Into<String>,
-        counters: StorageArrayHandle<U32Counter>,
+        counters: GpuBufferHandle,
         counter_count: u32,
         reset_value: u32,
     ) -> Result<Self, GpuPrimitiveValidationError> {
         let descriptor = Self {
             label: label.into(),
-            counters: *counters.id(),
+            counters: counters.diagnostic_identity(),
             counter_count,
             reset_value,
         };
         descriptor.validate()?;
         super::validate_capacity(
             format!("{}.counters", descriptor.label),
-            counters.len(),
+            buffer_capacity(
+                &counters,
+                U32Counter::BYTE_SIZE,
+                format!("{}.counters", descriptor.label),
+            )?,
             u64::from(counter_count),
         )?;
         Ok(descriptor)

@@ -2,15 +2,15 @@ use super::{
     CompiledPassDescriptor, RenderPassKind, RenderPassNode, RenderPassViewScope, ResourceGraph,
 };
 use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::render::RenderImportedTextureSemantic;
 use crate::plugins::render::api::ComputeDispatchDescriptor;
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
-use crate::plugins::render::resource::ImportedTextureSemantic;
 use crate::plugins::render::{
     RenderDrawDescriptor, RenderDrawSource, RenderFixedStepRegionId, RenderIndirectDrawArgsKind,
-    RenderPassId, RenderPrimitiveTopology, RenderRasterState, RenderResourceDescriptor,
-    RenderShaderConstant, RenderShaderReference, RenderTargetAliasKind, RenderVertexAttribute,
-    RenderVertexBufferLayout, RenderVertexStepMode,
+    RenderPassId, RenderPrimitiveTopology, RenderRasterState, RenderResourceDeclaration,
+    RenderShaderConstant, RenderShaderReference, RenderTargetAliasKey, RenderTargetAliasKind,
+    RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use std::any::TypeId;
 use std::collections::BTreeMap;
@@ -262,7 +262,7 @@ pub enum CompiledResourceRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledTargetAliasRef {
     pub resource_id: GpuWorkResourceId,
-    pub label: String,
+    pub binding_key: RenderTargetAliasKey,
     pub kind: RenderTargetAliasKind,
 }
 
@@ -545,11 +545,7 @@ fn is_buffer_like_resource(resources: &ResourceGraph, resource: &GpuWorkResource
             .resources
             .iter()
             .find(|descriptor| descriptor.id() == resource),
-        Some(
-            RenderResourceDescriptor::UniformBuffer(_)
-                | RenderResourceDescriptor::StorageBuffer(_)
-                | RenderResourceDescriptor::ImportedBuffer(_)
-        )
+        Some(RenderResourceDeclaration::Storage(_) | RenderResourceDeclaration::ImportedBuffer(_))
     )
 }
 
@@ -669,25 +665,24 @@ fn compile_resource_ref(
         .iter()
         .find(|descriptor| descriptor.id() == resource)
     {
-        Some(RenderResourceDescriptor::TargetAlias(value)) => {
+        Some(RenderResourceDeclaration::TargetAlias(value)) => {
             CompiledResourceRef::TargetAlias(CompiledTargetAliasRef {
-                resource_id: value.id,
-                label: value.label.clone(),
-                kind: value.kind,
+                resource_id: value.id(),
+                binding_key: value.binding_key().clone(),
+                kind: value.kind(),
             })
         }
-        Some(RenderResourceDescriptor::ImportedTexture(value)) => match value.semantic {
-            ImportedTextureSemantic::SurfaceColor => {
+        Some(RenderResourceDeclaration::ImportedTexture(value)) => match value.semantic {
+            RenderImportedTextureSemantic::SurfaceColor => {
                 CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceColor)
             }
-            ImportedTextureSemantic::SurfaceDepth => {
+            RenderImportedTextureSemantic::SurfaceDepth => {
                 CompiledResourceRef::ImportedBuiltin(CompiledBuiltinImport::SurfaceDepth)
             }
-            ImportedTextureSemantic::HistoryTexture | ImportedTextureSemantic::External => {
-                CompiledResourceRef::Imported(*resource)
-            }
+            RenderImportedTextureSemantic::HistoryTexture
+            | RenderImportedTextureSemantic::External => CompiledResourceRef::Imported(*resource),
         },
-        Some(RenderResourceDescriptor::ImportedBuffer(_)) => {
+        Some(RenderResourceDeclaration::ImportedBuffer(_)) => {
             CompiledResourceRef::Imported(*resource)
         }
         Some(_) | None => CompiledResourceRef::FlowOwned(*resource),
@@ -718,8 +713,9 @@ mod tests {
     fn storage_read_write_pass() -> (RenderPassNode, ResourceGraph, GpuWorkResourceId) {
         let storage_id = resource(7);
         let mut resources = ResourceGraph::default();
-        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(
+        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
             storage_id,
+            "test.storage",
         ));
         let mut pass = RenderPassNode::new(
             RenderPassId::try_from_raw(1).unwrap(),
@@ -770,7 +766,10 @@ mod tests {
     fn write_texture_emits_write_only_storage_texture_binding() {
         let texture_id = resource(8);
         let mut resources = ResourceGraph::default();
-        resources.add_resource(RenderResourceDescriptor::storage_texture(texture_id));
+        resources.add_resource(RenderResourceDeclaration::declare_storage_texture(
+            texture_id,
+            "test.texture",
+        ));
         let mut pass = RenderPassNode::new(
             RenderPassId::try_from_raw(2).unwrap(),
             "test.texture.write",
@@ -807,12 +806,17 @@ mod tests {
         let write_only = resource(3);
 
         let mut resources = ResourceGraph::default();
-        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(
+        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
             read_only,
+            "test.read_only",
         ));
-        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(shared));
-        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(
+        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
+            shared,
+            "test.shared",
+        ));
+        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
             write_only,
+            "test.write_only",
         ));
 
         let mut pass = RenderPassNode::new(
@@ -862,9 +866,18 @@ mod tests {
         let third = resource(3);
 
         let mut resources = ResourceGraph::default();
-        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(first));
-        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(second));
-        resources.add_resource(RenderResourceDescriptor::imported_external_buffer(third));
+        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
+            first,
+            "test.first",
+        ));
+        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
+            second,
+            "test.second",
+        ));
+        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
+            third,
+            "test.third",
+        ));
 
         let mut pass = RenderPassNode::new(
             RenderPassId::try_from_raw(12).unwrap(),

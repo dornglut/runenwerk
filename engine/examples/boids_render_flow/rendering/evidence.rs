@@ -1,14 +1,14 @@
 use crate::rendering::{BoidsRenderState, DEFAULT_BOID_COUNT, build_render_flow};
 use anyhow::Result;
+use engine::plugins::gpu::GpuCapabilities;
 use engine::plugins::render::inspect::{
     RenderGpuTimingDiagnostic, RenderPassTimingEvidence, inspect_compiled_render_flow_plan,
 };
 use engine::plugins::render::{
     CompiledPassExecutionPlan, CompiledRenderFlowPlan, PreparedFlowInputs, PreparedFlowInvocation,
     PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot,
-    PreparedSurfaceInfo, PreparedViewFrame, RenderBackendCapabilityProfile,
-    RenderFixedStepIterationUniform, RenderPassId, compile_flow_plan_checked,
-    preflight_prepared_render_frame,
+    PreparedSurfaceInfo, PreparedViewFrame, RenderFixedStepIterationUniform, RenderPassId,
+    compile_flow_plan_checked, current_runtime_gpu_capabilities, preflight_prepared_render_frame,
 };
 use std::time::Instant;
 use ui_render_data::ViewportSurfaceBindingRegistry;
@@ -203,13 +203,13 @@ impl BoidsProductionEvidenceReport {
 pub(crate) fn production_evidence_report() -> Result<BoidsProductionEvidenceReport> {
     let flow = build_render_flow();
     let state = BoidsRenderState::default();
-    let profile = RenderBackendCapabilityProfile::runtime_default();
-    let compiled = compile_flow_plan_checked(&flow, &profile)?;
+    let capabilities = current_runtime_gpu_capabilities();
+    let compiled = compile_flow_plan_checked(&flow, &capabilities)?;
     let inspection = inspect_compiled_render_flow_plan(&compiled);
     let passes = pass_evidence(&compiled);
     let graph_fixed_step_regions = fixed_step_region_evidence(&compiled);
     let gpu_timing_evidence = unsupported_gpu_timing_evidence(&compiled, &passes);
-    let cpu_timing_evidence = measure_cpu_timing_evidence(&compiled, &profile)?;
+    let cpu_timing_evidence = measure_cpu_timing_evidence(&compiled, &capabilities)?;
     let camera_projection_evidence = camera_projection_evidence(&state);
     let resize_pixel_evidence = resize_pixel_evidence(&state);
     let camera_projection_is_valid = camera_projection_evidence
@@ -329,11 +329,15 @@ fn format_optional_millis(value: Option<f32>) -> String {
 
 fn measure_cpu_timing_evidence(
     compiled: &CompiledRenderFlowPlan,
-    profile: &RenderBackendCapabilityProfile,
+    capabilities: &GpuCapabilities,
 ) -> Result<BoidsProductionCpuTimingEvidence> {
     let prepared_frame = prepared_frame_for_flow(compiled);
     let start = Instant::now();
-    preflight_prepared_render_frame(&prepared_frame, std::slice::from_ref(compiled), profile)?;
+    preflight_prepared_render_frame(
+        &prepared_frame,
+        std::slice::from_ref(compiled),
+        capabilities,
+    )?;
     Ok(BoidsProductionCpuTimingEvidence {
         source: "prepared_frame_preflight",
         preflight_ms: start.elapsed().as_secs_f32() * 1000.0,
