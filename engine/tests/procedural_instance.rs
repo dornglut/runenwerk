@@ -1,11 +1,11 @@
 use engine::plugins::render::{CompiledDrawSource, CompiledPassExecutionPlan, RenderFlow};
 use engine::plugins::render::{
     DrawIndexedIndirectArgs, DrawIndirectArgs, GpuStorage, ProceduralBufferBinding,
-    ProceduralPassDescriptor, ProceduralRenderPolicy, ProceduralValidationError,
-    RenderBackendCapabilityProfile, RenderBlendMode, RenderCullMode, RenderDepthPolicy,
-    RenderFlowAuthoringError, RenderFlowValidationIssue, RenderIndirectDrawArgsKind,
-    RenderPassKind, RenderPrimitiveTopology, RenderVertexBufferLayout, RenderVertexFormat,
-    SURFACE_COLOR_RESOURCE_LABEL, compile_flow_plan_checked,
+    ProceduralPassDescriptor, ProceduralRenderPolicy, ProceduralValidationError, RenderBlendMode,
+    RenderCullMode, RenderDepthPolicy, RenderFlowAuthoringError, RenderFlowValidationIssue,
+    RenderIndirectDrawArgsKind, RenderPassKind, RenderPrimitiveTopology, RenderVertexBufferLayout,
+    RenderVertexFormat, SURFACE_COLOR_RESOURCE_LABEL, compile_flow_plan_checked,
+    current_runtime_gpu_capabilities,
 };
 
 #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -75,7 +75,7 @@ fn procedural_instance_quad_sprite_descriptor_builds_pass_shape_safe_graphics_pa
     assert_eq!(pass.draw.expect("draw descriptor").vertex_count, 6);
     assert_eq!(pass.draw.expect("draw descriptor").instance_count, 64);
 
-    compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect("local instance geometry should satisfy pass-shape guards");
 }
 
@@ -141,12 +141,13 @@ fn procedural_pass_builder_authors_indirect_draw_without_exposing_graphics_build
         )
         .expect("valid descriptor should create a procedural builder")
         .draw_indirect(args)
+        .expect("declared draw-argument layout should match")
         .finish()
         .expect("procedural builder should lower to a render flow")
         .validate()
         .expect("procedural indirect draw should validate");
 
-    let plan = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    let plan = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect("procedural indirect draw should compile");
     let draw = plan
         .execution
@@ -184,11 +185,12 @@ fn graphics_indexed_indirect_draw_preserves_typed_args_kind() {
         .index_buffer(indices)
         .write_color_target(SURFACE_COLOR_RESOURCE_LABEL)
         .draw_indexed_indirect(args, 6, 4)
+        .expect("declared indexed draw-argument layout should match")
         .finish()
         .validate()
         .expect("indexed indirect draw should validate");
 
-    let plan = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    let plan = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect("indexed indirect draw should compile");
     let draw = plan
         .execution
@@ -232,7 +234,8 @@ fn procedural_indirect_draw_rejects_indexed_args_without_index_buffer() {
             .write_color_target(SURFACE_COLOR_RESOURCE_LABEL),
         )
         .expect("valid descriptor should create a procedural builder")
-        .draw_indirect(args)
+        .draw_indexed_indirect(args)
+        .expect("declared indexed draw-argument layout should match")
         .finish()
         .expect("procedural builder should lower to a render flow");
 
@@ -262,6 +265,7 @@ fn graphics_indirect_draw_rejects_out_of_bounds_byte_offset() {
         .instance_buffer(instances, instance_layout(0))
         .write_color_target(SURFACE_COLOR_RESOURCE_LABEL)
         .draw_indirect_with_offsets(args, 6, 32, 0, 0, DrawIndirectArgs::BYTE_SIZE)
+        .expect("declared draw-argument layout should match")
         .finish()
         .validation_report()
         .expect_err("offset at element end should be rejected");
@@ -288,6 +292,7 @@ fn graphics_indirect_draw_rejects_cpu_side_offsets() {
         .instance_buffer(instances, instance_layout(0))
         .write_color_target(SURFACE_COLOR_RESOURCE_LABEL)
         .draw_indirect_with_offsets(args, 6, 32, 1, 0, 0)
+        .expect("declared draw-argument layout should match")
         .finish()
         .validation_report()
         .expect_err("CPU-side indirect offsets should be rejected");
@@ -318,7 +323,7 @@ fn procedural_instance_local_sdf_2d_impostor_descriptor_is_local_2d_and_pass_sha
         )
         .expect("valid local 2D SDF impostor descriptor should build");
 
-    compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect("local SDF impostor instance geometry should satisfy pass-shape guards");
 }
 
@@ -356,7 +361,7 @@ fn procedural_instance_policy_survives_compilation() {
         )
         .expect("valid policy descriptor should build");
 
-    let plan = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    let plan = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect("procedural policy flow should compile");
     let raster = plan
         .execution

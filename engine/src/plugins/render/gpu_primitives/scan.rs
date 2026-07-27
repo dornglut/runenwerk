@@ -1,10 +1,14 @@
-use crate::plugins::gpu::GpuWorkResourceId;
-use crate::plugins::render::{GpuStorage, StorageArrayHandle};
+use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
+use crate::plugins::render::GpuStorage;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, GpuStorage)]
 pub struct U32ScanElement {
     pub value: u32,
+}
+
+impl U32ScanElement {
+    pub const BYTE_SIZE: u64 = 4;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,29 +27,37 @@ pub struct U32PrefixScanDescriptor {
 }
 
 impl U32PrefixScanDescriptor {
-    pub fn new<I, O>(
+    pub fn new(
         label: impl Into<String>,
-        input: StorageArrayHandle<I>,
-        output: StorageArrayHandle<O>,
+        input: GpuBufferHandle,
+        output: GpuBufferHandle,
         total_count: u32,
         mode: PrefixScanMode,
     ) -> Result<Self, GpuPrimitiveValidationError> {
         let descriptor = Self {
             label: label.into(),
-            input: *input.id(),
-            output: *output.id(),
+            input: input.diagnostic_identity(),
+            output: output.diagnostic_identity(),
             total_count,
             mode,
         };
         descriptor.validate()?;
         validate_capacity(
             format!("{}.input", descriptor.label),
-            input.len(),
+            buffer_capacity(
+                &input,
+                U32ScanElement::BYTE_SIZE,
+                format!("{}.input", descriptor.label),
+            )?,
             u64::from(total_count),
         )?;
         validate_capacity(
             format!("{}.output", descriptor.label),
-            output.len(),
+            buffer_capacity(
+                &output,
+                U32ScanElement::BYTE_SIZE,
+                format!("{}.output", descriptor.label),
+            )?,
             u64::from(total_count),
         )?;
         Ok(descriptor)
@@ -93,6 +105,32 @@ pub enum GpuPrimitiveValidationError {
 
     #[error("gpu primitive plan '{label}' must contain at least one step")]
     EmptyExecutionPlan { label: String },
+
+    #[error(
+        "gpu primitive buffer '{label}' has {size_bytes} bytes, which is not a multiple of the required {element_size}-byte element layout"
+    )]
+    InvalidBufferElementLayout {
+        label: String,
+        size_bytes: u64,
+        element_size: u64,
+    },
+}
+
+pub(crate) fn buffer_capacity(
+    handle: &GpuBufferHandle,
+    element_size: u64,
+    label: impl Into<String>,
+) -> Result<u64, GpuPrimitiveValidationError> {
+    let label = label.into();
+    let size_bytes = handle.descriptor().size_bytes();
+    if element_size == 0 || !size_bytes.is_multiple_of(element_size) {
+        return Err(GpuPrimitiveValidationError::InvalidBufferElementLayout {
+            label,
+            size_bytes,
+            element_size,
+        });
+    }
+    Ok(size_bytes / element_size)
 }
 
 pub fn validate_capacity(

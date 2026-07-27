@@ -1,4 +1,4 @@
-use engine::plugins::gpu::GpuWorkResourceId;
+use engine::plugins::gpu::{GpuCapabilityFeature, GpuWorkResourceId};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, PreparedRenderFrameInspection,
     ProductSurfaceDiagnosticInspectionEntry, RenderCaptureIdentity, RenderCapturePointIdentity,
@@ -27,19 +27,19 @@ use engine::plugins::render::{
     PreparedFlowInvocation, PreparedFlowInvocationId, PreparedFlowInvocationRequest,
     PreparedFrameContext, PreparedFrameContributions, PreparedRegisteredFeaturePayload,
     PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo, PreparedTargetBinding,
-    PreparedViewFrame, RenderBackendCapabilityProfile, RenderDynamicTextureRetention,
-    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
-    RenderDynamicTextureUploadDescriptor, RenderFeatureId, RenderFlow, RenderFragmentDescriptor,
-    RenderFragmentPackageDescriptor, RenderFragmentPassDescriptor,
-    RenderFragmentResourceDescriptor, RenderFrameProducerId, RenderGpuResidencyBudgetResource,
-    RenderGpuResidencyResource, RenderPreparedFramePreflightCacheState,
-    RenderPreparedFramePreflightCacheStatus, RenderPreparedFramePreflightMode,
-    RenderPreparedFramePreflightReportSource, RenderProductSurfaceManifest,
-    RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch, RenderProductSurfaceStatusKind,
-    RenderResourceDescriptor, RenderTextureSampleMode, RenderTextureTargetFormat,
-    RenderTextureUploadAlphaMode, RendererFrameTimings, ShaderReloadPollReport,
-    ShaderReloadPollStatus, StaticRegisteredFeaturePayload, compile_flow_plan,
-    merge_fragment_package_into_flow, validate_prepared_render_frame,
+    PreparedViewFrame, RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
+    RenderDynamicTextureTargetKey, RenderDynamicTextureUploadDescriptor, RenderFeatureId,
+    RenderFlow, RenderFragmentDescriptor, RenderFragmentPackageDescriptor,
+    RenderFragmentPassDescriptor, RenderFragmentResourceDescriptor, RenderFrameProducerId,
+    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource,
+    RenderPreparedFramePreflightCacheState, RenderPreparedFramePreflightCacheStatus,
+    RenderPreparedFramePreflightMode, RenderPreparedFramePreflightReportSource,
+    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
+    RenderProductSurfaceStatusKind, RenderResourceDeclaration, RenderTextureSampleMode,
+    RenderTextureTargetFormat, RenderTextureUploadAlphaMode, RendererFrameTimings,
+    ShaderReloadPollReport, ShaderReloadPollStatus, StaticRegisteredFeaturePayload,
+    compile_flow_plan, current_runtime_gpu_capabilities, merge_fragment_package_into_flow,
+    validate_prepared_render_frame,
 };
 use engine::runtime::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
 use product::{
@@ -587,8 +587,11 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
 
 #[test]
 fn render_runtime_inspect_resource_kind_label_matches_descriptor_kind() {
-    let descriptor =
-        RenderResourceDescriptor::storage_buffer::<InspectStorage>(test_resource_ids(1)[0]);
+    let descriptor = RenderResourceDeclaration::declare_storage::<InspectStorage>(
+        test_resource_ids(1)[0],
+        "inspect storage",
+    )
+    .expect("storage declaration should be valid");
     assert_eq!(resource_kind_name(&descriptor), "storage_buffer");
 }
 
@@ -639,9 +642,17 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
             .iter()
             .any(|window| window.resource_label.as_deref() == Some("scene_color"))
     );
+    assert!(
+        plan_inspection
+            .backend_capabilities
+            .supports(GpuCapabilityFeature::RenderPipeline)
+    );
     assert_eq!(
-        plan_inspection.backend_capabilities.profile_key,
-        "wgpu-portable-v1"
+        plan_inspection
+            .backend_capabilities
+            .limits()
+            .max_bindings_per_group(),
+        16
     );
 
     let frame = PreparedRenderFrame {
@@ -674,11 +685,8 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
             registry_revision: 1,
         },
     };
-    let report = validate_prepared_render_frame(
-        &frame,
-        &[compiled],
-        &RenderBackendCapabilityProfile::runtime_default(),
-    );
+    let report =
+        validate_prepared_render_frame(&frame, &[compiled], &current_runtime_gpu_capabilities());
     let preflight = inspect_render_execution_graph_preflight(&report);
 
     assert_eq!(preflight.error_count, 1);
@@ -736,7 +744,7 @@ fn render_runtime_inspect_fragment_merge_reports_expose_package_revision_and_pas
     let merged = merge_fragment_package_into_flow(
         RenderFlow::new("inspect.fragment.flow"),
         &package,
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     )
     .expect("valid fragment package should merge");
 

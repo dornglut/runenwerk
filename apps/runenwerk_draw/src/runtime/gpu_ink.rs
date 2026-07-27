@@ -491,7 +491,7 @@ fn gpu_texture_target_usage() -> RenderTextureTargetUsage {
 mod tests {
     use super::*;
     use engine::plugins::render::{
-        RenderResourceDescriptor, RenderTextureFormatPolicy, RenderTextureSizePolicy,
+        RenderResourceDeclaration, RenderTextureFormatPolicy, RenderTextureSizePolicy,
     };
 
     #[test]
@@ -509,7 +509,7 @@ mod tests {
             .find(|descriptor| *descriptor.id() == id)
             .expect("CPU reference target should have a descriptor");
 
-        let RenderResourceDescriptor::ColorTarget(target) = descriptor else {
+        let RenderResourceDeclaration::ColorAttachment(target) = descriptor else {
             panic!("CPU reference proof data should be a flow-owned color target");
         };
         assert_eq!(target.texture.size, RenderTextureSizePolicy::Surface);

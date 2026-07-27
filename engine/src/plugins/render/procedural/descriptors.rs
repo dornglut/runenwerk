@@ -1,7 +1,7 @@
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
 use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderPrimitiveTopology, RenderRasterState,
-    RenderVertexBufferLayout, ShaderHandle, StorageArrayHandle,
+    RenderVertexBufferLayout, ShaderHandle,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,9 +27,9 @@ pub struct ProceduralBufferBinding {
 }
 
 impl ProceduralBufferBinding {
-    pub fn storage<T>(handle: StorageArrayHandle<T>, layout: RenderVertexBufferLayout) -> Self {
+    pub fn storage(handle: GpuBufferHandle, layout: RenderVertexBufferLayout) -> Self {
         Self {
-            resource_id: *handle.id(),
+            resource_id: handle.diagnostic_identity(),
             layout,
         }
     }
@@ -41,9 +41,9 @@ pub struct ProceduralIndexBuffer {
 }
 
 impl ProceduralIndexBuffer {
-    pub fn storage<T>(handle: StorageArrayHandle<T>) -> Self {
+    pub fn storage(handle: GpuBufferHandle) -> Self {
         Self {
-            resource_id: *handle.id(),
+            resource_id: handle.diagnostic_identity(),
         }
     }
 }

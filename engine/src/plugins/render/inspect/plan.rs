@@ -2,9 +2,10 @@ use super::{
     RenderCaptureIdentity, RenderCapturePointIdentity, RenderCaptureSelector,
     RenderCaptureTerminal, RenderCaptureTerminalCode, RenderCaptureTerminalReason,
 };
+use crate::plugins::gpu::GpuCapabilities;
+use crate::plugins::render::current_runtime_gpu_capabilities;
 use crate::plugins::render::graph::{
     CompiledRenderFlowPlan, CompiledResourceAccessKind, CompiledResourceLifetimeWindow,
-    RenderBackendCapabilityInspection, RenderBackendCapabilityProfile,
     RenderExecutionGraphDiagnostic, RenderExecutionGraphPreparedReport,
     RenderPreparedFramePreflightCacheState,
 };
@@ -51,7 +52,7 @@ pub struct RenderExecutionGraphPlanInspection {
     pub resource_count: usize,
     pub compiler_diagnostics: Vec<RenderExecutionGraphDiagnosticInspection>,
     pub resource_lifetime_windows: Vec<RenderResourceLifetimeWindowInspection>,
-    pub backend_capabilities: RenderBackendCapabilityInspection,
+    pub backend_capabilities: GpuCapabilities,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,9 +117,7 @@ pub fn inspect_compiled_render_flow_plan(
             .iter()
             .map(inspect_resource_lifetime_window)
             .collect(),
-        backend_capabilities: RenderBackendCapabilityInspection::from(
-            &RenderBackendCapabilityProfile::runtime_default(),
-        ),
+        backend_capabilities: current_runtime_gpu_capabilities(),
     }
 }
 

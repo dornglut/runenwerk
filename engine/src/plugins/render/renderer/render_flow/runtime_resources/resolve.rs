@@ -14,7 +14,7 @@ impl FlowRuntimeResources {
         }
 
         if let Some(id) = self.resource_ids_by_label.get(value) {
-            if let Some(RenderResourceDescriptor::TargetAlias(alias)) = self.descriptors.get(id)
+            if let Some(RenderResourceDeclaration::TargetAlias(alias)) = self.descriptors.get(id)
                 && let Some(binding) = self.target_alias_bindings.get(alias.label.as_str())
             {
                 return Some(runtime_resource_key_for_target_binding(binding));
@@ -36,7 +36,7 @@ impl FlowRuntimeResources {
         }
     }
 
-    fn descriptor_for_key(&self, key: &RuntimeResourceKey) -> Option<&RenderResourceDescriptor> {
+    fn descriptor_for_key(&self, key: &RuntimeResourceKey) -> Option<&RenderResourceDeclaration> {
         match key {
             RuntimeResourceKey::FlowOwned(id) => self.descriptors.get(id),
             RuntimeResourceKey::InvocationUniform { resource_id, .. } => {
@@ -84,22 +84,24 @@ impl FlowRuntimeResources {
                     return fallback_class;
                 };
                 match descriptor {
-                    RenderResourceDescriptor::DepthTarget(_) => CaptureTextureClass::DepthTarget,
-                    RenderResourceDescriptor::HistoryTexture(_) => {
-                        CaptureTextureClass::HistoryTexture
+                    RenderResourceDeclaration::DepthAttachment(_) => {
+                        CaptureTextureClass::DepthTarget
                     }
-                    RenderResourceDescriptor::ImportedTexture(_) => {
+                    RenderResourceDeclaration::History(_) => CaptureTextureClass::HistoryTexture,
+                    RenderResourceDeclaration::ImportedTexture(_) => {
                         CaptureTextureClass::ImportedTexture
                     }
-                    RenderResourceDescriptor::SampledTexture(_)
-                    | RenderResourceDescriptor::StorageTexture(_)
-                    | RenderResourceDescriptor::ColorTarget(_) => CaptureTextureClass::ColorTarget,
-                    RenderResourceDescriptor::TargetAlias(_) => {
+                    RenderResourceDeclaration::Sampled(_)
+                    | RenderResourceDeclaration::StorageImage(_)
+                    | RenderResourceDeclaration::ColorAttachment(_) => {
+                        CaptureTextureClass::ColorTarget
+                    }
+                    RenderResourceDeclaration::TargetAlias(_) => {
                         CaptureTextureClass::ImportedTexture
                     }
-                    RenderResourceDescriptor::UniformBuffer(_)
-                    | RenderResourceDescriptor::StorageBuffer(_)
-                    | RenderResourceDescriptor::ImportedBuffer(_) => fallback_class,
+                    RenderResourceDeclaration::Uniform(_)
+                    | RenderResourceDeclaration::Storage(_)
+                    | RenderResourceDeclaration::ImportedBuffer(_) => fallback_class,
                 }
             }
         }
@@ -115,7 +117,7 @@ impl FlowRuntimeResources {
             CompiledResourceRef::FlowOwned(id) | CompiledResourceRef::Imported(id) => {
                 if matches!(
                     self.descriptors.get(id),
-                    Some(RenderResourceDescriptor::HistoryTexture(_))
+                    Some(RenderResourceDeclaration::History(_))
                 ) && let Some(invocation_id) = self.active_invocation_uniform_scope.as_ref()
                 {
                     return Ok(RuntimeResourceKey::InvocationHistory {
@@ -145,7 +147,7 @@ impl FlowRuntimeResources {
                     PreparedTargetBinding::FlowOwned(id) => {
                         if matches!(
                             self.descriptors.get(id),
-                            Some(RenderResourceDescriptor::HistoryTexture(_))
+                            Some(RenderResourceDeclaration::History(_))
                         ) && let Some(invocation_id) =
                             self.active_invocation_uniform_scope.as_ref()
                         {

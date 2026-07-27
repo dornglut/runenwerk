@@ -3,9 +3,7 @@ use engine::plugins::render::features::world::sdf_raymarch::{
     RenderSdfDistanceMipLevel, RenderSdfRaymarchAccelerationReport, RenderSdfRaymarchCandidate,
     RenderSdfRaymarchCandidateList,
 };
-use engine::plugins::render::graph::{
-    CompiledPassExecutionPlan, CompiledRenderFlowPlan, RenderBackendCapabilityProfile,
-};
+use engine::plugins::render::graph::{CompiledPassExecutionPlan, CompiledRenderFlowPlan};
 use engine::plugins::render::inspect::{
     PassTimingSample, RenderDebugTimingsState, RenderGpuResidencyBudgetInspection,
     RenderGpuResidencyInspection, RenderGpuTimingCapability, RenderGpuTimingDiagnostic,
@@ -43,8 +41,8 @@ use engine::plugins::render::{
     ProceduralPassDescriptor, ProceduralTargetDescriptor, RenderExecutionGraphPreparedReport,
     RenderFlow, RenderPreparedFramePreflightCacheKey, RenderVertexBufferLayout, RenderVertexFormat,
     U32Counter, U32PrefixScanDescriptor, U32ScanElement, U32ScatterDescriptor, compile_flow_plan,
-    preflight_prepared_render_frame, preflight_prepared_render_frame_runtime_guards,
-    prepared_render_frame_preflight_cache_key,
+    current_runtime_gpu_capabilities, preflight_prepared_render_frame,
+    preflight_prepared_render_frame_runtime_guards, prepared_render_frame_preflight_cache_key,
 };
 use engine::prelude::Resource;
 use ui_render_data::ViewportSurfaceBindingRegistry;
@@ -210,7 +208,7 @@ fn prepared_frame_for_flow(compiled: &CompiledRenderFlowPlan) -> PreparedRenderF
 }
 
 fn run_cold_preflight(compiled: &CompiledRenderFlowPlan, frame: &PreparedRenderFrame) {
-    let profile = RenderBackendCapabilityProfile::runtime_default();
+    let profile = current_runtime_gpu_capabilities();
     let key =
         prepared_render_frame_preflight_cache_key(frame, std::slice::from_ref(compiled), &profile);
     preflight_prepared_render_frame_runtime_guards(frame, std::slice::from_ref(compiled))
@@ -227,7 +225,7 @@ fn run_warm_cached_preflight(
     cached_key: &RenderPreparedFramePreflightCacheKey,
     cached_report: &RenderExecutionGraphPreparedReport,
 ) {
-    let profile = RenderBackendCapabilityProfile::runtime_default();
+    let profile = current_runtime_gpu_capabilities();
     preflight_prepared_render_frame_runtime_guards(frame, std::slice::from_ref(compiled))
         .expect("runtime guards should pass");
     let key =
@@ -1224,7 +1222,7 @@ fn bench_render_flow_planning(c: &mut Criterion) {
     });
     let compiled_boids = compile_flow_plan(&boids).expect("boids flow should compile");
     let boids_frame = prepared_frame_for_flow(&compiled_boids);
-    let profile = RenderBackendCapabilityProfile::runtime_default();
+    let profile = current_runtime_gpu_capabilities();
     let boids_preflight_key = prepared_render_frame_preflight_cache_key(
         &boids_frame,
         std::slice::from_ref(&compiled_boids),

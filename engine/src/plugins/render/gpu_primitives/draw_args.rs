@@ -1,6 +1,5 @@
-use super::{GpuPrimitiveValidationError, validate_capacity};
-use crate::plugins::gpu::GpuWorkResourceId;
-use crate::plugins::render::StorageArrayHandle;
+use super::{GpuPrimitiveValidationError, buffer_capacity, validate_capacity};
+use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
 pub use crate::plugins::render::graph::{
     DrawIndexedIndirectArgs, DrawIndirectArgs, IndirectDrawArgsBuffer,
 };
@@ -22,14 +21,18 @@ pub struct IndirectDrawArgsGenerationDescriptor {
 impl IndirectDrawArgsGenerationDescriptor {
     pub fn draw(
         label: impl Into<String>,
-        output: StorageArrayHandle<DrawIndirectArgs>,
+        output: GpuBufferHandle,
         output_index: u32,
         args: DrawIndirectArgs,
     ) -> Result<Self, GpuPrimitiveValidationError> {
         Self::new(
             label,
-            *output.id(),
-            output.len(),
+            output.diagnostic_identity(),
+            buffer_capacity(
+                &output,
+                DrawIndirectArgs::BYTE_SIZE,
+                "indirect draw argument output",
+            )?,
             output_index,
             GeneratedIndirectDrawArgs::Draw(args),
         )
@@ -37,14 +40,18 @@ impl IndirectDrawArgsGenerationDescriptor {
 
     pub fn draw_indexed(
         label: impl Into<String>,
-        output: StorageArrayHandle<DrawIndexedIndirectArgs>,
+        output: GpuBufferHandle,
         output_index: u32,
         args: DrawIndexedIndirectArgs,
     ) -> Result<Self, GpuPrimitiveValidationError> {
         Self::new(
             label,
-            *output.id(),
-            output.len(),
+            output.diagnostic_identity(),
+            buffer_capacity(
+                &output,
+                DrawIndexedIndirectArgs::BYTE_SIZE,
+                "indexed indirect draw argument output",
+            )?,
             output_index,
             GeneratedIndirectDrawArgs::DrawIndexed(args),
         )

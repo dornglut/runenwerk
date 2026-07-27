@@ -1,11 +1,4 @@
-use crate::plugins::gpu::GpuWorkResourceId;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ResourceAccess {
-    Read,
-    Write,
-    ReadWrite,
-}
+use crate::plugins::gpu::{GpuResourceAccessIntent, GpuWorkResourceId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResourceUsageKind {
@@ -22,14 +15,14 @@ pub enum ResourceUsageKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceUsage {
     pub resource_id: GpuWorkResourceId,
-    pub access: ResourceAccess,
+    pub access: GpuResourceAccessIntent,
     pub kind: ResourceUsageKind,
 }
 
 impl ResourceUsage {
     pub fn new(
         resource_id: impl Into<GpuWorkResourceId>,
-        access: ResourceAccess,
+        access: GpuResourceAccessIntent,
         kind: ResourceUsageKind,
     ) -> Self {
         Self {

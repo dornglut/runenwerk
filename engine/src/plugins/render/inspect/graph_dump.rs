@@ -1,6 +1,6 @@
 use crate::plugins::render::{
-    RenderBackendCapabilityProfile, RenderFlow, RenderFlowValidationError,
-    RenderFragmentDiagnosticSeverity, RenderFragmentMergeReport, compile_flow_plan_checked,
+    RenderFlow, RenderFlowValidationError, RenderFragmentDiagnosticSeverity,
+    RenderFragmentMergeReport, compile_flow_plan_checked, current_runtime_gpu_capabilities,
 };
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -133,9 +133,7 @@ pub fn dump_flow_graph(
             .collect::<Vec<_>>()
             .join(" -> ")
     ));
-    if let Ok(compiled) =
-        compile_flow_plan_checked(flow, &RenderBackendCapabilityProfile::runtime_default())
-    {
+    if let Ok(compiled) = compile_flow_plan_checked(flow, &current_runtime_gpu_capabilities()) {
         lines.push("resource_lifetimes:".to_string());
         for window in &compiled.resource_lifetime_windows {
             let label = window

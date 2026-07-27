@@ -1,8 +1,7 @@
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::api::RenderFlow;
-use crate::plugins::render::graph::{
-    CompiledRenderFlowPlan, RenderBackendCapabilityProfile, compile_flow_plan_checked,
-};
+use crate::plugins::render::current_runtime_gpu_capabilities;
+use crate::plugins::render::graph::{CompiledRenderFlowPlan, compile_flow_plan_checked};
 use crate::runtime::ResMut;
 use std::collections::BTreeMap;
 
@@ -57,10 +56,7 @@ impl RenderFlowRegistryResource {
         let mut next_compiled = Vec::<CompiledRenderFlowPlan>::new();
 
         for flow in self.flows.values() {
-            match compile_flow_plan_checked(
-                flow,
-                &RenderBackendCapabilityProfile::runtime_default(),
-            ) {
+            match compile_flow_plan_checked(flow, &current_runtime_gpu_capabilities()) {
                 Ok(compiled) => next_compiled.push(compiled),
                 Err(err) => tracing::warn!(
                     flow_id = ?flow.id(),

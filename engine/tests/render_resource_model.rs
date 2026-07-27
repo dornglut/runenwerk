@@ -1,7 +1,8 @@
 use engine::plugins::gpu::GpuWorkResourceId;
 use engine::plugins::render::api::RenderPassId;
-use engine::plugins::render::resource::{RenderResourceDescriptor, detect_duplicate_resource_ids};
-use engine::plugins::render::{GpuParams, GpuUniform, RenderFlow};
+use engine::plugins::render::{
+    GpuParams, GpuUniform, RenderFlow, RenderResourceDeclaration, detect_duplicate_resource_ids,
+};
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
 struct ResourceTestParams {
@@ -27,19 +28,21 @@ fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
 #[test]
 fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
     let id = test_resource_ids(1)[0];
-    let descriptor = RenderResourceDescriptor::uniform_buffer::<ResourceTestParams>(id);
+    let descriptor =
+        RenderResourceDeclaration::declare_uniform::<ResourceTestParams>(id, "test uniform")
+            .expect("uniform declaration should be valid");
 
     match descriptor {
-        RenderResourceDescriptor::UniformBuffer(value) => {
-            assert_eq!(value.id, id);
+        RenderResourceDeclaration::Uniform(value) => {
+            assert_eq!(*value.id(), id);
             assert_eq!(
-                value.params_type_id,
+                value.params_type_id(),
                 std::any::TypeId::of::<ResourceTestParams>()
             );
-            assert!(value.params_type_name.contains("ResourceTestParams"));
-            assert!(value.size_bytes > 0);
+            assert!(value.params_type_name().contains("ResourceTestParams"));
+            assert!(value.size_bytes() > 0);
             let raw = ResourceTestParams { value: 9 }.to_gpu();
-            assert_eq!(raw.bytes.len() as u64, value.size_bytes);
+            assert_eq!(raw.bytes.len() as u64, value.size_bytes());
             assert_eq!(u32::from_le_bytes(raw.bytes[0..4].try_into().unwrap()), 9);
         }
         other => panic!("unexpected descriptor variant: {other:?}"),
@@ -67,9 +70,9 @@ fn duplicate_resource_detection_finds_collisions() {
     let ids = test_resource_ids(2);
     let duplicate = ids[0];
     let descriptors = vec![
-        RenderResourceDescriptor::sampled_texture(duplicate),
-        RenderResourceDescriptor::color_target(ids[1]),
-        RenderResourceDescriptor::imported_texture(duplicate),
+        RenderResourceDeclaration::declare_sampled_texture(duplicate, "sampled"),
+        RenderResourceDeclaration::declare_color_attachment(ids[1], "color"),
+        RenderResourceDeclaration::declare_imported_external_texture(duplicate, "external"),
     ];
 
     let duplicates = detect_duplicate_resource_ids(&descriptors);

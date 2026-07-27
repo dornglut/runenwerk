@@ -1,12 +1,13 @@
+use engine::plugins::gpu::{GpuCapabilities, GpuCapabilityFeature};
 use engine::plugins::render::{
-    GpuStorage, GpuUniform, PreparedFlowInputs, PreparedFlowInvocation, PreparedFrameContext,
-    PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot, PreparedSurfaceInfo,
-    PreparedViewFrame, RenderBackendCapabilityProfile, RenderExecutionGraphDiagnosticKind,
-    RenderFlow, RenderFlowValidationIssue, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
-    RenderPassShapeIntent, RenderResourceDescriptor, RenderTextureFormatPolicy,
+    DrawIndirectArgs, GpuStorage, GpuUniform, PreparedFlowInputs, PreparedFlowInvocation,
+    PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot,
+    PreparedSurfaceInfo, PreparedViewFrame, RenderExecutionGraphDiagnosticKind, RenderFlow,
+    RenderFlowValidationIssue, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
+    RenderPassShapeIntent, RenderResourceDeclaration, RenderTextureFormatPolicy,
     RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
     RenderVertexFormat, ShaderRegistryResource, compile_flow_plan, compile_flow_plan_checked,
-    preflight_prepared_render_frame_runtime_guards,
+    current_runtime_gpu_capabilities, preflight_prepared_render_frame_runtime_guards,
 };
 use std::any::TypeId;
 use std::collections::{BTreeMap, BTreeSet};
@@ -208,7 +209,7 @@ fn render_flow_compiler_reports_typed_static_resource_diagnostics() {
         .expect("render flow authoring should succeed")
         .finish();
 
-    let err = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    let err = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect_err("compiler should expose typed diagnostics for invalid static resources");
 
     assert!(err.diagnostics.iter().any(|diagnostic| {
@@ -228,15 +229,51 @@ fn render_flow_compiler_reports_backend_capability_mismatches() {
         .validate()
         .expect("flow should validate before capability check");
 
-    let err = compile_flow_plan_checked(
-        &flow,
-        &RenderBackendCapabilityProfile::unsupported_for_tests("compute"),
-    )
-    .expect_err("unsupported compute capability should be typed");
+    let err =
+        compile_flow_plan_checked(&flow, &capabilities_without(GpuCapabilityFeature::Compute))
+            .expect_err("unsupported compute capability should be typed");
 
     assert!(err.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch
-            && diagnostic.capability.as_deref() == Some("pass_kind::Compute")
+            && diagnostic.capability.as_deref() == Some("feature::Compute")
+    }));
+}
+
+fn capabilities_without(feature: GpuCapabilityFeature) -> GpuCapabilities {
+    let capabilities = current_runtime_gpu_capabilities();
+    GpuCapabilities::from_normalized_facts(
+        capabilities
+            .features()
+            .filter(|candidate| *candidate != feature),
+        capabilities.limits(),
+        capabilities.formats(),
+    )
+}
+
+#[test]
+fn render_flow_compiler_requires_indirect_draw_capability() {
+    let (flow, args) = RenderFlow::new("indirect.capability")
+        .with_color_target("color")
+        .expect("render flow authoring should succeed")
+        .storage_array::<DrawIndirectArgs>("args", 1)
+        .expect("render flow authoring should succeed");
+    let flow = flow
+        .graphics_pass("draw")
+        .write_color_target("color")
+        .draw_indirect(args, 3, 1)
+        .expect("declared draw-argument layout should match")
+        .finish()
+        .validate()
+        .expect("flow shape should be valid");
+
+    let error = compile_flow_plan_checked(
+        &flow,
+        &capabilities_without(GpuCapabilityFeature::IndirectDraw),
+    )
+    .expect_err("indirect draw must require normalized capability support");
+    assert!(error.diagnostics.iter().any(|diagnostic| {
+        diagnostic.kind == RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch
+            && diagnostic.capability.as_deref() == Some("feature::IndirectDraw")
     }));
 }
 
@@ -244,7 +281,7 @@ fn render_flow_compiler_reports_backend_capability_mismatches() {
 fn render_flow_compiler_rejects_instanced_fullscreen_style_graphics_by_default() {
     let flow = instanced_fullscreen_style_flow(512);
 
-    let err = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    let err = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect_err("instanced fullscreen-style work should require explicit intent");
 
     assert!(err.diagnostics.iter().any(|diagnostic| {
@@ -273,9 +310,8 @@ fn render_flow_compiler_accepts_bounded_instanced_fullscreen_intent() {
         .validate()
         .expect("explicit advanced intent should preserve legacy-valid graph shape");
 
-    let compiled =
-        compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
-            .expect("bounded explicit intent should pass compiler guard");
+    let compiled = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
+        .expect("bounded explicit intent should pass compiler guard");
     let pass = compiled
         .pass_order
         .iter()
@@ -311,7 +347,7 @@ fn render_flow_compiler_rejects_instanced_fullscreen_intent_over_limit() {
         .validate()
         .expect("limit enforcement belongs to compiler guard");
 
-    let err = compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    let err = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect_err("advanced intent must enforce its own bound");
 
     assert!(err.diagnostics.iter().any(|diagnostic| {
@@ -349,7 +385,7 @@ fn render_flow_compiler_preserves_instanced_graphics_with_local_geometry() {
         .validate()
         .expect("local geometry path should remain valid");
 
-    compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+    compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect("local vertex/instance geometry should not need fullscreen opt-in");
 }
 
@@ -420,13 +456,13 @@ fn v2_named_uniform_buffers_support_prepared_invocation_overrides() {
 
     assert_eq!(
         flow.resource_id("compose.per_invocation"),
-        Some(*handle.id())
+        Some(handle.diagnostic_identity())
     );
     assert_eq!(
         flow.graph()
             .resources
             .uniform_buffer_ids_by_params_type(TypeId::of::<ComposeParams>()),
-        vec![*handle.id()],
+        vec![handle.diagnostic_identity()],
         "named uniform buffers should be real flow resources, not ad hoc request bytes"
     );
 }
@@ -447,7 +483,7 @@ fn v2_exact_color_target_is_surface_sized_with_exact_format() {
         .find(|resource| *resource.id() == id)
         .expect("registered resource should have a descriptor");
 
-    let RenderResourceDescriptor::ColorTarget(target) = resource else {
+    let RenderResourceDeclaration::ColorAttachment(target) = resource else {
         panic!("exact color target should remain a color target");
     };
     assert_eq!(target.texture.size, RenderTextureSizePolicy::Surface);

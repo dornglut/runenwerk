@@ -227,8 +227,8 @@ mod tests {
     use super::*;
     #[allow(deprecated)]
     use engine::plugins::render::{
-        RenderBackendCapabilityProfile, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
-        compile_flow_plan_checked,
+        RenderFrameDataRegistry, RenderPassId, RenderPassKind, compile_flow_plan_checked,
+        current_runtime_gpu_capabilities,
     };
 
     fn pass_kind(flow: &RenderFlow, pass_id: &str) -> RenderPassKind {
@@ -342,7 +342,7 @@ mod tests {
             DEFAULT_BOID_COUNT
         );
 
-        compile_flow_plan_checked(&flow, &RenderBackendCapabilityProfile::runtime_default())
+        compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
             .expect("boids procedural draw should satisfy pass-shape guards");
     }
 

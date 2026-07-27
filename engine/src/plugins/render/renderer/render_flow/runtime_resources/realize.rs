@@ -1,11 +1,11 @@
 use super::*;
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{
+    GpuResourceDescriptor, GpuTextureDimension, GpuTextureFormat, GpuWorkResourceId,
+};
 use crate::plugins::render::renderer::dynamic_targets::{
     dynamic_format_to_wgpu, dynamic_usage_to_wgpu,
 };
-use crate::plugins::render::{
-    RenderTextureDescriptor, RenderTextureFormatPolicy, RenderTextureSizePolicy,
-};
+use crate::plugins::render::{RenderTextureFormatPolicy, legacy_surface_validation_format};
 
 impl FlowRuntimeResources {
     pub fn realize_for_frame(
@@ -14,7 +14,7 @@ impl FlowRuntimeResources {
         flow: &CompiledRenderFlowPlan,
         surface_size: (u32, u32),
         surface_format: TextureFormat,
-    ) {
+    ) -> Result<()> {
         let frame_size = (surface_size.0.max(1), surface_size.1.max(1));
         let mut declared_ids = BTreeSet::<GpuWorkResourceId>::new();
 
@@ -31,16 +31,16 @@ impl FlowRuntimeResources {
             self.descriptors.insert(id, descriptor.clone());
 
             let kind = match descriptor {
-                RenderResourceDescriptor::UniformBuffer(_)
-                | RenderResourceDescriptor::StorageBuffer(_)
-                | RenderResourceDescriptor::ImportedBuffer(_) => RuntimeResourceKind::BufferLike,
+                RenderResourceDeclaration::Uniform(_)
+                | RenderResourceDeclaration::Storage(_)
+                | RenderResourceDeclaration::ImportedBuffer(_) => RuntimeResourceKind::BufferLike,
                 _ => RuntimeResourceKind::TextureLike,
             };
             self.kinds.insert(id, kind);
 
-            if !matches!(descriptor, RenderResourceDescriptor::HistoryTexture(_))
+            if !matches!(descriptor, RenderResourceDeclaration::History(_))
                 && let Some(texture_spec) =
-                    Self::texture_allocation_spec(descriptor, frame_size, surface_format)
+                    Self::texture_allocation_spec(descriptor, frame_size, surface_format)?
             {
                 let previous_generation = self
                     .textures
@@ -94,7 +94,7 @@ impl FlowRuntimeResources {
                 self.textures.remove(&id);
             }
 
-            if let Some(buffer_spec) = Self::buffer_allocation_spec(descriptor) {
+            if let Some(buffer_spec) = Self::buffer_allocation_spec(descriptor)? {
                 let previous_generation = self
                     .buffers
                     .get(&id)
@@ -142,6 +142,7 @@ impl FlowRuntimeResources {
         self.invocation_history_textures
             .retain(|(_, id), _| declared_ids.contains(id));
         self.active_invocation_uniform_scope = None;
+        Ok(())
     }
 
     pub fn set_active_invocation_uniform_scope(&mut self, invocation_id: impl Into<String>) {
@@ -178,13 +179,13 @@ impl FlowRuntimeResources {
             .descriptors
             .iter()
             .filter_map(|(id, descriptor)| match descriptor {
-                RenderResourceDescriptor::HistoryTexture(_) => Some((*id, descriptor.clone())),
+                RenderResourceDeclaration::History(_) => Some((*id, descriptor.clone())),
                 _ => None,
             })
             .collect::<Vec<_>>();
         for (resource_id, descriptor) in history_descriptors {
             let Some(texture_spec) =
-                Self::texture_allocation_spec(&descriptor, surface_size, surface_format)
+                Self::texture_allocation_spec(&descriptor, surface_size, surface_format)?
             else {
                 continue;
             };
@@ -258,7 +259,7 @@ impl FlowRuntimeResources {
                 resource_id
             )
         })?;
-        let Some(spec) = Self::buffer_allocation_spec(descriptor) else {
+        let Some(spec) = Self::buffer_allocation_spec(descriptor)? else {
             bail!(
                 "prepared invocation '{}' uploads '{}' but it is not a buffer resource",
                 invocation_id,
@@ -291,7 +292,7 @@ impl FlowRuntimeResources {
             let buffer = device.create_buffer(&BufferDescriptor {
                 label: Some(label.as_str()),
                 size,
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+                usage: spec.usage,
                 mapped_at_creation: false,
             });
             self.invocation_uniform_buffers.insert(
@@ -314,80 +315,71 @@ impl FlowRuntimeResources {
     }
 
     pub fn texture_allocation_spec(
-        descriptor: &RenderResourceDescriptor,
+        descriptor: &RenderResourceDeclaration,
         surface_size: (u32, u32),
         surface_format: TextureFormat,
-    ) -> Option<TextureAllocationSpec> {
-        let texture = match descriptor {
-            RenderResourceDescriptor::SampledTexture(value) => &value.texture,
-            RenderResourceDescriptor::StorageTexture(value) => &value.texture,
-            RenderResourceDescriptor::ColorTarget(value) => &value.texture,
-            RenderResourceDescriptor::DepthTarget(value) => &value.texture,
-            RenderResourceDescriptor::HistoryTexture(value) => &value.texture,
-            RenderResourceDescriptor::TargetAlias(_)
-            | RenderResourceDescriptor::ImportedTexture(_)
-            | RenderResourceDescriptor::UniformBuffer(_)
-            | RenderResourceDescriptor::StorageBuffer(_)
-            | RenderResourceDescriptor::ImportedBuffer(_) => return None,
+    ) -> Result<Option<TextureAllocationSpec>> {
+        let Some(normalized) =
+            descriptor.gpu_descriptor(surface_size, legacy_surface_validation_format())?
+        else {
+            return Ok(None);
         };
-        Some(Self::texture_descriptor_allocation_spec(
-            texture,
-            surface_size,
-            surface_format,
-        ))
-    }
-
-    fn texture_descriptor_allocation_spec(
-        texture: &RenderTextureDescriptor,
-        surface_size: (u32, u32),
-        surface_format: TextureFormat,
-    ) -> TextureAllocationSpec {
-        let size = match texture.size {
-            RenderTextureSizePolicy::Surface => surface_size,
-            RenderTextureSizePolicy::Fixed { width, height } => (width.max(1), height.max(1)),
+        let GpuResourceDescriptor::Texture(texture) = normalized else {
+            return Ok(None);
         };
-        let format = match texture.format {
+        if texture.dimension() != GpuTextureDimension::D2 || texture.extent().depth_or_layers() != 1
+        {
+            bail!("legacy render runtime can realize only normalized 2D single-layer textures");
+        }
+        let extent = texture.extent();
+        let render_texture = descriptor
+            .texture_intent()
+            .expect("normalized texture descriptors originate from render texture intent")
+            .texture();
+        let format = match render_texture.format {
             RenderTextureFormatPolicy::Surface => surface_format,
             RenderTextureFormatPolicy::Exact(format) => dynamic_format_to_wgpu(format),
         };
-        TextureAllocationSpec {
-            size,
+        Ok(Some(TextureAllocationSpec {
+            size: (extent.width(), extent.height()),
             format,
-            usage: dynamic_usage_to_wgpu(texture.usage),
-            is_depth: texture.format
-                == RenderTextureFormatPolicy::Exact(
-                    crate::plugins::render::RenderTextureTargetFormat::Depth32Float,
-                ),
-        }
+            usage: dynamic_usage_to_wgpu(render_texture.usage),
+            is_depth: texture.format().is_depth(),
+        }))
     }
 
     pub fn buffer_allocation_spec(
-        descriptor: &RenderResourceDescriptor,
-    ) -> Option<BufferAllocationSpec> {
-        match descriptor {
-            RenderResourceDescriptor::UniformBuffer(value) => Some(BufferAllocationSpec {
-                size: value.size_bytes,
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
-                kind: RuntimeBufferKind::Uniform,
-            }),
-            RenderResourceDescriptor::StorageBuffer(value) => Some(BufferAllocationSpec {
-                size: value.size_bytes,
-                usage: BufferUsages::STORAGE
+        descriptor: &RenderResourceDeclaration,
+    ) -> Result<Option<BufferAllocationSpec>> {
+        let Some(normalized) = descriptor.gpu_descriptor((1, 1), GpuTextureFormat::Rgba8Unorm)?
+        else {
+            return Ok(None);
+        };
+        let GpuResourceDescriptor::Buffer(buffer) = normalized else {
+            return Ok(None);
+        };
+        let kind = match descriptor {
+            RenderResourceDeclaration::Uniform(_) => RuntimeBufferKind::Uniform,
+            RenderResourceDeclaration::Storage(_) => RuntimeBufferKind::Storage,
+            _ => return Ok(None),
+        };
+        let usage = match kind {
+            RuntimeBufferKind::Uniform => {
+                BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
+            }
+            RuntimeBufferKind::Storage => {
+                BufferUsages::STORAGE
                     | BufferUsages::COPY_SRC
                     | BufferUsages::COPY_DST
                     | BufferUsages::VERTEX
                     | BufferUsages::INDEX
-                    | BufferUsages::INDIRECT,
-                kind: RuntimeBufferKind::Storage,
-            }),
-            RenderResourceDescriptor::SampledTexture(_)
-            | RenderResourceDescriptor::StorageTexture(_)
-            | RenderResourceDescriptor::ColorTarget(_)
-            | RenderResourceDescriptor::DepthTarget(_)
-            | RenderResourceDescriptor::HistoryTexture(_)
-            | RenderResourceDescriptor::TargetAlias(_)
-            | RenderResourceDescriptor::ImportedTexture(_)
-            | RenderResourceDescriptor::ImportedBuffer(_) => None,
-        }
+                    | BufferUsages::INDIRECT
+            }
+        };
+        Ok(Some(BufferAllocationSpec {
+            size: buffer.size_bytes(),
+            usage,
+            kind,
+        }))
     }
 }

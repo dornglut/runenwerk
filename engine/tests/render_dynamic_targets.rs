@@ -4,16 +4,17 @@ use engine::plugins::render::{
     PreparedFlowInvocationRequest, PreparedFrameContext, PreparedFrameContributions,
     PreparedRenderFrame, PreparedRenderFrameRequestError, PreparedRenderFrameRequestKind,
     PreparedRenderFrameRequestResource, PreparedShaderSnapshot, PreparedSurfaceInfo,
-    PreparedTargetBinding, PreparedViewFrame, PreparedViewKind, RenderBackendCapabilityProfile,
-    RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
-    RenderDynamicTextureTargetDescriptorError, RenderDynamicTextureTargetKey,
-    RenderDynamicTextureTargetRequestRegistryResource, RenderDynamicTextureUploadDescriptor,
-    RenderExecutionGraphDiagnosticKind, RenderFlow, RenderFlowId, RenderFrameProducerId,
-    RenderProductSurfaceDiagnosticKind, RenderProductSurfaceDiagnosticSeverity,
-    RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
-    RenderProductSurfaceRequestKind, RenderProductSurfaceStatusKind, RenderTextureSampleMode,
-    RenderTextureTargetFormat, RenderTextureTargetUsage, RenderTextureUploadAlphaMode,
-    compile_flow_plan, prepared_render_frame_preflight_cache_key, validate_prepared_render_frame,
+    PreparedTargetBinding, PreparedViewFrame, PreparedViewKind, RenderDynamicTextureRetention,
+    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetDescriptorError,
+    RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource,
+    RenderDynamicTextureUploadDescriptor, RenderExecutionGraphDiagnosticKind, RenderFlow,
+    RenderFlowId, RenderFrameProducerId, RenderProductSurfaceDiagnosticKind,
+    RenderProductSurfaceDiagnosticSeverity, RenderProductSurfaceManifest,
+    RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch, RenderProductSurfaceRequestKind,
+    RenderProductSurfaceStatusKind, RenderTextureSampleMode, RenderTextureTargetFormat,
+    RenderTextureTargetUsage, RenderTextureUploadAlphaMode, compile_flow_plan,
+    current_runtime_gpu_capabilities, prepared_render_frame_preflight_cache_key,
+    validate_prepared_render_frame,
 };
 use std::collections::BTreeMap;
 use ui_render_data::{ProductSurfaceTextureBindingSource, ViewportSurfaceBindingRegistry};
@@ -387,11 +388,8 @@ fn render_dynamic_targets_preflight_reports_missing_target_alias_binding() {
         Vec::new(),
     );
 
-    let report = validate_prepared_render_frame(
-        &frame,
-        &[compiled],
-        &RenderBackendCapabilityProfile::runtime_default(),
-    );
+    let report =
+        validate_prepared_render_frame(&frame, &[compiled], &current_runtime_gpu_capabilities());
 
     assert!(report.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::TargetAliasMissingBinding
@@ -448,11 +446,8 @@ fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_s
         vec![descriptor],
     );
 
-    let report = validate_prepared_render_frame(
-        &frame,
-        &[compiled],
-        &RenderBackendCapabilityProfile::runtime_default(),
-    );
+    let report =
+        validate_prepared_render_frame(&frame, &[compiled], &current_runtime_gpu_capabilities());
 
     assert!(report.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::DynamicTargetUsageMismatch
@@ -508,11 +503,8 @@ fn render_dynamic_targets_preflight_reports_typed_history_signature_conflicts() 
         vec![descriptor],
     );
 
-    let report = validate_prepared_render_frame(
-        &frame,
-        &[compiled],
-        &RenderBackendCapabilityProfile::runtime_default(),
-    );
+    let report =
+        validate_prepared_render_frame(&frame, &[compiled], &current_runtime_gpu_capabilities());
 
     assert!(report.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::HistorySignatureConflict
@@ -563,7 +555,7 @@ fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_unifor
     let baseline = prepared_render_frame_preflight_cache_key(
         &frame,
         std::slice::from_ref(&compiled),
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     );
 
     frame.context.frame_index += 1;
@@ -577,7 +569,7 @@ fn render_dynamic_targets_preflight_cache_key_ignores_frame_epoch_and_raw_unifor
     let changed_values = prepared_render_frame_preflight_cache_key(
         &frame,
         std::slice::from_ref(&compiled),
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     );
 
     assert_eq!(baseline, changed_values);
@@ -632,7 +624,7 @@ fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inpu
     let baseline = prepared_render_frame_preflight_cache_key(
         &frame,
         std::slice::from_ref(&compiled),
-        &RenderBackendCapabilityProfile::runtime_default(),
+        &current_runtime_gpu_capabilities(),
     );
 
     let mut alias_changed = frame.clone();
@@ -666,7 +658,7 @@ fn render_dynamic_targets_preflight_cache_key_invalidates_structural_render_inpu
         let changed_key = prepared_render_frame_preflight_cache_key(
             &changed,
             std::slice::from_ref(&compiled),
-            &RenderBackendCapabilityProfile::runtime_default(),
+            &current_runtime_gpu_capabilities(),
         );
         assert_ne!(baseline, changed_key);
     }

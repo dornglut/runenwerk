@@ -92,7 +92,7 @@ impl Renderer {
                     flow,
                     packet.surface_size,
                     packet.surface_format,
-                );
+                )?;
                 let invocation_ids = prepared_frame
                     .flow_invocations_for_flow(flow.flow_id)
                     .map(|invocation| invocation.invocation_id.0.as_str())
@@ -430,22 +430,23 @@ impl Renderer {
         runtime_resources: &mut FlowRuntimeResources,
     ) -> Result<()> {
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
+            let prepared = runtime_resources.prepare_uniform_upload(*buffer_id, bytes)?;
             let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
                 device,
                 invocation_id,
                 *buffer_id,
-                bytes.len() as u64,
+                prepared.layout().byte_len(),
             )?;
-            if bytes.len() as u64 > runtime_buffer.size {
+            if prepared.layout().byte_len() > runtime_buffer.size {
                 bail!(
                     "uniform upload for '{}' in invocation '{}' writes {} bytes but runtime buffer size is {}",
                     buffer_id,
                     invocation_id,
-                    bytes.len(),
+                    prepared.layout().byte_len(),
                     runtime_buffer.size
                 );
             }
-            queue.write_buffer(&runtime_buffer.buffer, 0, bytes);
+            queue.write_buffer(&runtime_buffer.buffer, 0, prepared.as_bytes());
         }
 
         Ok(())
@@ -461,22 +462,24 @@ impl Renderer {
         uniform: RenderFixedStepIterationUniform,
     ) -> Result<()> {
         let bytes = uniform.to_uniform_bytes();
+        let prepared =
+            runtime_resources.prepare_uniform_upload(region.iteration_uniform, &bytes)?;
         let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
             device,
             invocation_id,
             region.iteration_uniform,
-            bytes.len() as u64,
+            prepared.layout().byte_len(),
         )?;
-        if bytes.len() as u64 > runtime_buffer.size {
+        if prepared.layout().byte_len() > runtime_buffer.size {
             bail!(
                 "fixed-step iteration uniform upload for region '{}' in invocation '{}' writes {} bytes but runtime buffer size is {}",
                 region.region_label,
                 invocation_id,
-                bytes.len(),
+                prepared.layout().byte_len(),
                 runtime_buffer.size
             );
         }
-        queue.write_buffer(&runtime_buffer.buffer, 0, &bytes);
+        queue.write_buffer(&runtime_buffer.buffer, 0, prepared.as_bytes());
         Ok(())
     }
 

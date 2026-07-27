@@ -19,10 +19,13 @@ impl Renderer {
         compiled_flows: &[CompiledRenderFlowPlan],
         config: RenderPreflightValidationConfigResource,
     ) -> Result<RenderExecutionGraphPreparedReport> {
-        let profile = RenderBackendCapabilityProfile::runtime_default();
+        let capabilities = current_runtime_gpu_capabilities();
         let mode = config.effective_mode();
-        let key =
-            prepared_render_frame_preflight_cache_key(prepared_frame, compiled_flows, &profile);
+        let key = prepared_render_frame_preflight_cache_key(
+            prepared_frame,
+            compiled_flows,
+            &capabilities,
+        );
 
         if let Err(error) =
             preflight_prepared_render_frame_runtime_guards(prepared_frame, compiled_flows)
@@ -61,7 +64,7 @@ impl Renderer {
             }
         };
 
-        let report = preflight_prepared_render_frame(prepared_frame, compiled_flows, &profile)
+        let report = preflight_prepared_render_frame(prepared_frame, compiled_flows, &capabilities)
             .map_err(anyhow::Error::new)?;
         if mode == RenderPreparedFramePreflightMode::CachedStrict {
             self.preflight_cache = Some(RendererPreparedFramePreflightCacheEntry {

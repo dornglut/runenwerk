@@ -1,7 +1,8 @@
 use super::*;
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{GpuWorkResourceId, PreparedGpuData, UniformData};
 use crate::plugins::render::{
     PreparedTargetBinding, RenderDynamicTextureTargetKey, RenderFlowId, RenderPassId,
+    prepare_projected_uniform_bytes,
 };
 use std::fmt;
 
@@ -96,9 +97,37 @@ pub struct FlowRuntimeResources {
     pub invocation_history_textures: BTreeMap<(String, GpuWorkResourceId), RuntimeTextureResource>,
     pub active_invocation_uniform_scope: Option<String>,
     pub kinds: BTreeMap<GpuWorkResourceId, RuntimeResourceKind>,
-    pub descriptors: BTreeMap<GpuWorkResourceId, RenderResourceDescriptor>,
+    pub descriptors: BTreeMap<GpuWorkResourceId, RenderResourceDeclaration>,
     pub resource_ids_by_label: BTreeMap<String, GpuWorkResourceId>,
     pub target_alias_bindings: BTreeMap<String, PreparedTargetBinding>,
+}
+
+impl FlowRuntimeResources {
+    pub(super) fn prepare_uniform_upload(
+        &self,
+        resource_id: GpuWorkResourceId,
+        bytes: &[u8],
+    ) -> anyhow::Result<PreparedGpuData<UniformData>> {
+        let declaration = self.descriptors.get(&resource_id).ok_or_else(|| {
+            anyhow::anyhow!(
+                "uniform upload references undeclared logical resource '{}'",
+                resource_id
+            )
+        })?;
+        let RenderResourceDeclaration::Uniform(uniform) = declaration else {
+            anyhow::bail!(
+                "uniform upload references non-uniform logical resource '{}'",
+                resource_id
+            );
+        };
+        let common = uniform.handle().descriptor().common();
+        Ok(prepare_projected_uniform_bytes(
+            common.label().as_str(),
+            bytes.to_vec(),
+            uniform.layout(),
+            common.provenance().clone(),
+        )?)
+    }
 }
 
 #[derive(Debug)]
@@ -154,7 +183,8 @@ mod resolve;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::gpu::GpuWorkResourceIdAllocator;
+    use crate::plugins::gpu::{GpuResourceLifetime, GpuWorkResourceIdAllocator};
+    use crate::plugins::render::RenderTextureIntent;
     use std::num::NonZeroU64;
 
     fn resource(local: u64) -> GpuWorkResourceId {
@@ -191,7 +221,7 @@ mod tests {
         let mut resources = FlowRuntimeResources::default();
         resources.descriptors.insert(
             resource(7),
-            RenderResourceDescriptor::color_target(resource(7)),
+            RenderResourceDeclaration::declare_color_attachment(resource(7), "overlay"),
         );
         resources
             .resource_ids_by_label
@@ -209,36 +239,36 @@ mod tests {
     #[test]
     fn flow_owned_texture_allocation_honors_fixed_size_exact_format_and_usage() {
         let id = resource(11);
-        let descriptor = RenderResourceDescriptor::StorageTexture(
-            crate::plugins::render::resource::StorageTextureDescriptor {
-                id,
-                lifetime: crate::plugins::render::ResourceLifetime::Persistent,
-                texture: crate::plugins::render::RenderTextureDescriptor {
-                    size: crate::plugins::render::RenderTextureSizePolicy::Fixed {
-                        width: 320,
-                        height: 180,
-                    },
-                    format: crate::plugins::render::RenderTextureFormatPolicy::Exact(
-                        crate::plugins::render::RenderTextureTargetFormat::R32Uint,
-                    ),
-                    usage: crate::plugins::render::RenderTextureTargetUsage {
-                        color_attachment: false,
-                        depth_attachment: false,
-                        sampled: true,
-                        storage: true,
-                        copy_src: false,
-                        copy_dst: true,
-                    },
-                    sample_mode: crate::plugins::render::RenderTextureSampleMode::Uint,
+        let descriptor = RenderResourceDeclaration::StorageImage(RenderTextureIntent {
+            id,
+            label: "fixed storage".to_string(),
+            lifetime: GpuResourceLifetime::Retained,
+            texture: crate::plugins::render::RenderTextureDescriptor {
+                size: crate::plugins::render::RenderTextureSizePolicy::Fixed {
+                    width: 320,
+                    height: 180,
                 },
+                format: crate::plugins::render::RenderTextureFormatPolicy::Exact(
+                    crate::plugins::render::RenderTextureTargetFormat::R32Uint,
+                ),
+                usage: crate::plugins::render::RenderTextureTargetUsage {
+                    color_attachment: false,
+                    depth_attachment: false,
+                    sampled: true,
+                    storage: true,
+                    copy_src: false,
+                    copy_dst: true,
+                },
+                sample_mode: crate::plugins::render::RenderTextureSampleMode::Uint,
             },
-        );
+        });
 
         let spec = FlowRuntimeResources::texture_allocation_spec(
             &descriptor,
             (1920, 1080),
             TextureFormat::Bgra8UnormSrgb,
         )
+        .expect("normalized descriptor lowering should succeed")
         .expect("storage texture should allocate");
 
         assert_eq!(spec.size, (320, 180));
@@ -253,13 +283,14 @@ mod tests {
     #[test]
     fn flow_owned_texture_allocation_resolves_surface_policy_from_frame() {
         let id = resource(12);
-        let descriptor = RenderResourceDescriptor::color_target(id);
+        let descriptor = RenderResourceDeclaration::declare_color_attachment(id, "color");
 
         let spec = FlowRuntimeResources::texture_allocation_spec(
             &descriptor,
             (1280, 720),
             TextureFormat::Rgba8UnormSrgb,
         )
+        .expect("normalized descriptor lowering should succeed")
         .expect("color target should allocate");
 
         assert_eq!(spec.size, (1280, 720));
@@ -271,8 +302,9 @@ mod tests {
     #[test]
     fn exact_color_target_allocation_ignores_surface_format_policy() {
         let id = resource(13);
-        let descriptor = RenderResourceDescriptor::color_target_exact(
+        let descriptor = RenderResourceDeclaration::declare_color_attachment_exact(
             id,
+            "exact color",
             crate::plugins::render::RenderTextureTargetFormat::Rgba8Unorm,
         );
 
@@ -281,6 +313,7 @@ mod tests {
             (1280, 720),
             TextureFormat::Rgba8UnormSrgb,
         )
+        .expect("normalized descriptor lowering should succeed")
         .expect("exact color target should allocate");
 
         assert_eq!(spec.size, (1280, 720));

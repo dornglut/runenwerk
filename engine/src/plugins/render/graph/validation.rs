@@ -1,13 +1,13 @@
-use crate::plugins::gpu::GpuWorkResourceId;
-use crate::plugins::render::RenderResourceDescriptor;
+use crate::plugins::gpu::{GpuBufferUsage, GpuWorkResourceId};
 use crate::plugins::render::api::{SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL};
 use crate::plugins::render::graph::{
     RenderDrawSource, RenderFlowGraph, RenderIndirectDrawArgsKind, RenderPassKind, RenderPassNode,
     validate_builtin_ui_pass_shape,
 };
-use crate::plugins::render::resource::{
-    ImportedBufferSemantic, ImportedTextureSemantic, RenderTextureDescriptor,
-    RenderTextureFormatPolicy, RenderTextureSampleMode, RenderTextureTargetFormat,
+use crate::plugins::render::resource::{RenderTextureSampleMode, RenderTextureTargetFormat};
+use crate::plugins::render::{
+    RenderImportedBufferSemantic, RenderImportedTextureSemantic, RenderResourceDeclaration,
+    RenderTextureDescriptor, RenderTextureFormatPolicy,
 };
 use crate::plugins::render::{RenderPassId, RenderTargetAliasKind, RenderVertexStepMode};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -98,6 +98,16 @@ pub enum RenderFlowValidationIssue {
     MissingUniformBuffer {
         pass_label: String,
         uniform_id: GpuWorkResourceId,
+    },
+
+    #[error(
+        "pass '{pass_label}' projects '{projected_type_name}' into uniform buffer '{uniform_id:?}' declared for '{declared_type_name}'"
+    )]
+    UniformBufferTypeMismatch {
+        pass_label: String,
+        uniform_id: GpuWorkResourceId,
+        declared_type_name: &'static str,
+        projected_type_name: &'static str,
     },
 
     #[error(
@@ -448,6 +458,24 @@ pub enum RenderFlowValidationIssue {
     },
 
     #[error(
+        "pass '{pass_label}' uses '{resource_id:?}' in {role}(...) but its normalized buffer descriptor does not declare '{required_usage:?}' usage"
+    )]
+    MissingBufferRoleUsage {
+        pass_label: String,
+        resource_id: GpuWorkResourceId,
+        role: &'static str,
+        required_usage: GpuBufferUsage,
+    },
+
+    #[error(
+        "pass '{pass_label}' binds uniform buffer '{resource_id:?}' through storage access; bind it through a uniform projection instead"
+    )]
+    UniformBufferUsedAsStorage {
+        pass_label: String,
+        resource_id: GpuWorkResourceId,
+    },
+
+    #[error(
         "resource '{resource_id:?}' uses external imported texture semantics; external imports are not supported in active runtime flows"
     )]
     UnsupportedExternalImportedTexture { resource_id: GpuWorkResourceId },
@@ -531,14 +559,14 @@ pub fn validate_flow_graph(
     let mut issues = Vec::<RenderFlowValidationIssue>::new();
 
     let mut resource_ids = BTreeSet::<GpuWorkResourceId>::new();
-    let mut resources_by_id = BTreeMap::<GpuWorkResourceId, &RenderResourceDescriptor>::new();
+    let mut resources_by_id = BTreeMap::<GpuWorkResourceId, &RenderResourceDeclaration>::new();
     for resource in &graph.resources.resources {
         let resource_id = *resource.id();
         if !resource_ids.insert(resource_id) {
             issues.push(RenderFlowValidationIssue::DuplicateResourceId { resource_id });
         }
-        if let RenderResourceDescriptor::StorageBuffer(value) = resource
-            && value.element_count == 0
+        if let RenderResourceDeclaration::Storage(value) = resource
+            && value.element_count() == 0
         {
             issues.push(RenderFlowValidationIssue::ZeroLengthStorageBuffer { resource_id });
         }
@@ -597,11 +625,22 @@ pub fn validate_flow_graph(
                 );
             }
 
-            if !graph.resources.has_uniform_buffer(binding.uniform_id()) {
-                issues.push(RenderFlowValidationIssue::MissingUniformBuffer {
+            match graph.resources.uniform_buffer_params(binding.uniform_id()) {
+                None => issues.push(RenderFlowValidationIssue::MissingUniformBuffer {
                     pass_label: pass.label.clone(),
                     uniform_id: *binding.uniform_id(),
-                });
+                }),
+                Some((declared_type_id, declared_type_name))
+                    if declared_type_id != binding.params_type_id() =>
+                {
+                    issues.push(RenderFlowValidationIssue::UniformBufferTypeMismatch {
+                        pass_label: pass.label.clone(),
+                        uniform_id: *binding.uniform_id(),
+                        declared_type_name,
+                        projected_type_name: binding.params_type_name(),
+                    });
+                }
+                Some(_) => {}
             }
         }
 
@@ -890,11 +929,11 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
 }
 
 fn validate_resource_descriptor_shape(
-    resource: &RenderResourceDescriptor,
+    resource: &RenderResourceDeclaration,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
     match resource {
-        RenderResourceDescriptor::SampledTexture(value) => {
+        RenderResourceDeclaration::Sampled(value) => {
             validate_texture_descriptor_format_usage(
                 value.id,
                 "sampled_texture",
@@ -902,7 +941,7 @@ fn validate_resource_descriptor_shape(
                 issues,
             );
         }
-        RenderResourceDescriptor::StorageTexture(value) => {
+        RenderResourceDeclaration::StorageImage(value) => {
             validate_texture_descriptor_format_usage(
                 value.id,
                 "storage_texture",
@@ -910,13 +949,13 @@ fn validate_resource_descriptor_shape(
                 issues,
             );
         }
-        RenderResourceDescriptor::ColorTarget(value) => {
+        RenderResourceDeclaration::ColorAttachment(value) => {
             validate_color_target_descriptor_shape(value.id, &value.texture, issues);
         }
-        RenderResourceDescriptor::DepthTarget(value) => {
+        RenderResourceDeclaration::DepthAttachment(value) => {
             validate_depth_target_descriptor_shape(value.id, &value.texture, issues);
         }
-        RenderResourceDescriptor::HistoryTexture(value) => {
+        RenderResourceDeclaration::History(value) => {
             validate_texture_descriptor_format_usage(
                 value.id,
                 "history_texture",
@@ -924,11 +963,11 @@ fn validate_resource_descriptor_shape(
                 issues,
             );
         }
-        RenderResourceDescriptor::UniformBuffer(_)
-        | RenderResourceDescriptor::StorageBuffer(_)
-        | RenderResourceDescriptor::TargetAlias(_)
-        | RenderResourceDescriptor::ImportedTexture(_)
-        | RenderResourceDescriptor::ImportedBuffer(_) => {}
+        RenderResourceDeclaration::Uniform(_)
+        | RenderResourceDeclaration::Storage(_)
+        | RenderResourceDeclaration::TargetAlias(_)
+        | RenderResourceDeclaration::ImportedTexture(_)
+        | RenderResourceDeclaration::ImportedBuffer(_) => {}
     }
 }
 
@@ -1075,22 +1114,54 @@ fn validate_texture_descriptor_format_usage(
 
 fn validate_pass_resource_usage(
     pass: &RenderPassNode,
-    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDescriptor>,
+    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDeclaration>,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
+    if matches!(
+        pass.kind,
+        RenderPassKind::Compute | RenderPassKind::Fullscreen | RenderPassKind::Graphics
+    ) {
+        let mut seen = BTreeSet::new();
+        for resource_id in pass.reads.iter().chain(&pass.writes).copied() {
+            let explicit_non_storage_role = pass.sampled_textures.contains(&resource_id)
+                || pass.write_textures.contains(&resource_id)
+                || pass.vertex_buffers.contains(&resource_id)
+                || pass.index_buffers.contains(&resource_id)
+                || pass.instance_buffers.contains(&resource_id)
+                || pass.indirect_buffers.contains(&resource_id)
+                || pass.depth_target == Some(resource_id)
+                || (matches!(
+                    pass.kind,
+                    RenderPassKind::Fullscreen | RenderPassKind::Graphics
+                ) && pass.writes.contains(&resource_id));
+            if !explicit_non_storage_role
+                && seen.insert(resource_id)
+                && matches!(
+                    resources_by_id.get(&resource_id),
+                    Some(RenderResourceDeclaration::Uniform(_))
+                )
+            {
+                issues.push(RenderFlowValidationIssue::UniformBufferUsedAsStorage {
+                    pass_label: pass.label.clone(),
+                    resource_id,
+                });
+            }
+        }
+    }
+
     for sampled in &pass.sampled_textures {
         let Some(resource) = resources_by_id.get(sampled) else {
             continue;
         };
         if !matches!(
             resource,
-            RenderResourceDescriptor::SampledTexture(_)
-                | RenderResourceDescriptor::StorageTexture(_)
-                | RenderResourceDescriptor::ColorTarget(_)
-                | RenderResourceDescriptor::DepthTarget(_)
-                | RenderResourceDescriptor::HistoryTexture(_)
-                | RenderResourceDescriptor::TargetAlias(_)
-                | RenderResourceDescriptor::ImportedTexture(_)
+            RenderResourceDeclaration::Sampled(_)
+                | RenderResourceDeclaration::StorageImage(_)
+                | RenderResourceDeclaration::ColorAttachment(_)
+                | RenderResourceDeclaration::DepthAttachment(_)
+                | RenderResourceDeclaration::History(_)
+                | RenderResourceDeclaration::TargetAlias(_)
+                | RenderResourceDeclaration::ImportedTexture(_)
         ) {
             issues.push(RenderFlowValidationIssue::SampledNonTextureResource {
                 pass_label: pass.label.clone(),
@@ -1106,8 +1177,7 @@ fn validate_pass_resource_usage(
         };
         if !matches!(
             resource,
-            RenderResourceDescriptor::StorageTexture(_)
-                | RenderResourceDescriptor::HistoryTexture(_)
+            RenderResourceDeclaration::StorageImage(_) | RenderResourceDeclaration::History(_)
         ) {
             issues.push(RenderFlowValidationIssue::WriteTextureOnInvalidResource {
                 pass_label: pass.label.clone(),
@@ -1138,25 +1208,53 @@ fn validate_pass_resource_usage(
     }
 
     for id in &pass.vertex_buffers {
-        validate_buffer_role_resource(pass, *id, "vertex_buffer", resources_by_id, issues);
+        validate_buffer_role_resource(
+            pass,
+            *id,
+            "vertex_buffer",
+            GpuBufferUsage::Vertex,
+            resources_by_id,
+            issues,
+        );
     }
     for id in &pass.index_buffers {
-        validate_buffer_role_resource(pass, *id, "index_buffer", resources_by_id, issues);
+        validate_buffer_role_resource(
+            pass,
+            *id,
+            "index_buffer",
+            GpuBufferUsage::Index,
+            resources_by_id,
+            issues,
+        );
     }
     for id in &pass.instance_buffers {
-        validate_buffer_role_resource(pass, *id, "instance_buffer", resources_by_id, issues);
+        validate_buffer_role_resource(
+            pass,
+            *id,
+            "instance_buffer",
+            GpuBufferUsage::Vertex,
+            resources_by_id,
+            issues,
+        );
     }
     for id in &pass.indirect_buffers {
-        validate_buffer_role_resource(pass, *id, "indirect_buffer", resources_by_id, issues);
+        validate_buffer_role_resource(
+            pass,
+            *id,
+            "indirect_buffer",
+            GpuBufferUsage::Indirect,
+            resources_by_id,
+            issues,
+        );
     }
 
     if let Some(depth_target) = &pass.depth_target
         && let Some(resource) = resources_by_id.get(depth_target)
     {
-        let depth_ok = matches!(resource, RenderResourceDescriptor::DepthTarget(_))
+        let depth_ok = matches!(resource, RenderResourceDeclaration::DepthAttachment(_))
             || matches!(
                 resource,
-                RenderResourceDescriptor::TargetAlias(value)
+                RenderResourceDeclaration::TargetAlias(value)
                     if value.kind == RenderTargetAliasKind::Depth
             );
         if !depth_ok {
@@ -1208,14 +1306,14 @@ fn validate_pass_resource_usage(
         let Some(resource) = resources_by_id.get(write) else {
             continue;
         };
-        if let RenderResourceDescriptor::ImportedTexture(value) = resource {
-            if value.semantic != ImportedTextureSemantic::SurfaceColor {
+        if let RenderResourceDeclaration::ImportedTexture(value) = resource {
+            if value.semantic != RenderImportedTextureSemantic::SurfaceColor {
                 issues.push(
                     RenderFlowValidationIssue::InvalidImportedTextureWriteSemantic {
                         pass_label: pass.label.clone(),
                         resource_id: *write,
                         semantic: value.semantic.as_str(),
-                        allowed: ImportedTextureSemantic::SurfaceColor.as_str(),
+                        allowed: RenderImportedTextureSemantic::SurfaceColor.as_str(),
                     },
                 );
                 continue;
@@ -1596,12 +1694,12 @@ fn vertex_step_mode_name(value: RenderVertexStepMode) -> &'static str {
     }
 }
 
-fn is_raster_color_output_resource(resource: &RenderResourceDescriptor) -> bool {
+fn is_raster_color_output_resource(resource: &RenderResourceDeclaration) -> bool {
     match resource {
-        RenderResourceDescriptor::ColorTarget(_) => true,
-        RenderResourceDescriptor::TargetAlias(value) => value.kind == RenderTargetAliasKind::Color,
-        RenderResourceDescriptor::ImportedTexture(value) => {
-            value.semantic == ImportedTextureSemantic::SurfaceColor
+        RenderResourceDeclaration::ColorAttachment(_) => true,
+        RenderResourceDeclaration::TargetAlias(value) => value.kind == RenderTargetAliasKind::Color,
+        RenderResourceDeclaration::ImportedTexture(value) => {
+            value.semantic == RenderImportedTextureSemantic::SurfaceColor
         }
         _ => false,
     }
@@ -1611,7 +1709,8 @@ fn validate_buffer_role_resource(
     pass: &RenderPassNode,
     resource_id: GpuWorkResourceId,
     role: &'static str,
-    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDescriptor>,
+    required_usage: GpuBufferUsage,
+    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDeclaration>,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
     let Some(resource) = resources_by_id.get(&resource_id) else {
@@ -1624,54 +1723,70 @@ fn validate_buffer_role_resource(
             role,
             resource_kind: resource_kind_name(resource),
         });
+        return;
+    }
+
+    let descriptor = match resource {
+        RenderResourceDeclaration::Uniform(value) => Some(value.handle().descriptor()),
+        RenderResourceDeclaration::Storage(value) => Some(value.handle().descriptor()),
+        RenderResourceDeclaration::ImportedBuffer(_) => None,
+        _ => None,
+    };
+    if descriptor.is_some_and(|descriptor| !descriptor.usages().contains(required_usage)) {
+        issues.push(RenderFlowValidationIssue::MissingBufferRoleUsage {
+            pass_label: pass.label.clone(),
+            resource_id,
+            role,
+            required_usage,
+        });
     }
 }
 
-fn is_texture_resource(resource: &RenderResourceDescriptor) -> bool {
+fn is_texture_resource(resource: &RenderResourceDeclaration) -> bool {
     matches!(
         resource,
-        RenderResourceDescriptor::SampledTexture(_)
-            | RenderResourceDescriptor::StorageTexture(_)
-            | RenderResourceDescriptor::ColorTarget(_)
-            | RenderResourceDescriptor::DepthTarget(_)
-            | RenderResourceDescriptor::HistoryTexture(_)
-            | RenderResourceDescriptor::TargetAlias(_)
-            | RenderResourceDescriptor::ImportedTexture(_)
+        RenderResourceDeclaration::Sampled(_)
+            | RenderResourceDeclaration::StorageImage(_)
+            | RenderResourceDeclaration::ColorAttachment(_)
+            | RenderResourceDeclaration::DepthAttachment(_)
+            | RenderResourceDeclaration::History(_)
+            | RenderResourceDeclaration::TargetAlias(_)
+            | RenderResourceDeclaration::ImportedTexture(_)
     )
 }
 
-fn is_buffer_resource(resource: &RenderResourceDescriptor) -> bool {
+fn is_buffer_resource(resource: &RenderResourceDeclaration) -> bool {
     matches!(
         resource,
-        RenderResourceDescriptor::UniformBuffer(_)
-            | RenderResourceDescriptor::StorageBuffer(_)
-            | RenderResourceDescriptor::ImportedBuffer(_)
+        RenderResourceDeclaration::Uniform(_)
+            | RenderResourceDeclaration::Storage(_)
+            | RenderResourceDeclaration::ImportedBuffer(_)
     )
 }
 
-fn resource_kind_name(resource: &RenderResourceDescriptor) -> &'static str {
+fn resource_kind_name(resource: &RenderResourceDeclaration) -> &'static str {
     match resource {
-        RenderResourceDescriptor::UniformBuffer(_) => "uniform_buffer",
-        RenderResourceDescriptor::StorageBuffer(_) => "storage_buffer",
-        RenderResourceDescriptor::SampledTexture(_) => "sampled_texture",
-        RenderResourceDescriptor::StorageTexture(_) => "storage_texture",
-        RenderResourceDescriptor::ColorTarget(_) => "color_target",
-        RenderResourceDescriptor::DepthTarget(_) => "depth_target",
-        RenderResourceDescriptor::HistoryTexture(_) => "history_texture",
-        RenderResourceDescriptor::TargetAlias(value) => match value.kind {
+        RenderResourceDeclaration::Uniform(_) => "uniform_buffer",
+        RenderResourceDeclaration::Storage(_) => "storage_buffer",
+        RenderResourceDeclaration::Sampled(_) => "sampled_texture",
+        RenderResourceDeclaration::StorageImage(_) => "storage_texture",
+        RenderResourceDeclaration::ColorAttachment(_) => "color_target",
+        RenderResourceDeclaration::DepthAttachment(_) => "depth_target",
+        RenderResourceDeclaration::History(_) => "history_texture",
+        RenderResourceDeclaration::TargetAlias(value) => match value.kind {
             RenderTargetAliasKind::Color => "target_alias(color)",
             RenderTargetAliasKind::Depth => "target_alias(depth)",
             RenderTargetAliasKind::Texture => "target_alias(texture)",
         },
-        RenderResourceDescriptor::ImportedTexture(value) => match value.semantic {
-            ImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
-            ImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
-            ImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
-            ImportedTextureSemantic::External => "imported_texture(external)",
+        RenderResourceDeclaration::ImportedTexture(value) => match value.semantic {
+            RenderImportedTextureSemantic::SurfaceColor => "imported_texture(surface_color)",
+            RenderImportedTextureSemantic::SurfaceDepth => "imported_texture(surface_depth)",
+            RenderImportedTextureSemantic::HistoryTexture => "imported_texture(history_texture)",
+            RenderImportedTextureSemantic::External => "imported_texture(external)",
         },
-        RenderResourceDescriptor::ImportedBuffer(value) => match value.semantic {
-            ImportedBufferSemantic::HistoryBuffer => "imported_buffer(history_buffer)",
-            ImportedBufferSemantic::External => "imported_buffer(external)",
+        RenderResourceDeclaration::ImportedBuffer(value) => match value.semantic {
+            RenderImportedBufferSemantic::HistoryBuffer => "imported_buffer(history_buffer)",
+            RenderImportedBufferSemantic::External => "imported_buffer(external)",
         },
     }
 }
@@ -1688,7 +1803,7 @@ fn render_pass_kind_name(kind: RenderPassKind) -> &'static str {
 }
 
 fn validate_imported_resource_descriptors(
-    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDescriptor>,
+    resources_by_id: &BTreeMap<GpuWorkResourceId, &RenderResourceDeclaration>,
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
     let mut surface_color_count = 0usize;
@@ -1696,15 +1811,15 @@ fn validate_imported_resource_descriptors(
 
     for (id, descriptor) in resources_by_id {
         match descriptor {
-            RenderResourceDescriptor::ImportedTexture(value) => match value.semantic {
-                ImportedTextureSemantic::SurfaceColor => {
+            RenderResourceDeclaration::ImportedTexture(value) => match value.semantic {
+                RenderImportedTextureSemantic::SurfaceColor => {
                     surface_color_count = surface_color_count.saturating_add(1);
                 }
-                ImportedTextureSemantic::SurfaceDepth => {
+                RenderImportedTextureSemantic::SurfaceDepth => {
                     surface_depth_count = surface_depth_count.saturating_add(1);
                 }
-                ImportedTextureSemantic::HistoryTexture => {}
-                ImportedTextureSemantic::External => {
+                RenderImportedTextureSemantic::HistoryTexture => {}
+                RenderImportedTextureSemantic::External => {
                     issues.push(
                         RenderFlowValidationIssue::UnsupportedExternalImportedTexture {
                             resource_id: *id,
@@ -1712,9 +1827,9 @@ fn validate_imported_resource_descriptors(
                     );
                 }
             },
-            RenderResourceDescriptor::ImportedBuffer(value) => match value.semantic {
-                ImportedBufferSemantic::HistoryBuffer => {}
-                ImportedBufferSemantic::External => {
+            RenderResourceDeclaration::ImportedBuffer(value) => match value.semantic {
+                RenderImportedBufferSemantic::HistoryBuffer => {}
+                RenderImportedBufferSemantic::External => {
                     issues.push(
                         RenderFlowValidationIssue::UnsupportedExternalImportedBuffer {
                             resource_id: *id,

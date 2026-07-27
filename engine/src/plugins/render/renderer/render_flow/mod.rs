@@ -1,5 +1,4 @@
 use super::*;
-use crate::plugins::render::RenderResourceDescriptor;
 use crate::plugins::render::api::{
     RenderFixedStepIterationUniform, SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL,
 };
@@ -10,7 +9,7 @@ use crate::plugins::render::graph::{
     CompiledCopyExecutionPlan, CompiledFixedStepRegion, CompiledPassBindings,
     CompiledPassExecutionPlan, CompiledPresentExecutionPlan, CompiledRasterExecutionPlan,
     CompiledRenderFlowPlan, CompiledResourceRef, CompiledStorageAccess, CompiledTargetPlan,
-    RenderBackendCapabilityProfile, RenderShaderReference, preflight_prepared_render_frame,
+    RenderShaderReference, preflight_prepared_render_frame,
 };
 use crate::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, RenderCaptureIdentity,
@@ -25,6 +24,7 @@ use crate::plugins::render::inspect::{
 use crate::plugins::render::pipelines::{
     FlowPassBindGroupKey, FlowPassKind, FlowPassPipelineKey, FlowPrimitiveTopologyClass,
 };
+use crate::plugins::render::{RenderResourceDeclaration, current_runtime_gpu_capabilities};
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
