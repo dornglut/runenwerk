@@ -1,18 +1,23 @@
 ---
 title: RunenRender Architecture and Decomposition Design
-description: Decision-complete prepared-scene, provider, material, transport, reconstruction, overlay, RunenGPU, host, conformance, and extraction architecture for RunenRender.
+description: Decision-complete prepared-scene, provider, material, transport, reconstruction, overlay, RunenGPU, operational, host, conformance, and extraction architecture for RunenRender.
 status: active
 owner: render
 layer: framework/render
 canonical: true
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-27
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ./runengpu-architecture-design.md
+  - ./runengpu-g3-access-work-graph-design.md
   - ./runenrender-internal-decomposition-execution-plan.md
+  - ./runen-family-operational-hardening-design.md
   - ../../reports/investigations/runenrender-extraction-investigation.md
+  - ../../reports/investigations/runen-family-operational-hardening-investigation.md
+  - ../../reports/investigations/runengpu-runenrender-application-domain-fit.md
+  - ../../reports/investigations/runengpu-proof-workload-strategy.md
   - ../../workspace/planning/roadmap.md
 ---
 
@@ -21,12 +26,18 @@ related_docs:
 ## Status
 
 The repository identity, one-package shape, ownership boundary, dependency on
-RunenGPU, Runenwerk integration boundary, RunenUI relationship, and target
-rendering architecture are fixed.
+RunenGPU, Runenwerk integration boundary, RunenUI relationship, prepared-scene
+model, provider direction, and target image-formation architecture are fixed.
 
-Exact current-file disposition and the first implementation scope remain blocked
-on S0. This document does not authorize Rust changes, source movement, external
-repository population, or advanced renderer implementation.
+The S0 current-source, identity, consumer, lifecycle, shader, macro, and file
+inventory is complete through issue `#127` / PR `#128`. Current paths remain evidence,
+not permanent ownership. No RunenRender Rust implementation or external population is
+authorized before accepted external RunenGPU cutover and a separately bounded R-phase
+issue.
+
+Operational hardening adds incremental-scene, provider-maturity, cache, capture, and
+performance requirements without changing dependency direction or creating a new
+phase.
 
 ## Mission
 
@@ -35,8 +46,8 @@ RunenRender owns image formation.
 It answers:
 
 > Given prepared views, providers, instances, materials, media, emitters,
-> environments, overlays, changes, and quality policy, how should one or more
-> images be formed?
+> environments, overlays, changes, and quality policy, how should one or more images
+> be formed?
 
 RunenRender does not own:
 
@@ -44,17 +55,18 @@ RunenRender does not own:
 - authoring source, scene persistence, or procedural world policy;
 - field/SDF mathematics;
 - simulations;
-- UI state, layout, hit testing, focus, or accessibility;
+- UI state, layout, hit testing, focus, accessibility, or text shaping;
 - windows and event loops;
 - general GPU execution;
-- WGPU devices, queues, surfaces, resources, or command submission;
+- WGPU devices, queues, surfaces, resources, or submission;
 - shader filesystem discovery or hot-reload product policy;
-- product lifecycle, quality selection, or recovery.
+- vertical-domain product systems;
+- product lifecycle, quality selection, artifact encoding, or recovery.
 
 ## Repository and package
 
 ```text
-repository: Crystonix/runen-render
+repository: dornglut/runen-render
 package: runen-render
 crate: runen_render
 depends on: runen-gpu
@@ -97,21 +109,20 @@ runen-render/
 └── xtask/
 ```
 
-Module names are directional. The public package is one release unit until a real
-second consumer, backend, or release boundary proves another package is needed.
+The public package remains one release unit until an independent consumer, backend,
+release boundary, ABI, or compile-time boundary proves another package is needed.
 
 Do not initially create `runenrender_core`, `runenrender_gpu`,
-`runenrender_macros`, facade, testing, capture, bridge, or compatibility packages.
-
-There is no `runenrender_wgpu`. Concrete WGPU ownership belongs to RunenGPU.
+`runenrender_macros`, facade, capture, bridge, compatibility, or testing packages.
+There is no `runenrender_wgpu`; concrete WGPU ownership belongs to RunenGPU.
 
 ## Dependency rules
 
-RunenRender may depend on RunenGPU and appropriate low-level math/data libraries.
-It must not depend on:
+RunenRender may depend on RunenGPU and appropriate low-level math/data libraries. It
+must not depend on:
 
 ```text
-WGPU directly
+WGPU
 Winit
 Runenwerk
 RunenECS
@@ -120,44 +131,45 @@ RunenUI
 scene/world/material-authoring/editor/application domains
 ```
 
-The package may define renderer semantics and lower them into RunenGPU workloads.
-It must not reach through RunenGPU into backend handles or recreate a parallel GPU
-resource/submission system.
+RunenRender lowers renderer semantics into RunenGPU work through public contracts.
+It must not reach through RunenGPU into backend handles or recreate a second GPU
+resource, graph, submission, progress, loss, or error model.
 
 ## Ownership
 
 RunenRender owns:
 
 - renderer semantic identities;
-- prepared render scenes and contribution composition;
+- prepared scenes and deterministic contribution composition;
 - views and logical targets;
-- providers, instances, and interaction contracts;
+- providers, instances, and narrow interaction capabilities;
 - material, medium, emitter, and environment semantics;
 - visibility and provider-query policy;
-- transport, estimator, and quality policy;
-- radiance caches and bounded history;
+- transport, estimator, and renderer quality semantics;
+- render-derived caches and bounded history;
 - reconstruction and anti-aliasing policy;
-- 2D/overlay composition and presentation intent;
-- color pipeline intent;
+- overlay composition and presentation intent;
+- color-pipeline intent;
 - deterministic render planning;
-- rendering diagnostics and provenance;
-- render-specific lowering into RunenGPU work fragments.
+- renderer diagnostics and provenance;
+- render-specific lowering into RunenGPU work.
 
 RunenRender does not own:
 
 - source ECS entities or scene nodes;
 - world/chunk streaming;
 - material graph authoring or asset import;
-- SDF fields or numerical query semantics;
+- SDF fields or their numerical query semantics;
 - UI widget semantics;
 - WGPU realization;
 - native windows;
 - application lifecycle;
-- product-specific feature registries or fallback policy.
+- product feature registries, fallback policy, or recovery;
+- domain formats, constraints, simulation policy, or regulated validation.
 
 ## Prepared render scene
 
-RunenRender consumes an immutable render-facing snapshot:
+RunenRender consumes renderer-owned immutable prepared state:
 
 ```text
 PreparedRenderScene
@@ -172,27 +184,47 @@ PreparedRenderScene
 ├── environments
 ├── overlays
 ├── transforms and motion
-├── changed regions/generations
+├── changed regions and generations
 ├── importance hints
 ├── regional summaries
 └── provenance
 ```
 
-The prepared scene is renderer-owned input, not a mirror of ECS or authoring state.
-Planning and execution must not reach back into:
+The prepared scene is not an ECS mirror. Planning and execution must not reach back
+into ECS, UI runtime state, simulation state, authoring graphs, host windows, or
+product services. Runenwerk adapters form accepted prepared values before submission.
 
-- ECS;
-- UI runtime state;
-- simulation state;
-- authoring graphs;
-- host windows;
-- product services.
+### Incremental prepared-scene requirement
 
-Runenwerk adapters form the snapshot before submission.
+R1/R2 must support deterministic:
+
+```text
+insert contribution
+replace contribution
+remove contribution
+retire producer
+```
+
+Every mutation records affected identities, generations, and changed regions.
+Unrelated views, providers, instances, materials, media, emitters, targets, and
+overlays must not require reconstruction when correctness facts permit narrower
+updates.
+
+A source adapter that cannot provide narrow changes may request an explicit full
+rebuild. Full rebuild is a declared fallback, not hidden behavior.
+
+Required proof:
+
+- equivalent full and incremental construction produce identical semantic prepared
+  state;
+- replacement/removal/retirement are deterministic;
+- missing references and conflicts produce structured diagnostics;
+- affected/unaffected work is inspectable;
+- update cost is characterized rather than assumed.
 
 ## Contribution model
 
-Independent producers publish immutable contributions:
+Independent producers publish immutable values:
 
 ```text
 RenderContribution
@@ -208,24 +240,19 @@ RenderContribution
 └── provenance
 ```
 
-Required lifecycle:
-
-```text
-insert
-replace
-remove
-retire producer
-```
-
-Composition defines deterministic producer ordering, replacement, target and
+Composition defines deterministic producer ordering, replacement, target ordering,
 overlay ordering, conflict handling, missing references, and diagnostics.
 
-Producer or contribution identities are renderer-local runtime values. They are
-not raw ECS entity IDs or stable persisted asset IDs.
+Producer and contribution identities are renderer-local runtime values. They are not
+raw ECS entity IDs or stable persisted asset IDs.
+
+The current Runenwerk `PreparedFrameContributions` feature map and collector registry
+are migration evidence only. They remain ECS/product-shaped and do not define the
+future renderer public API.
 
 ## Identity separation
 
-Candidate renderer concepts:
+Candidate renderer concepts include:
 
 ```text
 RenderSceneId
@@ -243,30 +270,28 @@ RenderOverlayId
 RenderHistoryId
 ```
 
-Exact names remain implementation decisions. Required separation is:
+Required separation:
 
 ```text
 RenderProviderId   semantic prepared provider
-GpuBufferId        one GPU resource realization
-EcsEntityId        one Runenwerk source entity
-AssetId            one authored/persisted asset identity
+Gpu resource ID    one RunenGPU logical or realized resource
+ECS entity ID      one Runenwerk source entity
+Asset ID           one authored/persisted source identity
 ```
 
-One provider may have zero, one, or many GPU resource realizations across devices,
-quality policies, frames, or caches. This is why current `Render*Id` values must be
-classified before migration.
+One provider may have zero, one, or many GPU realizations across devices, quality
+policies, frames, and caches.
 
 ## Views and logical targets
 
-A prepared view contains render-facing facts:
+A prepared view contains:
 
 ```text
 PreparedView
 ├── identity
 ├── logical target
 ├── projection
-├── current transform
-├── previous transform
+├── current and previous transforms
 ├── viewport
 ├── sample footprint
 ├── visibility mask
@@ -289,70 +314,93 @@ RenderTarget
 ```
 
 Concrete textures and surface images are RunenGPU resources. Native windows are
-host-owned.
+Runenwerk-owned.
 
 ## Provider architecture
 
 RunenRender is provider-oriented and field-first-capable without requiring one
-universal representation.
+universal representation or mandatory source meshes.
 
-Provider families may include:
+### Provider maturity
+
+Provider families are planning categories, not commitments to implement every family.
 
 ```text
-Solid
-Shell
-Fiber
-Liquid
-Volume
-Analytic
-Procedural
-Population
-Overlay
-RegionalSummary
+near-term proof
+    Procedural
+    Analytic
+    field-backed Solid sufficient for first SDF terrain
+    Overlay
+
+research candidate
+    Volume
+    Population
+    RegionalSummary
+    Liquid
+
+fully deferred pending accepted consumer evidence
+    Fiber
+    broad hardware-specialized variants
+    universal provider unification
 ```
 
-Provider capabilities may include:
+`Shell` may be introduced only when an accepted proof distinguishes it from the
+near-term surface/field capabilities.
+
+### Narrow provider capabilities
+
+No universal provider trait may require every provider to implement every query.
+Capabilities remain narrow:
 
 ```text
-closest_surface
-any_hit_visibility
+surface_query
+visibility_query
 interval_query
-transmittance
+transmittance_query
 raster_visibility
 procedural_evaluation
 material_attributes
-velocity
-refinable
-streamable
-hardware_accelerable
+motion
+refinement
+streaming
 ```
 
-Authoring and visible semantics do not require mesh extraction.
+Hardware acceleration is a realization/fallback fact, not a semantic capability that
+every provider must implement.
+
+A new provider family requires:
+
+- a concrete accepted consumer;
+- owned numerical and semantic contracts;
+- a representative proof;
+- explicit non-goals;
+- no expansion of unrelated provider interfaces.
+
+### Derived acceleration
 
 Derived acceleration may use:
 
 - sparse field pages or clipmaps;
-- range or distance hierarchies;
+- range/distance hierarchies;
 - AABB/BVH structures;
 - rasterized intermediates;
 - procedural tables;
 - hardware acceleration structures;
 - temporary backend triangles, AABBs, or microgeometry.
 
-Derived acceleration remains replaceable, discardable, and non-authoritative.
-“No mandatory meshes” does not prohibit backend-local geometry when it is the best
-acceleration representation.
+Derived acceleration is replaceable, discardable, source-generation-bound,
+validated before reuse, and non-authoritative. “No mandatory meshes” does not
+prohibit backend-local geometry when it is the best acceleration form.
 
 ## Interaction contract
 
-All provider-specific query strategies produce a common interaction:
+Provider-specific strategies produce shared semantic interactions:
 
 ```text
 RenderInteraction
 ├── distance
 ├── world position
-├── geometric orientation
-├── shading orientation
+├── geometric and shading orientation
 ├── material
 ├── medium transition
 ├── emission
@@ -363,108 +411,64 @@ RenderInteraction
 └── provenance
 ```
 
-The interaction separates semantic rendering results from provider-specific
-acceleration structures.
+A provider implements only the interaction/query capabilities needed by accepted
+consumers.
 
 ## Visibility and query architecture
 
-RunenRender separates path/ray selection from provider intersection strategy.
+RunenRender separates path/ray selection from provider query strategy:
 
 ```text
 trace(ray, purpose, tolerance, visibility_mask)
     -> RenderQueryOutcome
 ```
 
-Purposes include:
+Purposes may include primary, shadow, reflection, refraction, indirect, volume,
+picking, and reference.
 
-```text
-primary
-shadow
-reflection
-refraction
-indirect
-volume
-picking
-reference
-```
-
-Provider strategies may use:
-
-- sphere tracing;
-- interval/range traversal;
-- continuous root solving;
-- analytic intersection;
-- fiber solvers;
-- volume integration;
-- raster visibility;
-- hardware ray queries.
+Provider strategies may use sphere tracing, interval/range traversal, continuous root
+solving, analytic intersection, volume integration, raster visibility, or later
+contained hardware ray queries.
 
 Ray marching is an intersection technique, not the lighting architecture.
-RunenRender does not reinterpret RunenSDF values directly; a Runenwerk or future
-reusable adapter must preserve RunenSDF capability and numerical contracts.
+RunenRender does not reinterpret RunenSDF values directly; an adapter preserves
+RunenSDF numerical and capability contracts.
 
-## Materials
+## Materials, media, emitters, and environments
+
+### Materials
 
 A material defines scattering independently of provider representation:
 
 ```text
 RenderMaterial
 ├── scattering closure
-├── parameter sources
-├── layers
-├── emission
-├── transmission
+├── parameter sources and layers
+├── emission and transmission
 ├── subsurface policy
 ├── displacement/detail policy
 ├── material style
 └── provenance
 ```
 
-Material authoring graphs and asset import remain outside RunenRender. An adapter
-lowers accepted authored material products into prepared render materials.
+Material authoring graphs and asset import remain outside RunenRender.
 
-Detail-frequency metadata distinguishes:
+Detail-frequency metadata distinguishes resolved, transition, and unresolved detail
+so quality changes do not silently discard semantic material state.
 
-```text
-resolved detail     -> provider/geometric evaluation
-transition detail   -> filtered evaluation
-unresolved detail   -> effective material/statistical response
-```
+### Media
 
-## Media
+A medium defines absorption, scattering, phase behavior, emission, density source,
+interface priority, and provenance. Interfaces identify medium transitions.
 
-A medium defines:
+### Emitters and environments
 
-```text
-RenderMedium
-├── absorption
-├── scattering
-├── phase behavior
-├── emission
-├── density source
-├── interface priority
-└── provenance
-```
-
-Surface interfaces identify medium transitions. Transport, visibility, and
-transmittance consume one consistent medium contract.
-
-## Emitters and environments
-
-One emitter model includes:
-
-- directional, point, spot, and area emitters;
-- emissive surfaces and fields;
-- particles and fire;
-- environment lighting;
-- procedural skies;
-- distant/regional summaries.
-
-Each emitter provides bounds/distribution, output, importance, linking masks,
-generation, and provenance.
+One emitter model may cover directional, point, spot, area, emissive surface/field,
+particles/fire, environment lighting, procedural skies, and distant/regional
+summaries.
 
 Many-light sampling, reservoirs, spatial reuse, and path guiding are estimator
-implementations under the same emitter contract.
+implementations under the same emitter semantics.
 
 ## Transport architecture
 
@@ -472,17 +476,14 @@ RunenRender uses one semantic transport family:
 
 ```text
 generate path segments
-    -> trace
-    -> classify interaction
-    -> evaluate emission
-    -> sample emitter
-    -> sample continuation
-    -> update throughput
-    -> terminate, cache, or continue
+-> trace
+-> classify interaction
+-> evaluate emission
+-> sample emitter
+-> sample continuation
+-> update throughput
+-> terminate, cache, or continue
 ```
-
-Quality tiers vary budgets and estimators without switching to unrelated rendering
-systems.
 
 Initial quality ladder:
 
@@ -494,51 +495,44 @@ Ultra
 Reference
 ```
 
-All tiers share:
+All tiers share current prepared scene, provider/interaction contracts,
+material/medium/emitter semantics, current primary visibility, and structured
+capability/degradation reporting.
 
-- current prepared scene;
-- provider/interaction contracts;
-- material/medium/emitter semantics;
-- current primary visibility;
-- structured capability and degradation reporting.
+Budgets may vary for path depth, light candidates, spatial reuse, cache use,
+glossy/refraction/volume support, reconstruction/history, and progressive
+accumulation. No tier silently renders stale primary visibility or material state.
 
-Budgets may vary:
+## Derived caches and history
 
-- path depth;
-- direct-light candidate count;
-- reservoir/spatial reuse;
-- radiance-cache use;
-- glossy/refraction/volume support;
-- reconstruction and history;
-- progressive accumulation.
+### Cache doctrine
 
-No tier silently renders stale primary visibility or material state. Unsupported
-transport is diagnosed explicitly.
-
-## Radiance cache
-
-The initial scalable GI contract is a sparse directional world-space cache:
+Every render-derived cache records all correctness facts required for reuse:
 
 ```text
-RadianceCacheEntry
-├── spatial domain
-├── directional radiance
-├── visibility summary
-├── geometry validity
-├── material compatibility
-├── variance/confidence
-├── source generations
-├── update age
-└── provenance
+scene generation
+view generation
+provider/instance generations
+material/medium/emitter generations
+quality/algorithm/schema revision
+changed-region coverage
+RunenGPU context/device generation where realized
+reconstruction source or explicit non-reconstructability
 ```
 
-The cache is derived and discardable. It may terminate later bounces, approximate
-diffuse or rough-glossy transport, and represent far/regional lighting.
+A cache hit changes cost, never semantics. Incomplete compatibility facts cause
+rejection or full rebuild.
 
-It must not become the only source of current primary visibility or authoritative
-scene state.
+### Radiance cache
 
-## Reconstruction and history
+A scalable GI cache may store spatial domain, directional radiance, visibility
+summary, geometry/material validity, variance/confidence, source generations, update
+age, and provenance.
+
+It may approximate later transport and far/regional lighting. It must not be the only
+source of current primary visibility or authoritative scene state.
+
+### History
 
 History policy is explicit:
 
@@ -551,11 +545,12 @@ FullTemporal
 ProgressiveReference
 ```
 
-Default product policy should preserve sharp current-frame visibility, material
-changes, validation, and disocclusion. History is bounded by source generations,
-motion, validity, and confidence.
+Default product policy preserves sharp current-frame visibility, material changes,
+validation, and disocclusion. Final-color history is not mandatory.
 
-Final-color history is not mandatory for every quality tier.
+R6 must prove narrow invalidation when correctness facts permit and full invalidation
+when they do not. Device-generation change invalidates GPU-realized caches/history.
+Stale cache use is never a quality-degradation mechanism.
 
 ## Stylization
 
@@ -564,190 +559,245 @@ Stylization is separated by owner:
 ```text
 MaterialStyle   local scattering/emission/detail
 TransportStyle  lighting/path/visibility interpretation
-DisplayStyle    color mapping, compositing, presentation
+DisplayStyle    color mapping/compositing/presentation
 ```
 
-Stylization does not require a separate renderer architecture or bypass current
-visibility/material validity.
+Stylization does not create a second renderer or bypass current visibility/material
+validity.
 
 ## Overlay architecture
 
-RunenRender accepts renderer-neutral overlay contributions such as:
-
-```text
-shapes
-strokes
-clips
-transforms
-glyph runs
-images
-layers
-blend/composite intent
-damage regions
-```
+RunenRender accepts renderer-neutral overlay contributions such as shapes, strokes,
+clips, transforms, glyph runs, images, layers, blend/composite intent, and damage
+regions.
 
 RunenRender may own GPU glyph/image resources, atlas residency, rasterization, and
-compositing. It must not own text shaping, line breaking, caret/selection logic,
-accessibility, widget state, or UI hit testing.
-
-### RunenUI bridge
-
-RunenUI remains independent:
+compositing. It does not own shaping, line breaking, caret/selection, accessibility,
+widget state, or UI hit testing.
 
 ```text
-RunenUI mounted runtime
-    -> style/layout/text/hit-test/semantics
-    -> renderer-neutral paint scene
+RunenUI paint scene
     -> Runenwerk bridge
-    -> RunenRender overlay contribution
-    -> RunenGPU workloads
+        -> RunenRender overlay contribution
+            -> RunenGPU work
 ```
 
 The bridge consumes paint facts, not widget state or actions.
 
-HUD and editor UI normally composite after 3D tone mapping. In-world UI may use an
-explicit adapter policy: texture/vector overlay, emissive surface, or physically
-lit surface. No current RunenUI milestone depends on RunenRender.
-
 ## RunenGPU lowering
 
-RunenRender converts semantic render plans into `GpuWorkFragment` contributions.
+RunenRender lowers semantic render plans into `GpuWorkFragment` values.
 
-The lowering may own:
+RunenRender may own render-specific:
 
-- render-specific resource realization and cache keys;
-- provider acceleration for rendering;
+- resource realization and cache keys expressed through RunenGPU contracts;
+- provider acceleration;
 - visibility/intersection pipelines;
-- material/medium evaluation pipelines;
+- material/medium evaluation;
 - emitter sampling;
 - transport wavefronts;
-- radiance-cache updates;
+- cache/history updates;
 - reconstruction;
 - overlay rasterization;
-- color/output encoding.
+- color/output transformation intent.
 
-It does not own:
-
-- device/queue/surface creation;
-- generic resource allocation or hazard validation;
-- command submission;
-- backend capability mapping;
-- a second GPU error or lifetime model.
-
-RunenGPU validates and executes the resulting work.
+RunenRender does not own device/queue/surface creation, generic allocation/hazard
+validation, command submission, progress, backend capability mapping, device loss, or
+a second GPU lifetime/error model.
 
 ## Shader boundary
 
-RunenRender owns render shader meaning and source products. RunenGPU owns shader
-admission and backend realization.
+RunenRender owns render shader meaning and source products. RunenGPU owns program
+admission, interface/layout validation, and backend realization. Runenwerk owns
+filesystem discovery, revision/watch/reload, user-facing diagnostics, and
+last-known-good product policy.
 
-Runenwerk owns filesystem discovery, source revision policy, file watching,
-hot-reload orchestration, user-facing diagnostics, and last-known-good product
-policy.
+WGSL/WGPU ABI details are not universal renderer semantics. A macro package requires
+concrete public-API and conformance evidence.
 
-WGSL/WGPU ABI details do not become universal renderer semantics. A macro package
-is not accepted before concrete API and conformance pressure exists.
-
-## Host and presentation boundary
+## Host, presentation, and recovery
 
 Runenwerk owns windows, event loops, resize/DPI/visibility policy, presentation
-timing, and product recovery.
+timing, product quality selection, artifact encoding, and recovery decisions.
 
-RunenGPU owns low-level surface operations and outcomes.
-
-RunenRender owns logical target, output color, compositing, and presentation intent.
-
-The dependency direction remains:
+RunenGPU owns low-level surface operations, generations, and outcomes.
+RunenRender owns logical targets, output color, compositing, and presentation intent.
 
 ```text
-Runenwerk host policy
+Runenwerk host/product policy
     -> RunenRender logical image intent
-    -> RunenGPU surface/resource execution
+        -> RunenGPU resource/surface execution
 ```
 
-## Diagnostics
+On device loss, RunenRender reports affected scene/cache/history realizations and
+reconstruction facts. It does not decide whether the product retries, degrades,
+recreates, or exits.
+
+## Diagnostics, capture, and reproducibility
 
 RunenRender exposes structured facts for:
 
 - prepared-scene and contribution validation;
 - missing/invalid providers and references;
-- quality/capability degradation;
+- capability/quality degradation;
 - visibility and interaction failures;
 - material/medium/emitter admission;
 - transport budgets and unsupported paths;
-- cache/history validity;
+- cache/history validity and invalidation;
 - reconstruction;
 - overlay composition;
-- RunenGPU workload provenance.
+- RunenGPU work provenance;
+- full versus incremental preparation evidence.
 
-RunenRender does not decide product severity, storage, UI presentation, or recovery.
+RunenRender does not decide product severity, retention, persistence, UI
+presentation, privacy, encoding, or recovery.
+
+Runenwerk may include namespaced RunenRender facts in a versioned reproducibility
+bundle. Runtime IDs, pointers, and unversioned diagnostic strings are not stable
+capture authority.
+
+## Operational phase requirements
+
+```text
+R1/R2
+    prepared scene/contribution identity and deterministic lifecycle
+    incremental insert/replace/remove/retire-producer proof
+
+R3
+    near-term provider proofs through narrow capabilities
+    reject universal provider-trait pressure
+
+R4/R5
+    image-formation/transport/quality proof on accepted RunenGPU
+
+R6
+    cache/history generation and changed-region invalidation
+
+R7
+    target/surface integration only through RunenGPU facts
+
+R8
+    renderer performance, memory, capture, diagnostics, recovery facts,
+    reproducibility, and anti-cheating proof
+```
+
+No new R phase is created.
+
+## Performance characterization
+
+R8 must record at least:
+
+- full-scene versus incremental preparation cost;
+- affected and unaffected contribution work;
+- provider-query counts and divergence evidence;
+- cache hit/miss/invalidation;
+- current-frame versus history-dependent paths;
+- CPU/GPU memory high-water marks;
+- cold/warm program/pipeline cost inherited through RunenGPU;
+- artifact/capture reproducibility;
+- comparison with a simpler renderer or direct path for the same bounded proof.
+
+Performance evidence is diagnostic until a separately accepted controlled budget
+exists. No private RunenGPU/WGPU reach-through may make the framework benchmark look
+better.
+
+## Application-domain boundary
+
+High-value pressure includes implicit fabrication, scientific volumes, robotics
+sensors, geospatial/environmental visualization, digital twins, and offline
+procedural output.
+
+Those applications retain constraints, domain formats, data governance, simulations,
+streaming, timelines, collaboration, and product workflows. RunenRender provides
+image-formation contracts, not complete vertical products.
 
 ## Current decomposition problem
 
-The current `engine/src/plugins/render` combines:
+The current `engine/src/plugins/render` mixes:
 
-- general GPU execution and WGPU ownership;
-- render graph/planning and image formation;
+- general GPU execution/WGPU ownership;
+- render graph and image formation;
 - native-window surfaces;
-- ECS and host state projection;
-- Runenwerk frame/time policy;
-- scene, world, material, SDF, UI, editor, procedural, and product features;
-- shader discovery and hot reload;
-- diagnostics, capture, artifact export, startup readiness, and frame pacing.
+- ECS/host projection and frame policy;
+- source-domain and product features;
+- shader discovery/hot reload;
+- diagnostics, captures, artifacts, readiness, residency, and pacing.
 
-Moving the directory unchanged is forbidden.
+Current frame contributions are ECS/product-shaped; `WgpuCtx` exposes backend
+`Device`/`Queue`; captures are runtime string/byte values; current caches/residency
+combine product and backend concerns. Moving the directory unchanged is forbidden.
 
 ## Conformance
 
 Internal RunenRender proof requires:
 
-1. prepared scene and contribution composition test without ECS, Runenwerk, WGPU,
+1. prepared scene and contribution composition without ECS, Runenwerk, WGPU,
    RunenSDF, or RunenUI;
-2. provider/interaction/material/medium/emitter contracts test independently;
-3. deterministic render planning;
-4. RunenGPU lowering through public workload contracts only;
-5. no direct WGPU dependency;
-6. at least two independent producer families through the same contribution seam;
-7. overlay proof using neutral primitives without UI runtime access;
-8. quality/history/cache validity tests;
-9. Runenwerk adapters consume no private renderer internals;
-10. no duplicate old render path remains.
+2. deterministic insert/replace/remove/retire-producer behavior;
+3. equivalent full and incremental prepared results;
+4. at least two independent producer families through the same seam;
+5. near-term providers using only required narrow capabilities;
+6. provider/interaction/material/medium/emitter tests independently;
+7. deterministic render planning;
+8. RunenGPU lowering through public work contracts only;
+9. no direct WGPU dependency or private reach-through;
+10. overlay proof using neutral primitives;
+11. quality/history/cache validity and invalidation tests;
+12. full/incremental performance and memory characterization;
+13. reproducibility/capture facts supplied without owning persistence policy;
+14. Runenwerk adapters consume no private renderer internals;
+15. no duplicate old render path.
 
-External repository proof additionally requires independent locked validation,
-public downstream consumption, exact RunenGPU revision, provenance, and clean
+External proof additionally requires independent locked validation, public downstream
+consumption, exact RunenGPU revision, provenance, operational conformance, and clean
 Runenwerk cutover.
 
-## S0 inventory gate
+## Current-source revalidation gate
 
-Before implementation, S0 must classify:
+Before each R implementation slice:
 
-- every current file/module/shader/test/example/benchmark;
-- graph, resource, WGPU, surface, shader, pipeline, macro, residency, frame,
-  diagnostics, capture, and runtime ownership;
-- every current `Render*Id`, allocator, handle, raw conversion, and persisted use;
-- every direct consumer in apps, domains, net, adapters, tests, examples, and tools;
-- all host/ECS/scene/world/material/SDF/UI/editor/product reach-back;
-- device/context/surface/window/drop/shutdown control flow;
-- shader discovery/reload and macro ABI consumers;
-- validation, headless, offscreen, surface, device-loss, runtime, and benchmark
-  commands;
-- exact move/stay/redesign/delete disposition.
+- verify current `main` and exact accepted base;
+- repeat declaration and direct/transitive consumer inventory for affected authority;
+- classify current graph, resource, surface, shader, pipeline, macro, residency,
+  frame, diagnostics, capture, runtime, example, test, and benchmark paths;
+- verify identities, raw conversions, and persisted uses;
+- identify all host/ECS/source-domain reach-back;
+- bind exact move/stay/redesign/delete scope;
+- run the canonical validation baseline;
+- stop if a new ADR, dependency direction, package, compatibility path, or stable
+  persisted-format change is required.
 
-S0 must first split GPU-execution ownership from renderer semantics. The old
-renderer-first R1 identity specification is invalid because current identities mix
-GPU, renderer, and Runenwerk owners.
+The accepted S0 inventory remains discovery evidence, not permission to skip current
+source revalidation.
 
 ## Definition of done
 
 RunenRender extraction is complete only when:
 
-- the one-package public API validates independently;
-- RunenRender depends on exact RunenGPU revision and not WGPU directly;
+- one independently validated package exists in `dornglut/runen-render`;
+- RunenRender depends on an exact RunenGPU revision and not WGPU;
 - Runenwerk consumes only public prepared/contribution/adapter seams;
 - RunenUI and RunenSDF remain independent;
-- downstream conformance and renderer/GPU/runtime evidence pass;
+- near-term provider and image-formation proofs pass;
+- incremental scene lifecycle and cache/history invalidation are proven;
+- operational/performance/capture/recovery facts pass R8 conformance;
+- downstream and runtime evidence pass;
 - every active consumer is migrated;
 - exact provenance is recorded;
-- the original Runenwerk image-formation implementation and temporary seams are
-  deleted;
-- no duplicate renderer or private reach-through path remains.
+- original Runenwerk image-formation authority and temporary seams are deleted;
+- no mirror, compatibility package, duplicate renderer, or private reach-through
+  remains.
+
+## Strategic reevaluation gates
+
+Reconsider the RunenRender split if:
+
+- a smaller rend3/Filament-style renderer satisfies all accepted proofs;
+- provider abstractions force unrelated query families into one interface;
+- prepared scenes systematically require full rebuilds;
+- optional history/current-frame quality cannot share coherent semantics;
+- RunenRender becomes architecture without multiple real provider families;
+- measured cost materially exceeds a simpler renderer without reusable value.
+
+Reevaluation requires an explicit architecture decision and does not authorize a
+hidden bypass.
