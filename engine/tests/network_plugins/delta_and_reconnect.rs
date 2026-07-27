@@ -1,4 +1,45 @@
 // Owner: Engine Networking Tests - Delta and Reconnect
+#[derive(Debug, Copy, Clone, Default, ecs::Resource)]
+struct NetworkTestFrameDelta(f32);
+
+fn apply_network_test_frame_delta(
+    frame_delta: Res<NetworkTestFrameDelta>,
+    mut time: ResMut<Time>,
+) {
+    time.delta_seconds = frame_delta.0;
+}
+
+fn install_network_test_clock(app: &mut App) {
+    app.init_resource::<NetworkTestFrameDelta>();
+    app.add_systems(
+        PreUpdate,
+        apply_network_test_frame_delta.after(CoreSet::Time),
+    );
+}
+
+fn run_network_protocol_frame(mut app: App, context: &str) -> App {
+    app.world_mut()
+        .resource_mut::<NetworkTestFrameDelta>()
+        .expect("network test clock should be installed")
+        .0 = 0.0;
+    app.run_for_frames(1)
+        .unwrap_or_else(|error| panic!("{context}: {error:#}"))
+}
+
+fn run_network_fixed_tick(mut app: App, context: &str) -> App {
+    let step_seconds = app
+        .world()
+        .resource::<FixedTimeConfig>()
+        .expect("fixed-time config should be installed")
+        .step_seconds;
+    app.world_mut()
+        .resource_mut::<NetworkTestFrameDelta>()
+        .expect("network test clock should be installed")
+        .0 = step_seconds;
+    app.run_for_frames(1)
+        .unwrap_or_else(|error| panic!("{context}: {error:#}"))
+}
+
 #[test]
 fn server_delta_snapshot_applies_cleanly_on_client() {
     let mut server = App::headless();
@@ -247,6 +288,7 @@ fn server_tracks_per_connection_baselines_across_reconnects() {
     let mut app = App::headless();
     app.add_plugins(default_plugins());
     app.add_plugins((ScenePlugin, NetworkServerPlugin));
+    install_network_test_clock(&mut app);
     app.world_mut().insert_resource(ServerSessionConfig {
         server_id: "srv-local".to_string(),
         protocol: ProtocolVersion::new(1, 1, 1),
@@ -270,8 +312,17 @@ fn server_tracks_per_connection_baselines_across_reconnects() {
         }),
     )
     .expect("server inbox enqueue should succeed");
-    let app = app.run_for_frames(1).expect("first join should run");
-    let mut app = app.run_for_ticks(1).expect("first replication tick should run");
+    let app = run_network_protocol_frame(app, "first join should run");
+    assert_eq!(
+        *app.world().resource::<SimulationTick>().unwrap(),
+        SimulationTick(0),
+        "protocol-only join frame must not advance fixed time"
+    );
+    let mut app = run_network_fixed_tick(app, "first replication tick should run");
+    assert_eq!(
+        *app.world().resource::<SimulationTick>().unwrap(),
+        SimulationTick(1)
+    );
 
     enqueue_server_inbox_from(
         app.world_mut(),
@@ -282,7 +333,12 @@ fn server_tracks_per_connection_baselines_across_reconnects() {
         }),
     )
     .expect("server inbox enqueue should succeed");
-    let mut app = app.run_for_frames(1).expect("ack frame should run");
+    let mut app = run_network_protocol_frame(app, "ack frame should run");
+    assert_eq!(
+        *app.world().resource::<SimulationTick>().unwrap(),
+        SimulationTick(1),
+        "protocol-only ACK frame must not advance fixed time"
+    );
 
     enqueue_server_inbox(
         app.world_mut(),
@@ -301,15 +357,22 @@ fn server_tracks_per_connection_baselines_across_reconnects() {
         }),
     )
     .expect("server inbox enqueue should succeed");
-    let app = app.run_for_frames(1).expect("second join should run");
+    let app = run_network_protocol_frame(app, "second join should run");
+    assert_eq!(
+        *app.world().resource::<SimulationTick>().unwrap(),
+        SimulationTick(1),
+        "protocol-only reconnect frame must not advance fixed time"
+    );
 
     let session = app.world().resource::<engine_net::ServerSessionState>().unwrap();
     assert!(session.active_connections.contains(&ConnectionId(1)));
     assert!(session.active_connections.contains(&ConnectionId(2)));
 
-    let app = app
-        .run_for_ticks(2)
-        .expect("second replication tick should run");
+    let app = run_network_fixed_tick(app, "second replication tick should run");
+    assert_eq!(
+        *app.world().resource::<SimulationTick>().unwrap(),
+        SimulationTick(2)
+    );
     let outbound = app.world().resource::<NetworkOutboundQueue>().unwrap();
     assert!(outbound.server_messages().iter().any(|message| {
         matches!(
