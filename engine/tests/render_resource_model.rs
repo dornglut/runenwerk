@@ -1,7 +1,9 @@
-use engine::plugins::gpu::GpuWorkResourceId;
+use engine::plugins::gpu::{GpuResourceDescriptor, GpuTextureFormat, GpuWorkResourceId};
 use engine::plugins::render::api::RenderPassId;
 use engine::plugins::render::{
-    GpuParams, GpuUniform, RenderFlow, RenderResourceDeclaration, detect_duplicate_resource_ids,
+    GpuParams, GpuUniform, RenderFlow, RenderGpuResourceLowering, RenderImportedBufferSemantic,
+    RenderImportedTextureSemantic, RenderResourceDeclaration, RenderTargetAliasKind,
+    detect_duplicate_resource_ids,
 };
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
@@ -77,4 +79,143 @@ fn duplicate_resource_detection_finds_collisions() {
 
     let duplicates = detect_duplicate_resource_ids(&descriptors);
     assert_eq!(duplicates, vec![duplicate]);
+}
+
+#[test]
+fn owned_buffer_lowering_returns_normalized_buffer() {
+    let id = test_resource_ids(1)[0];
+    let declaration =
+        RenderResourceDeclaration::declare_uniform::<ResourceTestParams>(id, "owned buffer")
+            .unwrap();
+
+    let lowering = declaration
+        .lower_gpu_resource((64, 64), GpuTextureFormat::Rgba8Unorm)
+        .unwrap();
+    let RenderGpuResourceLowering::Normalized(normalized) = lowering else {
+        panic!("owned buffer should have normalized descriptor facts");
+    };
+
+    assert!(matches!(
+        normalized.as_ref(),
+        GpuResourceDescriptor::Buffer(buffer) if buffer.size_bytes() > 0
+    ));
+}
+
+#[test]
+fn owned_texture_lowering_returns_normalized_texture() {
+    let id = test_resource_ids(1)[0];
+    let declaration = RenderResourceDeclaration::declare_color_attachment(id, "owned texture");
+
+    let lowering = declaration
+        .lower_gpu_resource((320, 180), GpuTextureFormat::Bgra8UnormSrgb)
+        .unwrap();
+    let RenderGpuResourceLowering::Normalized(normalized) = lowering else {
+        panic!("owned texture should have normalized descriptor facts");
+    };
+
+    assert!(matches!(
+        normalized.as_ref(),
+        GpuResourceDescriptor::Texture(texture)
+            if texture.extent().width() == 320
+                && texture.extent().height() == 180
+                && texture.format() == GpuTextureFormat::Bgra8UnormSrgb
+    ));
+}
+
+#[test]
+fn imported_texture_lowering_preserves_unresolved_render_intent() {
+    let id = test_resource_ids(1)[0];
+    let declaration =
+        RenderResourceDeclaration::declare_imported_external_texture(id, "external texture");
+
+    let lowering = declaration
+        .lower_gpu_resource((320, 180), GpuTextureFormat::Rgba8Unorm)
+        .unwrap();
+
+    assert!(matches!(
+        lowering,
+        RenderGpuResourceLowering::ImportedTexture(intent)
+            if intent.id == id
+                && intent.label == "external texture"
+                && intent.semantic == RenderImportedTextureSemantic::External
+    ));
+}
+
+#[test]
+fn imported_buffer_lowering_preserves_unresolved_render_intent() {
+    let id = test_resource_ids(1)[0];
+    let declaration =
+        RenderResourceDeclaration::declare_imported_history_buffer(id, "history buffer");
+
+    let lowering = declaration
+        .lower_gpu_resource((320, 180), GpuTextureFormat::Rgba8Unorm)
+        .unwrap();
+
+    assert!(matches!(
+        lowering,
+        RenderGpuResourceLowering::ImportedBuffer(intent)
+            if intent.id == id
+                && intent.label == "history buffer"
+                && intent.semantic == RenderImportedBufferSemantic::HistoryBuffer
+    ));
+}
+
+#[test]
+fn target_alias_lowering_remains_a_render_relationship() {
+    let id = test_resource_ids(1)[0];
+    let declaration = RenderResourceDeclaration::declare_target_alias(
+        id,
+        "surface alias",
+        RenderTargetAliasKind::Color,
+    );
+
+    let lowering = declaration
+        .lower_gpu_resource((320, 180), GpuTextureFormat::Rgba8Unorm)
+        .unwrap();
+
+    assert!(matches!(
+        lowering,
+        RenderGpuResourceLowering::TargetAlias(alias)
+            if alias.id == id
+                && alias.label == "surface alias"
+                && alias.kind == RenderTargetAliasKind::Color
+    ));
+}
+
+#[test]
+fn unresolved_import_lowering_rejects_an_empty_diagnostic_label() {
+    let id = test_resource_ids(1)[0];
+    let declaration = RenderResourceDeclaration::declare_imported_external_buffer(id, "   ");
+
+    assert!(
+        declaration
+            .lower_gpu_resource((1, 1), GpuTextureFormat::Rgba8Unorm)
+            .is_err()
+    );
+}
+
+#[test]
+fn diagnostic_labels_do_not_change_render_declaration_equality() {
+    let ids = test_resource_ids(3);
+
+    assert_eq!(
+        RenderResourceDeclaration::declare_color_attachment(ids[0], "first texture label"),
+        RenderResourceDeclaration::declare_color_attachment(ids[0], "second texture label"),
+    );
+    assert_eq!(
+        RenderResourceDeclaration::declare_imported_external_texture(ids[1], "first import label"),
+        RenderResourceDeclaration::declare_imported_external_texture(ids[1], "second import label",),
+    );
+    assert_eq!(
+        RenderResourceDeclaration::declare_target_alias(
+            ids[2],
+            "first alias label",
+            RenderTargetAliasKind::Color,
+        ),
+        RenderResourceDeclaration::declare_target_alias(
+            ids[2],
+            "second alias label",
+            RenderTargetAliasKind::Color,
+        ),
+    );
 }

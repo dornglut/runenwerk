@@ -1,8 +1,9 @@
 use super::*;
-use crate::plugins::gpu::{GpuWorkResourceId, PreparedGpuData, UniformData};
+use crate::plugins::gpu::{GpuTextureDimension, GpuWorkResourceId, PreparedGpuData, UniformData};
 use crate::plugins::render::{
-    PreparedTargetBinding, RenderDynamicTextureTargetKey, RenderFlowId, RenderPassId,
-    prepare_projected_uniform_bytes,
+    PreparedTargetBinding, RenderDynamicTextureTargetKey, RenderFlowId,
+    RenderGpuResourceAdapterError, RenderImportedBufferIntent, RenderImportedTextureIntent,
+    RenderPassId, RenderTargetAliasDeclaration, prepare_projected_uniform_bytes,
 };
 use std::fmt;
 
@@ -39,7 +40,7 @@ pub struct RuntimeBufferResource {
     pub reused_last_frame: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextureAllocationSpec {
     pub size: (u32, u32),
     pub format: TextureFormat,
@@ -47,11 +48,49 @@ pub struct TextureAllocationSpec {
     pub is_depth: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BufferAllocationSpec {
     pub size: u64,
     pub usage: BufferUsages,
     pub kind: RuntimeBufferKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CurrentRuntimeResourceDisposition {
+    Buffer(BufferAllocationSpec),
+    FlowTexture(TextureAllocationSpec),
+    InvocationHistoryTexture(TextureAllocationSpec),
+    ImportedTexture(RenderImportedTextureIntent),
+    ImportedBuffer(RenderImportedBufferIntent),
+    TargetAlias(RenderTargetAliasDeclaration),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+enum CurrentRuntimeResourceRealizationError {
+    #[error(transparent)]
+    Adapter(#[from] RenderGpuResourceAdapterError),
+    #[error(
+        "current render runtime cannot realize normalized GPU {kind} resource '{resource_id}'; the owning later phase must add an explicit realization path"
+    )]
+    UnsupportedNormalizedKind {
+        resource_id: GpuWorkResourceId,
+        kind: &'static str,
+    },
+    #[error(
+        "current render runtime cannot realize normalized texture resource '{resource_id}' with shape {dimension:?} and depth/layers {depth_or_layers}; only 2D single-layer textures are supported"
+    )]
+    UnsupportedTextureShape {
+        resource_id: GpuWorkResourceId,
+        dimension: GpuTextureDimension,
+        depth_or_layers: u32,
+    },
+    #[error(
+        "current render declaration '{resource_id}' produced normalized GPU {normalized_kind} facts that do not match its render-owned declaration kind"
+    )]
+    NormalizedDeclarationMismatch {
+        resource_id: GpuWorkResourceId,
+        normalized_kind: &'static str,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -183,9 +222,29 @@ mod resolve;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::gpu::{GpuResourceLifetime, GpuWorkResourceIdAllocator};
-    use crate::plugins::render::RenderTextureIntent;
+    use crate::plugins::gpu::{
+        GpuAddressMode, GpuBufferUsage, GpuFilterMode, GpuMemoryIntent, GpuQueryKind,
+        GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceDescriptor,
+        GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor,
+        GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent, GpuTextureFormat,
+        GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
+        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+    };
+    use crate::plugins::render::{
+        GpuParams, RenderGpuResourceLowering, RenderImportedBufferSemantic,
+        RenderImportedTextureSemantic, RenderTargetAliasKind, RenderTextureIntent,
+    };
     use std::num::NonZeroU64;
+
+    struct RuntimeTestUniform(u32);
+
+    impl GpuParams for RuntimeTestUniform {
+        type Raw = u32;
+
+        fn to_gpu(&self) -> Self::Raw {
+            self.0
+        }
+    }
 
     fn resource(local: u64) -> GpuWorkResourceId {
         let mut allocator = GpuWorkResourceIdAllocator::for_owner_scope(
@@ -199,6 +258,52 @@ mod tests {
             })
             .last()
             .expect("test local value is nonzero")
+    }
+
+    fn gpu_label(value: &str) -> GpuResourceLabel {
+        GpuResourceLabel::new(value).unwrap()
+    }
+
+    fn gpu_common(value: &str) -> GpuResourceCommon {
+        let label = gpu_label(value);
+        GpuResourceCommon::owned(
+            label.clone(),
+            GpuResourceLifetime::Retained,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(label, None, None),
+        )
+        .unwrap()
+    }
+
+    fn normalized_texture_view() -> GpuTextureViewDescriptor {
+        let parent_label = gpu_label("runtime test parent texture");
+        let parent = GpuTextureDescriptor::new(
+            gpu_common("runtime test parent texture"),
+            GpuTextureDimension::D2,
+            GpuTextureExtent::new(&parent_label, GpuTextureDimension::D2, 4, 4, 1).unwrap(),
+            1,
+            1,
+            GpuTextureFormat::Rgba8Unorm,
+            GpuTextureUsages::new(&parent_label, [GpuTextureUsage::Sampled]).unwrap(),
+            GpuTextureInitialization::Uninitialized,
+        )
+        .unwrap();
+        let mut allocator =
+            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(8).unwrap());
+        let handle = allocator.allocate_texture_handle(parent).unwrap();
+        let view_label = gpu_label("runtime test texture view");
+        let subresources =
+            GpuTextureSubresourceRange::new(&view_label, 0, 1, 0, 1, GpuTextureAspect::Color)
+                .unwrap();
+        GpuTextureViewDescriptor::new(
+            gpu_common("runtime test texture view"),
+            &handle,
+            None,
+            GpuTextureDimension::D2,
+            subresources,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -263,13 +368,15 @@ mod tests {
             },
         });
 
-        let spec = FlowRuntimeResources::texture_allocation_spec(
+        let disposition = FlowRuntimeResources::current_runtime_resource_disposition(
             &descriptor,
             (1920, 1080),
             TextureFormat::Bgra8UnormSrgb,
         )
-        .expect("normalized descriptor lowering should succeed")
-        .expect("storage texture should allocate");
+        .expect("normalized descriptor lowering should succeed");
+        let CurrentRuntimeResourceDisposition::FlowTexture(spec) = disposition else {
+            panic!("storage texture should have flow-owned allocation facts");
+        };
 
         assert_eq!(spec.size, (320, 180));
         assert_eq!(spec.format, TextureFormat::R32Uint);
@@ -285,13 +392,15 @@ mod tests {
         let id = resource(12);
         let descriptor = RenderResourceDeclaration::declare_color_attachment(id, "color");
 
-        let spec = FlowRuntimeResources::texture_allocation_spec(
+        let disposition = FlowRuntimeResources::current_runtime_resource_disposition(
             &descriptor,
             (1280, 720),
             TextureFormat::Rgba8UnormSrgb,
         )
-        .expect("normalized descriptor lowering should succeed")
-        .expect("color target should allocate");
+        .expect("normalized descriptor lowering should succeed");
+        let CurrentRuntimeResourceDisposition::FlowTexture(spec) = disposition else {
+            panic!("color target should have flow-owned allocation facts");
+        };
 
         assert_eq!(spec.size, (1280, 720));
         assert_eq!(spec.format, TextureFormat::Rgba8UnormSrgb);
@@ -308,17 +417,180 @@ mod tests {
             crate::plugins::render::RenderTextureTargetFormat::Rgba8Unorm,
         );
 
-        let spec = FlowRuntimeResources::texture_allocation_spec(
+        let disposition = FlowRuntimeResources::current_runtime_resource_disposition(
             &descriptor,
             (1280, 720),
             TextureFormat::Rgba8UnormSrgb,
         )
-        .expect("normalized descriptor lowering should succeed")
-        .expect("exact color target should allocate");
+        .expect("normalized descriptor lowering should succeed");
+        let CurrentRuntimeResourceDisposition::FlowTexture(spec) = disposition else {
+            panic!("exact color target should have flow-owned allocation facts");
+        };
 
         assert_eq!(spec.size, (1280, 720));
         assert_eq!(spec.format, TextureFormat::Rgba8Unorm);
         assert!(spec.usage.contains(TextureUsages::RENDER_ATTACHMENT));
         assert!(spec.usage.contains(TextureUsages::TEXTURE_BINDING));
+    }
+
+    #[test]
+    fn normalized_buffer_produces_current_buffer_allocation_facts() {
+        let descriptor = RenderResourceDeclaration::declare_uniform::<RuntimeTestUniform>(
+            resource(14),
+            "runtime uniform",
+        )
+        .unwrap();
+
+        let disposition = FlowRuntimeResources::current_runtime_resource_disposition(
+            &descriptor,
+            (1, 1),
+            TextureFormat::Rgba8Unorm,
+        )
+        .unwrap();
+        let CurrentRuntimeResourceDisposition::Buffer(spec) = disposition else {
+            panic!("uniform should have current buffer allocation facts");
+        };
+
+        assert_eq!(spec.kind, RuntimeBufferKind::Uniform);
+        assert!(spec.size > 0);
+        assert!(spec.usage.contains(BufferUsages::UNIFORM));
+        assert!(spec.usage.contains(BufferUsages::COPY_DST));
+        assert!(matches!(
+            descriptor,
+            RenderResourceDeclaration::Uniform(ref value)
+                if value.handle().descriptor().usages().contains(GpuBufferUsage::Uniform)
+        ));
+    }
+
+    #[test]
+    fn imported_and_alias_declarations_are_explicit_non_allocation_dispositions() {
+        let ids = [resource(15), resource(16), resource(17)];
+        let imported_texture = RenderResourceDeclaration::declare_imported_external_texture(
+            ids[0],
+            "external texture",
+        );
+        let imported_buffer =
+            RenderResourceDeclaration::declare_imported_external_buffer(ids[1], "external buffer");
+        let alias = RenderResourceDeclaration::declare_target_alias(
+            ids[2],
+            "color alias",
+            RenderTargetAliasKind::Color,
+        );
+
+        assert!(matches!(
+            FlowRuntimeResources::current_runtime_resource_disposition(
+                &imported_texture,
+                (64, 64),
+                TextureFormat::Rgba8Unorm,
+            )
+            .unwrap(),
+            CurrentRuntimeResourceDisposition::ImportedTexture(intent)
+                if intent.id == ids[0]
+                    && intent.label == "external texture"
+                    && intent.semantic == RenderImportedTextureSemantic::External
+        ));
+        assert!(matches!(
+            FlowRuntimeResources::current_runtime_resource_disposition(
+                &imported_buffer,
+                (64, 64),
+                TextureFormat::Rgba8Unorm,
+            )
+            .unwrap(),
+            CurrentRuntimeResourceDisposition::ImportedBuffer(intent)
+                if intent.id == ids[1]
+                    && intent.label == "external buffer"
+                    && intent.semantic == RenderImportedBufferSemantic::External
+        ));
+        assert!(matches!(
+            FlowRuntimeResources::current_runtime_resource_disposition(
+                &alias,
+                (64, 64),
+                TextureFormat::Rgba8Unorm,
+            )
+            .unwrap(),
+            CurrentRuntimeResourceDisposition::TargetAlias(value)
+                if value.id == ids[2]
+                    && value.label == "color alias"
+                    && value.kind == RenderTargetAliasKind::Color
+        ));
+    }
+
+    #[test]
+    fn history_texture_remains_invocation_scoped_with_surface_policy() {
+        let descriptor =
+            RenderResourceDeclaration::declare_history_texture(resource(18), "history texture");
+
+        let disposition = FlowRuntimeResources::current_runtime_resource_disposition(
+            &descriptor,
+            (1024, 576),
+            TextureFormat::Bgra8UnormSrgb,
+        )
+        .unwrap();
+        let CurrentRuntimeResourceDisposition::InvocationHistoryTexture(spec) = disposition else {
+            panic!("history textures must remain invocation-scoped");
+        };
+
+        assert_eq!(spec.size, (1024, 576));
+        assert_eq!(spec.format, TextureFormat::Bgra8UnormSrgb);
+        assert!(spec.usage.contains(TextureUsages::TEXTURE_BINDING));
+        assert!(spec.usage.contains(TextureUsages::RENDER_ATTACHMENT));
+    }
+
+    #[test]
+    fn unsupported_normalized_kinds_return_structured_current_runtime_errors() {
+        let declaration = RenderResourceDeclaration::declare_color_attachment(
+            resource(19),
+            "unsupported normalized kind",
+        );
+        let unsupported = [
+            (
+                GpuResourceDescriptor::TextureView(normalized_texture_view()),
+                "texture-view",
+            ),
+            (
+                GpuResourceDescriptor::Sampler(
+                    GpuSamplerDescriptor::new(
+                        gpu_common("runtime test sampler"),
+                        GpuAddressMode::ClampToEdge,
+                        GpuAddressMode::ClampToEdge,
+                        GpuAddressMode::ClampToEdge,
+                        GpuFilterMode::Nearest,
+                        GpuFilterMode::Nearest,
+                        GpuFilterMode::Nearest,
+                        0.0,
+                        1.0,
+                        None,
+                    )
+                    .unwrap(),
+                ),
+                "sampler",
+            ),
+            (
+                GpuResourceDescriptor::QuerySet(
+                    GpuQuerySetDescriptor::new(
+                        gpu_common("runtime test query set"),
+                        GpuQueryKind::Timestamp,
+                        2,
+                    )
+                    .unwrap(),
+                ),
+                "query-set",
+            ),
+        ];
+
+        for (normalized, expected_kind) in unsupported {
+            let error = FlowRuntimeResources::current_runtime_resource_disposition_from_lowering(
+                &declaration,
+                RenderGpuResourceLowering::Normalized(Box::new(normalized)),
+                TextureFormat::Rgba8Unorm,
+            )
+            .unwrap_err();
+            assert!(matches!(
+                error,
+                CurrentRuntimeResourceRealizationError::UnsupportedNormalizedKind { kind, .. }
+                    if kind == expected_kind
+            ));
+            assert!(error.to_string().contains("current render runtime"));
+        }
     }
 }

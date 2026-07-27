@@ -121,4 +121,26 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn gpu_g2_render_lowering_cannot_restore_optional_descriptor_ambiguity() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let adapter = manifest.join("src/plugins/render/adapters/gpu_resources.rs");
+        let source = fs::read_to_string(adapter).expect("GPU resource adapter should be readable");
+        let compact = source
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>();
+        let obsolete_optional_type = ["Option<", "GpuResourceDescriptor", ">"].concat();
+        let obsolete_method = ["fngpu", "_descriptor("].concat();
+
+        assert!(
+            !compact.contains(&obsolete_optional_type),
+            "render GPU lowering must use an explicit non-optional outcome"
+        );
+        assert!(
+            !compact.contains(&obsolete_method),
+            "the obsolete optional GPU descriptor lowering method must remain deleted"
+        );
+    }
 }

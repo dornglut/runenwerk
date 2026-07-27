@@ -159,13 +159,21 @@ impl RenderTextureDescriptor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RenderTextureIntent {
     pub id: GpuWorkResourceId,
     pub label: String,
     pub lifetime: GpuResourceLifetime,
     pub texture: RenderTextureDescriptor,
 }
+
+impl PartialEq for RenderTextureIntent {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.lifetime == other.lifetime && self.texture == other.texture
+    }
+}
+
+impl Eq for RenderTextureIntent {}
 
 impl RenderTextureIntent {
     pub const fn id(&self) -> GpuWorkResourceId {
@@ -192,12 +200,20 @@ pub enum RenderTargetAliasKind {
     Texture,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RenderTargetAliasDeclaration {
     pub id: GpuWorkResourceId,
     pub label: String,
     pub kind: RenderTargetAliasKind,
 }
+
+impl PartialEq for RenderTargetAliasDeclaration {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.kind == other.kind
+    }
+}
+
+impl Eq for RenderTargetAliasDeclaration {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderImportedTextureSemantic {
@@ -241,18 +257,53 @@ impl RenderImportedBufferSemantic {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Render-owned imported-texture facts awaiting complete admission facts.
+///
+/// G4 resolves ordinary imported textures. G7 resolves surface acquisition and
+/// presentation-owned facts. Render history remains render-owned policy while
+/// its generic imported-resource realization moves to the owning phase.
+#[derive(Debug, Clone)]
 pub struct RenderImportedTextureIntent {
     pub id: GpuWorkResourceId,
     pub label: String,
     pub semantic: RenderImportedTextureSemantic,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl PartialEq for RenderImportedTextureIntent {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.semantic == other.semantic
+    }
+}
+
+impl Eq for RenderImportedTextureIntent {}
+
+/// Render-owned imported-buffer facts awaiting G4 admission and realization.
+#[derive(Debug, Clone)]
 pub struct RenderImportedBufferIntent {
     pub id: GpuWorkResourceId,
     pub label: String,
     pub semantic: RenderImportedBufferSemantic,
+}
+
+impl PartialEq for RenderImportedBufferIntent {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.semantic == other.semantic
+    }
+}
+
+impl Eq for RenderImportedBufferIntent {}
+
+/// Explicit result of lowering one current render resource declaration.
+///
+/// Only `Normalized` contains complete checked G2 descriptor facts. Imports
+/// retain their render-owned admission intent until G4 or G7 supplies the
+/// missing facts, and target aliases remain render-graph relationships.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderGpuResourceLowering {
+    Normalized(Box<GpuResourceDescriptor>),
+    ImportedTexture(RenderImportedTextureIntent),
+    ImportedBuffer(RenderImportedBufferIntent),
+    TargetAlias(RenderTargetAliasDeclaration),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -610,28 +661,47 @@ impl RenderResourceDeclaration {
         }
     }
 
-    pub fn gpu_descriptor(
+    pub fn lower_gpu_resource(
         &self,
         resolved_size: (u32, u32),
         resolved_surface_format: GpuTextureFormat,
-    ) -> Result<Option<GpuResourceDescriptor>, RenderGpuResourceAdapterError> {
+    ) -> Result<RenderGpuResourceLowering, RenderGpuResourceAdapterError> {
         match self {
-            Self::Uniform(value) => Ok(Some(GpuResourceDescriptor::Buffer(
-                value.handle.descriptor().clone(),
+            Self::Uniform(value) => Ok(RenderGpuResourceLowering::Normalized(Box::new(
+                GpuResourceDescriptor::Buffer(value.handle.descriptor().clone()),
             ))),
-            Self::Storage(value) => Ok(Some(GpuResourceDescriptor::Buffer(
-                value.handle.descriptor().clone(),
+            Self::Storage(value) => Ok(RenderGpuResourceLowering::Normalized(Box::new(
+                GpuResourceDescriptor::Buffer(value.handle.descriptor().clone()),
             ))),
             Self::Sampled(value)
             | Self::StorageImage(value)
             | Self::ColorAttachment(value)
             | Self::DepthAttachment(value)
-            | Self::History(value) => Ok(Some(GpuResourceDescriptor::Texture(
-                lower_texture_intent(value, resolved_size, resolved_surface_format)?,
+            | Self::History(value) => Ok(RenderGpuResourceLowering::Normalized(Box::new(
+                GpuResourceDescriptor::Texture(lower_texture_intent(
+                    value,
+                    resolved_size,
+                    resolved_surface_format,
+                )?),
             ))),
-            Self::TargetAlias(_) | Self::ImportedTexture(_) | Self::ImportedBuffer(_) => Ok(None),
+            Self::ImportedTexture(value) => {
+                validate_unresolved_intent_label(&value.label)?;
+                Ok(RenderGpuResourceLowering::ImportedTexture(value.clone()))
+            }
+            Self::ImportedBuffer(value) => {
+                validate_unresolved_intent_label(&value.label)?;
+                Ok(RenderGpuResourceLowering::ImportedBuffer(value.clone()))
+            }
+            Self::TargetAlias(value) => {
+                validate_unresolved_intent_label(&value.label)?;
+                Ok(RenderGpuResourceLowering::TargetAlias(value.clone()))
+            }
         }
     }
+}
+
+fn validate_unresolved_intent_label(label: &str) -> Result<(), RenderGpuResourceAdapterError> {
+    GpuResourceLabel::new(label).map(|_| ()).map_err(Into::into)
 }
 
 fn texture_intent(

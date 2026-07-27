@@ -1,11 +1,11 @@
 use super::*;
-use crate::plugins::gpu::{
-    GpuResourceDescriptor, GpuTextureDimension, GpuTextureFormat, GpuWorkResourceId,
-};
+use crate::plugins::gpu::{GpuResourceDescriptor, GpuTextureDimension, GpuWorkResourceId};
 use crate::plugins::render::renderer::dynamic_targets::{
     dynamic_format_to_wgpu, dynamic_usage_to_wgpu,
 };
-use crate::plugins::render::{RenderTextureFormatPolicy, legacy_surface_validation_format};
+use crate::plugins::render::{
+    RenderGpuResourceLowering, RenderTextureFormatPolicy, legacy_surface_validation_format,
+};
 
 impl FlowRuntimeResources {
     pub fn realize_for_frame(
@@ -38,100 +38,35 @@ impl FlowRuntimeResources {
             };
             self.kinds.insert(id, kind);
 
-            if !matches!(descriptor, RenderResourceDeclaration::History(_))
-                && let Some(texture_spec) =
-                    Self::texture_allocation_spec(descriptor, frame_size, surface_format)?
-            {
-                let previous_generation = self
-                    .textures
-                    .get(&id)
-                    .map(|existing| existing.generation)
-                    .unwrap_or(0);
-                let should_recreate = match self.textures.get(&id) {
-                    Some(existing) => {
-                        descriptor.lifetime().is_transient()
-                            || existing.format != texture_spec.format
-                            || existing.size != texture_spec.size
-                            || existing.usage != texture_spec.usage
-                            || existing.is_depth != texture_spec.is_depth
-                    }
-                    None => true,
-                };
-
-                if should_recreate {
-                    let label = format!("engine_render_resource_{id}");
-                    let texture = device.create_texture(&TextureDescriptor {
-                        label: Some(label.as_str()),
-                        size: Extent3d {
-                            width: texture_spec.size.0,
-                            height: texture_spec.size.1,
-                            depth_or_array_layers: 1,
-                        },
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: TextureDimension::D2,
-                        format: texture_spec.format,
-                        usage: texture_spec.usage,
-                        view_formats: &[],
-                    });
-                    self.textures.insert(
-                        id,
-                        RuntimeTextureResource {
-                            texture,
-                            format: texture_spec.format,
-                            size: texture_spec.size,
-                            usage: texture_spec.usage,
-                            is_depth: texture_spec.is_depth,
-                            history_signature: None,
-                            generation: previous_generation.saturating_add(1),
-                            reused_last_frame: false,
-                        },
-                    );
-                } else if let Some(existing) = self.textures.get_mut(&id) {
-                    existing.reused_last_frame = true;
+            match Self::current_runtime_resource_disposition(
+                descriptor,
+                frame_size,
+                surface_format,
+            )? {
+                CurrentRuntimeResourceDisposition::Buffer(spec) => {
+                    self.textures.remove(&id);
+                    self.realize_flow_buffer(device, id, descriptor.lifetime(), spec);
                 }
-            } else {
-                self.textures.remove(&id);
-            }
-
-            if let Some(buffer_spec) = Self::buffer_allocation_spec(descriptor)? {
-                let previous_generation = self
-                    .buffers
-                    .get(&id)
-                    .map(|existing| existing.generation)
-                    .unwrap_or(0);
-                let should_recreate = match self.buffers.get(&id) {
-                    Some(existing) => {
-                        descriptor.lifetime().is_transient()
-                            || existing.size != buffer_spec.size.max(1)
-                            || existing.kind != buffer_spec.kind
-                    }
-                    None => true,
-                };
-
-                if should_recreate {
-                    let label = format!("engine_render_resource_{id}");
-                    let buffer = device.create_buffer(&BufferDescriptor {
-                        label: Some(label.as_str()),
-                        size: buffer_spec.size.max(1),
-                        usage: buffer_spec.usage,
-                        mapped_at_creation: false,
-                    });
-                    self.buffers.insert(
-                        id,
-                        RuntimeBufferResource {
-                            buffer,
-                            size: buffer_spec.size.max(1),
-                            kind: buffer_spec.kind,
-                            generation: previous_generation.saturating_add(1),
-                            reused_last_frame: false,
-                        },
-                    );
-                } else if let Some(existing) = self.buffers.get_mut(&id) {
-                    existing.reused_last_frame = true;
+                CurrentRuntimeResourceDisposition::FlowTexture(spec) => {
+                    self.buffers.remove(&id);
+                    self.realize_flow_texture(device, id, descriptor.lifetime(), spec);
                 }
-            } else {
-                self.buffers.remove(&id);
+                CurrentRuntimeResourceDisposition::InvocationHistoryTexture(_) => {
+                    self.textures.remove(&id);
+                    self.buffers.remove(&id);
+                }
+                CurrentRuntimeResourceDisposition::ImportedTexture(_) => {
+                    self.textures.remove(&id);
+                    self.buffers.remove(&id);
+                }
+                CurrentRuntimeResourceDisposition::ImportedBuffer(_) => {
+                    self.textures.remove(&id);
+                    self.buffers.remove(&id);
+                }
+                CurrentRuntimeResourceDisposition::TargetAlias(_) => {
+                    self.textures.remove(&id);
+                    self.buffers.remove(&id);
+                }
             }
         }
 
@@ -143,6 +78,106 @@ impl FlowRuntimeResources {
             .retain(|(_, id), _| declared_ids.contains(id));
         self.active_invocation_uniform_scope = None;
         Ok(())
+    }
+
+    fn realize_flow_texture(
+        &mut self,
+        device: &Device,
+        id: GpuWorkResourceId,
+        lifetime: crate::plugins::gpu::GpuResourceLifetime,
+        spec: TextureAllocationSpec,
+    ) {
+        let previous_generation = self
+            .textures
+            .get(&id)
+            .map(|existing| existing.generation)
+            .unwrap_or(0);
+        let should_recreate = match self.textures.get(&id) {
+            Some(existing) => {
+                lifetime.is_transient()
+                    || existing.format != spec.format
+                    || existing.size != spec.size
+                    || existing.usage != spec.usage
+                    || existing.is_depth != spec.is_depth
+            }
+            None => true,
+        };
+
+        if should_recreate {
+            let label = format!("engine_render_resource_{id}");
+            let texture = device.create_texture(&TextureDescriptor {
+                label: Some(label.as_str()),
+                size: Extent3d {
+                    width: spec.size.0,
+                    height: spec.size.1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: spec.format,
+                usage: spec.usage,
+                view_formats: &[],
+            });
+            self.textures.insert(
+                id,
+                RuntimeTextureResource {
+                    texture,
+                    format: spec.format,
+                    size: spec.size,
+                    usage: spec.usage,
+                    is_depth: spec.is_depth,
+                    history_signature: None,
+                    generation: previous_generation.saturating_add(1),
+                    reused_last_frame: false,
+                },
+            );
+        } else if let Some(existing) = self.textures.get_mut(&id) {
+            existing.reused_last_frame = true;
+        }
+    }
+
+    fn realize_flow_buffer(
+        &mut self,
+        device: &Device,
+        id: GpuWorkResourceId,
+        lifetime: crate::plugins::gpu::GpuResourceLifetime,
+        spec: BufferAllocationSpec,
+    ) {
+        let size = spec.size.max(1);
+        let previous_generation = self
+            .buffers
+            .get(&id)
+            .map(|existing| existing.generation)
+            .unwrap_or(0);
+        let should_recreate = match self.buffers.get(&id) {
+            Some(existing) => {
+                lifetime.is_transient() || existing.size != size || existing.kind != spec.kind
+            }
+            None => true,
+        };
+
+        if should_recreate {
+            let label = format!("engine_render_resource_{id}");
+            let buffer = device.create_buffer(&BufferDescriptor {
+                label: Some(label.as_str()),
+                size,
+                usage: spec.usage,
+                mapped_at_creation: false,
+            });
+            self.buffers.insert(
+                id,
+                RuntimeBufferResource {
+                    buffer,
+                    size,
+                    kind: spec.kind,
+                    generation: previous_generation.saturating_add(1),
+                    reused_last_frame: false,
+                },
+            );
+        } else if let Some(existing) = self.buffers.get_mut(&id) {
+            existing.reused_last_frame = true;
+        }
     }
 
     pub fn set_active_invocation_uniform_scope(&mut self, invocation_id: impl Into<String>) {
@@ -184,10 +219,22 @@ impl FlowRuntimeResources {
             })
             .collect::<Vec<_>>();
         for (resource_id, descriptor) in history_descriptors {
-            let Some(texture_spec) =
-                Self::texture_allocation_spec(&descriptor, surface_size, surface_format)?
-            else {
-                continue;
+            let texture_spec = match Self::current_runtime_resource_disposition(
+                &descriptor,
+                surface_size,
+                surface_format,
+            )? {
+                CurrentRuntimeResourceDisposition::InvocationHistoryTexture(spec) => spec,
+                CurrentRuntimeResourceDisposition::Buffer(_)
+                | CurrentRuntimeResourceDisposition::FlowTexture(_)
+                | CurrentRuntimeResourceDisposition::ImportedTexture(_)
+                | CurrentRuntimeResourceDisposition::ImportedBuffer(_)
+                | CurrentRuntimeResourceDisposition::TargetAlias(_) => {
+                    bail!(
+                        "history declaration '{}' did not produce invocation-scoped texture allocation facts",
+                        resource_id
+                    );
+                }
             };
             let key = (invocation_id.to_string(), resource_id);
             let next_history_signature = history_signature.map(ToOwned::to_owned);
@@ -259,12 +306,23 @@ impl FlowRuntimeResources {
                 resource_id
             )
         })?;
-        let Some(spec) = Self::buffer_allocation_spec(descriptor)? else {
-            bail!(
-                "prepared invocation '{}' uploads '{}' but it is not a buffer resource",
-                invocation_id,
-                resource_id
-            );
+        let spec = match Self::current_runtime_resource_disposition(
+            descriptor,
+            (1, 1),
+            TextureFormat::Rgba8Unorm,
+        )? {
+            CurrentRuntimeResourceDisposition::Buffer(spec) => spec,
+            CurrentRuntimeResourceDisposition::FlowTexture(_)
+            | CurrentRuntimeResourceDisposition::InvocationHistoryTexture(_)
+            | CurrentRuntimeResourceDisposition::ImportedTexture(_)
+            | CurrentRuntimeResourceDisposition::ImportedBuffer(_)
+            | CurrentRuntimeResourceDisposition::TargetAlias(_) => {
+                bail!(
+                    "prepared invocation '{}' uploads '{}' but it is not a buffer resource",
+                    invocation_id,
+                    resource_id
+                );
+            }
         };
         if !matches!(spec.kind, RuntimeBufferKind::Uniform) {
             bail!(
@@ -314,72 +372,152 @@ impl FlowRuntimeResources {
             .ok_or_else(|| anyhow::anyhow!("failed to realize invocation uniform buffer"))
     }
 
-    pub fn texture_allocation_spec(
+    pub(super) fn current_runtime_resource_disposition(
         descriptor: &RenderResourceDeclaration,
         surface_size: (u32, u32),
         surface_format: TextureFormat,
-    ) -> Result<Option<TextureAllocationSpec>> {
-        let Some(normalized) =
-            descriptor.gpu_descriptor(surface_size, legacy_surface_validation_format())?
-        else {
-            return Ok(None);
-        };
-        let GpuResourceDescriptor::Texture(texture) = normalized else {
-            return Ok(None);
-        };
-        if texture.dimension() != GpuTextureDimension::D2 || texture.extent().depth_or_layers() != 1
-        {
-            bail!("legacy render runtime can realize only normalized 2D single-layer textures");
-        }
-        let extent = texture.extent();
-        let render_texture = descriptor
-            .texture_intent()
-            .expect("normalized texture descriptors originate from render texture intent")
-            .texture();
-        let format = match render_texture.format {
-            RenderTextureFormatPolicy::Surface => surface_format,
-            RenderTextureFormatPolicy::Exact(format) => dynamic_format_to_wgpu(format),
-        };
-        Ok(Some(TextureAllocationSpec {
-            size: (extent.width(), extent.height()),
-            format,
-            usage: dynamic_usage_to_wgpu(render_texture.usage),
-            is_depth: texture.format().is_depth(),
-        }))
+    ) -> core::result::Result<
+        CurrentRuntimeResourceDisposition,
+        CurrentRuntimeResourceRealizationError,
+    > {
+        let lowering =
+            descriptor.lower_gpu_resource(surface_size, legacy_surface_validation_format())?;
+        Self::current_runtime_resource_disposition_from_lowering(
+            descriptor,
+            lowering,
+            surface_format,
+        )
     }
 
-    pub fn buffer_allocation_spec(
+    pub(super) fn current_runtime_resource_disposition_from_lowering(
         descriptor: &RenderResourceDeclaration,
-    ) -> Result<Option<BufferAllocationSpec>> {
-        let Some(normalized) = descriptor.gpu_descriptor((1, 1), GpuTextureFormat::Rgba8Unorm)?
-        else {
-            return Ok(None);
-        };
-        let GpuResourceDescriptor::Buffer(buffer) = normalized else {
-            return Ok(None);
-        };
-        let kind = match descriptor {
-            RenderResourceDeclaration::Uniform(_) => RuntimeBufferKind::Uniform,
-            RenderResourceDeclaration::Storage(_) => RuntimeBufferKind::Storage,
-            _ => return Ok(None),
-        };
-        let usage = match kind {
-            RuntimeBufferKind::Uniform => {
-                BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
+        lowering: RenderGpuResourceLowering,
+        surface_format: TextureFormat,
+    ) -> core::result::Result<
+        CurrentRuntimeResourceDisposition,
+        CurrentRuntimeResourceRealizationError,
+    > {
+        let resource_id = *descriptor.id();
+        match lowering {
+            RenderGpuResourceLowering::Normalized(normalized) => match normalized.as_ref() {
+                GpuResourceDescriptor::Buffer(buffer) => {
+                    let kind = match descriptor {
+                        RenderResourceDeclaration::Uniform(_) => RuntimeBufferKind::Uniform,
+                        RenderResourceDeclaration::Storage(_) => RuntimeBufferKind::Storage,
+                        RenderResourceDeclaration::Sampled(_)
+                        | RenderResourceDeclaration::StorageImage(_)
+                        | RenderResourceDeclaration::ColorAttachment(_)
+                        | RenderResourceDeclaration::DepthAttachment(_)
+                        | RenderResourceDeclaration::History(_)
+                        | RenderResourceDeclaration::TargetAlias(_)
+                        | RenderResourceDeclaration::ImportedTexture(_)
+                        | RenderResourceDeclaration::ImportedBuffer(_) => {
+                            return Err(
+                                CurrentRuntimeResourceRealizationError::NormalizedDeclarationMismatch {
+                                    resource_id,
+                                    normalized_kind: "buffer",
+                                },
+                            );
+                        }
+                    };
+                    let usage = match kind {
+                        RuntimeBufferKind::Uniform => {
+                            BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST
+                        }
+                        RuntimeBufferKind::Storage => {
+                            BufferUsages::STORAGE
+                                | BufferUsages::COPY_SRC
+                                | BufferUsages::COPY_DST
+                                | BufferUsages::VERTEX
+                                | BufferUsages::INDEX
+                                | BufferUsages::INDIRECT
+                        }
+                    };
+                    Ok(CurrentRuntimeResourceDisposition::Buffer(
+                        BufferAllocationSpec {
+                            size: buffer.size_bytes(),
+                            usage,
+                            kind,
+                        },
+                    ))
+                }
+                GpuResourceDescriptor::Texture(texture) => {
+                    if texture.dimension() != GpuTextureDimension::D2
+                        || texture.extent().depth_or_layers() != 1
+                    {
+                        return Err(
+                            CurrentRuntimeResourceRealizationError::UnsupportedTextureShape {
+                                resource_id,
+                                dimension: texture.dimension(),
+                                depth_or_layers: texture.extent().depth_or_layers(),
+                            },
+                        );
+                    }
+                    let render_texture = match descriptor {
+                        RenderResourceDeclaration::Sampled(value)
+                        | RenderResourceDeclaration::StorageImage(value)
+                        | RenderResourceDeclaration::ColorAttachment(value)
+                        | RenderResourceDeclaration::DepthAttachment(value)
+                        | RenderResourceDeclaration::History(value) => value.texture(),
+                        RenderResourceDeclaration::Uniform(_)
+                        | RenderResourceDeclaration::Storage(_)
+                        | RenderResourceDeclaration::TargetAlias(_)
+                        | RenderResourceDeclaration::ImportedTexture(_)
+                        | RenderResourceDeclaration::ImportedBuffer(_) => {
+                            return Err(
+                                CurrentRuntimeResourceRealizationError::NormalizedDeclarationMismatch {
+                                    resource_id,
+                                    normalized_kind: "texture",
+                                },
+                            );
+                        }
+                    };
+                    let format = match render_texture.format {
+                        RenderTextureFormatPolicy::Surface => surface_format,
+                        RenderTextureFormatPolicy::Exact(format) => dynamic_format_to_wgpu(format),
+                    };
+                    let spec = TextureAllocationSpec {
+                        size: (texture.extent().width(), texture.extent().height()),
+                        format,
+                        usage: dynamic_usage_to_wgpu(render_texture.usage),
+                        is_depth: texture.format().is_depth(),
+                    };
+                    if matches!(descriptor, RenderResourceDeclaration::History(_)) {
+                        Ok(CurrentRuntimeResourceDisposition::InvocationHistoryTexture(
+                            spec,
+                        ))
+                    } else {
+                        Ok(CurrentRuntimeResourceDisposition::FlowTexture(spec))
+                    }
+                }
+                GpuResourceDescriptor::TextureView(_) => Err(
+                    CurrentRuntimeResourceRealizationError::UnsupportedNormalizedKind {
+                        resource_id,
+                        kind: "texture-view",
+                    },
+                ),
+                GpuResourceDescriptor::Sampler(_) => Err(
+                    CurrentRuntimeResourceRealizationError::UnsupportedNormalizedKind {
+                        resource_id,
+                        kind: "sampler",
+                    },
+                ),
+                GpuResourceDescriptor::QuerySet(_) => Err(
+                    CurrentRuntimeResourceRealizationError::UnsupportedNormalizedKind {
+                        resource_id,
+                        kind: "query-set",
+                    },
+                ),
+            },
+            RenderGpuResourceLowering::ImportedTexture(intent) => {
+                Ok(CurrentRuntimeResourceDisposition::ImportedTexture(intent))
             }
-            RuntimeBufferKind::Storage => {
-                BufferUsages::STORAGE
-                    | BufferUsages::COPY_SRC
-                    | BufferUsages::COPY_DST
-                    | BufferUsages::VERTEX
-                    | BufferUsages::INDEX
-                    | BufferUsages::INDIRECT
+            RenderGpuResourceLowering::ImportedBuffer(intent) => {
+                Ok(CurrentRuntimeResourceDisposition::ImportedBuffer(intent))
             }
-        };
-        Ok(Some(BufferAllocationSpec {
-            size: buffer.size_bytes(),
-            usage,
-            kind,
-        }))
+            RenderGpuResourceLowering::TargetAlias(alias) => {
+                Ok(CurrentRuntimeResourceDisposition::TargetAlias(alias))
+            }
+        }
     }
 }

@@ -1247,13 +1247,23 @@ pub enum GpuResourceAccessIntent {
     ReadWrite,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct GpuExportRelationship {
     resource: GpuResourceRef,
     export_key: String,
     required_final_access: GpuResourceAccessIntent,
     provenance: GpuResourceProvenance,
 }
+
+impl PartialEq for GpuExportRelationship {
+    fn eq(&self, other: &Self) -> bool {
+        self.resource == other.resource
+            && self.export_key == other.export_key
+            && self.required_final_access == other.required_final_access
+    }
+}
+
+impl Eq for GpuExportRelationship {}
 
 impl GpuExportRelationship {
     pub fn new(
@@ -1343,6 +1353,37 @@ mod tests {
             GpuTextureInitialization::Uninitialized,
         )
         .unwrap()
+    }
+
+    fn buffer_descriptor(value: &str) -> GpuBufferDescriptor {
+        GpuBufferDescriptor::new(
+            common(value),
+            16,
+            GpuBufferUsages::new(&label(value), [GpuBufferUsage::Storage]).unwrap(),
+            GpuBufferInitialization::Uninitialized,
+        )
+        .unwrap()
+    }
+
+    fn export_relationship(
+        resource: GpuResourceRef,
+        export_key: &str,
+        required_final_access: GpuResourceAccessIntent,
+        provenance: GpuResourceProvenance,
+    ) -> GpuExportRelationship {
+        GpuExportRelationship::new(resource, export_key, required_final_access, provenance).unwrap()
+    }
+
+    fn buffer_resource_refs() -> (GpuResourceRef, GpuResourceRef) {
+        let mut allocator =
+            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(7).unwrap());
+        let first = allocator
+            .allocate_buffer_handle(buffer_descriptor("first buffer"))
+            .unwrap();
+        let second = allocator
+            .allocate_buffer_handle(buffer_descriptor("second buffer"))
+            .unwrap();
+        (first.into(), second.into())
     }
 
     #[test]
@@ -1720,6 +1761,87 @@ mod tests {
         )
         .unwrap();
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn export_equality_excludes_all_provenance_fields() {
+        let (resource, _) = buffer_resource_refs();
+        let first = export_relationship(
+            resource.clone(),
+            "consumer.output",
+            GpuResourceAccessIntent::Read,
+            GpuResourceProvenance::new(label("first producer"), Some(3), Some(label("revision a"))),
+        );
+        let second = export_relationship(
+            resource,
+            "consumer.output",
+            GpuResourceAccessIntent::Read,
+            GpuResourceProvenance::new(
+                label("second producer"),
+                Some(99),
+                Some(label("revision b")),
+            ),
+        );
+
+        assert_eq!(first, second);
+        assert_ne!(first.provenance(), second.provenance());
+    }
+
+    #[test]
+    fn export_equality_includes_consumer_owned_key() {
+        let (resource, _) = buffer_resource_refs();
+        let first = export_relationship(
+            resource.clone(),
+            "consumer.first",
+            GpuResourceAccessIntent::Read,
+            provenance("producer"),
+        );
+        let second = export_relationship(
+            resource,
+            "consumer.second",
+            GpuResourceAccessIntent::Read,
+            provenance("producer"),
+        );
+
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn export_equality_includes_required_final_access() {
+        let (resource, _) = buffer_resource_refs();
+        let first = export_relationship(
+            resource.clone(),
+            "consumer.output",
+            GpuResourceAccessIntent::Read,
+            provenance("producer"),
+        );
+        let second = export_relationship(
+            resource,
+            "consumer.output",
+            GpuResourceAccessIntent::Write,
+            provenance("producer"),
+        );
+
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn export_equality_includes_kind_preserving_resource_reference() {
+        let (first_resource, second_resource) = buffer_resource_refs();
+        let first = export_relationship(
+            first_resource,
+            "consumer.output",
+            GpuResourceAccessIntent::Read,
+            provenance("producer"),
+        );
+        let second = export_relationship(
+            second_resource,
+            "consumer.output",
+            GpuResourceAccessIntent::Read,
+            provenance("producer"),
+        );
+
+        assert_ne!(first, second);
     }
 
     #[test]

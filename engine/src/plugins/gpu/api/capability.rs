@@ -378,13 +378,23 @@ pub struct GpuPreferredAvailability {
     pub fallback: GpuPreferredFallback,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct GpuCapabilityAdmission {
     granted_required: Vec<GpuCapabilityFeature>,
     preferred: Vec<GpuPreferredAvailability>,
     verified_disabled: Vec<GpuCapabilityFeature>,
     diagnostics: Vec<String>,
 }
+
+impl PartialEq for GpuCapabilityAdmission {
+    fn eq(&self, other: &Self) -> bool {
+        self.granted_required == other.granted_required
+            && self.preferred == other.preferred
+            && self.verified_disabled == other.verified_disabled
+    }
+}
+
+impl Eq for GpuCapabilityAdmission {}
 
 impl GpuCapabilityAdmission {
     pub fn evaluate(
@@ -663,5 +673,30 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn admission_diagnostics_do_not_change_semantic_equality() {
+        let facts = GpuPreferredAvailability {
+            feature: GpuCapabilityFeature::TimestampQuery,
+            available: false,
+            enabled: false,
+            fallback: GpuPreferredFallback::DisableInstrumentation,
+        };
+        let first = GpuCapabilityAdmission {
+            granted_required: vec![GpuCapabilityFeature::Compute],
+            preferred: vec![facts],
+            verified_disabled: vec![GpuCapabilityFeature::Presentation],
+            diagnostics: vec!["first diagnostic wording".to_string()],
+        };
+        let second = GpuCapabilityAdmission {
+            granted_required: vec![GpuCapabilityFeature::Compute],
+            preferred: vec![facts],
+            verified_disabled: vec![GpuCapabilityFeature::Presentation],
+            diagnostics: vec!["different diagnostic wording".to_string()],
+        };
+
+        assert_eq!(first, second);
+        assert_ne!(first.diagnostics(), second.diagnostics());
     }
 }

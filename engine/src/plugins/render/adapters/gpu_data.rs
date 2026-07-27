@@ -8,12 +8,20 @@ use crate::plugins::gpu::{
 use crate::plugins::render::GpuParams;
 use std::any::{TypeId, type_name};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct RenderGpuParamsLayout {
     gpu: GpuDataLayout,
     params_type_id: TypeId,
     params_type_name: &'static str,
 }
+
+impl PartialEq for RenderGpuParamsLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.gpu == other.gpu
+    }
+}
+
+impl Eq for RenderGpuParamsLayout {}
 
 impl RenderGpuParamsLayout {
     pub fn uniform<Params: GpuParams + 'static>(
@@ -168,4 +176,39 @@ pub(crate) fn prepare_projected_uniform_bytes(
         provenance,
         Some(layout.params_type_name()),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct FirstParams(u32);
+
+    impl GpuParams for FirstParams {
+        type Raw = u32;
+
+        fn to_gpu(&self) -> Self::Raw {
+            self.0
+        }
+    }
+
+    struct SecondParams(u32);
+
+    impl GpuParams for SecondParams {
+        type Raw = u32;
+
+        fn to_gpu(&self) -> Self::Raw {
+            self.0
+        }
+    }
+
+    #[test]
+    fn diagnostic_type_identity_does_not_change_render_layout_equality() {
+        let first = RenderGpuParamsLayout::uniform::<FirstParams>("first").unwrap();
+        let second = RenderGpuParamsLayout::uniform::<SecondParams>("second").unwrap();
+
+        assert_eq!(first, second);
+        assert_ne!(first.params_type_id(), second.params_type_id());
+        assert_ne!(first.params_type_name(), second.params_type_name());
+    }
 }

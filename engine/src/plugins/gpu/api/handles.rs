@@ -75,6 +75,11 @@ macro_rules! typed_handle {
             }
         }
 
+        // Equality, ordering, and hashing identify one in-process logical
+        // lease by kind and private ID. This deliberately distinguishes two
+        // resource references for export relationships without granting the
+        // diagnostic ID persistence, replay, wire, cache, or descriptor-
+        // semantic authority.
         impl PartialEq for $name {
             fn eq(&self, other: &Self) -> bool {
                 self.lease.id == other.lease.id && self.kind() == other.kind()

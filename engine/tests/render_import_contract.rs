@@ -1,7 +1,8 @@
-use engine::plugins::gpu::GpuWorkResourceId;
+use engine::plugins::gpu::{GpuTextureFormat, GpuWorkResourceId};
 use engine::plugins::render::{
-    RenderFlow, RenderFlowGraph, RenderFlowId, RenderFlowValidationIssue, RenderPassId,
-    RenderPassKind, RenderPassNode, RenderResourceDeclaration, validate_flow_graph,
+    RenderFlow, RenderFlowGraph, RenderFlowId, RenderFlowValidationIssue,
+    RenderGpuResourceLowering, RenderImportedTextureSemantic, RenderPassId, RenderPassKind,
+    RenderPassNode, RenderResourceDeclaration, validate_flow_graph,
 };
 
 fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
@@ -110,4 +111,23 @@ fn typed_surface_imports_require_canonical_resource_ids() {
         "expected duplicate surface color import issue, got {:?}",
         err.issues
     );
+}
+
+#[test]
+fn surface_import_lowering_preserves_g7_owned_acquisition_intent() {
+    let surface_id = test_resource_ids(1)[0];
+    let declaration =
+        RenderResourceDeclaration::declare_imported_surface_color(surface_id, "surface color");
+
+    let lowering = declaration
+        .lower_gpu_resource((1920, 1080), GpuTextureFormat::Bgra8UnormSrgb)
+        .unwrap();
+
+    assert!(matches!(
+        lowering,
+        RenderGpuResourceLowering::ImportedTexture(intent)
+            if intent.id == surface_id
+                && intent.label == "surface color"
+                && intent.semantic == RenderImportedTextureSemantic::SurfaceColor
+    ));
 }
