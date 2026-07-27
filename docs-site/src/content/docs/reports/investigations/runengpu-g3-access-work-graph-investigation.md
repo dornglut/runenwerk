@@ -1,6 +1,6 @@
 ---
 title: RunenGPU G3 Access and Work Graph Investigation
-description: Current-main access, initialization, hazard, dependency, generic-work, graph, render-adapter, and GPU-primitive census for the decision-complete G3 specification.
+description: Current-main access, initialization, hazard, dependency, generic-work, graph, render-adapter, query-resolution, and GPU-primitive census for the decision-complete G3 specification.
 status: active
 owner: gpu
 layer: investigation
@@ -9,6 +9,7 @@ last_reviewed: 2026-07-27
 related_docs:
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../design/active/runengpu-architecture-design.md
+  - ../../design/active/runengpu-g3-access-work-graph-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/active-work.md
@@ -34,7 +35,7 @@ planning branch: docs/runengpu-g3-access-work-graph
 
 G2 is accepted through issue `#172` and merged PR `#173`. G3 extends its normalized descriptors, typed resource handles, initialization declarations, and export relationships. It must not recreate resource or backend authority.
 
-The current renderer contains useful correctness evidence, but generic access is split across broad pass reads/writes, role-specific pass fields, whole-resource lifetime windows, explicit dependency lists, and a second GPU-primitive plan. Buffer ranges, texture subresources, partial initialization, normalized texture-view overlap, and cross-fragment causality are absent.
+The current renderer contains useful correctness evidence, but generic access is split across broad pass reads/writes, role-specific pass fields, whole-resource lifetime windows, explicit dependency lists, a second GPU-primitive plan, and renderer-owned GPU timestamp resolution. Buffer ranges, texture subresources, partial initialization, normalized texture-view overlap, query-resolution work, and cross-fragment causality are absent from the future-transferable authority.
 
 ## Ownership boundary
 
@@ -44,9 +45,10 @@ G3 owns:
 - graph-entry initialization evidence and region-aware initialized coverage;
 - overlap, hazards, inferred data dependencies, and explicit non-data order;
 - immutable generic work fragments and nodes;
+- backend-neutral query-set resolution intent and exact logical destination coverage;
 - deterministic preparation and inspection facts.
 
-G3 does not own shader files, pipeline/binding admission, WGPU objects, realization, encoding, submission, completion, readback, retirement, surfaces, renderer meaning, ECS projection, fixed-time scheduling, or product policy.
+G3 does not own shader files, pipeline/binding admission, WGPU objects, realization, command encoding, submission, completion, readback decoding, retirement, surfaces, renderer meaning, ECS projection, fixed-time scheduling, timing presentation, or product policy.
 
 ## Current declaration census
 
@@ -72,6 +74,8 @@ Disposition: `RenderPassNode` may remain temporary render authoring input. One r
 
 Disposition: retain render-only shape checks above the boundary. Move generic resource/use validation, initialized coverage, hazards, inferred edges, cycles, and deterministic generic order to RunenGPU. Remove local generic topological authority after cutover.
 
+Explicit order must remain genuinely non-data. Retaining an explicit edge that duplicates an inferred data edge would preserve redundant dependency authority and undermine the intended access-derived model. G3 therefore rejects redundant explicit order rather than retaining both causes or choosing between two normalization policies.
+
 ### Whole-resource lifetime windows
 
 `engine/src/plugins/render/graph/resource_lifetimes.rs` records whole-resource first/last read/write and reports only transient read-before-write.
@@ -84,6 +88,7 @@ Missing authority:
 - partial initialization;
 - RAW, WAR, and WAW causes;
 - texture-view parent normalization;
+- query index initialization and resolution;
 - cross-fragment composition;
 - order inference.
 
@@ -102,6 +107,48 @@ Disposition: a temporary adapter produces one `GpuPreparedWorkGraph`; the render
 The prefix-scan hierarchy proves that typed transient resources and inferred multi-stage dependencies are required outside rendering.
 
 Disposition: primitive descriptors remain source conveniences but lower to G3 typed work. Delete primitive-local access types, `Temporary(String)`, and string stage dependency authority. Shader asset discovery remains outside RunenGPU until G4 program admission.
+
+### GPU timestamp query resolution
+
+`engine/src/plugins/render/renderer/render_flow/gpu_timing.rs` currently owns a complete backend-specific timestamp path:
+
+```text
+reserve two timestamp indices per pass
+    -> attach beginning/end writes to the render or compute pass
+    -> resolve_query_set into a QUERY_RESOLVE buffer
+    -> copy the resolved bytes into a MAP_READ/COPY_DST readback buffer
+    -> poll, map, decode u64 timestamps, and publish timing evidence
+```
+
+Current source evidence:
+
+- `GpuPassTimingFrame` owns a `QuerySet`, resolve buffer, and readback buffer;
+- the resolve buffer uses WGPU `QUERY_RESOLVE | COPY_SRC`;
+- `CommandEncoder::resolve_query_set` writes one `u64` per timestamp query;
+- a later buffer copy moves those bytes into the readback buffer;
+- polling, mapping, timestamp-period conversion, and presentation of timing evidence are later-phase/runtime concerns.
+
+Official WGPU evidence confirms that query resolution requires a dedicated query-resolve buffer usage and writes opaque query results as `u64` values:
+
+- <https://docs.rs/wgpu/latest/wgpu/struct.BufferUsages.html#associatedconstant.QUERY_RESOLVE>
+- <https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.resolve_query_set>
+- <https://docs.rs/wgpu/latest/wgpu/struct.QuerySet.html>
+
+The accepted G2 normalized buffer usages currently omit query-resolution destination usage. The initial G3 draft modeled `WriteTimestamp` and `ResolveSource` ranges but omitted the operation and destination access that connect them. That state was not decision-complete for the current consumer.
+
+Disposition:
+
+- extend `GpuBufferUsage` with normalized `QueryResolve` during G3 implementation;
+- add `GpuBufferAccessKind::QueryResolveDestination`;
+- model timestamp writes as exact query-index writes that initialize those indices;
+- model query-set resolution as a typed `Resolve` operation consuming initialized query indices and writing an exact destination buffer range;
+- calculate timestamp destination size as checked `query_count * 8` bytes;
+- require the destination descriptor to admit `QueryResolve` usage;
+- leave backend-specific destination-offset alignment and encoding to G4/G5;
+- retain the later resolve-buffer-to-readback transfer as ordinary typed buffer-copy work;
+- retain polling, map completion, timestamp-period conversion, artifacts, and diagnostic presentation outside G3.
+
+This preserves one generic correctness graph without pulling execution or timing policy into RunenGPU prematurely.
 
 ### G2 seams
 
@@ -129,9 +176,11 @@ Timestamp consumers justify a checked `GpuQueryRange`. Samplers are immutable in
 
 ### Exact access roles
 
-Buffer access distinguishes uniform, storage read/write/read-write, vertex, index, indirect, and copy source/destination.
+Buffer access distinguishes uniform, storage read/write/read-write, vertex, index, indirect, copy source/destination, and query-resolve destination.
 
 Texture access distinguishes sampled, storage read/write/read-write, copy source/destination, color attachment, depth/stencil attachment, and present.
+
+Query access distinguishes timestamp writes from resolve-source reads.
 
 Attachment semantics require separate load and store facts:
 
@@ -140,19 +189,22 @@ load:  Load | Clear
 store: Store | Discard
 ```
 
-`Load` requires initialized coverage. `Clear` establishes full initialized coverage for the attachment subresources. `Store` preserves post-node coverage. `Discard` removes later readable coverage. Discard is not a load mode.
+`Load` requires initialized coverage. `Clear` establishes full initialized coverage for the attachment subresources. `Store` preserves post-node coverage. `Discard` removes later readable coverage. Discard is not a load mode, and Store alone does not make an empty render operation meaningful.
 
 ### Initialization flow
 
 - `Zeroed` and complete G2 `Prepared` initialization begin initialized.
 - `Uninitialized` begins with no initialized coverage.
+- query sets begin with no initialized indices unless explicit graph-entry evidence exists;
 - pure writes and copy destinations initialize only covered regions;
+- timestamp writes initialize exact query indices;
+- query resolution requires initialized source indices and initializes its exact destination byte range;
 - read-write requires prior initialized coverage;
 - attachment `Load` requires prior coverage;
 - attachment `Clear` establishes coverage before work;
 - attachment `Discard` invalidates post-node readable coverage;
 - imported and retained prior-epoch contents require explicit graph-entry evidence;
-- G3 validates evidence but does not claim G5 actually preserved, uploaded, synchronized, or retired content.
+- G3 validates evidence but does not claim G5 actually preserved, uploaded, synchronized, resolved, copied, mapped, or retired content.
 
 ### Hazard rules
 
@@ -166,13 +218,15 @@ For overlapping normalized regions:
 | write | write | WAW edge only with unique producer order; otherwise error |
 | read-write | overlap | acts as both read and write |
 
-Disjoint byte ranges and disjoint mip/layer/aspect ranges do not conflict.
+Disjoint byte ranges and disjoint mip/layer/aspect/query ranges do not conflict.
 
 Within one fragment, lexical node order orients data hazards. Callers do not restate those edges.
 
 Fragment collection position is not semantic scheduling authority. Cross-fragment causality requires the same typed resource plus a matching typed import/export relation. Overlapping cross-fragment writers without one unique producer are rejected as ambiguous.
 
-Explicit order is fragment-local, typed, and only for non-data constraints. Contradiction with inferred order or a cycle is an error.
+Timestamp write -> query resolve ordering is inferred through the query range. Query resolve -> readback copy ordering is inferred through the destination buffer range.
+
+Explicit order is fragment-local, typed, and only for non-data constraints. A redundant explicit edge duplicating an inferred edge, contradiction with inferred order, or a cycle is an error.
 
 ### Work and graph shape
 
@@ -191,7 +245,9 @@ Resolve
 Present
 ```
 
-The single advanced authority is `GpuPreparedWorkGraph::prepare(...)`. It composes immutable fragments, validates and normalizes accesses, tracks initialized coverage, infers edges, incorporates explicit non-data order, rejects ambiguity/cycles, and produces deterministic prepared node order plus structured diagnostics. It performs no backend admission or execution.
+`Resolve` has separate typed variants for multisample texture resolution and query-set-to-buffer resolution.
+
+The single advanced authority is `GpuPreparedWorkGraph::prepare(...)`. It composes immutable fragments, validates and normalizes accesses and operation shape, tracks initialized coverage, infers edges, incorporates only non-redundant explicit non-data order, rejects ambiguity/cycles, and produces deterministic prepared node order plus structured diagnostics. It performs no backend admission or execution.
 
 G5 ordinary submission must call the same preparation authority internally.
 
@@ -223,7 +279,7 @@ Temporary integration:
 engine/src/plugins/render/adapters/gpu_work.rs
 ```
 
-This is a fourth temporary render adapter. It owns translation only, keeps render execution payload outside RunenGPU, and is deleted incrementally through G4-G6.
+This is a fourth temporary render adapter. It owns translation only, keeps render execution and timing presentation payload outside RunenGPU, and is deleted incrementally through G4-G6.
 
 ## Consumer inventory to reverify at implementation start
 
@@ -239,9 +295,10 @@ engine/src/plugins/render/graph/resource_lifetimes.rs
 engine/src/plugins/render/graph/prepared_validation.rs
 engine/src/plugins/render/graph/merge.rs
 engine/src/plugins/render/gpu_primitives/plan.rs
+engine/src/plugins/render/renderer/render_flow/gpu_timing.rs
 ```
 
-Transitive consumers include render runtime/preflight/inspection, fragment composition, procedural code, boids, Game of Life, SDF flows, compositor examples, editor/draw applications, render-flow tests, primitive tests, and the planning benchmark. The implementation issue must bind an exact current-main file inventory before source changes.
+Transitive consumers include render runtime/preflight/inspection, fragment composition, procedural code, boids, Game of Life, SDF flows, compositor examples, editor/draw applications, render-flow tests, primitive tests, timing evidence, and the planning benchmark. The implementation issue must bind an exact current-main file inventory before source changes.
 
 ## Required deletion target
 
@@ -259,11 +316,15 @@ generic RenderPassNode depends_on authority
 broad renderer access/lifetime correctness as final authority
 ```
 
-Render-only shape and execution payload may remain until their owner phases, but they must consume the one prepared G3 graph.
+Render-only shape, execution payload, timing decoding, and diagnostics presentation may remain until their owner phases, but they must consume the one prepared G3 graph.
 
 ## Alternatives rejected
 
 - Keep explicit pass dependencies: duplicates resource knowledge and remains renderer-shaped.
+- Preserve a duplicate explicit edge alongside an inferred edge: violates the non-data-only rule and leaves two dependency authorities.
+- Treat query resolution as `CopyDestination`: incorrect because WGPU requires dedicated query-resolve usage.
+- Defer query resolution entirely to G5: leaves current timestamp work absent from the G3 graph and cannot infer write -> resolve -> copy dependencies.
+- Put polling, mapping, or timing conversion in G3: crosses into G5 execution and Runenwerk presentation ownership.
 - Whole-resource inference only: over-serializes disjoint work and cannot validate partial initialization.
 - Treat input array order as cross-fragment semantics: hides writer ambiguity and couples scheduling to collection order.
 - Mandatory public graph DSL: violates progressive disclosure.
@@ -272,7 +333,7 @@ Render-only shape and execution payload may remain until their owner phases, but
 
 ## Stable-format and dependency audit
 
-No current evidence makes G3 ranges, nodes, edges, or prepared graphs persisted, replay, network, wire, cache, or external formats. Inspection output is process-local.
+No current evidence makes G3 ranges, nodes, edges, graphs, query resolve operations, or prepared diagnostics persisted, replay, network, wire, cache, or external formats. Inspection output is process-local.
 
 No dependency, package, workflow, lockfile, raw WGPU public type, ECS type, renderer semantic type, Winit type, SDF/UI/product type, or codec is required.
 
