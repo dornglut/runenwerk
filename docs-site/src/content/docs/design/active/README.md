@@ -122,6 +122,7 @@ architecture.
 - [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
+- [Runen Family Operational Hardening Design](runen-family-operational-hardening-design.md)
 
 ### Domain Authoring And Standalone UI Framework
 
@@ -136,12 +137,12 @@ architecture.
 - [UI Game And World-Space Host Requirements](ui-game-and-worldspace-host-requirements-design.md)
 - [UI Accessibility, Internationalization, And Text Conformance](ui-accessibility-internationalization-and-text-conformance-design.md)
 - [UI Layout, Style, Theme, And Motion](ui-layout-style-theme-and-motion-design.md)
-- [UI Performance, Virtualization, Assets, And Profiling](ui-performance-virtualization-assets-and-profiling-design.md)
+- [UI Performance, Virtualization, Assets, And Profiling](ui-performance-virtualization-assets-profiling-design.md)
 - [UI Render Output And Host Renderer Boundary](ui-render-output-and-host-renderer-boundary-design.md)
-- [UI Platform Input, Windowing, And OS Integration](ui-platform-input-windowing-and-os-integration-design.md)
-- [UI Devtools, Inspection, And Workbench](ui-devtools-inspection-and-workbench-design.md)
-- [UI Testing, Conformance, And Proof Matrix](ui-testing-conformance-and-proof-matrix-design.md)
-- [UI Package Security, Versioning, And Migration](ui-package-security-versioning-and-migration-design.md)
+- [UI Platform Input, Windowing, And OS Integration](ui-platform-input-windowing-os-integration-design.md)
+- [UI Devtools, Inspection, And Workbench](ui-devtools-inspection-workbench-design.md)
+- [UI Testing, Conformance, And Proof Matrix](ui-testing-conformance-proof-matrix-design.md)
+- [UI Package Security, Versioning, And Migration](ui-package-security-versioning-migration-design.md)
 
 ### Workspace / Cross-Domain
 
