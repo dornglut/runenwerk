@@ -119,20 +119,31 @@ StorageWrite
 StorageReadWrite
 CopySource
 CopyDestination
-ColorAttachment { load, store }
+ColorAttachment { load_kind, store }
 MultisampleResolveDestination
-DepthStencilAttachment { access, load, store }
+DepthStencilAttachment { access, load_kind, store }
 Present
 ```
 
-Attachment operations separate:
+Attachment operation values remain in the render operation rather than the access enum:
 
 ```text
-load:  Load | Clear
-store: Store | Discard
+color load
+    Load
+    Clear(GpuColorClearValue)
+
+depth load
+    Load
+    Clear(GpuDepthClearValue)
+
+store
+    Store
+    Discard
 ```
 
-`Load` reads prior content. `Clear` establishes complete initialized attachment coverage. `Store` preserves post-node coverage. `Discard` removes later readable coverage.
+The derived access records only `Load` versus `Clear`, because the clear value does not change hazards or initialization coverage. `Load` reads prior content. `Clear(value)` establishes complete initialized attachment coverage with an exact canonical value. `Store` preserves post-node coverage. `Discard` removes later readable coverage.
+
+The accepted G2 format vocabulary currently has color formats and `Depth32Float`, but no stencil format. G3 therefore defines no stencil load, clear value, access mode, or standalone stencil clear authority.
 
 Multisample texture resolution is not standalone work. A color attachment may name an optional single-sampled resolve destination as part of the same `GpuRenderOperation`. The render operation derives the source color-attachment access and destination `MultisampleResolveDestination` write. The resolve destination is written regardless of source attachment store policy.
 
@@ -161,11 +172,12 @@ Zeroed descriptor                 -> complete initialized coverage
 Prepared descriptor               -> checked prepared coverage
 Uninitialized descriptor          -> no initialized coverage
 pure write                        -> initialize written coverage
-copy destination                  -> initialize destination coverage
+buffer copy destination           -> initialize destination coverage
+standalone buffer zero            -> initialize exact destination bytes
 query timestamp write             -> initialize written query indices
 query resolve destination         -> initialize exact destination buffer bytes
 attachment Load                   -> require prior attachment coverage
-attachment Clear                  -> establish attachment coverage
+attachment Clear(value)           -> establish attachment coverage
 attachment write/draw             -> preserve/write attachment coverage
 multisample resolve destination   -> establish destination coverage
 attachment Store                  -> preserve source attachment coverage
@@ -247,15 +259,17 @@ Resolve
 Present
 ```
 
+`Clear` initially means checked buffer-zero work only. Arbitrary color/depth clear values belong to render attachment load operations. A general standalone texture-clear node is deferred because the accepted backend exposes zero-only texture clearing behind separate capability pressure and no current consumer requires it.
+
 `Resolve` is standalone query-set-to-buffer resolution. Multisample texture resolution belongs to a `Render` node's color-attachment operation because WGPU/WebGPU resolves the multisample attachment into its resolve target as part of that render pass.
 
-`GpuRenderOperation` owns exact ordered color-attachment operations, an optional depth/stencil attachment operation, ordered draw intents, and render-side query writes. Attachment operation constructors derive mandatory access facts; callers do not separately restate attachment reads/writes.
+`GpuRenderOperation` owns exact ordered color-attachment operations, an optional depth attachment operation, ordered draw intents, and render-side query writes. Attachment operation constructors derive mandatory access facts; callers do not separately restate attachment reads/writes.
 
 G3 nodes are pre-admission work intent. They include operation kind, exact access, capability requirements, backend-neutral operation shape, execution preference, label, and provenance.
 
 Current render shader/pipeline payload remains in a temporary render-owned sidecar keyed by prepared node identity. G4 replaces this seam with admitted generic shader/pipeline/interface authority. The sidecar cannot alter G3 hazard truth.
 
-An empty render draw list is valid only when an attachment `Clear` or render-side query write makes the pass meaningful. `Store` alone preserves content and is not work.
+An empty render draw list is valid only when an attachment uses `Clear(value)` or render-side query writes make the pass meaningful. `Store` alone preserves content and is not work.
 
 ## Capability requirements
 
@@ -264,10 +278,10 @@ Operations and accesses derive the normalized requirements they structurally nee
 ```text
 Compute operation                    -> Compute
 Render operation                     -> RenderPipeline
-Copy or standalone Clear             -> Copy
+Copy or buffer-zero Clear            -> Copy
 Indirect draw                        -> IndirectDraw
 Storage texture access               -> StorageTexture
-Depth/stencil attachment             -> DepthAttachment
+Depth attachment                     -> DepthAttachment
 Timestamp write or query resolution  -> TimestampQuery
 Present                              -> Presentation
 ```
@@ -324,7 +338,7 @@ Cross-fragment explicit node edges are deferred. Existing render passes needing 
 Preparation:
 
 1. accepts immutable fragments;
-2. validates identities, descriptors, usages, ranges, view parents, attachments, queries, query resolves, and imports/exports;
+2. validates identities, descriptors, usages, ranges, view parents, attachments, clear values, queries, query resolves, and imports/exports;
 3. normalizes operation-derived and caller-declared access;
 4. derives initial coverage and merged capability requirements;
 5. infers RAW/WAR/WAW edges;
@@ -348,6 +362,7 @@ engine/src/plugins/render/adapters/gpu_work.rs
 It:
 
 - lowers current render role and attachment fields into exact G3 operations/access;
+- maps current attachment clear colors/depth values into canonical render attachment load operations;
 - maps current whole-resource authoring to checked whole ranges only where no narrower fact exists;
 - translates history/import/runtime-entry assumptions into explicit input evidence;
 - maps current pass timestamp writes to exact query-index writes;
@@ -389,6 +404,7 @@ G3 stops before:
 - encoding, submission, upload/update, completion, readback, cancellation, and backend retirement;
 - stale-generation and runtime-retirement admission;
 - backend query-resolve offset alignment and command encoding;
+- standalone texture-clear capability/realization;
 - surface acquisition and presentation execution;
 - extraction or a new package;
 - aliasing, pass fusion, multi-queue scheduling, or graph visualization.
