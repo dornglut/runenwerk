@@ -28,14 +28,49 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+          echo "pull_request_base_revision=$PULL_REQUEST_BASE_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Checkout exact revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
           clean: true
           fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual checked-out revision: $actual_revision"
+          if [ -n "$PULL_REQUEST_BASE_REVISION" ]; then echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"; fi
+          test "$actual_revision" = "$EXPECTED_REVISION"
+          echo "Conclusion: PASS"
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
 
@@ -46,20 +81,41 @@ jobs:
         run: pnpm --dir docs-site install --frozen-lockfile
 
       - name: Build documentation site
-        run: pnpm --dir docs-site build 2>&1 | tee docs-build.log
+        id: build
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
+        run: |
+          set +e
+          log_path="${RUNNER_TEMP}/runenwerk-documentation-build.log"
+          pnpm --dir docs-site build >"$log_path" 2>&1
+          build_status=$?
+          set -e
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual checked-out revision: $actual_revision"
+          if [ -n "$PULL_REQUEST_BASE_REVISION" ]; then echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"; fi
+          echo "Canonical command: pnpm --dir docs-site build"
+          if [ "$build_status" -eq 0 ]; then echo "Conclusion: PASS"; exit 0; fi
+          echo "Conclusion: FAIL"
+          sed -n '1,120p' "$log_path" || true
+          tail -n 120 "$log_path" || true
+          exit "$build_status"
 
       - name: Upload build diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: documentation-build-diagnostics
-          path: docs-build.log
-          if-no-files-found: warn
+          path: ${{ runner.temp }}/runenwerk-documentation-build.log
+          if-no-files-found: error
           retention-days: 3
 
       - name: Remove build diagnostics
         if: always()
-        run: rm -f docs-build.log
+        run: rm -f "${RUNNER_TEMP}/runenwerk-documentation-build.log"
 
       - name: Check diff hygiene
         run: git diff --check

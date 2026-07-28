@@ -14,7 +14,7 @@ related_docs:
 
 # Engineering Workflow
 
-GitHub issues and pull requests manage work. Accepted ADRs and designs own durable architecture. Code and tests own current behavior. `cargo validate` and exact-head CI own the required validation baseline.
+GitHub issues and pull requests manage work. Accepted ADRs and designs own durable architecture. Code and tests own current behavior. `cargo validate` and exact-head CI own the required validation baseline. Pull-request workflows validate the explicitly selected reviewed feature head; push and dispatch use `github.sha`. A workflow definition may be loaded from a synthetic merge ref while checked-out repository contents prove a distinct revision.
 
 Repository scripts may automate deterministic checks. They do not grant permission, certify truth, manage lifecycle state, or author feature-branch changes.
 
@@ -76,7 +76,7 @@ git diff --check
 
 `cargo validate` is the same read-only, lockfile-safe implementation used by GitHub Actions. It validates the repository tooling, workspace formatting, locked tests, strict Clippy, documentation structure, and durable repository invariants.
 
-Documentation changes additionally run the Astro/Starlight production build through the path-scoped documentation workflow.
+Documentation changes additionally run the Astro/Starlight production build through the path-scoped documentation workflow. It is supplemental evidence, not a second Rust baseline. Success output is compact; failures preserve status, print bounded diagnostics, retain a short-lived complete artifact, and clean temporary state.
 
 Broader tools such as cargo-deny, cargo-machete, Lychee, ast-grep, benchmarks, or platform matrices are run directly when the affected change or release needs them. They are not a second named gate.
 

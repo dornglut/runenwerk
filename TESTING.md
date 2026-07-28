@@ -25,14 +25,16 @@ git diff --check
 
 `cargo validate` is read-only and lockfile-safe. It validates the repository tooling, formats the workspace, runs locked workspace tests, runs strict Clippy, validates documentation, and checks durable repository invariants.
 
-GitHub Actions runs the same command at the reviewed commit. That exact-head result is the merge authority for the baseline.
+Rust CI resolves, explicitly checks out, and validates the reviewed feature head for pull requests; push and dispatch use `github.sha`. That exact-head result is the merge authority for the baseline.
 
 ## Documentation build
 
-Documentation changes also run the Astro/Starlight production build through the path-scoped documentation workflow.
+Documentation changes also run the Astro/Starlight production build through the path-scoped documentation workflow. It independently selects and proves the same event-derived repository revision; its workflow-definition ref may be a synthetic merge ref, distinct from the checked-out contents.
 
 ## Evidence
 
 Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do not convert source inspection or user-reported output into a stronger validation claim.
+
+The accepted base, reviewed feature head, synthetic merge result, squash commit, and accepted-main push result are separate evidence objects.
 
 Long-form workflow authority lives in [`docs-site/src/content/docs/workspace/engineering-workflow.md`](docs-site/src/content/docs/workspace/engineering-workflow.md).
