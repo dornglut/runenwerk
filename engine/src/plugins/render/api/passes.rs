@@ -79,14 +79,13 @@ impl ComputePassBuilder {
 
     pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
         let id = handle.diagnostic_identity();
-        push_unique_resource(&mut self.pass.reads, id);
-        push_unique_resource(&mut self.pass.writes, id);
+        push_unique_resource(&mut self.pass.storage_reads, id);
+        push_unique_resource(&mut self.pass.storage_writes, id);
         self
     }
 
     pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        push_unique_resource(&mut self.pass.writes, id);
         push_unique_resource(&mut self.pass.write_textures, id);
         self
     }
@@ -94,10 +93,10 @@ impl ComputePassBuilder {
     pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
         let label = label.into();
         let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
-        push_unique_resource(&mut self.pass.reads, a_id);
-        push_unique_resource(&mut self.pass.reads, b_id);
-        push_unique_resource(&mut self.pass.writes, a_id);
-        push_unique_resource(&mut self.pass.writes, b_id);
+        push_unique_resource(&mut self.pass.storage_reads, a_id);
+        push_unique_resource(&mut self.pass.storage_reads, b_id);
+        push_unique_resource(&mut self.pass.storage_writes, a_id);
+        push_unique_resource(&mut self.pass.storage_writes, b_id);
         self
     }
 
@@ -124,8 +123,8 @@ impl ComputePassBuilder {
         self.bind_ping_pong_storage(label)
     }
 
-    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
-        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+    pub fn order_after(mut self, pass_label: impl Into<String>) -> Self {
+        add_non_data_order_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -239,20 +238,18 @@ impl FullscreenPassBuilder {
     }
 
     pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
-        push_unique_resource(&mut self.pass.reads, handle.diagnostic_identity());
+        push_unique_resource(&mut self.pass.storage_reads, handle.diagnostic_identity());
         self
     }
 
     pub fn sample_texture(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.sampled_textures, id);
         self
     }
 
     pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        push_unique_resource(&mut self.pass.writes, id);
         push_unique_resource(&mut self.pass.write_textures, id);
         self
     }
@@ -260,14 +257,14 @@ impl FullscreenPassBuilder {
     pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
         let label = label.into();
         let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
-        push_unique_resource(&mut self.pass.reads, a_id);
-        push_unique_resource(&mut self.pass.reads, b_id);
+        push_unique_resource(&mut self.pass.storage_reads, a_id);
+        push_unique_resource(&mut self.pass.storage_reads, b_id);
         self
     }
 
     pub fn write_surface_color(mut self) -> Result<Self, RenderFlowAuthoringError> {
         let id = self.flow.ensure_surface_color_resource()?;
-        push_unique_resource(&mut self.pass.writes, id);
+        push_unique_resource(&mut self.pass.color_outputs, id);
         Ok(self)
     }
 
@@ -276,7 +273,7 @@ impl FullscreenPassBuilder {
     /// Validation accepts flow-owned color targets and the imported surface color.
     pub fn write_color_target(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        push_unique_resource(&mut self.pass.writes, id);
+        push_unique_resource(&mut self.pass.color_outputs, id);
         self
     }
 
@@ -289,8 +286,8 @@ impl FullscreenPassBuilder {
         self
     }
 
-    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
-        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+    pub fn order_after(mut self, pass_label: impl Into<String>) -> Self {
+        add_non_data_order_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -404,35 +401,33 @@ impl GraphicsPassBuilder {
     }
 
     pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
-        push_unique_resource(&mut self.pass.reads, handle.diagnostic_identity());
+        push_unique_resource(&mut self.pass.storage_reads, handle.diagnostic_identity());
         self
     }
 
     pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
         let label = label.into();
         let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
-        push_unique_resource(&mut self.pass.reads, a_id);
-        push_unique_resource(&mut self.pass.reads, b_id);
+        push_unique_resource(&mut self.pass.storage_reads, a_id);
+        push_unique_resource(&mut self.pass.storage_reads, b_id);
         self
     }
 
     pub fn sample_texture(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.sampled_textures, id);
         self
     }
 
     pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        push_unique_resource(&mut self.pass.writes, id);
         push_unique_resource(&mut self.pass.write_textures, id);
         self
     }
 
     pub fn write_surface_color(mut self) -> Result<Self, RenderFlowAuthoringError> {
         let id = self.flow.ensure_surface_color_resource()?;
-        push_unique_resource(&mut self.pass.writes, id);
+        push_unique_resource(&mut self.pass.color_outputs, id);
         Ok(self)
     }
 
@@ -441,7 +436,7 @@ impl GraphicsPassBuilder {
     /// Validation accepts flow-owned color targets and the imported surface color.
     pub fn write_color_target(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        push_unique_resource(&mut self.pass.writes, id);
+        push_unique_resource(&mut self.pass.color_outputs, id);
         self
     }
 
@@ -473,7 +468,6 @@ impl GraphicsPassBuilder {
 
     pub fn indirect_buffer(mut self, handle: GpuBufferHandle) -> Self {
         let id = handle.diagnostic_identity();
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.indirect_buffers, id);
         self
     }
@@ -503,7 +497,6 @@ impl GraphicsPassBuilder {
         let element_count = self
             .flow
             .indirect_buffer_element_count::<DrawIndirectArgs>(&args_buffer)?;
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.indirect_buffers, id);
         self.pass.draw = Some(RenderDrawDescriptor::indirect(
             vertex_count,
@@ -529,7 +522,6 @@ impl GraphicsPassBuilder {
         let element_count = self
             .flow
             .indirect_buffer_element_count::<DrawIndexedIndirectArgs>(&args_buffer)?;
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.indirect_buffers, id);
         self.pass.draw = Some(RenderDrawDescriptor::indirect(
             index_count,
@@ -574,7 +566,6 @@ impl GraphicsPassBuilder {
         let element_count = self
             .flow
             .indirect_buffer_element_count::<DrawIndirectArgs>(&args_buffer)?;
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.indirect_buffers, id);
         self.pass.draw = Some(RenderDrawDescriptor::indirect_with_offsets(
             vertex_count,
@@ -604,8 +595,8 @@ impl GraphicsPassBuilder {
         self
     }
 
-    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
-        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+    pub fn order_after(mut self, pass_label: impl Into<String>) -> Self {
+        add_non_data_order_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -618,14 +609,12 @@ impl GraphicsPassBuilder {
         id: GpuWorkResourceId,
         layout: RenderVertexBufferLayout,
     ) -> Self {
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.vertex_buffers, id);
         self.pass.vertex_buffer_layouts.push(layout);
         self
     }
 
     pub(crate) fn push_index_buffer_resource(mut self, id: GpuWorkResourceId) -> Self {
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.index_buffers, id);
         self
     }
@@ -635,7 +624,6 @@ impl GraphicsPassBuilder {
         id: GpuWorkResourceId,
         layout: RenderVertexBufferLayout,
     ) -> Self {
-        push_unique_resource(&mut self.pass.reads, id);
         push_unique_resource(&mut self.pass.instance_buffers, id);
         self.pass.instance_buffer_layouts.push(layout);
         self
@@ -652,7 +640,6 @@ impl GraphicsPassBuilder {
         vertex_count: u32,
         instance_count: u32,
     ) -> Self {
-        push_unique_resource(&mut self.pass.reads, indirect.args_buffer);
         push_unique_resource(&mut self.pass.indirect_buffers, indirect.args_buffer);
         self.pass.draw = Some(RenderDrawDescriptor::indirect(
             vertex_count,
@@ -687,20 +674,18 @@ impl CopyPassBuilder {
 
     pub fn source(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        self.pass.reads.clear();
-        self.pass.reads.push(id);
+        self.pass.copy_source = Some(id);
         self
     }
 
     pub fn destination(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        self.pass.writes.clear();
-        self.pass.writes.push(id);
+        self.pass.copy_destination = Some(id);
         self
     }
 
-    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
-        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+    pub fn order_after(mut self, pass_label: impl Into<String>) -> Self {
+        add_non_data_order_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -732,20 +717,18 @@ impl PresentPassBuilder {
 
     pub fn source(mut self, resource_label: impl Into<String>) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
-        self.pass.reads.clear();
-        self.pass.reads.push(id);
+        self.pass.present_source = Some(id);
         self
     }
 
     pub fn surface_color(mut self) -> Result<Self, RenderFlowAuthoringError> {
         let id = self.flow.ensure_surface_color_resource()?;
-        self.pass.reads.clear();
-        self.pass.reads.push(id);
+        self.pass.present_source = Some(id);
         Ok(self)
     }
 
-    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
-        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+    pub fn order_after(mut self, pass_label: impl Into<String>) -> Self {
+        add_non_data_order_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -767,7 +750,7 @@ impl BuiltinUiCompositePassBuilder {
     ) -> Result<Self, RenderFlowAuthoringError> {
         let color_output = flow.ensure_surface_color_resource()?;
         let mut pass = new_pass(&mut flow, label, RenderPassKind::BuiltinUiComposite);
-        push_unique_resource(&mut pass.writes, color_output);
+        push_unique_resource(&mut pass.color_outputs, color_output);
         Ok(Self { flow, pass })
     }
 
@@ -776,8 +759,8 @@ impl BuiltinUiCompositePassBuilder {
         self
     }
 
-    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
-        add_dependency_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
+    pub fn order_after(mut self, pass_label: impl Into<String>) -> Self {
+        add_non_data_order_by_label(&self.flow, &mut self.pass, pass_label.into().as_str());
         self
     }
 
@@ -831,9 +814,9 @@ fn add_uniform_state_with_surface_binding<S, U, F>(
         ));
 }
 
-fn add_dependency_by_label(flow: &RenderFlow, pass: &mut RenderPassNode, pass_label: &str) {
+fn add_non_data_order_by_label(flow: &RenderFlow, pass: &mut RenderPassNode, pass_label: &str) {
     let dependency = require_pass_id(flow, pass_label);
-    push_unique_pass_dependency(&mut pass.depends_on, dependency);
+    push_unique_pass_dependency(&mut pass.non_data_order_after, dependency);
 }
 
 fn require_ping_pong_storage(

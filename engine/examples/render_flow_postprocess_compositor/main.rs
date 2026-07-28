@@ -22,11 +22,10 @@ fn main() -> Result<()> {
         .bind_ping_pong_storage("post.bloom")
         .write_surface_color()
         .expect("render flow authoring should succeed")
-        .depends_on("post.bloom_extract")
         .finish()
         .validate()?;
 
-    let order = flow.pass_order()?;
+    let order = flow.prepared_pass_order()?;
     let order = order
         .into_iter()
         .map(|pass_id| pass_id.to_string())

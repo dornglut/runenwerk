@@ -1,21 +1,24 @@
-use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator};
+use crate::plugins::gpu::{
+    GpuBufferHandle, GpuResourceLifetime, GpuWorkResourceId, GpuWorkResourceIdAllocator,
+};
 use crate::plugins::render::api::{
     BuiltinUiCompositePassBuilder, ComputePassBuilder, CopyPassBuilder, FullscreenPassBuilder,
     GraphicsPassBuilder, ParamProjectionError, PassUniformProjection, PresentPassBuilder,
     ProjectedUniformSet, RenderDoubleBuffer, RenderFixedStepIterationUniform,
     RenderFlowAuthoringError, project_uniform_bindings_for_pass,
 };
+use crate::plugins::render::graph::compile_flow_plan;
 use crate::plugins::render::procedural::{
     ProceduralPassBuilder, ProceduralPassDescriptor, build_procedural_pass,
 };
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{
-    FlowValidationReport, GpuParams, GpuPrimitiveDispatchPlan, GpuPrimitiveDispatchResource,
-    GpuPrimitiveExecutionPlan, GpuPrimitiveTemporaryStorageKind, IndirectDrawArgsBuffer,
-    RenderFixedStepRegionId, RenderFixedStepRegionMembership, RenderFlowGraph, RenderFlowId,
-    RenderFlowValidationError, RenderPassId, RenderPassIdSequence, RenderPassKind, RenderPassNode,
-    RenderResourceDeclaration, RenderShaderReference, RenderTargetAliasKey, RenderTargetAliasKind,
-    RenderTextureTargetFormat, U32ScanElement, validate_flow_graph,
+    FlowValidationReport, GpuParams, GpuPrimitiveDispatchPlan, GpuPrimitiveExecutionPlan,
+    IndirectDrawArgsBuffer, RenderFixedStepRegionId, RenderFixedStepRegionMembership,
+    RenderFlowGraph, RenderFlowId, RenderFlowValidationError, RenderPassId, RenderPassIdSequence,
+    RenderPassKind, RenderPassNode, RenderResourceDeclaration, RenderShaderReference,
+    RenderTargetAliasKey, RenderTargetAliasKind, RenderTextureTargetFormat, U32ScanElement,
+    validate_flow_graph,
 };
 use crate::runtime::{CatchupBudget, FixedTimeConfig, FixedTimeState};
 use std::collections::BTreeMap;
@@ -240,10 +243,14 @@ impl RenderFlow {
     }
 
     pub fn gpu_primitive_plan(
-        self,
+        mut self,
         plan: &GpuPrimitiveExecutionPlan,
     ) -> Result<Self, RenderFlowAuthoringError> {
-        let dispatch_plan = plan.dispatch_plan()?;
+        let dispatch_plan = plan.dispatch_plan_with_temporary(|label, element_count| {
+            let id =
+                self.register_transient_storage_array::<U32ScanElement>(label, element_count)?;
+            self.buffer_handle(id)
+        })?;
         self.append_gpu_primitive_dispatch_plan(dispatch_plan)
     }
 
@@ -340,8 +347,22 @@ impl RenderFlow {
         validate_flow_graph(&self.graph)
     }
 
-    pub fn pass_order(&self) -> Result<Vec<RenderPassId>, RenderFlowValidationError> {
-        Ok(self.validation_report()?.pass_order)
+    pub fn prepared_pass_order(&self) -> Result<Vec<RenderPassId>, RenderFlowValidationError> {
+        let plan = compile_flow_plan(self)?;
+        let Some(work) = plan.structural_work() else {
+            return Err(RenderFlowValidationError::from(vec![
+                crate::plugins::render::RenderFlowValidationIssue::GpuWorkLoweringFailed {
+                    message: "compiled flow is missing structural prepared GPU work".to_string(),
+                },
+            ]));
+        };
+        work.ordered_render_pass_ids().map_err(|error| {
+            RenderFlowValidationError::from(vec![
+                crate::plugins::render::RenderFlowValidationIssue::GpuWorkLoweringFailed {
+                    message: error.to_string(),
+                },
+            ])
+        })
     }
 
     pub fn id(&self) -> RenderFlowId {
@@ -643,6 +664,29 @@ impl RenderFlow {
     where
         T: GpuParams + 'static,
     {
+        self.register_storage_array_with_lifetime::<T>(label, len, GpuResourceLifetime::Retained)
+    }
+
+    fn register_transient_storage_array<T>(
+        &mut self,
+        label: String,
+        len: u64,
+    ) -> Result<GpuWorkResourceId, RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
+        self.register_storage_array_with_lifetime::<T>(label, len, GpuResourceLifetime::Transient)
+    }
+
+    fn register_storage_array_with_lifetime<T>(
+        &mut self,
+        label: String,
+        len: u64,
+        lifetime: GpuResourceLifetime,
+    ) -> Result<GpuWorkResourceId, RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
             return Ok(id);
         }
@@ -651,7 +695,9 @@ impl RenderFlow {
         self.upsert_labeled_resource(
             label.clone(),
             id,
-            RenderResourceDeclaration::declare_storage_array::<T>(id, label, len)?,
+            RenderResourceDeclaration::declare_storage_array_with_lifetime::<T>(
+                id, label, len, lifetime,
+            )?,
         );
         Ok(id)
     }
@@ -772,18 +818,6 @@ impl RenderFlow {
         mut self,
         plan: GpuPrimitiveDispatchPlan,
     ) -> Result<Self, RenderFlowAuthoringError> {
-        let mut temporary_resources = BTreeMap::<String, GpuWorkResourceId>::new();
-        for temporary in plan.temporary_storage {
-            let id = match temporary.kind {
-                GpuPrimitiveTemporaryStorageKind::U32ScanElement => self
-                    .register_storage_array::<U32ScanElement>(
-                        temporary.label.clone(),
-                        temporary.element_count,
-                    )?,
-            };
-            temporary_resources.insert(temporary.label, id);
-        }
-
         for stage in plan.stages {
             let (pass_id, pass_label) = self.allocate_pass(stage.label);
             let mut pass = RenderPassNode::new(pass_id, pass_label, RenderPassKind::Compute);
@@ -794,37 +828,15 @@ impl RenderFlow {
             pass.compute_dispatch =
                 Some(crate::plugins::render::api::ComputeDispatchDescriptor::Fixed(stage.dispatch));
             for read in stage.reads {
-                let resource_id =
-                    resolve_gpu_primitive_dispatch_resource(read, &temporary_resources);
-                push_unique_resource_id(&mut pass.reads, resource_id);
+                push_unique_resource_id(&mut pass.storage_reads, read.diagnostic_identity());
             }
             for write in stage.writes {
-                let resource_id =
-                    resolve_gpu_primitive_dispatch_resource(write, &temporary_resources);
-                push_unique_resource_id(&mut pass.writes, resource_id);
-            }
-            for dependency_label in stage.depends_on {
-                let dependency = self
-                    .resolve_pass_id(dependency_label.as_str())
-                    .expect("gpu primitive dispatch stage dependency should already be allocated");
-                push_unique_resource_id(&mut pass.depends_on, dependency);
+                push_unique_resource_id(&mut pass.storage_writes, write.diagnostic_identity());
             }
             self = self.push_pass(pass);
         }
 
         Ok(self)
-    }
-}
-
-fn resolve_gpu_primitive_dispatch_resource(
-    resource: GpuPrimitiveDispatchResource,
-    temporary_resources: &BTreeMap<String, GpuWorkResourceId>,
-) -> GpuWorkResourceId {
-    match resource {
-        GpuPrimitiveDispatchResource::Existing(resource_id) => resource_id,
-        GpuPrimitiveDispatchResource::Temporary(label) => *temporary_resources
-            .get(label.as_str())
-            .expect("gpu primitive temporary resource should be registered before pass lowering"),
     }
 }
 
@@ -1037,17 +1049,15 @@ mod tests {
             .bind_ping_pong_storage("test.cells")
             .write_color_target("test.color")
             .draw(3, 1)
-            .depends_on("test.compute")
             .finish()
             .copy_pass("test.history")
             .source("test.color")
             .destination("test.history")
-            .depends_on("test.graphics")
             .finish()
             .present_pass("test.present")
             .expect("render flow authoring should succeed")
             .source("test.color")
-            .depends_on("test.history")
+            .order_after("test.history")
             .finish()
             .validate()
             .expect("public render-flow path should validate");
@@ -1071,7 +1081,7 @@ mod tests {
 
         let plan = compile_flow_plan(&flow).expect("validated flow should compile");
         assert!(matches!(
-            plan.pass_order.as_slice(),
+            plan.render_passes.as_slice(),
             [
                 CompiledPassDescriptor::Compute(_),
                 CompiledPassDescriptor::Graphics(_),
@@ -1099,7 +1109,6 @@ mod tests {
             .expect("render flow authoring should succeed")
             .bind_storage(cells)
             .dispatch_from_state(TestState::dispatch)
-            .depends_on("test.step.a")
             .finish()
             .fixed_step_region("test.simulation", 4, ["test.step.a", "test.step.b"])
             .expect("render flow authoring should succeed")
@@ -1143,14 +1152,12 @@ mod tests {
             .expect("render flow authoring should succeed")
             .bind_storage(cells.clone())
             .dispatch_from_state(TestState::dispatch)
-            .depends_on("test.step.a")
             .finish()
             .compute_pass("test.step.b")
             .uniform_from_state(TestState::params)
             .expect("render flow authoring should succeed")
             .bind_storage(cells)
             .dispatch_from_state(TestState::dispatch)
-            .depends_on("test.outside")
             .finish()
             .fixed_step_region("test.simulation", 4, ["test.step.a", "test.step.b"])
             .expect("render flow authoring should succeed")
@@ -1444,7 +1451,6 @@ mod tests {
             .iter_mut()
             .find(|pass| pass.label == "test.draw")
             .expect("draw pass should exist");
-        pass.reads.push(vertices.diagnostic_identity());
         pass.vertex_buffers.push(vertices.diagnostic_identity());
 
         let err = flow
@@ -1850,11 +1856,10 @@ mod tests {
             .present_pass("test.present")
             .expect("render flow authoring should succeed")
             .source("test.color")
-            .depends_on("test.compose")
             .finish()
             .fullscreen_pass("test.after")
             .write_color_target("test.after")
-            .depends_on("test.present")
+            .order_after("test.present")
             .finish()
             .validation_report()
             .expect_err("present pass should reject downstream dependents");

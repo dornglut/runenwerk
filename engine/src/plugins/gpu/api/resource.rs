@@ -27,6 +27,12 @@ impl GpuResourceLabel {
     }
 }
 
+impl AsRef<str> for GpuResourceLabel {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuResourceProvenance {
     producer: GpuResourceLabel,
@@ -245,6 +251,7 @@ pub enum GpuBufferUsage {
     Indirect,
     CopySource,
     CopyDestination,
+    QueryResolve,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -323,7 +330,7 @@ pub enum GpuTextureDimension {
     D3,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuTextureExtent {
     width: u32,
     height: u32,
@@ -388,7 +395,7 @@ pub enum GpuTextureAspect {
     StencilOnly,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuTextureSubresourceRange {
     base_mip_level: u32,
     mip_level_count: u32,
@@ -1247,10 +1254,38 @@ pub enum GpuResourceAccessIntent {
     ReadWrite,
 }
 
+/// A consumer-owned semantic key used to connect fragment exports and imports.
+///
+/// Unlike labels, an export key participates in graph composition. It is still
+/// process-local work authoring data and carries no persistence, replay, wire,
+/// network, ABI, or cache stability promise.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuExportKey(String);
+
+impl GpuExportKey {
+    pub fn new(value: impl Into<String>) -> Result<Self, GpuResourceDescriptorError> {
+        let value = value.into();
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(GpuResourceDescriptorError::invalid(
+                "construct GPU export key",
+                "<empty>",
+                GpuResourceDescriptorCause::EmptyLabel,
+                "provide a non-empty consumer-owned export key",
+            ));
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GpuExportRelationship {
     resource: GpuResourceRef,
-    export_key: String,
+    export_key: GpuExportKey,
     required_final_access: GpuResourceAccessIntent,
     provenance: GpuResourceProvenance,
 }
@@ -1268,32 +1303,23 @@ impl Eq for GpuExportRelationship {}
 impl GpuExportRelationship {
     pub fn new(
         resource: GpuResourceRef,
-        export_key: impl Into<String>,
+        export_key: GpuExportKey,
         required_final_access: GpuResourceAccessIntent,
         provenance: GpuResourceProvenance,
-    ) -> Result<Self, GpuResourceDescriptorError> {
-        let export_key = export_key.into();
-        if export_key.trim().is_empty() {
-            return Err(GpuResourceDescriptorError::invalid(
-                "construct GPU export relationship",
-                "<empty>",
-                GpuResourceDescriptorCause::EmptyLabel,
-                "provide a non-empty consumer-owned export key",
-            ));
-        }
-        Ok(Self {
+    ) -> Self {
+        Self {
             resource,
             export_key,
             required_final_access,
             provenance,
-        })
+        }
     }
 
     pub fn resource(&self) -> &GpuResourceRef {
         &self.resource
     }
-    pub fn export_key(&self) -> &str {
-        self.export_key.as_str()
+    pub fn export_key(&self) -> &GpuExportKey {
+        &self.export_key
     }
     pub const fn required_final_access(&self) -> GpuResourceAccessIntent {
         self.required_final_access
@@ -1371,7 +1397,12 @@ mod tests {
         required_final_access: GpuResourceAccessIntent,
         provenance: GpuResourceProvenance,
     ) -> GpuExportRelationship {
-        GpuExportRelationship::new(resource, export_key, required_final_access, provenance).unwrap()
+        GpuExportRelationship::new(
+            resource,
+            GpuExportKey::new(export_key).unwrap(),
+            required_final_access,
+            provenance,
+        )
     }
 
     fn buffer_resource_refs() -> (GpuResourceRef, GpuResourceRef) {

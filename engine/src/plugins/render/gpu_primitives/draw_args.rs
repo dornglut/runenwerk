@@ -1,5 +1,5 @@
 use super::{GpuPrimitiveValidationError, buffer_capacity, validate_capacity};
-use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
+use crate::plugins::gpu::GpuBufferHandle;
 pub use crate::plugins::render::graph::{
     DrawIndexedIndirectArgs, DrawIndirectArgs, IndirectDrawArgsBuffer,
 };
@@ -13,7 +13,7 @@ pub enum GeneratedIndirectDrawArgs {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndirectDrawArgsGenerationDescriptor {
     pub label: String,
-    pub output: GpuWorkResourceId,
+    pub output: GpuBufferHandle,
     pub output_index: u32,
     pub args: GeneratedIndirectDrawArgs,
 }
@@ -25,14 +25,15 @@ impl IndirectDrawArgsGenerationDescriptor {
         output_index: u32,
         args: DrawIndirectArgs,
     ) -> Result<Self, GpuPrimitiveValidationError> {
+        let output_capacity = buffer_capacity(
+            &output,
+            DrawIndirectArgs::BYTE_SIZE,
+            "indirect draw argument output",
+        )?;
         Self::new(
             label,
-            output.diagnostic_identity(),
-            buffer_capacity(
-                &output,
-                DrawIndirectArgs::BYTE_SIZE,
-                "indirect draw argument output",
-            )?,
+            output,
+            output_capacity,
             output_index,
             GeneratedIndirectDrawArgs::Draw(args),
         )
@@ -44,14 +45,15 @@ impl IndirectDrawArgsGenerationDescriptor {
         output_index: u32,
         args: DrawIndexedIndirectArgs,
     ) -> Result<Self, GpuPrimitiveValidationError> {
+        let output_capacity = buffer_capacity(
+            &output,
+            DrawIndexedIndirectArgs::BYTE_SIZE,
+            "indexed indirect draw argument output",
+        )?;
         Self::new(
             label,
-            output.diagnostic_identity(),
-            buffer_capacity(
-                &output,
-                DrawIndexedIndirectArgs::BYTE_SIZE,
-                "indexed indirect draw argument output",
-            )?,
+            output,
+            output_capacity,
             output_index,
             GeneratedIndirectDrawArgs::DrawIndexed(args),
         )
@@ -59,7 +61,7 @@ impl IndirectDrawArgsGenerationDescriptor {
 
     fn new(
         label: impl Into<String>,
-        output: GpuWorkResourceId,
+        output: GpuBufferHandle,
         output_capacity: u64,
         output_index: u32,
         args: GeneratedIndirectDrawArgs,

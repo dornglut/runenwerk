@@ -1,13 +1,17 @@
-use engine::plugins::gpu::{GpuCapabilities, GpuCapabilityFeature};
+use engine::plugins::gpu::{
+    GpuBufferAccessKind, GpuCapabilities, GpuCapabilityFeature, GpuInitialCoverageKind,
+    GpuResourceAccess,
+};
 use engine::plugins::render::{
     DrawIndirectArgs, GpuStorage, GpuUniform, PreparedFlowInputs, PreparedFlowInvocation,
     PreparedFrameContext, PreparedFrameContributions, PreparedRenderFrame, PreparedShaderSnapshot,
     PreparedSurfaceInfo, PreparedViewFrame, RenderExecutionGraphDiagnosticKind, RenderFlow,
-    RenderFlowValidationIssue, RenderFrameDataRegistry, RenderPassId, RenderPassKind,
+    RenderFlowValidationIssue, RenderFrameDataRegistry, RenderGpuWorkInstrumentation, RenderPassId,
     RenderPassShapeIntent, RenderResourceDeclaration, RenderTextureFormatPolicy,
     RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
     RenderVertexFormat, ShaderRegistryResource, compile_flow_plan, compile_flow_plan_checked,
     current_runtime_gpu_capabilities, preflight_prepared_render_frame_runtime_guards,
+    prepare_render_gpu_work,
 };
 use std::any::TypeId;
 use std::collections::{BTreeMap, BTreeSet};
@@ -94,11 +98,9 @@ fn build_flow() -> RenderFlow {
         .bind_ping_pong_storage("cells")
         .write_surface_color()
         .expect("render flow authoring should succeed")
-        .depends_on("simulate")
         .finish()
         .builtin_ui_composite_pass("ui")
         .expect("render flow authoring should succeed")
-        .depends_on("compose")
         .finish()
         .validate()
         .expect("flow should validate")
@@ -160,7 +162,9 @@ fn instanced_fullscreen_style_flow(instance_count: u32) -> RenderFlow {
 #[test]
 fn v2_flow_keeps_graph_contract_inspectable() {
     let flow = build_flow();
-    let report = flow.validation_report().expect("report should validate");
+    let prepared_order = flow
+        .prepared_pass_order()
+        .expect("flow should expose prepared G3 order");
     let pass_labels_by_id = flow
         .graph()
         .passes
@@ -168,8 +172,7 @@ fn v2_flow_keeps_graph_contract_inspectable() {
         .iter()
         .map(|pass| (pass.id, pass.label.as_str()))
         .collect::<BTreeMap<_, _>>();
-    let ordered_labels = report
-        .pass_order
+    let ordered_labels = prepared_order
         .iter()
         .map(|id| {
             pass_labels_by_id
@@ -180,19 +183,35 @@ fn v2_flow_keeps_graph_contract_inspectable() {
         .collect::<Vec<_>>();
     assert_eq!(ordered_labels, vec!["simulate", "compose", "ui"]);
 
-    let simulate = flow
+    let compiled = compile_flow_plan(&flow).expect("flow should compile through G3");
+    let projected_dispatches = BTreeMap::from([(pass_id_by_label(&flow, "simulate"), [2, 2, 1])]);
+    let work = prepare_render_gpu_work(
+        &compiled,
+        &projected_dispatches,
+        (800, 600),
+        RenderGpuWorkInstrumentation::Disabled,
+    )
+    .expect("render flow should lower to prepared G3 work");
+    let simulate = work
         .graph()
-        .passes
-        .passes
+        .nodes()
         .iter()
-        .find(|pass| pass.label == "simulate")
-        .expect("simulate pass should exist");
-    assert_eq!(simulate.kind, RenderPassKind::Compute);
-    let read_ids = simulate.reads.iter().copied().collect::<BTreeSet<_>>();
-    let write_ids = simulate.writes.iter().copied().collect::<BTreeSet<_>>();
-    assert_eq!(read_ids.len(), 2);
-    assert_eq!(write_ids.len(), 2);
-    assert_eq!(read_ids, write_ids);
+        .find(|prepared| prepared.node().label().as_str() == "simulate")
+        .expect("simulate G3 node should exist");
+    let storage_ids = simulate
+        .node()
+        .accesses()
+        .iter()
+        .filter_map(|access| match access {
+            GpuResourceAccess::Buffer(access)
+                if access.kind() == GpuBufferAccessKind::StorageReadWrite =>
+            {
+                Some(access.buffer().diagnostic_identity())
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(storage_ids.len(), 2);
 }
 
 #[test]
@@ -313,7 +332,7 @@ fn render_flow_compiler_accepts_bounded_instanced_fullscreen_intent() {
     let compiled = compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())
         .expect("bounded explicit intent should pass compiler guard");
     let pass = compiled
-        .pass_order
+        .render_passes
         .iter()
         .find(|pass| pass.pass_label() == "compose")
         .expect("compose pass should compile");
@@ -405,7 +424,7 @@ fn render_flow_runtime_guard_rejects_cached_instanced_fullscreen_hazard() {
 }
 
 #[test]
-fn render_flow_compiler_exposes_resource_lifetime_windows() {
+fn render_flow_compiler_exposes_prepared_resource_initialization() {
     let flow = RenderFlow::new("v2.compiler.lifetimes")
         .with_color_target("color")
         .expect("render flow authoring should succeed")
@@ -416,15 +435,36 @@ fn render_flow_compiler_exposes_resource_lifetime_windows() {
         .expect("flow should validate");
 
     let compiled = compile_flow_plan(&flow).expect("flow should compile");
-    let color_window = compiled
-        .resource_lifetime_windows
+    let work = prepare_render_gpu_work(
+        &compiled,
+        &BTreeMap::new(),
+        (800, 600),
+        RenderGpuWorkInstrumentation::Disabled,
+    )
+    .expect("flow should lower to prepared G3 work");
+    let color_id = *compiled
+        .resource_ids_by_label
+        .get("color")
+        .expect("color resource should compile");
+    let color_initialization = work
+        .graph()
+        .initialization()
         .iter()
-        .find(|window| window.resource_label.as_deref() == Some("color"))
-        .expect("color target lifetime should be inspectable");
+        .find(|entry| entry.resource().diagnostic_identity() == color_id)
+        .expect("color target initialization should be inspectable");
 
-    assert_eq!(color_window.first_write, Some(0));
-    assert_eq!(color_window.last_use, Some(0));
-    assert!(color_window.first_read.is_none());
+    assert_eq!(
+        color_initialization
+            .initial()
+            .map(|coverage| coverage.kind()),
+        Some(GpuInitialCoverageKind::TextureSubresources)
+    );
+    assert_eq!(
+        color_initialization
+            .final_coverage()
+            .map(|coverage| coverage.kind()),
+        Some(GpuInitialCoverageKind::TextureSubresources)
+    );
 }
 
 #[test]
@@ -531,7 +571,6 @@ fn v2_uniform_projection_infers_types_from_method_items() {
         .bind_ping_pong_storage("cells")
         .write_surface_color()
         .expect("render flow authoring should succeed")
-        .depends_on("simulate")
         .finish()
         .validate()
         .expect("flow should validate");

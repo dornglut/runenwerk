@@ -30,7 +30,6 @@ pub enum RenderExecutionGraphDiagnosticKind {
     PreparedInvocationDuplicate,
     FeatureGateMissing,
     HistorySignatureConflict,
-    ResourceLifetimeUseBeforeWrite,
     BackendCapabilityMismatch,
     UnsupportedImportedResource,
     FullscreenInstancedWork,

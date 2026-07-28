@@ -1,5 +1,5 @@
 use super::{GpuPrimitiveValidationError, buffer_capacity};
-use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
+use crate::plugins::gpu::GpuBufferHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, crate::plugins::render::GpuStorage)]
 pub struct U32Counter {
@@ -13,7 +13,7 @@ impl U32Counter {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CounterResetDescriptor {
     pub label: String,
-    pub counters: GpuWorkResourceId,
+    pub counters: GpuBufferHandle,
     pub counter_count: u32,
     pub reset_value: u32,
 }
@@ -35,7 +35,7 @@ impl CounterResetDescriptor {
     ) -> Result<Self, GpuPrimitiveValidationError> {
         let descriptor = Self {
             label: label.into(),
-            counters: counters.diagnostic_identity(),
+            counters: counters.clone(),
             counter_count,
             reset_value,
         };

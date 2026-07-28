@@ -3,15 +3,15 @@
 //! backend admission constructs normalized capability facts directly.
 
 use crate::plugins::gpu::{
-    GpuCapabilities, GpuCapabilityFeature, GpuLimits, GpuTextureFormat,
-    GpuTextureFormatCapabilities,
+    GpuCapabilities, GpuCapabilityFeature, GpuCapabilityRequirement, GpuLimits,
+    GpuPreparedWorkGraph, GpuTextureFormat, GpuTextureFormatCapabilities,
 };
 use crate::plugins::render::graph::{
     CompiledBindingEntry, CompiledPassExecutionPlan, CompiledRenderFlowPlan,
     RenderExecutionGraphDiagnostic, RenderExecutionGraphDiagnosticKind,
 };
 use crate::plugins::render::{
-    RenderPassKind, RenderResourceDeclaration, RenderTextureFormatPolicy, RenderTextureTargetFormat,
+    RenderResourceDeclaration, RenderTextureFormatPolicy, RenderTextureTargetFormat,
 };
 
 /// Returns normalized facts for the fixed capability contract the current
@@ -122,25 +122,6 @@ pub fn validate_compiled_flow_capabilities(
 ) -> Vec<RenderExecutionGraphDiagnostic> {
     let mut diagnostics = Vec::<RenderExecutionGraphDiagnostic>::new();
 
-    for pass in &flow.pass_order {
-        let feature = capability_for_pass_kind(pass.node().kind);
-        if !capabilities.supports(feature) {
-            diagnostics.push(
-                RenderExecutionGraphDiagnostic::error(
-                    RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
-                    format!(
-                        "normalized GPU capabilities do not support {:?} pass '{}'",
-                        pass.node().kind,
-                        pass.pass_label()
-                    ),
-                )
-                .with_flow(flow.flow_id, flow.flow_label.clone())
-                .with_pass(pass.pass_id(), pass.pass_label().to_string())
-                .with_capability(format!("feature::{feature:?}")),
-            );
-        }
-    }
-
     for pass in &flow.execution.passes {
         validate_execution_pass_capabilities(flow, pass, capabilities, &mut diagnostics);
     }
@@ -152,15 +133,31 @@ pub fn validate_compiled_flow_capabilities(
     diagnostics
 }
 
-fn capability_for_pass_kind(kind: RenderPassKind) -> GpuCapabilityFeature {
-    match kind {
-        RenderPassKind::Compute => GpuCapabilityFeature::Compute,
-        RenderPassKind::Fullscreen
-        | RenderPassKind::Graphics
-        | RenderPassKind::BuiltinUiComposite => GpuCapabilityFeature::RenderPipeline,
-        RenderPassKind::Copy => GpuCapabilityFeature::Copy,
-        RenderPassKind::Present => GpuCapabilityFeature::Presentation,
-    }
+pub fn validate_prepared_gpu_work_capabilities(
+    flow: &CompiledRenderFlowPlan,
+    graph: &GpuPreparedWorkGraph,
+    capabilities: &GpuCapabilities,
+) -> Vec<RenderExecutionGraphDiagnostic> {
+    graph
+        .requirements()
+        .iter()
+        .filter_map(|requirement| match requirement {
+            GpuCapabilityRequirement::Required(feature) if !capabilities.supports(feature) => Some(
+                RenderExecutionGraphDiagnostic::error(
+                    RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
+                    format!(
+                        "prepared GPU work for flow '{}' requires unavailable capability {feature:?}",
+                        flow.flow_label
+                    ),
+                )
+                .with_flow(flow.flow_id, flow.flow_label.clone())
+                .with_capability(format!("feature::{feature:?}")),
+            ),
+            GpuCapabilityRequirement::Required(_)
+            | GpuCapabilityRequirement::Preferred { .. }
+            | GpuCapabilityRequirement::Disabled(_) => None,
+        })
+        .collect()
 }
 
 fn validate_execution_pass_capabilities(
@@ -223,26 +220,6 @@ fn validate_execution_pass_capabilities(
                     .with_flow(flow.flow_id, flow.flow_label.clone())
                     .with_pass(value.pass_id, value.pass_id.to_string())
                     .with_capability("max_vertex_buffers"),
-                );
-            }
-            if value.draw.is_some_and(|draw| {
-                matches!(
-                    draw.source,
-                    crate::plugins::render::CompiledDrawSource::Indirect { .. }
-                )
-            }) && !capabilities.supports(GpuCapabilityFeature::IndirectDraw)
-            {
-                diagnostics.push(
-                    RenderExecutionGraphDiagnostic::error(
-                        RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
-                        format!(
-                            "pass '{}' uses indirect draw but normalized GPU capabilities do not support it",
-                            value.pass_id
-                        ),
-                    )
-                    .with_flow(flow.flow_id, flow.flow_label.clone())
-                    .with_pass(value.pass_id, value.pass_id.to_string())
-                    .with_capability("feature::IndirectDraw"),
                 );
             }
         }
@@ -323,17 +300,6 @@ fn validate_resource_descriptor_capabilities(
             ));
         }
         RenderResourceDeclaration::StorageImage(value) => {
-            if !capabilities.supports(GpuCapabilityFeature::StorageTexture) {
-                diagnostics.push(resource_capability_diagnostic(
-                    flow,
-                    *descriptor.id(),
-                    "feature::StorageTexture",
-                    format!(
-                        "storage texture '{}' is not supported by normalized GPU capabilities",
-                        value.id
-                    ),
-                ));
-            }
             validate_texture_format_capability(
                 flow,
                 *descriptor.id(),
@@ -352,17 +318,6 @@ fn validate_resource_descriptor_capabilities(
             diagnostics,
         ),
         RenderResourceDeclaration::DepthAttachment(value) => {
-            if !capabilities.supports(GpuCapabilityFeature::DepthAttachment) {
-                diagnostics.push(resource_capability_diagnostic(
-                    flow,
-                    *descriptor.id(),
-                    "feature::DepthAttachment",
-                    format!(
-                        "depth target '{}' is not supported by normalized GPU capabilities",
-                        value.id
-                    ),
-                ));
-            }
             validate_texture_format_capability(
                 flow,
                 *descriptor.id(),

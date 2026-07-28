@@ -1,6 +1,6 @@
 use crate::plugins::render::{
     RenderFlow, RenderFlowValidationError, RenderFragmentDiagnosticSeverity,
-    RenderFragmentMergeReport, compile_flow_plan_checked, current_runtime_gpu_capabilities,
+    RenderFragmentMergeReport, compile_flow_plan,
 };
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
@@ -75,7 +75,7 @@ pub struct RenderFlowGraphDump {
 pub fn dump_flow_graph(
     flow: &RenderFlow,
 ) -> Result<RenderFlowGraphDump, RenderFlowValidationError> {
-    let report = flow.validation_report()?;
+    let compiled = compile_flow_plan(flow)?;
     let mut lines = Vec::<String>::new();
 
     lines.push(format!("flow: {}", flow.id()));
@@ -89,67 +89,57 @@ pub fn dump_flow_graph(
         ));
     }
 
-    lines.push("passes:".to_string());
-    for pass in &flow.graph().passes.passes {
-        lines.push(format!("  - {} [{:?}]", pass.id, pass.kind));
-        if !pass.reads.is_empty() {
+    if let Some(work) = compiled.structural_work() {
+        let graph = work.graph();
+        lines.push("prepared_nodes:".to_string());
+        for prepared in graph.nodes() {
             lines.push(format!(
-                "    reads: {}",
-                pass.reads
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "  - {} [{} {:?}; accesses={}]",
+                prepared.id(),
+                prepared.node().label().as_str(),
+                prepared.node().kind(),
+                prepared.node().accesses().len()
             ));
         }
-        if !pass.writes.is_empty() {
+        lines.push("prepared_dependencies:".to_string());
+        for dependency in graph.dependencies() {
             lines.push(format!(
-                "    writes: {}",
-                pass.writes
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "  - {} -> {} {:?}",
+                dependency.before(),
+                dependency.after(),
+                dependency.reasons()
             ));
         }
-        if !pass.depends_on.is_empty() {
+        lines.push("prepared_initialization:".to_string());
+        for initialization in graph.initialization() {
             lines.push(format!(
-                "    depends_on: {}",
-                pass.depends_on
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ));
-        }
-    }
-
-    lines.push(format!(
-        "execution_order: {}",
-        report
-            .pass_order
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(" -> ")
-    ));
-    if let Ok(compiled) = compile_flow_plan_checked(flow, &current_runtime_gpu_capabilities()) {
-        lines.push("resource_lifetimes:".to_string());
-        for window in &compiled.resource_lifetime_windows {
-            let label = window
-                .resource_label
-                .clone()
-                .unwrap_or_else(|| window.resource_id.to_string());
-            lines.push(format!(
-                "  - {} ({:?}) first_use={:?} last_use={:?}",
-                label, window.lifetime, window.first_use, window.last_use
+                "  - {} [{}]: initial={:?}, final={:?}",
+                initialization.resource().diagnostic_identity(),
+                initialization.resource().common().label().as_str(),
+                initialization.initial().map(|coverage| coverage.kind()),
+                initialization
+                    .final_coverage()
+                    .map(|coverage| coverage.kind())
             ));
         }
         lines.push(format!(
-            "compiler_diagnostics: {}",
-            compiled.compiler_diagnostics.len()
+            "prepared_requirements: {:?}",
+            graph.requirements().iter().collect::<Vec<_>>()
+        ));
+        lines.push(format!(
+            "prepared_order: {}",
+            graph
+                .topological_order()
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" -> ")
         ));
     }
+    lines.push(format!(
+        "compiler_diagnostics: {}",
+        compiled.compiler_diagnostics.len()
+    ));
     Ok(RenderFlowGraphDump {
         flow_id: flow.id().to_string(),
         lines,

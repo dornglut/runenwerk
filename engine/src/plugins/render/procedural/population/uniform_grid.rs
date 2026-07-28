@@ -109,19 +109,13 @@ pub enum BoundedUniformGrid2dStage {
 pub struct BoundedUniformGrid2dStagePlan {
     pub stage: BoundedUniformGrid2dStage,
     pub label: String,
-    pub depends_on: Option<String>,
 }
 
 impl BoundedUniformGrid2dStagePlan {
-    pub fn new(
-        stage: BoundedUniformGrid2dStage,
-        label: impl Into<String>,
-        depends_on: Option<String>,
-    ) -> Self {
+    pub fn new(stage: BoundedUniformGrid2dStage, label: impl Into<String>) -> Self {
         Self {
             stage,
             label: label.into(),
-            depends_on,
         }
     }
 }
@@ -282,14 +276,9 @@ fn canonical_stage_plan(label: &str) -> Vec<BoundedUniformGrid2dStagePlan> {
         ),
     ];
 
-    let mut previous = None;
     stages
         .into_iter()
-        .map(|(stage, label)| {
-            let depends_on = previous.clone();
-            previous = Some(label.clone());
-            BoundedUniformGrid2dStagePlan::new(stage, label, depends_on)
-        })
+        .map(|(stage, label)| BoundedUniformGrid2dStagePlan::new(stage, label))
         .collect()
 }
 
@@ -408,10 +397,7 @@ mod tests {
                 BoundedUniformGrid2dStage::PublishDraw,
             ]
         );
-        assert_eq!(plan.stages[0].depends_on, None);
-        assert_eq!(
-            plan.stages[1].depends_on.as_deref(),
-            Some("grid.clear_counts")
-        );
+        assert_eq!(plan.stages[0].label, "grid.clear_counts");
+        assert_eq!(plan.stages[1].label, "grid.count_cells");
     }
 }

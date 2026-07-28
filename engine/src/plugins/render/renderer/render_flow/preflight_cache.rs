@@ -98,8 +98,11 @@ mod tests {
 
     fn prepared_frame(
         compiled: &CompiledRenderFlowPlan,
-        inputs: PreparedFlowInputs,
+        mut inputs: PreparedFlowInputs,
     ) -> PreparedRenderFrame {
+        if inputs.prepared_work.is_none() {
+            inputs.prepared_work = compiled.structural_work().cloned();
+        }
         let key = RenderDynamicTextureTargetKey::new("cache.test", "scene");
         let mut bindings = BTreeMap::new();
         bindings.insert(
@@ -169,7 +172,7 @@ mod tests {
             .fullscreen_pass("draw")
             .offscreen_products_only()
             .write_target_alias("scene_color")
-            .depends_on("simulate")
+            .order_after("simulate")
             .finish()
             .validate()
             .expect("dispatch flow should validate");

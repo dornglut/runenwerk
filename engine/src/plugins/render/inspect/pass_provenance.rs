@@ -26,7 +26,8 @@ pub struct RenderPassProvenanceRecord {
     pub pass_id: String,
     pub pass_label: String,
     pub pass_kind: FlowPassKind,
-    pub order_index: usize,
+    /// Lexical source position retained as evidence, not execution order.
+    pub authoring_index: usize,
     pub feature_id: Option<String>,
     pub shader_id: String,
     pub shader_revision: u64,

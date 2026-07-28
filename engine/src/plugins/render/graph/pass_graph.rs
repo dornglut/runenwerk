@@ -449,9 +449,20 @@ pub struct RenderPassNode {
     pub shape_intent: RenderPassShapeIntent,
     pub shader: Option<RenderShaderReference>,
     pub shader_constants: Vec<RenderShaderConstant>,
-    pub reads: Vec<GpuWorkResourceId>,
-    pub writes: Vec<GpuWorkResourceId>,
-    pub depends_on: Vec<RenderPassId>,
+    /// Render-owned storage binding semantics. Generic access and hazard truth
+    /// is derived immediately by the RunenGPU work adapter.
+    pub storage_reads: Vec<GpuWorkResourceId>,
+    pub storage_writes: Vec<GpuWorkResourceId>,
+    /// Ordered raster color outputs. Attachment access is owned by the lowered
+    /// `GpuRenderOperation`, not by a parallel renderer access list.
+    pub color_outputs: Vec<GpuWorkResourceId>,
+    pub copy_source: Option<GpuWorkResourceId>,
+    pub copy_destination: Option<GpuWorkResourceId>,
+    pub present_source: Option<GpuWorkResourceId>,
+    /// Render-only non-data ordering requests. The adapter lowers these to
+    /// `GpuExplicitOrder`; G3 rejects any request that duplicates typed hazard
+    /// order.
+    pub non_data_order_after: Vec<RenderPassId>,
     pub workgroup_size: Option<[u32; 3]>,
     pub clear_color: Option<[f32; 4]>,
     pub compute_dispatch: Option<ComputeDispatchDescriptor>,
@@ -486,9 +497,13 @@ impl RenderPassNode {
             shape_intent: RenderPassShapeIntent::Default,
             shader: None,
             shader_constants: Vec::new(),
-            reads: Vec::new(),
-            writes: Vec::new(),
-            depends_on: Vec::new(),
+            storage_reads: Vec::new(),
+            storage_writes: Vec::new(),
+            color_outputs: Vec::new(),
+            copy_source: None,
+            copy_destination: None,
+            present_source: None,
+            non_data_order_after: Vec::new(),
             workgroup_size: None,
             clear_color: None,
             compute_dispatch: None,

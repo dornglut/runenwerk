@@ -140,10 +140,16 @@ impl BenchState {
 
 fn run_validation_and_planning(flow: &RenderFlow) {
     let report = flow.validation_report().expect("flow should validate");
-    let windows = build_transient_windows(flow.graph());
+    let compiled = compile_flow_plan(flow).expect("flow should compile through prepared G3 work");
+    let prepared = compiled
+        .structural_work()
+        .expect("compiled flow should retain prepared G3 work")
+        .graph();
+    let windows = build_transient_windows(prepared);
     let alias_candidates = find_aliasable_transients(&windows);
     let alias_assignments = build_transient_alias_assignments(&windows);
-    black_box(report.pass_order.len());
+    black_box(report.lexical_pass_ids.len());
+    black_box(prepared.topological_order().len());
     black_box(windows.len());
     black_box(alias_candidates.len());
     black_box(alias_assignments.len());
@@ -259,12 +265,6 @@ fn run_prefix_scan_primitive_plan(element_count: u32) {
     .expect("valid scan primitive plan");
 
     black_box(plan.step_count());
-    black_box(plan.resource_accesses().len());
-    let dispatch = plan
-        .dispatch_plan()
-        .expect("valid scan primitive dispatch plan");
-    black_box(dispatch.stage_count());
-    black_box(dispatch.temporary_storage_count());
     let flow = flow
         .gpu_primitive_plan(&plan)
         .expect("valid primitive dispatch should append to flow")
@@ -332,10 +332,6 @@ fn run_scan_compaction_indirect_args_plan(element_count: u32) {
     .expect("valid primitive execution plan");
 
     black_box(plan.step_count());
-    black_box(plan.resource_accesses().len());
-    let dispatch = plan.dispatch_plan().expect("valid primitive dispatch plan");
-    black_box(dispatch.stage_count());
-    black_box(dispatch.temporary_storage_count());
     let flow = flow
         .gpu_primitive_plan(&plan)
         .expect("valid primitive dispatch should append to flow")
@@ -375,7 +371,7 @@ fn run_bounded_grid_build_plan(agent_count: u32) {
 
     black_box(plan.config.cell_count());
     black_box(plan.resources.sorted_index_capacity);
-    black_box(plan.primitive_plan.resource_accesses().len());
+    black_box(plan.primitive_plan.step_count());
     black_box(plan.stages.len());
 }
 
@@ -383,7 +379,7 @@ fn run_boids_production_evidence_report(flow: &RenderFlow) {
     let compiled = compile_flow_plan(flow).expect("procedural boids flow should compile");
     let pass_count = compiled.execution.passes.len();
     let grid_stage_count = compiled
-        .pass_order
+        .render_passes
         .iter()
         .filter(|pass| {
             pass.pass_label()
@@ -1013,7 +1009,6 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .uniform_from_state(BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_grid_workgroups)
-        .depends_on("bench.procedural_boids.seed_or_hold")
         .finish()
         .compute_pass(count_cells.clone())
         .bind_ping_pong_storage(boid_instances.name())
@@ -1024,7 +1019,6 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .uniform_from_state(BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
-        .depends_on(clear_counts.as_str())
         .finish()
         .compute_pass(scan_counts.clone())
         .bind_ping_pong_storage(boid_instances.name())
@@ -1035,7 +1029,6 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .uniform_from_state(BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_scan_workgroups)
-        .depends_on(count_cells.as_str())
         .finish()
         .compute_pass(reset_cursors.clone())
         .bind_ping_pong_storage(boid_instances.name())
@@ -1046,7 +1039,6 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .uniform_from_state(BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_grid_workgroups)
-        .depends_on(scan_counts.as_str())
         .finish()
         .compute_pass(scatter_indices.clone())
         .bind_ping_pong_storage(boid_instances.name())
@@ -1057,7 +1049,6 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .uniform_from_state(BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
-        .depends_on(reset_cursors.as_str())
         .finish()
         .compute_pass(simulate_neighbors.clone())
         .bind_ping_pong_storage(boid_instances.name())
@@ -1068,7 +1059,6 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .uniform_from_state(BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
-        .depends_on(scatter_indices.as_str())
         .finish()
         .compute_pass(publish_draw.clone())
         .bind_ping_pong_storage(boid_instances.name())
@@ -1079,7 +1069,6 @@ fn build_procedural_boids_flow() -> RenderFlow {
         .uniform_from_state(BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
-        .depends_on(simulate_neighbors.as_str())
         .finish();
 
     let flow = flow
@@ -1092,8 +1081,7 @@ fn build_procedural_boids_flow() -> RenderFlow {
             .shader_asset("assets/shaders/boids_compose.wgsl")
             .target(ProceduralTargetDescriptor::color(
                 "bench.procedural_boids.color",
-            ))
-            .depends_on(publish_draw.as_str()),
+            )),
         )
         .expect("procedural boids builder should be valid")
         .uniform_from_state_with_surface(BenchState::procedural_boids_draw_params)
@@ -1104,7 +1092,6 @@ fn build_procedural_boids_flow() -> RenderFlow {
     flow.present_pass("bench.procedural_boids.present")
         .expect("render flow authoring should succeed")
         .source("bench.procedural_boids.color")
-        .depends_on("bench.procedural_boids.draw")
         .finish()
         .validate()
         .expect("procedural boids flow should validate")
@@ -1145,11 +1132,9 @@ fn build_compositor_flow() -> RenderFlow {
         .expect("render flow authoring should succeed")
         .write_surface_color()
         .expect("render flow authoring should succeed")
-        .depends_on("post.extract")
         .finish()
         .builtin_ui_composite_pass("post.ui")
         .expect("render flow authoring should succeed")
-        .depends_on("post.compose")
         .finish()
         .validate()
         .expect("compositor flow should validate")
@@ -1174,7 +1159,6 @@ fn build_sdf_like_flow() -> RenderFlow {
         .expect("render flow authoring should succeed")
         .write_surface_color()
         .expect("render flow authoring should succeed")
-        .depends_on("sdf.compute")
         .finish()
         .validate()
         .expect("sdf flow should validate")
@@ -1200,11 +1184,9 @@ fn build_mixed_ui_flow() -> RenderFlow {
         .expect("render flow authoring should succeed")
         .write_surface_color()
         .expect("render flow authoring should succeed")
-        .depends_on("mixed.simulate")
         .finish()
         .builtin_ui_composite_pass("mixed.ui")
         .expect("render flow authoring should succeed")
-        .depends_on("mixed.compose")
         .finish()
         .validate()
         .expect("mixed ui flow should validate")

@@ -1,0 +1,289 @@
+use super::support::*;
+
+#[test]
+fn initial_coverage_is_checked_normalized_and_kind_preserving() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "coverage",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::Storage],
+    );
+    let coverage = GpuInitialCoverage::buffer_ranges(
+        &buffer,
+        [
+            GpuBufferRange::new(&buffer, 16, 16).unwrap(),
+            GpuBufferRange::new(&buffer, 0, 16).unwrap(),
+            GpuBufferRange::new(&buffer, 8, 8).unwrap(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(coverage.kind(), GpuInitialCoverageKind::BufferRanges);
+    assert_eq!(coverage.buffer_range_values().unwrap().len(), 1);
+    assert_eq!(coverage.buffer_range_values().unwrap()[0].size(), 32);
+
+    let queries = allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(common("queries"), GpuQueryKind::Timestamp, 4).unwrap(),
+        )
+        .unwrap();
+    assert!(
+        GpuInitialCoverage::descriptor_initialization(GpuResourceRef::QuerySet(queries)).is_err()
+    );
+}
+
+#[test]
+fn same_node_access_deduplicates_merges_and_rejects_incompatible_roles() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "storage",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::Storage, GpuBufferUsage::Uniform],
+    );
+    let range = GpuBufferRange::whole(&buffer).unwrap();
+    let read = buffer_access(&buffer, range, GpuBufferAccessKind::StorageRead);
+    let write = buffer_access(&buffer, range, GpuBufferAccessKind::StorageWrite);
+    let mut fragment = builder("normalize");
+    fragment
+        .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+        .unwrap();
+    add_compute(&mut fragment, "read write", [read.clone(), read, write]);
+    let fragment = fragment.finish().unwrap();
+    assert_eq!(fragment.nodes()[0].accesses().len(), 1);
+    assert!(matches!(
+        fragment.nodes()[0].accesses()[0],
+        GpuResourceAccess::Buffer(ref access)
+            if access.kind() == GpuBufferAccessKind::StorageReadWrite
+    ));
+
+    let mut invalid = builder("invalid normalize");
+    invalid
+        .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+        .unwrap();
+    let error = invalid
+        .add_node(
+            label("contradiction"),
+            compute_operation(),
+            [
+                buffer_access(&buffer, range, GpuBufferAccessKind::UniformRead),
+                buffer_access(&buffer, range, GpuBufferAccessKind::StorageWrite),
+            ],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance("contradiction"),
+        )
+        .unwrap_err();
+    assert_eq!(
+        error.cause(),
+        GpuWorkAuthoringCause::IncompatibleSameNodeAccess
+    );
+}
+
+#[test]
+fn duplicate_resource_declaration_is_transactional_and_authoring_can_continue() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "transactional resource",
+        GpuBufferInitialization::Zeroed,
+        [GpuBufferUsage::Storage],
+    );
+    let original = GpuResourceRef::Buffer(buffer.clone());
+    let replacement_label = label("replacement resource");
+    let replacement = GpuResourceRef::Buffer(GpuBufferHandle::from_descriptor(
+        buffer.diagnostic_identity(),
+        GpuBufferDescriptor::new(
+            common("replacement resource"),
+            32,
+            GpuBufferUsages::new(&replacement_label, [GpuBufferUsage::Storage]).unwrap(),
+            GpuBufferInitialization::Zeroed,
+        )
+        .unwrap(),
+    ));
+    let mut fragment = builder("transactional declaration");
+    fragment.declare_resource(original.clone()).unwrap();
+
+    let error = fragment.declare_resource(replacement).unwrap_err();
+    assert_eq!(error.cause(), GpuWorkAuthoringCause::DuplicateResource);
+
+    add_compute(
+        &mut fragment,
+        "continued authoring",
+        [buffer_access(
+            &buffer,
+            GpuBufferRange::whole(&buffer).unwrap(),
+            GpuBufferAccessKind::StorageWrite,
+        )],
+    );
+    let fragment = fragment.finish().unwrap();
+    assert!(matches!(
+        fragment.resources(),
+        [GpuResourceRef::Buffer(retained)]
+            if retained.descriptor().common().label().as_str() == "transactional resource"
+                && retained.descriptor().size_bytes() == 64
+    ));
+    assert_eq!(fragment.nodes().len(), 1);
+}
+
+#[test]
+fn lexical_compute_authors_checked_storage_accesses_and_dispatch() {
+    let mut allocator = allocator();
+    let positions = buffer(
+        &mut allocator,
+        "positions",
+        GpuBufferInitialization::Zeroed,
+        [GpuBufferUsage::Storage],
+    );
+    let next_positions = buffer(
+        &mut allocator,
+        "next positions",
+        GpuBufferInitialization::Zeroed,
+        [GpuBufferUsage::Storage],
+    );
+    let fragment = GpuWorkFragment::build("simulation.update", |work| {
+        work.compute("integrate", |node| {
+            node.storage_read(&positions, GpuBufferRange::whole(&positions)?)?;
+            node.storage_write(&next_positions, GpuBufferRange::whole(&next_positions)?)?;
+            node.dispatch([4, 1, 1])?;
+            Ok(())
+        })?;
+        Ok(())
+    })
+    .unwrap();
+
+    assert_eq!(fragment.resources().len(), 2);
+    let node = &fragment.nodes()[0];
+    assert!(matches!(
+        node.operation(),
+        GpuWorkOperation::Compute(operation) if operation.dispatch().as_array() == [4, 1, 1]
+    ));
+    assert_eq!(node.accesses().len(), 2);
+    assert!(node.accesses().iter().any(|access| matches!(
+        access,
+        GpuResourceAccess::Buffer(access)
+            if access.buffer() == &positions
+                && access.kind() == GpuBufferAccessKind::StorageRead
+    )));
+    assert!(node.accesses().iter().any(|access| matches!(
+        access,
+        GpuResourceAccess::Buffer(access)
+            if access.buffer() == &next_positions
+                && access.kind() == GpuBufferAccessKind::StorageWrite
+    )));
+}
+
+#[test]
+fn lexical_compute_failure_is_structured_transactional_and_does_not_consume_identity() {
+    let mut fragment = builder("lexical failure");
+    let error = fragment
+        .compute("invalid dispatch", |node| {
+            node.dispatch([1, 1, 1])?;
+            node.dispatch([2, 1, 1])?;
+            Ok(())
+        })
+        .unwrap_err();
+    assert_eq!(
+        error.cause(),
+        GpuWorkAuthoringCause::OperationAccessContradiction
+    );
+
+    let node = fragment
+        .compute("valid dispatch", |node| {
+            node.dispatch([2, 1, 1])?;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(node.diagnostic_local(), 1);
+    assert_eq!(fragment.finish().unwrap().nodes().len(), 1);
+}
+
+#[test]
+fn lexical_and_advanced_compute_share_operation_access_and_requirement_authority() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "shared compute storage",
+        GpuBufferInitialization::Zeroed,
+        [GpuBufferUsage::Storage],
+    );
+    let range = GpuBufferRange::whole(&buffer).unwrap();
+    let mut lexical = builder("lexical compute");
+    lexical
+        .compute("integrate", |node| {
+            node.storage_read(&buffer, range)?;
+            node.dispatch([3, 2, 1])?;
+            Ok(())
+        })
+        .unwrap();
+
+    let mut advanced = builder("advanced compute");
+    advanced
+        .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+        .unwrap();
+    advanced
+        .add_node(
+            label("integrate"),
+            GpuWorkOperation::Compute(GpuComputeOperation::new(
+                GpuDispatchSize::new(3, 2, 1).unwrap(),
+            )),
+            [buffer_access(
+                &buffer,
+                range,
+                GpuBufferAccessKind::StorageRead,
+            )],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance("integrate"),
+        )
+        .unwrap();
+
+    let lexical = lexical.finish().unwrap();
+    let advanced = advanced.finish().unwrap();
+    let lexical = &lexical.nodes()[0];
+    let advanced = &advanced.nodes()[0];
+    assert_eq!(lexical.operation(), advanced.operation());
+    assert_eq!(lexical.accesses(), advanced.accesses());
+    assert_eq!(lexical.requirements(), advanced.requirements());
+    assert_eq!(
+        lexical.execution_preference(),
+        advanced.execution_preference()
+    );
+}
+
+#[test]
+fn caller_cannot_repeat_an_operation_derived_access() {
+    let mut allocator = allocator();
+    let queries = allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(common("derived query"), GpuQueryKind::Timestamp, 2)
+                .unwrap(),
+        )
+        .unwrap();
+    let access = GpuQueryAccess::new(
+        &queries,
+        GpuQueryRange::new(&queries, 0, 1).unwrap(),
+        GpuQueryAccessKind::WriteTimestamp,
+    )
+    .unwrap();
+    let operation =
+        GpuWorkOperation::Render(GpuRenderOperation::new([], None, [], [access.clone()]).unwrap());
+    let mut fragment = builder("derived access");
+    fragment
+        .declare_resource(GpuResourceRef::QuerySet(queries))
+        .unwrap();
+    let error = fragment
+        .add_node(
+            label("timestamp"),
+            operation,
+            [GpuResourceAccess::Query(access)],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::GraphicsRequired,
+            provenance("timestamp"),
+        )
+        .unwrap_err();
+    assert_eq!(
+        error.cause(),
+        GpuWorkAuthoringCause::OperationAccessContradiction
+    );
+}

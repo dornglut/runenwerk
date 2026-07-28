@@ -44,7 +44,7 @@ pub(crate) fn lower_procedural_pass(
         index_buffer,
         target,
         policy,
-        dependencies,
+        non_data_order_after,
     } = descriptor;
 
     let mut builder = flow.graphics_pass(label);
@@ -93,8 +93,8 @@ pub(crate) fn lower_procedural_pass(
             instance_count,
         ),
     };
-    for dependency in dependencies {
-        builder = builder.depends_on(dependency);
+    for dependency in non_data_order_after {
+        builder = builder.order_after(dependency);
     }
 
     Ok(builder.finish())

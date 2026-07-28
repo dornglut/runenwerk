@@ -46,14 +46,15 @@ pub(super) use capture::{
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;
 pub(super) use gpu_timing::{
-    GpuPassTimestampWrites, GpuPassTimingFrame, read_gpu_pass_timing_evidence,
+    GpuPassTimestampIndices, GpuPassTimestampWrites, GpuPassTimingFrame,
+    PendingGpuPassTimingReadback, read_gpu_pass_timing_evidence,
 };
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(super) use provenance::{
     EncodedPassEvidence, EncodedPipelinePass, collect_pass_material_binding_evidence,
     collect_pass_resource_truth, compiled_storage_access_to_storage_texture_access,
-    execution_flow_pass_kind, execution_pass_feature_id, execution_pass_id,
-    execution_pass_kind_name, execution_pass_order_index, feature_runtime_version,
+    execution_flow_pass_kind, execution_pass_authoring_index, execution_pass_feature_id,
+    execution_pass_id, execution_pass_kind_name, feature_runtime_version,
     hash_bind_group_layout_entries, hash_view_signature, material_specialization_fragment_hash,
     pass_consumes_material_resources, resolve_shader_material, resolve_shader_material_for_packet,
 };

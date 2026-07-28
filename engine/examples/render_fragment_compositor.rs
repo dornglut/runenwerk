@@ -38,7 +38,7 @@ fn build_flow() -> Result<RenderFlow> {
 fn main() -> Result<()> {
     let flow = build_flow()?;
     let order = flow
-        .pass_order()?
+        .prepared_pass_order()?
         .into_iter()
         .map(|pass_id| pass_id.to_string())
         .collect::<Vec<_>>()
@@ -56,6 +56,6 @@ mod tests {
         let flow = build_flow().expect("example fragment compositor flow should build");
 
         assert!(flow.pass_id("example_compositor::compose").is_some());
-        assert_eq!(flow.pass_order().unwrap().len(), 1);
+        assert_eq!(flow.prepared_pass_order().unwrap().len(), 1);
     }
 }

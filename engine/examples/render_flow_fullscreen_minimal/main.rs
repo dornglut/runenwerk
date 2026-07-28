@@ -11,7 +11,7 @@ fn main() -> Result<()> {
         .finish()
         .validate()?;
 
-    let order = flow.pass_order()?;
+    let order = flow.prepared_pass_order()?;
     let order = order
         .into_iter()
         .map(|pass_id| pass_id.to_string())

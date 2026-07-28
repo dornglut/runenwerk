@@ -1,13 +1,16 @@
 use crate::plugins::gpu::{GpuCapabilities, GpuWorkResourceId};
 use crate::plugins::render::RenderFlowValidationError;
-use crate::plugins::render::api::RenderFlow;
+use crate::plugins::render::api::{ComputeDispatchDescriptor, RenderFlow};
 use crate::plugins::render::graph::{
     CompiledFlowExecutionPlan, RenderExecutionGraphCompileError, RenderExecutionGraphDiagnostic,
     RenderExecutionGraphDiagnosticKind, RenderPassKind, RenderPassNode, ResourceGraph,
-    compile_execution_plan, compile_resource_lifetime_windows, diagnose_compiled_pass_shapes,
-    diagnose_resource_lifetime_windows,
+    compile_execution_plan, diagnose_compiled_pass_shapes,
 };
-use crate::plugins::render::{RenderFlowId, RenderPassId, validate_compiled_flow_capabilities};
+use crate::plugins::render::{
+    PreparedRenderWorkPlan, RenderFlowId, RenderGpuWorkInstrumentation, RenderPassId,
+    prepare_render_gpu_work, validate_compiled_flow_capabilities,
+    validate_prepared_gpu_work_capabilities,
+};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
@@ -16,10 +19,12 @@ pub struct CompiledRenderFlowPlan {
     pub flow_label: String,
     pub resource_ids_by_label: BTreeMap<String, GpuWorkResourceId>,
     pub resources: ResourceGraph,
-    pub pass_order: Vec<CompiledPassDescriptor>,
+    /// Lexical render-owned pass descriptors and later-phase payload inputs.
+    /// Runtime scheduling comes only from prepared G3 work.
+    pub render_passes: Vec<CompiledPassDescriptor>,
     pub execution: CompiledFlowExecutionPlan,
-    pub resource_lifetime_windows: Vec<crate::plugins::render::CompiledResourceLifetimeWindow>,
     pub compiler_diagnostics: Vec<RenderExecutionGraphDiagnostic>,
+    structural_work: Option<PreparedRenderWorkPlan>,
 }
 
 impl CompiledRenderFlowPlan {
@@ -37,6 +42,13 @@ impl CompiledRenderFlowPlan {
             .resources
             .iter()
             .find(|descriptor| *descriptor.id() == resource_id)
+    }
+
+    /// Structurally prepared G3 authority for compile-time inspection and
+    /// admission. Runtime uses the exact per-invocation prepared work stored in
+    /// `PreparedFlowInputs` after ECS/domain projection.
+    pub fn structural_work(&self) -> Option<&PreparedRenderWorkPlan> {
+        self.structural_work.as_ref()
     }
 }
 
@@ -70,51 +82,59 @@ impl CompiledPassDescriptor {
         }
     }
 
-    pub fn order_index(&self) -> usize {
+    /// Lexical source position retained for provenance only. Prepared G3 work
+    /// owns dependency and execution order.
+    pub fn authoring_index(&self) -> usize {
         match self {
-            Self::Compute(value) => value.order_index,
-            Self::Fullscreen(value) => value.order_index,
-            Self::Graphics(value) => value.order_index,
-            Self::Copy(value) => value.order_index,
-            Self::Present(value) => value.order_index,
-            Self::BuiltinUiComposite(value) => value.order_index,
+            Self::Compute(value) => value.authoring_index,
+            Self::Fullscreen(value) => value.authoring_index,
+            Self::Graphics(value) => value.authoring_index,
+            Self::Copy(value) => value.authoring_index,
+            Self::Present(value) => value.authoring_index,
+            Self::BuiltinUiComposite(value) => value.authoring_index,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledComputePass {
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub node: RenderPassNode,
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledFullscreenPass {
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub node: RenderPassNode,
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledGraphicsPass {
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub node: RenderPassNode,
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledCopyPass {
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub node: RenderPassNode,
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledPresentPass {
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub node: RenderPassNode,
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledUiCompositePass {
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub node: RenderPassNode,
 }
 
@@ -122,11 +142,16 @@ pub fn compile_flow_plan(
     flow: &RenderFlow,
 ) -> Result<CompiledRenderFlowPlan, RenderFlowValidationError> {
     let report = flow.validation_report()?;
-    Ok(build_compiled_flow_plan(
-        flow,
-        report.pass_order,
-        Vec::new(),
-    ))
+    let mut plan = build_compiled_flow_plan(flow, report.lexical_pass_ids, Vec::new());
+    let work = prepare_structural_gpu_work(&plan).map_err(|error| {
+        RenderFlowValidationError::from(vec![
+            crate::plugins::render::RenderFlowValidationIssue::GpuWorkLoweringFailed {
+                message: error.to_string(),
+            },
+        ])
+    })?;
+    plan.structural_work = Some(work);
+    Ok(plan)
 }
 
 pub fn compile_flow_plan_checked(
@@ -150,15 +175,27 @@ pub fn compile_flow_plan_checked(
             return Err(RenderExecutionGraphCompileError::new(diagnostics));
         }
     };
-    let mut plan = build_compiled_flow_plan(flow, report.pass_order, Vec::new());
+    let mut plan = build_compiled_flow_plan(flow, report.lexical_pass_ids, Vec::new());
     let mut diagnostics = Vec::<RenderExecutionGraphDiagnostic>::new();
-    diagnostics.extend(diagnose_resource_lifetime_windows(
-        plan.flow_id,
-        plan.flow_label.as_str(),
-        &plan.resource_lifetime_windows,
-    ));
     diagnostics.extend(diagnose_compiled_pass_shapes(&plan));
     diagnostics.extend(validate_compiled_flow_capabilities(&plan, capabilities));
+    match prepare_structural_gpu_work(&plan) {
+        Ok(work) => {
+            diagnostics.extend(validate_prepared_gpu_work_capabilities(
+                &plan,
+                work.graph(),
+                capabilities,
+            ));
+            plan.structural_work = Some(work);
+        }
+        Err(error) => diagnostics.push(
+            RenderExecutionGraphDiagnostic::error(
+                RenderExecutionGraphDiagnosticKind::FlowValidationIssue,
+                error.to_string(),
+            )
+            .with_flow(plan.flow_id, plan.flow_label.clone()),
+        ),
+    }
     plan.compiler_diagnostics = diagnostics.clone();
     if diagnostics
         .iter()
@@ -172,7 +209,7 @@ pub fn compile_flow_plan_checked(
 
 fn build_compiled_flow_plan(
     flow: &RenderFlow,
-    pass_order_ids: Vec<RenderPassId>,
+    lexical_pass_ids: Vec<RenderPassId>,
     compiler_diagnostics: Vec<RenderExecutionGraphDiagnostic>,
 ) -> CompiledRenderFlowPlan {
     let pass_lookup = flow
@@ -183,9 +220,9 @@ fn build_compiled_flow_plan(
         .map(|pass| (pass.id, pass.clone()))
         .collect::<std::collections::BTreeMap<_, _>>();
 
-    let mut pass_order = Vec::<CompiledPassDescriptor>::with_capacity(pass_order_ids.len());
+    let mut render_passes = Vec::<CompiledPassDescriptor>::with_capacity(lexical_pass_ids.len());
 
-    for (order_index, pass_id) in pass_order_ids.iter().copied().enumerate() {
+    for (authoring_index, pass_id) in lexical_pass_ids.iter().copied().enumerate() {
         let pass = pass_lookup
             .get(&pass_id)
             .cloned()
@@ -193,59 +230,73 @@ fn build_compiled_flow_plan(
 
         let compiled = match pass.kind {
             RenderPassKind::Compute => CompiledPassDescriptor::Compute(CompiledComputePass {
-                order_index,
+                authoring_index,
                 node: pass,
             }),
             RenderPassKind::Fullscreen => {
                 CompiledPassDescriptor::Fullscreen(CompiledFullscreenPass {
-                    order_index,
+                    authoring_index,
                     node: pass,
                 })
             }
             RenderPassKind::Graphics => CompiledPassDescriptor::Graphics(CompiledGraphicsPass {
-                order_index,
+                authoring_index,
                 node: pass,
             }),
             RenderPassKind::Copy => CompiledPassDescriptor::Copy(CompiledCopyPass {
-                order_index,
+                authoring_index,
                 node: pass,
             }),
             RenderPassKind::Present => CompiledPassDescriptor::Present(CompiledPresentPass {
-                order_index,
+                authoring_index,
                 node: pass,
             }),
             RenderPassKind::BuiltinUiComposite => {
                 CompiledPassDescriptor::BuiltinUiComposite(CompiledUiCompositePass {
-                    order_index,
+                    authoring_index,
                     node: pass,
                 })
             }
         };
-        pass_order.push(compiled);
+        render_passes.push(compiled);
     }
 
-    let execution = compile_execution_plan(&flow.graph().resources, &pass_order);
-    let labels_by_id = flow
-        .resource_ids_by_label()
-        .iter()
-        .map(|(label, id)| (*id, label.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let resource_lifetime_windows = compile_resource_lifetime_windows(
-        &flow.graph().resources.resources,
-        &labels_by_id,
-        &pass_order,
-    );
-
+    let execution = compile_execution_plan(&flow.graph().resources, &render_passes);
     CompiledRenderFlowPlan {
         flow_id: flow.id(),
         flow_label: flow.label().to_string(),
         resource_ids_by_label: flow.resource_ids_by_label().clone(),
         resources: flow.graph().resources.clone(),
-        pass_order,
+        render_passes,
         execution,
-        resource_lifetime_windows,
         compiler_diagnostics,
+        structural_work: None,
     }
+}
+
+fn prepare_structural_gpu_work(
+    plan: &CompiledRenderFlowPlan,
+) -> Result<PreparedRenderWorkPlan, crate::plugins::render::RenderGpuWorkAdapterError> {
+    let structural_dispatches = plan
+        .render_passes
+        .iter()
+        .filter(|pass| pass.node().kind == RenderPassKind::Compute)
+        .filter_map(|pass| {
+            let dispatch = match pass.node().compute_dispatch.as_ref()? {
+                ComputeDispatchDescriptor::Fixed(value) => *value,
+                // ECS/domain projection occurs before exact per-invocation
+                // preparation. This nonzero value validates invariant shape.
+                ComputeDispatchDescriptor::State(_) => [1, 1, 1],
+            };
+            Some((pass.pass_id(), dispatch))
+        })
+        .collect::<BTreeMap<_, _>>();
+    prepare_render_gpu_work(
+        plan,
+        &structural_dispatches,
+        (1, 1),
+        RenderGpuWorkInstrumentation::Disabled,
+    )
 }
 
 fn validation_issue_kind(
@@ -274,13 +325,11 @@ fn validation_issue_kind(
         | MultipleSurfaceColorImports { .. }
         | MultipleSurfaceDepthImports { .. } => RenderExecutionGraphDiagnosticKind::InvalidResource,
         DuplicatePassId { .. }
-        | UnknownPassDependency { .. }
+        | UnknownNonDataOrderTarget { .. }
         | MultiplePresentPasses { .. }
         | PresentPassNotTerminal { .. }
-        | PresentPassNotLast { .. }
-        | PassDependencyCycleDetected { .. } => {
-            RenderExecutionGraphDiagnosticKind::InvalidPassOrder
-        }
+        | PresentPassNotLast { .. } => RenderExecutionGraphDiagnosticKind::InvalidPassOrder,
+        GpuWorkLoweringFailed { .. } => RenderExecutionGraphDiagnosticKind::FlowValidationIssue,
         _ => RenderExecutionGraphDiagnosticKind::FlowValidationIssue,
     }
 }

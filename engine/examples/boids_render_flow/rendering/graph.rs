@@ -82,7 +82,6 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_grid_workgroups)
-        .depends_on("boids.seed_or_hold")
         .finish()
         .compute_pass(count_cells.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
@@ -94,7 +93,6 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
-        .depends_on(clear_counts.as_str())
         .finish()
         .compute_pass(scan_counts.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
@@ -106,7 +104,6 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_scan_workgroups)
-        .depends_on(count_cells.as_str())
         .finish()
         .compute_pass(reset_cursors.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
@@ -118,7 +115,6 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_grid_workgroups)
-        .depends_on(scan_counts.as_str())
         .finish()
         .compute_pass(scatter_indices.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
@@ -130,7 +126,6 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
-        .depends_on(reset_cursors.as_str())
         .finish()
         .compute_pass(simulate_neighbors.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
@@ -142,7 +137,6 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
-        .depends_on(scatter_indices.as_str())
         .finish()
         .compute_pass(publish_draw.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
@@ -154,7 +148,6 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_scatter_cursors)
         .bind_storage(grid_sorted_indices)
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
-        .depends_on(simulate_neighbors.as_str())
         .finish();
 
     let flow = flow
@@ -185,8 +178,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
             .target(
                 ProceduralTargetDescriptor::color("boids.color")
                     .clear_color([0.020, 0.028, 0.040, 1.0]),
-            )
-            .depends_on(publish_draw.as_str()),
+            ),
         )
         .expect("boids.draw procedural builder should be valid")
         .uniform_from_state_with_surface(BoidsRenderState::draw_params)
@@ -197,7 +189,6 @@ pub(crate) fn build_render_flow() -> RenderFlow {
     flow.present_pass("boids.present")
         .expect("render flow authoring should succeed")
         .source("boids.color")
-        .depends_on("boids.draw")
         .finish()
         .validate()
         .expect("boids_render_flow should validate")
@@ -350,7 +341,7 @@ mod tests {
     fn flow_orders_compute_publish_procedural_draw_then_present() {
         let flow = build_render_flow();
         let order = flow
-            .pass_order()
+            .prepared_pass_order()
             .expect("boids_render_flow pass order should validate")
             .into_iter()
             .map(|id| {

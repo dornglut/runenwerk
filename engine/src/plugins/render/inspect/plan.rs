@@ -5,8 +5,7 @@ use super::{
 use crate::plugins::gpu::GpuCapabilities;
 use crate::plugins::render::current_runtime_gpu_capabilities;
 use crate::plugins::render::graph::{
-    CompiledRenderFlowPlan, CompiledResourceAccessKind, CompiledResourceLifetimeWindow,
-    RenderExecutionGraphDiagnostic, RenderExecutionGraphPreparedReport,
+    CompiledRenderFlowPlan, RenderExecutionGraphDiagnostic, RenderExecutionGraphPreparedReport,
     RenderPreparedFramePreflightCacheState,
 };
 use std::path::PathBuf;
@@ -50,9 +49,28 @@ pub struct RenderExecutionGraphPlanInspection {
     pub flow_label: String,
     pub pass_count: usize,
     pub resource_count: usize,
+    pub prepared_node_count: usize,
+    pub prepared_topological_order: Vec<String>,
+    pub prepared_dependencies: Vec<RenderGpuWorkDependencyInspection>,
+    pub prepared_initialization: Vec<RenderGpuResourceInitializationInspection>,
+    pub prepared_requirements: Vec<String>,
     pub compiler_diagnostics: Vec<RenderExecutionGraphDiagnosticInspection>,
-    pub resource_lifetime_windows: Vec<RenderResourceLifetimeWindowInspection>,
     pub backend_capabilities: GpuCapabilities,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderGpuWorkDependencyInspection {
+    pub before: String,
+    pub after: String,
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderGpuResourceInitializationInspection {
+    pub resource_id: String,
+    pub resource_label: String,
+    pub initial_coverage: Option<String>,
+    pub final_coverage: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,37 +103,78 @@ pub struct RenderExecutionGraphDiagnosticInspection {
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderResourceLifetimeWindowInspection {
-    pub resource_id: String,
-    pub resource_label: Option<String>,
-    pub lifetime: String,
-    pub first_use: Option<usize>,
-    pub first_read: Option<usize>,
-    pub first_write: Option<usize>,
-    pub last_read: Option<usize>,
-    pub last_write: Option<usize>,
-    pub last_use: Option<usize>,
-    pub access_kinds: Vec<String>,
-}
-
 pub fn inspect_compiled_render_flow_plan(
     plan: &CompiledRenderFlowPlan,
 ) -> RenderExecutionGraphPlanInspection {
+    let graph = plan.structural_work().map(|work| work.graph());
     RenderExecutionGraphPlanInspection {
         flow_id: plan.flow_id.to_string(),
         flow_label: plan.flow_label.clone(),
-        pass_count: plan.pass_order.len(),
+        pass_count: plan.render_passes.len(),
         resource_count: plan.resources.resources.len(),
+        prepared_node_count: graph.map_or(0, |graph| graph.nodes().len()),
+        prepared_topological_order: graph
+            .map(|graph| {
+                graph
+                    .topological_order()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        prepared_dependencies: graph
+            .map(|graph| {
+                graph
+                    .dependencies()
+                    .iter()
+                    .map(|dependency| RenderGpuWorkDependencyInspection {
+                        before: dependency.before().to_string(),
+                        after: dependency.after().to_string(),
+                        reasons: dependency
+                            .reasons()
+                            .iter()
+                            .map(|reason| format!("{reason:?}"))
+                            .collect(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        prepared_initialization: graph
+            .map(|graph| {
+                graph
+                    .initialization()
+                    .iter()
+                    .map(|initialization| RenderGpuResourceInitializationInspection {
+                        resource_id: initialization.resource().diagnostic_identity().to_string(),
+                        resource_label: initialization
+                            .resource()
+                            .common()
+                            .label()
+                            .as_str()
+                            .to_string(),
+                        initial_coverage: initialization
+                            .initial()
+                            .map(|coverage| format!("{:?}", coverage.kind())),
+                        final_coverage: initialization
+                            .final_coverage()
+                            .map(|coverage| format!("{:?}", coverage.kind())),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        prepared_requirements: graph
+            .map(|graph| {
+                graph
+                    .requirements()
+                    .iter()
+                    .map(|requirement| format!("{requirement:?}"))
+                    .collect()
+            })
+            .unwrap_or_default(),
         compiler_diagnostics: plan
             .compiler_diagnostics
             .iter()
             .map(inspect_render_execution_graph_diagnostic)
-            .collect(),
-        resource_lifetime_windows: plan
-            .resource_lifetime_windows
-            .iter()
-            .map(inspect_resource_lifetime_window)
             .collect(),
         backend_capabilities: current_runtime_gpu_capabilities(),
     }
@@ -171,44 +230,6 @@ pub fn inspect_render_execution_graph_diagnostic(
         history_signature: diagnostic.history_signature.clone(),
         capability: diagnostic.capability.clone(),
         message: diagnostic.message.clone(),
-    }
-}
-
-fn inspect_resource_lifetime_window(
-    window: &CompiledResourceLifetimeWindow,
-) -> RenderResourceLifetimeWindowInspection {
-    RenderResourceLifetimeWindowInspection {
-        resource_id: window.resource_id.to_string(),
-        resource_label: window.resource_label.clone(),
-        lifetime: format!("{:?}", window.lifetime),
-        first_use: window.first_use,
-        first_read: window.first_read,
-        first_write: window.first_write,
-        last_read: window.last_read,
-        last_write: window.last_write,
-        last_use: window.last_use,
-        access_kinds: window
-            .access_kinds
-            .iter()
-            .map(access_kind_label)
-            .map(str::to_string)
-            .collect(),
-    }
-}
-
-fn access_kind_label(value: &CompiledResourceAccessKind) -> &'static str {
-    match value {
-        CompiledResourceAccessKind::Read => "read",
-        CompiledResourceAccessKind::Write => "write",
-        CompiledResourceAccessKind::SampledTexture => "sampled_texture",
-        CompiledResourceAccessKind::StorageTextureWrite => "storage_texture_write",
-        CompiledResourceAccessKind::UniformBuffer => "uniform_buffer",
-        CompiledResourceAccessKind::StorageBuffer => "storage_buffer",
-        CompiledResourceAccessKind::VertexBuffer => "vertex_buffer",
-        CompiledResourceAccessKind::IndexBuffer => "index_buffer",
-        CompiledResourceAccessKind::InstanceBuffer => "instance_buffer",
-        CompiledResourceAccessKind::IndirectBuffer => "indirect_buffer",
-        CompiledResourceAccessKind::DepthTarget => "depth_target",
     }
 }
 

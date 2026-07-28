@@ -3,7 +3,7 @@ use super::{
     IndirectDrawArgsGenerationDescriptor, PrefixScanMode, U32PrefixScanDescriptor,
     U32ScatterDescriptor,
 };
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::GpuBufferHandle;
 use crate::plugins::render::RenderShaderConstant;
 
 pub const GPU_PRIMITIVE_WORKGROUP_SIZE: u32 = 64;
@@ -19,62 +19,6 @@ pub const GPU_PRIMITIVE_INDEXED_INDIRECT_DRAW_ARGS_SHADER: &str =
     "assets/shaders/gpu_primitive_indexed_indirect_draw_args.wgsl";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuPrimitiveResourceAccessKind {
-    Read,
-    Write,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuPrimitiveResourceAccess {
-    pub resource_id: GpuWorkResourceId,
-    pub kind: GpuPrimitiveResourceAccessKind,
-}
-
-impl GpuPrimitiveResourceAccess {
-    pub const fn read(resource_id: GpuWorkResourceId) -> Self {
-        Self {
-            resource_id,
-            kind: GpuPrimitiveResourceAccessKind::Read,
-        }
-    }
-
-    pub const fn write(resource_id: GpuWorkResourceId) -> Self {
-        Self {
-            resource_id,
-            kind: GpuPrimitiveResourceAccessKind::Write,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuPrimitiveTemporaryStorageKind {
-    U32ScanElement,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GpuPrimitiveTemporaryStorage {
-    pub label: String,
-    pub kind: GpuPrimitiveTemporaryStorageKind,
-    pub element_count: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum GpuPrimitiveDispatchResource {
-    Existing(GpuWorkResourceId),
-    Temporary(String),
-}
-
-impl GpuPrimitiveDispatchResource {
-    pub const fn existing(resource_id: GpuWorkResourceId) -> Self {
-        Self::Existing(resource_id)
-    }
-
-    pub fn temporary(label: impl Into<String>) -> Self {
-        Self::Temporary(label.into())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuPrimitiveDispatchStageKind {
     CounterReset,
     U32PrefixScanBlock { mode: PrefixScanMode },
@@ -88,17 +32,16 @@ pub struct GpuPrimitiveDispatchStage {
     pub label: String,
     pub kind: GpuPrimitiveDispatchStageKind,
     pub shader_asset: &'static str,
-    pub reads: Vec<GpuPrimitiveDispatchResource>,
-    pub writes: Vec<GpuPrimitiveDispatchResource>,
+    pub reads: Vec<GpuBufferHandle>,
+    pub writes: Vec<GpuBufferHandle>,
     pub dispatch: [u32; 3],
     pub constants: Vec<RenderShaderConstant>,
-    pub depends_on: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuPrimitiveDispatchPlan {
     pub label: String,
-    pub temporary_storage: Vec<GpuPrimitiveTemporaryStorage>,
+    pub temporary_storage: Vec<GpuBufferHandle>,
     pub stages: Vec<GpuPrimitiveDispatchStage>,
 }
 
@@ -136,22 +79,6 @@ impl GpuPrimitiveStep {
             Self::U32PrefixScan(step) => step.validate(),
             Self::U32Scatter(step) => step.validate(),
             Self::IndirectDrawArgs(step) => step.validate(),
-        }
-    }
-
-    pub fn resource_accesses(&self) -> Vec<GpuPrimitiveResourceAccess> {
-        match self {
-            Self::CounterReset(step) => vec![GpuPrimitiveResourceAccess::write(step.counters)],
-            Self::U32PrefixScan(step) => vec![
-                GpuPrimitiveResourceAccess::read(step.input),
-                GpuPrimitiveResourceAccess::write(step.output),
-            ],
-            Self::U32Scatter(step) => vec![
-                GpuPrimitiveResourceAccess::read(step.source_indices),
-                GpuPrimitiveResourceAccess::read(step.prefix_offsets),
-                GpuPrimitiveResourceAccess::write(step.output_indices),
-            ],
-            Self::IndirectDrawArgs(step) => vec![GpuPrimitiveResourceAccess::write(step.output)],
         }
     }
 }
@@ -216,22 +143,22 @@ impl GpuPrimitiveExecutionPlan {
         Ok(())
     }
 
-    pub fn resource_accesses(&self) -> Vec<GpuPrimitiveResourceAccess> {
-        self.steps
-            .iter()
-            .flat_map(GpuPrimitiveStep::resource_accesses)
-            .collect()
-    }
-
     pub fn step_count(&self) -> usize {
         self.steps.len()
     }
 
-    pub fn dispatch_plan(&self) -> Result<GpuPrimitiveDispatchPlan, GpuPrimitiveValidationError> {
-        self.validate()?;
+    pub(crate) fn dispatch_plan_with_temporary<F, E>(
+        &self,
+        mut allocate_temporary: F,
+    ) -> Result<GpuPrimitiveDispatchPlan, E>
+    where
+        F: FnMut(String, u64) -> Result<GpuBufferHandle, E>,
+        E: From<GpuPrimitiveValidationError>,
+    {
+        self.validate().map_err(E::from)?;
         let mut builder = GpuPrimitiveDispatchPlanBuilder::new(self.label.clone());
         for (step_index, step) in self.steps.iter().enumerate() {
-            builder.push_step(step_index, step);
+            builder.push_step(step_index, step, &mut allocate_temporary)?;
         }
         Ok(builder.finish())
     }
@@ -239,15 +166,14 @@ impl GpuPrimitiveExecutionPlan {
 
 #[derive(Debug, Clone)]
 struct PrefixScanLevel {
-    output: GpuPrimitiveDispatchResource,
+    output: GpuBufferHandle,
     element_count: u32,
 }
 
 struct GpuPrimitiveDispatchPlanBuilder {
     label: String,
-    temporary_storage: Vec<GpuPrimitiveTemporaryStorage>,
+    temporary_storage: Vec<GpuBufferHandle>,
     stages: Vec<GpuPrimitiveDispatchStage>,
-    previous_stage_label: Option<String>,
 }
 
 impl GpuPrimitiveDispatchPlanBuilder {
@@ -256,19 +182,29 @@ impl GpuPrimitiveDispatchPlanBuilder {
             label,
             temporary_storage: Vec::new(),
             stages: Vec::new(),
-            previous_stage_label: None,
         }
     }
 
-    fn push_step(&mut self, step_index: usize, step: &GpuPrimitiveStep) {
+    fn push_step<F, E>(
+        &mut self,
+        step_index: usize,
+        step: &GpuPrimitiveStep,
+        allocate_temporary: &mut F,
+    ) -> Result<(), E>
+    where
+        F: FnMut(String, u64) -> Result<GpuBufferHandle, E>,
+    {
         match step {
             GpuPrimitiveStep::CounterReset(step) => self.push_counter_reset(step_index, step),
-            GpuPrimitiveStep::U32PrefixScan(step) => self.push_prefix_scan(step_index, step),
+            GpuPrimitiveStep::U32PrefixScan(step) => {
+                self.push_prefix_scan(step_index, step, allocate_temporary)?
+            }
             GpuPrimitiveStep::U32Scatter(step) => self.push_scatter(step_index, step),
             GpuPrimitiveStep::IndirectDrawArgs(step) => {
                 self.push_indirect_draw_args(step_index, step)
             }
         }
+        Ok(())
     }
 
     fn push_counter_reset(&mut self, step_index: usize, step: &CounterResetDescriptor) {
@@ -277,20 +213,27 @@ impl GpuPrimitiveDispatchPlanBuilder {
             kind: GpuPrimitiveDispatchStageKind::CounterReset,
             shader_asset: GPU_PRIMITIVE_COUNTER_RESET_SHADER,
             reads: Vec::new(),
-            writes: vec![GpuPrimitiveDispatchResource::existing(step.counters)],
+            writes: vec![step.counters.clone()],
             dispatch: dispatch_for_count(step.counter_count),
             constants: vec![
                 RenderShaderConstant::u32("ELEMENT_COUNT", step.counter_count),
                 RenderShaderConstant::u32("RESET_VALUE", step.reset_value),
             ],
-            depends_on: Vec::new(),
         });
     }
 
-    fn push_prefix_scan(&mut self, step_index: usize, step: &U32PrefixScanDescriptor) {
+    fn push_prefix_scan<F, E>(
+        &mut self,
+        step_index: usize,
+        step: &U32PrefixScanDescriptor,
+        allocate_temporary: &mut F,
+    ) -> Result<(), E>
+    where
+        F: FnMut(String, u64) -> Result<GpuBufferHandle, E>,
+    {
         let mut levels = Vec::<PrefixScanLevel>::new();
-        let mut input = GpuPrimitiveDispatchResource::existing(step.input);
-        let mut output = GpuPrimitiveDispatchResource::existing(step.output);
+        let mut input = step.input.clone();
+        let mut output = step.output.clone();
         let mut element_count = step.total_count;
         let mut level_index = 0usize;
 
@@ -302,7 +245,8 @@ impl GpuPrimitiveDispatchPlanBuilder {
                 level_index,
                 "block_sums",
                 block_count,
-            );
+                allocate_temporary,
+            )?;
             let mode = if level_index == 0 {
                 step.mode
             } else {
@@ -330,7 +274,6 @@ impl GpuPrimitiveDispatchPlanBuilder {
                         },
                     ),
                 ],
-                depends_on: Vec::new(),
             });
             levels.push(PrefixScanLevel {
                 output: output.clone(),
@@ -348,13 +291,14 @@ impl GpuPrimitiveDispatchPlanBuilder {
                 level_index,
                 "block_offsets",
                 block_count,
-            );
+                allocate_temporary,
+            )?;
             element_count = block_count;
             level_index = level_index.saturating_add(1);
         }
 
         if levels.len() <= 1 {
-            return;
+            return Ok(());
         }
 
         for level_index in (0..levels.len() - 1).rev() {
@@ -375,9 +319,9 @@ impl GpuPrimitiveDispatchPlanBuilder {
                     "ELEMENT_COUNT",
                     levels[level_index].element_count,
                 )],
-                depends_on: Vec::new(),
             });
         }
+        Ok(())
     }
 
     fn push_scatter(&mut self, step_index: usize, step: &U32ScatterDescriptor) {
@@ -385,17 +329,13 @@ impl GpuPrimitiveDispatchPlanBuilder {
             label: self.stage_label(step_index, step.label.as_str(), "scatter"),
             kind: GpuPrimitiveDispatchStageKind::U32Scatter,
             shader_asset: GPU_PRIMITIVE_U32_SCATTER_SHADER,
-            reads: vec![
-                GpuPrimitiveDispatchResource::existing(step.source_indices),
-                GpuPrimitiveDispatchResource::existing(step.prefix_offsets),
-            ],
-            writes: vec![GpuPrimitiveDispatchResource::existing(step.output_indices)],
+            reads: vec![step.source_indices.clone(), step.prefix_offsets.clone()],
+            writes: vec![step.output_indices.clone()],
             dispatch: dispatch_for_count(step.element_count),
             constants: vec![
                 RenderShaderConstant::u32("ELEMENT_COUNT", step.element_count),
                 RenderShaderConstant::u32("OUTPUT_CAPACITY", step.output_capacity),
             ],
-            depends_on: Vec::new(),
         });
     }
 
@@ -432,42 +372,39 @@ impl GpuPrimitiveDispatchPlanBuilder {
             kind: GpuPrimitiveDispatchStageKind::IndirectDrawArgs,
             shader_asset,
             reads: Vec::new(),
-            writes: vec![GpuPrimitiveDispatchResource::existing(step.output)],
+            writes: vec![step.output.clone()],
             dispatch: [1, 1, 1],
             constants,
-            depends_on: Vec::new(),
         });
     }
 
-    fn push_stage(&mut self, mut stage: GpuPrimitiveDispatchStage) {
-        if let Some(previous) = self.previous_stage_label.as_ref() {
-            stage.depends_on.push(previous.clone());
-        }
-        self.previous_stage_label = Some(stage.label.clone());
+    fn push_stage(&mut self, stage: GpuPrimitiveDispatchStage) {
         self.stages.push(stage);
     }
 
-    fn register_temporary_scan_storage(
+    fn register_temporary_scan_storage<F, E>(
         &mut self,
         step_index: usize,
         step_label: &str,
         level_index: usize,
         suffix: &str,
         element_count: u32,
-    ) -> GpuPrimitiveDispatchResource {
+        allocate_temporary: &mut F,
+    ) -> Result<GpuBufferHandle, E>
+    where
+        F: FnMut(String, u64) -> Result<GpuBufferHandle, E>,
+    {
         let label = self.temporary_label(step_index, step_label, level_index, suffix);
-        if self
+        if let Some(existing) = self
             .temporary_storage
             .iter()
-            .all(|existing| existing.label != label)
+            .find(|existing| existing.descriptor().common().label().as_str() == label)
         {
-            self.temporary_storage.push(GpuPrimitiveTemporaryStorage {
-                label: label.clone(),
-                kind: GpuPrimitiveTemporaryStorageKind::U32ScanElement,
-                element_count: u64::from(element_count.max(1)),
-            });
+            return Ok(existing.clone());
         }
-        GpuPrimitiveDispatchResource::temporary(label)
+        let handle = allocate_temporary(label, u64::from(element_count.max(1)))?;
+        self.temporary_storage.push(handle.clone());
+        Ok(handle)
     }
 
     fn stage_label(
@@ -522,6 +459,21 @@ mod tests {
     use std::sync::Arc;
     use wgpu::util::DeviceExt;
 
+    fn dispatch_plan_for_test(plan: &GpuPrimitiveExecutionPlan) -> GpuPrimitiveDispatchPlan {
+        let mut owner = Some(RenderFlow::new(format!("{}.test_temporaries", plan.label)));
+        plan.dispatch_plan_with_temporary(|label, element_count| {
+            let flow = owner
+                .take()
+                .expect("test temporary owner should be available");
+            let (flow, handle) = flow
+                .storage_array::<U32ScanElement>(label, element_count)
+                .expect("typed primitive temporary should allocate through the flow owner");
+            owner = Some(flow);
+            Ok::<_, GpuPrimitiveValidationError>(handle)
+        })
+        .expect("primitive dispatch plan should lower")
+    }
+
     #[test]
     fn gpu_primitives_execution_plan_rejects_empty_step_list() {
         assert!(matches!(
@@ -531,7 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn gpu_primitives_execution_plan_exposes_resource_accesses() {
+    fn gpu_primitives_execution_plan_retains_typed_buffer_handles() {
         let (flow, counters) = RenderFlow::new("test.primitive.plan")
             .storage_array::<U32Counter>("counts", 16)
             .expect("render flow authoring should succeed");
@@ -554,14 +506,14 @@ mod tests {
         .expect("valid primitive plan");
 
         assert_eq!(plan.step_count(), 2);
-        let accesses = plan.resource_accesses();
-        assert!(accesses.iter().any(|access| {
-            access.kind == GpuPrimitiveResourceAccessKind::Write
-                && access.resource_id == counters_id
-        }));
-        assert!(accesses.iter().any(|access| {
-            access.kind == GpuPrimitiveResourceAccessKind::Write && access.resource_id == offsets_id
-        }));
+        let GpuPrimitiveStep::CounterReset(reset) = &plan.steps[0] else {
+            panic!("first primitive step should remain a counter reset");
+        };
+        let GpuPrimitiveStep::U32PrefixScan(scan) = &plan.steps[1] else {
+            panic!("second primitive step should remain a prefix scan");
+        };
+        assert_eq!(reset.counters.diagnostic_identity(), counters_id);
+        assert_eq!(scan.output.diagnostic_identity(), offsets_id);
     }
 
     #[test]
@@ -572,6 +524,89 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(stage_counts, vec![1, 1, 3, 3, 5]);
+    }
+
+    #[test]
+    fn gpu_primitives_4097_scan_lowers_typed_temporaries_and_inferred_stage_order() {
+        let (flow, input) = RenderFlow::new("test.primitive.4097")
+            .storage_array::<U32ScanElement>("scan.input", 4097)
+            .expect("scan input should be valid");
+        let (flow, output) = flow
+            .storage_array::<U32ScanElement>("scan.output", 4097)
+            .expect("scan output should be valid");
+        let scan =
+            U32PrefixScanDescriptor::new("scan", input, output, 4097, PrefixScanMode::Exclusive)
+                .expect("4097-element scan should be valid");
+        let primitive =
+            GpuPrimitiveExecutionPlan::new("primitive.4097", [GpuPrimitiveStep::from(scan)])
+                .expect("4097-element primitive plan should be valid");
+        let flow = flow
+            .gpu_primitive_plan(&primitive)
+            .expect("primitive temporaries should allocate through the flow owner")
+            .validate()
+            .expect("4097-element primitive flow should validate");
+        let compiled =
+            compile_flow_plan(&flow).expect("4097-element primitive flow should compile");
+        let temporary_ids = compiled
+            .resources
+            .resources
+            .iter()
+            .filter_map(|resource| {
+                let handle = resource.buffer_handle()?;
+                handle
+                    .descriptor()
+                    .common()
+                    .label()
+                    .as_str()
+                    .starts_with("primitive.4097.0.scan.level_")
+                    .then(|| handle.diagnostic_identity())
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(temporary_ids.len(), 5);
+        assert!(compiled.resources.resources.iter().all(|resource| {
+            !temporary_ids.contains(resource.id())
+                || resource.lifetime() == crate::plugins::gpu::GpuResourceLifetime::Transient
+        }));
+
+        let prepared = compiled
+            .structural_work()
+            .expect("compiled primitive flow should retain G3 work")
+            .graph();
+        assert_eq!(prepared.nodes().len(), 5);
+        assert!(prepared.nodes().iter().all(|prepared_node| {
+            matches!(
+                prepared_node.node().operation(),
+                crate::plugins::gpu::GpuWorkOperation::Compute(_)
+            )
+        }));
+        let accessed_temporary_ids = prepared
+            .nodes()
+            .iter()
+            .flat_map(|prepared_node| prepared_node.node().accesses())
+            .filter_map(|access| match access {
+                crate::plugins::gpu::GpuResourceAccess::Buffer(access)
+                    if temporary_ids.contains(&access.resource_identity()) =>
+                {
+                    Some(access.resource_identity())
+                }
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(accessed_temporary_ids, temporary_ids);
+        assert!(prepared.dependencies().iter().all(|dependency| {
+            dependency.reasons().iter().all(|reason| {
+                !matches!(
+                    reason,
+                    crate::plugins::gpu::GpuDependencyReason::ExplicitNonData { .. }
+                )
+            })
+        }));
+        assert!(prepared.topological_order().windows(2).all(|pair| {
+            prepared
+                .dependencies()
+                .iter()
+                .any(|dependency| dependency.before() == pair[0] && dependency.after() == pair[1])
+        }));
     }
 
     #[test]
@@ -622,9 +657,7 @@ mod tests {
             ],
         )
         .expect("valid primitive plan");
-        let dispatch_plan = primitive_plan
-            .dispatch_plan()
-            .expect("dispatch plan should lower");
+        let dispatch_plan = dispatch_plan_for_test(&primitive_plan);
 
         assert_eq!(dispatch_plan.stage_count(), 6);
         assert_eq!(dispatch_plan.temporary_storage_count(), 3);
@@ -633,12 +666,13 @@ mod tests {
                 stage.shader_asset == GPU_PRIMITIVE_PREFIX_SCAN_APPLY_OFFSETS_SHADER
             })
         );
-        assert!(
-            dispatch_plan
-                .stages
-                .windows(2)
-                .all(|pair| pair[1].depends_on == vec![pair[0].label.clone()])
-        );
+        assert!(dispatch_plan.stages.iter().all(|stage| {
+            stage
+                .reads
+                .iter()
+                .chain(&stage.writes)
+                .all(|resource| resource.descriptor().size_bytes() > 0)
+        }));
     }
 
     #[test]
@@ -691,15 +725,6 @@ mod tests {
             ],
         )
         .expect("valid primitive plan");
-        let final_primitive_pass = primitive_plan
-            .dispatch_plan()
-            .expect("dispatch plan should lower")
-            .stages
-            .last()
-            .expect("primitive plan should emit at least one stage")
-            .label
-            .clone();
-
         let flow = flow
             .gpu_primitive_plan(&primitive_plan)
             .expect("primitive plan should append to render flow")
@@ -707,11 +732,22 @@ mod tests {
             .write_color_target("test.primitive.color")
             .draw_indirect(draw_args.clone(), 6, 130)
             .expect("declared draw-argument layout should match")
-            .depends_on(final_primitive_pass)
             .finish()
             .validate()
             .expect("primitive flow should validate");
         let compiled = compile_flow_plan(&flow).expect("primitive flow should compile");
+        let prepared = compiled
+            .structural_work()
+            .expect("compiled primitive flow should retain G3 work")
+            .graph();
+        assert!(prepared.dependencies().iter().all(|dependency| {
+            dependency.reasons().iter().all(|reason| {
+                !matches!(
+                    reason,
+                    crate::plugins::gpu::GpuDependencyReason::ExplicitNonData { .. }
+                )
+            })
+        }));
 
         let compute_passes = compiled
             .execution
@@ -826,27 +862,25 @@ mod tests {
             ],
         )
         .expect("runtime primitive plan should be valid");
-        let dispatch_plan = primitive_plan
-            .dispatch_plan()
-            .expect("runtime primitive dispatch plan should lower");
+        let dispatch_plan = dispatch_plan_for_test(&primitive_plan);
 
-        let mut buffers = BTreeMap::<GpuPrimitiveDispatchResource, wgpu::Buffer>::new();
+        let mut buffers = BTreeMap::<GpuBufferHandle, wgpu::Buffer>::new();
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(scan_input.diagnostic_identity()),
+            scan_input.clone(),
             &vec![1_u32; element_count as usize],
         );
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(scan_output.diagnostic_identity()),
+            scan_output.clone(),
             &vec![0_u32; element_count as usize],
         );
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(source_indices.diagnostic_identity()),
+            source_indices.clone(),
             &(0..element_count)
                 .map(|index| 1000 + index)
                 .collect::<Vec<_>>(),
@@ -854,21 +888,16 @@ mod tests {
         insert_storage_buffer(
             &device,
             &mut buffers,
-            GpuPrimitiveDispatchResource::existing(sorted_indices.diagnostic_identity()),
+            sorted_indices.clone(),
             &vec![0_u32; element_count as usize],
         );
-        insert_storage_buffer(
-            &device,
-            &mut buffers,
-            GpuPrimitiveDispatchResource::existing(draw_args.diagnostic_identity()),
-            &[0_u32; 4],
-        );
+        insert_storage_buffer(&device, &mut buffers, draw_args.clone(), &[0_u32; 4]);
         for temporary in &dispatch_plan.temporary_storage {
             insert_storage_buffer(
                 &device,
                 &mut buffers,
-                GpuPrimitiveDispatchResource::temporary(temporary.label.clone()),
-                &vec![0_u32; temporary.element_count as usize],
+                temporary.clone(),
+                &vec![0_u32; (temporary.descriptor().size_bytes() / 4) as usize],
             );
         }
 
@@ -885,9 +914,7 @@ mod tests {
             &device,
             &mut encoder,
             buffers
-                .get(&GpuPrimitiveDispatchResource::existing(
-                    scan_output.diagnostic_identity(),
-                ))
+                .get(&scan_output)
                 .expect("scan output buffer should exist"),
             u64::from(element_count) * 4,
         );
@@ -895,9 +922,7 @@ mod tests {
             &device,
             &mut encoder,
             buffers
-                .get(&GpuPrimitiveDispatchResource::existing(
-                    sorted_indices.diagnostic_identity(),
-                ))
+                .get(&sorted_indices)
                 .expect("scatter output buffer should exist"),
             u64::from(element_count) * 4,
         );
@@ -905,9 +930,7 @@ mod tests {
             &device,
             &mut encoder,
             buffers
-                .get(&GpuPrimitiveDispatchResource::existing(
-                    draw_args.diagnostic_identity(),
-                ))
+                .get(&draw_args)
                 .expect("draw args buffer should exist"),
             DrawIndirectArgs::BYTE_SIZE,
         );
@@ -947,11 +970,9 @@ mod tests {
             PrefixScanMode::Exclusive,
         )
         .expect("valid scan descriptor");
-        GpuPrimitiveExecutionPlan::new("scan.plan", [GpuPrimitiveStep::from(scan)])
-            .expect("valid primitive plan")
-            .dispatch_plan()
-            .expect("dispatch plan should lower")
-            .stage_count()
+        let plan = GpuPrimitiveExecutionPlan::new("scan.plan", [GpuPrimitiveStep::from(scan)])
+            .expect("valid primitive plan");
+        dispatch_plan_for_test(&plan).stage_count()
     }
 
     fn runtime_primitive_device() -> Option<(Arc<wgpu::Device>, Arc<wgpu::Queue>)> {
@@ -989,8 +1010,8 @@ mod tests {
 
     fn insert_storage_buffer(
         device: &wgpu::Device,
-        buffers: &mut BTreeMap<GpuPrimitiveDispatchResource, wgpu::Buffer>,
-        resource: GpuPrimitiveDispatchResource,
+        buffers: &mut BTreeMap<GpuBufferHandle, wgpu::Buffer>,
+        resource: GpuBufferHandle,
         values: &[u32],
     ) {
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -1007,7 +1028,7 @@ mod tests {
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         workspace_root: &std::path::Path,
-        buffers: &BTreeMap<GpuPrimitiveDispatchResource, wgpu::Buffer>,
+        buffers: &BTreeMap<GpuBufferHandle, wgpu::Buffer>,
         stage: &GpuPrimitiveDispatchStage,
     ) {
         let source = std::fs::read_to_string(workspace_root.join(stage.shader_asset))
@@ -1085,12 +1106,10 @@ mod tests {
         pass.dispatch_workgroups(stage.dispatch[0], stage.dispatch[1], stage.dispatch[2]);
     }
 
-    fn stage_binding_resources(
-        stage: &GpuPrimitiveDispatchStage,
-    ) -> Vec<(GpuPrimitiveDispatchResource, bool)> {
+    fn stage_binding_resources(stage: &GpuPrimitiveDispatchStage) -> Vec<(GpuBufferHandle, bool)> {
         let writable = stage.writes.iter().cloned().collect::<BTreeSet<_>>();
-        let mut seen = BTreeSet::<GpuPrimitiveDispatchResource>::new();
-        let mut resources = Vec::<(GpuPrimitiveDispatchResource, bool)>::new();
+        let mut seen = BTreeSet::<GpuBufferHandle>::new();
+        let mut resources = Vec::<(GpuBufferHandle, bool)>::new();
         for resource in stage.reads.iter().chain(stage.writes.iter()) {
             if seen.insert(resource.clone()) {
                 resources.push((resource.clone(), writable.contains(resource)));

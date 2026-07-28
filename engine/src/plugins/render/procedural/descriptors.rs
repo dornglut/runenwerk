@@ -198,7 +198,7 @@ pub struct ProceduralPassDescriptor {
     pub index_buffer: Option<ProceduralIndexBuffer>,
     pub target: Option<ProceduralTargetDescriptor>,
     pub policy: ProceduralRenderPolicy,
-    pub dependencies: Vec<String>,
+    pub non_data_order_after: Vec<String>,
 }
 
 impl ProceduralPassDescriptor {
@@ -217,7 +217,7 @@ impl ProceduralPassDescriptor {
             index_buffer: None,
             target: None,
             policy: ProceduralRenderPolicy::default(),
-            dependencies: Vec::new(),
+            non_data_order_after: Vec::new(),
         }
     }
 
@@ -294,8 +294,8 @@ impl ProceduralPassDescriptor {
         self
     }
 
-    pub fn depends_on(mut self, pass_label: impl Into<String>) -> Self {
-        self.dependencies.push(pass_label.into());
+    pub fn order_after(mut self, pass_label: impl Into<String>) -> Self {
+        self.non_data_order_after.push(pass_label.into());
         self
     }
 }

@@ -7,7 +7,6 @@ pub mod pass_shape;
 pub mod planning;
 pub mod prepared_validation;
 pub mod resource_graph;
-pub mod resource_lifetimes;
 pub mod validation;
 pub mod validation_builtin_ui;
 
@@ -20,6 +19,5 @@ pub use pass_shape::*;
 pub use planning::*;
 pub use prepared_validation::*;
 pub use resource_graph::*;
-pub use resource_lifetimes::*;
 pub use validation::*;
 pub use validation_builtin_ui::*;

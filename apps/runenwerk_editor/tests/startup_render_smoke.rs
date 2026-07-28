@@ -79,7 +79,7 @@ fn startup_render_smoke_publishes_editor_shell_submission() {
         .compiled_flows()
         .iter()
         .flat_map(|flow| {
-            flow.pass_order
+            flow.render_passes
                 .iter()
                 .map(|pass| pass.pass_label().to_string())
         })

@@ -44,7 +44,8 @@ pub(crate) struct BoidsProductionEvidenceReport {
 pub(crate) struct BoidsProductionPassEvidence {
     pub label: String,
     pub kind: &'static str,
-    pub order_index: usize,
+    /// Lexical source position retained as evidence, not execution order.
+    pub authoring_index: usize,
     pub gpu_timestamp_expected: bool,
     pub dispatch_workgroups_available: bool,
     pub local_instance_geometry: bool,
@@ -122,10 +123,10 @@ impl BoidsProductionEvidenceReport {
 
         for pass in &self.passes {
             lines.push(format!(
-                "pass label={} kind={} order={} gpu_timestamp_expected={} dispatch_available={} local_instance_geometry={} vertex_count={} instance_count={}",
+                "pass label={} kind={} authoring_index={} gpu_timestamp_expected={} dispatch_available={} local_instance_geometry={} vertex_count={} instance_count={}",
                 pass.label,
                 pass.kind,
-                pass.order_index,
+                pass.authoring_index,
                 pass.gpu_timestamp_expected,
                 pass.dispatch_workgroups_available,
                 pass.local_instance_geometry,
@@ -439,7 +440,7 @@ fn pass_evidence(compiled: &CompiledRenderFlowPlan) -> Vec<BoidsProductionPassEv
             BoidsProductionPassEvidence {
                 label: pass_label(compiled, pass_id),
                 kind: execution_pass_kind(pass),
-                order_index: execution_order_index(pass),
+                authoring_index: execution_authoring_index(pass),
                 gpu_timestamp_expected: pass_supports_gpu_timestamps(pass),
                 dispatch_workgroups_available: compute_dispatch_available(pass),
                 local_instance_geometry: local_instance_geometry(pass),
@@ -474,7 +475,7 @@ fn unsupported_gpu_timing_evidence(
 
 fn pass_label(compiled: &CompiledRenderFlowPlan, pass_id: RenderPassId) -> String {
     compiled
-        .pass_order
+        .render_passes
         .iter()
         .find(|pass| pass.pass_id() == pass_id)
         .map(|pass| pass.pass_label().to_string())
@@ -492,14 +493,14 @@ fn execution_pass_id(pass: &CompiledPassExecutionPlan) -> RenderPassId {
     }
 }
 
-fn execution_order_index(pass: &CompiledPassExecutionPlan) -> usize {
+fn execution_authoring_index(pass: &CompiledPassExecutionPlan) -> usize {
     match pass {
-        CompiledPassExecutionPlan::Compute(value) => value.order_index,
+        CompiledPassExecutionPlan::Compute(value) => value.authoring_index,
         CompiledPassExecutionPlan::Fullscreen(value)
-        | CompiledPassExecutionPlan::Graphics(value) => value.order_index,
-        CompiledPassExecutionPlan::Copy(value) => value.order_index,
-        CompiledPassExecutionPlan::Present(value) => value.order_index,
-        CompiledPassExecutionPlan::BuiltinUiComposite(value) => value.order_index,
+        | CompiledPassExecutionPlan::Graphics(value) => value.authoring_index,
+        CompiledPassExecutionPlan::Copy(value) => value.authoring_index,
+        CompiledPassExecutionPlan::Present(value) => value.authoring_index,
+        CompiledPassExecutionPlan::BuiltinUiComposite(value) => value.authoring_index,
     }
 }
 

@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: reports
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 related_docs:
   - ../../workspace/workflow-lifecycle.md
   - ../../workspace/planning/completed-work.md
@@ -22,6 +22,7 @@ Use this folder for detailed historical completion evidence.
 
 - [RunenGPU G1A Closeout](pt-runengpu-g1a-closeout.md)
 - [RunenGPU G2 Implementation Closeout](pt-runengpu-g2-implementation-closeout.md)
+- [RunenGPU G3 Implementation Closeout](pt-runengpu-g3-implementation-closeout.md)
 - [Runen Family Operational Hardening Closeout](pt-runen-family-operational-hardening-closeout.md)
 - [RunenSDF Internal Retirement Closeout](pt-runensdf-004-internal-sdf-retirement-closeout.md)
 

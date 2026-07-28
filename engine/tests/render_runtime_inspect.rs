@@ -31,7 +31,7 @@ use engine::plugins::render::{
     RenderDynamicTextureTargetKey, RenderDynamicTextureUploadDescriptor, RenderFeatureId,
     RenderFlow, RenderFragmentDescriptor, RenderFragmentPackageDescriptor,
     RenderFragmentPassDescriptor, RenderFragmentResourceDescriptor, RenderFrameProducerId,
-    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource,
+    RenderGpuResidencyBudgetResource, RenderGpuResidencyResource, RenderGpuWorkInstrumentation,
     RenderPreparedFramePreflightCacheState, RenderPreparedFramePreflightCacheStatus,
     RenderPreparedFramePreflightMode, RenderPreparedFramePreflightReportSource,
     RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
@@ -39,7 +39,7 @@ use engine::plugins::render::{
     RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureUploadAlphaMode,
     RendererFrameTimings, ShaderReloadPollReport, ShaderReloadPollStatus,
     StaticRegisteredFeaturePayload, compile_flow_plan, current_runtime_gpu_capabilities,
-    merge_fragment_package_into_flow, validate_prepared_render_frame,
+    merge_fragment_package_into_flow, prepare_render_gpu_work, validate_prepared_render_frame,
 };
 use engine::runtime::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
 use product::{
@@ -637,15 +637,23 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
         .expect("flow should validate");
     let compiled = compile_flow_plan(&flow).expect("flow should compile");
     let plan_inspection = inspect_compiled_render_flow_plan(&compiled);
+    let prepared_work = prepare_render_gpu_work(
+        &compiled,
+        &BTreeMap::new(),
+        (320, 180),
+        RenderGpuWorkInstrumentation::Disabled,
+    )
+    .expect("invocation work should lower");
 
     assert_eq!(plan_inspection.flow_label, "inspect.compiler");
     assert_eq!(plan_inspection.pass_count, 1);
     assert!(
         plan_inspection
-            .resource_lifetime_windows
+            .prepared_initialization
             .iter()
-            .any(|window| window.resource_label.as_deref() == Some("scene_color"))
+            .any(|resource| resource.resource_label == "scene_color")
     );
+    assert_eq!(plan_inspection.prepared_node_count, 1);
     assert!(
         plan_inspection
             .backend_capabilities
@@ -676,7 +684,10 @@ fn render_runtime_inspect_compiler_plan_and_preflight_reports_are_structured() {
             invocation_id: PreparedFlowInvocationId::new("viewport.1.scene"),
             flow_id: compiled.flow_id,
             view_id: "viewport.1".to_string(),
-            inputs: PreparedFlowInputs::default(),
+            inputs: PreparedFlowInputs {
+                prepared_work: Some(prepared_work),
+                ..PreparedFlowInputs::default()
+            },
             target_alias_bindings: BTreeMap::new(),
             history_signature: None,
         }],
@@ -1105,7 +1116,7 @@ fn render_runtime_inspect_pass_provenance_state_preserves_required_human_fields(
             pass_id: "runenwerk.editor.viewport.sdf".to_string(),
             pass_label: "runenwerk.editor.viewport.sdf".to_string(),
             pass_kind: FlowPassKind::Fullscreen,
-            order_index: 3,
+            authoring_index: 3,
             feature_id: Some("feature.ui".to_string()),
             shader_id: "editor_viewport_sdf".to_string(),
             shader_revision: 7,

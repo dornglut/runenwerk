@@ -31,7 +31,7 @@ fn diagnose_graphics_pass_shape(
         return diagnostics;
     };
     let Some(node) = flow
-        .pass_order
+        .render_passes
         .iter()
         .find(|pass| pass.pass_id() == raster.pass_id)
         .map(|pass| pass.node())
@@ -123,7 +123,7 @@ fn pass_shape_diagnostic(
     message: impl Into<String>,
 ) -> RenderExecutionGraphDiagnostic {
     let label = flow
-        .pass_order
+        .render_passes
         .iter()
         .find(|pass| pass.pass_id() == raster.pass_id)
         .map(|pass| pass.pass_label().to_string())

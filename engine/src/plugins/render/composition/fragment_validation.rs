@@ -328,15 +328,15 @@ fn validate_pass_references(
         );
     }
 
-    for dependency in &pass.dependencies {
-        if dependency.is_local() && !pass_labels.contains(dependency.raw_label()) {
+    for ordered_before in &pass.non_data_order_after {
+        if ordered_before.is_local() && !pass_labels.contains(ordered_before.raw_label()) {
             diagnostics.push(
                 RenderFragmentDiagnostic::error(
                     RenderFragmentDiagnosticKind::MissingPassReference,
                     format!(
-                        "pass '{}' depends on missing local pass '{}'",
+                        "pass '{}' orders after missing local pass '{}'",
                         pass.label,
-                        dependency.raw_label()
+                        ordered_before.raw_label()
                     ),
                 )
                 .with_package(package)

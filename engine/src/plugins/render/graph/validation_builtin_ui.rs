@@ -61,16 +61,25 @@ pub fn validate_builtin_ui_pass_shape(
         );
     }
 
-    if !pass.reads.is_empty() {
-        issues.push(RenderFlowValidationIssue::BuiltinUiHasReads {
-            pass_label: pass.label.clone(),
-        });
+    if !pass.storage_reads.is_empty()
+        || !pass.storage_writes.is_empty()
+        || pass.copy_source.is_some()
+        || pass.copy_destination.is_some()
+        || pass.present_source.is_some()
+    {
+        issues.push(
+            RenderFlowValidationIssue::BuiltinUiHasInvalidResourceRoles {
+                pass_label: pass.label.clone(),
+            },
+        );
     }
 
-    if pass.writes.len() != 1 {
-        issues.push(RenderFlowValidationIssue::BuiltinUiInvalidWriteArity {
-            pass_label: pass.label.clone(),
-            write_count: pass.writes.len(),
-        });
+    if pass.color_outputs.len() != 1 {
+        issues.push(
+            RenderFlowValidationIssue::BuiltinUiInvalidColorOutputArity {
+                pass_label: pass.label.clone(),
+                output_count: pass.color_outputs.len(),
+            },
+        );
     }
 }

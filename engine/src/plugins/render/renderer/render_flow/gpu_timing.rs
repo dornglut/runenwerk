@@ -32,19 +32,16 @@ pub(in crate::plugins::render::renderer) struct GpuPassTimingFrame {
     readback_size: BufferAddress,
     timestamp_period_ns: f32,
     entries: Vec<GpuPassTimingEntry>,
+    resolve_encoded: bool,
 }
 
 impl GpuPassTimingFrame {
-    pub fn new(device: &Device, queue: &Queue, pass_capacity: usize) -> Option<Self> {
-        if pass_capacity == 0 {
+    pub fn new(device: &Device, queue: &Queue, query_capacity: u32) -> Option<Self> {
+        if query_capacity == 0 {
             return None;
         }
         let timestamp_period_ns = queue.get_timestamp_period();
         if timestamp_period_ns <= 0.0 {
-            return None;
-        }
-        let query_capacity = pass_capacity.checked_mul(2)?.try_into().ok()?;
-        if query_capacity == 0 {
             return None;
         }
         let readback_size = u64::from(query_capacity) * u64::from(QUERY_SIZE);
@@ -74,24 +71,26 @@ impl GpuPassTimingFrame {
             readback_size,
             timestamp_period_ns,
             entries: Vec::new(),
+            resolve_encoded: false,
         })
     }
 
-    pub fn reserve_pass(
+    pub fn register_pass(
         &mut self,
+        indices: GpuPassTimestampIndices,
         frame_index: u64,
         render_surface_id: u64,
         flow_id: impl Into<String>,
         pass_id: impl Into<String>,
         pass_kind: impl Into<String>,
     ) -> Option<GpuPassTimestampIndices> {
-        let begin = self.query_count;
-        let end = begin.checked_add(1)?;
-        if end >= self.query_capacity {
+        if indices.begin >= indices.end
+            || indices.end >= self.query_capacity
+            || self.entries.iter().any(|entry| entry.indices == indices)
+        {
             return None;
         }
-        self.query_count = self.query_count.saturating_add(2);
-        let indices = GpuPassTimestampIndices { begin, end };
+        self.query_count = self.query_count.max(indices.end.saturating_add(1));
         self.entries.push(GpuPassTimingEntry {
             frame_index,
             render_surface_id,
@@ -110,17 +109,28 @@ impl GpuPassTimingFrame {
         }
     }
 
-    pub fn resolve(mut self, encoder: &mut CommandEncoder) -> Option<PendingGpuPassTimingReadback> {
+    pub fn encode_resolve(&mut self, encoder: &mut CommandEncoder) -> bool {
         if self.query_count == 0 {
-            return None;
+            return false;
         }
-        let readback_size = u64::from(self.query_count) * u64::from(QUERY_SIZE);
         encoder.resolve_query_set(
             &self.query_set,
             0..self.query_count,
             &self.resolve_buffer,
             0,
         );
+        self.resolve_encoded = true;
+        true
+    }
+
+    pub fn encode_readback_copy(
+        mut self,
+        encoder: &mut CommandEncoder,
+    ) -> Option<PendingGpuPassTimingReadback> {
+        if !self.resolve_encoded || self.query_count == 0 {
+            return None;
+        }
+        let readback_size = u64::from(self.query_count) * u64::from(QUERY_SIZE);
         encoder.copy_buffer_to_buffer(
             &self.resolve_buffer,
             0,
@@ -296,9 +306,16 @@ mod tests {
         }
 
         let mut frame =
-            GpuPassTimingFrame::new(&device, &queue, 1).expect("timestamp frame should allocate");
+            GpuPassTimingFrame::new(&device, &queue, 2).expect("timestamp frame should allocate");
         let indices = frame
-            .reserve_pass(1, 1, "runtime.gpu", "timestamp.empty_compute", "compute")
+            .register_pass(
+                GpuPassTimestampIndices { begin: 0, end: 1 },
+                1,
+                1,
+                "runtime.gpu",
+                "timestamp.empty_compute",
+                "compute",
+            )
             .expect("timestamp pass should reserve queries");
         let writes = frame.timestamp_writes(indices);
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
@@ -314,8 +331,9 @@ mod tests {
                 }),
             });
         }
+        assert!(frame.encode_resolve(&mut encoder));
         let pending = frame
-            .resolve(&mut encoder)
+            .encode_readback_copy(&mut encoder)
             .expect("timestamp queries should resolve");
         queue.submit(std::iter::once(encoder.finish()));
 
