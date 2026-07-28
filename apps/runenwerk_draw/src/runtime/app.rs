@@ -37,7 +37,6 @@ fn register_draw_render_flow(app: &mut App) -> Result<()> {
         .finish()
         .builtin_ui_composite_pass(DRAW_MAIN_UI_PASS_ID)?
         .main_surface_only()
-        .depends_on(DRAW_SURFACE_CLEAR_PASS_ID)
         .finish()
         .validate()
         .expect("drawing render flow should validate");

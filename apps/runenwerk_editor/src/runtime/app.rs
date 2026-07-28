@@ -162,7 +162,7 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .finish()
         .fullscreen_pass(EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID)
         .offscreen_products_only()
-        .depends_on(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
+        .order_after(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .shader_asset(EDITOR_VIEWPORT_PICKING_PRODUCT_SHADER_ID)
         .uniform_from_state_with_surface_to(
             scene_product_uniform.clone(),
@@ -172,7 +172,7 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .finish()
         .fullscreen_pass(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)
         .offscreen_products_only()
-        .depends_on(EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID)
+        .order_after(EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID)
         .shader_asset(EDITOR_VIEWPORT_OVERLAY_PRODUCT_SHADER_ID)
         .clear_color(EDITOR_VIEWPORT_TRANSPARENT_CLEAR)
         .uniform_from_state_with_surface_to(
@@ -183,8 +183,7 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .finish()
         .builtin_ui_composite_pass(EDITOR_MAIN_UI_PASS_ID)?
         .main_surface_only()
-        .depends_on(EDITOR_SURFACE_CLEAR_PASS_ID)
-        .depends_on(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)
+        .order_after(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)
         .finish()
         .validate()
         .expect("editor render flow should validate");

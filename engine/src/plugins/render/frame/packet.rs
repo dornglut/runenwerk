@@ -4,7 +4,7 @@ use super::{
 };
 use crate::plugins::gpu::GpuWorkResourceId;
 use crate::plugins::render::{
-    RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
+    PreparedRenderWorkPlan, RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId,
     RenderGpuResourceAdapterError, RenderPassId, RenderTargetAliasKey, backend::RenderSurfaceId,
 };
@@ -204,6 +204,12 @@ pub struct PreparedFlowInputs {
     pub projected_uniform_bytes: BTreeMap<GpuWorkResourceId, Vec<u8>>,
     pub projected_dispatch_workgroups: BTreeMap<RenderPassId, [u32; 3]>,
     pub required_state_types: Vec<PreparedStateTypeInfo>,
+    /// Per-invocation G3 authority built only after domain dispatch projection.
+    pub prepared_work: Option<PreparedRenderWorkPlan>,
+    /// The same invocation lowered transactionally with timestamp-query,
+    /// resolve, and readback-copy intent. Runtime selects this only when the
+    /// active backend reports timestamp support.
+    pub timestamped_work: Option<PreparedRenderWorkPlan>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

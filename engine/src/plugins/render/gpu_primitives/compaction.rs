@@ -1,12 +1,12 @@
 use super::{GpuPrimitiveValidationError, U32ScanElement, buffer_capacity, validate_capacity};
-use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
+use crate::plugins::gpu::GpuBufferHandle;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct U32ScatterDescriptor {
     pub label: String,
-    pub source_indices: GpuWorkResourceId,
-    pub prefix_offsets: GpuWorkResourceId,
-    pub output_indices: GpuWorkResourceId,
+    pub source_indices: GpuBufferHandle,
+    pub prefix_offsets: GpuBufferHandle,
+    pub output_indices: GpuBufferHandle,
     pub element_count: u32,
     pub output_capacity: u32,
 }
@@ -22,9 +22,9 @@ impl U32ScatterDescriptor {
     ) -> Result<Self, GpuPrimitiveValidationError> {
         let descriptor = Self {
             label: label.into(),
-            source_indices: source_indices.diagnostic_identity(),
-            prefix_offsets: prefix_offsets.diagnostic_identity(),
-            output_indices: output_indices.diagnostic_identity(),
+            source_indices: source_indices.clone(),
+            prefix_offsets: prefix_offsets.clone(),
+            output_indices: output_indices.clone(),
             element_count,
             output_capacity,
         };

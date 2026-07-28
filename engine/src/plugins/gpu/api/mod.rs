@@ -14,6 +14,7 @@ pub use access::*;
 pub use capability::*;
 pub use data::*;
 pub use errors::*;
+pub(crate) use errors::{GpuWorkAuthoringErrorContext, GpuWorkGraphErrorContext};
 pub use graph::*;
 pub use handles::*;
 pub use resource::*;

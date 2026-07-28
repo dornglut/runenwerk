@@ -1,4 +1,4 @@
-use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
+use crate::plugins::gpu::GpuBufferHandle;
 use crate::plugins::render::GpuStorage;
 use thiserror::Error;
 
@@ -20,8 +20,8 @@ pub enum PrefixScanMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct U32PrefixScanDescriptor {
     pub label: String,
-    pub input: GpuWorkResourceId,
-    pub output: GpuWorkResourceId,
+    pub input: GpuBufferHandle,
+    pub output: GpuBufferHandle,
     pub total_count: u32,
     pub mode: PrefixScanMode,
 }
@@ -36,8 +36,8 @@ impl U32PrefixScanDescriptor {
     ) -> Result<Self, GpuPrimitiveValidationError> {
         let descriptor = Self {
             label: label.into(),
-            input: input.diagnostic_identity(),
-            output: output.diagnostic_identity(),
+            input: input.clone(),
+            output: output.clone(),
             total_count,
             mode,
         };

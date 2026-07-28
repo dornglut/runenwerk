@@ -11,6 +11,7 @@ use crate::plugins::render::{
     PreparedFlowInvocation, PreparedFlowInvocationId, PreparedRenderFrame, PreparedTargetBinding,
     PreparedViewFrame, RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderResourceDeclaration, RenderTargetAliasKind, validate_compiled_flow_capabilities,
+    validate_prepared_gpu_work_capabilities,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
@@ -353,6 +354,7 @@ pub fn validate_prepared_render_frame(
             view,
             &dynamic_targets,
             frame,
+            capabilities,
             &mut diagnostics,
         );
     }
@@ -471,8 +473,25 @@ fn validate_invocation(
         &RenderDynamicTextureTargetDescriptor,
     >,
     frame: &PreparedRenderFrame,
+    capabilities: &GpuCapabilities,
     diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
 ) {
+    match invocation.inputs.prepared_work.as_ref() {
+        Some(work) => diagnostics.extend(validate_prepared_gpu_work_capabilities(
+            flow,
+            work.graph(),
+            capabilities,
+        )),
+        None => diagnostics.push(
+            RenderExecutionGraphDiagnostic::error(
+                RenderExecutionGraphDiagnosticKind::FlowValidationIssue,
+                "prepared invocation is missing transactionally lowered GPU work",
+            )
+            .with_flow(flow.flow_id, flow.flow_label.clone())
+            .with_invocation(invocation.invocation_id.clone())
+            .with_view(invocation.view_id.clone()),
+        ),
+    }
     for pass in &flow.execution.passes {
         if !pass_targets_view(pass, view) {
             continue;
@@ -933,13 +952,6 @@ fn alias_requirements(pass: &CompiledPassExecutionPlan) -> Vec<AliasRequirement>
             if let Some(resource) = &value.targets.depth_output {
                 collect_alias_requirement(resource, AliasUseRole::DepthOutput, &mut requirements);
             }
-            for resource in &value.targets.reads {
-                collect_alias_requirement(
-                    resource,
-                    AliasUseRole::SampledTexture,
-                    &mut requirements,
-                );
-            }
         }
         CompiledPassExecutionPlan::Copy(value) => {
             if let Some(resource) = &value.source {
@@ -1135,8 +1147,8 @@ fn hash_compiled_flow_structure(compiled_flows: &[CompiledRenderFlowPlan]) -> u6
         for flow in compiled_flows {
             flow.flow_id.hash(hasher);
             flow.flow_label.hash(hasher);
-            flow.pass_order.len().hash(hasher);
-            for pass in &flow.pass_order {
+            flow.render_passes.len().hash(hasher);
+            for pass in &flow.render_passes {
                 pass.pass_id().hash(hasher);
                 pass.pass_label().hash(hasher);
                 pass.node().kind.hash(hasher);
@@ -1169,7 +1181,7 @@ fn hash_compiled_pass_structure(pass: &CompiledPassExecutionPlan, hasher: &mut i
         CompiledPassExecutionPlan::Compute(value) => {
             "compute".hash(hasher);
             value.pass_id.hash(hasher);
-            value.order_index.hash(hasher);
+            value.authoring_index.hash(hasher);
             value.feature_id.hash(hasher);
             hash_view_mask(&value.view_mask, hasher);
             hash_bindings(&value.bindings, hasher);
@@ -1186,7 +1198,7 @@ fn hash_compiled_pass_structure(pass: &CompiledPassExecutionPlan, hasher: &mut i
         CompiledPassExecutionPlan::Copy(value) => {
             "copy".hash(hasher);
             value.pass_id.hash(hasher);
-            value.order_index.hash(hasher);
+            value.authoring_index.hash(hasher);
             value.feature_id.hash(hasher);
             hash_view_mask(&value.view_mask, hasher);
             hash_compiled_resource_ref(value.source.as_ref(), hasher);
@@ -1195,7 +1207,7 @@ fn hash_compiled_pass_structure(pass: &CompiledPassExecutionPlan, hasher: &mut i
         CompiledPassExecutionPlan::Present(value) => {
             "present".hash(hasher);
             value.pass_id.hash(hasher);
-            value.order_index.hash(hasher);
+            value.authoring_index.hash(hasher);
             value.feature_id.hash(hasher);
             hash_view_mask(&value.view_mask, hasher);
             hash_compiled_resource_ref(value.source.as_ref(), hasher);
@@ -1203,7 +1215,7 @@ fn hash_compiled_pass_structure(pass: &CompiledPassExecutionPlan, hasher: &mut i
         CompiledPassExecutionPlan::BuiltinUiComposite(value) => {
             "builtin_ui".hash(hasher);
             value.pass_id.hash(hasher);
-            value.order_index.hash(hasher);
+            value.authoring_index.hash(hasher);
             value.feature_id.hash(hasher);
             hash_view_mask(&value.view_mask, hasher);
             hash_compiled_resource_ref(Some(&value.color_output), hasher);
@@ -1213,7 +1225,7 @@ fn hash_compiled_pass_structure(pass: &CompiledPassExecutionPlan, hasher: &mut i
 
 fn hash_raster_pass_structure(value: &CompiledRasterExecutionPlan, hasher: &mut impl Hasher) {
     value.pass_id.hash(hasher);
-    value.order_index.hash(hasher);
+    value.authoring_index.hash(hasher);
     value.feature_id.hash(hasher);
     hash_view_mask(&value.view_mask, hasher);
     hash_bindings(&value.bindings, hasher);
@@ -1222,10 +1234,6 @@ fn hash_raster_pass_structure(value: &CompiledRasterExecutionPlan, hasher: &mut 
         hash_compiled_resource_ref(Some(resource), hasher);
     }
     hash_compiled_resource_ref(value.targets.depth_output.as_ref(), hasher);
-    value.targets.reads.len().hash(hasher);
-    for resource in &value.targets.reads {
-        hash_compiled_resource_ref(Some(resource), hasher);
-    }
     value.draw_buffers.vertex_buffers.len().hash(hasher);
     for binding in &value.draw_buffers.vertex_buffers {
         hash_compiled_resource_ref(Some(&binding.resource), hasher);

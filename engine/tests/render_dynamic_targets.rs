@@ -441,7 +441,6 @@ fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_s
         .sample_texture("scene_color")
         .write_surface_color()
         .expect("render flow authoring should succeed")
-        .depends_on("draw_scene")
         .finish()
         .validate()
         .expect("flow should validate");

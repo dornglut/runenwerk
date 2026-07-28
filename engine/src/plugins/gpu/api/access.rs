@@ -5,6 +5,16 @@ use super::{
     GpuWorkResourceId,
 };
 
+/// A descriptor-bounded byte range.
+///
+/// Raw construction is intentionally unavailable; callers must use the
+/// checked constructors.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuBufferRange;
+///
+/// let _unchecked = GpuBufferRange { offset: 0, size: 4 };
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuBufferRange {
     offset: u64,
@@ -77,6 +87,13 @@ fn buffer_range_error(
     )
 }
 
+/// A descriptor-bounded query interval.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuQueryRange;
+///
+/// let _unchecked = GpuQueryRange { first: 0, count: 2 };
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuQueryRange {
     first: u32,
@@ -211,6 +228,15 @@ fn validate_texture_range(
     range: GpuTextureSubresourceRange,
 ) -> Result<(), GpuAccessError> {
     let descriptor = texture.descriptor();
+    if descriptor.dimension() == GpuTextureDimension::D3
+        && (range.base_array_layer() != 0 || range.array_layer_count() != 1)
+    {
+        return Err(texture_access_error(
+            texture,
+            GpuAccessCause::InvalidD3Interpretation,
+            "address each D3 mip as one whole volume with logical array layer 0",
+        ));
+    }
     let layers = match descriptor.dimension() {
         GpuTextureDimension::D2 => descriptor.extent().depth_or_layers(),
         GpuTextureDimension::D1 | GpuTextureDimension::D3 => 1,
@@ -238,15 +264,6 @@ fn validate_texture_range(
             texture,
             GpuAccessCause::InvalidTextureAspect,
             "select an aspect represented by the parent texture format",
-        ));
-    }
-    if descriptor.dimension() == GpuTextureDimension::D3
-        && (range.base_array_layer() != 0 || range.array_layer_count() != 1)
-    {
-        return Err(texture_access_error(
-            texture,
-            GpuAccessCause::InvalidD3Interpretation,
-            "address each D3 mip as one whole volume with logical array layer 0",
         ));
     }
     Ok(())
@@ -456,6 +473,18 @@ impl GpuQueryAccessKind {
     }
 }
 
+/// Typed buffer access; cross-kind construction is rejected by Rust's type
+/// system before graph preparation.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::{
+///     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuTextureHandle,
+/// };
+///
+/// fn cross_kind(texture: &GpuTextureHandle, range: GpuBufferRange) {
+///     let _ = GpuBufferAccess::new(texture, range, GpuBufferAccessKind::StorageRead);
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuBufferAccess {
     buffer: GpuBufferHandle,
@@ -796,7 +825,11 @@ mod tests {
         GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization, GpuTextureUsages,
         GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
     };
-    use std::num::NonZeroU64;
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+        num::NonZeroU64,
+    };
 
     fn label(value: &str) -> GpuResourceLabel {
         GpuResourceLabel::new(value).unwrap()
@@ -837,6 +870,12 @@ mod tests {
             .unwrap()
     }
 
+    fn semantic_hash(value: impl Hash) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
     #[test]
     fn checked_buffer_and_query_ranges_reject_zero_overflow_and_bounds() {
         let mut allocator = allocator();
@@ -865,9 +904,86 @@ mod tests {
             .unwrap();
         assert_eq!(GpuQueryRange::whole(&queries).unwrap().count(), 8);
         assert!(GpuQueryRange::new(&queries, 2, 4).is_ok());
-        assert!(GpuQueryRange::new(&queries, 0, 0).is_err());
-        assert!(GpuQueryRange::new(&queries, u32::MAX, 2).is_err());
-        assert!(GpuQueryRange::new(&queries, 7, 2).is_err());
+        assert_eq!(
+            GpuQueryRange::new(&queries, 0, 0).unwrap_err().cause(),
+            GpuAccessCause::ZeroRange
+        );
+        assert_eq!(
+            GpuQueryRange::new(&queries, u32::MAX, 2)
+                .unwrap_err()
+                .cause(),
+            GpuAccessCause::ArithmeticOverflow
+        );
+        assert_eq!(
+            GpuQueryRange::new(&queries, 7, 2).unwrap_err().cause(),
+            GpuAccessCause::OutOfBounds
+        );
+    }
+
+    #[test]
+    fn buffer_and_query_ranges_have_diagnostic_free_order_and_hashing() {
+        let mut allocator = allocator();
+        let first_buffer = buffer(&mut allocator, "first buffer", [GpuBufferUsage::Storage]);
+        let second_buffer = buffer(&mut allocator, "second buffer", [GpuBufferUsage::Storage]);
+        let first = GpuBufferRange::new(&first_buffer, 8, 16).unwrap();
+        let same = GpuBufferRange::new(&second_buffer, 8, 16).unwrap();
+        let later = GpuBufferRange::new(&first_buffer, 24, 8).unwrap();
+        assert_eq!(first, same);
+        assert_eq!(semantic_hash(first), semantic_hash(same));
+        assert!(first < later);
+
+        let first_queries = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(common("first queries"), GpuQueryKind::Timestamp, 8)
+                    .unwrap(),
+            )
+            .unwrap();
+        let second_queries = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(common("second queries"), GpuQueryKind::Timestamp, 8)
+                    .unwrap(),
+            )
+            .unwrap();
+        let first = GpuQueryRange::new(&first_queries, 2, 3).unwrap();
+        let same = GpuQueryRange::new(&second_queries, 2, 3).unwrap();
+        let later = GpuQueryRange::new(&first_queries, 5, 1).unwrap();
+        assert_eq!(first, same);
+        assert_eq!(semantic_hash(first), semantic_hash(same));
+        assert!(first < later);
+    }
+
+    #[test]
+    fn texture_subresource_order_and_hashing_ignore_diagnostic_labels() {
+        let first = GpuTextureSubresourceRange::new(
+            &label("first diagnostic"),
+            0,
+            1,
+            1,
+            2,
+            GpuTextureAspect::Color,
+        )
+        .unwrap();
+        let same = GpuTextureSubresourceRange::new(
+            &label("second diagnostic"),
+            0,
+            1,
+            1,
+            2,
+            GpuTextureAspect::Color,
+        )
+        .unwrap();
+        let later = GpuTextureSubresourceRange::new(
+            &label("third diagnostic"),
+            1,
+            1,
+            0,
+            1,
+            GpuTextureAspect::Color,
+        )
+        .unwrap();
+        assert_eq!(first, same);
+        assert_eq!(semantic_hash(first), semantic_hash(same));
+        assert!(first < later);
     }
 
     #[test]
@@ -936,7 +1052,7 @@ mod tests {
             GpuTextureSubresourceRange::new(&view_label, 2, 1, 2, 1, GpuTextureAspect::All)
                 .unwrap();
         let access = GpuTextureAccess::new(
-            GpuTextureAccessResource::TextureView(view),
+            GpuTextureAccessResource::TextureView(view.clone()),
             requested,
             GpuTextureAccessKind::SampledRead,
         )
@@ -947,6 +1063,122 @@ mod tests {
         assert_eq!(
             access.normalized_subresources().aspect(),
             GpuTextureAspect::Color
+        );
+
+        let outside_view =
+            GpuTextureSubresourceRange::new(&view_label, 0, 1, 0, 1, GpuTextureAspect::Color)
+                .unwrap();
+        assert_eq!(
+            GpuTextureAccess::new(
+                GpuTextureAccessResource::TextureView(view),
+                outside_view,
+                GpuTextureAccessKind::SampledRead,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuAccessCause::InvalidViewIntersection
+        );
+    }
+
+    #[test]
+    fn texture_ranges_are_bounded_and_overlap_aware() {
+        let mut allocator = allocator();
+        let texture_label = label("array texture");
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common("array texture"),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 16, 16, 4)
+                        .unwrap(),
+                    3,
+                    1,
+                    GpuTextureFormat::Rgba8Unorm,
+                    GpuTextureUsages::new(&texture_label, [GpuTextureUsage::Sampled]).unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let first =
+            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 0, 2, GpuTextureAspect::Color)
+                .unwrap();
+        let overlapping =
+            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 1, 2, GpuTextureAspect::All)
+                .unwrap();
+        let disjoint_mip =
+            GpuTextureSubresourceRange::new(&texture_label, 1, 1, 0, 2, GpuTextureAspect::Color)
+                .unwrap();
+        assert!(GpuTextureSubresourceRange::checked_for(&texture, first).is_ok());
+        assert!(first.overlaps(overlapping, GpuTextureAspect::Color));
+        assert!(!first.overlaps(disjoint_mip, GpuTextureAspect::Color));
+
+        let mip_out_of_bounds =
+            GpuTextureSubresourceRange::new(&texture_label, 2, 2, 0, 1, GpuTextureAspect::Color)
+                .unwrap();
+        assert_eq!(
+            GpuTextureSubresourceRange::checked_for(&texture, mip_out_of_bounds)
+                .unwrap_err()
+                .cause(),
+            GpuAccessCause::OutOfBounds
+        );
+        let layer_out_of_bounds =
+            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 3, 2, GpuTextureAspect::Color)
+                .unwrap();
+        assert_eq!(
+            GpuTextureSubresourceRange::checked_for(&texture, layer_out_of_bounds)
+                .unwrap_err()
+                .cause(),
+            GpuAccessCause::OutOfBounds
+        );
+        let invalid_aspect = GpuTextureSubresourceRange::new(
+            &texture_label,
+            0,
+            1,
+            0,
+            1,
+            GpuTextureAspect::DepthOnly,
+        )
+        .unwrap();
+        assert_eq!(
+            GpuTextureSubresourceRange::checked_for(&texture, invalid_aspect)
+                .unwrap_err()
+                .cause(),
+            GpuAccessCause::InvalidTextureAspect
+        );
+    }
+
+    #[test]
+    fn d3_mips_are_addressed_as_whole_volumes() {
+        let mut allocator = allocator();
+        let volume_label = label("volume texture");
+        let volume = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common("volume texture"),
+                    GpuTextureDimension::D3,
+                    GpuTextureExtent::new(&volume_label, GpuTextureDimension::D3, 8, 8, 8).unwrap(),
+                    4,
+                    1,
+                    GpuTextureFormat::Rgba8Unorm,
+                    GpuTextureUsages::new(&volume_label, [GpuTextureUsage::Sampled]).unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let whole_volume = GpuTextureSubresourceRange::whole(&volume).unwrap();
+        assert_eq!(whole_volume.mip_level_count(), 4);
+        assert_eq!(whole_volume.base_array_layer(), 0);
+        assert_eq!(whole_volume.array_layer_count(), 1);
+        let sliced_volume =
+            GpuTextureSubresourceRange::new(&volume_label, 0, 1, 1, 1, GpuTextureAspect::Color)
+                .unwrap();
+        assert_eq!(
+            GpuTextureSubresourceRange::checked_for(&volume, sliced_volume)
+                .unwrap_err()
+                .cause(),
+            GpuAccessCause::InvalidD3Interpretation
         );
     }
 }

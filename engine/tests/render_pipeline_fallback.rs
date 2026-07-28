@@ -193,7 +193,7 @@ fn pipeline_pass(
         pass_id: "runenwerk.editor.material".to_string(),
         pass_label: "runenwerk.editor.material".to_string(),
         pass_kind: FlowPassKind::Fullscreen,
-        order_index: 1,
+        authoring_index: 1,
         feature_id: consumes_material_resources.then(|| "feature.material".to_string()),
         shader_id: shader_id.to_string(),
         shader_revision,

@@ -176,8 +176,8 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         "compute runtime path should consume prepare-projected dispatch values"
     );
     assert!(
-        render_flow.contains("for pass in &flow.execution.passes"),
-        "renderer must execute compiled execution plans instead of raw pass graph arrays"
+        render_flow.contains("ordered_payloads()?"),
+        "renderer must schedule execution payloads through prepared G3 node order"
     );
     assert!(
         !render_flow.contains("for pass in &flow.pass_order"),
@@ -237,6 +237,81 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         assert!(
             !pipeline_cache.contains(symbol),
             "pipeline cache ECS resource must remain canonical stats-only sink; found legacy symbol '{symbol}'"
+        );
+    }
+}
+
+#[test]
+fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar() {
+    let production = read_render_production_sources();
+    let retired = [
+        "CompiledResourceAccessKind",
+        "CompiledResourceLifetimeWindow",
+        "compile_resource_lifetime_windows",
+        "diagnose_resource_lifetime_windows",
+        "GpuPrimitiveResourceAccessKind",
+        "GpuPrimitiveResourceAccess",
+        "GpuPrimitiveDispatchResource",
+        "PassDependencyCycleDetected",
+        "UnknownPassDependency",
+    ];
+    let offenders = production
+        .iter()
+        .flat_map(|(file, source)| {
+            retired
+                .iter()
+                .filter(move |retired| source.contains(**retired))
+                .map(move |retired| format!("{file}: {retired}"))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        offenders.is_empty(),
+        "retired renderer correctness authority remains: {offenders:?}"
+    );
+    assert!(
+        !Path::new("src/plugins/render/graph/resource_lifetimes.rs").exists(),
+        "the retired renderer lifetime-analysis module must remain deleted"
+    );
+
+    let pass_graph = read("src/plugins/render/graph/pass_graph.rs");
+    for retired_field in ["pub reads:", "pub writes:", "pub depends_on:"] {
+        assert!(
+            !pass_graph.contains(retired_field),
+            "RenderPassNode must not restore generic correctness field '{retired_field}'"
+        );
+    }
+    assert!(pass_graph.contains("pub non_data_order_after: Vec<RenderPassId>"));
+
+    let adapter = read("src/plugins/render/adapters/gpu_work.rs");
+    let sidecar_start = adapter
+        .find("struct RenderGpuWorkSidecar")
+        .expect("render G3 adapter should define its private sidecar");
+    let sidecar_tail = &adapter[sidecar_start..];
+    let sidecar_end = sidecar_tail
+        .find("\n}\n\nimpl RenderGpuWorkSidecar")
+        .expect("sidecar declaration should precede its implementation");
+    let sidecar = &sidecar_tail[..sidecar_end];
+    assert!(sidecar.contains("BTreeMap<GpuPreparedWorkNodeId, RenderGpuWorkPayload>"));
+    for forbidden_truth in [
+        "GpuResourceAccess",
+        "GpuCapabilityRequirements",
+        "GpuInitialCoverage",
+        "GpuWorkDependency",
+        "topological_order",
+    ] {
+        assert!(
+            !sidecar.contains(forbidden_truth),
+            "render sidecar must not contain generic graph truth '{forbidden_truth}'"
+        );
+    }
+
+    let execute = read("src/plugins/render/renderer/render_flow/execute.rs");
+    let schedule = function_body(&execute, "fn schedule_invocation_passes<'a>(");
+    assert!(schedule.contains(".ordered_payloads()?"));
+    for alternate_order in ["flow.execution.passes", "topological_sort", "sort_by"] {
+        assert!(
+            !schedule.contains(alternate_order),
+            "runtime scheduling must not restore alternate order path '{alternate_order}'"
         );
     }
 }

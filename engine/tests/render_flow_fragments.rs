@@ -205,7 +205,7 @@ fn fragment_merge_qualifies_labels_and_compiles_normal_render_flow() {
         merged.flow.pass_id("compositor::compose").is_some(),
         "fragment pass labels must be namespace qualified"
     );
-    assert_eq!(merged.flow.pass_order().unwrap().len(), 1);
+    assert_eq!(merged.flow.prepared_pass_order().unwrap().len(), 1);
     let flow_id = merged.flow.id().to_string();
     assert_eq!(
         merged.report.generated_flow_id.as_deref(),

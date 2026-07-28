@@ -670,6 +670,18 @@ impl GpuComputeOperation {
     }
 }
 
+/// Checked render-operation construction cannot be bypassed through fields.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuRenderOperation;
+///
+/// let _unchecked = GpuRenderOperation {
+///     color_attachments: Vec::new(),
+///     depth_stencil_attachment: None,
+///     draws: Vec::new(),
+///     timestamp_writes: Vec::new(),
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuRenderOperation {
     color_attachments: Vec<GpuRenderColorAttachment>,
@@ -1783,7 +1795,11 @@ mod tests {
         GpuTextureExtent, GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages,
         GpuWorkResourceIdAllocator,
     };
-    use std::num::NonZeroU64;
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+        num::NonZeroU64,
+    };
 
     fn label(value: &str) -> GpuResourceLabel {
         GpuResourceLabel::new(value).unwrap()
@@ -1803,6 +1819,12 @@ mod tests {
 
     fn allocator() -> GpuWorkResourceIdAllocator {
         GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(73).unwrap())
+    }
+
+    fn semantic_hash(value: impl Hash) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
     }
 
     fn buffer(
@@ -1825,11 +1847,20 @@ mod tests {
             .unwrap()
     }
 
-    fn texture(
-        allocator: &mut GpuWorkResourceIdAllocator,
-        name: &str,
+    #[derive(Clone, Copy)]
+    struct TestTextureShape {
+        width: u32,
+        height: u32,
+        layers: u32,
+        mip_levels: u32,
         sample_count: u32,
         format: GpuTextureFormat,
+    }
+
+    fn texture_with_shape(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        name: &str,
+        shape: TestTextureShape,
         usages: impl IntoIterator<Item = GpuTextureUsage>,
     ) -> GpuTextureHandle {
         let label = label(name);
@@ -1838,10 +1869,17 @@ mod tests {
                 GpuTextureDescriptor::new(
                     common(name),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(&label, GpuTextureDimension::D2, 16, 16, 1).unwrap(),
-                    1,
-                    sample_count,
-                    format,
+                    GpuTextureExtent::new(
+                        &label,
+                        GpuTextureDimension::D2,
+                        shape.width,
+                        shape.height,
+                        shape.layers,
+                    )
+                    .unwrap(),
+                    shape.mip_levels,
+                    shape.sample_count,
+                    shape.format,
                     GpuTextureUsages::new(&label, usages).unwrap(),
                     GpuTextureInitialization::Uninitialized,
                 )
@@ -1850,17 +1888,42 @@ mod tests {
             .unwrap()
     }
 
+    fn texture(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        name: &str,
+        sample_count: u32,
+        format: GpuTextureFormat,
+        usages: impl IntoIterator<Item = GpuTextureUsage>,
+    ) -> GpuTextureHandle {
+        texture_with_shape(
+            allocator,
+            name,
+            TestTextureShape {
+                width: 16,
+                height: 16,
+                layers: 1,
+                mip_levels: 1,
+                sample_count,
+                format,
+            },
+            usages,
+        )
+    }
+
     #[test]
     fn clear_values_are_finite_normalized_and_canonical() {
-        assert_eq!(
-            GpuColorClearValue::new(-0.0, 0.0, 1.0, 1.0).unwrap(),
-            GpuColorClearValue::new(0.0, -0.0, 1.0, 1.0).unwrap()
-        );
-        assert_eq!(
-            GpuDepthClearValue::new(-0.0).unwrap(),
-            GpuDepthClearValue::new(0.0).unwrap()
-        );
+        let negative_zero = GpuColorClearValue::new(-0.0, 0.0, 1.0, 1.0).unwrap();
+        let positive_zero = GpuColorClearValue::new(0.0, -0.0, 1.0, 1.0).unwrap();
+        assert_eq!(negative_zero, positive_zero);
+        assert_eq!(semantic_hash(negative_zero), semantic_hash(positive_zero));
+        assert_eq!(negative_zero.components()[0].to_bits(), 0.0_f64.to_bits());
+        let negative_zero = GpuDepthClearValue::new(-0.0).unwrap();
+        let positive_zero = GpuDepthClearValue::new(0.0).unwrap();
+        assert_eq!(negative_zero, positive_zero);
+        assert_eq!(semantic_hash(negative_zero), semantic_hash(positive_zero));
+        assert_eq!(negative_zero.value().to_bits(), 0.0_f32.to_bits());
         assert!(GpuColorClearValue::new(f64::NAN, 0.0, 0.0, 1.0).is_err());
+        assert!(GpuColorClearValue::new(f64::INFINITY, 0.0, 0.0, 1.0).is_err());
         assert!(GpuColorClearValue::new(1.1, 0.0, 0.0, 1.0).is_err());
         assert!(GpuDepthClearValue::new(f32::INFINITY).is_err());
         assert!(GpuDepthClearValue::new(-0.1).is_err());
@@ -2026,6 +2089,76 @@ mod tests {
     }
 
     #[test]
+    fn multisample_resolve_rejects_extent_and_subresource_mismatches() {
+        let mut allocator = allocator();
+        let source = texture(
+            &mut allocator,
+            "multisample source",
+            4,
+            GpuTextureFormat::Rgba8Unorm,
+            [GpuTextureUsage::ColorAttachment],
+        );
+        let wrong_extent = texture_with_shape(
+            &mut allocator,
+            "wrong extent",
+            TestTextureShape {
+                width: 8,
+                height: 8,
+                layers: 1,
+                mip_levels: 1,
+                sample_count: 1,
+                format: GpuTextureFormat::Rgba8Unorm,
+            },
+            [GpuTextureUsage::ColorAttachment],
+        );
+        let source_range = GpuTextureSubresourceRange::whole(&source).unwrap();
+        let wrong_extent_resolve = GpuMultisampleResolveTarget::new(
+            GpuTextureAccessResource::Texture(wrong_extent.clone()),
+            GpuTextureSubresourceRange::whole(&wrong_extent).unwrap(),
+        )
+        .unwrap();
+        assert!(GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(source.clone()),
+            source_range,
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Discard,
+            Some(wrong_extent_resolve),
+        )
+        .is_err());
+
+        let extra_mip = texture_with_shape(
+            &mut allocator,
+            "extra destination mip",
+            TestTextureShape {
+                width: 16,
+                height: 16,
+                layers: 1,
+                mip_levels: 2,
+                sample_count: 1,
+                format: GpuTextureFormat::Rgba8Unorm,
+            },
+            [GpuTextureUsage::ColorAttachment],
+        );
+        let mismatched_subresources = GpuMultisampleResolveTarget::new(
+            GpuTextureAccessResource::Texture(extra_mip.clone()),
+            GpuTextureSubresourceRange::whole(&extra_mip).unwrap(),
+        )
+        .unwrap();
+        assert!(GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(source),
+            source_range,
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Discard,
+            Some(mismatched_subresources),
+        )
+        .is_err());
+    }
+
+    #[test]
     fn load_store_only_render_is_rejected_but_clear_and_timestamp_are_work() {
         let mut allocator = allocator();
         let target = texture(
@@ -2044,6 +2177,8 @@ mod tests {
             None,
         )
         .unwrap();
+        assert!(load.source_access().kind().reads());
+        assert!(load.source_access().kind().writes());
         assert!(GpuRenderOperation::new([load], None, [], []).is_err());
         let clear = GpuRenderColorAttachment::new(
             GpuTextureAccessResource::Texture(target),
@@ -2066,7 +2201,72 @@ mod tests {
             GpuQueryAccessKind::WriteTimestamp,
         )
         .unwrap();
+        assert!(
+            GpuResourceAccess::Query(query.clone())
+                .derived_requirements()
+                .unwrap()
+                .get(GpuCapabilityFeature::TimestampQuery)
+                .is_some()
+        );
         assert!(GpuRenderOperation::new([], None, [], [query]).is_ok());
+    }
+
+    #[test]
+    fn depth_attachment_load_clear_store_and_requirements_are_typed() {
+        let mut allocator = allocator();
+        let depth = texture(
+            &mut allocator,
+            "depth",
+            1,
+            GpuTextureFormat::Depth32Float,
+            [GpuTextureUsage::DepthStencilAttachment],
+        );
+        let range = GpuTextureSubresourceRange::whole(&depth).unwrap();
+        let read_only = GpuRenderDepthStencilAttachment::new(
+            GpuTextureAccessResource::Texture(depth.clone()),
+            range,
+            GpuDepthStencilAccess::ReadOnly,
+            GpuDepthAttachmentLoad::Load,
+            GpuAttachmentStore::Store,
+        )
+        .unwrap();
+        assert!(read_only.source_access().kind().reads());
+        assert!(!read_only.source_access().kind().writes());
+        assert!(
+            GpuRenderDepthStencilAttachment::new(
+                GpuTextureAccessResource::Texture(depth.clone()),
+                range,
+                GpuDepthStencilAccess::ReadOnly,
+                GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(1.0).unwrap()),
+                GpuAttachmentStore::Store,
+            )
+            .is_err()
+        );
+
+        let clear = GpuRenderDepthStencilAttachment::new(
+            GpuTextureAccessResource::Texture(depth),
+            range,
+            GpuDepthStencilAccess::ReadWrite,
+            GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
+            GpuAttachmentStore::Discard,
+        )
+        .unwrap();
+        assert!(!clear.source_access().kind().reads());
+        assert!(clear.source_access().kind().writes());
+        let operation =
+            GpuWorkOperation::Render(GpuRenderOperation::new([], Some(clear), [], []).unwrap());
+        let requirements = operation.derived_requirements().unwrap();
+        assert!(
+            requirements
+                .get(GpuCapabilityFeature::RenderPipeline)
+                .is_some()
+        );
+        assert!(
+            requirements
+                .get(GpuCapabilityFeature::DepthAttachment)
+                .is_some()
+        );
+        assert_eq!(operation.derived_accesses().unwrap().len(), 1);
     }
 
     #[test]
@@ -2079,18 +2279,16 @@ mod tests {
             2048,
             [GpuBufferUsage::CopyDestination],
         );
-        assert!(
-            GpuCopyOperation::buffer_to_buffer(
-                GpuBufferRegion::new(&source, GpuBufferRange::new(&source, 0, 64).unwrap())
-                    .unwrap(),
-                GpuBufferRegion::new(
-                    &destination,
-                    GpuBufferRange::new(&destination, 0, 64).unwrap(),
-                )
-                .unwrap(),
+        let buffer_copy = GpuCopyOperation::buffer_to_buffer(
+            GpuBufferRegion::new(&source, GpuBufferRange::new(&source, 0, 64).unwrap()).unwrap(),
+            GpuBufferRegion::new(
+                &destination,
+                GpuBufferRange::new(&destination, 0, 64).unwrap(),
             )
-            .is_ok()
-        );
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(buffer_copy.derived_accesses().unwrap().len(), 2);
         let texture_source = texture(
             &mut allocator,
             "texture source",
@@ -2124,13 +2322,20 @@ mod tests {
         .unwrap();
         let source_layout = GpuBufferTextureLayout::new(&source, 0, 64, 0).unwrap();
         let destination_layout = GpuBufferTextureLayout::new(&destination, 0, 64, 0).unwrap();
-        assert!(
-            GpuCopyOperation::buffer_to_texture(source_layout, destination_region.clone()).is_ok()
-        );
-        assert!(
-            GpuCopyOperation::texture_to_buffer(source_region.clone(), destination_layout).is_ok()
-        );
-        assert!(GpuCopyOperation::texture_to_texture(source_region, destination_region).is_ok());
+        let buffer_texture =
+            GpuCopyOperation::buffer_to_texture(source_layout, destination_region.clone()).unwrap();
+        let accesses = buffer_texture.derived_accesses().unwrap();
+        assert_eq!(accesses.len(), 2);
+        assert!(matches!(
+            &accesses[0],
+            GpuResourceAccess::Buffer(access) if access.range().size() == 1_024
+        ));
+        let texture_buffer =
+            GpuCopyOperation::texture_to_buffer(source_region.clone(), destination_layout).unwrap();
+        assert_eq!(texture_buffer.derived_accesses().unwrap().len(), 2);
+        let texture_texture =
+            GpuCopyOperation::texture_to_texture(source_region, destination_region).unwrap();
+        assert_eq!(texture_texture.derived_accesses().unwrap().len(), 2);
         let invalid_layout = GpuBufferTextureLayout::new(&source, 0, 63, 0).unwrap();
         assert!(
             GpuCopyOperation::buffer_to_texture(
@@ -2161,6 +2366,26 @@ mod tests {
             GpuBufferRegion::new(&zero, GpuBufferRange::new(&zero, 8, 16).unwrap()).unwrap();
         let clear = GpuClearOperation::buffer_zero(zero_region).unwrap();
         assert_eq!(clear.derived_accesses().unwrap().len(), 1);
+        assert!(
+            GpuWorkOperation::Clear(clear.clone())
+                .derived_requirements()
+                .unwrap()
+                .get(GpuCapabilityFeature::Copy)
+                .is_some()
+        );
+        let wrong_zero = buffer(&mut allocator, "wrong zero", 64, [GpuBufferUsage::Storage]);
+        assert_eq!(
+            GpuClearOperation::buffer_zero(
+                GpuBufferRegion::new(
+                    &wrong_zero,
+                    GpuBufferRange::new(&wrong_zero, 0, 16).unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap_err()
+            .cause(),
+            GpuWorkOperationCause::InvalidBufferZero
+        );
 
         let queries = allocator
             .allocate_query_set_handle(
@@ -2183,8 +2408,26 @@ mod tests {
         assert_eq!(operation.destination_range().offset(), 8);
         assert_eq!(operation.destination_range().size(), 16);
         assert_eq!(
+            operation.source_access().kind(),
+            GpuQueryAccessKind::ResolveSource
+        );
+        assert_eq!(
             operation.destination_access().kind(),
             GpuBufferAccessKind::QueryResolveDestination
+        );
+        assert_eq!(
+            GpuWorkOperation::Resolve(operation.clone())
+                .derived_accesses()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(
+            GpuWorkOperation::Resolve(operation.clone())
+                .derived_requirements()
+                .unwrap()
+                .get(GpuCapabilityFeature::TimestampQuery)
+                .is_some()
         );
 
         let wrong_usage = buffer(
@@ -2255,5 +2498,100 @@ mod tests {
                 GpuCapabilityFeature::Compute
             ))
         );
+    }
+
+    #[test]
+    fn indirect_storage_and_presentation_requirements_are_derived() {
+        let mut allocator = allocator();
+        let arguments = buffer(
+            &mut allocator,
+            "indirect arguments",
+            64,
+            [GpuBufferUsage::Indirect],
+        );
+        let indirect = GpuDrawIntent::indirect(
+            &arguments,
+            GpuBufferRange::new(&arguments, 0, 16).unwrap(),
+            false,
+        )
+        .unwrap();
+        let render =
+            GpuWorkOperation::Render(GpuRenderOperation::new([], None, [indirect], []).unwrap());
+        let requirements = render.derived_requirements().unwrap();
+        assert!(
+            requirements
+                .get(GpuCapabilityFeature::RenderPipeline)
+                .is_some()
+        );
+        assert!(
+            requirements
+                .get(GpuCapabilityFeature::IndirectDraw)
+                .is_some()
+        );
+
+        let storage = texture(
+            &mut allocator,
+            "storage texture",
+            1,
+            GpuTextureFormat::Rgba8Unorm,
+            [GpuTextureUsage::StorageRead, GpuTextureUsage::StorageWrite],
+        );
+        let storage_access = GpuResourceAccess::Texture(
+            GpuTextureAccess::new(
+                GpuTextureAccessResource::Texture(storage.clone()),
+                GpuTextureSubresourceRange::whole(&storage).unwrap(),
+                GpuTextureAccessKind::StorageReadWrite,
+            )
+            .unwrap(),
+        );
+        assert!(
+            storage_access
+                .derived_requirements()
+                .unwrap()
+                .get(GpuCapabilityFeature::StorageTexture)
+                .is_some()
+        );
+
+        let present_source = texture_with_shape(
+            &mut allocator,
+            "present source",
+            TestTextureShape {
+                width: 16,
+                height: 16,
+                layers: 1,
+                mip_levels: 2,
+                sample_count: 1,
+                format: GpuTextureFormat::Rgba8Unorm,
+            },
+            [GpuTextureUsage::ColorAttachment],
+        );
+        assert!(
+            GpuPresentOperation::new(
+                GpuTextureAccessResource::Texture(present_source.clone()),
+                GpuTextureSubresourceRange::whole(&present_source).unwrap(),
+            )
+            .is_err()
+        );
+        let one_mip = GpuTextureSubresourceRange::new(
+            present_source.descriptor().common().label(),
+            1,
+            1,
+            0,
+            1,
+            GpuTextureAspect::Color,
+        )
+        .unwrap();
+        let present = GpuWorkOperation::Present(
+            GpuPresentOperation::new(GpuTextureAccessResource::Texture(present_source), one_mip)
+                .unwrap(),
+        );
+        assert!(
+            present
+                .derived_requirements()
+                .unwrap()
+                .get(GpuCapabilityFeature::Presentation)
+                .is_some()
+        );
+        assert!(present.derived_accesses().unwrap()[0].reads());
     }
 }

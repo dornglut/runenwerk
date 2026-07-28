@@ -679,7 +679,7 @@ fn build_prepared_flow_inputs(
     for flow in compiled_flows {
         let mut projected_uniform_bytes = BTreeMap::<GpuWorkResourceId, Vec<u8>>::new();
 
-        for pass in &flow.pass_order {
+        for pass in &flow.render_passes {
             for binding in &pass.node().uniform_bindings {
                 if !flow.resources.has_state_resource(binding.state_type_id()) {
                     anyhow::bail!(
@@ -737,7 +737,7 @@ fn build_prepared_flow_inputs(
         project_fixed_step_region_uniforms(flow, extracted_state, &mut projected_uniform_bytes)?;
 
         let mut projected_dispatch_workgroups = BTreeMap::<RenderPassId, [u32; 3]>::new();
-        for pass in &flow.pass_order {
+        for pass in &flow.render_passes {
             if !matches!(pass.node().kind, RenderPassKind::Compute) {
                 continue;
             }
@@ -754,12 +754,26 @@ fn build_prepared_flow_inputs(
             })
             .collect::<Vec<_>>();
 
+        let prepared_work = prepare_render_gpu_work(
+            flow,
+            &projected_dispatch_workgroups,
+            surface_size,
+            RenderGpuWorkInstrumentation::Disabled,
+        )?;
+        let timestamped_work = prepare_render_gpu_work(
+            flow,
+            &projected_dispatch_workgroups,
+            surface_size,
+            RenderGpuWorkInstrumentation::TimestampQueries,
+        )?;
         outputs.insert(
             flow.flow_id,
             PreparedFlowInputs {
                 projected_uniform_bytes,
                 projected_dispatch_workgroups,
                 required_state_types,
+                prepared_work: Some(prepared_work),
+                timestamped_work: Some(timestamped_work),
             },
         );
     }

@@ -155,16 +155,16 @@ fn validate_merge_references(
             }
         }
 
-        for dependency in &pass.dependencies {
-            if matches!(dependency, RenderFragmentLabelRef::Absolute(label) if flow.resolve_pass_id(label).is_none())
+        for ordered_before in &pass.non_data_order_after {
+            if matches!(ordered_before, RenderFragmentLabelRef::Absolute(label) if flow.resolve_pass_id(label).is_none())
             {
                 diagnostics.push(
                     RenderFragmentDiagnostic::error(
                         RenderFragmentDiagnosticKind::MissingPassReference,
                         format!(
-                            "pass '{}' depends on missing absolute pass '{}'",
+                            "pass '{}' orders after missing absolute pass '{}'",
                             pass.label,
-                            dependency.raw_label()
+                            ordered_before.raw_label()
                         ),
                     )
                     .with_package(package)
@@ -229,13 +229,13 @@ fn merge_fragment_into_flow(
             pass.label.clone(),
             generated_label,
         ));
-        for dependency in &pass.dependencies {
+        for ordered_before in &pass.non_data_order_after {
             report.provenance.push(provenance_record(
                 package,
                 fragment,
-                RenderFragmentProvenanceElementKind::Dependency,
-                dependency.raw_label().to_string(),
-                dependency.resolve(&fragment.namespace),
+                RenderFragmentProvenanceElementKind::NonDataOrder,
+                ordered_before.raw_label().to_string(),
+                ordered_before.resolve(&fragment.namespace),
             ));
         }
     }
@@ -264,8 +264,8 @@ fn merge_pass_into_flow(
             if let Some(dispatch) = pass.compute_dispatch {
                 builder = builder.dispatch(dispatch);
             }
-            for dependency in &pass.dependencies {
-                builder = builder.depends_on(dependency.resolve(namespace));
+            for ordered_before in &pass.non_data_order_after {
+                builder = builder.order_after(ordered_before.resolve(namespace));
             }
             Ok(builder.finish())
         }
@@ -297,8 +297,8 @@ fn merge_pass_into_flow(
             if let Some(clear_color) = pass.clear_color {
                 builder = builder.clear_color(clear_color);
             }
-            for dependency in &pass.dependencies {
-                builder = builder.depends_on(dependency.resolve(namespace));
+            for ordered_before in &pass.non_data_order_after {
+                builder = builder.order_after(ordered_before.resolve(namespace));
             }
             Ok(builder.finish())
         }
@@ -341,8 +341,8 @@ fn merge_pass_into_flow(
                     draw.first_instance,
                 );
             }
-            for dependency in &pass.dependencies {
-                builder = builder.depends_on(dependency.resolve(namespace));
+            for ordered_before in &pass.non_data_order_after {
+                builder = builder.order_after(ordered_before.resolve(namespace));
             }
             Ok(builder.finish())
         }
@@ -355,8 +355,8 @@ fn merge_pass_into_flow(
             if let Some(destination) = &pass.copy_destination {
                 builder = builder.destination(destination.resolve(namespace));
             }
-            for dependency in &pass.dependencies {
-                builder = builder.depends_on(dependency.resolve(namespace));
+            for ordered_before in &pass.non_data_order_after {
+                builder = builder.order_after(ordered_before.resolve(namespace));
             }
             Ok(builder.finish())
         }
@@ -371,8 +371,8 @@ fn merge_pass_into_flow(
             if let Some(source) = &pass.present_source {
                 builder = builder.source(source.resolve(namespace));
             }
-            for dependency in &pass.dependencies {
-                builder = builder.depends_on(dependency.resolve(namespace));
+            for ordered_before in &pass.non_data_order_after {
+                builder = builder.order_after(ordered_before.resolve(namespace));
             }
             Ok(builder.finish())
         }
@@ -381,8 +381,8 @@ fn merge_pass_into_flow(
             if pass.view_scope == RenderPassViewScope::MainSurfaceOnly {
                 builder = builder.main_surface_only();
             }
-            for dependency in &pass.dependencies {
-                builder = builder.depends_on(dependency.resolve(namespace));
+            for ordered_before in &pass.non_data_order_after {
+                builder = builder.order_after(ordered_before.resolve(namespace));
             }
             Ok(builder.finish())
         }

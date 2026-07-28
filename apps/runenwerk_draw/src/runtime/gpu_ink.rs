@@ -87,7 +87,6 @@ fn build_drawing_ink_gpu_flow() -> Result<(RenderFlow, DrawingInkGpuFlowResource
         .offscreen_products_only()
         .source(DRAWING_GPU_INK_SCRATCH_TARGET)
         .destination(DRAWING_GPU_INK_OUTPUT_ALIAS)
-        .depends_on(DRAWING_GPU_INK_COMPUTE_PASS)
         .finish()
         .validate()
         .expect("drawing GPU ink proof flow should validate");

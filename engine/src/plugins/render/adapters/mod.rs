@@ -6,7 +6,9 @@
 mod gpu_capabilities;
 mod gpu_data;
 mod gpu_resources;
+mod gpu_work;
 
 pub use gpu_capabilities::*;
 pub use gpu_data::*;
 pub use gpu_resources::*;
+pub use gpu_work::*;

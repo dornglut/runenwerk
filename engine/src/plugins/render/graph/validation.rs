@@ -10,16 +10,21 @@ use crate::plugins::render::{
     RenderTextureDescriptor, RenderTextureFormatPolicy,
 };
 use crate::plugins::render::{RenderPassId, RenderTargetAliasKind, RenderVertexStepMode};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FlowValidationReport {
-    pub pass_order: Vec<RenderPassId>,
+    /// Lexical authoring identities only. Generic dependency and ordering
+    /// authority lives on `GpuPreparedWorkGraph`.
+    pub lexical_pass_ids: Vec<RenderPassId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RenderFlowValidationIssue {
+    #[error("render flow cannot lower to checked GPU work: {message}")]
+    GpuWorkLoweringFailed { message: String },
+
     #[error("duplicate resource id '{resource_id:?}'")]
     DuplicateResourceId { resource_id: GpuWorkResourceId },
 
@@ -74,10 +79,10 @@ pub enum RenderFlowValidationIssue {
         pass_label: String,
     },
 
-    #[error("pass '{pass_label}' depends on unknown pass '{dependency_id:?}'")]
-    UnknownPassDependency {
+    #[error("pass '{pass_label}' orders after unknown pass '{ordered_before_id:?}'")]
+    UnknownNonDataOrderTarget {
         pass_label: String,
-        dependency_id: RenderPassId,
+        ordered_before_id: RenderPassId,
     },
 
     #[error("pass '{pass_label}' references unknown resource '{resource_id:?}'")]
@@ -124,20 +129,15 @@ pub enum RenderFlowValidationIssue {
     MultiplePresentPasses { count: usize, labels: String },
 
     #[error(
-        "present pass '{present_label}' must be terminal but is a dependency for ({dependent_labels})"
+        "present pass '{present_label}' must be terminal but later passes order after it ({ordered_after_labels})"
     )]
     PresentPassNotTerminal {
         present_label: String,
-        dependent_labels: String,
+        ordered_after_labels: String,
     },
 
-    #[error(
-        "present pass '{present_label}' must be the final execution node; add explicit depends_on edges so it orders last"
-    )]
+    #[error("present pass '{present_label}' must be declared last in render authoring order")]
     PresentPassNotLast { present_label: String },
-
-    #[error("pass dependency cycle detected: {cycle_labels}")]
-    PassDependencyCycleDetected { cycle_labels: String },
 
     #[error("fixed-step region '{region_label}' must declare max_substeps greater than zero")]
     FixedStepRegionInvalidMaxSubsteps { region_label: String },
@@ -364,22 +364,22 @@ pub enum RenderFlowValidationIssue {
         stride: u64,
     },
 
+    #[error("copy pass '{pass_label}' must declare one source and one destination")]
+    CopyPassMissingEndpoints { pass_label: String },
+
+    #[error("copy pass '{pass_label}' contains roles other than copy endpoints or non-data order")]
+    CopyPassHasInvalidRoles { pass_label: String },
+
+    #[error("present pass '{pass_label}' must declare one present source")]
+    PresentPassMissingSource { pass_label: String },
+
+    #[error("present pass '{pass_label}' cannot declare resource-write roles")]
+    PresentPassHasWriteRoles { pass_label: String },
+
     #[error(
-        "copy pass '{pass_label}' must declare exactly one reads(...) and one writes(...) resource"
+        "present pass '{pass_label}' contains roles other than present source or non-data order"
     )]
-    CopyPassInvalidArity { pass_label: String },
-
-    #[error("copy pass '{pass_label}' only supports reads/writes/depends_on")]
-    CopyPassInvalidFields { pass_label: String },
-
-    #[error("present pass '{pass_label}' must declare exactly one reads(...) resource")]
-    PresentPassInvalidReadArity { pass_label: String },
-
-    #[error("present pass '{pass_label}' cannot declare writes(...) resources")]
-    PresentPassHasWrites { pass_label: String },
-
-    #[error("present pass '{pass_label}' only supports reads/depends_on")]
-    PresentPassInvalidFields { pass_label: String },
+    PresentPassHasInvalidRoles { pass_label: String },
 
     #[error(
         "pass '{pass_label}' samples resource '{resource_id:?}' which is not texture-like (kind: {resource_kind})"
@@ -518,20 +518,20 @@ pub enum RenderFlowValidationIssue {
     #[error("builtin_ui_composite pass '{pass_label}' cannot declare uniform bindings")]
     BuiltinUiHasUniformBindings { pass_label: String },
 
-    #[error("builtin_ui_composite pass '{pass_label}' only supports writes/depends_on")]
+    #[error("builtin_ui_composite pass '{pass_label}' contains unsupported resource-binding roles")]
     BuiltinUiInvalidResourceBindings { pass_label: String },
 
     #[error(
-        "builtin_ui_composite pass '{pass_label}' must not declare reads(...); UI input comes from PreparedRenderFrame::ui()"
+        "builtin_ui_composite pass '{pass_label}' must not declare storage, copy, or present roles; UI input comes from PreparedRenderFrame::ui()"
     )]
-    BuiltinUiHasReads { pass_label: String },
+    BuiltinUiHasInvalidResourceRoles { pass_label: String },
 
     #[error(
-        "builtin_ui_composite pass '{pass_label}' must declare exactly one writes(...) resource; found {write_count}"
+        "builtin_ui_composite pass '{pass_label}' must declare exactly one color output; found {output_count}"
     )]
-    BuiltinUiInvalidWriteArity {
+    BuiltinUiInvalidColorOutputArity {
         pass_label: String,
-        write_count: usize,
+        output_count: usize,
     },
 }
 
@@ -595,11 +595,11 @@ pub fn validate_flow_graph(
     for pass in &graph.passes.passes {
         validate_pass_shape(pass, &mut issues);
 
-        for dependency in &pass.depends_on {
-            if !pass_lookup.contains_key(dependency) {
-                issues.push(RenderFlowValidationIssue::UnknownPassDependency {
+        for ordered_before_id in &pass.non_data_order_after {
+            if !pass_lookup.contains_key(ordered_before_id) {
+                issues.push(RenderFlowValidationIssue::UnknownNonDataOrderTarget {
                     pass_label: pass.label.clone(),
-                    dependency_id: *dependency,
+                    ordered_before_id: *ordered_before_id,
                 });
             }
         }
@@ -682,8 +682,15 @@ pub fn validate_flow_graph(
         });
     }
 
-    let pass_order = topological_sort(&graph.passes.passes, &mut issues);
-    validate_fixed_step_regions(&graph.passes.passes, &pass_order, &mut issues);
+    // This is lexical render authoring order only. Generic dependency and
+    // topological authority belongs exclusively to `GpuPreparedWorkGraph`.
+    let lexical_pass_ids = graph
+        .passes
+        .passes
+        .iter()
+        .map(|pass| pass.id)
+        .collect::<Vec<_>>();
+    validate_fixed_step_regions(&graph.passes.passes, &lexical_pass_ids, &mut issues);
 
     if present_passes.len() == 1 {
         let present_pass = present_passes[0];
@@ -691,18 +698,18 @@ pub fn validate_flow_graph(
             .passes
             .passes
             .iter()
-            .filter(|pass| pass.depends_on.contains(&present_pass.id))
+            .filter(|pass| pass.non_data_order_after.contains(&present_pass.id))
             .map(|pass| pass.label.clone())
             .collect::<Vec<_>>();
 
         if !dependent_passes.is_empty() {
             issues.push(RenderFlowValidationIssue::PresentPassNotTerminal {
                 present_label: present_pass.label.clone(),
-                dependent_labels: dependent_passes.join(", "),
+                ordered_after_labels: dependent_passes.join(", "),
             });
         }
 
-        if pass_order
+        if lexical_pass_ids
             .last()
             .copied()
             .is_some_and(|id| id != present_pass.id)
@@ -714,7 +721,7 @@ pub fn validate_flow_graph(
     }
 
     if issues.is_empty() {
-        Ok(FlowValidationReport { pass_order })
+        Ok(FlowValidationReport { lexical_pass_ids })
     } else {
         Err(RenderFlowValidationError::from(issues))
     }
@@ -805,11 +812,11 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                     pass_label: pass.label.clone(),
                 });
             }
-            if pass.writes.len() != 1 {
+            if pass.color_outputs.len() != 1 {
                 issues.push(
                     RenderFlowValidationIssue::FullscreenPassInvalidColorOutputArity {
                         pass_label: pass.label.clone(),
-                        write_count: pass.writes.len(),
+                        write_count: pass.color_outputs.len(),
                     },
                 );
             }
@@ -828,11 +835,11 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                     pass_label: pass.label.clone(),
                 });
             }
-            if pass.writes.len() != 1 {
+            if pass.color_outputs.len() != 1 {
                 issues.push(
                     RenderFlowValidationIssue::GraphicsPassInvalidColorOutputArity {
                         pass_label: pass.label.clone(),
-                        write_count: pass.writes.len(),
+                        write_count: pass.color_outputs.len(),
                     },
                 );
             }
@@ -867,8 +874,8 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
             validate_graphics_draw_source(pass, issues);
         }
         RenderPassKind::Copy => {
-            if pass.reads.len() != 1 || pass.writes.len() != 1 {
-                issues.push(RenderFlowValidationIssue::CopyPassInvalidArity {
+            if pass.copy_source.is_none() || pass.copy_destination.is_none() {
+                issues.push(RenderFlowValidationIssue::CopyPassMissingEndpoints {
                     pass_label: pass.label.clone(),
                 });
             }
@@ -887,20 +894,28 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 || !pass.instance_buffers.is_empty()
                 || !pass.instance_buffer_layouts.is_empty()
                 || !pass.indirect_buffers.is_empty()
+                || !pass.storage_reads.is_empty()
+                || !pass.storage_writes.is_empty()
+                || !pass.color_outputs.is_empty()
+                || pass.present_source.is_some()
             {
-                issues.push(RenderFlowValidationIssue::CopyPassInvalidFields {
+                issues.push(RenderFlowValidationIssue::CopyPassHasInvalidRoles {
                     pass_label: pass.label.clone(),
                 });
             }
         }
         RenderPassKind::Present => {
-            if pass.reads.len() != 1 {
-                issues.push(RenderFlowValidationIssue::PresentPassInvalidReadArity {
+            if pass.present_source.is_none() {
+                issues.push(RenderFlowValidationIssue::PresentPassMissingSource {
                     pass_label: pass.label.clone(),
                 });
             }
-            if !pass.writes.is_empty() {
-                issues.push(RenderFlowValidationIssue::PresentPassHasWrites {
+            if !pass.storage_writes.is_empty()
+                || !pass.write_textures.is_empty()
+                || !pass.color_outputs.is_empty()
+                || pass.copy_destination.is_some()
+            {
+                issues.push(RenderFlowValidationIssue::PresentPassHasWriteRoles {
                     pass_label: pass.label.clone(),
                 });
             }
@@ -919,8 +934,10 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
                 || !pass.instance_buffers.is_empty()
                 || !pass.instance_buffer_layouts.is_empty()
                 || !pass.indirect_buffers.is_empty()
+                || !pass.storage_reads.is_empty()
+                || pass.copy_source.is_some()
             {
-                issues.push(RenderFlowValidationIssue::PresentPassInvalidFields {
+                issues.push(RenderFlowValidationIssue::PresentPassHasInvalidRoles {
                     pass_label: pass.label.clone(),
                 });
             }
@@ -1122,20 +1139,13 @@ fn validate_pass_resource_usage(
         RenderPassKind::Compute | RenderPassKind::Fullscreen | RenderPassKind::Graphics
     ) {
         let mut seen = BTreeSet::new();
-        for resource_id in pass.reads.iter().chain(&pass.writes).copied() {
-            let explicit_non_storage_role = pass.sampled_textures.contains(&resource_id)
-                || pass.write_textures.contains(&resource_id)
-                || pass.vertex_buffers.contains(&resource_id)
-                || pass.index_buffers.contains(&resource_id)
-                || pass.instance_buffers.contains(&resource_id)
-                || pass.indirect_buffers.contains(&resource_id)
-                || pass.depth_target == Some(resource_id)
-                || (matches!(
-                    pass.kind,
-                    RenderPassKind::Fullscreen | RenderPassKind::Graphics
-                ) && pass.writes.contains(&resource_id));
-            if !explicit_non_storage_role
-                && seen.insert(resource_id)
+        for resource_id in pass
+            .storage_reads
+            .iter()
+            .chain(&pass.storage_writes)
+            .copied()
+        {
+            if seen.insert(resource_id)
                 && matches!(
                     resources_by_id.get(&resource_id),
                     Some(RenderResourceDeclaration::Uniform(_))
@@ -1190,9 +1200,9 @@ fn validate_pass_resource_usage(
     if matches!(
         pass.kind,
         RenderPassKind::Fullscreen | RenderPassKind::Graphics
-    ) && pass.writes.len() == 1
+    ) && pass.color_outputs.len() == 1
     {
-        let output = pass.writes[0];
+        let output = pass.color_outputs[0];
         if let Some(resource) = resources_by_id.get(&output)
             && !is_raster_color_output_resource(resource)
         {
@@ -1266,43 +1276,45 @@ fn validate_pass_resource_usage(
         }
     }
 
-    if matches!(pass.kind, RenderPassKind::Copy) && pass.reads.len() == 1 && pass.writes.len() == 1
-    {
-        let read = pass.reads[0];
-        let write = pass.writes[0];
-        if let (Some(read_resource), Some(write_resource)) =
+    if matches!(pass.kind, RenderPassKind::Copy)
+        && let (Some(read), Some(write)) = (pass.copy_source, pass.copy_destination)
+        && let (Some(read_resource), Some(write_resource)) =
             (resources_by_id.get(&read), resources_by_id.get(&write))
-        {
-            let read_texture = is_texture_resource(read_resource);
-            let write_texture = is_texture_resource(write_resource);
-            let read_buffer = is_buffer_resource(read_resource);
-            let write_buffer = is_buffer_resource(write_resource);
-            if (read_texture && write_buffer) || (read_buffer && write_texture) {
-                issues.push(RenderFlowValidationIssue::CopyPassMixedResourceClasses {
-                    pass_label: pass.label.clone(),
-                    read_id: read,
-                    read_kind: resource_kind_name(read_resource),
-                    write_id: write,
-                    write_kind: resource_kind_name(write_resource),
-                });
-            }
-        }
-    }
-
-    if matches!(pass.kind, RenderPassKind::Present) && pass.reads.len() == 1 {
-        let read = pass.reads[0];
-        if let Some(resource) = resources_by_id.get(&read)
-            && !is_texture_resource(resource)
-        {
-            issues.push(RenderFlowValidationIssue::PresentPassReadsNonTexture {
+    {
+        let read_texture = is_texture_resource(read_resource);
+        let write_texture = is_texture_resource(write_resource);
+        let read_buffer = is_buffer_resource(read_resource);
+        let write_buffer = is_buffer_resource(write_resource);
+        if (read_texture && write_buffer) || (read_buffer && write_texture) {
+            issues.push(RenderFlowValidationIssue::CopyPassMixedResourceClasses {
                 pass_label: pass.label.clone(),
-                resource_id: read,
-                resource_kind: resource_kind_name(resource),
+                read_id: read,
+                read_kind: resource_kind_name(read_resource),
+                write_id: write,
+                write_kind: resource_kind_name(write_resource),
             });
         }
     }
 
-    for write in &pass.writes {
+    if matches!(pass.kind, RenderPassKind::Present)
+        && let Some(read) = pass.present_source
+        && let Some(resource) = resources_by_id.get(&read)
+        && !is_texture_resource(resource)
+    {
+        issues.push(RenderFlowValidationIssue::PresentPassReadsNonTexture {
+            pass_label: pass.label.clone(),
+            resource_id: read,
+            resource_kind: resource_kind_name(resource),
+        });
+    }
+
+    for write in pass
+        .storage_writes
+        .iter()
+        .chain(&pass.write_textures)
+        .chain(&pass.color_outputs)
+        .chain(pass.copy_destination.iter())
+    {
         let Some(resource) = resources_by_id.get(write) else {
             continue;
         };
@@ -1435,7 +1447,7 @@ fn validate_graphics_draw_source(
 
 fn validate_fixed_step_regions(
     passes: &[RenderPassNode],
-    pass_order: &[RenderPassId],
+    lexical_pass_ids: &[RenderPassId],
     issues: &mut Vec<RenderFlowValidationIssue>,
 ) {
     #[derive(Clone)]
@@ -1496,7 +1508,7 @@ fn validate_fixed_step_regions(
     }
 
     for region in regions.values() {
-        let positions = pass_order
+        let positions = lexical_pass_ids
             .iter()
             .enumerate()
             .filter_map(|(index, pass_id)| region.pass_ids.contains(pass_id).then_some(index))
@@ -1504,7 +1516,7 @@ fn validate_fixed_step_regions(
         let (Some(first), Some(last)) = (positions.first(), positions.last()) else {
             continue;
         };
-        for pass_id in &pass_order[*first..=*last] {
+        for pass_id in &lexical_pass_ids[*first..=*last] {
             if region.pass_ids.contains(pass_id) {
                 continue;
             }
@@ -1856,63 +1868,14 @@ fn validate_imported_resource_descriptors(
     }
 }
 
-fn topological_sort(
-    passes: &[RenderPassNode],
-    issues: &mut Vec<RenderFlowValidationIssue>,
-) -> Vec<RenderPassId> {
-    let mut by_id = BTreeMap::<RenderPassId, usize>::new();
-    for (index, pass) in passes.iter().enumerate() {
-        by_id.insert(pass.id, index);
-    }
-
-    let mut indegree = vec![0usize; passes.len()];
-    let mut outgoing = vec![Vec::<usize>::new(); passes.len()];
-
-    for (index, pass) in passes.iter().enumerate() {
-        for dependency in &pass.depends_on {
-            if let Some(dep_index) = by_id.get(dependency) {
-                indegree[index] = indegree[index].saturating_add(1);
-                outgoing[*dep_index].push(index);
-            }
-        }
-    }
-
-    let mut queue = VecDeque::<usize>::new();
-    for (index, degree) in indegree.iter().enumerate() {
-        if *degree == 0 {
-            queue.push_back(index);
-        }
-    }
-
-    let mut order = Vec::<RenderPassId>::with_capacity(passes.len());
-    while let Some(index) = queue.pop_front() {
-        order.push(passes[index].id);
-        for next in &outgoing[index] {
-            indegree[*next] = indegree[*next].saturating_sub(1);
-            if indegree[*next] == 0 {
-                queue.push_back(*next);
-            }
-        }
-    }
-
-    if order.len() != passes.len() {
-        let cycle_labels = indegree
-            .iter()
-            .enumerate()
-            .filter(|(_, degree)| **degree > 0)
-            .map(|(index, _)| passes[index].label.clone())
-            .collect::<Vec<_>>()
-            .join(", ");
-        issues.push(RenderFlowValidationIssue::PassDependencyCycleDetected { cycle_labels });
-    }
-
-    order
-}
-
 fn pass_resource_refs(pass: &RenderPassNode) -> impl Iterator<Item = &GpuWorkResourceId> {
-    pass.reads
+    pass.storage_reads
         .iter()
-        .chain(pass.writes.iter())
+        .chain(pass.storage_writes.iter())
+        .chain(pass.color_outputs.iter())
+        .chain(pass.copy_source.iter())
+        .chain(pass.copy_destination.iter())
+        .chain(pass.present_source.iter())
         .chain(pass.sampled_textures.iter())
         .chain(pass.write_textures.iter())
         .chain(pass.vertex_buffers.iter())

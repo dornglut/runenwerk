@@ -442,7 +442,9 @@ pub struct RenderFragmentPassDescriptor {
     pub color_outputs: Vec<RenderFragmentLabelRef>,
     pub write_surface_color: bool,
     pub depth_target: Option<RenderFragmentLabelRef>,
-    pub dependencies: Vec<RenderFragmentLabelRef>,
+    /// Genuine render-owned sequencing that is not implied by resource access.
+    /// Fragment merge lowers this immediately into G3 explicit non-data order.
+    pub non_data_order_after: Vec<RenderFragmentLabelRef>,
     pub clear_color: Option<[f32; 4]>,
     pub compute_dispatch: Option<[u32; 3]>,
     pub copy_source: Option<RenderFragmentLabelRef>,
@@ -463,7 +465,7 @@ impl RenderFragmentPassDescriptor {
             color_outputs: Vec::new(),
             write_surface_color: false,
             depth_target: None,
-            dependencies: Vec::new(),
+            non_data_order_after: Vec::new(),
             clear_color: None,
             compute_dispatch: None,
             copy_source: None,
@@ -553,13 +555,14 @@ impl RenderFragmentPassDescriptor {
         self
     }
 
-    pub fn depends_on_local(mut self, label: impl Into<String>) -> Self {
-        self.dependencies.push(RenderFragmentLabelRef::local(label));
+    pub fn order_after_local(mut self, label: impl Into<String>) -> Self {
+        self.non_data_order_after
+            .push(RenderFragmentLabelRef::local(label));
         self
     }
 
-    pub fn depends_on_absolute(mut self, label: impl Into<String>) -> Self {
-        self.dependencies
+    pub fn order_after_absolute(mut self, label: impl Into<String>) -> Self {
+        self.non_data_order_after
             .push(RenderFragmentLabelRef::absolute(label));
         self
     }
@@ -599,7 +602,7 @@ impl RenderFragmentPassDescriptor {
 pub enum RenderFragmentProvenanceElementKind {
     Resource,
     Pass,
-    Dependency,
+    NonDataOrder,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

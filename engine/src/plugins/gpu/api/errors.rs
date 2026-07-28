@@ -248,55 +248,63 @@ struct GpuWorkAuthoringErrorDetails {
     source: Option<Box<GpuWorkAuthoringErrorSource>>,
 }
 
-impl GpuWorkAuthoringError {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn invalid(
-        operation: &'static str,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GpuWorkAuthoringErrorContext {
+    fragment_label: Option<String>,
+    node_label: Option<String>,
+    node: Option<GpuWorkNodeId>,
+    resource: Option<GpuWorkResourceId>,
+    provenance: Option<GpuResourceProvenance>,
+}
+
+impl GpuWorkAuthoringErrorContext {
+    pub(crate) const fn new(
         fragment_label: Option<String>,
         node_label: Option<String>,
         node: Option<GpuWorkNodeId>,
         resource: Option<GpuWorkResourceId>,
+        provenance: Option<GpuResourceProvenance>,
+    ) -> Self {
+        Self {
+            fragment_label,
+            node_label,
+            node,
+            resource,
+            provenance,
+        }
+    }
+}
+
+impl GpuWorkAuthoringError {
+    pub(crate) fn invalid(
+        operation: &'static str,
+        context: GpuWorkAuthoringErrorContext,
         cause: GpuWorkAuthoringCause,
         correction: &'static str,
-        provenance: Option<GpuResourceProvenance>,
     ) -> Self {
         Self {
             details: Box::new(GpuWorkAuthoringErrorDetails {
                 operation,
-                fragment_label,
-                node_label,
-                node,
-                resource,
+                fragment_label: context.fragment_label,
+                node_label: context.node_label,
+                node: context.node,
+                resource: context.resource,
                 cause,
                 correction,
-                provenance,
+                provenance: context.provenance,
                 source: None,
             }),
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn with_source(
         operation: &'static str,
-        fragment_label: Option<String>,
-        node_label: Option<String>,
-        node: Option<GpuWorkNodeId>,
-        resource: Option<GpuWorkResourceId>,
+        context: GpuWorkAuthoringErrorContext,
         cause: GpuWorkAuthoringCause,
         correction: &'static str,
-        provenance: Option<GpuResourceProvenance>,
         source: GpuWorkAuthoringErrorSource,
     ) -> Self {
-        let mut error = Self::invalid(
-            operation,
-            fragment_label,
-            node_label,
-            node,
-            resource,
-            cause,
-            correction,
-            provenance,
-        );
+        let mut error = Self::invalid(operation, context, cause, correction);
         error.details.source = Some(Box::new(source));
         error
     }
@@ -414,63 +422,71 @@ struct GpuWorkGraphErrorDetails {
     source: Option<Box<GpuWorkGraphErrorSource>>,
 }
 
-impl GpuWorkGraphError {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn invalid(
-        operation: &'static str,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GpuWorkGraphErrorContext {
+    graph_label: String,
+    fragment_label: Option<String>,
+    node_label: Option<String>,
+    node: Option<GpuPreparedWorkNodeId>,
+    resource: Option<GpuWorkResourceId>,
+    region: Option<String>,
+    provenance: Option<GpuResourceProvenance>,
+}
+
+impl GpuWorkGraphErrorContext {
+    pub(crate) fn new(
         graph_label: impl Into<String>,
         fragment_label: Option<String>,
         node_label: Option<String>,
         node: Option<GpuPreparedWorkNodeId>,
         resource: Option<GpuWorkResourceId>,
         region: Option<String>,
-        cause: GpuWorkGraphCause,
-        correction: &'static str,
         provenance: Option<GpuResourceProvenance>,
     ) -> Self {
         Self {
-            details: Box::new(GpuWorkGraphErrorDetails {
-                operation,
-                graph_label: graph_label.into(),
-                fragment_label,
-                node_label,
-                node,
-                resource,
-                region,
-                cause,
-                correction,
-                provenance,
-                source: None,
-            }),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn with_source(
-        operation: &'static str,
-        graph_label: impl Into<String>,
-        fragment_label: Option<String>,
-        node_label: Option<String>,
-        node: Option<GpuPreparedWorkNodeId>,
-        resource: Option<GpuWorkResourceId>,
-        region: Option<String>,
-        cause: GpuWorkGraphCause,
-        correction: &'static str,
-        provenance: Option<GpuResourceProvenance>,
-        source: GpuWorkGraphErrorSource,
-    ) -> Self {
-        let mut error = Self::invalid(
-            operation,
-            graph_label,
+            graph_label: graph_label.into(),
             fragment_label,
             node_label,
             node,
             resource,
             region,
-            cause,
-            correction,
             provenance,
-        );
+        }
+    }
+}
+
+impl GpuWorkGraphError {
+    pub(crate) fn invalid(
+        operation: &'static str,
+        context: GpuWorkGraphErrorContext,
+        cause: GpuWorkGraphCause,
+        correction: &'static str,
+    ) -> Self {
+        Self {
+            details: Box::new(GpuWorkGraphErrorDetails {
+                operation,
+                graph_label: context.graph_label,
+                fragment_label: context.fragment_label,
+                node_label: context.node_label,
+                node: context.node,
+                resource: context.resource,
+                region: context.region,
+                cause,
+                correction,
+                provenance: context.provenance,
+                source: None,
+            }),
+        }
+    }
+
+    pub(crate) fn with_source(
+        operation: &'static str,
+        context: GpuWorkGraphErrorContext,
+        cause: GpuWorkGraphCause,
+        correction: &'static str,
+        source: GpuWorkGraphErrorSource,
+    ) -> Self {
+        let mut error = Self::invalid(operation, context, cause, correction);
         error.details.source = Some(Box::new(source));
         error
     }

@@ -298,7 +298,7 @@ fn active_flow_excludes_legacy_fullscreen_mask_architecture() {
         .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
         .expect("editor main flow should exist");
     let pass_ids = editor_flow
-        .pass_order
+        .render_passes
         .iter()
         .map(|pass| pass.pass_label().to_string())
         .collect::<Vec<_>>();
@@ -348,7 +348,7 @@ fn viewport_scene_and_overlay_products_clear_before_drawing() {
         "runenwerk.editor.viewport.product.overlay",
     ] {
         let pass = editor_flow
-            .pass_order
+            .render_passes
             .iter()
             .find(|pass| pass.pass_label() == pass_label)
             .unwrap_or_else(|| panic!("editor flow should contain pass {pass_label}"));

@@ -24,17 +24,15 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .expect("render flow authoring should succeed")
         .bind_ping_pong_storage("sdf.history.probe")
         .write_color_target("sdf.color")
-        .depends_on("sdf.prepare")
         .finish()
         .copy_pass("sdf.history")
         .source("sdf.color")
         .destination("sdf.history")
-        .depends_on("sdf.compose")
         .finish()
         .present_pass("sdf.present")
         .expect("render flow authoring should succeed")
         .source("sdf.color")
-        .depends_on("sdf.history")
+        .order_after("sdf.history")
         .finish()
         .validate()
         .expect("sdf_render_flow_3d should validate")
@@ -81,7 +79,7 @@ mod tests {
     fn flow_orders_prepare_compose_history_before_terminal_present() {
         let flow = build_render_flow();
         let order = flow
-            .pass_order()
+            .prepared_pass_order()
             .expect("sdf_render_flow pass order should validate")
             .into_iter()
             .map(|id| {

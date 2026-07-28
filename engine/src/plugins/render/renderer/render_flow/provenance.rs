@@ -325,14 +325,14 @@ pub fn execution_pass_shader_reference(
     }
 }
 
-pub fn execution_pass_order_index(pass: &CompiledPassExecutionPlan) -> usize {
+pub fn execution_pass_authoring_index(pass: &CompiledPassExecutionPlan) -> usize {
     match pass {
-        CompiledPassExecutionPlan::Compute(value) => value.order_index,
-        CompiledPassExecutionPlan::Fullscreen(value) => value.order_index,
-        CompiledPassExecutionPlan::Graphics(value) => value.order_index,
-        CompiledPassExecutionPlan::Copy(value) => value.order_index,
-        CompiledPassExecutionPlan::Present(value) => value.order_index,
-        CompiledPassExecutionPlan::BuiltinUiComposite(value) => value.order_index,
+        CompiledPassExecutionPlan::Compute(value) => value.authoring_index,
+        CompiledPassExecutionPlan::Fullscreen(value) => value.authoring_index,
+        CompiledPassExecutionPlan::Graphics(value) => value.authoring_index,
+        CompiledPassExecutionPlan::Copy(value) => value.authoring_index,
+        CompiledPassExecutionPlan::Present(value) => value.authoring_index,
+        CompiledPassExecutionPlan::BuiltinUiComposite(value) => value.authoring_index,
     }
 }
 
@@ -737,7 +737,7 @@ mod tests {
         });
         let pass = CompiledPassExecutionPlan::Present(CompiledPresentExecutionPlan {
             pass_id: RenderPassId::try_from_raw(9).unwrap(),
-            order_index: 0,
+            authoring_index: 0,
             feature_id: Some(WORLD_DRAW_RENDER_FEATURE_ID),
             view_mask: CompiledViewMask::AllViews,
             source: None,
@@ -789,7 +789,7 @@ mod tests {
         explicit.insert("main".to_string());
         let pass = CompiledPassExecutionPlan::Present(CompiledPresentExecutionPlan {
             pass_id: RenderPassId::try_from_raw(1).unwrap(),
-            order_index: 0,
+            authoring_index: 0,
             feature_id: None,
             view_mask: CompiledViewMask::Explicit(explicit),
             source: None,
@@ -822,7 +822,7 @@ mod tests {
     fn material_scene_fullscreen_pass() -> CompiledPassExecutionPlan {
         CompiledPassExecutionPlan::Fullscreen(CompiledRasterExecutionPlan {
             pass_id: RenderPassId::try_from_raw(7).unwrap(),
-            order_index: 0,
+            authoring_index: 0,
             feature_id: Some(MATERIAL_RENDER_FEATURE_ID),
             shader: Some(RenderShaderReference::MaterialSceneBundle {
                 fallback_asset: "fallback-scene.wgsl".to_string(),

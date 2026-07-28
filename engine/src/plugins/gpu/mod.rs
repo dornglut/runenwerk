@@ -2,6 +2,7 @@
 
 pub mod api;
 
+pub(crate) use api::GpuWorkAuthoringErrorContext;
 pub use api::*;
 
 #[cfg(test)]
@@ -21,7 +22,7 @@ mod tests {
     }
 
     #[test]
-    fn gpu_g2_boundary_has_no_forbidden_dependencies_or_vocabulary() {
+    fn gpu_g2_g3_boundary_has_no_forbidden_dependencies_or_vocabulary() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/plugins/gpu");
         let forbidden = [
             ["crate::plugins::", "render"].concat(),
@@ -75,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    fn gpu_g2_retired_authority_and_forwarding_paths_are_absent() {
+    fn gpu_g2_g3_retired_authority_and_forwarding_paths_are_absent() {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let source_root = manifest.join("src/plugins");
         let mut paths = Vec::new();
@@ -92,6 +93,15 @@ mod tests {
             ["Uniform", "Handle"].concat(),
             ["StorageArray", "Handle"].concat(),
             ["DoubleBuffer", "Handle"].concat(),
+            ["CompiledResourceAccess", "Kind"].concat(),
+            ["CompiledResourceLifetime", "Window"].concat(),
+            ["compile_resource_lifetime", "_windows"].concat(),
+            ["diagnose_resource_lifetime", "_windows"].concat(),
+            ["GpuPrimitiveResource", "AccessKind"].concat(),
+            ["GpuPrimitiveResource", "Access"].concat(),
+            ["GpuPrimitiveDispatch", "Resource"].concat(),
+            ["PassDependencyCycle", "Detected"].concat(),
+            ["UnknownPass", "Dependency"].concat(),
         ];
         for path in paths {
             let source = fs::read_to_string(&path).expect("source file should be readable");
@@ -114,6 +124,7 @@ mod tests {
             "src/plugins/render/resource/import.rs",
             "src/plugins/render/resource/lifetime.rs",
             "src/plugins/render/api/resources.rs",
+            "src/plugins/render/graph/resource_lifetimes.rs",
         ] {
             assert!(
                 !manifest.join(retired_path).exists(),

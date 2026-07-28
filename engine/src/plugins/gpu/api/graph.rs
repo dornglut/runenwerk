@@ -6,8 +6,9 @@ use super::{
     GpuResourceProvenance, GpuResourceRef, GpuTextureAccess, GpuTextureAccessKind,
     GpuTextureAccessResource, GpuTextureAspect, GpuTextureDimension, GpuTextureHandle,
     GpuTextureInitialization, GpuTextureSubresourceRange, GpuWorkAuthoringCause,
-    GpuWorkAuthoringError, GpuWorkAuthoringErrorSource, GpuWorkGraphCause, GpuWorkGraphError,
-    GpuWorkGraphErrorSource, GpuWorkNodeKind, GpuWorkOperation, GpuWorkResourceId,
+    GpuWorkAuthoringError, GpuWorkAuthoringErrorContext, GpuWorkAuthoringErrorSource,
+    GpuWorkGraphCause, GpuWorkGraphError, GpuWorkGraphErrorContext, GpuWorkGraphErrorSource,
+    GpuWorkNodeKind, GpuWorkOperation, GpuWorkResourceId,
 };
 use core::fmt;
 use core::hash::{Hash, Hasher};
@@ -15,6 +16,13 @@ use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+/// Fragment-local opaque work identity.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuWorkNodeId;
+///
+/// let _ = GpuWorkNodeId::from_raw(1);
+/// ```
 #[derive(Clone)]
 pub struct GpuWorkNodeId {
     fragment_identity: Arc<()>,
@@ -67,6 +75,14 @@ impl Hash for GpuWorkNodeId {
     }
 }
 
+/// Deterministic process-local prepared identity. No raw reconstruction API is
+/// exposed because this is not a persistence, replay, cache, or wire key.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuPreparedWorkNodeId;
+///
+/// let _ = GpuPreparedWorkNodeId::from_raw(0, 1);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuPreparedWorkNodeId {
     fragment_ordinal: u32,
@@ -345,13 +361,9 @@ fn coverage_error(
 ) -> GpuWorkAuthoringError {
     GpuWorkAuthoringError::invalid(
         operation,
-        None,
-        None,
-        None,
-        Some(resource),
+        GpuWorkAuthoringErrorContext::new(None, None, None, Some(resource), None),
         GpuWorkAuthoringCause::InvalidCoverage,
         correction,
-        None,
     )
 }
 
@@ -362,13 +374,9 @@ fn coverage_source_error(
 ) -> GpuWorkAuthoringError {
     GpuWorkAuthoringError::with_source(
         operation,
-        None,
-        None,
-        None,
-        Some(resource),
+        GpuWorkAuthoringErrorContext::new(None, None, None, Some(resource), None),
         GpuWorkAuthoringCause::InvalidCoverage,
         "provide coverage checked against the same typed resource",
-        None,
         GpuWorkAuthoringErrorSource::Access(source),
     )
 }
@@ -445,13 +453,15 @@ impl GpuWorkResourceInput {
         if resource != *initialized_coverage.resource() {
             return Err(GpuWorkAuthoringError::invalid(
                 "construct GPU work-resource input",
-                None,
-                None,
-                None,
-                Some(resource.diagnostic_identity()),
+                GpuWorkAuthoringErrorContext::new(
+                    None,
+                    None,
+                    None,
+                    Some(resource.diagnostic_identity()),
+                    Some(provenance),
+                ),
                 GpuWorkAuthoringCause::InvalidResourceKind,
                 "bind initialized coverage checked against the same kind-preserving resource",
-                Some(provenance),
             ));
         }
         Ok(Self {
@@ -537,13 +547,15 @@ impl GpuWorkOutput {
         if relationship.resource() != final_initialized_coverage.resource() {
             return Err(GpuWorkAuthoringError::invalid(
                 "construct GPU work output",
-                None,
-                None,
-                None,
-                Some(relationship.resource().diagnostic_identity()),
+                GpuWorkAuthoringErrorContext::new(
+                    None,
+                    None,
+                    None,
+                    Some(relationship.resource().diagnostic_identity()),
+                    Some(relationship.provenance().clone()),
+                ),
                 GpuWorkAuthoringCause::InvalidCoverage,
                 "bind final coverage checked against the exported kind-preserving resource",
-                Some(relationship.provenance().clone()),
             ));
         }
         Ok(Self {
@@ -579,25 +591,17 @@ impl GpuExplicitOrder {
         if reason.is_empty() || before == after {
             return Err(GpuWorkAuthoringError::invalid(
                 "construct explicit GPU work order",
-                None,
-                None,
-                Some(before.clone()),
-                None,
+                GpuWorkAuthoringErrorContext::new(None, None, Some(before.clone()), None, None),
                 GpuWorkAuthoringCause::InvalidExplicitOrder,
                 "provide distinct fragment-local nodes and a nonempty non-data reason",
-                None,
             ));
         }
         if !Arc::ptr_eq(&before.fragment_identity, &after.fragment_identity) {
             return Err(GpuWorkAuthoringError::invalid(
                 "construct explicit GPU work order",
-                None,
-                None,
-                Some(before.clone()),
-                None,
+                GpuWorkAuthoringErrorContext::new(None, None, Some(before.clone()), None, None),
                 GpuWorkAuthoringCause::ForeignIdentity,
                 "order only nodes allocated by the same fragment builder",
-                None,
             ));
         }
         Ok(Self {
@@ -620,6 +624,16 @@ impl GpuExplicitOrder {
     }
 }
 
+/// Immutable checked work node. Operation kind is derived from `operation()`;
+/// there is no duplicate mutable kind field.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::{GpuWorkNode, GpuWorkNodeKind};
+///
+/// fn bypass(node: &mut GpuWorkNode) {
+///     node.kind = GpuWorkNodeKind::Copy;
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuWorkNode {
     id: GpuWorkNodeId,
@@ -665,6 +679,16 @@ impl GpuWorkNode {
     }
 }
 
+/// Immutable authored fragment. Mutation is available only through the
+/// checked builder transaction.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuWorkFragment;
+///
+/// fn mutate(fragment: &mut GpuWorkFragment) {
+///     fragment.nodes.clear();
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct GpuWorkFragment {
     identity: Arc<()>,
@@ -843,7 +867,6 @@ impl GpuWorkFragmentBuilder {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn add_node(
         &mut self,
         label: GpuResourceLabel,
@@ -854,24 +877,32 @@ impl GpuWorkFragmentBuilder {
         provenance: GpuResourceProvenance,
     ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError> {
         operation.validate_shape().map_err(|source| {
-            self.source_error(
+            GpuWorkAuthoringError::with_source(
                 "add GPU work node",
-                Some(label.as_str().to_string()),
-                source.resource(),
+                GpuWorkAuthoringErrorContext::new(
+                    Some(self.label.as_str().to_string()),
+                    Some(label.as_str().to_string()),
+                    None,
+                    source.resource(),
+                    Some(provenance.clone()),
+                ),
                 GpuWorkAuthoringCause::OperationAccessContradiction,
                 "construct the operation through its checked operation constructor",
-                Some(provenance.clone()),
                 GpuWorkAuthoringErrorSource::Operation(source),
             )
         })?;
         let derived = operation.derived_accesses().map_err(|source| {
-            self.source_error(
+            GpuWorkAuthoringError::with_source(
                 "derive GPU work-node access",
-                Some(label.as_str().to_string()),
-                source.resource(),
+                GpuWorkAuthoringErrorContext::new(
+                    Some(self.label.as_str().to_string()),
+                    Some(label.as_str().to_string()),
+                    None,
+                    source.resource(),
+                    Some(provenance.clone()),
+                ),
                 GpuWorkAuthoringCause::OperationAccessContradiction,
                 "use one internally consistent checked operation",
-                Some(provenance.clone()),
                 GpuWorkAuthoringErrorSource::Operation(source),
             )
         })?;
@@ -1017,37 +1048,15 @@ impl GpuWorkFragmentBuilder {
     ) -> GpuWorkAuthoringError {
         GpuWorkAuthoringError::invalid(
             operation,
-            Some(self.label.as_str().to_string()),
-            node_label,
-            None,
-            resource,
+            GpuWorkAuthoringErrorContext::new(
+                Some(self.label.as_str().to_string()),
+                node_label,
+                None,
+                resource,
+                provenance,
+            ),
             cause,
             correction,
-            provenance,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn source_error(
-        &self,
-        operation: &'static str,
-        node_label: Option<String>,
-        resource: Option<GpuWorkResourceId>,
-        cause: GpuWorkAuthoringCause,
-        correction: &'static str,
-        provenance: Option<GpuResourceProvenance>,
-        source: GpuWorkAuthoringErrorSource,
-    ) -> GpuWorkAuthoringError {
-        GpuWorkAuthoringError::with_source(
-            operation,
-            Some(self.label.as_str().to_string()),
-            node_label,
-            None,
-            resource,
-            cause,
-            correction,
-            provenance,
-            source,
         )
     }
 }
@@ -1110,13 +1119,15 @@ fn insert_normalized_access(
         if let Some(merged) = merge_storage_access(existing, &access).map_err(|source| {
             GpuWorkAuthoringError::with_source(
                 "normalize GPU storage access",
-                Some(fragment_label.as_str().to_string()),
-                Some(node_label.as_str().to_string()),
-                None,
-                Some(access.resource_identity()),
+                GpuWorkAuthoringErrorContext::new(
+                    Some(fragment_label.as_str().to_string()),
+                    Some(node_label.as_str().to_string()),
+                    None,
+                    Some(access.resource_identity()),
+                    Some(provenance.clone()),
+                ),
                 GpuWorkAuthoringCause::OperationAccessContradiction,
                 "declare compatible exact storage read/write coverage",
-                Some(provenance.clone()),
                 GpuWorkAuthoringErrorSource::Access(source),
             )
         })? {
@@ -1288,13 +1299,15 @@ fn requirement_authoring_error(
 ) -> GpuWorkAuthoringError {
     GpuWorkAuthoringError::with_source(
         "merge GPU work-node capability requirements",
-        Some(fragment_label.as_str().to_string()),
-        Some(node_label.as_str().to_string()),
-        None,
-        None,
+        GpuWorkAuthoringErrorContext::new(
+            Some(fragment_label.as_str().to_string()),
+            Some(node_label.as_str().to_string()),
+            None,
+            None,
+            Some(provenance.clone()),
+        ),
         GpuWorkAuthoringCause::MechanicalCapabilityContradiction,
         "remove a caller constraint that disables or ambiguously redefines a mechanically required capability",
-        Some(provenance.clone()),
         GpuWorkAuthoringErrorSource::Capability(source),
     )
 }
@@ -1310,13 +1323,15 @@ fn node_authoring_error(
 ) -> GpuWorkAuthoringError {
     GpuWorkAuthoringError::invalid(
         operation,
-        Some(fragment_label.as_str().to_string()),
-        Some(node_label.as_str().to_string()),
-        None,
-        resource,
+        GpuWorkAuthoringErrorContext::new(
+            Some(fragment_label.as_str().to_string()),
+            Some(node_label.as_str().to_string()),
+            None,
+            resource,
+            Some(provenance.clone()),
+        ),
         cause,
         correction,
-        Some(provenance.clone()),
     )
 }
 
@@ -1732,6 +1747,15 @@ impl GpuPreparedWorkNode {
     }
 }
 
+/// Immutable deterministic result of graph preparation.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuPreparedWorkGraph;
+///
+/// fn mutate(graph: &mut GpuPreparedWorkGraph) {
+///     graph.topological_order.clear();
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct GpuPreparedWorkGraph {
     label: GpuResourceLabel,
@@ -1761,8 +1785,7 @@ impl GpuPreparedWorkGraph {
                 graph_error(
                     "assign prepared fragment identity",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     None,
                     GpuWorkGraphCause::UnknownIdentity,
@@ -1785,8 +1808,7 @@ impl GpuPreparedWorkGraph {
                     return Err(graph_error(
                         "validate fragment-local GPU work-node identity",
                         graph_label,
-                        Some(fragment),
-                        Some(node),
+                        GraphErrorOrigin::new(Some(fragment), Some(node)),
                         None,
                         None,
                         GpuWorkGraphCause::ForeignIdentity,
@@ -1802,8 +1824,7 @@ impl GpuPreparedWorkGraph {
                     return Err(graph_error(
                         "validate prepared GPU work-node identity",
                         graph_label,
-                        Some(fragment),
-                        Some(node),
+                        GraphErrorOrigin::new(Some(fragment), Some(node)),
                         Some(id),
                         None,
                         GpuWorkGraphCause::UnknownIdentity,
@@ -1845,15 +1866,17 @@ impl GpuPreparedWorkGraph {
                 .map_err(|source| {
                     GpuWorkGraphError::with_source(
                         "merge GPU work-graph capability requirements",
-                        graph_label,
-                        Some(prepared.fragment_label().as_str().to_string()),
-                        Some(prepared.node().label().as_str().to_string()),
-                        Some(prepared.id()),
-                        None,
-                        None,
+                        GpuWorkGraphErrorContext::new(
+                            graph_label,
+                            Some(prepared.fragment_label().as_str().to_string()),
+                            Some(prepared.node().label().as_str().to_string()),
+                            Some(prepared.id()),
+                            None,
+                            None,
+                            Some(prepared.node().provenance().clone()),
+                        ),
                         GpuWorkGraphCause::MechanicalCapabilityContradiction,
                         "remove graph-wide caller constraints that disable mechanically required capabilities",
-                        Some(prepared.node().provenance().clone()),
                         GpuWorkGraphErrorSource::Capability(source),
                     )
                 })?;
@@ -1953,8 +1976,7 @@ fn register_fragment_resources(
             return Err(graph_error(
                 "register GPU work resource",
                 graph_label,
-                Some(fragment),
-                None,
+                GraphErrorOrigin::new(Some(fragment), None),
                 None,
                 Some(identity),
                 GpuWorkGraphCause::UnknownIdentity,
@@ -1971,8 +1993,7 @@ fn register_fragment_resources(
             return Err(graph_error(
                 "register normalized GPU storage resource",
                 graph_label,
-                Some(fragment),
-                None,
+                GraphErrorOrigin::new(Some(fragment), None),
                 None,
                 Some(storage_identity),
                 GpuWorkGraphCause::UnknownIdentity,
@@ -2001,15 +2022,17 @@ fn validate_node_resources(
     node.operation().validate_shape().map_err(|source| {
         GpuWorkGraphError::with_source(
             "validate GPU work operation",
-            graph_label,
-            Some(fragment.label().as_str().to_string()),
-            Some(node.label().as_str().to_string()),
-            None,
-            source.resource(),
-            None,
+            GpuWorkGraphErrorContext::new(
+                graph_label,
+                Some(fragment.label().as_str().to_string()),
+                Some(node.label().as_str().to_string()),
+                None,
+                source.resource(),
+                None,
+                Some(node.provenance().clone()),
+            ),
             GpuWorkGraphCause::OperationAccessContradiction,
             "retain the checked operation shape accepted during fragment authoring",
-            Some(node.provenance().clone()),
             GpuWorkGraphErrorSource::Operation(source),
         )
     })?;
@@ -2023,8 +2046,7 @@ fn validate_node_resources(
             return Err(graph_error(
                 "validate GPU work-node resource identity",
                 graph_label,
-                Some(fragment),
-                Some(node),
+                GraphErrorOrigin::new(Some(fragment), Some(node)),
                 None,
                 Some(identity),
                 GpuWorkGraphCause::UnknownIdentity,
@@ -2054,8 +2076,7 @@ fn collect_output_bindings(
                 return Err(graph_error(
                     "bind GPU work output",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     Some(output.relationship().resource().diagnostic_identity()),
                     GpuWorkGraphCause::DuplicateExportKey,
@@ -2081,8 +2102,7 @@ fn bind_imports(
                 return Err(graph_error(
                     "bind GPU work import",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     Some(import.resource().diagnostic_identity()),
                     GpuWorkGraphCause::ImportExportMismatch,
@@ -2096,8 +2116,7 @@ fn bind_imports(
                 return Err(graph_error(
                     "bind GPU work import",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     Some(import.resource().diagnostic_identity()),
                     GpuWorkGraphCause::ImportExportMismatch,
@@ -2112,8 +2131,7 @@ fn bind_imports(
                 return Err(graph_error(
                     "bind GPU work import",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     Some(resource),
                     GpuWorkGraphCause::AmbiguousWriter,
@@ -2143,8 +2161,7 @@ fn validate_boundary_access_intents(
                 return Err(graph_error(
                     "validate GPU work import access",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     Some(resource),
                     GpuWorkGraphCause::ImportExportMismatch,
@@ -2160,8 +2177,7 @@ fn validate_boundary_access_intents(
                 return Err(graph_error(
                     "validate GPU work output access",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     Some(resource),
                     GpuWorkGraphCause::ImportExportMismatch,
@@ -2260,15 +2276,9 @@ fn topological_fragment_order(
     if order.len() != fragments.len() {
         return Err(GpuWorkGraphError::invalid(
             "order GPU work-fragment imports",
-            graph_label,
-            None,
-            None,
-            None,
-            None,
-            None,
+            GpuWorkGraphErrorContext::new(graph_label, None, None, None, None, None, None),
             GpuWorkGraphCause::Cycle,
             "remove cyclic typed import/export relationships",
-            None,
         ));
     }
     Ok(order)
@@ -2289,8 +2299,7 @@ fn validate_fragment_initialization(
                 return Err(graph_error(
                     "resolve GPU work import coverage",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     Some(storage_identity(import.resource())),
                     GpuWorkGraphCause::ImportExportMismatch,
@@ -2301,8 +2310,7 @@ fn validate_fragment_initialization(
                 return Err(graph_error(
                     "resolve GPU work import coverage",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     Some(storage_identity(import.resource())),
                     GpuWorkGraphCause::ImportExportMismatch,
@@ -2323,8 +2331,7 @@ fn validate_fragment_initialization(
                     graph_error(
                         "assign prepared fragment identity",
                         graph_label,
-                        Some(fragment),
-                        Some(node),
+                        GraphErrorOrigin::new(Some(fragment), Some(node)),
                         None,
                         None,
                         GpuWorkGraphCause::UnknownIdentity,
@@ -2346,11 +2353,9 @@ fn validate_fragment_initialization(
                 return Err(graph_error_with_region(
                     "validate GPU work output coverage",
                     graph_label,
-                    fragment,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
-                    None,
-                    resource,
-                    &expected,
+                    (resource, &expected),
                     GpuWorkGraphCause::ImportExportMismatch,
                     "declare the producer fragment's exact final initialized coverage",
                 ));
@@ -2400,8 +2405,7 @@ fn union_state_coverage(
         return Err(graph_error(
             "merge GPU initialization coverage",
             graph_label,
-            Some(fragment),
-            None,
+            GraphErrorOrigin::new(Some(fragment), None),
             None,
             Some(resource),
             GpuWorkGraphCause::UnknownIdentity,
@@ -2412,8 +2416,7 @@ fn union_state_coverage(
         return Err(graph_error(
             "merge GPU initialization coverage",
             graph_label,
-            Some(fragment),
-            None,
+            GraphErrorOrigin::new(Some(fragment), None),
             None,
             Some(resource),
             GpuWorkGraphCause::ImportExportMismatch,
@@ -2475,15 +2478,17 @@ fn apply_node_initialization(
         {
             return Err(GpuWorkGraphError::invalid(
                 "prepare GPU work initialization",
-                graph_label,
-                Some(fragment.label().as_str().to_string()),
-                Some(node.label().as_str().to_string()),
-                Some(prepared_id),
-                Some(resource),
-                Some(access_region_description(access)),
+                GpuWorkGraphErrorContext::new(
+                    graph_label,
+                    Some(fragment.label().as_str().to_string()),
+                    Some(node.label().as_str().to_string()),
+                    Some(prepared_id),
+                    Some(resource),
+                    Some(access_region_description(access)),
+                    Some(node.provenance().clone()),
+                ),
                 GpuWorkGraphCause::ReadBeforeInitialization,
                 "provide descriptor/input/import coverage or preceding work that initializes the exact region",
-                Some(node.provenance().clone()),
             ));
         }
     }
@@ -2494,8 +2499,7 @@ fn apply_node_initialization(
             return Err(graph_error(
                 "apply GPU work initialization",
                 graph_label,
-                Some(fragment),
-                Some(node),
+                GraphErrorOrigin::new(Some(fragment), Some(node)),
                 Some(prepared_id),
                 Some(resource),
                 GpuWorkGraphCause::UnknownIdentity,
@@ -2507,8 +2511,7 @@ fn apply_node_initialization(
                 return Err(graph_error(
                     "apply GPU attachment discard",
                     graph_label,
-                    Some(fragment),
-                    Some(node),
+                    GraphErrorOrigin::new(Some(fragment), Some(node)),
                     Some(prepared_id),
                     Some(resource),
                     GpuWorkGraphCause::OperationAccessContradiction,
@@ -2519,8 +2522,7 @@ fn apply_node_initialization(
             return Err(graph_error(
                 "apply GPU write initialization",
                 graph_label,
-                Some(fragment),
-                Some(node),
+                GraphErrorOrigin::new(Some(fragment), Some(node)),
                 Some(prepared_id),
                 Some(resource),
                 GpuWorkGraphCause::OperationAccessContradiction,
@@ -2642,19 +2644,21 @@ fn infer_cross_fragment_hazards(
                                 };
                                 return Err(GpuWorkGraphError::invalid(
                                     "infer cross-fragment GPU hazard",
-                                    graph_label,
-                                    Some(left_fragment.label().as_str().to_string()),
-                                    Some(left_node.label().as_str().to_string()),
-                                    None,
-                                    Some(resource),
-                                    Some(format!(
-                                        "{} versus {}",
-                                        access_region_description(left_access),
-                                        access_region_description(right_access)
-                                    )),
+                                    GpuWorkGraphErrorContext::new(
+                                        graph_label,
+                                        Some(left_fragment.label().as_str().to_string()),
+                                        Some(left_node.label().as_str().to_string()),
+                                        None,
+                                        Some(resource),
+                                        Some(format!(
+                                            "{} versus {}",
+                                            access_region_description(left_access),
+                                            access_region_description(right_access)
+                                        )),
+                                        Some(left_node.provenance().clone()),
+                                    ),
                                     cause,
                                     "bind one unique typed producer output to the consumer import for this storage resource",
-                                    Some(left_node.provenance().clone()),
                                 ));
                             }
                             let (
@@ -2750,8 +2754,7 @@ fn prepared_node_id(
         graph_error(
             "assign prepared GPU work-node identity",
             graph_label,
-            Some(fragment),
-            Some(node),
+            GraphErrorOrigin::new(Some(fragment), Some(node)),
             None,
             None,
             GpuWorkGraphCause::UnknownIdentity,
@@ -2774,8 +2777,7 @@ fn add_explicit_orders(
                 return Err(graph_error(
                     "validate explicit GPU work order",
                     graph_label,
-                    Some(fragment),
-                    None,
+                    GraphErrorOrigin::new(Some(fragment), None),
                     None,
                     None,
                     GpuWorkGraphCause::ForeignIdentity,
@@ -2790,8 +2792,7 @@ fn add_explicit_orders(
                     graph_error(
                         "validate explicit GPU work-order endpoint",
                         graph_label,
-                        Some(fragment),
-                        None,
+                        GraphErrorOrigin::new(Some(fragment), None),
                         None,
                         None,
                         GpuWorkGraphCause::UnknownIdentity,
@@ -2806,8 +2807,7 @@ fn add_explicit_orders(
                     graph_error(
                         "validate explicit GPU work-order endpoint",
                         graph_label,
-                        Some(fragment),
-                        None,
+                        GraphErrorOrigin::new(Some(fragment), None),
                         None,
                         None,
                         GpuWorkGraphCause::UnknownIdentity,
@@ -2820,8 +2820,7 @@ fn add_explicit_orders(
                 return Err(graph_error(
                     "add explicit GPU work order",
                     graph_label,
-                    Some(fragment),
-                    Some(after_node),
+                    GraphErrorOrigin::new(Some(fragment), Some(after_node)),
                     Some(after),
                     None,
                     GpuWorkGraphCause::RedundantExplicitDataOrder,
@@ -2832,8 +2831,7 @@ fn add_explicit_orders(
                 return Err(graph_error(
                     "add explicit GPU work order",
                     graph_label,
-                    Some(fragment),
-                    Some(after_node),
+                    GraphErrorOrigin::new(Some(fragment), Some(after_node)),
                     Some(after),
                     None,
                     GpuWorkGraphCause::ExplicitOrderConflict,
@@ -2894,15 +2892,17 @@ fn topological_node_order(
         if !indegree.contains_key(&before) || !indegree.contains_key(&after) {
             return Err(GpuWorkGraphError::invalid(
                 "validate GPU work dependency identity",
-                graph_label,
-                None,
-                None,
-                Some(after),
-                None,
-                None,
+                GpuWorkGraphErrorContext::new(
+                    graph_label,
+                    None,
+                    None,
+                    Some(after),
+                    None,
+                    None,
+                    None,
+                ),
                 GpuWorkGraphCause::UnknownIdentity,
                 "retain dependency endpoints in the prepared node set",
-                None,
             ));
         }
         if outgoing.entry(before).or_default().insert(after)
@@ -2938,15 +2938,17 @@ fn topological_node_order(
             .map(|&(fragment, _)| &fragments[fragment]);
         return Err(GpuWorkGraphError::invalid(
             "topologically order GPU work",
-            graph_label,
-            fragment.map(|fragment| fragment.label().as_str().to_string()),
-            None,
-            cycle_node,
-            None,
-            None,
+            GpuWorkGraphErrorContext::new(
+                graph_label,
+                fragment.map(|fragment| fragment.label().as_str().to_string()),
+                None,
+                cycle_node,
+                None,
+                None,
+                fragment.map(|fragment| fragment.provenance().clone()),
+            ),
             GpuWorkGraphCause::Cycle,
             "remove cyclic explicit order or cyclic typed resource causality",
-            fragment.map(|fragment| fragment.provenance().clone()),
         ));
     }
     Ok(ordered)
@@ -2985,15 +2987,17 @@ fn simulate_prepared_initialization(
         let Some(&(fragment_index, node_index)) = node_locations.get(&prepared_id) else {
             return Err(GpuWorkGraphError::invalid(
                 "simulate prepared GPU work initialization",
-                graph_label,
-                None,
-                None,
-                Some(prepared_id),
-                None,
-                None,
+                GpuWorkGraphErrorContext::new(
+                    graph_label,
+                    None,
+                    None,
+                    Some(prepared_id),
+                    None,
+                    None,
+                    None,
+                ),
                 GpuWorkGraphCause::UnknownIdentity,
                 "retain every topological identity in the prepared node table",
-                None,
             ));
         };
         let fragment = &fragments[fragment_index];
@@ -3041,15 +3045,17 @@ fn coverage_to_public(
                     GpuBufferRange::new(buffer, start, end - start).map_err(|source| {
                         GpuWorkGraphError::with_source(
                             "publish prepared buffer initialization",
-                            graph_label,
-                            None,
-                            None,
-                            None,
-                            Some(buffer.diagnostic_identity()),
-                            Some(format!("bytes {start}..{end}")),
+                            GpuWorkGraphErrorContext::new(
+                                graph_label,
+                                None,
+                                None,
+                                None,
+                                Some(buffer.diagnostic_identity()),
+                                Some(format!("bytes {start}..{end}")),
+                                Some(buffer.descriptor().common().provenance().clone()),
+                            ),
                             GpuWorkGraphCause::OperationAccessContradiction,
                             "retain checked buffer coverage during preparation",
-                            Some(buffer.descriptor().common().provenance().clone()),
                             GpuWorkGraphErrorSource::Authoring(coverage_source_error(
                                 "publish prepared buffer initialization",
                                 buffer.diagnostic_identity(),
@@ -3081,15 +3087,17 @@ fn coverage_to_public(
                         .map_err(|_| {
                             GpuWorkGraphError::invalid(
                                 "publish prepared texture initialization",
-                                graph_label,
-                                None,
-                                None,
-                                None,
-                                Some(texture.diagnostic_identity()),
-                                Some(format!("{coverage:?}")),
+                                GpuWorkGraphErrorContext::new(
+                                    graph_label,
+                                    None,
+                                    None,
+                                    None,
+                                    Some(texture.diagnostic_identity()),
+                                    Some(format!("{coverage:?}")),
+                                    Some(texture.descriptor().common().provenance().clone()),
+                                ),
                                 GpuWorkGraphCause::OperationAccessContradiction,
                                 "retain checked texture coverage during preparation",
-                                Some(texture.descriptor().common().provenance().clone()),
                             )
                         })?,
                     );
@@ -3108,15 +3116,17 @@ fn coverage_to_public(
                     GpuQueryRange::new(query_set, start, end - start).map_err(|source| {
                         GpuWorkGraphError::with_source(
                             "publish prepared query initialization",
-                            graph_label,
-                            None,
-                            None,
-                            None,
-                            Some(query_set.diagnostic_identity()),
-                            Some(format!("queries {start}..{end}")),
+                            GpuWorkGraphErrorContext::new(
+                                graph_label,
+                                None,
+                                None,
+                                None,
+                                Some(query_set.diagnostic_identity()),
+                                Some(format!("queries {start}..{end}")),
+                                Some(query_set.descriptor().common().provenance().clone()),
+                            ),
                             GpuWorkGraphCause::OperationAccessContradiction,
                             "retain checked query coverage during preparation",
-                            Some(query_set.descriptor().common().provenance().clone()),
                             GpuWorkGraphErrorSource::Authoring(coverage_source_error(
                                 "publish prepared query initialization",
                                 query_set.diagnostic_identity(),
@@ -3136,15 +3146,17 @@ fn coverage_to_public(
             GpuInitialCoverage::descriptor_initialization(resource.clone()).map_err(|source| {
                 GpuWorkGraphError::with_source(
                     "publish prepared sampler initialization",
-                    graph_label,
-                    None,
-                    None,
-                    None,
-                    Some(resource.diagnostic_identity()),
-                    None,
+                    GpuWorkGraphErrorContext::new(
+                        graph_label,
+                        None,
+                        None,
+                        None,
+                        Some(resource.diagnostic_identity()),
+                        None,
+                        Some(resource.common().provenance().clone()),
+                    ),
                     GpuWorkGraphCause::OperationAccessContradiction,
                     "retain immutable sampler evidence",
-                    Some(resource.common().provenance().clone()),
                     GpuWorkGraphErrorSource::Authoring(source),
                 )
             })?
@@ -3152,27 +3164,39 @@ fn coverage_to_public(
         _ => {
             return Err(GpuWorkGraphError::invalid(
                 "publish prepared resource initialization",
-                graph_label,
-                None,
-                None,
-                None,
-                Some(storage_identity(resource)),
-                Some(format!("{coverage:?}")),
+                GpuWorkGraphErrorContext::new(
+                    graph_label,
+                    None,
+                    None,
+                    None,
+                    Some(storage_identity(resource)),
+                    Some(format!("{coverage:?}")),
+                    Some(resource.common().provenance().clone()),
+                ),
                 GpuWorkGraphCause::OperationAccessContradiction,
                 "retain coverage with the matching normalized resource kind",
-                Some(resource.common().provenance().clone()),
             ));
         }
     };
     Ok(Some(value))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(Clone, Copy)]
+struct GraphErrorOrigin<'a> {
+    fragment: Option<&'a GpuWorkFragment>,
+    node: Option<&'a GpuWorkNode>,
+}
+
+impl<'a> GraphErrorOrigin<'a> {
+    const fn new(fragment: Option<&'a GpuWorkFragment>, node: Option<&'a GpuWorkNode>) -> Self {
+        Self { fragment, node }
+    }
+}
+
 fn graph_error(
     operation: &'static str,
     graph_label: &str,
-    fragment: Option<&GpuWorkFragment>,
-    node: Option<&GpuWorkNode>,
+    origin: GraphErrorOrigin<'_>,
     prepared_node: Option<GpuPreparedWorkNodeId>,
     resource: Option<GpuWorkResourceId>,
     cause: GpuWorkGraphCause,
@@ -3180,43 +3204,61 @@ fn graph_error(
 ) -> GpuWorkGraphError {
     GpuWorkGraphError::invalid(
         operation,
-        graph_label,
-        fragment.map(|fragment| fragment.label().as_str().to_string()),
-        node.map(|node| node.label().as_str().to_string()),
-        prepared_node,
-        resource,
-        None,
+        GpuWorkGraphErrorContext::new(
+            graph_label,
+            origin
+                .fragment
+                .map(|fragment| fragment.label().as_str().to_string()),
+            origin.node.map(|node| node.label().as_str().to_string()),
+            prepared_node,
+            resource,
+            None,
+            origin
+                .node
+                .map(|node| node.provenance().clone())
+                .or_else(|| {
+                    origin
+                        .fragment
+                        .map(|fragment| fragment.provenance().clone())
+                }),
+        ),
         cause,
         correction,
-        node.map(|node| node.provenance().clone())
-            .or_else(|| fragment.map(|fragment| fragment.provenance().clone())),
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 fn graph_error_with_region(
     operation: &'static str,
     graph_label: &str,
-    fragment: &GpuWorkFragment,
-    node: Option<&GpuWorkNode>,
+    origin: GraphErrorOrigin<'_>,
     prepared_node: Option<GpuPreparedWorkNodeId>,
-    resource: GpuWorkResourceId,
-    coverage: &InitializedCoverage,
+    region: (GpuWorkResourceId, &InitializedCoverage),
     cause: GpuWorkGraphCause,
     correction: &'static str,
 ) -> GpuWorkGraphError {
+    let (resource, coverage) = region;
     GpuWorkGraphError::invalid(
         operation,
-        graph_label,
-        Some(fragment.label().as_str().to_string()),
-        node.map(|node| node.label().as_str().to_string()),
-        prepared_node,
-        Some(resource),
-        Some(format!("{coverage:?}")),
+        GpuWorkGraphErrorContext::new(
+            graph_label,
+            origin
+                .fragment
+                .map(|fragment| fragment.label().as_str().to_string()),
+            origin.node.map(|node| node.label().as_str().to_string()),
+            prepared_node,
+            Some(resource),
+            Some(format!("{coverage:?}")),
+            origin
+                .node
+                .map(|node| node.provenance().clone())
+                .or_else(|| {
+                    origin
+                        .fragment
+                        .map(|fragment| fragment.provenance().clone())
+                }),
+        ),
         cause,
         correction,
-        node.map(|node| node.provenance().clone())
-            .or_else(|| Some(fragment.provenance().clone())),
     )
 }
 
@@ -3226,12 +3268,14 @@ mod tests {
     use crate::plugins::gpu::{
         GpuBufferDescriptor, GpuBufferRegion, GpuBufferUsage, GpuBufferUsages,
         GpuCapabilityFeature, GpuCapabilityRequirement, GpuClearOperation, GpuColorAttachmentLoad,
-        GpuColorClearValue, GpuComputeOperation, GpuCopyOperation, GpuDispatchSize,
-        GpuMemoryIntent, GpuMultisampleResolveTarget, GpuQueryAccess, GpuQueryAccessKind,
-        GpuQueryKind, GpuQueryResolveOperation, GpuQuerySetDescriptor, GpuReconstruction,
-        GpuRenderColorAttachment, GpuRenderOperation, GpuResourceCommon, GpuResourceLifetime,
-        GpuTextureDescriptor, GpuTextureExtent, GpuTextureFormat, GpuTextureUsage,
-        GpuTextureUsages, GpuWorkResourceIdAllocator,
+        GpuColorClearValue, GpuComputeOperation, GpuCopyOperation, GpuDepthAttachmentLoad,
+        GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchSize, GpuDrawIntent, GpuDrawRange,
+        GpuMemoryIntent, GpuMultisampleResolveTarget, GpuPreparedTextureData, GpuQueryAccess,
+        GpuQueryAccessKind, GpuQueryKind, GpuQueryResolveOperation, GpuQuerySetDescriptor,
+        GpuReconstruction, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+        GpuRenderOperation, GpuResourceCommon, GpuResourceLifetime, GpuTextureDescriptor,
+        GpuTextureExtent, GpuTextureFormat, GpuTextureUsage, GpuTextureUsages,
+        GpuWorkResourceIdAllocator, PreparedGpuData, TransferData,
     };
 
     fn label(value: &str) -> GpuResourceLabel {
@@ -3305,6 +3349,56 @@ mod tests {
             .unwrap()
     }
 
+    fn prepared_texture_initialization(name: &str) -> GpuTextureInitialization {
+        let resource_label = label(name);
+        let extent =
+            GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap();
+        let data = PreparedGpuData::<TransferData>::from_pod_transfer(
+            name,
+            &[0_u8; 256],
+            provenance(name),
+        )
+        .unwrap();
+        GpuTextureInitialization::Prepared(
+            GpuPreparedTextureData::new(
+                &resource_label,
+                data,
+                GpuTextureFormat::Rgba8Unorm,
+                extent,
+                32,
+                0,
+            )
+            .unwrap(),
+        )
+    }
+
+    fn depth_texture(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> GpuTextureHandle {
+        let resource_label = label(name);
+        allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common(name),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Depth32Float,
+                    GpuTextureUsages::new(
+                        &resource_label,
+                        [
+                            GpuTextureUsage::DepthStencilAttachment,
+                            GpuTextureUsage::Sampled,
+                        ],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap()
+    }
+
     fn compute_operation() -> GpuWorkOperation {
         GpuWorkOperation::Compute(GpuComputeOperation::new(
             GpuDispatchSize::new(1, 1, 1).unwrap(),
@@ -3338,6 +3432,21 @@ mod tests {
         kind: GpuBufferAccessKind,
     ) -> GpuResourceAccess {
         GpuResourceAccess::Buffer(GpuBufferAccess::new(buffer, range, kind).unwrap())
+    }
+
+    fn texture_access(
+        texture: &GpuTextureHandle,
+        range: GpuTextureSubresourceRange,
+        kind: GpuTextureAccessKind,
+    ) -> GpuResourceAccess {
+        GpuResourceAccess::Texture(
+            GpuTextureAccess::new(
+                GpuTextureAccessResource::Texture(texture.clone()),
+                range,
+                kind,
+            )
+            .unwrap(),
+        )
     }
 
     #[test]
@@ -3449,6 +3558,39 @@ mod tests {
                 .is_ok()
         );
 
+        let prepared_data = PreparedGpuData::<TransferData>::from_pod_transfer(
+            "prepared buffer bytes",
+            &[0_u8; 64],
+            provenance("prepared buffer bytes"),
+        )
+        .unwrap();
+        let prepared = buffer(
+            &mut allocator,
+            "prepared",
+            GpuBufferInitialization::Prepared(prepared_data),
+            [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
+        );
+        let mut readable = builder("prepared descriptor initialized");
+        readable
+            .declare_resource(GpuResourceRef::Buffer(prepared.clone()))
+            .unwrap();
+        add_compute(
+            &mut readable,
+            "read prepared",
+            [buffer_access(
+                &prepared,
+                GpuBufferRange::whole(&prepared).unwrap(),
+                GpuBufferAccessKind::StorageRead,
+            )],
+        );
+        assert!(
+            GpuPreparedWorkGraph::prepare(
+                label("prepared descriptor graph"),
+                [readable.finish().unwrap()]
+            )
+            .is_ok()
+        );
+
         let uninitialized = buffer(
             &mut allocator,
             "uninitialized",
@@ -3493,6 +3635,137 @@ mod tests {
                 .unwrap_err();
         assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
         assert_eq!(error.resource(), Some(uninitialized.diagnostic_identity()));
+    }
+
+    #[test]
+    fn texture_descriptor_initialization_distinguishes_zeroed_and_prepared_coverage() {
+        let mut allocator = allocator();
+        let zeroed = texture(
+            &mut allocator,
+            "zeroed texture",
+            GpuTextureInitialization::Zeroed,
+            2,
+            1,
+            [GpuTextureUsage::Sampled, GpuTextureUsage::CopyDestination],
+        );
+        let prepared = texture(
+            &mut allocator,
+            "prepared texture",
+            prepared_texture_initialization("prepared texture"),
+            2,
+            1,
+            [GpuTextureUsage::Sampled, GpuTextureUsage::CopyDestination],
+        );
+        let prepared_base = GpuTextureSubresourceRange::new(
+            prepared.descriptor().common().label(),
+            0,
+            1,
+            0,
+            1,
+            GpuTextureAspect::Color,
+        )
+        .unwrap();
+        let mut fragment = builder("initialized textures");
+        for resource in [&zeroed, &prepared] {
+            fragment
+                .declare_resource(GpuResourceRef::Texture(resource.clone()))
+                .unwrap();
+        }
+        add_compute(
+            &mut fragment,
+            "read zeroed",
+            [texture_access(
+                &zeroed,
+                GpuTextureSubresourceRange::whole(&zeroed).unwrap(),
+                GpuTextureAccessKind::SampledRead,
+            )],
+        );
+        add_compute(
+            &mut fragment,
+            "read prepared base",
+            [texture_access(
+                &prepared,
+                prepared_base,
+                GpuTextureAccessKind::SampledRead,
+            )],
+        );
+        let graph = GpuPreparedWorkGraph::prepare(
+            label("initialized texture graph"),
+            [fragment.finish().unwrap()],
+        )
+        .unwrap();
+        let initial_mip_count = |identity| {
+            graph
+                .initialization()
+                .iter()
+                .find(|summary| summary.resource().diagnostic_identity() == identity)
+                .unwrap()
+                .initial()
+                .unwrap()
+                .texture_subresource_values()
+                .unwrap()
+                .len()
+        };
+        assert_eq!(initial_mip_count(zeroed.diagnostic_identity()), 2);
+        assert_eq!(initial_mip_count(prepared.diagnostic_identity()), 1);
+    }
+
+    #[test]
+    fn texture_reads_reject_uninitialized_or_unprepared_mips() {
+        let mut allocator = allocator();
+        let prepared = texture(
+            &mut allocator,
+            "partially prepared texture",
+            prepared_texture_initialization("partially prepared texture"),
+            2,
+            1,
+            [GpuTextureUsage::Sampled, GpuTextureUsage::CopyDestination],
+        );
+        let uninitialized = texture(
+            &mut allocator,
+            "uninitialized texture",
+            GpuTextureInitialization::Uninitialized,
+            1,
+            1,
+            [GpuTextureUsage::Sampled],
+        );
+        let prepared_mip_one = GpuTextureSubresourceRange::new(
+            prepared.descriptor().common().label(),
+            1,
+            1,
+            0,
+            1,
+            GpuTextureAspect::Color,
+        )
+        .unwrap();
+        for (name, texture, range) in [
+            ("unprepared mip", prepared, prepared_mip_one),
+            (
+                "uninitialized texture",
+                uninitialized.clone(),
+                GpuTextureSubresourceRange::whole(&uninitialized).unwrap(),
+            ),
+        ] {
+            let mut fragment = builder(name);
+            fragment
+                .declare_resource(GpuResourceRef::Texture(texture.clone()))
+                .unwrap();
+            add_compute(
+                &mut fragment,
+                "invalid read",
+                [texture_access(
+                    &texture,
+                    range,
+                    GpuTextureAccessKind::SampledRead,
+                )],
+            );
+            assert_eq!(
+                GpuPreparedWorkGraph::prepare(label(name), [fragment.finish().unwrap()])
+                    .unwrap_err()
+                    .cause(),
+                GpuWorkGraphCause::ReadBeforeInitialization
+            );
+        }
     }
 
     #[test]
@@ -3567,6 +3840,118 @@ mod tests {
         assert!(graph.dependencies().iter().all(|dependency| {
             dependency.before().local_node() != 4 && dependency.after().local_node() != 4
         }));
+    }
+
+    #[test]
+    fn buffer_hazard_truth_table_is_lexically_oriented() {
+        let mut allocator = allocator();
+        let buffer = buffer(
+            &mut allocator,
+            "truth table",
+            GpuBufferInitialization::Zeroed,
+            [GpuBufferUsage::Storage],
+        );
+        let range = GpuBufferRange::whole(&buffer).unwrap();
+        let mut fragment = builder("truth table");
+        fragment
+            .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+            .unwrap();
+        for (name, kind) in [
+            ("read one", GpuBufferAccessKind::StorageRead),
+            ("read two", GpuBufferAccessKind::StorageRead),
+            ("write one", GpuBufferAccessKind::StorageWrite),
+            ("write two", GpuBufferAccessKind::StorageWrite),
+            ("read write", GpuBufferAccessKind::StorageReadWrite),
+        ] {
+            add_compute(&mut fragment, name, [buffer_access(&buffer, range, kind)]);
+        }
+        let graph =
+            GpuPreparedWorkGraph::prepare(label("truth table graph"), [fragment.finish().unwrap()])
+                .unwrap();
+        let reasons = |before, after| {
+            graph.dependencies().iter().find_map(|dependency| {
+                (dependency.before().local_node() == before
+                    && dependency.after().local_node() == after)
+                    .then(|| dependency.reasons())
+            })
+        };
+        assert!(reasons(1, 2).is_none());
+        assert!(
+            reasons(1, 3)
+                .unwrap()
+                .iter()
+                .any(|reason| { matches!(reason, GpuDependencyReason::WriteAfterRead { .. }) })
+        );
+        assert!(
+            reasons(3, 4)
+                .unwrap()
+                .iter()
+                .any(|reason| { matches!(reason, GpuDependencyReason::WriteAfterWrite { .. }) })
+        );
+        let read_write = reasons(4, 5).unwrap();
+        assert!(
+            read_write
+                .iter()
+                .any(|reason| matches!(reason, GpuDependencyReason::ReadAfterWrite { .. }))
+        );
+        assert!(
+            read_write
+                .iter()
+                .any(|reason| matches!(reason, GpuDependencyReason::WriteAfterWrite { .. }))
+        );
+    }
+
+    #[test]
+    fn disjoint_query_ranges_remain_independent() {
+        let mut allocator = allocator();
+        let queries = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(common("disjoint queries"), GpuQueryKind::Timestamp, 4)
+                    .unwrap(),
+            )
+            .unwrap();
+        let operation = |range| {
+            GpuWorkOperation::Render(
+                GpuRenderOperation::new(
+                    [],
+                    None,
+                    [],
+                    [
+                        GpuQueryAccess::new(&queries, range, GpuQueryAccessKind::WriteTimestamp)
+                            .unwrap(),
+                    ],
+                )
+                .unwrap(),
+            )
+        };
+        let mut fragment = builder("disjoint queries");
+        fragment
+            .declare_resource(GpuResourceRef::QuerySet(queries.clone()))
+            .unwrap();
+        for (name, range) in [
+            ("first queries", GpuQueryRange::new(&queries, 0, 2).unwrap()),
+            (
+                "second queries",
+                GpuQueryRange::new(&queries, 2, 2).unwrap(),
+            ),
+        ] {
+            fragment
+                .add_node(
+                    label(name),
+                    operation(range),
+                    [],
+                    GpuCapabilityRequirements::new(),
+                    GpuExecutionPreference::GraphicsRequired,
+                    provenance(name),
+                )
+                .unwrap();
+        }
+        let graph = GpuPreparedWorkGraph::prepare(
+            label("disjoint query graph"),
+            [fragment.finish().unwrap()],
+        )
+        .unwrap();
+        assert!(graph.dependencies().is_empty());
     }
 
     #[test]
@@ -3654,6 +4039,90 @@ mod tests {
     }
 
     #[test]
+    fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
+        let mut allocator = allocator();
+        let depth = depth_texture(&mut allocator, "depth attachment");
+        let range = GpuTextureSubresourceRange::whole(&depth).unwrap();
+        let render = |load, store, draws: Vec<GpuDrawIntent>| {
+            GpuWorkOperation::Render(
+                GpuRenderOperation::new(
+                    [],
+                    Some(
+                        GpuRenderDepthStencilAttachment::new(
+                            GpuTextureAccessResource::Texture(depth.clone()),
+                            range,
+                            GpuDepthStencilAccess::ReadWrite,
+                            load,
+                            store,
+                        )
+                        .unwrap(),
+                    ),
+                    draws,
+                    [],
+                )
+                .unwrap(),
+            )
+        };
+        let sampled = || texture_access(&depth, range, GpuTextureAccessKind::SampledRead);
+        let clear = GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap());
+        for (name, store, succeeds) in [
+            ("stored depth", GpuAttachmentStore::Store, true),
+            ("discarded depth", GpuAttachmentStore::Discard, false),
+        ] {
+            let mut fragment = builder(name);
+            fragment
+                .declare_resource(GpuResourceRef::Texture(depth.clone()))
+                .unwrap();
+            fragment
+                .add_node(
+                    label("clear depth"),
+                    render(clear, store, Vec::new()),
+                    [],
+                    GpuCapabilityRequirements::new(),
+                    GpuExecutionPreference::GraphicsRequired,
+                    provenance("clear depth"),
+                )
+                .unwrap();
+            add_compute(&mut fragment, "sample depth", [sampled()]);
+            let result = GpuPreparedWorkGraph::prepare(label(name), [fragment.finish().unwrap()]);
+            assert_eq!(result.is_ok(), succeeds);
+            if !succeeds {
+                assert_eq!(
+                    result.unwrap_err().cause(),
+                    GpuWorkGraphCause::ReadBeforeInitialization
+                );
+            }
+        }
+
+        let mut load = builder("load depth");
+        load.declare_resource(GpuResourceRef::Texture(depth.clone()))
+            .unwrap();
+        let draw = GpuDrawIntent::direct(
+            GpuDrawRange::new(0, 3).unwrap(),
+            GpuDrawRange::new(0, 1).unwrap(),
+        );
+        load.add_node(
+            label("load depth"),
+            render(
+                GpuDepthAttachmentLoad::Load,
+                GpuAttachmentStore::Store,
+                vec![draw],
+            ),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::GraphicsRequired,
+            provenance("load depth"),
+        )
+        .unwrap();
+        assert_eq!(
+            GpuPreparedWorkGraph::prepare(label("load depth graph"), [load.finish().unwrap()])
+                .unwrap_err()
+                .cause(),
+            GpuWorkGraphCause::ReadBeforeInitialization
+        );
+    }
+
+    #[test]
     fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
         let mut allocator = allocator();
         let queries = allocator
@@ -3683,6 +4152,32 @@ mod tests {
         let query_resolve =
             GpuQueryResolveOperation::new(&queries, query_range, &resolve, 0).unwrap();
         let resolve_range = query_resolve.destination_range();
+        let mut unresolved = builder("unresolved timing");
+        for resource in [
+            GpuResourceRef::QuerySet(queries.clone()),
+            GpuResourceRef::Buffer(resolve.clone()),
+        ] {
+            unresolved.declare_resource(resource).unwrap();
+        }
+        unresolved
+            .add_node(
+                label("resolve unwritten timestamps"),
+                GpuWorkOperation::Resolve(query_resolve.clone()),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::TransferPreferred,
+                provenance("resolve unwritten timestamps"),
+            )
+            .unwrap();
+        assert_eq!(
+            GpuPreparedWorkGraph::prepare(
+                label("unresolved timing graph"),
+                [unresolved.finish().unwrap()],
+            )
+            .unwrap_err()
+            .cause(),
+            GpuWorkGraphCause::ReadBeforeInitialization
+        );
         let copy = GpuCopyOperation::buffer_to_buffer(
             GpuBufferRegion::new(&resolve, resolve_range).unwrap(),
             GpuBufferRegion::new(
@@ -3731,10 +4226,39 @@ mod tests {
                 provenance("copy readback"),
             )
             .unwrap();
+        let fragment = fragment.finish().unwrap();
         let graph =
-            GpuPreparedWorkGraph::prepare(label("timing graph"), [fragment.finish().unwrap()])
-                .unwrap();
-        assert_eq!(graph.topological_order().len(), 3);
+            GpuPreparedWorkGraph::prepare(label("timing graph"), [fragment.clone()]).unwrap();
+        let repeated = GpuPreparedWorkGraph::prepare(label("timing graph"), [fragment]).unwrap();
+        assert_eq!(graph.nodes(), repeated.nodes());
+        assert_eq!(graph.topological_order(), repeated.topological_order());
+        assert_eq!(graph.dependencies(), repeated.dependencies());
+        assert_eq!(graph.initialization(), repeated.initialization());
+        assert_eq!(graph.requirements(), repeated.requirements());
+        assert_eq!(graph.outputs(), repeated.outputs());
+        assert_eq!(graph.diagnostics(), repeated.diagnostics());
+        assert_eq!(
+            graph
+                .nodes()
+                .iter()
+                .map(GpuPreparedWorkNode::id)
+                .collect::<Vec<_>>(),
+            graph.topological_order()
+        );
+        assert_eq!(
+            graph
+                .nodes()
+                .iter()
+                .map(|node| node.node().label().as_str())
+                .collect::<Vec<_>>(),
+            vec!["write timestamps", "resolve timestamps", "copy readback"]
+        );
+        assert!(graph.nodes().iter().all(|node| {
+            node.node()
+                .accesses()
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+        }));
         assert!(graph.dependencies().iter().any(|dependency| {
             dependency.before().local_node() == 1 && dependency.after().local_node() == 2
         }));
@@ -3748,6 +4272,18 @@ mod tests {
             Some(GpuCapabilityRequirement::Required(
                 GpuCapabilityFeature::TimestampQuery
             ))
+        );
+        assert_eq!(
+            graph
+                .requirements()
+                .iter()
+                .map(GpuCapabilityRequirement::feature)
+                .collect::<Vec<_>>(),
+            vec![
+                GpuCapabilityFeature::RenderPipeline,
+                GpuCapabilityFeature::Copy,
+                GpuCapabilityFeature::TimestampQuery,
+            ]
         );
     }
 
@@ -3816,6 +4352,33 @@ mod tests {
         consumer.finish().unwrap()
     }
 
+    fn semantic_dependencies(
+        graph: &GpuPreparedWorkGraph,
+    ) -> Vec<(String, String, Vec<GpuDependencyReason>)> {
+        let node_label = |id| {
+            graph
+                .nodes()
+                .iter()
+                .find(|node| node.id() == id)
+                .unwrap()
+                .node()
+                .label()
+                .as_str()
+                .to_string()
+        };
+        graph
+            .dependencies()
+            .iter()
+            .map(|dependency| {
+                (
+                    node_label(dependency.before()),
+                    node_label(dependency.after()),
+                    dependency.reasons().to_vec(),
+                )
+            })
+            .collect()
+    }
+
     #[test]
     fn typed_import_export_causality_overrides_fragment_input_order() {
         let mut allocator = allocator();
@@ -3829,12 +4392,27 @@ mod tests {
         let key = GpuExportKey::new("shared.ready").unwrap();
         let producer = producer_fragment(&shared, key.clone(), range);
         let consumer = consumer_fragment(&shared, key, range);
-        let graph =
+        let producer_first = GpuPreparedWorkGraph::prepare(
+            label("composition"),
+            [producer.clone(), consumer.clone()],
+        )
+        .unwrap();
+        let consumer_first =
             GpuPreparedWorkGraph::prepare(label("composition"), [consumer, producer]).unwrap();
-        assert_eq!(graph.topological_order()[0].fragment_ordinal(), 1);
-        assert_eq!(graph.topological_order()[1].fragment_ordinal(), 0);
+        assert_eq!(
+            semantic_dependencies(&producer_first),
+            semantic_dependencies(&consumer_first)
+        );
+        assert_eq!(
+            producer_first.initialization(),
+            consumer_first.initialization()
+        );
+        assert_eq!(producer_first.requirements(), consumer_first.requirements());
+        assert_eq!(producer_first.outputs(), consumer_first.outputs());
+        assert_eq!(consumer_first.topological_order()[0].fragment_ordinal(), 1);
+        assert_eq!(consumer_first.topological_order()[1].fragment_ordinal(), 0);
         assert!(
-            graph.dependencies()[0]
+            consumer_first.dependencies()[0]
                 .reasons()
                 .iter()
                 .any(|reason| matches!(reason, GpuDependencyReason::ReadAfterWrite { .. }))
@@ -3877,14 +4455,67 @@ mod tests {
                 GpuBufferAccessKind::StorageRead,
             )],
         );
-        let error = GpuPreparedWorkGraph::prepare(
+        let writer = writer.finish().unwrap();
+        let reader = reader.finish().unwrap();
+        let writer_first = GpuPreparedWorkGraph::prepare(
             label("missing causality"),
-            [writer.finish().unwrap(), reader.finish().unwrap()],
+            [writer.clone(), reader.clone()],
         )
         .unwrap_err();
+        let reader_first =
+            GpuPreparedWorkGraph::prepare(label("missing causality"), [reader, writer])
+                .unwrap_err();
         assert_eq!(
-            error.cause(),
+            writer_first.cause(),
             GpuWorkGraphCause::MissingCrossFragmentCausality
+        );
+        assert_eq!(writer_first.cause(), reader_first.cause());
+        assert_eq!(writer_first.resource(), reader_first.resource());
+    }
+
+    #[test]
+    fn imports_reject_mismatched_resources_and_insufficient_export_coverage() {
+        let mut allocator = allocator();
+        let produced = buffer(
+            &mut allocator,
+            "produced",
+            GpuBufferInitialization::Uninitialized,
+            [GpuBufferUsage::Storage],
+        );
+        let other = buffer(
+            &mut allocator,
+            "other",
+            GpuBufferInitialization::Uninitialized,
+            [GpuBufferUsage::Storage],
+        );
+        let produced_range = GpuBufferRange::new(&produced, 0, 16).unwrap();
+        let key = GpuExportKey::new("produced.ready").unwrap();
+        let producer = producer_fragment(&produced, key.clone(), produced_range);
+        let mismatched_consumer = consumer_fragment(
+            &other,
+            key.clone(),
+            GpuBufferRange::new(&other, 0, 16).unwrap(),
+        );
+        assert_eq!(
+            GpuPreparedWorkGraph::prepare(
+                label("mismatched resource"),
+                [producer.clone(), mismatched_consumer],
+            )
+            .unwrap_err()
+            .cause(),
+            GpuWorkGraphCause::ImportExportMismatch
+        );
+
+        let oversized_consumer =
+            consumer_fragment(&produced, key, GpuBufferRange::whole(&produced).unwrap());
+        assert_eq!(
+            GpuPreparedWorkGraph::prepare(
+                label("insufficient coverage"),
+                [producer, oversized_consumer],
+            )
+            .unwrap_err()
+            .cause(),
+            GpuWorkGraphCause::ReadBeforeInitialization
         );
     }
 
@@ -3909,6 +4540,51 @@ mod tests {
         let second = producer_fragment(&shared, GpuExportKey::new("second").unwrap(), range);
         let error = GpuPreparedWorkGraph::prepare(label("ambiguous"), [first, second]).unwrap_err();
         assert_eq!(error.cause(), GpuWorkGraphCause::AmbiguousWriter);
+    }
+
+    #[test]
+    fn explicit_non_data_order_succeeds_and_rejects_duplicate_or_unknown_endpoints() {
+        let mut ordered = builder("ordered");
+        let first = add_compute(&mut ordered, "first", []);
+        let second = add_compute(&mut ordered, "second", []);
+        ordered
+            .add_explicit_order(GpuExplicitOrder::new(&first, &second, "phase order").unwrap())
+            .unwrap();
+        let graph =
+            GpuPreparedWorkGraph::prepare(label("ordered graph"), [ordered.finish().unwrap()])
+                .unwrap();
+        assert_eq!(graph.dependencies().len(), 1);
+        assert_eq!(
+            graph.dependencies()[0].reasons(),
+            [GpuDependencyReason::ExplicitNonData {
+                reason: "phase order".to_string(),
+            }]
+        );
+
+        let mut duplicate = builder("duplicate");
+        let first = add_compute(&mut duplicate, "first", []);
+        let second = add_compute(&mut duplicate, "second", []);
+        let order = GpuExplicitOrder::new(&first, &second, "one edge").unwrap();
+        duplicate.add_explicit_order(order.clone()).unwrap();
+        assert_eq!(
+            duplicate.add_explicit_order(order).unwrap_err().cause(),
+            GpuWorkAuthoringCause::DuplicateExplicitOrder
+        );
+
+        let mut missing = builder("missing endpoint");
+        let first = add_compute(&mut missing, "first", []);
+        let second = add_compute(&mut missing, "second", []);
+        missing
+            .add_explicit_order(GpuExplicitOrder::new(&first, &second, "missing").unwrap())
+            .unwrap();
+        let mut missing = missing.finish().unwrap();
+        missing.nodes.pop();
+        assert_eq!(
+            GpuPreparedWorkGraph::prepare(label("missing endpoint graph"), [missing])
+                .unwrap_err()
+                .cause(),
+            GpuWorkGraphCause::UnknownIdentity
+        );
     }
 
     #[test]
@@ -4018,6 +4694,46 @@ mod tests {
             error.cause(),
             GpuWorkAuthoringCause::MechanicalCapabilityContradiction
         );
+    }
+
+    #[test]
+    fn prepared_graph_rejects_a_foreign_resource_identity() {
+        let mut allocator = allocator();
+        let declared = buffer(
+            &mut allocator,
+            "declared",
+            GpuBufferInitialization::Zeroed,
+            [GpuBufferUsage::Storage],
+        );
+        let foreign = buffer(
+            &mut allocator,
+            "foreign",
+            GpuBufferInitialization::Zeroed,
+            [GpuBufferUsage::Storage],
+        );
+        let mut fragment = builder("foreign resource");
+        fragment
+            .declare_resource(GpuResourceRef::Buffer(declared.clone()))
+            .unwrap();
+        add_compute(
+            &mut fragment,
+            "read",
+            [buffer_access(
+                &declared,
+                GpuBufferRange::whole(&declared).unwrap(),
+                GpuBufferAccessKind::StorageRead,
+            )],
+        );
+        let mut fragment = fragment.finish().unwrap();
+        fragment.nodes[0].accesses = vec![buffer_access(
+            &foreign,
+            GpuBufferRange::whole(&foreign).unwrap(),
+            GpuBufferAccessKind::StorageRead,
+        )];
+        let error =
+            GpuPreparedWorkGraph::prepare(label("foreign resource graph"), [fragment]).unwrap_err();
+        assert_eq!(error.cause(), GpuWorkGraphCause::UnknownIdentity);
+        assert_eq!(error.resource(), Some(foreign.diagnostic_identity()));
     }
 
     #[test]
@@ -4150,37 +4866,71 @@ mod tests {
     #[test]
     fn explicit_graph_entry_input_initializes_only_declared_coverage() {
         let mut allocator = allocator();
-        let imported = buffer(
-            &mut allocator,
-            "imported",
-            GpuBufferInitialization::Uninitialized,
-            [GpuBufferUsage::Storage],
-        );
-        let initialized = GpuBufferRange::new(&imported, 16, 16).unwrap();
-        let input = GpuWorkResourceInput::new(
-            GpuResourceRef::Buffer(imported.clone()),
-            GpuInitialCoverage::buffer_ranges(&imported, [initialized]).unwrap(),
-            provenance("external input"),
-        )
-        .unwrap();
-        let mut fragment = builder("input");
-        fragment
-            .declare_resource(GpuResourceRef::Buffer(imported.clone()))
+        let imported_label = label("imported retained");
+        let retained_label = label("owned retained");
+        let commons = [
+            GpuResourceCommon::imported(
+                imported_label.clone(),
+                GpuResourceLifetime::Retained,
+                provenance("imported retained"),
+            ),
+            GpuResourceCommon::owned(
+                retained_label.clone(),
+                GpuResourceLifetime::Retained,
+                GpuMemoryIntent::Device,
+                GpuReconstruction::SourceBacked,
+                provenance("owned retained"),
+            )
+            .unwrap(),
+        ];
+        for common in commons {
+            let resource_label = common.label().clone();
+            let resource = allocator
+                .allocate_buffer_handle(
+                    GpuBufferDescriptor::new(
+                        common,
+                        64,
+                        GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
+                        GpuBufferInitialization::Uninitialized,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+            let initialized = GpuBufferRange::new(&resource, 16, 16).unwrap();
+            let input = GpuWorkResourceInput::new(
+                GpuResourceRef::Buffer(resource.clone()),
+                GpuInitialCoverage::buffer_ranges(&resource, [initialized]).unwrap(),
+                provenance("external input"),
+            )
             .unwrap();
-        fragment.add_input(input).unwrap();
-        add_compute(
-            &mut fragment,
-            "read imported",
-            [buffer_access(
-                &imported,
-                initialized,
-                GpuBufferAccessKind::StorageRead,
-            )],
-        );
-        assert!(
-            GpuPreparedWorkGraph::prepare(label("input graph"), [fragment.finish().unwrap()])
-                .is_ok()
-        );
+            let prepare_read = |name, read_range| {
+                let mut fragment = builder(name);
+                fragment
+                    .declare_resource(GpuResourceRef::Buffer(resource.clone()))
+                    .unwrap();
+                fragment.add_input(input.clone()).unwrap();
+                add_compute(
+                    &mut fragment,
+                    "read input",
+                    [buffer_access(
+                        &resource,
+                        read_range,
+                        GpuBufferAccessKind::StorageRead,
+                    )],
+                );
+                GpuPreparedWorkGraph::prepare(label(name), [fragment.finish().unwrap()])
+            };
+            assert!(prepare_read("initialized input", initialized).is_ok());
+            assert_eq!(
+                prepare_read(
+                    "uninitialized input",
+                    GpuBufferRange::new(&resource, 0, 16).unwrap(),
+                )
+                .unwrap_err()
+                .cause(),
+                GpuWorkGraphCause::ReadBeforeInitialization
+            );
+        }
     }
 
     #[test]

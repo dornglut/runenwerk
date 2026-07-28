@@ -37,7 +37,7 @@ fn external_imported_texture_is_rejected_in_active_runtime_path() {
         "post.present",
         RenderPassKind::Present,
     );
-    pass.reads.push(external_id);
+    pass.present_source = Some(external_id);
     graph.add_pass(pass);
 
     let err = validate_flow_graph(&graph).expect_err("flow must reject external imports");
@@ -72,15 +72,16 @@ fn builtin_ui_composite_requires_canonical_read_write_contract() {
         "ui.composite",
         RenderPassKind::BuiltinUiComposite,
     );
-    pass.reads.push(surface_color);
-    pass.writes.push(ui_output);
+    pass.storage_reads.push(surface_color);
+    pass.color_outputs.push(ui_output);
     graph.add_pass(pass);
 
     let err = validate_flow_graph(&graph).expect_err("flow must enforce UI composite contract");
     assert!(
-        err.issues
-            .iter()
-            .any(|issue| matches!(issue, RenderFlowValidationIssue::BuiltinUiHasReads { .. })),
+        err.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::BuiltinUiHasInvalidResourceRoles { .. }
+        )),
         "expected UI reads contract issue, got {:?}",
         err.issues
     );

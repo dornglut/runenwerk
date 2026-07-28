@@ -52,7 +52,8 @@ pub enum CompiledPassExecutionPlan {
 #[derive(Debug, Clone)]
 pub struct CompiledComputeExecutionPlan {
     pub pass_id: RenderPassId,
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub feature_id: Option<RenderFeatureId>,
     pub shader: Option<RenderShaderReference>,
     pub shader_constants: Vec<RenderShaderConstant>,
@@ -64,7 +65,8 @@ pub struct CompiledComputeExecutionPlan {
 #[derive(Debug, Clone)]
 pub struct CompiledRasterExecutionPlan {
     pub pass_id: RenderPassId,
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub feature_id: Option<RenderFeatureId>,
     pub shader: Option<RenderShaderReference>,
     pub view_mask: CompiledViewMask,
@@ -79,7 +81,8 @@ pub struct CompiledRasterExecutionPlan {
 #[derive(Debug, Clone)]
 pub struct CompiledCopyExecutionPlan {
     pub pass_id: RenderPassId,
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub feature_id: Option<RenderFeatureId>,
     pub view_mask: CompiledViewMask,
     pub source: Option<CompiledResourceRef>,
@@ -89,7 +92,8 @@ pub struct CompiledCopyExecutionPlan {
 #[derive(Debug, Clone)]
 pub struct CompiledPresentExecutionPlan {
     pub pass_id: RenderPassId,
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub feature_id: Option<RenderFeatureId>,
     pub view_mask: CompiledViewMask,
     pub source: Option<CompiledResourceRef>,
@@ -98,7 +102,8 @@ pub struct CompiledPresentExecutionPlan {
 #[derive(Debug, Clone)]
 pub struct CompiledUiCompositeExecutionPlan {
     pub pass_id: RenderPassId,
-    pub order_index: usize,
+    /// Lexical source position retained for provenance, not scheduling.
+    pub authoring_index: usize,
     pub feature_id: RenderFeatureId,
     pub view_mask: CompiledViewMask,
     pub color_output: CompiledResourceRef,
@@ -178,7 +183,6 @@ pub enum CompiledStorageAccess {
 pub struct CompiledTargetPlan {
     pub color_outputs: Vec<CompiledResourceRef>,
     pub depth_output: Option<CompiledResourceRef>,
-    pub reads: Vec<CompiledResourceRef>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -280,7 +284,7 @@ pub struct CompiledStorageBinding {
 
 pub fn compile_execution_plan(
     resources: &ResourceGraph,
-    pass_order: &[CompiledPassDescriptor],
+    render_passes: &[CompiledPassDescriptor],
 ) -> CompiledFlowExecutionPlan {
     let mut required_state_types = Vec::<CompiledStateRequirement>::new();
     let mut seen_state_types = BTreeSet::<TypeId>::new();
@@ -293,11 +297,11 @@ pub fn compile_execution_plan(
         }
     }
 
-    let passes = pass_order
+    let passes = render_passes
         .iter()
         .map(|pass| compile_pass_execution(pass, resources))
         .collect();
-    let fixed_step_regions = compile_fixed_step_regions(pass_order);
+    let fixed_step_regions = compile_fixed_step_regions(render_passes);
 
     CompiledFlowExecutionPlan {
         required_state_types,
@@ -307,10 +311,10 @@ pub fn compile_execution_plan(
 }
 
 fn compile_fixed_step_regions(
-    pass_order: &[CompiledPassDescriptor],
+    render_passes: &[CompiledPassDescriptor],
 ) -> Vec<CompiledFixedStepRegion> {
     let mut regions = BTreeMap::<RenderFixedStepRegionId, CompiledFixedStepRegion>::new();
-    for pass in pass_order {
+    for pass in render_passes {
         let Some(region) = pass.node().fixed_step_region.as_ref() else {
             continue;
         };
@@ -334,7 +338,7 @@ fn compile_pass_execution(
 ) -> CompiledPassExecutionPlan {
     let node = pass.node();
     let pass_id = node.id;
-    let order_index = pass.order_index();
+    let authoring_index = pass.authoring_index();
 
     let bindings = compile_pass_bindings(node, resources);
 
@@ -342,7 +346,7 @@ fn compile_pass_execution(
         RenderPassKind::Compute => {
             CompiledPassExecutionPlan::Compute(CompiledComputeExecutionPlan {
                 pass_id,
-                order_index,
+                authoring_index,
                 feature_id: compile_feature_id(node),
                 shader: node.shader.clone(),
                 shader_constants: node.shader_constants.clone(),
@@ -354,7 +358,7 @@ fn compile_pass_execution(
         RenderPassKind::Fullscreen => {
             CompiledPassExecutionPlan::Fullscreen(CompiledRasterExecutionPlan {
                 pass_id,
-                order_index,
+                authoring_index,
                 feature_id: compile_feature_id(node),
                 shader: node.shader.clone(),
                 view_mask: compile_view_mask(node),
@@ -369,7 +373,7 @@ fn compile_pass_execution(
         RenderPassKind::Graphics => {
             CompiledPassExecutionPlan::Graphics(CompiledRasterExecutionPlan {
                 pass_id,
-                order_index,
+                authoring_index,
                 feature_id: compile_feature_id(node),
                 shader: node.shader.clone(),
                 view_mask: compile_view_mask(node),
@@ -383,34 +387,34 @@ fn compile_pass_execution(
         }
         RenderPassKind::Copy => CompiledPassExecutionPlan::Copy(CompiledCopyExecutionPlan {
             pass_id,
-            order_index,
+            authoring_index,
             feature_id: compile_feature_id(node),
             view_mask: compile_view_mask(node),
             source: node
-                .reads
-                .first()
+                .copy_source
+                .as_ref()
                 .map(|resource| compile_resource_ref(resource, resources)),
             destination: node
-                .writes
-                .first()
+                .copy_destination
+                .as_ref()
                 .map(|resource| compile_resource_ref(resource, resources)),
         }),
         RenderPassKind::Present => {
             CompiledPassExecutionPlan::Present(CompiledPresentExecutionPlan {
                 pass_id,
-                order_index,
+                authoring_index,
                 feature_id: compile_feature_id(node),
                 view_mask: compile_view_mask(node),
                 source: node
-                    .reads
-                    .first()
+                    .present_source
+                    .as_ref()
                     .map(|resource| compile_resource_ref(resource, resources)),
             })
         }
         RenderPassKind::BuiltinUiComposite => {
             CompiledPassExecutionPlan::BuiltinUiComposite(CompiledUiCompositeExecutionPlan {
                 pass_id,
-                order_index,
+                authoring_index,
                 feature_id: UI_RENDER_FEATURE_ID,
                 view_mask: compile_view_mask(node),
                 color_output: CompiledResourceRef::ImportedBuiltin(
@@ -515,14 +519,19 @@ fn collect_storage_usage(
     resources: &ResourceGraph,
 ) -> Vec<(GpuWorkResourceId, CompiledStorageAccess)> {
     let writable_storage = node
-        .writes
+        .storage_writes
         .iter()
         .copied()
         .filter(|resource| is_buffer_like_resource(resources, resource))
         .collect::<BTreeSet<_>>();
     let mut seen_storage = BTreeSet::<GpuWorkResourceId>::new();
     let mut usage = Vec::<(GpuWorkResourceId, CompiledStorageAccess)>::new();
-    for resource in node.reads.iter().chain(node.writes.iter()).copied() {
+    for resource in node
+        .storage_reads
+        .iter()
+        .chain(node.storage_writes.iter())
+        .copied()
+    {
         if !is_buffer_like_resource(resources, &resource) {
             continue;
         }
@@ -552,7 +561,7 @@ fn is_buffer_like_resource(resources: &ResourceGraph, resource: &GpuWorkResource
 fn compile_target_plan(node: &RenderPassNode, resources: &ResourceGraph) -> CompiledTargetPlan {
     CompiledTargetPlan {
         color_outputs: node
-            .writes
+            .color_outputs
             .iter()
             .map(|resource| compile_resource_ref(resource, resources))
             .collect(),
@@ -560,11 +569,6 @@ fn compile_target_plan(node: &RenderPassNode, resources: &ResourceGraph) -> Comp
             .depth_target
             .as_ref()
             .map(|resource| compile_resource_ref(resource, resources)),
-        reads: node
-            .reads
-            .iter()
-            .map(|resource| compile_resource_ref(resource, resources))
-            .collect(),
     }
 }
 
@@ -722,8 +726,8 @@ mod tests {
             "test.pass",
             RenderPassKind::Compute,
         );
-        pass.reads.push(storage_id);
-        pass.writes.push(storage_id);
+        pass.storage_reads.push(storage_id);
+        pass.storage_writes.push(storage_id);
         (pass, resources, storage_id)
     }
 
@@ -824,8 +828,8 @@ mod tests {
             "test.order",
             RenderPassKind::Compute,
         );
-        pass.reads.extend([read_only, shared]);
-        pass.writes.extend([shared, write_only]);
+        pass.storage_reads.extend([read_only, shared]);
+        pass.storage_writes.extend([shared, write_only]);
 
         let bindings = compile_pass_bindings(&pass, &resources);
         let storage_bindings = bindings
@@ -884,8 +888,8 @@ mod tests {
             "test.usage",
             RenderPassKind::Compute,
         );
-        pass.reads.extend([first, second, first]);
-        pass.writes.extend([second, third, second]);
+        pass.storage_reads.extend([first, second, first]);
+        pass.storage_writes.extend([second, third, second]);
 
         assert_eq!(
             collect_storage_usage(&pass, &resources),
