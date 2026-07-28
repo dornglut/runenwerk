@@ -27,6 +27,12 @@ impl GpuResourceLabel {
     }
 }
 
+impl AsRef<str> for GpuResourceLabel {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuResourceProvenance {
     producer: GpuResourceLabel,

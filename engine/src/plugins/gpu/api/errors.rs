@@ -186,6 +186,7 @@ impl std::error::Error for GpuWorkOperationError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuWorkAuthoringCause {
+    InvalidLabel,
     InvalidCoverage,
     InvalidResourceKind,
     DuplicateResource,
@@ -208,6 +209,7 @@ pub enum GpuWorkAuthoringErrorSource {
     Access(GpuAccessError),
     Operation(GpuWorkOperationError),
     Capability(GpuCapabilityRequirementError),
+    Descriptor(GpuResourceDescriptorError),
 }
 
 impl fmt::Display for GpuWorkAuthoringErrorSource {
@@ -216,6 +218,7 @@ impl fmt::Display for GpuWorkAuthoringErrorSource {
             Self::Access(source) => source.fmt(f),
             Self::Operation(source) => source.fmt(f),
             Self::Capability(source) => source.fmt(f),
+            Self::Descriptor(source) => source.fmt(f),
         }
     }
 }
@@ -226,6 +229,7 @@ impl std::error::Error for GpuWorkAuthoringErrorSource {
             Self::Access(source) => Some(source),
             Self::Operation(source) => Some(source),
             Self::Capability(source) => Some(source),
+            Self::Descriptor(source) => Some(source),
         }
     }
 }
@@ -355,6 +359,19 @@ impl std::error::Error for GpuWorkAuthoringError {
             .source
             .as_deref()
             .map(|source| source as &(dyn std::error::Error + 'static))
+    }
+}
+
+impl From<GpuAccessError> for GpuWorkAuthoringError {
+    fn from(source: GpuAccessError) -> Self {
+        let resource = source.resource();
+        Self::with_source(
+            "author checked GPU access",
+            GpuWorkAuthoringErrorContext::new(None, None, None, resource, None),
+            GpuWorkAuthoringCause::InvalidCoverage,
+            "provide a checked range bounded by the same typed resource",
+            GpuWorkAuthoringErrorSource::Access(source),
+        )
     }
 }
 

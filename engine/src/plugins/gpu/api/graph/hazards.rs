@@ -1,13 +1,13 @@
 use super::super::{
     GpuResourceAccess, GpuWorkGraphCause, GpuWorkGraphError, GpuWorkGraphErrorContext,
+    GpuWorkResourceId,
 };
 use super::{
-    authoring::{GpuWorkFragment, GpuWorkNode, accesses_overlap},
+    authoring::{GpuWorkFragment, GpuWorkNode},
     composition::FragmentRelations,
-    dependency::GpuDependencyReason,
-    diagnostics::{GraphErrorOrigin, graph_error},
+    dependency::{GpuDependencyReason, GpuDependencyRegion, access_intersection},
+    diagnostics::{GraphErrorOrigin, graph_error, graph_error_with_region},
     identity::GpuPreparedWorkNodeId,
-    initialization::access_region_description,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -51,13 +51,14 @@ pub(super) fn infer_cross_fragment_hazards(
                 for right_node in right_fragment.nodes() {
                     for left_access in left_node.accesses() {
                         for right_access in right_node.accesses() {
-                            if left_access.resource_identity() != right_access.resource_identity()
-                                || !accesses_overlap(left_access, right_access)
-                                || (!left_access.writes() && !right_access.writes())
-                            {
+                            let Some((resource, region)) =
+                                access_intersection(left_access, right_access)
+                            else {
+                                continue;
+                            };
+                            if !left_access.writes() && !right_access.writes() {
                                 continue;
                             }
-                            let resource = left_access.resource_identity();
                             let left_to_right = relations.contains(&(
                                 left_fragment_index,
                                 right_fragment_index,
@@ -74,21 +75,12 @@ pub(super) fn infer_cross_fragment_hazards(
                                 } else {
                                     GpuWorkGraphCause::MissingCrossFragmentCausality
                                 };
-                                return Err(GpuWorkGraphError::invalid(
+                                return Err(graph_error_with_region(
                                     "infer cross-fragment GPU hazard",
-                                    GpuWorkGraphErrorContext::new(
-                                        graph_label,
-                                        Some(left_fragment.label().as_str().to_string()),
-                                        Some(left_node.label().as_str().to_string()),
-                                        None,
-                                        Some(resource),
-                                        Some(format!(
-                                            "{} versus {}",
-                                            access_region_description(left_access),
-                                            access_region_description(right_access)
-                                        )),
-                                        Some(left_node.provenance().clone()),
-                                    ),
+                                    graph_label,
+                                    GraphErrorOrigin::new(Some(left_fragment), Some(left_node)),
+                                    None,
+                                    (resource, region.to_string()),
                                     cause,
                                     "bind one unique typed producer output to the consumer import for this storage resource",
                                 ));
@@ -131,10 +123,14 @@ pub(super) fn infer_cross_fragment_hazards(
                                 &fragments[after_fragment],
                                 after_node,
                             )?;
-                            edges
-                                .entry((before, after))
-                                .or_default()
-                                .extend(access_pair_hazard_reasons(before_access, after_access));
+                            edges.entry((before, after)).or_default().extend(
+                                access_pair_hazard_reasons(
+                                    before_access,
+                                    after_access,
+                                    resource,
+                                    region,
+                                ),
+                            );
                         }
                     }
                 }
@@ -148,11 +144,15 @@ fn hazard_reasons(earlier: &GpuWorkNode, later: &GpuWorkNode) -> BTreeSet<GpuDep
     let mut reasons = BTreeSet::new();
     for earlier_access in earlier.accesses() {
         for later_access in later.accesses() {
-            if earlier_access.resource_identity() == later_access.resource_identity()
-                && accesses_overlap(earlier_access, later_access)
-            {
-                reasons.extend(access_pair_hazard_reasons(earlier_access, later_access));
-            }
+            let Some((resource, region)) = access_intersection(earlier_access, later_access) else {
+                continue;
+            };
+            reasons.extend(access_pair_hazard_reasons(
+                earlier_access,
+                later_access,
+                resource,
+                region,
+            ));
         }
     }
     reasons
@@ -161,17 +161,18 @@ fn hazard_reasons(earlier: &GpuWorkNode, later: &GpuWorkNode) -> BTreeSet<GpuDep
 fn access_pair_hazard_reasons(
     earlier: &GpuResourceAccess,
     later: &GpuResourceAccess,
+    resource: GpuWorkResourceId,
+    region: GpuDependencyRegion,
 ) -> BTreeSet<GpuDependencyReason> {
     let mut reasons = BTreeSet::new();
-    let resource = earlier.resource_identity();
     if earlier.writes() && later.reads() {
-        reasons.insert(GpuDependencyReason::ReadAfterWrite { resource });
+        reasons.insert(GpuDependencyReason::ReadAfterWrite { resource, region });
     }
     if earlier.reads() && later.writes() {
-        reasons.insert(GpuDependencyReason::WriteAfterRead { resource });
+        reasons.insert(GpuDependencyReason::WriteAfterRead { resource, region });
     }
     if earlier.writes() && later.writes() {
-        reasons.insert(GpuDependencyReason::WriteAfterWrite { resource });
+        reasons.insert(GpuDependencyReason::WriteAfterWrite { resource, region });
     }
     reasons
 }

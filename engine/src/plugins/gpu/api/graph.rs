@@ -15,11 +15,11 @@ mod initialization;
 mod preparation;
 
 pub use authoring::{
-    GpuExecutionPreference, GpuExplicitOrder, GpuWorkFragment, GpuWorkFragmentBuilder,
-    GpuWorkImport, GpuWorkNode, GpuWorkOutput,
+    GpuComputeNodeBuilder, GpuExecutionPreference, GpuExplicitOrder, GpuWorkFragment,
+    GpuWorkFragmentBuilder, GpuWorkImport, GpuWorkNode, GpuWorkOutput,
 };
 pub use coverage::{GpuInitialCoverage, GpuInitialCoverageKind, GpuWorkResourceInput};
-pub use dependency::{GpuDependencyReason, GpuWorkDependency};
+pub use dependency::{GpuDependencyReason, GpuDependencyRegion, GpuWorkDependency};
 pub use diagnostics::GpuPreparedWorkDiagnostic;
 pub use identity::{GpuPreparedWorkNodeId, GpuWorkNodeId};
 pub use initialization::GpuPreparedResourceInitialization;

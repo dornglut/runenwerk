@@ -1526,7 +1526,7 @@ mod tests {
         assert!(work.graph().dependencies().iter().any(|dependency| {
             dependency.after() == resolve.0
                 && dependency.reasons().iter().any(|reason| {
-                    matches!(reason, GpuDependencyReason::ReadAfterWrite { resource }
+                    matches!(reason, GpuDependencyReason::ReadAfterWrite { resource, .. }
                         if *resource == resolve.1.source().diagnostic_identity())
                 })
         }));
@@ -1534,7 +1534,7 @@ mod tests {
             dependency.before() == resolve.0
                 && dependency.after() == readback.0
                 && dependency.reasons().iter().any(|reason| {
-                    matches!(reason, GpuDependencyReason::ReadAfterWrite { resource }
+                    matches!(reason, GpuDependencyReason::ReadAfterWrite { resource, .. }
                         if *resource == resolve.1.destination().diagnostic_identity())
                 })
         }));
