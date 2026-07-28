@@ -5,7 +5,7 @@ status: active
 owner: render
 layer: engine/render
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 related_docs:
   - ./runengpu-architecture-design.md
   - ./runengpu-g3-access-work-graph-design.md
@@ -22,6 +22,7 @@ related_docs:
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
   - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
   - ../../workspace/specs/pt-runengpu-g3-access-work-graph.ron
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/active-work.md
@@ -56,15 +57,17 @@ S0 inventory                         complete
 G1A resource identity                complete
 G2 capabilities/resources            complete at 709aa6aced020ee99405e1e1c3dde7703c77a4d4
 G3 decision phase                    complete at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
-operational hardening                complete through issue #176 / PR #178 on merge
-G3 Rust implementation               queued through issue #177 for exact-main revalidation
+operational hardening                complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
+G3 Rust implementation               complete on branch; draft PR #181 in review
 G4-G8                                pending
 GX                                   blocked on G2-G8
 R1-R8 and RX                         blocked on GX
 ```
 
-The operational-hardening completion becomes authoritative through the merge of PR
-`#178`; this candidate deliberately asserts no merge SHA.
+G3 was implemented from accepted base
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`; the frozen code candidate is
+`0c950b244cea799661468d4774d485b5fc2b5984`. Draft PR `#181` remains open and
+unmerged for independent review, so no G3 merge SHA is asserted.
 
 Target repositories:
 
@@ -163,9 +166,10 @@ G2 created no device, graph, submission, surface, or external package.
 
 **Planning state: complete at `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`.**
 
-**Implementation state: issue `#177`, queued for revalidation against the exact
-post-PR-`#178` `main`. Source changes remain unauthorized until that evidence is
-recorded.**
+**Implementation state: complete on branch from accepted base
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`; draft PR `#181` is in independent
+review at and after frozen code candidate
+`0c950b244cea799661468d4774d485b5fc2b5984`.**
 
 Accepted scope:
 

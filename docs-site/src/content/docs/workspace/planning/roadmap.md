@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 related_docs:
   - ../engineering-workflow.md
   - ./active-work.md
@@ -25,6 +25,7 @@ related_docs:
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
   - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
   - ../../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
   - ../specs/pt-runengpu-g3-access-work-graph.ron
 ---
 
@@ -49,10 +50,9 @@ not depend on Runenwerk.
 
 ## Current priorities
 
-1. Reverify bounded G3 implementation issue `#177` against the exact accepted
-   post-PR-`#178` `main`.
-2. Implement G3 as one bounded migration/deletion slice with no G4/G5/G7 work.
-3. Plan and execute G4-G8 sequentially through their existing owners.
+1. Complete exact-head CI and independent review for issue `#177` / draft PR `#181`.
+2. Merge the coherent G3 migration/deletion slice without adding G4/G5/G7 work.
+3. Plan and execute G4-G8 sequentially through their existing owners after G3 merge.
 4. Extract RunenGPU and perform a clean Runenwerk cutover only after internal
    conformance and extraction-readiness gates pass.
 5. Prove RunenRender internally on the accepted external RunenGPU boundary.
@@ -67,11 +67,13 @@ RunenGPU S0 complete
 RunenGPU G1A complete
 RunenGPU G2 complete at 709aa6aced020ee99405e1e1c3dde7703c77a4d4
 RunenGPU G3 planning complete at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
-Runen family operational hardening completed through #176 / PR #178
+Runen family operational hardening complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
+RunenGPU G3 code complete on branch at 0c950b244cea799661468d4774d485b5fc2b5984
 ```
 
-The operational-hardening completion becomes authoritative through the merge of PR
-`#178`; this candidate deliberately asserts no merge SHA.
+The G3 candidate starts from accepted base
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`. Draft PR `#181` remains open and
+unmerged, so the roadmap asserts no G3 merge SHA.
 
 ## RunenSDF
 
@@ -188,8 +190,8 @@ The family requires:
 G1A owner-scoped logical resource identity                 complete
 G2 capabilities/resources/typed handles/prepared data      complete
 G3 decision-complete planning                              complete
-operational hardening #176 / PR #178                       complete on merge
-G3 access/work/graph implementation #177                   queued for revalidation
+operational hardening #176 / PR #178                       complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
+G3 access/work/graph implementation #177 / PR #181         complete on branch; in review
 G4 context/device/program/layout/WGPU/cache admission       deferred
 G5 progress/pressure/execution/readback/retirement          deferred
 G6 offscreen graphics/shared consumers/direct baseline     deferred

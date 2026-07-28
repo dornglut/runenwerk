@@ -5,7 +5,7 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -28,6 +28,7 @@ related_docs:
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
   - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
   - ../../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
   - ../../workspace/specs/pt-runengpu-g2-capabilities-resource-descriptors.ron
   - ../../workspace/specs/pt-runengpu-g3-access-work-graph.ron
   - ../../workspace/planning/roadmap.md
@@ -47,14 +48,16 @@ S0 inventory                         complete
 G1A logical work-resource identity   complete
 G2 capabilities and resources        complete at 709aa6aced020ee99405e1e1c3dde7703c77a4d4
 G3 decision phase                    complete at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
-operational hardening                complete through issue #176 / PR #178 on merge
-G3 Rust implementation               queued through issue #177 for exact-main revalidation
+operational hardening                complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
+G3 Rust implementation               complete on branch; draft PR #181 in review
 G4-G8                                pending and not authorized early
 GX external extraction               blocked on accepted G2-G8 evidence
 ```
 
-The operational-hardening completion becomes authoritative through the merge of PR
-`#178`; this candidate deliberately asserts no merge SHA.
+G3 was implemented from accepted base
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`; the frozen code candidate is
+`0c950b244cea799661468d4774d485b5fc2b5984`. Draft PR `#181` remains open and
+unmerged for independent review, so this document asserts no G3 merge SHA.
 
 The implementation remains inside Runenwerk until each internal future public
 boundary is accepted. This document defines broad architecture. Focused phase designs,
@@ -1213,8 +1216,8 @@ S0 complete inventory                                      complete
 G1A owner-scoped logical GPU work-resource identity         complete
 G2 capabilities, resources, typed handles, prepared data    complete
 G3 decision-complete planning                               complete
-operational hardening #176 / PR #178                        complete on merge
-G3 access, operations, initialization, hazards, work graph  issue #177 queued for revalidation
+operational hardening #176 / PR #178                        complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
+G3 access, operations, initialization, hazards, work graph  complete on branch; draft PR #181 in review
 G4 context/device, shader/pipeline, binding/layout, WGPU     pending
 G5 progress/pressure/execution/readback/retirement          pending
 G6 offscreen graphics/shared consumers/direct baseline     pending
@@ -1223,10 +1226,10 @@ G8 operational conformance/diagnostics/shutdown/audit       pending
 GX external dornglut/runen-gpu clean cutover                blocked
 ```
 
-Only one next implementation authority is active at a time. Issue `#177` may begin
-source changes only after exact post-PR-`#178` main revalidation is recorded. G2-G7
-migrate/delete replaced authority incrementally. G8 is final conformance and residual
-audit.
+Only one next implementation authority is active at a time. Issue `#177` recorded
+the exact post-PR-`#180` revalidation before G3 source changes. G4 remains deferred
+until G3 is independently reviewed and merged. G2-G7 migrate/delete replaced
+authority incrementally. G8 is final conformance and residual audit.
 
 ## External cutover
 

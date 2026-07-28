@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 related_docs:
   - ../workspace/planning/active-work.md
   - ../workspace/planning/roadmap.md
@@ -15,6 +15,7 @@ related_docs:
   - ../reports/investigations/runengpu-industry-comparison.md
   - ../reports/investigations/runengpu-runenrender-application-domain-fit.md
   - ../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
+  - ../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
   - ../design/active/runensdf-extraction-design.md
   - ../design/active/runenecs-extraction-boundary-design.md
   - ../design/active/runengpu-architecture-design.md
@@ -79,12 +80,14 @@ No dependency cycle is allowed.
 |---|---|---|
 | RunenSDF | standalone authority in `dornglut/runen-sdf`; duplicate Runenwerk source retired through issue `#133` / PR `#157` | standalone roadmap and independently accepted adapters only |
 | RunenECS | internal ownership and safety repair required | separately bounded investigation/design/repair |
-| RunenGPU | S0, G1A, and G2 complete; G3 planning accepted through issue `#174` / PR `#175` at merge `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`; operational hardening completed through issue `#176` / PR `#178` | issue `#177` queued for exact post-`#178` main revalidation before source changes; G4-G8 and extraction remain unauthorized |
+| RunenGPU | S0, G1A, and G2 complete; G3 planning accepted through issue `#174` / PR `#175` at merge `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`; operational hardening merged as `90d24abb93bff4b1d3f5b4743056bc00ff80d4b6`; bounded G3 implementation complete on branch through code candidate `0c950b244cea799661468d4774d485b5fc2b5984` | issue `#177` / draft PR `#181` in independent review; G4-G8 and extraction remain unauthorized |
 | RunenRender | architecture corrected to consume RunenGPU; operational/provider/incremental-scene requirements reconciled through PR `#178` | S0/design only; internal proof waits for accepted external RunenGPU cutover and separately bounded R-phase work |
 | RunenUI | independent repository/workstream | governed in RunenUI |
 
-The operational-hardening state becomes authoritative through the merge of PR `#178`;
-this candidate deliberately asserts no merge SHA.
+The G3 branch starts from accepted base
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`. Repository completion still requires
+the independent review and eventual merge of draft PR `#181`; no G3 merge SHA is
+asserted before that event.
 
 Current source location is implementation evidence, not permanent ownership.
 

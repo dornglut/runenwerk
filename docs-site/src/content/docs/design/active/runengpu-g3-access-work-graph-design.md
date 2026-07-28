@@ -5,12 +5,13 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 related_docs:
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ./runengpu-architecture-design.md
   - ./runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/runengpu-g3-access-work-graph-investigation.md
+  - ../../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
   - ../../workspace/specs/pt-runengpu-g3-access-work-graph.ron
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
@@ -22,13 +23,18 @@ related_docs:
 
 ```text
 G2 logical resources and prepared data     accepted
-G3 decision phase                          active through issue #174
-G3 Rust implementation                    not authorized
-G4-G7                                      deferred
+G3 decision phase                          accepted at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
+G3 Rust implementation                    complete on branch; draft PR #181 in review
+G4-G7                                      deferred and not implemented by G3
 external runen-gpu package                 not authorized
 ```
 
-This document binds G3 architecture. The implementation specification binds exact modules, types, migration, deletion, tests, validation, and stop conditions.
+This document binds G3 architecture. The implementation specification binds exact
+modules, types, migration, deletion, tests, validation, and stop conditions. Issue
+`#177` implemented the bounded slice from accepted base
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`; code candidate
+`0c950b244cea799661468d4774d485b5fc2b5984` is under independent review in draft
+PR `#181`. No G3 merge SHA is asserted before merge.
 
 ## Mission
 
@@ -40,16 +46,35 @@ G3 does not create a GPU context, realize WGPU objects, admit shaders or pipelin
 
 ## Public experience
 
-Ordinary consumers contribute immutable work through lexical builders:
+Consumers contribute immutable work through the checked lexical builder. Resource,
+label, provenance, and access values below are constructed through their checked G2
+and G3 constructors before authoring:
 
 ```rust
-let simulation = GpuWorkFragment::build("simulation.update", |work| {
-    work.compute("integrate", |node| {
-        node.storage_read(&positions, GpuBufferRange::whole(&positions)?)?;
-        node.storage_write(&next_positions, GpuBufferRange::whole(&next_positions)?)?;
-        node.dispatch([groups, 1, 1])?;
-        Ok(())
-    })?;
+let simulation = GpuWorkFragment::build(fragment_label, |work| {
+    work.declare_resource(positions.clone().into())?;
+    work.declare_resource(next_positions.clone().into())?;
+    work.add_node(
+        node_label,
+        GpuWorkOperation::Compute(GpuComputeOperation::new(
+            GpuDispatchSize::new(groups, 1, 1)?,
+        )),
+        [
+            GpuBufferAccess::new(
+                &positions,
+                GpuBufferRange::whole(&positions)?,
+                GpuBufferAccessKind::StorageRead,
+            )?.into(),
+            GpuBufferAccess::new(
+                &next_positions,
+                GpuBufferRange::whole(&next_positions)?,
+                GpuBufferAccessKind::StorageWrite,
+            )?.into(),
+        ],
+        GpuCapabilityRequirements::new(),
+        GpuExecutionPreference::Automatic,
+        node_provenance,
+    )?;
     Ok(())
 })?;
 ```
@@ -411,6 +436,11 @@ G3 stops before:
 
 ## Acceptance
 
-G3 planning is accepted only when issue `#174`, its investigation, this design, and the implementation specification are independently reviewed and merged with canonical validation green.
+G3 planning was accepted through issue `#174` and PR `#175` at merge
+`5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`. Issue `#177` then reverified the
+exact accepted implementation base, authorized one bounded Rust cutover, and
+produced draft PR `#181`.
 
-Only then may one bounded G3 implementation issue be created. The planning issue itself authorizes no Rust implementation.
+The branch implementation is complete only as a review candidate until that PR's
+exact head passes required validation and independent review and is merged. G4-G7,
+external extraction, and a new package remain separately authorized future work.

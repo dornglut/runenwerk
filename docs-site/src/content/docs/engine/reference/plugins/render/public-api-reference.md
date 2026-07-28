@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 ---
 
 # Render Public API Reference
@@ -127,7 +127,6 @@ product ownership.
   - `GeneratedIndirectDrawArgs`
   - `GpuPrimitiveExecutionPlan`
   - `GpuPrimitiveStep`
-  - `GpuPrimitiveResourceAccess`
 - bounded population support:
   - `BoundedUniformGrid2dConfig`
   - `BoundedUniformGrid2dBuildPlan`
@@ -335,8 +334,6 @@ These APIs expose graph validation and execution-ready compilation metadata.
   - `CompiledResourceRef`
   - `CompiledBuiltinImport`
   - `CompiledStateRequirement`
-  - `CompiledResourceLifetimeWindow`
-  - `CompiledResourceAccessKind`
 - typed compiler/preflight diagnostics:
   - `RenderExecutionGraphDiagnostic`
   - `RenderExecutionGraphDiagnosticKind`
@@ -360,11 +357,17 @@ These APIs expose graph validation and execution-ready compilation metadata.
   - `current_runtime_gpu_capabilities`
   - `validate_compiled_flow_capabilities`
   - `diagnose_compiled_pass_shapes`
+  - `PreparedRenderWorkPlan`
+  - `GpuPreparedWorkGraph`
+  - `GpuPreparedWorkNodeId`
+  - `GpuWorkDependency`
+  - `GpuPreparedResourceInitialization`
 
 Contract:
 
-- `compile_flow_plan_checked(...)` wraps static `RenderFlow` validation, resource lifetime window derivation, pass-shape guard diagnostics, and backend-neutral capability validation in typed diagnostics.
-- `CompiledRenderFlowPlan::resource_lifetime_windows` exposes first/last read/write/use windows derived from compiled pass order.
+- `compile_flow_plan_checked(...)` wraps static `RenderFlow` validation, structural G3 work preparation, pass-shape guard diagnostics, and backend-neutral capability validation in typed diagnostics.
+- `CompiledRenderFlowPlan::structural_work()` exposes a `PreparedRenderWorkPlan` for compile-time inspection and admission. Its `GpuPreparedWorkGraph` is the sole access, initialization, dependency, capability-requirement, and topological-order authority; lexical render pass position remains provenance only.
+- Transient allocation windows are derived from prepared G3 access and order. They are allocation-policy output, not a second access graph or scheduling authority.
 - `validate_prepared_render_frame(...)` checks a prepared frame against compiled flows before backend encoding: target alias bindings, dynamic target descriptors, sampleability, dispatch preparation, uniform presence, feature gates, history signatures, and capability mismatches.
 - Pass-shape guards reject fullscreen-style generated graphics multiplied by instance count unless `GraphicsPassBuilder::allow_instanced_fullscreen(...)` records explicit bounded author intent. Diagnostics use `FullscreenInstancedWork`, `AmbiguousProceduralShape`, and `InvalidPassShapeIntent`.
 - `RenderFlow::procedural_pass(...)` builds normal graphics passes from renderer-owned procedural descriptors. Mesh sprites, quad sprites, and local 2D SDF impostors use typed storage-backed instance buffers and explicit render policy; the API derives renderer execution resources only and does not own product truth or residency policy.
@@ -647,7 +650,7 @@ Flow-owned color target format contract:
 
 Compiler/preflight inspection contract:
 
-- `inspect_compiled_render_flow_plan(...)` summarizes compiled pass/resource counts, resource lifetime windows, compiler diagnostics, and the active backend-neutral capability profile.
+- `inspect_compiled_render_flow_plan(...)` summarizes compiled pass/resource counts, prepared G3 node order, typed dependency reasons, initial/final resource coverage, merged capability requirements, compiler diagnostics, and the active backend-neutral capability profile.
 - `inspect_render_execution_graph_preflight(...)` summarizes prepared-frame preflight diagnostics for tooling.
 - `inspect_render_execution_graph_preflight_with_cache(...)` adds cache mode, cache status, and report source without exposing backend handles.
 - `Renderer::last_preflight_report()` exposes the last successful submit preflight report, and `Renderer::last_preflight_cache_state()` exposes whether it came from full validation or cache.

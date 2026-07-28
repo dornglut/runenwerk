@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 related_docs:
   - ../engineering-workflow.md
   - ./roadmap.md
@@ -24,6 +24,7 @@ related_docs:
   - ../../reports/closeouts/pt-runengpu-g1a-closeout.md
   - ../../reports/closeouts/pt-runengpu-g2-implementation-closeout.md
   - ../../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
+  - ../../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
   - ../specs/pt-runengpu-g3-access-work-graph.ron
 ---
 
@@ -33,7 +34,7 @@ GitHub issues and pull requests own live delivery. This page is a concise cross-
 
 ## Active
 
-### G3 implementation revalidation — issue `#177`
+### G3 implementation review — issue `#177` / draft PR `#181`
 
 Accepted foundation:
 
@@ -42,27 +43,15 @@ RunenGPU G1A  complete
 RunenGPU G2   complete through #172 / PR #173
 RunenGPU G3 planning accepted through #174 / PR #175
 accepted G3 planning merge 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
-Runen family operational hardening completed through #176 / PR #178
+Runen family operational hardening merged as 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
+accepted G3 implementation base 1c645b2bbfcece44dd6ae151cc97559793afa2c2
+frozen G3 code candidate 0c950b244cea799661468d4774d485b5fc2b5984
 ```
 
-The operational-hardening completion becomes authoritative through the merge of PR
-`#178`; this branch deliberately asserts no merge SHA.
-
-Issue `#177` owns the bounded G3 Rust implementation. Source changes remain
-unauthorized until the issue is reverified against the exact post-`#178` `main`.
-
-Before source changes it must:
-
-1. record the exact accepted implementation base;
-2. run `cargo validate` and `git diff --check`;
-3. repeat the current declaration/direct/transitive consumer census;
-4. verify no accepted G3 value became a persisted, replay, wire, cache, network, or
-   external format;
-5. confirm no new ADR, package, dependency, compatibility path, or G4/G5/G7 authority
-   is required;
-6. update the issue with the exact revalidation evidence.
-
-The G3 implementation remains limited to:
+Issue `#177` recorded the exact-main census and untouched-baseline validation before
+source changes. The implementation branch now contains one coherent G3 cutover and
+draft PR `#181` remains open, draft, and unmerged for exact-head CI and independent
+review. The delivered scope is limited to:
 
 - checked buffer, texture-subresource, and query access;
 - graph-entry initialization;
@@ -75,6 +64,10 @@ The G3 implementation remains limited to:
 - complete current-consumer migration;
 - deletion of replaced generic renderer correctness authority without aliases or
   parallel paths.
+
+No G4/G5/G7 implementation, external package, manifest, dependency, lockfile, or
+workflow change entered the slice. The next lifecycle action is review and merge of
+the exact PR head, not early G4 implementation.
 
 ### Retained operational findings
 
@@ -163,5 +156,6 @@ RunenRender
 - G1A implementation: issue `#131`, PR `#164`, merge `5bbdab36ae661d99432bfe5d215062c397aac975`;
 - G2 decision and implementation: issues `#168` and `#172`, PRs `#171` and `#173`, merge `709aa6aced020ee99405e1e1c3dde7703c77a4d4`;
 - G3 decision phase: issue `#174`, PR `#175`, merge `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`;
-- Runen family operational hardening: issue `#176`, PR `#178`; authoritative on merge, with no merge SHA asserted in this candidate;
+- Runen family operational hardening: issue `#176`, PR `#178`, merge `90d24abb93bff4b1d3f5b4743056bc00ff80d4b6`;
+- G3 implementation candidate: issue `#177`, draft PR `#181`, frozen code candidate `0c950b244cea799661468d4774d485b5fc2b5984`; repository completion remains contingent on review and merge;
 - RunenSDF standalone transfer and Runenwerk duplicate-source retirement: issue `#133`, Runenwerk PRs `#118` and `#157`, and accepted `dornglut/runen-sdf` work.

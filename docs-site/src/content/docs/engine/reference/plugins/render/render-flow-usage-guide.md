@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-07-27
+last_reviewed: 2026-07-28
 ---
 
 # Render Flow Usage Guide
@@ -110,19 +110,23 @@ let flow = flow
     )
     .write_color_target("scene.color")
     .draw(3, 128)
-    .depends_on("simulate")
     .finish()
     .copy_pass("history")
     .source("scene.color")
     .destination("scene.history")
-    .depends_on("draw")
     .finish()
     .present_pass("present")
     .source("scene.color")
-    .depends_on("history")
+    .order_after("history")
     .finish()
     .validate()?;
 ```
+
+Resource data order is inferred from checked G3 access: the storage transition orders
+`simulate` before `draw`, and the color-target write orders `draw` before `history`.
+Use `order_after(...)` only for a genuine non-data constraint, such as requiring the
+independent present read to wait for the history copy. Redundant explicit data order
+is rejected.
 
 ## Procedural Mesh, Quad, And Local SDF Instance Passes
 
@@ -532,7 +536,6 @@ let flow = RenderFlow::new("sdf.flow")
     .finish()
     .present_pass("sdf.present")
     .source("sdf.color")
-    .depends_on("sdf.compose")
     .finish()
     .validate()?;
 ```
@@ -573,11 +576,10 @@ let flow = RenderFlow::new("product.flow")
     .copy_pass("product.history")
     .source("product.color")
     .destination("product.history")
-    .depends_on("product.compose")
     .finish()
     .present_pass("product.present")
     .source("product.color")
-    .depends_on("product.history")
+    .order_after("product.history")
     .finish()
     .validate()?;
 ```
@@ -704,7 +706,6 @@ let flow = RenderFlow::new("ui.flow")
     .write_surface_color()
     .finish()
     .builtin_ui_composite_pass("ui")
-    .depends_on("compose")
     .finish()
     .validate()?;
 ```
@@ -714,7 +715,7 @@ let flow = RenderFlow::new("ui.flow")
 `RenderFlow` keeps contracts inspectable:
 
 - `flow.validation_report()` returns pass order and validation result details.
-- `compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())` returns typed compiler diagnostics for static validation failures, resource lifetime windows, and mismatches against normalized `GpuCapabilities` facts.
+- `compile_flow_plan_checked(&flow, &current_runtime_gpu_capabilities())` returns typed compiler diagnostics for static validation failures, prepared G3 access/dependency/initialization errors, and mismatches against normalized `GpuCapabilities` facts.
 - `flow.graph()` exposes declared pass/resource topology for tests and tooling.
 - `flow.project_uniforms(frame_data, surface_size)` verifies state projection at frame time.
 
