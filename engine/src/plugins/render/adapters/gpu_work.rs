@@ -210,7 +210,7 @@ impl PreparedRenderWorkPlan {
             entries
                 .into_iter()
                 .filter_map(|(_, payload)| match payload {
-                    RenderGpuWorkPayload::Pass(pass) => Some(execution_pass_id(pass)),
+                    RenderGpuWorkPayload::Pass(pass) => Some(execution_pass_id(pass.as_ref())),
                     RenderGpuWorkPayload::TimingResolve
                     | RenderGpuWorkPayload::TimingReadbackCopy => None,
                 })

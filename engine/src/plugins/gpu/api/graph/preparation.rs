@@ -1,0 +1,346 @@
+use super::super::{
+    GpuCapabilityRequirements, GpuResourceLabel, GpuResourceRef, GpuWorkGraphCause,
+    GpuWorkGraphError, GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkResourceId,
+};
+use super::{
+    authoring::{GpuWorkFragment, GpuWorkNode, GpuWorkOutput},
+    composition::{
+        bind_imports, collect_output_bindings, topological_fragment_order,
+        validate_boundary_access_intents,
+    },
+    coverage::{canonical_storage_resource, storage_identity},
+    dependency::{GpuDependencyReason, GpuWorkDependency},
+    diagnostics::{GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error},
+    hazards::{
+        add_explicit_orders, infer_cross_fragment_hazards, infer_fragment_hazards,
+        topological_node_order,
+    },
+    identity::GpuPreparedWorkNodeId,
+    initialization::{
+        GpuPreparedResourceInitialization, simulate_prepared_initialization,
+        validate_fragment_initialization,
+    },
+};
+use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuPreparedWorkNode {
+    id: GpuPreparedWorkNodeId,
+    fragment_label: GpuResourceLabel,
+    node: GpuWorkNode,
+}
+
+impl GpuPreparedWorkNode {
+    pub const fn id(&self) -> GpuPreparedWorkNodeId {
+        self.id
+    }
+
+    pub fn fragment_label(&self) -> &GpuResourceLabel {
+        &self.fragment_label
+    }
+
+    pub fn node(&self) -> &GpuWorkNode {
+        &self.node
+    }
+}
+
+/// Immutable deterministic result of graph preparation.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuPreparedWorkGraph;
+///
+/// fn mutate(graph: &mut GpuPreparedWorkGraph) {
+///     graph.topological_order.clear();
+/// }
+/// ```
+#[derive(Debug, Clone)]
+pub struct GpuPreparedWorkGraph {
+    label: GpuResourceLabel,
+    nodes: Vec<GpuPreparedWorkNode>,
+    topological_order: Vec<GpuPreparedWorkNodeId>,
+    dependencies: Vec<GpuWorkDependency>,
+    initialization: Vec<GpuPreparedResourceInitialization>,
+    requirements: GpuCapabilityRequirements,
+    outputs: Vec<GpuWorkOutput>,
+    diagnostics: Vec<GpuPreparedWorkDiagnostic>,
+}
+
+impl GpuPreparedWorkGraph {
+    pub fn prepare(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+    ) -> Result<Self, GpuWorkGraphError> {
+        let fragments = fragments.into_iter().collect::<Vec<_>>();
+        let graph_label = label.as_str();
+        let mut declared_resources = BTreeMap::<GpuWorkResourceId, GpuResourceRef>::new();
+        let mut storage_resources = BTreeMap::<GpuWorkResourceId, GpuResourceRef>::new();
+        let mut prepared_nodes = Vec::new();
+        let mut node_locations = BTreeMap::<GpuPreparedWorkNodeId, (usize, usize)>::new();
+
+        for (fragment_index, fragment) in fragments.iter().enumerate() {
+            let fragment_ordinal = u32::try_from(fragment_index).map_err(|_| {
+                graph_error(
+                    "assign prepared fragment identity",
+                    graph_label,
+                    GraphErrorOrigin::new(Some(fragment), None),
+                    None,
+                    None,
+                    GpuWorkGraphCause::UnknownIdentity,
+                    "prepare fewer fragments in one bounded graph",
+                )
+            })?;
+            register_fragment_resources(
+                graph_label,
+                fragment,
+                &mut declared_resources,
+                &mut storage_resources,
+            )?;
+            for (node_index, node) in fragment.nodes().iter().enumerate() {
+                let expected_local = u64::try_from(node_index)
+                    .ok()
+                    .and_then(|index| index.checked_add(1));
+                if !node.id().belongs_to(&fragment.identity)
+                    || expected_local != Some(node.id().diagnostic_local())
+                {
+                    return Err(graph_error(
+                        "validate fragment-local GPU work-node identity",
+                        graph_label,
+                        GraphErrorOrigin::new(Some(fragment), Some(node)),
+                        None,
+                        None,
+                        GpuWorkGraphCause::ForeignIdentity,
+                        "retain nodes allocated monotonically by their originating fragment builder",
+                    ));
+                }
+                validate_node_resources(graph_label, fragment, node)?;
+                let id = GpuPreparedWorkNodeId::new(fragment_ordinal, node.id().local);
+                if node_locations
+                    .insert(id, (fragment_index, node_index))
+                    .is_some()
+                {
+                    return Err(graph_error(
+                        "validate prepared GPU work-node identity",
+                        graph_label,
+                        GraphErrorOrigin::new(Some(fragment), Some(node)),
+                        Some(id),
+                        None,
+                        GpuWorkGraphCause::UnknownIdentity,
+                        "use distinct monotonically allocated local node identities",
+                    ));
+                }
+                prepared_nodes.push(GpuPreparedWorkNode {
+                    id,
+                    fragment_label: fragment.label().clone(),
+                    node: node.clone(),
+                });
+            }
+        }
+
+        let output_bindings = collect_output_bindings(graph_label, &fragments)?;
+        let (import_bindings, relations) = bind_imports(graph_label, &fragments, &output_bindings)?;
+        validate_boundary_access_intents(graph_label, &fragments)?;
+        let mut inferred_edges = BTreeMap::<
+            (GpuPreparedWorkNodeId, GpuPreparedWorkNodeId),
+            BTreeSet<GpuDependencyReason>,
+        >::new();
+        infer_fragment_hazards(graph_label, &fragments, &mut inferred_edges)?;
+        infer_cross_fragment_hazards(graph_label, &fragments, &relations, &mut inferred_edges)?;
+        add_explicit_orders(graph_label, &fragments, &mut inferred_edges)?;
+        let topological_order =
+            topological_node_order(graph_label, &fragments, &node_locations, &inferred_edges)?;
+        let fragment_order = topological_fragment_order(graph_label, &fragments, &import_bindings)?;
+        validate_fragment_initialization(
+            graph_label,
+            &fragments,
+            &fragment_order,
+            &import_bindings,
+        )?;
+
+        let mut requirements = GpuCapabilityRequirements::new();
+        for prepared in &prepared_nodes {
+            requirements = requirements
+                .merge(prepared.node().requirements())
+                .map_err(|source| {
+                    GpuWorkGraphError::with_source(
+                        "merge GPU work-graph capability requirements",
+                        GpuWorkGraphErrorContext::new(
+                            graph_label,
+                            Some(prepared.fragment_label().as_str().to_string()),
+                            Some(prepared.node().label().as_str().to_string()),
+                            Some(prepared.id()),
+                            None,
+                            None,
+                            Some(prepared.node().provenance().clone()),
+                        ),
+                        GpuWorkGraphCause::MechanicalCapabilityContradiction,
+                        "remove graph-wide caller constraints that disable mechanically required capabilities",
+                        GpuWorkGraphErrorSource::Capability(source),
+                    )
+                })?;
+        }
+
+        let (initialization, initialization_diagnostics) = simulate_prepared_initialization(
+            graph_label,
+            &fragments,
+            &storage_resources,
+            &node_locations,
+            &topological_order,
+        )?;
+        let dependencies = inferred_edges
+            .into_iter()
+            .map(|((before, after), reasons)| GpuWorkDependency {
+                before,
+                after,
+                reasons: reasons.into_iter().collect(),
+            })
+            .collect::<Vec<_>>();
+        let outputs = fragments
+            .iter()
+            .flat_map(|fragment| fragment.outputs().iter().cloned())
+            .collect::<Vec<_>>();
+        let mut diagnostics = dependencies
+            .iter()
+            .cloned()
+            .map(GpuPreparedWorkDiagnostic::Dependency)
+            .collect::<Vec<_>>();
+        diagnostics.extend(initialization_diagnostics);
+        diagnostics.extend(
+            outputs
+                .iter()
+                .map(|output| GpuPreparedWorkDiagnostic::Output {
+                    export_key: output.relationship().export_key().clone(),
+                    resource: storage_identity(output.relationship().resource()),
+                }),
+        );
+
+        Ok(Self {
+            label,
+            nodes: prepared_nodes,
+            topological_order,
+            dependencies,
+            initialization,
+            requirements,
+            outputs,
+            diagnostics,
+        })
+    }
+
+    pub fn label(&self) -> &GpuResourceLabel {
+        &self.label
+    }
+
+    pub fn nodes(&self) -> &[GpuPreparedWorkNode] {
+        &self.nodes
+    }
+
+    pub fn topological_order(&self) -> &[GpuPreparedWorkNodeId] {
+        &self.topological_order
+    }
+
+    pub fn dependencies(&self) -> &[GpuWorkDependency] {
+        &self.dependencies
+    }
+
+    pub fn initialization(&self) -> &[GpuPreparedResourceInitialization] {
+        &self.initialization
+    }
+
+    pub fn requirements(&self) -> &GpuCapabilityRequirements {
+        &self.requirements
+    }
+
+    pub fn outputs(&self) -> &[GpuWorkOutput] {
+        &self.outputs
+    }
+
+    pub fn diagnostics(&self) -> &[GpuPreparedWorkDiagnostic] {
+        &self.diagnostics
+    }
+}
+
+fn register_fragment_resources(
+    graph_label: &str,
+    fragment: &GpuWorkFragment,
+    declared: &mut BTreeMap<GpuWorkResourceId, GpuResourceRef>,
+    storage: &mut BTreeMap<GpuWorkResourceId, GpuResourceRef>,
+) -> Result<(), GpuWorkGraphError> {
+    for resource in fragment.resources() {
+        let identity = resource.diagnostic_identity();
+        if declared
+            .get(&identity)
+            .is_some_and(|existing| existing != resource)
+        {
+            return Err(graph_error(
+                "register GPU work resource",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), None),
+                None,
+                Some(identity),
+                GpuWorkGraphCause::UnknownIdentity,
+                "use one kind-preserving handle for each logical resource identity",
+            ));
+        }
+        declared.entry(identity).or_insert_with(|| resource.clone());
+        let storage_resource = canonical_storage_resource(resource);
+        let storage_identity = storage_identity(&storage_resource);
+        if storage
+            .get(&storage_identity)
+            .is_some_and(|existing| existing != &storage_resource)
+        {
+            return Err(graph_error(
+                "register normalized GPU storage resource",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), None),
+                None,
+                Some(storage_identity),
+                GpuWorkGraphCause::UnknownIdentity,
+                "retain one descriptor and kind for each normalized storage identity",
+            ));
+        }
+        storage.entry(storage_identity).or_insert(storage_resource);
+    }
+    Ok(())
+}
+
+fn validate_node_resources(
+    graph_label: &str,
+    fragment: &GpuWorkFragment,
+    node: &GpuWorkNode,
+) -> Result<(), GpuWorkGraphError> {
+    node.operation().validate_shape().map_err(|source| {
+        GpuWorkGraphError::with_source(
+            "validate GPU work operation",
+            GpuWorkGraphErrorContext::new(
+                graph_label,
+                Some(fragment.label().as_str().to_string()),
+                Some(node.label().as_str().to_string()),
+                None,
+                source.resource(),
+                None,
+                Some(node.provenance().clone()),
+            ),
+            GpuWorkGraphCause::OperationAccessContradiction,
+            "retain the checked operation shape accepted during fragment authoring",
+            GpuWorkGraphErrorSource::Operation(source),
+        )
+    })?;
+    for access in node.accesses() {
+        let identity = access.declared_resource_identity();
+        if !fragment
+            .resources()
+            .iter()
+            .any(|resource| resource.diagnostic_identity() == identity)
+        {
+            return Err(graph_error(
+                "validate GPU work-node resource identity",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), Some(node)),
+                None,
+                Some(identity),
+                GpuWorkGraphCause::UnknownIdentity,
+                "declare every accessed typed resource in its immutable fragment",
+            ));
+        }
+    }
+    Ok(())
+}
