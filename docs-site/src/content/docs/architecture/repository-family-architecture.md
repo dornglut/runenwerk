@@ -80,7 +80,7 @@ No dependency cycle is allowed.
 |---|---|---|
 | RunenSDF | standalone authority in `dornglut/runen-sdf`; duplicate Runenwerk source retired through issue `#133` / PR `#157` | standalone roadmap and independently accepted adapters only |
 | RunenECS | internal ownership and safety repair required | separately bounded investigation/design/repair |
-| RunenGPU | S0, G1A, and G2 complete; G3 planning accepted through issue `#174` / PR `#175` at merge `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`; operational hardening merged as `90d24abb93bff4b1d3f5b4743056bc00ff80d4b6`; bounded G3 implementation complete on branch through code candidate `0c950b244cea799661468d4774d485b5fc2b5984` | issue `#177` / draft PR `#181` in independent review; G4-G8 and extraction remain unauthorized |
+| RunenGPU | S0, G1A, and G2 complete; G3 planning accepted through issue `#174` / PR `#175` at merge `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`; operational hardening merged as `90d24abb93bff4b1d3f5b4743056bc00ff80d4b6`; bounded G3 implementation candidate corrected after review through `905c506e33202405d1bea8c160a05ac92c326c43` | issue `#177` / draft PR `#181` awaiting new exact-head independent review; G4-G8 and extraction remain unauthorized |
 | RunenRender | architecture corrected to consume RunenGPU; operational/provider/incremental-scene requirements reconciled through PR `#178` | S0/design only; internal proof waits for accepted external RunenGPU cutover and separately bounded R-phase work |
 | RunenUI | independent repository/workstream | governed in RunenUI |
 

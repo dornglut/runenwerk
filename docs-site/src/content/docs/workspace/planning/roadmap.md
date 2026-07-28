@@ -68,12 +68,14 @@ RunenGPU G1A complete
 RunenGPU G2 complete at 709aa6aced020ee99405e1e1c3dde7703c77a4d4
 RunenGPU G3 planning complete at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
 Runen family operational hardening complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
-RunenGPU G3 code complete on branch at 0c950b244cea799661468d4774d485b5fc2b5984
+RunenGPU G3 corrected code candidate on branch at 905c506e33202405d1bea8c160a05ac92c326c43
 ```
 
 The G3 candidate starts from accepted base
-`1c645b2bbfcece44dd6ae151cc97559793afa2c2`. Draft PR `#181` remains open and
-unmerged, so the roadmap asserts no G3 merge SHA.
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`. Its first reviewed head was
+`38abac6bd234d9db3a4544aedbf2dba149538e36`; draft PR `#181` remains open and
+unmerged pending a new review of the corrected head, so the roadmap asserts no G3
+merge SHA.
 
 ## RunenSDF
 

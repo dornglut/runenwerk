@@ -45,13 +45,15 @@ RunenGPU G3 planning accepted through #174 / PR #175
 accepted G3 planning merge 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
 Runen family operational hardening merged as 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
 accepted G3 implementation base 1c645b2bbfcece44dd6ae151cc97559793afa2c2
-frozen G3 code candidate 0c950b244cea799661468d4774d485b5fc2b5984
+previous reviewed G3 head 38abac6bd234d9db3a4544aedbf2dba149538e36
+corrected G3 code candidate 905c506e33202405d1bea8c160a05ac92c326c43
 ```
 
 Issue `#177` recorded the exact-main census and untouched-baseline validation before
-source changes. The implementation branch now contains one coherent G3 cutover and
-draft PR `#181` remains open, draft, and unmerged for exact-head CI and independent
-review. The delivered scope is limited to:
+source changes. The implementation branch now contains one coherent G3 cutover plus
+the corrections required by its first independent review. Draft PR `#181` remains
+open, draft, and unmerged for corrected exact-head CI and a new independent review.
+The delivered scope is limited to:
 
 - checked buffer, texture-subresource, and query access;
 - graph-entry initialization;
@@ -157,5 +159,5 @@ RunenRender
 - G2 decision and implementation: issues `#168` and `#172`, PRs `#171` and `#173`, merge `709aa6aced020ee99405e1e1c3dde7703c77a4d4`;
 - G3 decision phase: issue `#174`, PR `#175`, merge `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`;
 - Runen family operational hardening: issue `#176`, PR `#178`, merge `90d24abb93bff4b1d3f5b4743056bc00ff80d4b6`;
-- G3 implementation candidate: issue `#177`, draft PR `#181`, frozen code candidate `0c950b244cea799661468d4774d485b5fc2b5984`; repository completion remains contingent on review and merge;
+- G3 implementation candidate: issue `#177`, draft PR `#181`, corrected code candidate `905c506e33202405d1bea8c160a05ac92c326c43`; repository completion remains contingent on new exact-head review and merge;
 - RunenSDF standalone transfer and Runenwerk duplicate-source retirement: issue `#133`, Runenwerk PRs `#118` and `#157`, and accepted `dornglut/runen-sdf` work.

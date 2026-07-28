@@ -24,7 +24,7 @@ related_docs:
 ```text
 G2 logical resources and prepared data     accepted
 G3 decision phase                          accepted at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
-G3 Rust implementation                    complete on branch; draft PR #181 in review
+G3 Rust implementation                    candidate corrected after independent review
 G4-G7                                      deferred and not implemented by G3
 external runen-gpu package                 not authorized
 ```
@@ -32,9 +32,11 @@ external runen-gpu package                 not authorized
 This document binds G3 architecture. The implementation specification binds exact
 modules, types, migration, deletion, tests, validation, and stop conditions. Issue
 `#177` implemented the bounded slice from accepted base
-`1c645b2bbfcece44dd6ae151cc97559793afa2c2`; code candidate
-`0c950b244cea799661468d4774d485b5fc2b5984` is under independent review in draft
-PR `#181`. No G3 merge SHA is asserted before merge.
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`. The first independent exact-head review
+of `38abac6bd234d9db3a4544aedbf2dba149538e36` required corrections. Corrected code
+candidate `905c506e33202405d1bea8c160a05ac92c326c43` remains open, draft, and unmerged in
+PR `#181` pending fresh exact-head validation and independent review. No G3 merge SHA
+is asserted before merge.
 
 ## Mission
 
@@ -46,38 +48,28 @@ G3 does not create a GPU context, realize WGPU objects, admit shaders or pipelin
 
 ## Public experience
 
-Consumers contribute immutable work through the checked lexical builder. Resource,
-label, provenance, and access values below are constructed through their checked G2
-and G3 constructors before authoring:
+Ordinary consumers contribute immutable work through the checked lexical builder:
 
 ```rust
-let simulation = GpuWorkFragment::build(fragment_label, |work| {
-    work.declare_resource(positions.clone().into())?;
-    work.declare_resource(next_positions.clone().into())?;
-    work.add_node(
-        node_label,
-        GpuWorkOperation::Compute(GpuComputeOperation::new(
-            GpuDispatchSize::new(groups, 1, 1)?,
-        )),
-        [
-            GpuBufferAccess::new(
-                &positions,
-                GpuBufferRange::whole(&positions)?,
-                GpuBufferAccessKind::StorageRead,
-            )?.into(),
-            GpuBufferAccess::new(
-                &next_positions,
-                GpuBufferRange::whole(&next_positions)?,
-                GpuBufferAccessKind::StorageWrite,
-            )?.into(),
-        ],
-        GpuCapabilityRequirements::new(),
-        GpuExecutionPreference::Automatic,
-        node_provenance,
-    )?;
+let simulation = GpuWorkFragment::build("simulation.update", |work| {
+    work.compute("integrate", |node| {
+        node.storage_read(&positions, GpuBufferRange::whole(&positions)?)?;
+        node.storage_write(&next_positions, GpuBufferRange::whole(&next_positions)?)?;
+        node.dispatch([groups, 1, 1])?;
+        Ok(())
+    })?;
     Ok(())
 })?;
 ```
+
+The lexical compute builder registers the referenced kind-preserving resources,
+collects checked storage access, requires exactly one checked dispatch, derives
+ordinary provenance, and commits only after the closure and the existing
+`GpuWorkFragmentBuilder::add_node(...)` authority both succeed. The advanced
+six-argument `add_node(...)` primitive remains available for explicitly constructed
+operations; it owns the same operation, access normalization, requirement derivation,
+identity allocation, and validation truth. No equivalent convenience entrypoint is
+added for operation families without another accepted ordinary authoring contract.
 
 The advanced path prepares the same authority later used by ordinary submission:
 
@@ -236,6 +228,20 @@ For overlapping regions:
 
 Disjoint ranges do not conflict.
 
+Every data-derived reason retains both the normalized storage identity and one exact
+`GpuDependencyRegion`:
+
+```text
+Buffer(GpuBufferRange)                    exact intersected bytes
+Texture(GpuTextureSubresourceRange)       exact parent mip/layer/aspect intersection
+Query(GpuQueryRange)                      exact intersected query indices
+```
+
+One intersection authority computes this evidence for same-node normalization and
+intra-/cross-fragment hazard inference. Samplers produce no data region. Distinct
+overlap regions remain distinct ordered reasons on the same node edge; labels and
+provenance remain diagnostics rather than region identity.
+
 Within one fragment, lexical node declaration order orients access-derived hazards. This is not a second manual dependency API.
 
 Fragment collection order is not semantic scheduling authority. Cross-fragment causality requires:
@@ -366,11 +372,11 @@ Preparation:
 2. validates identities, descriptors, usages, ranges, view parents, attachments, clear values, queries, query resolves, and imports/exports;
 3. normalizes operation-derived and caller-declared access;
 4. derives initial coverage and merged capability requirements;
-5. infers RAW/WAR/WAW edges;
+5. infers RAW/WAR/WAW edges retaining exact typed overlap regions;
 6. adds non-redundant explicit non-data edges;
 7. rejects missing cross-fragment causality, ambiguity, conflict, redundant explicit order, and cycles;
 8. produces deterministic prepared IDs and topological order;
-9. publishes normalized access, edges with typed causes, coverage summaries, requirements, exports, diagnostics, and provenance.
+9. publishes normalized access, edges with typed causes and regions, coverage summaries, requirements, exports, diagnostics, and provenance.
 
 Independent ready nodes are ordered deterministically for inspection without promising concurrent or parallel execution.
 
@@ -441,6 +447,8 @@ G3 planning was accepted through issue `#174` and PR `#175` at merge
 exact accepted implementation base, authorized one bounded Rust cutover, and
 produced draft PR `#181`.
 
-The branch implementation is complete only as a review candidate until that PR's
-exact head passes required validation and independent review and is merged. G4-G7,
-external extraction, and a new package remain separately authorized future work.
+The branch implementation is an implementation candidate corrected after independent
+review. It is not accepted or review-complete until the corrected exact head passes
+required workflows and a new independent review, and it is not repository-complete
+until merged. G4-G7, external extraction, and a new package remain separately
+authorized future work.

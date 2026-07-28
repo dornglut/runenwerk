@@ -25,7 +25,9 @@ related_docs:
 ## Outcome
 
 Issue `#177` implements the complete bounded RunenGPU G3 access/work-graph slice in
-draft PR `#181`. The implementation creates one future-transferable authority under
+draft PR `#181`. This implementation candidate was corrected after the first
+independent exact-head review; it does not claim that the corrected head has passed a
+new review. The implementation creates one future-transferable authority under
 `engine::plugins::gpu` for checked resource access, typed immutable GPU operations,
 region-aware graph-entry initialization, exact hazards, typed cross-fragment
 causality, operation-derived requirements, immutable work fragments/nodes, and
@@ -56,16 +58,20 @@ review; this report deliberately asserts no G3 merge SHA.
 | Access-contract commit | `5f132c5c8d488d129057658dd40a275273f5bdb5` |
 | Operation-contract commit | `2baed155c51869026376d5a2a25ed6e8041d38e5` |
 | Prepared-graph commit | `9d52f7a1c95ee2aa78fa6b53689a80b83a6ea4a7` |
-| Frozen code candidate | `0c950b244cea799661468d4774d485b5fc2b5984` |
+| Render cutover commit | `0c950b244cea799661468d4774d485b5fc2b5984` |
+| Previous reviewed head | `38abac6bd234d9db3a4544aedbf2dba149538e36` |
+| Semantic graph decomposition | `d78df27e769f65b1a3af6ce5e02d3ea053b342ea` |
+| Dependency and authoring correction | `905c506e33202405d1bea8c160a05ac92c326c43` |
+| Corrected code candidate | `905c506e33202405d1bea8c160a05ac92c326c43` |
 | Final documentation head | the commit containing this report; its exact SHA is recorded in PR `#181` and issue `#177` after publication because a commit cannot contain its own SHA |
 | Merge base against `origin/main` at publication | exact accepted implementation base |
 | Acceptance record | repository Git history plus eventual closure of issue `#177` and merge of PR `#181`; no merge SHA asserted here |
 
-The accepted-base diff at frozen code candidate
-`0c950b244cea799661468d4774d485b5fc2b5984` contains exactly 66 changed files with
-12,675 additions and 1,431 deletions. The final documentation candidate contains
-exactly 78 changed files with 13,310 additions and
-1,522 deletions. PR `#181` owns the later exact documentation-head SHA,
+The accepted-base diff at corrected code candidate
+`905c506e33202405d1bea8c160a05ac92c326c43` contains exactly 93 changed files with
+14,313 additions and 1,522 deletions. The final documentation candidate contains
+exactly 93 changed files with 14,467 additions and 1,517 deletions. PR `#181` owns
+the later exact documentation-head SHA,
 final remote-head equality, exact-head Actions URLs and conclusions, review state,
 and final aggregate statistics after this self-contained report is committed.
 
@@ -121,18 +127,133 @@ The public work-graph authority includes:
 - `GpuWorkResourceInput`, `GpuWorkImport`, `GpuWorkOutput`, and semantic
   `GpuExportKey` causality;
 - `GpuExplicitOrder` for fragment-local non-data constraints only;
-- `GpuWorkNode`, `GpuWorkFragmentBuilder`, and immutable `GpuWorkFragment`;
-- `GpuDependencyReason`, `GpuWorkDependency`, prepared initialization summaries,
-  merged requirements, outputs, and diagnostics;
+- `GpuComputeNodeBuilder`, `GpuWorkNode`, `GpuWorkFragmentBuilder`, and immutable
+  `GpuWorkFragment`;
+- `GpuDependencyRegion`, `GpuDependencyReason`, `GpuWorkDependency`, prepared
+  initialization summaries, merged requirements, outputs, and diagnostics;
 - one immutable `GpuPreparedWorkGraph::prepare(...)` authority.
 
 Preparation validates resource identity/kind, operation/access consistency, exact
 initial coverage, imports/exports, requirements, same-node normalization, RAW/WAR/WAW
 hazards, missing or ambiguous cross-fragment causality, redundant/opposing explicit
 edges, and cycles. It emits deterministic prepared identities, diagnostics,
-dependencies, requirements, initialization, and topological order. Input fragment
+dependencies with exact normalized regions, requirements, initialization, and
+topological order. Input fragment
 enumeration may change diagnostic ordinals but cannot change semantic edges or error
 outcomes.
+
+### Corrected public authoring path
+
+The ordinary accepted compute path is lexical and closure-scoped:
+
+```rust
+let simulation = GpuWorkFragment::build("simulation.update", |work| {
+    work.compute("integrate", |node| {
+        node.storage_read(&positions, GpuBufferRange::whole(&positions)?)?;
+        node.storage_write(&next_positions, GpuBufferRange::whole(&next_positions)?)?;
+        node.dispatch([groups, 1, 1])?;
+        Ok(())
+    })?;
+    Ok(())
+})?;
+```
+
+The lexical builder collects checked storage access, registers referenced resources,
+requires exactly one checked dispatch, derives ordinary provenance, constructs the
+existing `GpuComputeOperation`, and delegates final normalization, requirement
+derivation, identity allocation, and validation to `add_node(...)`. It stages the
+fragment builder and commits only on success, so closure or downstream validation
+failure cannot leave partial resources or consume node identity. The advanced
+six-argument primitive and ordinary path produce equal operation, access, requirement,
+and execution-preference evidence in focused tests.
+
+The other public operation families already have concrete checked operation types but
+no accepted ordinary lexical contract in this slice. They continue through
+`add_node(...)`; adding speculative convenience builders would create unsupported API
+surface.
+
+## Independent review corrections
+
+The first independent exact-head review of
+`38abac6bd234d9db3a4544aedbf2dba149538e36` found four merge-blocking issues. The
+corrected code candidate addresses them as follows:
+
+1. `GpuWorkFragmentBuilder::declare_resource(...)` now uses `BTreeMap::entry`; an
+   occupied entry returns `DuplicateResource` without replacing the original. The
+   regression injects a same-identity handle with a different descriptor, catches the
+   error, continues authoring, and proves the original 64-byte descriptor remains.
+2. Every RAW/WAR/WAW reason now retains explicit resource identity plus an exact
+   `GpuDependencyRegion::Buffer`, `Texture`, or `Query`. One intersection authority
+   computes normalized evidence for same-node and intra-/cross-fragment processing;
+   samplers create none and multiple regions remain distinct on one edge.
+3. `GpuWorkFragment::build("...", ...)` and `work.compute("...", ...)` restore the
+   accepted ordinary experience while retaining `add_node(...)` as the advanced
+   validation authority. The canonical example is a passing rustdoc.
+4. The 183,145-byte monolithic `graph.rs` was replaced by a 1,041-byte public root and
+   semantic private modules with owner-focused tests. No numbered split, forwarding
+   module, duplicate preparation, initialization, or hazard implementation was added.
+
+The complete fallible-mutation audit found no other pre-existing G3 violation:
+`add_input`, `add_import`, `add_output`, `add_explicit_order`, `add_node`, capability
+requirement insertion, work-resource identity allocation, and sidecar insertion all
+perform fallible checks before reusable state mutation. Preparation-local maps are
+scratch state discarded with the failed preparation. The new lexical compute path is
+transactional through a private staged snapshot.
+
+### Graph module byte-size census
+
+The corrected semantic module inventory and raw byte sizes are:
+
+| Authored file | Bytes |
+|---|---:|
+| `engine/src/plugins/gpu/api/graph.rs` | 1,041 |
+| `graph/authoring.rs` | 39,027 |
+| `graph/composition.rs` | 8,898 |
+| `graph/coverage.rs` | 13,788 |
+| `graph/dependency.rs` | 5,642 |
+| `graph/diagnostics.rs` | 2,978 |
+| `graph/hazards.rs` | 15,617 |
+| `graph/identity.rs` | 2,598 |
+| `graph/initialization.rs` | 34,763 |
+| `graph/preparation.rs` | 12,941 |
+| `graph/tests.rs` | 78 |
+| `graph/tests/authoring.rs` | 9,691 |
+| `graph/tests/composition.rs` | 15,078 |
+| `graph/tests/hazards.rs` | 15,450 |
+| `graph/tests/initialization.rs` | 26,740 |
+| `graph/tests/support.rs` | 4,994 |
+
+Only `graph/authoring.rs` and `graph/initialization.rs` exceed 32 KiB; every graph
+file is substantially below the 131,072-byte ceiling.
+
+The complete raw-byte census covered every existing authored UTF-8 file changed from
+the accepted base. Files above 32 KiB are:
+
+| Authored file | Bytes |
+|---|---:|
+| `engine/src/plugins/render/renderer/render_flow/provenance.rs` | 32,942 |
+| `engine/src/plugins/gpu/api/graph/initialization.rs` | 34,763 |
+| `docs-site/src/content/docs/engine/reference/plugins/render/render-flow-usage-guide.md` | 35,880 |
+| `engine/tests/render_dynamic_targets.rs` | 35,985 |
+| `engine/src/plugins/gpu/api/access.rs` | 38,833 |
+| `engine/src/plugins/gpu/api/graph/authoring.rs` | 39,027 |
+| `engine/src/plugins/render/runtime/frame_prepare.rs` | 40,109 |
+| `engine/src/plugins/render/gpu_primitives/plan.rs` | 44,460 |
+| `docs-site/src/content/docs/engine/reference/plugins/render/public-api-reference.md` | 48,232 |
+| `docs-site/src/content/docs/design/active/runengpu-architecture-design.md` | 48,255 |
+| `engine/tests/render_runtime_inspect.rs` | 49,229 |
+| `engine/benches/render_flow_planning.rs` | 53,376 |
+| `engine/src/plugins/render/graph/prepared_validation.rs` | 55,299 |
+| `engine/src/plugins/render/renderer/render_flow/execute.rs` | 58,706 |
+| `engine/src/plugins/gpu/api/resource.rs` | 61,402 |
+| `engine/src/plugins/render/adapters/gpu_work.rs` | 62,472 |
+| `engine/src/plugins/render/api/flow.rs` | 66,597 |
+| `engine/src/plugins/render/graph/validation.rs` | 68,737 |
+| `apps/runenwerk_editor/tests/viewport_architecture_guards.rs` | 71,964 |
+| `engine/src/plugins/gpu/api/work.rs` | 88,330 |
+
+The largest changed authored file is 88,330 bytes. No changed authored file exceeds
+131,072 raw bytes.
 
 ## Render migration and temporary adapter
 
@@ -242,6 +363,21 @@ manifest/dependency/lockfile change, or workflow change remains.
 
 - `engine/src/plugins/gpu/api/access.rs`
 - `engine/src/plugins/gpu/api/graph.rs`
+- `engine/src/plugins/gpu/api/graph/authoring.rs`
+- `engine/src/plugins/gpu/api/graph/composition.rs`
+- `engine/src/plugins/gpu/api/graph/coverage.rs`
+- `engine/src/plugins/gpu/api/graph/dependency.rs`
+- `engine/src/plugins/gpu/api/graph/diagnostics.rs`
+- `engine/src/plugins/gpu/api/graph/hazards.rs`
+- `engine/src/plugins/gpu/api/graph/identity.rs`
+- `engine/src/plugins/gpu/api/graph/initialization.rs`
+- `engine/src/plugins/gpu/api/graph/preparation.rs`
+- `engine/src/plugins/gpu/api/graph/tests.rs`
+- `engine/src/plugins/gpu/api/graph/tests/authoring.rs`
+- `engine/src/plugins/gpu/api/graph/tests/composition.rs`
+- `engine/src/plugins/gpu/api/graph/tests/hazards.rs`
+- `engine/src/plugins/gpu/api/graph/tests/initialization.rs`
+- `engine/src/plugins/gpu/api/graph/tests/support.rs`
 - `engine/src/plugins/gpu/api/work.rs`
 - `engine/src/plugins/render/adapters/gpu_work.rs`
 
@@ -352,7 +488,7 @@ Observed successful focused commands and results include:
 
 | Command or suite | Observed result |
 |---|---|
-| `cargo test -p engine gpu:: --locked` | 75 GPU tests passed; all filtered binaries clean |
+| `cargo test -p engine gpu:: --locked` | 84 GPU tests passed; all filtered binaries clean |
 | adapter `gpu_work` unit filter | 4 adapter/sidecar tests passed |
 | `cargo test -p engine --test render_flow_v2 --locked` | 16 passed |
 | `cargo test -p engine --test render_dynamic_targets --locked` | 15 passed |
@@ -365,7 +501,7 @@ Observed successful focused commands and results include:
 | focused GPU-primitive suite | 14 passed, including exact 4,097-element prefix-scan planning and runtime-adapter coverage |
 | `cargo test -p engine --test render_cutoff_guard --locked` | 5 passed |
 | `cargo test -p engine --test render_import_contract --locked` | 4 passed |
-| `cargo test -p engine --doc --locked` | 8 ordinary doctests and 21 compile-fail doctests passed |
+| `cargo test -p engine --doc --locked` | 9 ordinary doctests and 21 compile-fail doctests passed |
 | `cargo clippy -p engine --lib --tests --benches --examples --locked -- -D warnings` | passed with warnings denied |
 | `cargo test -p runenwerk_draw --locked` | 12 library, 48 application-shell, and 7 guard tests passed |
 | `cargo test -p runenwerk_editor --locked` | 643 library, 2 startup, and 55 viewport tests passed; one existing manual environment-dependent GPU smoke remained ignored by design |
@@ -379,9 +515,15 @@ timestamp-to-resolve-to-copy, kind, and derived requirements. Graph tests cover 
 initialization modes, partial coverage, RAW/WAR/WAW/read-read, disjoint regions,
 same-node normalization, typed imports/exports, fragment reorder invariance,
 deterministic identities/order/diagnostics/requirements, explicit-order success and
-failure, foreign identities, and attachment/query initialization transitions.
+failure, foreign identities, and attachment/query initialization transitions. The
+correction regressions additionally prove transactional duplicate declaration with
+continued authoring, exact partial buffer/texture/query intersections, disjoint
+coverage, multiple regions on one edge, lexical closure failure, accepted storage
+read/write authoring, duplicate operation-derived access rejection, and lexical/
+advanced authority convergence.
 
-Compile-fail rustdoc proves private range/node construction, absent raw-ID recovery,
+The ordinary rustdoc compiles the accepted `GpuWorkFragment::build("...", ...)` /
+`work.compute("...", ...)` example. Compile-fail rustdoc proves private range/node construction, absent raw-ID recovery,
 cross-kind rejection, immutable fragments/prepared graphs, private render-operation
 fields, and no public duplicate node-kind mutation path. Source/dependency guards scan
 the complete GPU subtree for renderer, ECS, WGPU, Winit, UI, SDF, application,
@@ -401,7 +543,7 @@ recorded below with the final documentation candidate.
 | `CI=true pnpm --dir docs-site build` | passed; Astro built 1,001 pages and emitted only the existing missing-site sitemap warning |
 | `cargo validate` | passed: workspace formatting, locked tests/doctests, strict Clippy, documentation validation, and repository audit; only the existing `block 0.1.6` future-incompatibility notice was emitted |
 | `git diff --check` | passed; tracked and new-file content checked before commit and repeated at the documentation head |
-| `git diff --check 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6..<final-documentation-head>` | passed at the documentation head |
+| `git diff --check 1c645b2bbfcece44dd6ae151cc97559793afa2c2...<final-documentation-head>` | passed at the documentation head |
 | complete accepted-base and previous-base diff review | passed with no unresolved local correctness, ownership, migration, deletion, dependency, or phase-boundary finding |
 
 Exact-head GitHub Actions and Documentation Build are publication facts that occur
@@ -470,13 +612,13 @@ accepted phase boundaries, not hidden implementation gaps or extraction readines
 
 ## Merge readiness and next safe action
 
-The local implementation, migration, deletion, focused validation, documentation
-reconciliation, and complete-diff audit are complete with no known local correctness
-blocker once the final-candidate placeholders above are replaced by observed results.
-PR `#181` owns final remote-head equality, exact-head Actions, Documentation Build,
-comments, reviews, and unresolved-thread evidence.
+The local implementation, review corrections, migration, deletion, focused
+validation, documentation reconciliation, and complete-diff audit are complete with
+no known local correctness blocker. PR `#181` owns final remote-head equality,
+exact-head Actions, Documentation Build, comments, reviews, and unresolved-thread
+evidence.
 
-The next safe action is independent review of the exact draft-PR head. Do not merge
-until its required workflows pass and no unresolved correctness or ownership finding
-remains. Do not begin G4, G5, G7, external extraction, or a new package as part of
-this slice.
+The corrected candidate is ready for a new independent review after its exact-head
+workflows pass. Do not merge until that new review leaves no unresolved correctness
+or ownership finding. Do not begin G4, G5, G7, external extraction, or a new package
+as part of this slice.

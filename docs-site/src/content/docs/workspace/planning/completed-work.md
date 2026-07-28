@@ -85,14 +85,15 @@ PR `#132` was closed without merge because it contained only temporary automatio
   timing, GPU primitives, applications, examples, tests, and benchmarks through one
   temporary adapter. It deletes renderer-owned lifetime/access/topological authority
   without aliases or a parallel graph.
-- The accepted base is `1c645b2bbfcece44dd6ae151cc97559793afa2c2`; the frozen
-  code candidate is `0c950b244cea799661468d4774d485b5fc2b5984`.
+- The accepted base is `1c645b2bbfcece44dd6ae151cc97559793afa2c2`; the first
+  reviewed head was `38abac6bd234d9db3a4544aedbf2dba149538e36`, and the
+  corrected code candidate is `905c506e33202405d1bea8c160a05ac92c326c43`.
 - No external package, manifest, dependency, lockfile, workflow, or G4/G5/G7
   implementation entered scope.
 - Detailed evidence is recorded in the [PT-RUNENGPU-G3 implementation
   closeout](../../reports/closeouts/pt-runengpu-g3-implementation-closeout.md).
-- This candidate becomes repository completion only through independent exact-head
-  review and merge of PR `#181`; no merge SHA is asserted before merge.
+- This candidate becomes repository completion only through a new independent
+  exact-head review and merge of PR `#181`; no merge SHA is asserted before merge.
 
 ### Operational hardening
 

@@ -49,15 +49,17 @@ G1A logical work-resource identity   complete
 G2 capabilities and resources        complete at 709aa6aced020ee99405e1e1c3dde7703c77a4d4
 G3 decision phase                    complete at 5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8
 operational hardening                complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
-G3 Rust implementation               complete on branch; draft PR #181 in review
+G3 Rust implementation               candidate corrected after independent review
 G4-G8                                pending and not authorized early
 GX external extraction               blocked on accepted G2-G8 evidence
 ```
 
 G3 was implemented from accepted base
-`1c645b2bbfcece44dd6ae151cc97559793afa2c2`; the frozen code candidate is
-`0c950b244cea799661468d4774d485b5fc2b5984`. Draft PR `#181` remains open and
-unmerged for independent review, so this document asserts no G3 merge SHA.
+`1c645b2bbfcece44dd6ae151cc97559793afa2c2`. The reviewed head
+`38abac6bd234d9db3a4544aedbf2dba149538e36` required corrections; corrected code
+candidate `905c506e33202405d1bea8c160a05ac92c326c43` remains open, draft, and unmerged
+pending fresh exact-head validation and independent review. This document asserts no
+G3 merge SHA.
 
 The implementation remains inside Runenwerk until each internal future public
 boundary is accepted. This document defines broad architecture. Focused phase designs,
@@ -1217,7 +1219,7 @@ G1A owner-scoped logical GPU work-resource identity         complete
 G2 capabilities, resources, typed handles, prepared data    complete
 G3 decision-complete planning                               complete
 operational hardening #176 / PR #178                        complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
-G3 access, operations, initialization, hazards, work graph  complete on branch; draft PR #181 in review
+G3 access, operations, initialization, hazards, work graph  corrected candidate; new review pending
 G4 context/device, shader/pipeline, binding/layout, WGPU     pending
 G5 progress/pressure/execution/readback/retirement          pending
 G6 offscreen graphics/shared consumers/direct baseline     pending
