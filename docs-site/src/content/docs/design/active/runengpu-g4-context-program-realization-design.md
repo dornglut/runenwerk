@@ -67,7 +67,8 @@ G4 establishes one future-transferable RunenGPU owner for:
 - migration and deletion of renderer-owned GPU realization authority.
 
 G4 does not encode or submit work. It does not own progress, completion, readback,
-retirement, surfaces, presentation, device-loss recovery, or image-formation semantics.
+retirement, reusable surfaces, presentation, device-loss recovery, or image-formation
+semantics.
 
 ## Ownership boundaries
 
@@ -193,7 +194,7 @@ application type, executor, callback, or persistence policy.
 
 ## Async and terminal boundary
 
-The backend may await instance/adapter/device requests. The future:
+The backend may await instance, adapter, and device requests. The future:
 
 - is cancellation-safe before a context is returned;
 - publishes no partially admitted public context;
@@ -203,7 +204,7 @@ The backend may await instance/adapter/device requests. The future:
 - returns structured terminal success or failure.
 
 Native blocking belongs to a host adapter. Web integration uses the same async public
-contract. G5 later binds progress after work acceptance; G4A only binds context request
+contract. G5 later binds progress after work acceptance; G4A only binds context-request
 completion.
 
 ## Context identity and generation
@@ -220,8 +221,8 @@ Rules:
    admitted context instance.
 2. `GpuDeviceGeneration` is opaque, nonzero, and starts at `1` for a newly admitted
    context.
-3. G4A does not replace a live device. G7 increments generation when device
-   replacement is later implemented.
+3. G4A does not replace a live device. G7 increments generation when device replacement
+   is later implemented.
 4. Every G4C backend realization stores complete `GpuContextAffinity`.
 5. Logical G2/G3 descriptors remain backend-neutral and do not acquire affinity merely
    by existing.
@@ -229,13 +230,13 @@ Rules:
    typed inspection.
 7. Context IDs, generation values, backend handles, and pointer-like values are not
    stable persistence or wire authority.
-8. Equality of affinities is exact pair equality. Labels, provenance and diagnostics
+8. Equality of affinities is exact pair equality. Labels, provenance, and diagnostics
    do not participate.
 
 ## Normalized backend vocabulary
 
-`GpuBackendFamily` initially contains only concrete families the selected WGPU version
-can report and RunenGPU can normalize without guessing:
+`GpuBackendFamily` contains only backend/API families the selected WGPU version reports
+and RunenGPU can normalize without guessing:
 
 ```text
 Vulkan
@@ -243,13 +244,15 @@ Metal
 Direct3D12
 OpenGl
 BrowserWebGpu
-Software
 UnknownBackend
 ```
 
-`UnknownBackend` preserves an explicit unsupported/unmapped result; it is never folded
-into another family. Internal WGPU backend enum values do not cross the public
-boundary.
+Software execution is not a backend family. A software adapter may use Vulkan,
+Direct3D12, OpenGL, or another backend family. Software/fallback status is recorded as
+an independent normalized adapter fact and evaluated by the explicit fallback policy.
+
+`UnknownBackend` preserves an unsupported or unmapped result; it is never folded into
+another family. Internal WGPU backend enum values do not cross the public boundary.
 
 `GpuAdapterClass` distinguishes:
 
@@ -261,6 +264,10 @@ Cpu
 Other
 Unknown
 ```
+
+The class and independent software/fallback fact remain distinct from backend family.
+A CPU class is strong software evidence; an unavailable fact remains `Unknown` rather
+than guessed.
 
 `GpuPortabilityClass` distinguishes:
 
@@ -288,11 +295,11 @@ adapter.
 `GpuAdapterFacts` records:
 
 - normalized backend family and adapter class;
+- independent software/fallback status;
 - sanitized adapter name for diagnostics only;
-- vendor/device identifiers when the backend supplies them, as optional diagnostic
-  compatibility facts rather than public identity promises;
+- vendor/device identifiers when supplied, as optional diagnostic compatibility facts
+  rather than public identity promises;
 - driver name/version when supplied;
-- software/fallback status;
 - normalized supported features;
 - normalized limits;
 - normalized format capabilities;
@@ -303,10 +310,10 @@ adapter.
 not merely adapter support. Supported and enabled facts remain distinct.
 
 Initial normalized alignments include every current operation-relevant constraint that
-can reject G2/G3 work before encoding, including uniform/storage binding offsets,
-copy row pitch, copy buffer offsets, query-resolve destination offsets, and texture
-block constraints. A fact is absent only when it is irrelevant or unavailable; absent
-is distinct from zero or default.
+can reject G2/G3 work before encoding, including uniform/storage binding offsets, copy
+row pitch, copy-buffer offsets, query-resolve destination offsets, and texture block
+constraints. A fact is absent only when it is irrelevant or unavailable; absent is
+distinct from zero or default.
 
 ## Requirement model
 
@@ -344,21 +351,21 @@ admit(candidate_facts, normalized_request)
 
 Algorithm:
 
-1. Reject a disallowed backend family or adapter class.
-2. Evaluate every mandatory feature, limit, format and alignment requirement in typed
+1. Reject a disallowed backend family, adapter class, or software/fallback status.
+2. Evaluate every mandatory feature, limit, format, and alignment requirement in typed
    identity order.
 3. Evaluate preferred requirements in the same order.
-4. Record exact requested, supported, granted and degraded values.
+4. Record exact requested, supported, granted, and degraded values.
 5. Reject if any mandatory requirement is missing, any limit is contradictory, or a
    format/alignment relation cannot be satisfied.
 6. For each unsupported preferred requirement, require its declared degradation key
    and emit one typed degradation record.
 7. Enable only features required by accepted mandatory/preferred requirements plus
-   backend features that WGPU itself requires. Do not opportunistically enable
-   unrelated features.
+   backend features WGPU itself requires. Do not opportunistically enable unrelated
+   features.
 8. Request the least limits that satisfy the admitted request, bounded by adapter
    support. Do not request broad defaults as hidden policy.
-9. Derive portability class from the admitted feature/limit/format set.
+9. Derive portability class from the admitted feature, limit, and format set.
 10. Produce a canonical report ordered by typed requirement identity.
 
 Candidate selection is deterministic over the candidate facts the backend can expose:
@@ -366,9 +373,12 @@ Candidate selection is deterministic over the candidate facts the backend can ex
 1. discard rejected candidates;
 2. rank explicit fallback requirement, power preference, portability class, adapter
    class, and backend-family preference in that order;
-3. use normalized backend family, vendor/device facts and sanitized adapter name only
-   as stable tie-break diagnostics when present;
+3. use normalized backend family, optional vendor/device facts, and sanitized adapter
+   name only as final deterministic tie-break inputs within the observed candidate set;
 4. retain the full candidate reports and selected rank reason.
+
+Adapter names and driver strings are not persistence or cross-machine identity. Their
+use as a final in-process tie-break changes no compatibility claim.
 
 On platforms where WGPU exposes only a backend-selected adapter rather than an
 enumerable candidate set, the same pure admission algorithm evaluates that candidate.
@@ -396,7 +406,7 @@ Required failure categories include:
 
 - no candidate;
 - backend family forbidden;
-- fallback policy violation;
+- software/fallback policy violation;
 - mandatory feature missing;
 - limit below required minimum or above permitted maximum;
 - unsupported format role;
@@ -408,7 +418,8 @@ Required failure categories include:
 
 ## Raw WGPU containment
 
-WGPU types live only in private backend modules. The public or future-transferable API
+WGPU types live only in private backend modules, except for one explicitly temporary
+crate-private G5 execution bridge defined under G4C. The future-transferable public API
 must not expose:
 
 ```text
@@ -420,28 +431,13 @@ wgpu::Features
 wgpu::Limits
 wgpu::TextureFormat
 wgpu::Surface or surface configuration
-wgpu resource, layout, bind-group, shader or pipeline objects
+wgpu resource, layout, bind-group, shader, or pipeline objects
 ```
 
-A private `WgpuContextState` may own instance, adapter, device and queue. It is reached
+A private `WgpuContextState` may own instance, adapter, device, and queue. It is reached
 through `GpuContext` methods that return normalized values or opaque generation-bound
-handles. No `Deref`, `AsRef<Device>`, public field, broad callback receiving raw WGPU,
+handles. No public field, `Deref`, `AsRef<Device>`, broad callback receiving raw WGPU,
 or stable escape hatch is accepted.
-
-A narrow internal backend terminal may be used by G5 implementation. It is crate
-private and covered by reach-through guards.
-
-## Temporary host compatibility
-
-The current host needs surface-compatible adapter selection. G4A may keep one
-Runenwerk-owned adapter path that supplies an opaque temporary compatibility input to
-private WGPU admission. Rules:
-
-- it is not part of the future public standalone API;
-- it does not transfer surface ownership to G4;
-- it does not configure, acquire or present a surface;
-- it has an explicit G7 deletion owner;
-- headless admission is independently tested and remains the default architecture.
 
 # G4B — program, interface, binding and pipeline contracts
 
@@ -459,7 +455,7 @@ GpuProgramInterfaceDescriptor
 
 - constructed from a nonempty bounded UTF-8 value or an owner-scoped typed allocator;
 - contains no filesystem-path semantics;
-- equality, ordering and hashing use the normalized key value;
+- equality, ordering, and hashing use the normalized key value;
 - labels and provenance are separate.
 
 `GpuProgramSourceRevision` is nonzero and monotonically meaningful only within its
@@ -478,10 +474,10 @@ WGSL bytes are runtime source input. This design does not define a stable source
 format.
 
 `GpuProgramDescriptor` contains source key, revision, source kind/value, declared entry
-points, explicit interface, merged requirements and provenance. Source text participates
-in realization correctness through a deterministic content digest in addition to key
-and revision. A caller cannot reuse a revision with different source bytes without a
-structured `SourceRevisionConflict`.
+points, explicit interface, merged requirements, and provenance. Source text
+participates in realization correctness through a deterministic content digest in
+addition to key and revision. A caller cannot reuse a revision with different source
+bytes without a structured `SourceRevisionConflict`.
 
 ## Entry points
 
@@ -500,7 +496,7 @@ names for the same stage, missing declared entry points, and undeclared backend 
 points required by a pipeline are rejected.
 
 Entry-point names are source-level identifiers, not diagnostic labels. They participate
-in equality/hash exactly as normalized UTF-8 names.
+in equality and hashing exactly as normalized UTF-8 names.
 
 ## Typed binding keys
 
@@ -520,20 +516,20 @@ String labels
 filesystem paths
 TypeId or Rust type names
 GpuWorkResourceId
-RenderFlowId, RenderPassId or RenderFeatureId
+RenderFlowId, RenderPassId, or RenderFeatureId
 vector position
 naked u64 signature hashes
 WGPU BindGroupLayoutEntry values
 ```
 
-Labels, Rust type names and source spans may accompany diagnostics only.
+Labels, Rust type names, and source spans may accompany diagnostics only.
 
 ## Binding declarations
 
 `GpuBindingDeclaration` contains:
 
 - typed key;
-- visibility set over compute/vertex/fragment stages;
+- visibility set over compute, vertex, and fragment stages;
 - one typed binding kind;
 - optional nonzero binding-array count when admitted;
 - provenance and diagnostic label excluded from semantic equality.
@@ -548,10 +544,10 @@ StorageTexture { access, format, view_dimension }
 Sampler { Filtering | NonFiltering | Comparison }
 ```
 
-The normalized texture format and view vocabularies reuse or extend accepted G2 facts;
-raw WGPU enums do not cross the boundary. Unsupported acceleration structures, external
-textures, video, ray tracing, bindless/unbounded arrays, and backend-native bindings
-remain deferred.
+Normalized texture format and view vocabularies reuse or extend accepted G2 facts. Raw
+WGPU enums do not cross the boundary. Acceleration structures, external textures,
+video, ray tracing, bindless/unbounded arrays, and backend-native bindings remain
+deferred.
 
 Compatibility checks include:
 
@@ -560,7 +556,7 @@ Compatibility checks include:
 - visibility required by the entry point;
 - minimum buffer size and declared range;
 - dynamic-offset policy and admitted alignment;
-- texture sample class, view dimension, multisample state and format role;
+- texture sample class, view dimension, multisample state, and format role;
 - storage texture access and exact normalized format;
 - sampler class;
 - array cardinality;
@@ -571,14 +567,14 @@ Compatibility checks include:
 `GpuProgramInterfaceDescriptor` owns an ordered set of binding declarations plus any
 stage input/output contracts needed to create initial compute/render pipelines.
 
-Initial vertex input contracts include typed shader locations, normalized scalar/vector
-format, byte offset, stride, step mode and buffer slot. Initial fragment output
+Initial vertex-input contracts include typed shader locations, normalized scalar/vector
+format, byte offset, stride, step mode, and buffer slot. Initial fragment-output
 contracts include typed color locations and normalized format class. Inter-stage
 reflection is not assumed. The explicit descriptor is authoritative and backend module
 validation must agree with it.
 
 WGSL reflection may be used internally as validation evidence only when the selected
-WGPU/naga facilities can provide complete trustworthy facts. It does not replace the
+WGPU/Naga facilities provide complete trustworthy facts. It does not replace the
 explicit public interface. A mismatch is a structured error, never an inferred silent
 layout change.
 
@@ -591,20 +587,12 @@ GpuPipelineLayoutDescriptor
 
 A bind-group layout contains one group index and declarations sorted by binding key. It
 rejects duplicate bindings and declarations whose keys name a different group. A
-pipeline layout contains ordered group-layout descriptors with unique group indices and
-an explicit push-constant list only when a future accepted requirement exists. Initial
-G4 has no push constants.
+pipeline layout contains ordered group-layout descriptors with unique group indices.
+Initial G4 has no push constants because no accepted current consumer proves them.
 
-Semantic equality and hashing include every correctness field and exclude:
-
-```text
-labels
-provenance
-source spans
-backend object addresses
-insertion order after normalization
-diagnostic-only adapter strings
-```
+Semantic equality and hashing include every correctness field and exclude labels,
+provenance, source spans, backend object addresses, insertion order after
+normalization, and diagnostic-only adapter strings.
 
 ## Specialization
 
@@ -621,8 +609,8 @@ Initial value kinds are `Bool`, `U32`, `I32`, and finite `F32`. Floating-point v
 normalize negative zero and use canonical IEEE bits; NaN and infinity are rejected.
 Keys are validated source-level identifiers, not labels. A schema has unique keys,
 exact types, optional defaults, and requirement implications. A value set rejects
-unknown keys, duplicates, type mismatch and missing required values, then normalizes to
-schema key order.
+unknown keys, duplicates, type mismatch, and missing required values, then normalizes
+to schema-key order.
 
 Specialization values participate in module/pipeline realization keys only where WGPU
 or source transformation actually consumes them. RunenGPU must not pretend unsupported
@@ -638,9 +626,9 @@ WGSL override behavior is available. Backend support is admitted explicitly.
 - exact pipeline-layout descriptor;
 - normalized specialization values;
 - required capability facts;
-- label/provenance excluded from semantic equality.
+- label and provenance excluded from semantic equality.
 
-No renderer flow, pass, feature, material, view or surface identity appears.
+No renderer flow, pass, feature, material, view, or surface identity appears.
 
 ## Render pipeline descriptors
 
@@ -651,34 +639,31 @@ No renderer flow, pass, feature, material, view or surface identity appears.
 - exact program interface and pipeline layout;
 - normalized specialization values;
 - vertex-buffer layouts;
-- primitive topology/front-face/cull/polygon rules;
+- primitive topology, front-face, cull, and polygon rules;
 - depth/stencil state where accepted normalized formats support it;
-- multisample count/mask/alpha-to-coverage;
+- multisample count, mask, and alpha-to-coverage;
 - ordered color-target states with normalized formats and generic blend/write masks;
 - required capability facts.
 
 It contains no material meaning, lighting model, view ID, render feature ID, pass ID,
-RenderFlow identity, target alias, product quality policy, shader path, or surface
+render-flow identity, target alias, product quality policy, shader path, or surface
 handle. RunenRender or Runenwerk derives a generic descriptor from semantic decisions.
-
-Initial dynamic state is limited to what current WGPU pipelines and accepted consumers
-require. No universal graphics-state abstraction is invented.
+Initial dynamic state is limited to current accepted consumer needs.
 
 ## Descriptor equality, ordering and hashing
 
 All G4B semantic descriptors:
 
 - have private fields and fallible constructors;
-- normalize unordered collections into typed key order;
-- implement `PartialEq`, `Eq`, `PartialOrd`, `Ord`, and `Hash` where their fields permit;
+- normalize unordered collections into typed-key order;
+- implement semantic equality, ordering, and hashing where fields permit;
 - canonicalize floating-point values before storage;
 - hash typed discriminants and complete field values, never `Debug` text;
 - do not expose a naked hash as authoritative identity;
 - may expose a diagnostic digest alongside the full descriptor;
-- exclude label/provenance fields from semantic equality only when those fields cannot
-  affect backend correctness.
+- exclude label/provenance only where those fields cannot affect backend correctness.
 
-A cache always verifies full key equality. Hash collision cannot produce reuse.
+A cache always verifies full-key equality. Hash collision cannot produce reuse.
 
 ## Program and interface diagnostics
 
@@ -688,33 +673,27 @@ Required categories:
 invalid source key or revision
 source revision conflict
 unsupported source kind
-WGSL parse/validation failure
+WGSL parse or validation failure
 entry point missing or stage mismatch
 duplicate binding key
 binding declaration invalid
 program/interface mismatch
 runtime binding incompatible
-specialization unknown/missing/type mismatch
+specialization unknown, missing, or type-mismatched
 pipeline descriptor invalid
-backend module/layout/pipeline realization failure
+backend module, layout, or pipeline realization failure
 ```
 
 Backend compiler messages are attached as bounded diagnostic detail with source key,
-revision and entry point. They are not parsed as the public error category.
+revision, and entry point. They are not parsed as the public error category.
 
 ## Existing parameter helper disposition
 
 `GpuParams`, `GpuUniform`, `GpuStorage`, `ToGpuValue`, `GpuUniformField`, and the current
 derives remain in the Runenwerk/render boundary during G4. They may prepare bytes for a
-logical buffer. They do not prove:
-
-- WGSL structure identity;
-- binding key or visibility;
-- minimum binding size beyond the explicit G4B declaration;
-- storage-buffer ABI;
-- nested structure, array or runtime-array layout;
-- package-independent generated paths;
-- interface compatibility.
+logical buffer. They do not prove WGSL structure identity, binding key or visibility,
+minimum binding size, storage-buffer ABI, nested/array/runtime-array layout, package
+independence, or interface compatibility.
 
 G4B adds no derive. Compile-pass/fail tests prove explicit descriptor construction and
 reject ambiguous helper use as interface authority. The implementation must not move
@@ -722,28 +701,25 @@ reject ambiguous helper use as interface authority. The implementation must not 
 
 ## Compile-pass and compile-fail proof
 
-G4B requires deterministic rustdoc or compile-test proof for:
+Required passing proof:
 
-### Pass
+- one WGSL compute program with typed storage-read and storage-write bindings;
+- one WGSL render program with typed vertex input, uniform binding, and one color
+  target;
+- equal descriptors built in different insertion orders produce full equality and
+  equal hashes;
+- specializations normalize independently of caller order;
+- current Runenwerk parameter bytes bind only after explicit interface validation.
 
-- one WGSL compute program with one typed storage-read and one typed storage-write
-  binding;
-- one WGSL render program with typed vertex input, uniform binding and one color target;
-- equal descriptors built in different insertion orders produce equal hashes and full
-  equality;
-- explicit specializations normalize independently of caller order;
-- current Runenwerk parameter bytes can bind only after explicit interface validation.
-
-### Fail or runtime-construction rejection
+Required compile-fail or construction rejection:
 
 - raw WGPU type in a public descriptor;
-- string, `TypeId`, resource ID or pass ID used as a binding key;
+- string, `TypeId`, resource ID, or pass ID used as binding key;
 - duplicate `(group, binding)`;
 - stage visibility mismatch;
-- wrong resource kind, texture class, sampler class, format or array count;
-- missing/unknown/type-mismatched specialization;
-- compute pipeline using render entry point or render pipeline using compute entry
-  point;
+- wrong resource kind, texture class, sampler class, format, or array count;
+- missing, unknown, or type-mismatched specialization;
+- compute pipeline using a render entry point or the reverse;
 - source key/revision reused with different source bytes;
 - semantic descriptor field construction bypassing validation;
 - derives treated as sufficient interface proof.
@@ -753,23 +729,11 @@ G4B requires deterministic rustdoc or compile-test proof for:
 ## Realization model
 
 Logical descriptors are admitted into one `GpuContext` and produce opaque,
-generation-bound realized handles. Initial public handle families are conceptually:
+generation-bound realized handles for buffers, textures, views, samplers, query sets,
+programs, bind-group layouts, pipeline layouts, bind groups, compute pipelines, and
+render pipelines.
 
-```text
-GpuRealizedBuffer
-GpuRealizedTexture
-GpuRealizedTextureView
-GpuRealizedSampler
-GpuRealizedQuerySet
-GpuRealizedProgram
-GpuRealizedBindGroupLayout
-GpuRealizedPipelineLayout
-GpuRealizedBindGroup
-GpuRealizedComputePipeline
-GpuRealizedRenderPipeline
-```
-
-Exact file/module names remain implementation details. Public handles are `Clone`,
+Exact file and type names remain implementation details. Public handles are `Clone`,
 non-`Copy`, contain no raw WGPU access, and expose typed logical identity plus affinity
 for inspection. Backend objects remain private.
 
@@ -779,18 +743,18 @@ The accepted policy is explicit admission with bounded lazy derivation:
 
 | Kind | Policy | Reason |
 |---|---|---|
-| persistent/imported buffer or texture | explicit realization before graph execution | allocation/import failure must be reported before G5 encoding |
-| transient graph resource | explicit bounded graph-realization pass after G3 preparation | permits lifetime-aware allocation later without hidden execution-time creation |
-| sampler | explicit or cache-backed lazy realization from a complete descriptor | stateless derived object with deterministic key |
-| texture view | lazy within an already realized parent texture, cached by complete view descriptor | derived object; parent affinity is mandatory |
-| query set | explicit realization | count/type/support failures must precede execution |
-| program module | explicit admission or first-pipeline lazy realization | source validation failure is deterministic and cacheable as a structured result |
-| bind-group layout and pipeline layout | cache-backed lazy realization from full descriptors | pure derived state once admission succeeds |
-| bind group | explicit realization from a typed layout plus realized resources | runtime value compatibility and generation must be checked |
-| compute/render pipeline | explicit request or cache-backed lazy realization before execution | pipeline failure must not occur as an unclassified side effect of G5 encoding |
+| persistent/imported buffer or texture | explicit before graph execution | allocation/import failure precedes G5 encoding |
+| transient graph resource | explicit bounded graph-realization pass after G3 preparation | permits future lifetime-aware allocation without hidden execution-time creation |
+| sampler | explicit or cache-backed lazy from complete descriptor | stateless derived object |
+| texture view | lazy within an admitted parent texture, cached by complete view descriptor | derived object with mandatory parent affinity |
+| query set | explicit | count/type/support failure precedes execution |
+| program module | explicit admission or first-pipeline lazy realization | source failure is structured and cacheable |
+| bind-group and pipeline layouts | cache-backed lazy from full descriptors | derived state after admission |
+| bind group | explicit from typed layout and realized resources | runtime values and generation must be checked |
+| compute/render pipeline | explicit or cache-backed lazy before execution | pipeline failure is not an unclassified G5 side effect |
 
-G5 may request that all required realizations for a prepared graph be resolved before
-encoding. It cannot create undeclared resources or bypass compatibility checks.
+G5 may require all realizations for a prepared graph to resolve before encoding. It
+cannot create undeclared resources or bypass compatibility checks.
 
 ## Affinity and rejection points
 
@@ -799,30 +763,18 @@ Every realization request validates in this order:
 1. logical descriptor validity;
 2. context identity of every already realized input;
 3. current device generation;
-4. resource/program/interface/pipeline compatibility;
-5. admitted features, limits, formats and alignments;
+4. resource, program, interface, and pipeline compatibility;
+5. admitted features, limits, formats, and alignments;
 6. full cache-key lookup and equality;
 7. WGPU creation when no compatible hit exists.
 
-Structured failures distinguish:
+Structured failures distinguish foreign context, stale generation, unknown logical
+resource, descriptor change for identity, resource-kind mismatch, interface mismatch,
+binding-value mismatch, unadmitted requirement, format/alignment incompatibility,
+cache rejection, and backend realization failure.
 
-```text
-ForeignContext
-StaleDeviceGeneration
-UnknownLogicalResource
-DescriptorChangedForIdentity
-ResourceKindMismatch
-InterfaceMismatch
-BindingValueMismatch
-RequirementNotAdmitted
-FormatOrAlignmentNotAdmitted
-CacheRejected
-BackendRealizationFailure
-```
-
-Foreign or stale values are rejected before any WGPU call. A stale cache entry is never
-returned and may be discarded. G4C does not decide delayed destruction; G5 owns when an
-old generation or retired object can be physically released.
+Foreign or stale values are rejected before a WGPU call. A stale cache entry is never
+returned. Runtime use-after-retirement and delayed destruction remain G5-owned.
 
 ## Realization registries
 
@@ -843,216 +795,168 @@ Registry invariants:
 
 - one context/device generation per registry instance;
 - full typed key plus full equality check;
-- no renderer, ECS, Winit, domain or product type;
-- no string-only lookup;
-- no `TypeId` lookup;
-- no WGPU object exposed;
+- no renderer, ECS, Winit, domain, or product type;
+- no string-only or `TypeId` lookup;
+- no WGPU object exposed publicly;
 - no authoritative entry without its normalized source descriptor;
-- errors do not leave partially published entries;
+- errors leave no partially published entry;
 - duplicate equal requests return the same logical realization record;
-- same logical identity with a different descriptor is rejected;
-- diagnostic labels do not split otherwise equal realizations;
-- source/provenance references remain available for reports.
+- one logical identity with a different descriptor is rejected;
+- labels do not split otherwise equal realizations;
+- provenance remains available for reports;
+- no consumer callback occurs under internal locks.
 
-Internal synchronization must avoid consumer callbacks under locks. G4 does not promise
-parallel creation beyond WGPU safety and concrete implementation proof.
+## Realization keys
 
-## Resource realization keys
+Resource keys include context identity, device generation, logical identity, complete
+normalized descriptor, and import/source generation where applicable. A texture-view
+key additionally includes parent realization identity and complete normalized view
+range. Sampler and query-set keys include complete semantics. Labels are excluded.
 
-A resource realization key includes:
+Program/module keys include context identity, generation, source kind/key/revision,
+source-content digest, declared entry points, program interface, admitted requirements,
+and backend compatibility revision.
 
-```text
-context identity
-device generation
-logical resource identity
-complete normalized descriptor
-import/source generation where applicable
-```
+Layout keys include affinity, complete descriptor, and relevant admitted limits and
+features. Bind-group keys include affinity, full layout identity, ordered typed values,
+complete resource realizations and ranges, and resource/import generations.
 
-A texture-view key additionally includes parent realization identity and complete
-normalized subresource/view descriptor. A sampler key contains complete sampler
-semantics. Query-set keys contain kind and count. Labels are excluded.
+Pipeline keys include affinity, complete program/module and entry-point identities,
+interface, layout, complete compute/render descriptor, specialization, relevant
+features/limits/formats/alignments, and backend compatibility revision.
 
-## Program and pipeline realization keys
-
-Program/module key:
-
-```text
-context identity
-device generation
-source kind
-source key
-source revision
-source content digest
-entry-point declarations
-program interface descriptor
-admitted requirement set
-WGPU/backend compatibility revision
-```
-
-Layout key:
-
-```text
-context identity
-device generation
-complete normalized layout descriptor
-admitted relevant limits/features
-```
-
-Bind-group key:
-
-```text
-context identity
-device generation
-complete layout identity
-ordered typed binding values
-complete realized resource identities and ranges
-resource/import generations
-```
-
-Pipeline key:
-
-```text
-context identity
-device generation
-complete program/module identity
-complete entry-point identities
-complete program interface
-complete pipeline layout
-complete compute or render pipeline descriptor
-complete specialization values
-relevant admitted features, limits, formats and alignments
-WGPU/backend compatibility revision
-```
-
-Renderer semantic identities may contribute to the descriptor before lowering, but do
-not appear merely as opaque renderer IDs or hashes in the RunenGPU key.
+Renderer semantic identities may contribute to the lowered descriptor but do not
+appear merely as renderer IDs or hashes in the RunenGPU key.
 
 ## Cache scope and compatibility
 
 Initial G4 caches are in-memory and scoped to one `GpuContextId` and
-`GpuDeviceGeneration`. They are derived, discardable and reconstructable.
+`GpuDeviceGeneration`. They are derived, discardable, and reconstructable.
 
 No stable persisted pipeline-cache or wire format is authorized. If the selected WGPU
-version exposes backend cache blobs and implementation needs an internal experiment,
-that data remains disabled by default unless the implementation issue explicitly
-confirms it fits this accepted envelope without adding a stable format.
+version exposes backend cache data, G4C may use it only when the implementation issue
+proves it fits this internal envelope without adding a stable format.
 
-A cache-compatibility record includes every correctness fact:
+Compatibility includes every correctness fact:
 
 ```text
 RunenGPU internal cache schema revision
 RunenGPU descriptor schema revision
 WGPU version and backend compatibility revision
 normalized backend family
-adapter class and available adapter identity facts
-relevant driver identity/version when available
+adapter class and independent software/fallback fact
+available adapter and relevant driver identity facts
 context identity and device generation for in-memory entries
-source kind/key/revision/content digest
+source kind, key, revision, and content digest
 program interface and specialization identity
-complete resource/layout/pipeline descriptor
+complete resource, layout, and pipeline descriptors
 exact enabled features and effective limits
 relevant format and alignment facts
 ```
 
-Compatibility behavior:
+Behavior:
 
 - full match: reuse and emit `Hit`;
 - no entry: create and emit `Miss`;
-- entry with incompatible facts: emit typed `Rejected`, discard or quarantine it, then
-  perform ordinary realization;
-- backend creation failure: emit `RealizationFailed`; do not publish an entry;
-- cache corruption or unreadable backend data: emit `RejectedCorrupt`; ordinary
-  realization remains the correctness path.
+- incompatible entry: emit typed `Rejected`, discard or quarantine, then realize
+  ordinarily;
+- corrupt backend data: emit `RejectedCorrupt`, then realize ordinarily;
+- backend creation failure: emit `RealizationFailed` and publish no entry.
 
-A cache hit changes cost, never semantics. Fallback is not silent; diagnostics record
-why reuse was impossible. Cache stats count hits, misses, rejections and creation
-failures separately.
+A cache hit changes cost, never semantics. Cache stats distinguish hits, misses,
+rejections, corruption, and creation failures.
 
-## WGPU backend object ownership
+## Private backend ownership and the temporary G5 bridge
 
-After G4C, only private RunenGPU backend modules own reusable WGPU objects for:
+After G4C, only private RunenGPU backend modules own reusable WGPU buffers, textures,
+views, samplers, query sets, shader modules, layouts, bind groups, pipelines, instance,
+adapter, device, and queue.
 
-```text
-buffers, textures, views, samplers and query sets
-shader modules
-bind-group layouts and pipeline layouts
-bind groups
-compute and render pipelines
-instance, adapter, device and queue
-```
+The current renderer still owns G5 execution until G5 is implemented. G4C therefore
+permits exactly one narrow crate-private execution bridge with these rules:
 
-Current renderer files may retain WGPU command encoders, render/compute pass encoders,
-surface textures, presentation and residual execution objects only where they are
-explicitly G5/G7 migration evidence. They cannot own reusable resource/program/layout/
-pipeline/cache authority.
+- it is located at the RunenGPU backend boundary and is not public or
+  future-transferable;
+- it is reachable only from the existing bounded render execution adapter;
+- it may lend scoped borrowed WGPU references required to encode the already accepted
+  G5 execution payload;
+- borrowed values cannot be stored, cloned into new ownership, cached, used as lookup
+  authority, or returned to other modules;
+- it accepts only opaque realized handles already validated for context, generation,
+  kind, program, interface, layout, and pipeline compatibility;
+- it owns no operation, access, hazard, initialization, requirement, program,
+  interface, pipeline, cache, or realization truth;
+- source and reach-through guards permit only this named path;
+- G5 deletes the bridge when encoding/submission moves into RunenGPU.
+
+This is a migration terminal, not stable raw-WGPU authority or a general escape hatch.
+Current render files may otherwise retain WGPU command/pass encoders, surface textures,
+and presentation only where explicitly G5/G7-owned.
 
 ## Migration order
 
-G4C performs a clean cutover in this order:
+G4C performs a clean cutover:
 
 1. add generation-bound private RunenGPU realization registries;
 2. realize G2 logical resources through the context;
 3. realize G4B programs and layouts through the context;
 4. realize typed bind groups and pipelines through the context;
-5. migrate renderer setup, dynamic targets, material resources, UI passes, flow runtime
-   caches, applications, examples, tests and benchmarks;
-6. replace raw device/queue access with bounded RunenGPU operations needed by the
-   retained G5 execution seam;
-7. remove renderer cache keys that contain shader/path/pass/feature/hash authority in
+5. migrate renderer setup, dynamic targets, material resources, UI passes, flow-runtime
+   caches, applications, examples, tests, and benchmarks;
+6. replace broad raw device/queue and backend-object access with the one bounded
+   crate-private G5 execution bridge;
+7. remove renderer cache keys using shader paths, pass/feature IDs, or naked hashes in
    place of complete G4 descriptors;
 8. remove renderer-owned WGPU resource/program/layout/bind-group/pipeline registries;
 9. remove synthetic logical-handle construction and the `RenderFlowId` owner bridge;
-10. remove all G4-owned program/interface/pipeline/cache/realization truth from the G3
-    sidecar;
-11. add source, dependency and reach-through guards;
+10. remove all G4-owned program/interface/layout/pipeline/cache/realization truth from
+    the G3 sidecar;
+11. add source, dependency, bridge, sidecar, migration, and deletion guards;
 12. prove every current consumer migrated and every replaced owner deleted.
 
-No compatibility alias, forwarding module, duplicate cache, or old/new realization path
-is retained.
+No compatibility alias, forwarding module, duplicate cache, or old/new realization
+path is retained.
 
 ## Exact deletion and retention split
 
-### Delete in G4C after migration
+Delete in G4C after migration:
 
 ```text
-renderer-owned reusable WGPU resource allocator/registries
-renderer-owned shader-module cache
-renderer-owned bind-group-layout and pipeline-layout caches
-renderer-owned bind-group cache
-renderer-owned compute/render pipeline cache
-string-only PipelineKey authority
+renderer-owned reusable WGPU resource allocator and registries
+renderer-owned shader-module/layout/bind-group/pipeline caches
+string-only PipelineKey as GPU correctness authority
 FlowPassPipelineKey and FlowPassBindGroupKey as GPU correctness authority
-backend cache aliases that only forward renderer authority
+backend aliases that only forward renderer authority
 synthetic G2 handle construction from render declarations
 RenderFlowId-derived GpuWorkResourceId owner bridge
-G4-owned program/interface/layout/pipeline/cache/realization fields in the sidecar
-public WgpuCtx device and queue reach-through
+G4-owned program/interface/layout/pipeline/cache/realization sidecar fields
+public or broad WgpuCtx device/queue reach-through
 ```
 
-A file may remain if it still owns unrelated render semantics, but the replaced type,
-field, function and re-export must be deleted.
+A file may remain if it still owns unrelated render semantics, but replaced types,
+fields, functions, and re-exports are deleted.
 
-### Retain until G5
+Retain until G5:
 
 ```text
 prepared G3 graph
 residual operation-specific execution payload
 command/pass encoding
 uploads and updates
-query resolution execution
+query-resolution execution
 queue submission
 progress and device polling
-completion/readback/cancellation
-runtime retirement
+completion, readback, and cancellation
+runtime retirement and delayed destruction
+the single crate-private scoped execution bridge
 ```
 
-### Retain until G7
+Retain until G7:
 
 ```text
 current Runenwerk window-to-surface registry
 surface compatibility shim
-surface configuration/acquisition/presentation
+surface configuration, acquisition, and presentation
 surface-generation and loss gaps
 Winit host integration
 ```
@@ -1061,20 +965,19 @@ Winit host integration
 
 G4 is GPU/backend decontamination and substrate work. It does not define materials,
 providers, lighting, visibility, transport, reconstruction, render history, overlays,
-views, render targets, color policy, image quality or presentation meaning.
+views, targets, color policy, image quality, or presentation meaning.
 
 The current render tree is evidence of mixed ownership. It is not moved, renamed,
-wrapped, or extracted wholesale. A current render file changes in G4 only to remove
-GPU context, program/interface, realization or cache authority, or to consume the new
-RunenGPU substrate. Renderer semantic code remains where it is until separately
-accepted R-phase work.
+wrapped, or extracted wholesale. A render file changes in G4 only to remove GPU
+context, program/interface, realization, or cache authority, or to consume the new
+RunenGPU substrate. Renderer semantic code remains until separately accepted R-phase
+work.
 
-The temporary execution seam may remain only for G5-owned execution payload. After the
-owning G4 slice, it cannot contain operation, access, hazard, initialization,
-requirement, program, interface, pipeline, cache or realization truth.
+The temporary sidecar may remain only for G5-owned execution payload. After the owning
+G4 slice, it cannot contain operation, access, hazard, initialization, requirement,
+program, interface, pipeline, cache, or realization truth.
 
-Separate RunenRender planning and implementation issues remain independently owned.
-RX is a later mechanical repository transfer and clean cutover after R-phase proof; it
+RX is a later mechanical repository transfer and clean cutover after R-phase proof. It
 is not where renderer architecture is invented.
 
 # Proof and conformance
@@ -1085,13 +988,13 @@ is not where renderer architecture is invented.
 - foreign/stale affinity is rejected;
 - requirement normalization is order-independent;
 - contradictions are rejected before backend access;
-- synthetic candidate facts produce deterministic admission, degradation and ranking;
+- synthetic candidate facts produce deterministic admission, degradation, and ranking;
 - unsupported preferred requirements require explicit degradation keys;
 - unrelated features are not opportunistically enabled;
-- portability classes are derived exactly;
-- normalized backend/limit/format/alignment mappings have exhaustive tests for known
-  variants and explicit unknown handling;
-- public/source dependency guards prove no raw WGPU, Winit, renderer, ECS, application
+- portability classes derive exactly;
+- normalized backend/adapter/software/limit/format/alignment mappings have exhaustive
+  known-variant tests and explicit unknown handling;
+- public/source dependency guards prove no raw WGPU, Winit, renderer, ECS, application,
   or product type in the future-transferable boundary.
 
 ## Environment-dependent G4A proof
@@ -1100,12 +1003,12 @@ is not where renderer architecture is invented.
 - explicit unsupported/no-adapter outcome;
 - enabled facts equal the request result;
 - optional temporary host-compatible selection smoke;
-- WebGPU compile/runtime proof in the platform matrix when available.
+- WebGPU compile/runtime proof in the supported platform matrix when available.
 
 ## Deterministic G4B proof
 
 - source key/revision/content consistency;
-- descriptor validation, equality, ordering and hashing;
+- descriptor validation, equality, ordering, and hashing;
 - typed binding-key uniqueness and compatibility;
 - explicit interface versus entry-point stages;
 - specialization schema/value normalization;
@@ -1117,9 +1020,9 @@ is not where renderer architecture is invented.
 
 - WGSL module creation and compiler diagnostics;
 - one compute and one render pipeline realization on an admitted adapter;
-- resource, texture-view, sampler, query-set, bind-group and layout realization;
+- resource, view, sampler, query-set, bind-group, and layout realization;
 - alignment/format rejection using real adapter facts;
-- cache hit, miss, rejection and ordinary fallback;
+- cache hit, miss, rejection, and ordinary fallback;
 - exact context/device-generation isolation.
 
 ## Migration and deletion proof
@@ -1127,13 +1030,14 @@ is not where renderer architecture is invented.
 Guards inspect the complete relevant source subtree and reject:
 
 - raw public `Device` or `Queue` fields and broad WGPU re-exports;
+- any raw-WGPU reach-through except the named crate-private scoped G5 bridge;
 - renderer-owned shader-module/layout/bind-group/pipeline cache types;
 - `RenderFlowId`-derived GPU resource-owner construction;
 - crate-private synthetic G2 handle constructors outside the RunenGPU owner;
-- program/interface/pipeline/cache truth in the sidecar;
-- string, path, `TypeId`, pass, feature or naked hash binding authority;
-- direct WGPU resource/program/pipeline consumers outside the private backend and
-  explicitly retained G5/G7 migration files;
+- program/interface/pipeline/cache/realization truth in the sidecar;
+- string, path, `TypeId`, pass, feature, or naked-hash binding authority;
+- direct WGPU realization consumers outside the private backend and explicitly retained
+  G5/G7 migration files;
 - compatibility aliases or forwarding modules for deleted owners.
 
 Source-string guards supplement typed tests; they do not replace behavior proof.
@@ -1148,8 +1052,8 @@ git diff --check
 CI=true pnpm --dir docs-site build
 ```
 
-Repository-owned exact-head GitHub Actions are independent merge evidence. G4A, G4B
-and G4C each update their issue, parent program and durable planning. No later slice
+Repository-owned exact-head GitHub Actions are independent merge evidence. G4A, G4B,
+and G4C each update their issue, parent program, and durable planning. No later slice
 may begin before its predecessor is accepted.
 
 # Implementation ergonomics
@@ -1165,39 +1069,41 @@ let output = context.realize_buffer(output_descriptor)?;
 ```
 
 Names are directional, not an implementation mandate. The implementation may return
-future-like results for backend work where WGPU requires asynchronous behavior. The
-important contract is one context owner, explicit admission, typed descriptors,
-structured failures, no raw WGPU reach-through, and no duplicated realization path.
+future-like results where WGPU requires asynchronous backend work. The contract is one
+context owner, explicit admission, typed descriptors, structured failures, no public
+raw WGPU reach-through, and no duplicated realization path.
 
-RunenRender and Runenwerk adapters may offer higher-level semantic authoring. They must
-lower into the same G4B descriptors and G4C realization authority.
+RunenRender and Runenwerk adapters may offer higher-level semantic authoring. They lower
+into the same G4B descriptors and G4C realization authority.
 
 # Stop conditions
 
-Implementation must stop for owner decision if it requires:
+Implementation stops for owner decision if it requires:
 
 - a new dependency or package;
-- a stable persisted cache/source/wire format;
-- public raw WGPU access;
+- a stable persisted cache, source, ABI, capture, replay, or wire format;
+- public raw WGPU access or a second raw-WGPU escape path;
 - unsafe code not already covered by accepted repository policy;
 - a second backend abstraction without a concrete consumer;
-- G5 execution, progress, completion or retirement;
-- G7 surface/loss/reconstruction authority;
+- G5 progress, completion, readback, retirement, or shutdown beyond the named temporary
+  execution bridge;
+- G7 reusable surface, loss, or reconstruction authority;
 - RunenRender semantic implementation;
-- a compatibility facade, forwarding package or duplicate cache;
-- an ADR that changes accepted dependency direction or repository ownership.
+- a compatibility facade, forwarding package, or duplicate cache;
+- an ADR changing accepted dependency direction or repository ownership.
 
-Backend API details, actual adapter availability and compiler diagnostics are expected
+Backend API details, adapter availability, and compiler diagnostics are expected
 environment facts, not architecture stop conditions when they fit this design.
 
 # Decision summary
 
 G4A creates an async, headless, normalized, generation-aware context admission boundary.
-G4B creates explicit typed WGSL-first program, interface, binding, specialization and
+G4B creates explicit typed WGSL-first program, interface, binding, specialization, and
 pipeline descriptors with deterministic semantic identity. G4C realizes those values
 through private WGPU registries, rejects stale and foreign generations, uses
 correctness-complete derived caches, migrates every consumer, and deletes renderer-owned
-GPU realization authority.
+GPU realization authority. One narrow crate-private G5 execution bridge preserves the
+current encoder during the ordered cutover and is deleted by G5.
 
 G5 remains the execution and lifecycle slice. G7 remains the surface and device-loss
 slice. RunenRender remains semantic image formation. No package extraction or Rust
