@@ -82,6 +82,48 @@ mod tests {
     }
 
     #[test]
+    fn g4a_keeps_wgpu_authority_private_and_retired_renderer_authority_deleted() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let gpu_root = manifest.join("src/plugins/gpu");
+        let backend = gpu_root.join("backend/wgpu.rs");
+        let wgpu_context = manifest.join("src/plugins/render/backend/wgpu_ctx.rs");
+        let renderer_root = manifest.join("src/plugins/render");
+
+        assert!(
+            backend.exists(),
+            "G4A must retain exactly one private WGPU owner"
+        );
+        assert!(
+            !manifest
+                .join("src/plugins/render/backend/device.rs")
+                .exists(),
+            "renderer device-request authority must remain deleted"
+        );
+
+        let context_source =
+            fs::read_to_string(wgpu_context).expect("current host terminal should be readable");
+        assert!(
+            !context_source.contains("pub device") && !context_source.contains("pub queue"),
+            "WgpuCtx must not restore public device or queue authority"
+        );
+        assert!(
+            context_source.matches("request_for_current_host").count() == 1,
+            "the host terminal must use the sole G4A compatibility request path"
+        );
+
+        let mut render_sources = Vec::new();
+        rust_sources_below(&renderer_root, &mut render_sources);
+        for path in render_sources {
+            let source = fs::read_to_string(&path).expect("render source should be readable");
+            assert!(
+                !source.contains("RenderBackendTimingCapabilities"),
+                "retired timing authority remains in {}",
+                path.display()
+            );
+        }
+    }
+
+    #[test]
     fn gpu_g2_g3_retired_authority_and_forwarding_paths_are_absent() {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let source_root = manifest.join("src/plugins");

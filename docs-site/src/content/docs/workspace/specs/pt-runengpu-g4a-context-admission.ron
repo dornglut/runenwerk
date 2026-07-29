@@ -4,12 +4,12 @@
 PhaseImplementationSpec(
     phase_id: "PT-RUNENGPU-G4A",
     title: "Context and Adapter/Device Admission",
-    lifecycle_state: "planned",
-    implementation_authorization_status: "not-authorized-until-g4-planning-is-accepted-and-g4a-issue-is-active",
+    lifecycle_state: "implemented-pending-review",
+    implementation_authorization_status: "implemented-in-dornglut-runenwerk-issue-186-pending-review-and-merge",
     owner: "RunenGPU contract owner",
-    source_baseline: "6bbd341691a34763ef54c8ca059940cac8981265",
+    source_baseline: "62c3949d31a7c03f1f554f8108120d9767139123",
     planning_issue: "dornglut/runenwerk#182",
-    implementation_issue: "pending-after-planning-acceptance",
+    implementation_issue: "dornglut/runenwerk#186",
     parent_issue: "dornglut/runenwerk#167",
     completed_predecessor_issue: "dornglut/runenwerk#177",
     completed_predecessor_pull_request: "dornglut/runenwerk#181",
@@ -32,6 +32,15 @@ PhaseImplementationSpec(
     ],
 
     goal: "Create one future-transferable, async, headless-first GpuContext admission authority with opaque context and device-generation identity, normalized backend and portability facts, deterministic requirement admission and degradation, private WGPU instance/adapter/device/queue ownership, and structured diagnostics; migrate current context consumers without implementing reusable surfaces or G5 execution.",
+
+    implementation_record: [
+        "Implemented pending review in issue #186 from accepted base 62c3949d31a7c03f1f554f8108120d9767139123.",
+        "Public G4A types are GpuContext, GpuContextDescriptor, GpuAdapterFacts, GpuAdmittedDeviceFacts, GpuContextAdmissionReport, GpuCandidateDisposition, GpuContextId, GpuDeviceGeneration, and GpuContextAffinity.",
+        "GpuContext::request is the async headless terminal; private backend/wgpu.rs owns WGPU Instance, Adapter, Device, and Queue.",
+        "The exact temporary G7 deletion inventory is crate-private GpuContext::request_for_current_host, which accepts opaque current-host compatibility evidence and returns no public surface authority.",
+        "The exact temporary G4C deletion inventory is crate-private GpuContext::current_render_device_queue, a borrowing Device/Queue-only loan used by the current renderer.",
+        "engine/src/plugins/render/backend/device.rs and RenderBackendTimingCapabilities are deleted; timing reads admitted TimestampQuery facts instead.",
+    ],
 
     dependency_direction: [
         "Runenwerk host policy -> RunenGPU GpuContext admission -> private WGPU backend.",

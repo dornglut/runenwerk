@@ -242,6 +242,7 @@ pub struct GpuContextDescriptor {
     power_preference: GpuPowerPreference,
     fallback_policy: GpuSoftwareFallbackPolicy,
     allowed_backends: BTreeSet<GpuBackendFamily>,
+    backend_preference: BTreeMap<GpuBackendFamily, u8>,
     allowed_adapter_classes: BTreeSet<GpuAdapterClass>,
     portability_policy: GpuPortabilityPolicy,
     requirements: GpuCapabilityRequirements,
@@ -258,6 +259,7 @@ impl GpuContextDescriptor {
             power_preference: GpuPowerPreference::NoPreference,
             fallback_policy: GpuSoftwareFallbackPolicy::Allow,
             allowed_backends: BTreeSet::new(),
+            backend_preference: BTreeMap::new(),
             allowed_adapter_classes: BTreeSet::new(),
             portability_policy: GpuPortabilityPolicy::AllowBackendSpecialized,
             requirements,
@@ -287,6 +289,20 @@ impl GpuContextDescriptor {
         backends: impl IntoIterator<Item = GpuBackendFamily>,
     ) -> Self {
         self.allowed_backends = backends.into_iter().collect();
+        self
+    }
+    /// Orders otherwise-equivalent permitted backend families without relying on
+    /// backend enumeration order.
+    pub fn with_backend_preference(
+        mut self,
+        backends: impl IntoIterator<Item = GpuBackendFamily>,
+    ) -> Self {
+        self.backend_preference.clear();
+        for (priority, backend) in backends.into_iter().enumerate() {
+            self.backend_preference
+                .entry(backend)
+                .or_insert(u8::try_from(priority).unwrap_or(u8::MAX));
+        }
         self
     }
     pub fn with_allowed_adapter_classes(
@@ -331,6 +347,10 @@ impl GpuContextDescriptor {
             merge_power_preference(self.power_preference, other.power_preference)?;
         let fallback_policy = merge_fallback_policy(self.fallback_policy, other.fallback_policy)?;
         let allowed_backends = merge_allowlist(&self.allowed_backends, &other.allowed_backends)?;
+        let backend_preference =
+            merge_backend_preference(&self.backend_preference, &other.backend_preference)?;
+        let mut ordered_backend_preference = backend_preference.into_iter().collect::<Vec<_>>();
+        ordered_backend_preference.sort_by_key(|(_, priority)| *priority);
         let allowed_adapter_classes = merge_allowlist(
             &self.allowed_adapter_classes,
             &other.allowed_adapter_classes,
@@ -339,6 +359,11 @@ impl GpuContextDescriptor {
             .with_power_preference(power_preference)
             .with_fallback_policy(fallback_policy)
             .with_allowed_backends(allowed_backends)
+            .with_backend_preference(
+                ordered_backend_preference
+                    .into_iter()
+                    .map(|(backend, _)| backend),
+            )
             .with_allowed_adapter_classes(allowed_adapter_classes)
             .with_portability_policy(match (self.portability_policy, other.portability_policy) {
                 (GpuPortabilityPolicy::RequirePortableBaseline, _)
@@ -371,6 +396,7 @@ impl GpuContextDescriptor {
         self.power_preference == other.power_preference
             && self.fallback_policy == other.fallback_policy
             && self.allowed_backends == other.allowed_backends
+            && self.backend_preference == other.backend_preference
             && self.allowed_adapter_classes == other.allowed_adapter_classes
             && self.portability_policy == other.portability_policy
             && self.requirements == other.requirements
@@ -461,6 +487,22 @@ fn merge_allowlist<T: Ord + Copy>(
         ));
     }
     Ok(merged)
+}
+
+fn merge_backend_preference(
+    left: &BTreeMap<GpuBackendFamily, u8>,
+    right: &BTreeMap<GpuBackendFamily, u8>,
+) -> Result<BTreeMap<GpuBackendFamily, u8>, GpuContextRequestError> {
+    if left.is_empty() {
+        return Ok(right.clone());
+    }
+    if right.is_empty() || left == right {
+        return Ok(left.clone());
+    }
+    Err(GpuContextRequestError::new(
+        GpuContextRequestErrorCategory::ContradictoryRequest,
+        "backend preferences conflict",
+    ))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -692,6 +734,17 @@ pub(crate) fn validate_descriptor(
         return Err(GpuContextRequestError::new(
             GpuContextRequestErrorCategory::ContradictoryRequest,
             "alignment requirements must be nonzero",
+        ));
+    }
+    if !descriptor.allowed_backends.is_empty()
+        && descriptor
+            .backend_preference
+            .keys()
+            .any(|backend| !descriptor.allowed_backends.contains(backend))
+    {
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::ContradictoryRequest,
+            "backend preference contains a forbidden backend",
         ));
     }
     Ok(())
@@ -967,14 +1020,11 @@ fn candidate_rank(
         GpuAdapterClass::Other => 4,
         GpuAdapterClass::Unknown => 5,
     };
-    let backend = match adapter.backend() {
-        GpuBackendFamily::Vulkan => 0,
-        GpuBackendFamily::Metal => 1,
-        GpuBackendFamily::Direct3D12 => 2,
-        GpuBackendFamily::OpenGl => 3,
-        GpuBackendFamily::BrowserWebGpu => 4,
-        GpuBackendFamily::UnknownBackend => 5,
-    };
+    let backend = descriptor
+        .backend_preference
+        .get(&adapter.backend())
+        .copied()
+        .unwrap_or(u8::MAX);
     (
         fallback,
         power,
@@ -1208,5 +1258,28 @@ mod tests {
             [GpuCandidateDisposition::Rejected(rejection)]
                 if rejection.category() == GpuContextRequestErrorCategory::BackendFamilyForbidden
         ));
+    }
+
+    #[test]
+    fn backend_preference_is_explicit_and_not_candidate_enumeration_order() {
+        let vulkan = adapter();
+        let metal = GpuAdapterFacts::new(
+            GpuBackendFamily::Metal,
+            vulkan.class(),
+            vulkan.software(),
+            vulkan.fallback_requested(),
+            vulkan.supported().clone(),
+            vulkan.alignments(),
+        );
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_backend_preference([GpuBackendFamily::Metal, GpuBackendFamily::Vulkan]);
+        assert_eq!(
+            select_candidate(&descriptor, [vulkan, metal], true)
+                .unwrap()
+                .candidate
+                .adapter()
+                .backend(),
+            GpuBackendFamily::Metal
+        );
     }
 }

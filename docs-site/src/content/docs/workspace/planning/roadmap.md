@@ -46,11 +46,9 @@ not depend on Runenwerk.
 
 ## Current priorities
 
-1. Accept the G4 decision phase in issue `#182` / planning PR `#185` only after exact
-   feature-head validation, documentation build, and critical review.
-2. Activate only G4A context and adapter/device admission from the accepted
-   specification.
-3. Keep G4B blocked until accepted G4A and G4C blocked until accepted G4B.
+1. Review G4A context and adapter/device admission in issue `#186`; it is implemented
+   pending review and remains unaccepted until merge.
+2. Keep G4B blocked until accepted G4A and G4C blocked until accepted G4B.
 4. Continue G5-G8 sequentially only through separately accepted issues and specs.
 5. Extract RunenGPU and perform a clean Runenwerk cutover only after internal
    conformance and extraction-readiness gates pass.

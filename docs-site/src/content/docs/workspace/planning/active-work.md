@@ -41,6 +41,7 @@ G3 decision phase                    complete at 5c82cc54d5ac51aeb2fd8e3da916ed8
 operational hardening                complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
 G3 Rust implementation               accepted at 39d6fe65a334502bdfba0b1a2ce3b365099fcf28
 verified-head maintenance            accepted at 6bbd341691a34763ef54c8ca059940cac8981265
+G4A context admission                implemented pending review in issue #186
 ```
 
 The commit after accepted G3 changes only validation/workflow authority. It changes no
@@ -61,9 +62,9 @@ The planning change is accepted only when its exact reviewed head passes reposit
 validation and documentation build, no blocking review finding remains, and the diff
 contains no Rust implementation.
 
-After accepted planning:
+G4A implementation status:
 
-- G4A is the only slice that may become active;
+- G4A is implemented pending review in issue `#186` and is not accepted until merge;
 - G4B remains blocked by accepted G4A;
 - G4C remains blocked by accepted G4B;
 - G5, G7, RunenRender implementation and package extraction remain unauthorized.
