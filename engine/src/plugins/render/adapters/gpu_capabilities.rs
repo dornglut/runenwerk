@@ -45,6 +45,8 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
                 depth_stencil: false,
                 copy_source: true,
                 copy_destination: true,
+                block_dimensions: Some((1, 1)),
+                block_copy_size: Some(4),
             },
         ),
         (
@@ -58,6 +60,8 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
                 depth_stencil: false,
                 copy_source: true,
                 copy_destination: true,
+                block_dimensions: Some((1, 1)),
+                block_copy_size: Some(4),
             },
         ),
         (
@@ -71,6 +75,8 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
                 depth_stencil: false,
                 copy_source: true,
                 copy_destination: true,
+                block_dimensions: Some((1, 1)),
+                block_copy_size: Some(4),
             },
         ),
         (
@@ -84,6 +90,8 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
                 depth_stencil: false,
                 copy_source: true,
                 copy_destination: true,
+                block_dimensions: Some((1, 1)),
+                block_copy_size: Some(4),
             },
         ),
         (
@@ -97,6 +105,8 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
                 depth_stencil: false,
                 copy_source: true,
                 copy_destination: true,
+                block_dimensions: Some((1, 1)),
+                block_copy_size: Some(4),
             },
         ),
         (
@@ -110,6 +120,8 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
                 depth_stencil: true,
                 copy_source: true,
                 copy_destination: true,
+                block_dimensions: Some((1, 1)),
+                block_copy_size: Some(4),
             },
         ),
     ]

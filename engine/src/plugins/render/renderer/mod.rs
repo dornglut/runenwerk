@@ -787,7 +787,7 @@ pub struct Renderer {
 
 #[derive(Debug, ecs::Component, ecs::Resource)]
 pub struct Gfx {
-    pub ctx: WgpuCtx<'static>,
+    ctx: WgpuCtx<'static>,
     pub renderer: Renderer,
 }
 
@@ -831,6 +831,15 @@ impl Gfx {
         self.ctx.has_surface(render_surface_id)
     }
 
+    pub fn surface_size(
+        &self,
+        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+    ) -> Option<(u32, u32)> {
+        self.ctx
+            .surface_config(render_surface_id)
+            .map(|config| (config.width, config.height))
+    }
+
     pub fn resize(
         &mut self,
         render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
@@ -859,14 +868,20 @@ impl Gfx {
         let frame = self.ctx.get_current_texture(render_surface_id)?;
         timings.acquire_ms = acquire_start.elapsed().as_secs_f32() * 1000.0;
         let view = frame.texture.create_view(&Default::default());
-        let gpu_timing_capability = if self.ctx.timing_capabilities().timestamp_query {
+        let gpu_timing_capability = if self
+            .ctx
+            .context()
+            .device_facts()
+            .is_enabled(crate::plugins::gpu::GpuCapabilityFeature::TimestampQuery)
+        {
             RenderGpuTimingCapability::Supported
         } else {
             RenderGpuTimingCapability::Unsupported
         };
+        let loan = self.ctx.context().current_render_device_queue();
         timings.renderer = self.renderer.render(
-            &self.ctx.device,
-            &self.ctx.queue,
+            loan.device,
+            loan.queue,
             &frame.texture,
             &view,
             prepared_frame,

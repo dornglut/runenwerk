@@ -1,6 +1,7 @@
 //! Future-transferable RunenGPU contract boundaries.
 
 pub mod api;
+mod backend;
 
 pub(crate) use api::GpuWorkAuthoringErrorContext;
 pub use api::*;
@@ -58,15 +59,20 @@ mod tests {
         rust_sources_below(&root, &mut paths);
         paths.sort();
         paths.dedup();
+        let raw_backend_token = ["wgpu", "::"].concat();
 
         for path in paths {
             let source = fs::read_to_string(&path).expect("GPU boundary source should be readable");
+            let private_wgpu_backend = path.ends_with("backend/wgpu.rs");
             for line in source.lines().filter(|line| {
                 let trimmed = line.trim_start();
                 !trimmed.starts_with("//") && !trimmed.starts_with('*')
             }) {
                 assert!(
-                    forbidden.iter().all(|token| !line.contains(token)),
+                    forbidden
+                        .iter()
+                        .filter(|token| !private_wgpu_backend || *token != &raw_backend_token)
+                        .all(|token| !line.contains(token)),
                     "forbidden GPU boundary import in {}: {}",
                     path.display(),
                     line

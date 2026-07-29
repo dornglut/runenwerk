@@ -274,39 +274,42 @@ fn gpu_timing_unavailable_evidence(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::render::backend::request_device_and_queue;
+    use crate::plugins::gpu::{
+        GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuContext,
+        GpuContextDescriptor, GpuPreferredFallback,
+    };
     use crate::plugins::render::inspect::RenderTimingSource;
     use pollster::block_on;
 
     #[test]
     #[ignore = "runtime evidence test: requires a local WGPU adapter and may depend on driver timestamp-query support"]
     fn render_gpu_timing_runtime_query_readback_reports_measured_or_unsupported() {
-        let instance = runtime_gpu_timing_probe_instance();
-        let adapter = match block_on(instance.request_adapter(&RequestAdapterOptions {
-            power_preference: PowerPreference::HighPerformance,
-            force_fallback_adapter: false,
-            compatible_surface: None,
-        })) {
-            Ok(adapter) => adapter,
-            Err(err) => {
-                println!("runtime GPU timing evidence: no adapter available: {err}");
+        let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
+        requirements
+            .insert(GpuCapabilityRequirement::Preferred {
+                feature: GpuCapabilityFeature::TimestampQuery,
+                fallback: GpuPreferredFallback::DisableInstrumentation,
+            })
+            .expect("timestamp preference should merge");
+        let context = match block_on(GpuContext::request(GpuContextDescriptor::new(requirements))) {
+            Ok(context) => context,
+            Err(error) => {
+                println!("runtime GPU timing evidence: {error}");
                 return;
             }
         };
-        let adapter_info = adapter.get_info();
-        println!(
-            "runtime GPU timing evidence: backend={:?} adapter={}",
-            adapter_info.backend, adapter_info.name
-        );
-        let (device, queue, timing_capabilities) =
-            block_on(request_device_and_queue(&adapter)).expect("device request should succeed");
-        if !timing_capabilities.timestamp_query {
+        if !context
+            .device_facts()
+            .is_enabled(GpuCapabilityFeature::TimestampQuery)
+        {
             println!("runtime GPU timing evidence: timestamp queries unsupported by adapter");
             return;
         }
+        let loan = context.current_render_device_queue();
+        let (device, queue) = (loan.device, loan.queue);
 
         let mut frame =
-            GpuPassTimingFrame::new(&device, &queue, 2).expect("timestamp frame should allocate");
+            GpuPassTimingFrame::new(device, queue, 2).expect("timestamp frame should allocate");
         let indices = frame
             .register_pass(
                 GpuPassTimestampIndices { begin: 0, end: 1 },
@@ -337,7 +340,7 @@ mod tests {
             .expect("timestamp queries should resolve");
         queue.submit(std::iter::once(encoder.finish()));
 
-        let evidence = read_gpu_pass_timing_evidence(&device, pending);
+        let evidence = read_gpu_pass_timing_evidence(device, pending);
         println!("runtime GPU timing evidence: {evidence:?}");
         assert_eq!(evidence.len(), 1);
         assert_eq!(evidence[0].source, RenderTimingSource::GpuTimestampQuery);
@@ -346,26 +349,5 @@ mod tests {
             RenderGpuTimingCapability::Supported
         );
         assert!(evidence[0].millis.is_some());
-    }
-
-    fn runtime_gpu_timing_probe_instance() -> Instance {
-        let descriptor = InstanceDescriptor {
-            backends: runtime_gpu_timing_probe_backends(),
-            ..InstanceDescriptor::default()
-        }
-        .with_env();
-        Instance::new(&descriptor)
-    }
-
-    #[cfg(target_os = "windows")]
-    fn runtime_gpu_timing_probe_backends() -> Backends {
-        // Keep the headless proof on a deterministic backend by default; WGPU_BACKEND can still
-        // override this when a backend-specific driver issue is being investigated.
-        Backends::VULKAN
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    fn runtime_gpu_timing_probe_backends() -> Backends {
-        Backends::PRIMARY
     }
 }

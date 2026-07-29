@@ -2,6 +2,7 @@
 
 mod access;
 mod capability;
+mod context;
 mod data;
 mod errors;
 mod graph;
@@ -12,6 +13,7 @@ mod work_resource_id;
 
 pub use access::*;
 pub use capability::*;
+pub use context::*;
 pub use data::*;
 pub use errors::*;
 pub(crate) use errors::{GpuWorkAuthoringErrorContext, GpuWorkGraphErrorContext};

@@ -238,6 +238,10 @@ pub struct GpuTextureFormatCapabilities {
     pub depth_stencil: bool,
     pub copy_source: bool,
     pub copy_destination: bool,
+    /// Texture-block dimensions are absent when the backend cannot report them.
+    pub block_dimensions: Option<(u32, u32)>,
+    /// Copy bytes per texture block are absent when the backend cannot report them.
+    pub block_copy_size: Option<u32>,
 }
 
 impl GpuTextureFormatCapabilities {
@@ -251,6 +255,8 @@ impl GpuTextureFormatCapabilities {
             depth_stencil: false,
             copy_source: false,
             copy_destination: false,
+            block_dimensions: None,
+            block_copy_size: None,
         }
     }
 }
