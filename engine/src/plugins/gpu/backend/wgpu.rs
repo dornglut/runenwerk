@@ -2,11 +2,12 @@
 
 use crate::plugins::gpu::{
     GpuAdapterClass, GpuAdapterFacts, GpuAlignmentFacts, GpuBackendFamily,
-    GpuCandidateSelectionKind, GpuCapabilities, GpuCapabilityFeature, GpuContext,
-    GpuContextAdmissionReport, GpuContextDescriptor, GpuContextRequestError,
-    GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuFallbackStatus, GpuLimits,
-    GpuSoftwareStatus, GpuTextureFormat, GpuTextureFormatCapabilities, admitted_device_facts,
-    allocate_context_id, select_candidate_with_host_evidence, validate_descriptor,
+    GpuCandidateEnvironmentEvidence, GpuCandidateSelectionKind, GpuCapabilities,
+    GpuCapabilityFeature, GpuContext, GpuContextAdmissionReport, GpuContextDescriptor,
+    GpuContextRequestError, GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuFallbackStatus,
+    GpuLimits, GpuSoftwareStatus, GpuTextureFormat, GpuTextureFormatCapabilities,
+    admitted_device_facts, allocate_context_id, select_candidate_with_host_evidence,
+    validate_descriptor,
 };
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
@@ -30,6 +31,36 @@ pub(crate) struct WgpuContextState {
 pub(crate) struct CurrentRenderDeviceQueue<'a> {
     pub(crate) device: &'a Device,
     pub(crate) queue: &'a Queue,
+}
+
+/// Temporary G7 migration bridge; delete when G7 owns reusable surface authority.
+#[derive(Debug)]
+pub(crate) struct CurrentHostSurfaceBridge<'a> {
+    state: &'a WgpuContextState,
+}
+
+impl<'a> CurrentHostSurfaceBridge<'a> {
+    pub(crate) fn create_surface<'window>(
+        &self,
+        target: impl Into<SurfaceTarget<'window>>,
+    ) -> Result<Surface<'window>, wgpu::CreateSurfaceError> {
+        self.state.instance.create_surface(target)
+    }
+
+    pub(crate) fn capabilities(&self, surface: &Surface<'_>) -> SurfaceCapabilities {
+        surface.get_capabilities(&self.state.adapter)
+    }
+
+    pub(crate) fn configure(&self, surface: &Surface<'_>, config: &SurfaceConfiguration) {
+        surface.configure(&self.state.device, config);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+struct NativeAdapterCandidate<T> {
+    facts: GpuAdapterFacts,
+    adapter: T,
+    environment: GpuCandidateEnvironmentEvidence,
 }
 
 pub(crate) async fn request_headless(
@@ -133,7 +164,15 @@ async fn select_backend_adapter(
                 surface_supported,
                 GpuFallbackStatus::ConfirmedNotFallback,
             );
-            (facts, adapter, surface_supported)
+            NativeAdapterCandidate {
+                facts,
+                adapter,
+                environment: if compatible_surface.is_some() {
+                    GpuCandidateEnvironmentEvidence::current_host(surface_supported)
+                } else {
+                    GpuCandidateEnvironmentEvidence::headless()
+                },
+            }
         })
         .collect::<Vec<_>>();
     select_enumerated_adapter(descriptor, candidates).map(|(adapter, selection)| {
@@ -170,23 +209,35 @@ const fn native_selection_route(
 #[cfg(not(target_arch = "wasm32"))]
 fn select_enumerated_adapter<T>(
     descriptor: &GpuContextDescriptor,
-    candidates: Vec<(GpuAdapterFacts, T, bool)>,
+    candidates: Vec<NativeAdapterCandidate<T>>,
 ) -> Result<(T, crate::plugins::gpu::GpuCandidateSelection), GpuContextRequestError> {
     let facts = candidates
         .iter()
-        .map(|(facts, _, surface_supported)| (facts.clone(), *surface_supported))
+        .map(|candidate| (candidate.facts.clone(), candidate.environment))
         .collect::<Vec<_>>();
     let selection = select_candidate_with_host_evidence(descriptor, facts)?;
     let selected_facts = selection.candidate.adapter();
-    let adapter = candidates
-        .into_iter()
-        .find_map(|(facts, adapter, _)| (facts == *selected_facts).then_some(adapter))
-        .ok_or_else(|| {
-            GpuContextRequestError::new(
+    let mut matching = candidates.into_iter().filter(|candidate| {
+        candidate.facts == *selected_facts
+            && candidate
+                .environment
+                .satisfies_host_compatibility_constraint()
+    });
+    let adapter = match (matching.next(), matching.next()) {
+        (Some(candidate), None) => candidate.adapter,
+        (None, _) => {
+            return Err(GpuContextRequestError::new(
                 GpuContextRequestErrorCategory::BackendAdapterRequestFailure,
-                "selected normalized adapter is absent from native enumeration",
-            )
-        })?;
+                "selected normalized adapter is absent from native candidate set",
+            ));
+        }
+        (Some(_), Some(_)) => {
+            return Err(GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::AmbiguousAdapterSelection,
+                "selected normalized adapter maps to multiple backend candidates",
+            ));
+        }
+    };
     Ok((adapter, selection))
 }
 
@@ -241,8 +292,12 @@ async fn select_backend_selected_adapter(
             GpuFallbackStatus::Unknown
         },
     );
-    let selection =
-        select_candidate_with_host_evidence(descriptor, [(facts, compatible_surface.is_some())])?;
+    let environment = if compatible_surface.is_some() {
+        GpuCandidateEnvironmentEvidence::current_host(true)
+    } else {
+        GpuCandidateEnvironmentEvidence::headless()
+    };
+    let selection = select_candidate_with_host_evidence(descriptor, [(facts, environment)])?;
     Ok((
         adapter,
         selection,
@@ -279,26 +334,11 @@ impl GpuContext {
         Ok((context, surface))
     }
 
-    pub(crate) fn create_current_host_surface<'window>(
-        &self,
-        target: impl Into<SurfaceTarget<'window>>,
-    ) -> Result<Surface<'window>, wgpu::CreateSurfaceError> {
-        self.backend.instance.create_surface(target)
-    }
-
-    pub(crate) fn current_host_surface_capabilities(
-        &self,
-        surface: &Surface<'_>,
-    ) -> SurfaceCapabilities {
-        surface.get_capabilities(&self.backend.adapter)
-    }
-
-    pub(crate) fn configure_current_host_surface(
-        &self,
-        surface: &Surface<'_>,
-        config: &SurfaceConfiguration,
-    ) {
-        surface.configure(&self.backend.device, config);
+    /// Temporary G7 migration bridge; delete when G7 owns reusable surface authority.
+    pub(crate) fn current_host_surface_bridge(&self) -> CurrentHostSurfaceBridge<'_> {
+        CurrentHostSurfaceBridge {
+            state: &self.backend,
+        }
     }
 
     /// The sole crate-private G4A loan to the current renderer. G4C replaces this terminal.
@@ -475,7 +515,8 @@ fn format_capabilities(
 mod native_selection_tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuCapabilityRequirements, GpuContextDescriptor, GpuFallbackStatus, GpuLimits,
+        GpuCandidateDisposition, GpuCapabilityRequirements, GpuContextDescriptor,
+        GpuFallbackStatus, GpuLimits,
     };
 
     fn facts(
@@ -507,6 +548,26 @@ mod native_selection_tests {
         )
     }
 
+    fn headless_candidate<T>(facts: GpuAdapterFacts, adapter: T) -> NativeAdapterCandidate<T> {
+        NativeAdapterCandidate {
+            facts,
+            adapter,
+            environment: GpuCandidateEnvironmentEvidence::headless(),
+        }
+    }
+
+    fn current_host_candidate<T>(
+        facts: GpuAdapterFacts,
+        adapter: T,
+        host_compatible: bool,
+    ) -> NativeAdapterCandidate<T> {
+        NativeAdapterCandidate {
+            facts,
+            adapter,
+            environment: GpuCandidateEnvironmentEvidence::current_host(host_compatible),
+        }
+    }
+
     #[test]
     fn native_enumerated_candidates_are_ranked_before_retaining_the_adapter_handle() {
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
@@ -514,23 +575,21 @@ mod native_selection_tests {
         let forward = select_enumerated_adapter(
             &descriptor,
             vec![
-                (
+                headless_candidate(
                     facts(
                         GpuAdapterClass::Integrated,
                         GpuFallbackStatus::ConfirmedNotFallback,
                         false,
                     ),
                     "integrated",
-                    true,
                 ),
-                (
+                headless_candidate(
                     facts(
                         GpuAdapterClass::Discrete,
                         GpuFallbackStatus::ConfirmedNotFallback,
                         false,
                     ),
                     "discrete",
-                    true,
                 ),
             ],
         )
@@ -538,23 +597,21 @@ mod native_selection_tests {
         let reverse = select_enumerated_adapter(
             &descriptor,
             vec![
-                (
+                headless_candidate(
                     facts(
                         GpuAdapterClass::Discrete,
                         GpuFallbackStatus::ConfirmedNotFallback,
                         false,
                     ),
                     "discrete",
-                    true,
                 ),
-                (
+                headless_candidate(
                     facts(
                         GpuAdapterClass::Integrated,
                         GpuFallbackStatus::ConfirmedNotFallback,
                         false,
                     ),
                     "integrated",
-                    true,
                 ),
             ],
         )
@@ -593,7 +650,7 @@ mod native_selection_tests {
             .with_power_preference(GpuPowerPreference::HighPerformance);
         let enumerated = select_enumerated_adapter(
             &host_descriptor,
-            vec![(
+            vec![current_host_candidate(
                 facts(
                     GpuAdapterClass::Discrete,
                     GpuFallbackStatus::ConfirmedNotFallback,
@@ -615,7 +672,7 @@ mod native_selection_tests {
         assert!(
             select_enumerated_adapter(
                 &forbidding,
-                vec![(
+                vec![current_host_candidate(
                     facts(
                         GpuAdapterClass::Discrete,
                         GpuFallbackStatus::ConfirmedNotFallback,
@@ -630,7 +687,7 @@ mod native_selection_tests {
         assert!(matches!(
             select_enumerated_adapter(
                 &host_descriptor,
-                vec![(
+                vec![current_host_candidate(
                     facts(
                         GpuAdapterClass::Discrete,
                         GpuFallbackStatus::ConfirmedNotFallback,
@@ -654,7 +711,7 @@ mod native_selection_tests {
                     GpuFallbackStatus::ConfirmedFallback,
                     true,
                 ),
-                true,
+                GpuCandidateEnvironmentEvidence::current_host(true),
             )],
         )
         .unwrap();
@@ -672,10 +729,57 @@ mod native_selection_tests {
                         GpuFallbackStatus::ConfirmedFallback,
                         true,
                     ),
-                    false,
+                    GpuCandidateEnvironmentEvidence::current_host(false),
                 )],
             ),
             Err(error) if error.category() == GpuContextRequestErrorCategory::NoCandidate
+        ));
+    }
+
+    #[test]
+    fn native_reconnection_keeps_host_compatibility_with_equal_normalized_facts() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let normalized = facts(
+            GpuAdapterClass::Discrete,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            true,
+        );
+        let forward = select_enumerated_adapter(
+            &descriptor,
+            vec![
+                current_host_candidate(normalized.clone(), "incompatible", false),
+                current_host_candidate(normalized.clone(), "compatible", true),
+            ],
+        )
+        .unwrap();
+        let reverse = select_enumerated_adapter(
+            &descriptor,
+            vec![
+                current_host_candidate(normalized.clone(), "compatible", true),
+                current_host_candidate(normalized.clone(), "incompatible", false),
+            ],
+        )
+        .unwrap();
+        assert_eq!(forward.0, "compatible");
+        assert_eq!(reverse.0, "compatible");
+        assert_eq!(forward.1.candidate, reverse.1.candidate);
+        assert_eq!(forward.1.dispositions, reverse.1.dispositions);
+        assert_eq!(forward.1.evidence, reverse.1.evidence);
+        assert!(matches!(
+            forward.1.dispositions.as_slice(),
+            [GpuCandidateDisposition::Accepted(_), GpuCandidateDisposition::Rejected(report)]
+                if report.category() == GpuContextRequestErrorCategory::TemporaryHostCompatibilityFailure
+        ));
+
+        assert!(matches!(
+            select_enumerated_adapter(
+                &descriptor,
+                vec![
+                    current_host_candidate(normalized.clone(), "first", true),
+                    current_host_candidate(normalized, "second", true),
+                ],
+            ),
+            Err(error) if error.category() == GpuContextRequestErrorCategory::AmbiguousAdapterSelection
         ));
     }
 }

@@ -806,13 +806,44 @@ pub(crate) fn allocate_context_id() -> Result<GpuContextId, GpuContextRequestErr
     ))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GpuCandidateEnvironmentEvidence {
+    host_compatible: bool,
+    host_compatibility_required: bool,
+}
+
+impl GpuCandidateEnvironmentEvidence {
+    pub(crate) const fn headless() -> Self {
+        Self {
+            host_compatible: false,
+            host_compatibility_required: false,
+        }
+    }
+
+    pub(crate) const fn current_host(host_compatible: bool) -> Self {
+        Self {
+            host_compatible,
+            host_compatibility_required: true,
+        }
+    }
+
+    pub(crate) const fn satisfies_host_compatibility_constraint(self) -> bool {
+        !self.host_compatibility_required || self.host_compatible
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn evaluate_candidate(
     descriptor: &GpuContextDescriptor,
     adapter: GpuAdapterFacts,
     host_compatible: bool,
 ) -> Result<GpuCandidateAdmissionReport, GpuContextRequestError> {
     validate_descriptor(descriptor)?;
-    evaluate_validated_candidate(descriptor, adapter, host_compatible)
+    evaluate_validated_candidate(
+        descriptor,
+        adapter,
+        GpuCandidateEnvironmentEvidence::current_host(host_compatible),
+    )
 }
 
 /// Validates caller-provided normalized authority before a backend terminal exists.
@@ -853,8 +884,14 @@ pub(crate) fn validate_descriptor(
 fn evaluate_validated_candidate(
     descriptor: &GpuContextDescriptor,
     adapter: GpuAdapterFacts,
-    host_compatible: bool,
+    environment: GpuCandidateEnvironmentEvidence,
 ) -> Result<GpuCandidateAdmissionReport, GpuContextRequestError> {
+    if !environment.satisfies_host_compatibility_constraint() {
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::TemporaryHostCompatibilityFailure,
+            "adapter is incompatible with the required current host",
+        ));
+    }
     if !descriptor.allowed_backends.is_empty()
         && !descriptor.allowed_backends.contains(&adapter.backend)
     {
@@ -899,7 +936,9 @@ fn evaluate_validated_candidate(
         match requirement {
             GpuCapabilityRequirement::Required(feature) => {
                 let supported = adapter.supported.supports(feature)
-                    && (feature != GpuCapabilityFeature::Presentation || host_compatible);
+                    && (feature != GpuCapabilityFeature::Presentation
+                        || (environment.host_compatibility_required
+                            && environment.host_compatible));
                 if !supported {
                     return Err(GpuContextRequestError::new(
                         if feature == GpuCapabilityFeature::Presentation {
@@ -914,7 +953,9 @@ fn evaluate_validated_candidate(
             }
             GpuCapabilityRequirement::Preferred { feature, fallback } => {
                 let supported = adapter.supported.supports(feature)
-                    && (feature != GpuCapabilityFeature::Presentation || host_compatible);
+                    && (feature != GpuCapabilityFeature::Presentation
+                        || (environment.host_compatibility_required
+                            && environment.host_compatible));
                 if supported {
                     enabled.insert(feature);
                 } else {
@@ -1098,21 +1139,24 @@ pub(crate) fn select_candidate(
 ) -> Result<GpuCandidateSelection, GpuContextRequestError> {
     select_candidate_with_host_evidence(
         descriptor,
-        candidates
-            .into_iter()
-            .map(|candidate| (candidate, host_compatible)),
+        candidates.into_iter().map(|candidate| {
+            (
+                candidate,
+                GpuCandidateEnvironmentEvidence::current_host(host_compatible),
+            )
+        }),
     )
 }
 
 pub(crate) fn select_candidate_with_host_evidence(
     descriptor: &GpuContextDescriptor,
-    candidates: impl IntoIterator<Item = (GpuAdapterFacts, bool)>,
+    candidates: impl IntoIterator<Item = (GpuAdapterFacts, GpuCandidateEnvironmentEvidence)>,
 ) -> Result<GpuCandidateSelection, GpuContextRequestError> {
     validate_descriptor(descriptor)?;
     let mut dispositions = candidates
         .into_iter()
-        .map(|(candidate, host_compatible)| {
-            match evaluate_candidate(descriptor, candidate.clone(), host_compatible) {
+        .map(|(candidate, environment)| {
+            match evaluate_validated_candidate(descriptor, candidate.clone(), environment) {
                 Ok(report) => GpuCandidateDisposition::Accepted(Box::new(report)),
                 Err(error) => {
                     GpuCandidateDisposition::Rejected(Box::new(GpuRejectedCandidateReport {
@@ -1688,6 +1732,136 @@ mod tests {
         assert!(matches!(
             select_candidate(&descriptor, [discrete.clone(), discrete], true),
             Err(error) if error.category() == GpuContextRequestErrorCategory::AmbiguousAdapterSelection
+        ));
+    }
+
+    #[test]
+    fn current_host_compatibility_is_a_private_mandatory_selection_constraint() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_power_preference(GpuPowerPreference::HighPerformance);
+        let compatible = adapter().with_diagnostics("compatible adapter".to_owned(), 2, 2);
+        let incompatible =
+            compatible
+                .clone()
+                .with_diagnostics("incompatible adapter".to_owned(), 1, 1);
+        let other_incompatible =
+            compatible
+                .clone()
+                .with_diagnostics("other incompatible adapter".to_owned(), 3, 3);
+
+        let rejected = select_candidate_with_host_evidence(
+            &descriptor,
+            [(
+                incompatible.clone(),
+                GpuCandidateEnvironmentEvidence::current_host(false),
+            )],
+        )
+        .unwrap_err();
+        assert_eq!(
+            rejected.category(),
+            GpuContextRequestErrorCategory::NoCandidate
+        );
+        assert!(matches!(
+            rejected.candidate_dispositions(),
+            [GpuCandidateDisposition::Rejected(report)]
+                if report.adapter() == &incompatible
+                    && report.category() == GpuContextRequestErrorCategory::TemporaryHostCompatibilityFailure
+        ));
+
+        let admitted = select_candidate_with_host_evidence(
+            &descriptor,
+            [(
+                compatible.clone(),
+                GpuCandidateEnvironmentEvidence::current_host(true),
+            )],
+        )
+        .unwrap();
+        assert_eq!(admitted.candidate.adapter(), &compatible);
+
+        let forward = select_candidate_with_host_evidence(
+            &descriptor,
+            [
+                (
+                    incompatible.clone(),
+                    GpuCandidateEnvironmentEvidence::current_host(false),
+                ),
+                (
+                    compatible.clone(),
+                    GpuCandidateEnvironmentEvidence::current_host(true),
+                ),
+                (
+                    other_incompatible.clone(),
+                    GpuCandidateEnvironmentEvidence::current_host(false),
+                ),
+            ],
+        )
+        .unwrap();
+        let reverse = select_candidate_with_host_evidence(
+            &descriptor,
+            [
+                (
+                    other_incompatible.clone(),
+                    GpuCandidateEnvironmentEvidence::current_host(false),
+                ),
+                (
+                    compatible.clone(),
+                    GpuCandidateEnvironmentEvidence::current_host(true),
+                ),
+                (
+                    incompatible.clone(),
+                    GpuCandidateEnvironmentEvidence::current_host(false),
+                ),
+            ],
+        )
+        .unwrap();
+        let rotated = select_candidate_with_host_evidence(
+            &descriptor,
+            [
+                (
+                    compatible.clone(),
+                    GpuCandidateEnvironmentEvidence::current_host(true),
+                ),
+                (
+                    other_incompatible,
+                    GpuCandidateEnvironmentEvidence::current_host(false),
+                ),
+                (
+                    incompatible,
+                    GpuCandidateEnvironmentEvidence::current_host(false),
+                ),
+            ],
+        )
+        .unwrap();
+        assert_eq!(forward.candidate, reverse.candidate);
+        assert_eq!(forward.dispositions, reverse.dispositions);
+        assert_eq!(forward.evidence, reverse.evidence);
+        assert_eq!(forward.candidate, rotated.candidate);
+        assert_eq!(forward.dispositions, rotated.dispositions);
+        assert_eq!(forward.evidence, rotated.evidence);
+
+        assert!(
+            select_candidate_with_host_evidence(
+                &descriptor,
+                [(
+                    compatible.clone(),
+                    GpuCandidateEnvironmentEvidence::headless()
+                )],
+            )
+            .is_ok()
+        );
+
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Presentation,
+            ))
+            .unwrap();
+        assert!(matches!(
+            select_candidate_with_host_evidence(
+                &GpuContextDescriptor::new(requirements),
+                [(compatible, GpuCandidateEnvironmentEvidence::headless())],
+            ),
+            Err(error) if error.category() == GpuContextRequestErrorCategory::NoCandidate
         ));
     }
 

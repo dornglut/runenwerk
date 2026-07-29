@@ -38,12 +38,16 @@ impl<'window> WgpuCtx<'window> {
         let (context, surface) =
             GpuContext::request_for_current_host(descriptor, Arc::clone(&window)).await?;
 
-        let size = window.inner_size();
-        let caps = context.current_host_surface_capabilities(&surface);
-        let format = preferred_surface_format(&caps);
-        let surface_config =
-            build_surface_config(size.width, size.height, format, caps.alpha_modes[0]);
-        context.configure_current_host_surface(&surface, &surface_config);
+        let surface_config = {
+            let bridge = context.current_host_surface_bridge();
+            let size = window.inner_size();
+            let caps = bridge.capabilities(&surface);
+            let format = preferred_surface_format(&caps);
+            let surface_config =
+                build_surface_config(size.width, size.height, format, caps.alpha_modes[0]);
+            bridge.configure(&surface, &surface_config);
+            surface_config
+        };
 
         Ok(Self {
             context,
@@ -67,17 +71,20 @@ impl<'window> WgpuCtx<'window> {
         window: Arc<Window>,
         target_size_px: (u32, u32),
     ) -> Result<()> {
-        let surface = self.context.create_current_host_surface(window)?;
-        let caps = self.context.current_host_surface_capabilities(&surface);
-        let format = preferred_surface_format(&caps);
-        let config = build_surface_config(
-            target_size_px.0,
-            target_size_px.1,
-            format,
-            caps.alpha_modes[0],
-        );
-        self.context
-            .configure_current_host_surface(&surface, &config);
+        let (surface, config) = {
+            let bridge = self.context.current_host_surface_bridge();
+            let surface = bridge.create_surface(window)?;
+            let caps = bridge.capabilities(&surface);
+            let format = preferred_surface_format(&caps);
+            let config = build_surface_config(
+                target_size_px.0,
+                target_size_px.1,
+                format,
+                caps.alpha_modes[0],
+            );
+            bridge.configure(&surface, &config);
+            (surface, config)
+        };
         self.surfaces
             .insert(render_surface_id, WgpuSurfaceState { surface, config });
         Ok(())
@@ -107,7 +114,8 @@ impl<'window> WgpuCtx<'window> {
         state.config.width = width.max(1);
         state.config.height = height.max(1);
         self.context
-            .configure_current_host_surface(&state.surface, &state.config);
+            .current_host_surface_bridge()
+            .configure(&state.surface, &state.config);
         true
     }
 

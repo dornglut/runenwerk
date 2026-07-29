@@ -102,6 +102,8 @@ mod tests {
 
         let context_source =
             fs::read_to_string(wgpu_context).expect("current host terminal should be readable");
+        let backend_source =
+            fs::read_to_string(&backend).expect("private WGPU backend should be readable");
         assert!(
             !context_source.contains("pub device") && !context_source.contains("pub queue"),
             "WgpuCtx must not restore public device or queue authority"
@@ -109,6 +111,71 @@ mod tests {
         assert!(
             context_source.matches("request_for_current_host").count() == 1,
             "the host terminal must use the sole G4A compatibility request path"
+        );
+        assert_eq!(
+            backend_source.matches("request_for_current_host").count(),
+            1,
+            "G4A must retain exactly one current-host request terminal"
+        );
+        assert_eq!(
+            backend_source
+                .matches("current_host_surface_bridge")
+                .count(),
+            1,
+            "G4A must retain exactly one current-host surface bridge accessor"
+        );
+        assert_eq!(
+            backend_source
+                .matches("struct CurrentHostSurfaceBridge")
+                .count(),
+            1,
+            "G4A must retain exactly one bounded current-host bridge type"
+        );
+        let bridge_definition = backend_source
+            .split("struct CurrentHostSurfaceBridge")
+            .nth(1)
+            .and_then(|source| source.split("impl<'a> CurrentHostSurfaceBridge").next())
+            .expect("current-host bridge definition should be present");
+        let bridge_implementation = backend_source
+            .split("impl<'a> CurrentHostSurfaceBridge")
+            .nth(1)
+            .and_then(|source| source.split("#[cfg(not(target_arch = \"wasm32\"))]").next())
+            .expect("current-host bridge implementation should be present");
+        assert!(
+            !bridge_definition.contains("pub"),
+            "the current-host bridge must not expose raw fields"
+        );
+        assert_eq!(
+            bridge_implementation.matches("pub(crate) fn").count(),
+            3,
+            "the current-host bridge may expose only create, capabilities, and configure"
+        );
+        for retired_surface_operation in [
+            "create_current_host_surface",
+            "current_host_surface_capabilities",
+            "configure_current_host_surface",
+        ] {
+            assert!(
+                !backend_source.contains(retired_surface_operation),
+                "GpuContext must not retain G7 surface operation: {retired_surface_operation}"
+            );
+        }
+        assert!(
+            !bridge_implementation.contains("fn device(")
+                && !bridge_implementation.contains("fn queue(")
+                && !bridge_implementation.contains("fn instance(")
+                && !bridge_implementation.contains("fn adapter(")
+                && !bridge_implementation.contains("FnOnce")
+                && !bridge_implementation.contains("FnMut")
+                && !bridge_implementation.contains("Fn("),
+            "the current-host bridge must not expose raw WGPU authority"
+        );
+        assert!(
+            context_source.contains("struct WgpuSurfaceState")
+                && context_source.contains("surface: Surface")
+                && context_source.contains("config: SurfaceConfiguration")
+                && context_source.contains("get_current_texture"),
+            "WgpuCtx must retain surface/configuration ownership and acquisition"
         );
 
         let mut render_sources = Vec::new();
