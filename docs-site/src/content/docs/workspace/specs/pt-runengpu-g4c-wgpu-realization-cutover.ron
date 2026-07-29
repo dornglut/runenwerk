@@ -41,14 +41,14 @@ PhaseImplementationSpec(
         "G4A owns context identity, device generation, adapter/device admission, and normalized admitted facts.",
         "G4B owns program/source/interface/binding/layout/specialization/pipeline descriptors.",
         "G4C owns WGPU resource/program/layout/bind-group/pipeline objects, realization registries, context/generation affinity, cache compatibility, migration, and deletion of replaced renderer authority.",
-        "G5 owns execution, uploads, query-resolution encoding, submission, progress, completion, readback, cancellation, runtime retirement, and delayed destruction.",
+        "G5 owns execution, uploads, query-resolution encoding, submission, progress, completion, readback, cancellation, runtime retirement, delayed destruction, and deletion of the temporary execution bridge.",
         "G7 owns surface creation/configuration/acquisition/presentation, device replacement, loss, and reconstruction facts.",
         "RunenRender owns semantic image formation and Runenwerk owns source/watch/window/product policy.",
     ],
 
     realized_handle_contracts: [
         "Opaque Clone non-Copy handle families cover realized buffers, textures, texture views, samplers, query sets, programs, bind-group layouts, pipeline layouts, bind groups, compute pipelines, and render pipelines.",
-        "Every realized handle exposes typed logical identity and GpuContextAffinity for inspection but no raw WGPU object or pointer.",
+        "Every realized handle exposes typed logical identity and GpuContextAffinity for inspection but no public raw WGPU object or pointer.",
         "Exact public type/module names may follow coherent responsibility; no numbered split or facade package is required.",
         "Runtime IDs and affinities are process-local and are not stable persistence or wire authority.",
     ],
@@ -131,7 +131,7 @@ PhaseImplementationSpec(
         "RunenGPU internal cache schema revision.",
         "RunenGPU descriptor schema revision.",
         "Pinned WGPU version and backend compatibility revision.",
-        "Normalized backend family and adapter class.",
+        "Normalized backend family, adapter class, and independent software/fallback fact.",
         "Available adapter and relevant driver identity/version facts.",
         "Context identity and device generation for in-memory entries.",
         "Source kind, key, revision, and content digest.",
@@ -153,8 +153,13 @@ PhaseImplementationSpec(
 
     private_wgpu_ownership: [
         "Only private RunenGPU backend modules own reusable WGPU buffers, textures, views, samplers, query sets, shader modules, bind-group layouts, pipeline layouts, bind groups, compute pipelines, render pipelines, instance, adapter, device, and queue after cutover.",
-        "Current render files may retain command/pass encoders, surface textures, presentation, and residual execution objects only as explicitly G5/G7-owned migration evidence.",
         "No public raw backend accessor, broad callback, Deref, AsRef, re-export, or compatibility facade is accepted.",
+        "Permit exactly one named crate-private scoped G5 execution bridge from the private RunenGPU backend to the existing bounded render execution adapter.",
+        "The bridge may lend borrowed WGPU references only while encoding already accepted G5 payload; borrowed values cannot be stored, cloned into ownership, cached, returned, or used as lookup authority.",
+        "The bridge accepts only opaque realized handles already validated for context, generation, resource kind, program, interface, layout, and pipeline compatibility.",
+        "The bridge owns no operation, access, hazard, initialization, requirement, program, interface, pipeline, cache, or realization truth.",
+        "Source and reach-through guards permit only this named path, and G5 deletes it during execution cutover.",
+        "Current render files may otherwise retain command/pass encoders, surface textures, and presentation only as explicitly G5/G7-owned migration evidence.",
     ],
 
     migration_order: [
@@ -163,12 +168,12 @@ PhaseImplementationSpec(
         "Realize accepted G4B programs, bind-group layouts, and pipeline layouts through GpuContext.",
         "Realize typed bind groups and compute/render pipelines through GpuContext.",
         "Migrate renderer setup, dynamic targets, material GPU resources, UI passes, flow runtime caches, apps, examples, benches, and tests.",
-        "Replace raw Device/Queue reach-through with bounded crate-private RunenGPU operations required by the retained G5 seam.",
+        "Replace broad raw Device/Queue/backend-object reach-through with the single named crate-private scoped G5 execution bridge.",
         "Remove renderer keys that substitute paths, pass/feature IDs, strings, TypeId, labels, or naked hashes for complete G4 descriptors.",
         "Remove renderer-owned WGPU resource/program/layout/bind-group/pipeline registries and caches.",
         "Remove synthetic G2 handle construction and the RenderFlowId-derived work-resource owner bridge.",
         "Remove all G4-owned program/interface/layout/pipeline/cache/realization truth from the G3 sidecar.",
-        "Add source, dependency, reach-through, sidecar, migration, and deletion guards.",
+        "Add source, dependency, bridge, sidecar, migration, and deletion guards.",
         "Prove all current consumers migrated and all replaced authority deleted in the same slice.",
     ],
 
@@ -181,7 +186,7 @@ PhaseImplementationSpec(
         "Synthetic GpuBufferHandle, GpuTextureHandle, GpuTextureViewHandle, GpuSamplerHandle, and GpuQuerySetHandle construction outside the RunenGPU owner.",
         "RenderFlowId-derived GpuWorkResourceId owner bridge.",
         "Program/interface/layout/pipeline/cache/realization fields in the temporary execution sidecar.",
-        "Public WgpuCtx Device/Queue reach-through and any replacement raw accessors.",
+        "Public or broad WgpuCtx Device/Queue/backend-object reach-through and any replacement raw accessor outside the one named G5 bridge.",
     ],
 
     retain_for_g5: [
@@ -191,6 +196,7 @@ PhaseImplementationSpec(
         "Uploads, updates, staging, and query-resolution execution.",
         "Queue submission, polling, progress, completion, cancellation, mapping/readback, and runtime retirement.",
         "Delayed backend destruction and shutdown semantics.",
+        "The single named crate-private scoped execution bridge, deleted by G5.",
     ],
 
     retain_for_g7: [
@@ -204,7 +210,8 @@ PhaseImplementationSpec(
         "After G4B, no program, source, entry-point, interface, binding, layout, specialization, or pipeline descriptor truth remains in the sidecar.",
         "After G4C, no backend resource, shader module, layout, bind-group, pipeline, cache, generation, or realization truth remains in the sidecar.",
         "The remaining sidecar may contain only G5-owned execution payload keyed by prepared node identity.",
-        "G5 owns deletion of that residual payload during encoding/submission cutover.",
+        "The temporary execution bridge is not sidecar truth; it only resolves already validated opaque realizations for scoped encoding.",
+        "G5 owns deletion of the residual sidecar payload and bridge during encoding/submission cutover.",
     ],
 
     runenrender_boundary: [
@@ -222,7 +229,8 @@ PhaseImplementationSpec(
         "Texture views cannot outlive or cross parent affinity in registry logic.",
         "Cache hit, miss, incompatible rejection, corrupt rejection, fallback, and creation failure are distinct.",
         "Labels/provenance do not split equal realizations.",
-        "Source/dependency/reach-through guards reject deleted renderer authority and synthetic handles.",
+        "The named execution bridge cannot store, clone, cache, return, or use borrowed WGPU values as authority and has exactly one call path.",
+        "Source/dependency/reach-through guards reject deleted renderer authority, synthetic handles, and any second raw-WGPU bridge.",
         "Complete current-consumer and deletion inventory is enforced.",
     ],
 
@@ -230,6 +238,7 @@ PhaseImplementationSpec(
         "Realize representative buffer, texture, texture view, sampler, and query set on an admitted WGPU device.",
         "Create one WGSL compute module/pipeline and one WGSL render module/pipeline.",
         "Realize typed bind-group and pipeline layouts and a bind group with compatible resources.",
+        "Use the temporary bridge to encode one current representative compute path and one current representative render path without moving G5 execution authority.",
         "Reject actual adapter limit/format/alignment incompatibility with structured facts.",
         "Prove cache reuse within one context/generation and rejection across another context or generation.",
         "Report unavailable adapters/backends explicitly; environment-dependent proof does not replace deterministic proof.",
@@ -238,14 +247,15 @@ PhaseImplementationSpec(
     guards: [
         "No renderer-owned reusable WGPU resource/program/layout/bind-group/pipeline/cache owner.",
         "No public Device, Queue, raw WGPU resource, shader, layout, bind-group, or pipeline access.",
+        "No raw-WGPU module reach-through except the single named crate-private scoped G5 execution bridge.",
         "No RenderFlowId-derived GPU owner or synthetic G2 handle constructor outside RunenGPU.",
         "No program/interface/pipeline/cache/realization truth in the sidecar.",
         "No string, path, TypeId, pass ID, feature ID, label, or naked hash as binding/cache authority.",
-        "No compatibility alias, forwarding module, duplicate cache, second realization path, new dependency/package, stable persistence format, generated prompt, task database, truth certificate, execution lock, or temporary workflow.",
+        "No compatibility alias, forwarding module, duplicate cache, second realization path, second bridge, new dependency/package, stable persistence format, generated prompt, task database, truth certificate, execution lock, or temporary workflow.",
     ],
 
     exclusions: [
-        "No command encoding, queue submission, progress, pressure, completion, mapping, readback, cancellation, runtime retirement, delayed destruction, or shutdown implementation.",
+        "No command encoding, queue submission, progress, pressure, completion, mapping, readback, cancellation, runtime retirement, delayed destruction, or shutdown implementation beyond preserving the already existing renderer encoding through the named scoped bridge.",
         "No surface public API, acquisition, presentation, device replacement, loss, or reconstruction implementation.",
         "No RunenRender semantic work or package extraction.",
         "No stable backend cache, source, capture, persistence, ABI, or wire format.",
@@ -253,7 +263,7 @@ PhaseImplementationSpec(
     ],
 
     validation: [
-        "Focused deterministic realization, affinity, key, cache, migration, deletion, and guard tests.",
+        "Focused deterministic realization, affinity, key, cache, bridge, migration, deletion, and guard tests.",
         "Focused environment-dependent WGPU resource/program/pipeline realization tests.",
         "Complete direct and transitive raw Device/Queue/resource/program/layout/pipeline consumer census.",
         "cargo validate",
@@ -268,9 +278,10 @@ PhaseImplementationSpec(
         "Every resource/program/layout/bind-group/pipeline realization is explicit, typed, compatible, transactional, and stale/foreign-safe.",
         "Derived caches are correctness-complete, generation-scoped, reject incompatibility safely, and fall back to ordinary realization.",
         "All current consumers are migrated through the new authority.",
-        "Renderer-owned GPU realization/cache authority, synthetic handles, owner bridge, raw reach-through, and G4-owned sidecar truth are deleted without aliases or duplicate paths.",
+        "Renderer-owned GPU realization/cache authority, synthetic handles, owner bridge, broad raw reach-through, and G4-owned sidecar truth are deleted without aliases or duplicate paths.",
+        "Exactly one named scoped G5 execution bridge remains and is explicitly owned for deletion by G5.",
         "Only explicitly G5/G7-owned migration evidence remains.",
-        "No G5, G7, RunenRender or extraction implementation entered scope.",
+        "No G5 semantics beyond preserving current encoding, no G7, no RunenRender, and no extraction implementation entered scope.",
         "Exact-head validation and independent review pass with no unresolved blocking finding.",
     ],
 )
