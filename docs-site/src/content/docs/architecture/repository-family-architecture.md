@@ -5,13 +5,13 @@ status: active
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-07-28
+last_reviewed: 2026-07-29
 related_docs:
   - ../workspace/planning/active-work.md
   - ../workspace/planning/roadmap.md
   - ../reports/investigations/repository-family-current-state-investigation.md
   - ../reports/investigations/runenrender-extraction-investigation.md
-  - ../reports/investigations/runengpu-g3-access-work-graph-investigation.md
+  - ../reports/investigations/runengpu-g4-context-program-realization-investigation.md
   - ../reports/investigations/runengpu-industry-comparison.md
   - ../reports/investigations/runengpu-runenrender-application-domain-fit.md
   - ../reports/closeouts/pt-runen-family-operational-hardening-closeout.md
@@ -19,10 +19,13 @@ related_docs:
   - ../design/active/runensdf-extraction-design.md
   - ../design/active/runenecs-extraction-boundary-design.md
   - ../design/active/runengpu-architecture-design.md
-  - ../design/active/runengpu-g3-access-work-graph-design.md
+  - ../design/active/runengpu-g4-context-program-realization-design.md
   - ../design/active/runenrender-decomposition-design.md
+  - ../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../design/active/runen-family-operational-hardening-design.md
-  - ../workspace/specs/pt-runengpu-g3-access-work-graph.ron
+  - ../workspace/specs/pt-runengpu-g4a-context-admission.ron
+  - ../workspace/specs/pt-runengpu-g4b-program-interface-layout.ron
+  - ../workspace/specs/pt-runengpu-g4c-wgpu-realization-cutover.ron
   - ../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../adr/accepted/0015-separate-gpu-execution-from-rendering.md
 ---
@@ -34,7 +37,7 @@ related_docs:
 Runenwerk is the integration and product repository for independently useful
 framework repositories. This document owns repository-level boundaries, dependency
 direction, integration policy, family-wide operational doctrine, and clean cutovers.
-Framework designs own subsystem contracts.
+Focused framework designs own subsystem contracts.
 
 ## Repository family
 
@@ -49,8 +52,8 @@ Runenwerk     dornglut/runenwerk            workspace      integration/product
 ```
 
 RunenGPU and RunenRender each begin with one public package. Internal modules carry
-responsibility boundaries until a real second consumer, backend, release unit, ABI,
-or compile-time boundary proves another package is needed.
+responsibility boundaries until a real second consumer, backend, release unit, ABI, or
+compile-time boundary proves another package is needed.
 
 Framework repositories do not depend on Runenwerk. Runenwerk may depend on exact
 framework revisions directly or through explicit Runenwerk-owned adapters.
@@ -79,15 +82,14 @@ No dependency cycle is allowed.
 | Framework | Current state | Authorized work |
 |---|---|---|
 | RunenSDF | standalone authority in `dornglut/runen-sdf`; duplicate Runenwerk source retired through issue `#133` / PR `#157` | standalone roadmap and independently accepted adapters only |
-| RunenECS | internal ownership and safety repair required | separately bounded investigation/design/repair |
-| RunenGPU | S0, G1A, and G2 complete; G3 planning accepted through issue `#174` / PR `#175` at merge `5c82cc54d5ac51aeb2fd8e3da916ed895f8058e8`; operational hardening merged as `90d24abb93bff4b1d3f5b4743056bc00ff80d4b6`; bounded G3 implementation candidate corrected after review through `905c506e33202405d1bea8c160a05ac92c326c43` | issue `#177` / draft PR `#181` awaiting new exact-head independent review; G4-G8 and extraction remain unauthorized |
-| RunenRender | architecture corrected to consume RunenGPU; operational/provider/incremental-scene requirements reconciled through PR `#178` | S0/design only; internal proof waits for accepted external RunenGPU cutover and separately bounded R-phase work |
+| RunenECS | internal ownership and safety repair required | separately bounded investigation, design, and repair |
+| RunenGPU | S0, G1A, G2, G3 planning, operational hardening, and G3 implementation accepted; G3 merged as `39d6fe65a334502bdfba0b1a2ce3b365099fcf28`; exact current accepted main for G4 planning is `6bbd341691a34763ef54c8ca059940cac8981265` | issue `#182` / PR `#185` owns G4 planning only; after acceptance, only G4A may become active; G4B is blocked by accepted G4A and G4C by accepted G4B |
+| RunenRender | architecture corrected to consume RunenGPU; operational/provider/incremental-scene requirements accepted | S0/design only; implementation remains independently owned and waits for accepted RunenGPU cutover plus separately bounded R-phase work |
 | RunenUI | independent repository/workstream | governed in RunenUI |
 
-The G3 branch starts from accepted base
-`1c645b2bbfcece44dd6ae151cc97559793afa2c2`. Repository completion still requires
-the independent review and eventual merge of draft PR `#181`; no G3 merge SHA is
-asserted before that event.
+The commit between accepted G3 and the G4 planning base changes only verified-head
+validation and workflow authority. It changes no RunenGPU or render architecture,
+source, dependency, manifest, or lockfile.
 
 Current source location is implementation evidence, not permanent ownership.
 
@@ -112,24 +114,44 @@ networking, replay, world streaming, or product lifecycle.
 
 ### RunenGPU
 
-Owns normalized capabilities, contexts, logical resources, access, graph-time
-initialization, hazards, generic work, submissions, uploads/readback, low-level
-surfaces, WGPU realization, backend outcomes, progress facts, pressure outcomes,
-device generations, and GPU diagnostics.
+Owns normalized capabilities and requirements, contexts, logical resources, checked
+access and work graphs, program/interface contracts, private backend realization,
+execution/submission mechanisms, low-level surface mechanisms, backend outcomes,
+progress and pressure facts, device generations, and GPU diagnostics.
 
-Does not own image formation, simulation algorithms, field mathematics, ECS, UI,
-windows/event loops, shader filesystem policy, artifact codecs, or product recovery.
+Ownership is phased:
+
+```text
+G1A-G3  logical identity, resources, access, operations and prepared work
+G4A     context and adapter/device admission
+G4B     program, interface, binding, layout and pipeline descriptors
+G4C     generation-bound WGPU realization and cache compatibility
+G5      execution, submission, progress, completion, readback and retirement
+G6      offscreen graphics, shared consumers and cost characterization
+G7      surfaces, device replacement, loss and reconstruction
+G8      operational conformance and residual audit
+GX      external repository cutover
+```
+
+RunenGPU does not own image formation, simulation algorithms, field mathematics, ECS,
+UI, windows/event loops, shader filesystem policy, artifact codecs, or product recovery.
 
 ### RunenRender
 
-Owns prepared render scenes, views, providers/interactions, materials/media,
-emitters/environments, visibility, transport, radiance caches, history,
+Owns prepared render scenes, views, providers and interactions, materials and media,
+emitters and environments, visibility, transport, radiance caches, history,
 reconstruction, overlays, color, presentation intent, and lowering into RunenGPU
 workloads.
 
 Does not own WGPU, general GPU execution, ECS extraction, field mathematics, UI
 semantics, native windows, shader file watching, vertical-domain products, or
 Runenwerk lifecycle.
+
+G4A, G4B, and G4C are GPU/backend decontamination and substrate work. They do not
+implement RunenRender semantics. The current render tree is migration evidence and is
+not moved, renamed, wrapped, or extracted wholesale. RX is a later mechanical
+transfer/cutover after accepted R-phase proof, not where renderer architecture is
+invented.
 
 ### RunenUI
 
@@ -146,8 +168,9 @@ Owns:
 - windows/event loops and native host policy;
 - ECS and domain extraction;
 - scene, world, material-authoring, SDF, UI, editor, simulation, and product adapters;
-- shader source discovery/revision/watch/reload policy;
-- product capability/quality selection;
+- shader source discovery, revision, watching, reload scheduling, and last-known-good
+  product policy;
+- product capability and quality selection;
 - cross-framework composition and tested compatibility;
 - product recovery decisions;
 - diagnostics presentation and support artifacts;
@@ -176,18 +199,21 @@ Adapters must not:
 - expose broad compatibility facades;
 - hide dependency cycles;
 - preserve private reach-through after cutover;
-- silently convert structured pressure/failure into logs.
+- silently convert structured pressure or failure into logs.
 
-Keep a bridge in Runenwerk until independent consumers prove stable reusable
-ownership.
+Keep a bridge in Runenwerk until independent consumers prove stable reusable ownership.
+A temporary bridge must name its owning deletion phase. G4C deletes GPU realization,
+program/interface, cache, synthetic-handle, and temporary resource-owner authority.
+G5 deletes the residual execution payload. G7 deletes temporary surface-compatibility
+seams.
 
 ## Family-wide operational doctrine
 
 ### Accepted-work integrity
 
-Once a framework accepts work, it must eventually report exactly one terminal
-outcome. Accepted work, completion notifications, requested artifacts, and
-non-discardable source state are never silently dropped.
+Once a framework accepts work, it must eventually report exactly one terminal outcome.
+Accepted work, completion notifications, requested artifacts, and non-discardable
+source state are never silently dropped.
 
 ### Structured pressure
 
@@ -207,9 +233,12 @@ Unbounded implicit growth is not a default policy.
 
 ### Derived caches
 
-Derived caches are non-authoritative, discardable, reconstructable, keyed by all
-correctness facts, source-generation-bound, validated before reuse, and versioned
-when persisted. A cache hit changes cost, not semantics.
+Derived caches are non-authoritative, discardable, reconstructable, keyed by every
+correctness fact, source-generation-bound, validated before reuse, and versioned when
+persisted. A cache hit changes cost, not semantics.
+
+G4C initially owns only in-memory, context/device-generation-scoped GPU realization
+caches. No stable persisted backend cache format is authorized by G4 planning.
 
 ### Compatibility manifest
 
@@ -217,14 +246,14 @@ Runenwerk owns a tested compatibility manifest for the exact framework and adapt
 revisions it integrates. It may include WGPU/backend family and persisted artifact
 schema facts.
 
-The manifest does not create a shared `RunenCore` package and is not imported back
-into framework repositories as product policy.
+The manifest does not create a shared `RunenCore` package and is not imported back into
+framework repositories as product policy.
 
 ### Recovery ownership
 
 Frameworks classify loss, invalidate generations, and report reconstruction facts.
-Runenwerk decides whether a product retries, recreates, degrades, pauses, exits, or
-asks the user for action.
+Runenwerk decides whether a product retries, recreates, degrades, pauses, exits, or asks
+the user for action.
 
 Source-backed, externally reconstructed, and non-reconstructable values remain
 explicitly distinct.
@@ -236,8 +265,8 @@ capabilities, device/backend facts where permitted, prepared-work diagnostics,
 scene/view generations, seeds, fixed-time inputs, provenance, artifacts, checksums,
 and privacy/redaction metadata.
 
-Runtime handles, pointers, memory addresses, and unversioned diagnostic strings are
-never persisted as authority.
+Runtime handles, pointers, memory addresses, context IDs, device generations, and
+unversioned diagnostic strings are never persisted as stable authority.
 
 ## RunenUI rendering relationship
 
@@ -275,6 +304,9 @@ Additional packages require a proven independent dependency subset, second backe
 release/versioning unit, required proc macro, platform/MSRV separation, or externally
 used conformance package.
 
+G4 does not create `runengpu_core`, `runengpu_wgpu`, `runengpu_macros`, a cache package,
+a testing package, or a facade.
+
 ## No shared-core magnet
 
 Do not create `RunenCore`, a universal ID repository, universal diagnostics package,
@@ -306,29 +338,31 @@ Every extracted repository defines:
 
 - Rust edition and declared MSRV;
 - formatting, locked tests, strict Clippy, rustdoc, and docs validation;
-- publication/API stability state;
+- publication and API stability state;
 - license and source provenance;
 - dependency and feature policy;
 - public downstream conformance.
 
-Before stable publication, Runenwerk uses an exact commit or exact pre-release
-version. Moving branch dependencies are forbidden.
+Before stable publication, Runenwerk uses an exact commit or exact pre-release version.
+Moving branch dependencies are forbidden.
 
 ## Persisted formats
 
 Rust API compatibility and persisted-format compatibility are separate.
 
-Every persisted source, artifact, trace, replay, cache, compatibility manifest,
-capture bundle, or wire format names:
+Every persisted source, artifact, trace, replay, cache, compatibility manifest, capture
+bundle, or wire format names:
 
 - owning repository;
 - format identifier and version;
-- validation/compatibility policy;
+- validation and compatibility policy;
 - migration behavior;
 - deterministic encoding requirements where relevant;
-- privacy/redaction policy where relevant.
+- privacy and redaction policy where relevant.
 
-Internal runtime packets and IDs are not stable formats by default.
+Internal runtime packets, descriptors, cache keys, context IDs, device generations, and
+handles are not stable formats by default. G4 defines no stable source, ABI, cache,
+capture, persistence, replay, or wire format.
 
 ## Conformance
 
@@ -347,7 +381,9 @@ Runenwerk owns cross-repository integration tests, compatibility-manifest proof,
 product recovery proof, and persisted reproducibility/capture validation.
 
 Evidence distinguishes deterministic contract proof from environment-dependent
-GPU/window/runtime proof.
+GPU/window/runtime proof. G4 keeps synthetic admission, descriptor, binding, cache,
+affinity, migration, and source/dependency proof separate from live WGPU adapter,
+module, resource, and pipeline evidence.
 
 ## Performance and anti-cheating
 
@@ -355,10 +391,10 @@ A framework boundary is not justified by architecture diagrams alone.
 
 RunenGPU and RunenRender must characterize:
 
-- CPU preparation/validation cost;
+- CPU preparation and validation cost;
 - allocations and memory high-water marks;
 - cold/warm shader and pipeline cost;
-- staging/readback pressure;
+- staging and readback pressure;
 - GPU timing where supported;
 - full versus incremental scene preparation;
 - derived-cache behavior;
@@ -375,7 +411,7 @@ Each extraction proceeds:
 2. accept a decision-complete boundary;
 3. correct and prove the future public boundary inside Runenwerk;
 4. establish independent conformance;
-5. create/populate the external repository;
+5. create or populate the external repository;
 6. pin Runenwerk to an exact revision;
 7. migrate active consumers;
 8. delete the original implementation;
@@ -383,8 +419,8 @@ Each extraction proceeds:
 10. update authority and record closeout.
 
 Temporary duplication may exist only on an unmerged branch. Compatibility packages,
-forwarding namespaces, mirrors, submodules, and branch dependencies do not survive a
-completed cutover.
+forwarding namespaces, mirrors, submodules, source includes, and branch dependencies do
+not survive a completed cutover.
 
 If Runenwerk has no active consumer, removing the internal implementation does not
 require adding an unused external dependency.
@@ -394,9 +430,9 @@ require adding an unused external dependency.
 ```text
 S0 inventory
 -> internal RunenGPU G1A-G8 proof
--> external RunenGPU cutover
--> internal RunenRender proof on RunenGPU
--> external RunenRender cutover
+-> external RunenGPU cutover GX
+-> internal RunenRender R1-R8 proof on accepted RunenGPU
+-> external RunenRender cutover RX
 -> reusable adapter review
 -> advanced renderer work
 ```
@@ -405,17 +441,27 @@ RunenGPU moves before RunenRender because the renderer depends on it. Advanced
 renderer/provider work must not harden accidental mixed ownership before the
 foundational cutovers.
 
+Within G4:
+
+```text
+G4A context admission
+-> G4B program/interface contracts
+-> G4C WGPU realization and cutover
+```
+
+Only one implementation slice is active at a time.
+
 ## Extraction gates
 
 No external transfer begins until the track proves:
 
 - complete source and consumer inventory;
-- decision-complete public ownership/API direction;
+- decision-complete public ownership and API direction;
 - no unresolved dependency cycle;
 - independent downstream conformance;
 - validation and versioning policy;
 - identity, diagnostics, persisted-format, pressure, and recovery decisions;
-- exact move/stay/redesign/delete map;
+- exact move, stay, redesign, and delete map;
 - provenance and clean-cutover strategy;
 - current exact-head CI;
 - acceptable measured boundary overhead;

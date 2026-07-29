@@ -1,0 +1,205 @@
+// Decision-complete implementation specification for RunenGPU G4A.
+// Planning issue #182 owns this specification. Rust implementation requires a separate active issue.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENGPU-G4A",
+    title: "Context and Adapter/Device Admission",
+    lifecycle_state: "planned",
+    implementation_authorization_status: "not-authorized-until-g4-planning-is-accepted-and-g4a-issue-is-active",
+    owner: "RunenGPU contract owner",
+    source_baseline: "6bbd341691a34763ef54c8ca059940cac8981265",
+    planning_issue: "dornglut/runenwerk#182",
+    implementation_issue: "pending-after-planning-acceptance",
+    parent_issue: "dornglut/runenwerk#167",
+    completed_predecessor_issue: "dornglut/runenwerk#177",
+    completed_predecessor_pull_request: "dornglut/runenwerk#181",
+    completed_predecessor_merge: "39d6fe65a334502bdfba0b1a2ce3b365099fcf28",
+    target_repository_after_internal_conformance: "dornglut/runen-gpu",
+
+    authority_docs: [
+        "AGENTS.md",
+        "TESTING.md",
+        "ARCHITECTURE.md",
+        "docs-site/src/content/docs/architecture/repository-family-architecture.md",
+        "docs-site/src/content/docs/adr/accepted/0015-separate-gpu-execution-from-rendering.md",
+        "docs-site/src/content/docs/design/active/runengpu-architecture-design.md",
+        "docs-site/src/content/docs/design/active/runengpu-g4-context-program-realization-design.md",
+        "docs-site/src/content/docs/design/active/runenrender-internal-decomposition-execution-plan.md",
+        "docs-site/src/content/docs/reports/investigations/runengpu-g4-context-program-realization-investigation.md",
+        "docs-site/src/content/docs/reports/closeouts/pt-runengpu-g3-implementation-closeout.md",
+        "docs-site/src/content/docs/workspace/planning/roadmap.md",
+        "docs-site/src/content/docs/workspace/planning/active-work.md",
+    ],
+
+    goal: "Create one future-transferable, async, headless-first GpuContext admission authority with opaque context and device-generation identity, normalized backend and portability facts, deterministic requirement admission and degradation, private WGPU instance/adapter/device/queue ownership, and structured diagnostics; migrate current context consumers without implementing reusable surfaces or G5 execution.",
+
+    dependency_direction: [
+        "Runenwerk host policy -> RunenGPU GpuContext admission -> private WGPU backend.",
+        "RunenRender and independent consumers use normalized context facts and never receive raw WGPU Device or Queue authority.",
+        "The future-transferable G4A boundary contains no renderer, ECS, UI, SDF, Winit, application, product, filesystem, or surface semantics.",
+    ],
+
+    phase_ownership: [
+        "G2/G3 remain authoritative for normalized logical requirements, resources, access, operations, and prepared work.",
+        "G4A owns context request, adapter/device admission, context identity, current device generation, normalized backend/adapter/device facts, requirement admission, degradation, and private WGPU context containment.",
+        "G4B owns programs, entry points, interfaces, bindings, layouts, specialization, and pipeline descriptors.",
+        "G4C owns generation-bound resource/program/layout/bind-group/pipeline realization and renderer cutover.",
+        "G5 owns command encoding, submission, progress, pressure, completion, mapping, readback, cancellation, and retirement.",
+        "G7 owns reusable surface creation/configuration/acquisition/presentation, device replacement, loss, and reconstruction facts.",
+        "Runenwerk retains blocking terminals, Winit/window policy, one crate-private temporary host-compatibility request envelope, and product recovery.",
+    ],
+
+    public_contracts: [
+        "Opaque nonzero process-local GpuContextId with no persistence or wire promise.",
+        "Opaque nonzero GpuDeviceGeneration beginning at 1 for each newly admitted context.",
+        "GpuContextAffinity containing exact context identity and device generation.",
+        "GpuContextDescriptor with diagnostic label/provenance, normalized power preference, software/fallback policy, backend allowlist, portability policy, merged requirements, and no raw or temporary host/backend value.",
+        "GpuContext::request(descriptor) as the reusable asynchronous headless-first constructor.",
+        "GpuBackendFamily with Vulkan, Metal, Direct3D12, OpenGl, BrowserWebGpu, and UnknownBackend only.",
+        "GpuAdapterClass with Discrete, Integrated, Virtual, Cpu, Other, and Unknown.",
+        "Software/fallback status as an independent normalized adapter fact rather than a backend family.",
+        "GpuPortabilityClass with PortableBaseline, PortableWithDeclaredExtensions, BackendSpecialized, and Unsupported.",
+        "GpuAdapterFacts and GpuAdmittedDeviceFacts separating supported from enabled facts.",
+        "GpuContextAdmissionReport, candidate reports, typed requirement dispositions, degradation records, and structured request errors.",
+    ],
+
+    context_identity_semantics: [
+        "Allocate GpuContextId only after complete adapter/device admission succeeds; failed requests publish no public identity.",
+        "Start GpuDeviceGeneration at nonzero value 1.",
+        "G4A never silently changes generation and does not implement device replacement.",
+        "Every future G4C realization records GpuContextAffinity and rejects unequal context or generation before backend access.",
+        "Logical G2/G3 handles remain backend-neutral and are not mutated to carry a context merely by declaration.",
+        "Context IDs and generations are runtime correlation values only and must not be persisted as stable authority.",
+    ],
+
+    normalized_facts: [
+        "Normalize backend family, adapter class, independent software/fallback status, supported features, effective enabled features, limits, format capabilities, and operation-relevant alignments.",
+        "A software adapter retains its actual Vulkan, Direct3D12, OpenGl, or other backend family; software is never modeled as a backend API family.",
+        "Retain adapter name, vendor/device IDs, and driver identity/version only as optional sanitized diagnostics and compatibility facts supplied by the backend.",
+        "Unknown backend, adapter, or software/fallback facts remain explicit Unknown values and are never guessed into a known category.",
+        "Initial alignments cover uniform/storage dynamic offsets, copy buffer offsets, copy row pitch, query-resolve destination offsets, and texture block constraints where applicable.",
+        "Supported, requested, granted, degraded, and rejected facts remain distinct in reports.",
+    ],
+
+    requirement_admission_algorithm: [
+        "Normalize and validate all requirements before backend access.",
+        "Merge equal requirements; combine minimum limits by maximum requested minimum and maximum constraints by minimum permitted maximum; reject contradictions.",
+        "Order evaluation and diagnostics by typed requirement identity, independent of caller insertion order.",
+        "Reject a candidate when backend family, adapter class, or software/fallback status violates explicit policy.",
+        "Mandatory requirements reject a candidate when unsupported.",
+        "Preferred requirements may degrade only when the caller supplied an explicit degradation key and the contract defines the degraded result.",
+        "Enable only features required by accepted mandatory/preferred requirements plus backend-mandatory features; do not opportunistically enable unrelated features.",
+        "Request the least effective limits satisfying the admitted request and bounded by adapter support.",
+        "Evaluate format roles and alignments before device publication.",
+        "Derive portability class from admitted requirements and contained backend specialization.",
+        "For enumerable candidates, rank accepted candidates by fallback policy, power preference, portability class, adapter class, backend preference, then optional normalized diagnostics as final tie-break inputs within the observed candidate set.",
+        "If multiple accepted candidates remain indistinguishable after every permitted normalized tie-break, return AmbiguousAdapterSelection and require a stronger caller filter; never use backend enumeration order.",
+        "For backend-selected-only platforms, run the same pure admission algorithm and report BackendSelectedCandidate without claiming deterministic hardware selection.",
+    ],
+
+    async_and_terminal_rules: [
+        "The library constructor returns a future and never calls pollster::block_on.",
+        "A Runenwerk binary/host adapter may provide a blocking terminal outside the future-transferable boundary.",
+        "Cancellation before successful return publishes no partially admitted context.",
+        "No consumer callback is invoked while an internal lock is held.",
+        "G4A binds only context-request completion; G5 later binds progress for accepted GPU work.",
+        "Native and web use the same structured terminal result categories.",
+    ],
+
+    raw_wgpu_containment: [
+        "WGPU Instance, Adapter, Device, Queue, Features, Limits, TextureFormat, resources, shader/layout/pipeline objects, Surface, and SurfaceConfiguration remain private backend types.",
+        "No public field, Deref, AsRef<Device>, broad callback, universal native-handle escape hatch, or render re-export may expose raw WGPU authority.",
+        "A private WgpuContextState may own instance, adapter, device, and queue and may be reached only by crate-private backend terminals.",
+        "Public methods return normalized facts, structured results, or opaque generation-bound handles.",
+    ],
+
+    temporary_host_compatibility: [
+        "Permit exactly one Runenwerk-owned crate-private request envelope pairing a public GpuContextDescriptor with opaque compatibility evidence solely to preserve current surface-compatible adapter selection while G7 is pending.",
+        "Do not place the compatibility value in the public descriptor, public builder, standalone API, or reusable context identity.",
+        "Do not configure, acquire, present, resize, or own a reusable surface in G4A.",
+        "Keep headless context admission independent and the default architecture.",
+        "Record the compatibility path as G7 deletion inventory and guard against a second path.",
+    ],
+
+    target_source_areas: [
+        "engine/src/plugins/gpu/api context/admission/capability/error modules chosen by coherent responsibility, not numbered file splitting",
+        "engine/src/plugins/gpu private backend/wgpu context-admission implementation",
+        "engine/src/plugins/gpu/mod.rs complete-subtree guards",
+        "engine/src/plugins/render/backend/device.rs migration and deletion of replaced authority",
+        "engine/src/plugins/render/backend/wgpu_ctx.rs migration and reduction to explicitly temporary G7 evidence where required",
+        "engine/src/plugins/render/renderer/mod.rs removal of public raw Device/Queue reach-through",
+        "current context consumers in apps/runenwerk_draw, apps/runenwerk_editor, engine/examples, engine/benches, and engine/tests",
+    ],
+
+    migration_rules: [
+        "Introduce the new context owner before changing consumers.",
+        "Migrate headless-capable consumers first, then the current window-compatible host adapter.",
+        "Replace RenderBackendTimingCapabilities with normalized feature admission rather than forwarding it.",
+        "Remove public Gfx.ctx.device and Gfx.ctx.queue authority; do not add aliases or accessor methods returning raw WGPU.",
+        "Do not move surface configuration, acquisition, presentation, loss, or reconstruction into G4A.",
+        "Delete replaced instance/adapter/device/queue creation authority in the same accepted slice.",
+    ],
+
+    deterministic_tests: [
+        "Context identity allocation is nonzero and unique after successful synthetic admission.",
+        "Device generation begins at 1 and exact affinity equality rejects foreign context and stale generation.",
+        "Requirement normalization and reports are invariant to caller order.",
+        "Contradictory limits fail before backend request.",
+        "Mandatory feature/limit/format/alignment misses reject candidates.",
+        "Preferred misses require an explicit degradation key and emit one typed record.",
+        "Unrelated supported features are not enabled.",
+        "Synthetic candidate ranking follows the accepted deterministic ordering and rejects an indistinguishable tie.",
+        "Portability classes derive exactly from admitted facts.",
+        "Known backend mappings, adapter classes, software/fallback facts, and explicit unknown mappings are exhaustive for the pinned WGPU version.",
+        "Public dependency/source guards reject raw WGPU, Winit, renderer, ECS, application, product, and temporary host-compatibility vocabulary.",
+    ],
+
+    environment_tests: [
+        "Request a headless native adapter/device where the environment provides one.",
+        "Report no-adapter or unsupported environments explicitly rather than panicking.",
+        "Prove actual enabled features and effective limits match the admitted report.",
+        "Exercise the crate-private temporary host-compatible selection only as an explicitly environment-dependent smoke.",
+        "Compile and run WebGPU coverage in the supported platform matrix when available.",
+    ],
+
+    deletion_guards: [
+        "No public WgpuCtx device or queue field.",
+        "No reusable RunenGPU constructor taking winit::window::Window.",
+        "No public raw WGPU type in the future-transferable boundary.",
+        "No Software variant in GpuBackendFamily; software/fallback remains an adapter fact.",
+        "No public host-compatibility value and no second crate-private compatibility path.",
+        "No second instance/adapter/device/queue owner under render.",
+        "No compatibility alias forwarding deleted renderer context types.",
+        "No generated prompt, task database, truth certificate, execution lock, or temporary authoring workflow.",
+    ],
+
+    exclusions: [
+        "No G4B program/interface types.",
+        "No G4C resource/program/pipeline realization cutover beyond stubs strictly required by context identity tests.",
+        "No G5 encoding, submission, progress, completion, readback, cancellation, retirement, or shutdown behavior.",
+        "No G7 public surface, presentation, device replacement, loss, or reconstruction behavior.",
+        "No RunenRender semantics or package extraction.",
+        "No dependency, manifest, lockfile, workflow, stable persistence, wire format, or new ADR unless a genuine stop condition is reached.",
+    ],
+
+    validation: [
+        "Focused deterministic context/admission tests and dependency guards.",
+        "Focused environment-dependent headless WGPU tests with explicit unsupported outcomes.",
+        "cargo validate",
+        "git diff --check",
+        "CI=true pnpm --dir docs-site build",
+        "Repository-owned exact-head GitHub Actions and Documentation Build.",
+        "All tracked files remain below 131072 raw bytes.",
+    ],
+
+    acceptance: [
+        "One async headless-first GpuContext request authority exists.",
+        "Context and device-generation semantics are explicit and tested.",
+        "Requirement admission, degradation, candidate ranking, and ambiguity are deterministic and structured.",
+        "Normalized backend/adapter/software/portability/feature/limit/format/alignment facts replace renderer timing-only capability authority.",
+        "Raw WGPU instance/adapter/device/queue ownership is private and no public reach-through remains.",
+        "Current hosts are migrated through one crate-private compatibility path without changing the public descriptor or transferring reusable surface ownership from G7.",
+        "No G4B, G4C, G5, G7, RunenRender, or extraction scope entered the diff.",
+        "Exact-head validation, independent review, migration census, and deletion guards pass.",
+    ],
+)

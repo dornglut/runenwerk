@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-28
+last_reviewed: 2026-07-29
 ---
 
 # Active Designs
@@ -120,6 +120,7 @@ architecture.
 - [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
 - [RunenGPU Architecture Design](runengpu-architecture-design.md)
 - [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
+- [RunenGPU G4 Context, Program, and WGPU Realization Design](runengpu-g4-context-program-realization-design.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 - [Runen Family Operational Hardening Design](runen-family-operational-hardening-design.md)
@@ -158,7 +159,7 @@ architecture.
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
 - [UI Framework App Integration Direction Review](ui-framework-app-integration-direction-review.md)
 - [Live UiPlugin Runtime And Surface Frame Rendering](live-uiplugin-runtime-and-surface-frame-rendering-design.md)
-- [Live UiPlugin Runtime Full Platform Cutover Plan](live-uiplugin-runtime-full-cutover-plan.md)
+- [Live UiPlugin Runtime Full Cutover Plan](live-uiplugin-runtime-full-cutover-plan.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [UI Program Architecture](ui-program-architecture.md)

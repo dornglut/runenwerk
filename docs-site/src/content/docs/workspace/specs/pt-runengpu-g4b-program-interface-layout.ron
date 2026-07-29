@@ -1,0 +1,222 @@
+// Decision-complete implementation specification for RunenGPU G4B.
+// G4B starts only after the separately bounded G4A implementation is accepted.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENGPU-G4B",
+    title: "Program, Interface, Binding, Layout, and Pipeline Contracts",
+    lifecycle_state: "planned-blocked",
+    implementation_authorization_status: "blocked-until-accepted-g4a-and-separate-active-g4b-issue",
+    owner: "RunenGPU contract owner",
+    source_baseline: "accepted-g4a-merge-to-be-recorded-by-g4b-issue",
+    planning_issue: "dornglut/runenwerk#182",
+    implementation_issue: "pending-after-planning-acceptance",
+    parent_issue: "dornglut/runenwerk#167",
+    blocking_predecessor: "PT-RUNENGPU-G4A",
+    target_repository_after_internal_conformance: "dornglut/runen-gpu",
+
+    authority_docs: [
+        "AGENTS.md",
+        "TESTING.md",
+        "ARCHITECTURE.md",
+        "docs-site/src/content/docs/architecture/repository-family-architecture.md",
+        "docs-site/src/content/docs/design/active/runengpu-architecture-design.md",
+        "docs-site/src/content/docs/design/active/runengpu-g4-context-program-realization-design.md",
+        "docs-site/src/content/docs/design/active/runenrender-internal-decomposition-execution-plan.md",
+        "docs-site/src/content/docs/reports/investigations/runengpu-g4-context-program-realization-investigation.md",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4a-context-admission.ron",
+        "docs-site/src/content/docs/workspace/planning/roadmap.md",
+        "docs-site/src/content/docs/workspace/planning/active-work.md",
+    ],
+
+    goal: "Create one explicit WGSL-first RunenGPU authority for source keys and revisions, program and entry-point descriptors, typed binding keys and declarations, program interfaces, bind-group and pipeline layouts, specialization schemas and values, and deterministic compute/render pipeline descriptors; prove compile-pass and compile-fail ergonomics without realizing WGPU objects or granting current derives universal ABI authority.",
+
+    dependency_direction: [
+        "Runenwerk source policy or a domain/renderer consumer supplies explicit source values and revisions to RunenGPU.",
+        "RunenGPU validates generic program/interface/pipeline contracts independently of filesystem, renderer, ECS, application, and product semantics.",
+        "G4C consumes accepted G4B descriptors to realize private WGPU objects.",
+    ],
+
+    phase_ownership: [
+        "G4A remains authoritative for context identity, device generation, adapter/device admission, normalized backend facts, and admitted requirements.",
+        "G4B owns program source identity, entry-point contracts, typed binding identity, binding/interface compatibility, layout descriptors, specialization, and generic pipeline descriptors.",
+        "G4C owns WGPU module/layout/bind-group/pipeline realization, caches, migration, and deletion of renderer-owned realization authority.",
+        "G5 owns execution and submission; G7 owns surfaces; RunenRender owns image-formation semantics; Runenwerk owns source discovery/watch/reload and last-known-good policy.",
+    ],
+
+    source_contracts: [
+        "GpuProgramSourceKey is an opaque validated semantic key with bounded nonempty UTF-8 or owner-scoped allocation; it has no filesystem-path semantics.",
+        "GpuProgramSourceRevision is nonzero and meaningful only within one source owner; it is not globally ordered or persisted authority.",
+        "GpuProgramSource initially supports only WGSL source text.",
+        "GpuProgramDescriptor stores source key, revision, source kind/value, declared entry points, explicit interface, merged requirements, and provenance.",
+        "A deterministic source-content digest participates in realization correctness in addition to key and revision.",
+        "Reusing one key/revision with different source bytes is SourceRevisionConflict.",
+        "Do not add SPIR-V, GLSL, HLSL, MSL, DXIL, native modules, filesystem references, or stable source schemas.",
+    ],
+
+    entry_point_contracts: [
+        "Typed stages are Compute, Vertex, and Fragment.",
+        "Each entry-point descriptor contains validated source identifier, stage, and interface reference.",
+        "Compute pipelines name exactly one compute entry point.",
+        "Render pipelines name exactly one vertex and zero or one fragment entry point.",
+        "Reject missing entries, duplicate same-stage names, stage mismatch, and pipeline references not declared by the program.",
+        "Entry-point names participate in semantic equality and are not diagnostic labels.",
+    ],
+
+    binding_key_contract: [
+        "GpuBindingKey contains checked u32 group and binding components.",
+        "Ordering is lexicographic by group then binding; hashing includes typed discriminant and both values.",
+        "Constructors reject structural overflow/duplicates and context admission later checks device limits.",
+        "Strings, paths, TypeId, Rust type names, GpuWorkResourceId, RenderFlowId, RenderPassId, RenderFeatureId, vector positions, labels, and naked u64 hashes cannot be binding authority.",
+    ],
+
+    binding_declarations: [
+        "GpuBindingDeclaration contains typed key, stage visibility, one typed binding kind, optional nonzero array count, label, and provenance.",
+        "Initial kinds are UniformBuffer, StorageBuffer, SampledTexture, StorageTexture, and Sampler.",
+        "UniformBuffer stores dynamic-offset policy and optional nonzero minimum size.",
+        "StorageBuffer stores ReadOnly or ReadWrite access, dynamic-offset policy, and optional nonzero minimum size.",
+        "SampledTexture stores normalized sample class, view dimension, and multisample state.",
+        "StorageTexture stores normalized access, exact normalized format, and view dimension.",
+        "Sampler class is Filtering, NonFiltering, or Comparison.",
+        "Unsupported acceleration structures, external textures, video, ray tracing, unbounded/bindless arrays, and backend-native bindings remain absent.",
+    ],
+
+    interface_compatibility: [
+        "Validate exact binding key, resource kind/usage, stage visibility, minimum buffer size/range, dynamic-offset policy/alignment, texture sample/view/multisample/format facts, storage access, sampler class, array cardinality, and later realization affinity.",
+        "GpuProgramInterfaceDescriptor owns ordered binding declarations plus the initial vertex-input and fragment-output contracts required by accepted compute/render consumers.",
+        "Vertex inputs use typed shader location, normalized scalar/vector format, byte offset, stride, step mode, and buffer slot.",
+        "Fragment outputs use typed color location and normalized format class.",
+        "The explicit interface descriptor is authoritative; reflection is optional validation evidence and cannot silently infer or replace the contract.",
+        "Backend/source disagreement returns structured ProgramInterfaceMismatch.",
+    ],
+
+    layout_contracts: [
+        "GpuBindGroupLayoutDescriptor owns exactly one group and declarations sorted by binding key.",
+        "Reject duplicate bindings and declarations naming a different group.",
+        "GpuPipelineLayoutDescriptor owns ordered unique group-layout descriptors.",
+        "Initial G4B has no push constants because no accepted consumer proves them.",
+        "Labels, provenance and source spans are excluded from semantic equality only when they cannot affect backend correctness.",
+    ],
+
+    specialization_contracts: [
+        "GpuSpecializationKey is a validated source-level identifier, not a label.",
+        "Initial types are Bool, U32, I32, and finite F32.",
+        "F32 normalizes negative zero, rejects NaN/infinity, and hashes canonical IEEE bits.",
+        "A schema has unique keys, exact types, optional defaults, and requirement implications.",
+        "A value set rejects unknown/duplicate keys, missing required values, and type mismatches, then normalizes to schema order.",
+        "Specialization participates in realization keys only where the selected source/backend path consumes it; unsupported override behavior is rejected explicitly.",
+    ],
+
+    compute_pipeline_descriptor: [
+        "Contains exact program source identity, compute entry point, program-interface identity, pipeline layout, normalized specialization values, and capability requirements.",
+        "Contains no renderer flow/pass/feature/material/view/surface or product identity.",
+    ],
+
+    render_pipeline_descriptor: [
+        "Contains exact program source identity, vertex and optional fragment entry points, program interface, pipeline layout, specialization values, vertex buffer layouts, primitive state, depth/stencil state, multisample state, ordered color target states, and capability requirements.",
+        "Uses normalized GPU formats and state vocabularies rather than raw WGPU enums.",
+        "Contains no material meaning, lighting, visibility, view ID, RenderFlowId, RenderPassId, RenderFeatureId, target alias, shader path, surface handle, or product quality policy.",
+        "Add only dynamic state and graphics options required by accepted current consumers; do not invent a universal graphics abstraction.",
+    ],
+
+    deterministic_identity: [
+        "All semantic descriptors have private fields and fallible constructors.",
+        "Normalize unordered collections into typed key order.",
+        "Implement semantic equality, ordering and hashing where all fields permit.",
+        "Hash complete typed fields and discriminants, never Debug text or insertion order.",
+        "Do not expose a naked hash as authoritative identity; caches compare full keys after hashing.",
+        "Labels/provenance cannot split otherwise identical backend descriptors.",
+        "Floating-point values are canonicalized before storage.",
+    ],
+
+    diagnostics: [
+        "InvalidSourceKey",
+        "InvalidSourceRevision",
+        "SourceRevisionConflict",
+        "UnsupportedSourceKind",
+        "WgslParseOrValidationFailed",
+        "EntryPointMissing",
+        "EntryPointStageMismatch",
+        "DuplicateBindingKey",
+        "BindingDeclarationInvalid",
+        "ProgramInterfaceMismatch",
+        "RuntimeBindingIncompatible",
+        "SpecializationUnknownMissingOrTypeMismatch",
+        "PipelineDescriptorInvalid",
+    ],
+
+    current_helper_disposition: [
+        "Keep GpuParams, GpuUniform, GpuStorage, ToGpuValue, GpuUniformField, and current derives as transitional Runenwerk/render byte-preparation helpers during G4.",
+        "They do not prove WGSL struct identity, binding key/visibility, minimum size, storage ABI, nested/array/runtime-array layout, matrix orientation, package independence, or interface compatibility.",
+        "Do not move these helpers into the RunenGPU public boundary in G4B.",
+        "Do not add a derive, create runengpu_macros, or extract engine_render_macros.",
+        "Binding compatibility is validated independently of whichever helper produced bytes.",
+    ],
+
+    current_source_migration: [
+        "Translate explicit loaded shader source, semantic source key, and revision from engine/src/plugins/render/shader without moving filesystem discovery/watch policy.",
+        "Replace string-only PipelineKey, phase/label specialization, untyped binding layout hashes, and renderer pass/feature IDs as GPU correctness authority.",
+        "Move program/interface/layout/pipeline truth out of engine/src/plugins/render/adapters/gpu_work.rs sidecar into typed generic work references or descriptors.",
+        "Migrate renderer setup/prepare/render-flow paths, applications, examples, benches, and tests to construct explicit G4B descriptors.",
+        "Retain renderer semantic decisions and Runenwerk source policy outside RunenGPU.",
+    ],
+
+    compile_pass_proof: [
+        "WGSL compute program with typed storage-read and storage-write bindings.",
+        "WGSL render program with typed vertex input, uniform binding, and one color output.",
+        "Equal descriptors built from different insertion orders compare and hash equally.",
+        "Specialization sets normalize independently of insertion order.",
+        "Current parameter bytes bind only after explicit interface compatibility validation.",
+        "Public examples use no raw WGPU type and no nested finish ladder.",
+    ],
+
+    compile_fail_or_rejection_proof: [
+        "Raw WGPU type in public descriptor.",
+        "String, TypeId, resource ID, pass ID, feature ID, or naked hash used as binding key.",
+        "Duplicate group/binding key.",
+        "Stage visibility mismatch.",
+        "Wrong buffer/texture/sampler kind, format, access, dimension, multisample state, or array count.",
+        "Missing, unknown, duplicate, or type-mismatched specialization.",
+        "Compute pipeline using render entry point or render pipeline using compute entry point.",
+        "Source key/revision reused with different bytes.",
+        "Field construction bypassing validation.",
+        "GpuUniform/GpuStorage derive treated as sufficient interface proof.",
+    ],
+
+    source_and_dependency_guards: [
+        "No public raw WGPU type or Winit type.",
+        "No renderer, ECS, application, product, shader filesystem, path watcher, or last-known-good policy in engine/src/plugins/gpu G4B source.",
+        "No TypeId or std::any::Any in G4B interface authority.",
+        "No RenderFlowId, RenderPassId, RenderFeatureId, RenderTarget, material, view, lighting, or transport vocabulary.",
+        "No new macro package, dependency, persistence format, generated prompt, task database, truth certificate, execution lock, or temporary workflow.",
+    ],
+
+    exclusions: [
+        "No WGPU resource, shader module, layout, bind-group, or pipeline realization.",
+        "No cache implementation beyond deterministic key/compatibility contract tests.",
+        "No command encoding, submission, progress, readback, retirement, surface, presentation, device-loss, or reconstruction behavior.",
+        "No RunenRender semantics or external package extraction.",
+        "No stable source, ABI, cache, capture, persistence, or wire format.",
+    ],
+
+    validation: [
+        "Focused descriptor, equality/hash, interface, specialization, and negative tests.",
+        "Compile-pass and compile-fail public-contract proof.",
+        "Source/dependency/sidecar guards and complete current-consumer migration census.",
+        "cargo validate",
+        "git diff --check",
+        "CI=true pnpm --dir docs-site build",
+        "Repository-owned exact-head GitHub Actions and Documentation Build.",
+        "All tracked files remain below 131072 raw bytes.",
+    ],
+
+    acceptance: [
+        "One typed WGSL-first program/source/entry-point authority exists.",
+        "One typed binding/interface/layout authority replaces strings, TypeId and naked hashes.",
+        "Compute and render pipeline descriptors are generic, complete, deterministic, and renderer-semantic-free.",
+        "Current derives remain explicitly transitional and cannot claim ABI/interface truth.",
+        "Program/interface/pipeline truth no longer resides in the G3 execution sidecar.",
+        "Every current declaration consumer is migrated or explicitly classified for G4C.",
+        "No G4C, G5, G7, RunenRender or extraction implementation entered scope.",
+        "Exact-head validation and independent review pass with no unresolved blocking finding.",
+    ],
+)
