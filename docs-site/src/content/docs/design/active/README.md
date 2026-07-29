@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-28
+last_reviewed: 2026-07-29
 ---
 
 # Active Designs
@@ -40,7 +40,7 @@ architecture.
 - [Editor Rendered World And Multi Entity Viewport Design](editor-rendered-world-and-multi-entity-viewport-design.md)
 - [Editor Shell Menu And Tab Chrome Polish Design](editor-shell-menu-and-tab-chrome-polish-design.md)
 - [Editor Tool Suite Registry And Workbench Host Design](editor-tool-suite-registry-and-workbench-host-design.md)
-- [Editor Product UX Lab And Game UI Ready Foundations](editor-product-ux-lab-and-game-ui-ready-foundations-design.md)
+- [Editor Product UX Lab And Game UI Ready Foundations](editor-product-ux-lab-productization-design.md)
 - [Editor UI Runtime V2 And Interaction Formation Design](editor-ui-runtime-v2-and-interaction-formation-design.md)
 - [Editor UI Popup Adornment Drop Preview Contract](editor-ui-popup-adornment-drop-preview-contract.md)
 - [Editor UI Workspace Tool Surface Architecture](editor-ui-workspace-tool-surface-architecture.md)
@@ -54,7 +54,7 @@ architecture.
 - [Game Runtime UI Projection And HUD Platform](game-runtime-ui-projection-and-hud-platform-design.md)
 - [Renderer Procedural Population Hardening Platform](renderer-procedural-population-hardening-platform-design.md)
 - [Renderer Procedural Population Platform](renderer-procedural-population-platform-design.md)
-- [Renderer Production Audit And Perfectionist Verification Platform](renderer-production-audit-and-perfectionist-verification-design.md)
+- [Renderer Production Audit And Perfectionist Verification Platform](renderer-production-audit-perfectionist-verification-design.md)
 - [Sparse SDF Terrain Runtime Integration](sparse-sdf-terrain-runtime-integration-design.md)
 
 ### Gameplay
@@ -120,6 +120,7 @@ architecture.
 - [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
 - [RunenGPU Architecture Design](runengpu-architecture-design.md)
 - [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
+- [RunenGPU G4 Context, Program, and WGPU Realization Design](runengpu-g4-context-program-realization-design.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 - [Runen Family Operational Hardening Design](runen-family-operational-hardening-design.md)
@@ -137,28 +138,28 @@ architecture.
 - [UI Game And World-Space Host Requirements](ui-game-and-worldspace-host-requirements-design.md)
 - [UI Accessibility, Internationalization, And Text Conformance](ui-accessibility-internationalization-and-text-conformance-design.md)
 - [UI Layout, Style, Theme, And Motion](ui-layout-style-theme-and-motion-design.md)
-- [UI Performance, Virtualization, Assets, And Profiling](ui-performance-virtualization-assets-and-profiling-design.md)
-- [UI Render Output And Host Renderer Boundary](ui-render-output-and-host-renderer-boundary-design.md)
-- [UI Platform Input, Windowing, And OS Integration](ui-platform-input-windowing-and-os-integration-design.md)
-- [UI Devtools, Inspection, And Workbench](ui-devtools-inspection-and-workbench-design.md)
-- [UI Testing, Conformance, And Proof Matrix](ui-testing-conformance-and-proof-matrix-design.md)
-- [UI Package Security, Versioning, And Migration](ui-package-security-versioning-and-migration-design.md)
+- [UI Performance, Virtualization, Assets, And Profiling](ui-performance-virtualization-assets-profiling-design.md)
+- [UI Render Output And Host Renderer Boundary](ui-render-output-host-renderer-boundary-design.md)
+- [UI Platform Input, Windowing, And OS Integration](ui-platform-input-windowing-os-integration-design.md)
+- [UI Devtools, Inspection, And Workbench](ui-devtools-inspection-workbench-design.md)
+- [UI Testing, Conformance, And Proof Matrix](ui-testing-conformance-proof-matrix-design.md)
+- [UI Package Security, Versioning, And Migration](ui-package-security-versioning-migration-design.md)
 
 ### Workspace / Cross-Domain
 
-- [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
+- [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-comic-layout-platform-design.md)
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
 - [Field Visualizer Product Workflow Design](field-visualizer-product-workflow-design.md)
-- [Material Lab And Material Preview Design](material-lab-and-material-preview-design.md)
-- [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
+- [Material Lab And Material Preview Design](material-lab-material-preview-design.md)
+- [Native Tablet Input and Latency Contract](native-tablet-input-latency-contract.md)
 - [Runenwerk Capability Workbench Target Architecture](runenwerk-capability-workbench-target-architecture.md)
 - [Runenwerk Domain Workbench North Star](runenwerk-domain-workbench-north-star.md)
 - [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
 - [UI Framework App Integration Direction Review](ui-framework-app-integration-direction-review.md)
-- [Live UiPlugin Runtime And Surface Frame Rendering](live-uiplugin-runtime-and-surface-frame-rendering-design.md)
-- [Live UiPlugin Runtime Full Platform Cutover Plan](live-uiplugin-runtime-full-cutover-plan.md)
+- [Live UiPlugin Runtime And Surface Frame Rendering](live-uiplugin-runtime-surface-frame-rendering-design.md)
+- [Live UiPlugin Runtime Full Platform Cutover Plan](live-uiplugin-runtime-full-platform-cutover-plan.md)
 - [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 - [Runenwerk UI Story Driven Golden Workflow Design](runenwerk-ui-story-driven-golden-workflow-design.md)
 - [UI Program Architecture](ui-program-architecture.md)
@@ -167,7 +168,7 @@ architecture.
 - [UI Program Proof Slice Plan](ui-program-proof-slice-plan.md)
 - [UI Runtime Rendering Pipeline Roadmap](ui-runtime-rendering-pipeline-roadmap.md)
 - [SDF Prefab Composition System Design](sdf-prefab-composition-system-design.md)
-- [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-and-animated-models-design.md)
-- [Semantic Graph IR and Compilation Design](semantic-graph-ir-and-compilation-design.md)
-- [Viewport Camera And Projection Contract Platform](viewport-camera-and-projection-contract-platform-design.md)
+- [SDF Procedural Animation and Animated Models Design](sdf-procedural-animation-animated-models-design.md)
+- [Semantic Graph IR and Compilation Design](semantic-graph-ir-compilation-design.md)
+- [Viewport Camera And Projection Contract Platform](viewport-camera-projection-contract-platform-design.md)
 - [Viewport Expression Upgrade Design](workspace-viewport-expression-upgrade-design.md)
