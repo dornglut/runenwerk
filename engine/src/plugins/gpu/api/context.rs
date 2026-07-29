@@ -40,7 +40,11 @@ pub enum GpuSoftwareStatus {
     Unknown,
 }
 
-/// Observed fallback-adapter evidence, deliberately separate from request policy.
+/// Observed adapter-selection-path evidence, deliberately separate from request policy.
+///
+/// `ConfirmedFallback` means WGPU returned the adapter from a request with forced
+/// fallback selection. `ConfirmedNotFallback` means RunenGPU directly enumerated
+/// and retained the adapter. `Unknown` means WGPU selected it without either proof.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuFallbackStatus {
     ConfirmedFallback,
@@ -212,6 +216,12 @@ impl GpuAdmittedDeviceFacts {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuContextId(NonZeroU64);
+
+impl GpuContextId {
+    pub const fn is_nonzero(self) -> bool {
+        self.0.get() != 0
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuDeviceGeneration(NonZeroU64);
@@ -606,7 +616,7 @@ impl GpuRejectedCandidateReport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GpuCandidateDisposition {
     Accepted(Box<GpuCandidateAdmissionReport>),
-    Rejected(GpuRejectedCandidateReport),
+    Rejected(Box<GpuRejectedCandidateReport>),
 }
 
 impl GpuCandidateDisposition {
@@ -713,6 +723,11 @@ impl GpuContextAdmissionReport {
     }
     pub fn candidate_dispositions(&self) -> &[GpuCandidateDisposition] {
         &self.candidate_dispositions
+    }
+    pub fn candidate_dispositions_are_canonically_ordered(&self) -> bool {
+        self.candidate_dispositions
+            .windows(2)
+            .all(|pair| canonical_disposition_key(&pair[0]) <= canonical_disposition_key(&pair[1]))
     }
     pub fn selection_evidence(&self) -> &GpuCandidateSelectionEvidence {
         &self.selection_evidence
@@ -1094,19 +1109,22 @@ pub(crate) fn select_candidate_with_host_evidence(
     candidates: impl IntoIterator<Item = (GpuAdapterFacts, bool)>,
 ) -> Result<GpuCandidateSelection, GpuContextRequestError> {
     validate_descriptor(descriptor)?;
-    let dispositions = candidates
+    let mut dispositions = candidates
         .into_iter()
         .map(|(candidate, host_compatible)| {
             match evaluate_candidate(descriptor, candidate.clone(), host_compatible) {
                 Ok(report) => GpuCandidateDisposition::Accepted(Box::new(report)),
-                Err(error) => GpuCandidateDisposition::Rejected(GpuRejectedCandidateReport {
-                    adapter: candidate,
-                    category: error.category,
-                    detail: error.detail,
-                }),
+                Err(error) => {
+                    GpuCandidateDisposition::Rejected(Box::new(GpuRejectedCandidateReport {
+                        adapter: candidate,
+                        category: error.category,
+                        detail: error.detail,
+                    }))
+                }
             }
         })
         .collect::<Vec<_>>();
+    dispositions.sort_by_key(canonical_disposition_key);
     let mut admitted = dispositions
         .iter()
         .filter_map(|disposition| match disposition {
@@ -1139,6 +1157,106 @@ pub(crate) fn select_candidate_with_host_evidence(
         candidate: best,
         dispositions,
     })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct GpuCanonicalFormatCapabilities {
+    sampled: bool,
+    filterable: bool,
+    storage_read: bool,
+    storage_write: bool,
+    color_attachment: bool,
+    depth_stencil: bool,
+    copy_source: bool,
+    copy_destination: bool,
+    block_dimensions: Option<(u32, u32)>,
+    block_copy_size: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct GpuCanonicalDispositionKey {
+    backend: GpuBackendFamily,
+    class: GpuAdapterClass,
+    software: GpuSoftwareStatus,
+    fallback: GpuFallbackStatus,
+    supported_features: Vec<GpuCapabilityFeature>,
+    supported_limits: (u64, u64, u32, u32, u32),
+    supported_formats: Vec<(GpuTextureFormat, GpuCanonicalFormatCapabilities)>,
+    alignments: GpuAlignmentFacts,
+    vendor: Option<u32>,
+    device: Option<u32>,
+    diagnostic_name: Option<String>,
+    disposition_category: u8,
+}
+
+fn canonical_disposition_key(disposition: &GpuCandidateDisposition) -> GpuCanonicalDispositionKey {
+    let (adapter, disposition_category) = match disposition {
+        GpuCandidateDisposition::Accepted(report) => (report.adapter(), 0),
+        GpuCandidateDisposition::Rejected(report) => {
+            (report.adapter(), 1 + error_category_rank(report.category()))
+        }
+    };
+    let limits = adapter.supported().limits();
+    GpuCanonicalDispositionKey {
+        backend: adapter.backend(),
+        class: adapter.class(),
+        software: adapter.software(),
+        fallback: adapter.fallback(),
+        supported_features: adapter.supported().features().collect(),
+        supported_limits: (
+            limits.max_uniform_buffer_binding_size(),
+            limits.max_storage_buffer_binding_size(),
+            limits.max_color_attachments(),
+            limits.max_vertex_buffers(),
+            limits.max_bindings_per_group(),
+        ),
+        supported_formats: adapter
+            .supported()
+            .formats()
+            .map(|(format, capabilities)| {
+                (
+                    format,
+                    GpuCanonicalFormatCapabilities {
+                        sampled: capabilities.sampled,
+                        filterable: capabilities.filterable,
+                        storage_read: capabilities.storage_read,
+                        storage_write: capabilities.storage_write,
+                        color_attachment: capabilities.color_attachment,
+                        depth_stencil: capabilities.depth_stencil,
+                        copy_source: capabilities.copy_source,
+                        copy_destination: capabilities.copy_destination,
+                        block_dimensions: capabilities.block_dimensions,
+                        block_copy_size: capabilities.block_copy_size,
+                    },
+                )
+            })
+            .collect(),
+        alignments: adapter.alignments(),
+        vendor: adapter.vendor(),
+        device: adapter.device(),
+        diagnostic_name: adapter.diagnostic_name().map(str::to_owned),
+        disposition_category,
+    }
+}
+
+const fn error_category_rank(category: GpuContextRequestErrorCategory) -> u8 {
+    match category {
+        GpuContextRequestErrorCategory::NoCandidate => 0,
+        GpuContextRequestErrorCategory::AmbiguousAdapterSelection => 1,
+        GpuContextRequestErrorCategory::BackendFamilyForbidden => 2,
+        GpuContextRequestErrorCategory::SoftwareFallbackPolicyViolation => 3,
+        GpuContextRequestErrorCategory::MandatoryFeatureMissing => 4,
+        GpuContextRequestErrorCategory::LimitBelowRequiredMinimum => 5,
+        GpuContextRequestErrorCategory::LimitAbovePermittedMaximum => 6,
+        GpuContextRequestErrorCategory::UnsupportedFormatRole => 7,
+        GpuContextRequestErrorCategory::AlignmentIncompatibility => 8,
+        GpuContextRequestErrorCategory::ContradictoryRequest => 9,
+        GpuContextRequestErrorCategory::BackendAdapterRequestFailure => 10,
+        GpuContextRequestErrorCategory::BackendDeviceRequestFailure => 11,
+        GpuContextRequestErrorCategory::TemporaryHostCompatibilityFailure => 12,
+        GpuContextRequestErrorCategory::IdentityExhausted => 13,
+        GpuContextRequestErrorCategory::InvalidDegradation => 14,
+    }
 }
 
 fn candidate_rank(
@@ -1571,6 +1689,93 @@ mod tests {
             select_candidate(&descriptor, [discrete.clone(), discrete], true),
             Err(error) if error.category() == GpuContextRequestErrorCategory::AmbiguousAdapterSelection
         ));
+    }
+
+    #[test]
+    fn complete_candidate_dispositions_are_canonical_across_input_orders() {
+        let discrete = adapter().with_diagnostics("alpha adapter".to_owned(), 1, 10);
+        let integrated = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Integrated,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            discrete.supported().clone(),
+            discrete.alignments(),
+        )
+        .with_diagnostics("integrated adapter".to_owned(), 2, 20);
+        let rejected = GpuAdapterFacts::new(
+            GpuBackendFamily::UnknownBackend,
+            GpuAdapterClass::Unknown,
+            GpuSoftwareStatus::Unknown,
+            GpuFallbackStatus::Unknown,
+            discrete.supported().clone(),
+            discrete.alignments(),
+        )
+        .with_diagnostics("unknown adapter".to_owned(), 3, 30);
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_power_preference(GpuPowerPreference::HighPerformance);
+        let forward = select_candidate(
+            &descriptor,
+            [rejected.clone(), integrated.clone(), discrete.clone()],
+            true,
+        )
+        .unwrap();
+        let reverse = select_candidate(
+            &descriptor,
+            [discrete.clone(), integrated.clone(), rejected.clone()],
+            true,
+        )
+        .unwrap();
+        let rotated = select_candidate(
+            &descriptor,
+            [integrated, rejected.clone(), discrete.clone()],
+            true,
+        )
+        .unwrap();
+        assert_eq!(forward.dispositions, reverse.dispositions);
+        assert_eq!(forward.dispositions, rotated.dispositions);
+        assert_eq!(forward.candidate, reverse.candidate);
+        assert_eq!(forward.evidence, reverse.evidence);
+        assert_eq!(forward.evidence, rotated.evidence);
+
+        let only_metal = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_allowed_backends([GpuBackendFamily::Metal]);
+        let all_rejected_forward =
+            select_candidate(&only_metal, [discrete.clone(), rejected.clone()], true).unwrap_err();
+        let all_rejected_reverse =
+            select_candidate(&only_metal, [rejected.clone(), discrete.clone()], true).unwrap_err();
+        assert_eq!(all_rejected_forward, all_rejected_reverse);
+
+        let beta = adapter().with_diagnostics("beta adapter".to_owned(), 1, 10);
+        let diagnostic_forward =
+            select_candidate(&descriptor, [beta.clone(), discrete.clone()], true).unwrap();
+        let diagnostic_reverse =
+            select_candidate(&descriptor, [discrete.clone(), beta], true).unwrap();
+        assert_eq!(
+            diagnostic_forward.dispositions,
+            diagnostic_reverse.dispositions
+        );
+        assert_eq!(diagnostic_forward.candidate, diagnostic_reverse.candidate);
+        assert_eq!(diagnostic_forward.evidence, diagnostic_reverse.evidence);
+        assert_eq!(
+            diagnostic_forward.candidate.adapter().diagnostic_name(),
+            Some("alpha adapter")
+        );
+
+        let indistinguishable = adapter().with_diagnostics("same adapter".to_owned(), 9, 9);
+        let ambiguous_forward = select_candidate(
+            &descriptor,
+            [indistinguishable.clone(), indistinguishable.clone()],
+            true,
+        )
+        .unwrap_err();
+        let ambiguous_reverse = select_candidate(
+            &descriptor,
+            [indistinguishable.clone(), indistinguishable],
+            true,
+        )
+        .unwrap_err();
+        assert_eq!(ambiguous_forward, ambiguous_reverse);
     }
 
     #[test]
