@@ -46,14 +46,14 @@ PhaseImplementationSpec(
         "G4C owns generation-bound resource/program/layout/bind-group/pipeline realization and renderer cutover.",
         "G5 owns command encoding, submission, progress, pressure, completion, mapping, readback, cancellation, and retirement.",
         "G7 owns reusable surface creation/configuration/acquisition/presentation, device replacement, loss, and reconstruction facts.",
-        "Runenwerk retains blocking terminals, Winit/window policy, temporary host compatibility, and product recovery.",
+        "Runenwerk retains blocking terminals, Winit/window policy, one crate-private temporary host-compatibility request envelope, and product recovery.",
     ],
 
     public_contracts: [
         "Opaque nonzero process-local GpuContextId with no persistence or wire promise.",
         "Opaque nonzero GpuDeviceGeneration beginning at 1 for each newly admitted context.",
         "GpuContextAffinity containing exact context identity and device generation.",
-        "GpuContextDescriptor with diagnostic label/provenance, normalized power preference, software/fallback policy, backend allowlist, portability policy, merged requirements, and no raw host/backend type.",
+        "GpuContextDescriptor with diagnostic label/provenance, normalized power preference, software/fallback policy, backend allowlist, portability policy, merged requirements, and no raw or temporary host/backend value.",
         "GpuContext::request(descriptor) as the reusable asynchronous headless-first constructor.",
         "GpuBackendFamily with Vulkan, Metal, Direct3D12, OpenGl, BrowserWebGpu, and UnknownBackend only.",
         "GpuAdapterClass with Discrete, Integrated, Virtual, Cpu, Other, and Unknown.",
@@ -91,8 +91,9 @@ PhaseImplementationSpec(
         "Enable only features required by accepted mandatory/preferred requirements plus backend-mandatory features; do not opportunistically enable unrelated features.",
         "Request the least effective limits satisfying the admitted request and bounded by adapter support.",
         "Evaluate format roles and alignments before device publication.",
-        "Derive portability class from the admitted requirements and contained backend specialization.",
-        "For enumerable candidates, rank accepted candidates by fallback policy, power preference, portability class, adapter class, backend preference, then optional diagnostics as a final deterministic tie-break within the observed candidate set.",
+        "Derive portability class from admitted requirements and contained backend specialization.",
+        "For enumerable candidates, rank accepted candidates by fallback policy, power preference, portability class, adapter class, backend preference, then optional normalized diagnostics as final tie-break inputs within the observed candidate set.",
+        "If multiple accepted candidates remain indistinguishable after every permitted normalized tie-break, return AmbiguousAdapterSelection and require a stronger caller filter; never use backend enumeration order.",
         "For backend-selected-only platforms, run the same pure admission algorithm and report BackendSelectedCandidate without claiming deterministic hardware selection.",
     ],
 
@@ -113,11 +114,11 @@ PhaseImplementationSpec(
     ],
 
     temporary_host_compatibility: [
-        "Permit one Runenwerk-owned opaque compatibility input solely to preserve current surface-compatible adapter selection while G7 is pending.",
-        "Do not expose the compatibility input as the standalone RunenGPU public API.",
+        "Permit exactly one Runenwerk-owned crate-private request envelope pairing a public GpuContextDescriptor with opaque compatibility evidence solely to preserve current surface-compatible adapter selection while G7 is pending.",
+        "Do not place the compatibility value in the public descriptor, public builder, standalone API, or reusable context identity.",
         "Do not configure, acquire, present, resize, or own a reusable surface in G4A.",
         "Keep headless context admission independent and the default architecture.",
-        "Record the compatibility shim as G7 deletion inventory.",
+        "Record the compatibility path as G7 deletion inventory and guard against a second path.",
     ],
 
     target_source_areas: [
@@ -147,17 +148,17 @@ PhaseImplementationSpec(
         "Mandatory feature/limit/format/alignment misses reject candidates.",
         "Preferred misses require an explicit degradation key and emit one typed record.",
         "Unrelated supported features are not enabled.",
-        "Synthetic candidate ranking follows the accepted deterministic ordering.",
+        "Synthetic candidate ranking follows the accepted deterministic ordering and rejects an indistinguishable tie.",
         "Portability classes derive exactly from admitted facts.",
         "Known backend mappings, adapter classes, software/fallback facts, and explicit unknown mappings are exhaustive for the pinned WGPU version.",
-        "Public dependency/source guards reject raw WGPU, Winit, renderer, ECS, application, and product vocabulary.",
+        "Public dependency/source guards reject raw WGPU, Winit, renderer, ECS, application, product, and temporary host-compatibility vocabulary.",
     ],
 
     environment_tests: [
         "Request a headless native adapter/device where the environment provides one.",
         "Report no-adapter or unsupported environments explicitly rather than panicking.",
         "Prove actual enabled features and effective limits match the admitted report.",
-        "Exercise the temporary host-compatible selection only as an explicitly environment-dependent smoke.",
+        "Exercise the crate-private temporary host-compatible selection only as an explicitly environment-dependent smoke.",
         "Compile and run WebGPU coverage in the supported platform matrix when available.",
     ],
 
@@ -166,6 +167,7 @@ PhaseImplementationSpec(
         "No reusable RunenGPU constructor taking winit::window::Window.",
         "No public raw WGPU type in the future-transferable boundary.",
         "No Software variant in GpuBackendFamily; software/fallback remains an adapter fact.",
+        "No public host-compatibility value and no second crate-private compatibility path.",
         "No second instance/adapter/device/queue owner under render.",
         "No compatibility alias forwarding deleted renderer context types.",
         "No generated prompt, task database, truth certificate, execution lock, or temporary authoring workflow.",
@@ -193,10 +195,10 @@ PhaseImplementationSpec(
     acceptance: [
         "One async headless-first GpuContext request authority exists.",
         "Context and device-generation semantics are explicit and tested.",
-        "Requirement admission and degradation are deterministic and structured.",
+        "Requirement admission, degradation, candidate ranking, and ambiguity are deterministic and structured.",
         "Normalized backend/adapter/software/portability/feature/limit/format/alignment facts replace renderer timing-only capability authority.",
         "Raw WGPU instance/adapter/device/queue ownership is private and no public reach-through remains.",
-        "Current hosts are migrated without transferring reusable surface ownership from G7.",
+        "Current hosts are migrated through one crate-private compatibility path without changing the public descriptor or transferring reusable surface ownership from G7.",
         "No G4B, G4C, G5, G7, RunenRender, or extraction scope entered the diff.",
         "Exact-head validation, independent review, migration census, and deletion guards pass.",
     ],
