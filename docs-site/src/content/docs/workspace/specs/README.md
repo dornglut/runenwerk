@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-07
+last_reviewed: 2026-07-29
 related_docs:
   - ../authority-model.md
   - ../operating-model.md
@@ -29,6 +29,14 @@ A spec must not become parallel authority. If a spec and accepted Markdown disag
 ## Active spec docs
 
 - [Phase Implementation Spec](phase-implementation-spec.md)
+
+## RunenGPU implementation specs
+
+- [PT-RUNENGPU-G4A Context Admission](pt-runengpu-g4a-context-admission.ron)
+- [PT-RUNENGPU-G4B Program, Interface, and Layout](pt-runengpu-g4b-program-interface-layout.ron)
+- [PT-RUNENGPU-G4C WGPU Realization and Cutover](pt-runengpu-g4c-wgpu-realization-cutover.ron)
+
+The three G4 specifications are ordered. Only G4A may become active after the G4 planning decision is accepted. G4B is blocked by accepted G4A, and G4C is blocked by accepted G4B.
 
 ## Format rule
 
