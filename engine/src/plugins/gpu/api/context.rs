@@ -40,6 +40,14 @@ pub enum GpuSoftwareStatus {
     Unknown,
 }
 
+/// Observed fallback-adapter evidence, deliberately separate from request policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuFallbackStatus {
+    ConfirmedFallback,
+    ConfirmedNotFallback,
+    Unknown,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuPortabilityClass {
     PortableBaseline,
@@ -118,7 +126,7 @@ pub struct GpuAdapterFacts {
     backend: GpuBackendFamily,
     class: GpuAdapterClass,
     software: GpuSoftwareStatus,
-    fallback_requested: bool,
+    fallback: GpuFallbackStatus,
     diagnostic_name: Option<String>,
     vendor: Option<u32>,
     device: Option<u32>,
@@ -131,7 +139,7 @@ impl GpuAdapterFacts {
         backend: GpuBackendFamily,
         class: GpuAdapterClass,
         software: GpuSoftwareStatus,
-        fallback_requested: bool,
+        fallback: GpuFallbackStatus,
         supported: GpuCapabilities,
         alignments: GpuAlignmentFacts,
     ) -> Self {
@@ -139,7 +147,7 @@ impl GpuAdapterFacts {
             backend,
             class,
             software,
-            fallback_requested,
+            fallback,
             diagnostic_name: None,
             vendor: None,
             device: None,
@@ -164,8 +172,8 @@ impl GpuAdapterFacts {
     pub const fn software(&self) -> GpuSoftwareStatus {
         self.software
     }
-    pub const fn fallback_requested(&self) -> bool {
-        self.fallback_requested
+    pub const fn fallback(&self) -> GpuFallbackStatus {
+        self.fallback
     }
     pub fn diagnostic_name(&self) -> Option<&str> {
         self.diagnostic_name.as_deref()
@@ -577,17 +585,90 @@ pub struct GpuCandidateAdmissionReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuRejectedCandidateReport {
+    adapter: GpuAdapterFacts,
+    category: GpuContextRequestErrorCategory,
+    detail: Option<String>,
+}
+
+impl GpuRejectedCandidateReport {
+    pub fn adapter(&self) -> &GpuAdapterFacts {
+        &self.adapter
+    }
+    pub const fn category(&self) -> GpuContextRequestErrorCategory {
+        self.category
+    }
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GpuCandidateDisposition {
     Accepted(Box<GpuCandidateAdmissionReport>),
-    Rejected(GpuContextRequestError),
+    Rejected(GpuRejectedCandidateReport),
 }
 
 impl GpuCandidateDisposition {
     pub fn adapter(&self) -> Option<&GpuAdapterFacts> {
         match self {
             Self::Accepted(report) => Some(report.adapter()),
-            Self::Rejected(_) => None,
+            Self::Rejected(report) => Some(report.adapter()),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GpuCandidateRankEvidence {
+    fallback: u8,
+    power: u8,
+    portability: u8,
+    adapter_class: u8,
+    backend_preference: u8,
+    vendor: Option<u32>,
+    device: Option<u32>,
+    diagnostic_name: Option<String>,
+}
+
+impl GpuCandidateRankEvidence {
+    pub const fn fallback_priority(&self) -> u8 {
+        self.fallback
+    }
+    pub const fn power_priority(&self) -> u8 {
+        self.power
+    }
+    pub const fn portability_priority(&self) -> u8 {
+        self.portability
+    }
+    pub const fn adapter_class_priority(&self) -> u8 {
+        self.adapter_class
+    }
+    pub const fn backend_preference_priority(&self) -> u8 {
+        self.backend_preference
+    }
+    pub const fn vendor(&self) -> Option<u32> {
+        self.vendor
+    }
+    pub const fn device(&self) -> Option<u32> {
+        self.device
+    }
+    pub fn diagnostic_name(&self) -> Option<&str> {
+        self.diagnostic_name.as_deref()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuCandidateSelectionEvidence {
+    rank: GpuCandidateRankEvidence,
+    reason: &'static str,
+}
+
+impl GpuCandidateSelectionEvidence {
+    pub fn rank(&self) -> &GpuCandidateRankEvidence {
+        &self.rank
+    }
+    pub const fn reason(&self) -> &'static str {
+        self.reason
     }
 }
 
@@ -620,6 +701,7 @@ pub struct GpuContextAdmissionReport {
     pub(crate) selected: GpuCandidateSelectionKind,
     pub(crate) candidate: GpuCandidateAdmissionReport,
     pub(crate) candidate_dispositions: Vec<GpuCandidateDisposition>,
+    pub(crate) selection_evidence: GpuCandidateSelectionEvidence,
 }
 
 impl GpuContextAdmissionReport {
@@ -631,6 +713,9 @@ impl GpuContextAdmissionReport {
     }
     pub fn candidate_dispositions(&self) -> &[GpuCandidateDisposition] {
         &self.candidate_dispositions
+    }
+    pub fn selection_evidence(&self) -> &GpuCandidateSelectionEvidence {
+        &self.selection_evidence
     }
 }
 
@@ -772,18 +857,23 @@ fn evaluate_validated_candidate(
         ));
     }
     match descriptor.fallback_policy {
-        GpuSoftwareFallbackPolicy::Require if !adapter.fallback_requested => {
-            return Err(GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::SoftwareFallbackPolicyViolation,
-                "fallback adapter was required",
-            ));
-        }
-        GpuSoftwareFallbackPolicy::Forbid
-            if adapter.fallback_requested || adapter.software == GpuSoftwareStatus::Software =>
+        GpuSoftwareFallbackPolicy::Require
+            if adapter.fallback != GpuFallbackStatus::ConfirmedFallback =>
         {
             return Err(GpuContextRequestError::new(
                 GpuContextRequestErrorCategory::SoftwareFallbackPolicyViolation,
-                "software or fallback adapter is forbidden",
+                "fallback adapter selection was not proven",
+            ));
+        }
+        GpuSoftwareFallbackPolicy::Forbid
+            if matches!(
+                adapter.fallback,
+                GpuFallbackStatus::ConfirmedFallback | GpuFallbackStatus::Unknown
+            ) || adapter.software == GpuSoftwareStatus::Software =>
+        {
+            return Err(GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::SoftwareFallbackPolicyViolation,
+                "software, fallback, or unknown fallback evidence is forbidden",
             ));
         }
         _ => {}
@@ -861,24 +951,30 @@ fn evaluate_validated_candidate(
             ));
         }
     }
-    let portability = match descriptor.portability_policy {
-        GpuPortabilityPolicy::RequirePortableBaseline
-            if adapter.backend == GpuBackendFamily::UnknownBackend =>
-        {
+    let effective_limits = effective_limits(descriptor);
+    for kind in ALL_LIMIT_KINDS {
+        if limit_value(adapter.supported.limits(), kind) < limit_value(effective_limits, kind) {
             return Err(GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::NoCandidate,
-                "portable baseline requires a known backend family",
+                GpuContextRequestErrorCategory::LimitBelowRequiredMinimum,
+                format!("{kind:?} is below the effective admitted request"),
             ));
         }
-        GpuPortabilityPolicy::RequirePortableBaseline => GpuPortabilityClass::PortableBaseline,
-        GpuPortabilityPolicy::AllowBackendSpecialized
-            if adapter.backend == GpuBackendFamily::UnknownBackend =>
-        {
-            GpuPortabilityClass::BackendSpecialized
-        }
-        GpuPortabilityPolicy::AllowBackendSpecialized => GpuPortabilityClass::PortableBaseline,
-    };
-    let effective_limits = effective_limits(descriptor, adapter.supported.limits());
+    }
+    let portability = derive_portability(descriptor, &enabled, adapter.backend);
+    if portability == GpuPortabilityClass::Unsupported {
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::NoCandidate,
+            "adapter backend cannot establish the requested portability contract",
+        ));
+    }
+    if descriptor.portability_policy == GpuPortabilityPolicy::RequirePortableBaseline
+        && portability != GpuPortabilityClass::PortableBaseline
+    {
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::NoCandidate,
+            "portable baseline excludes admitted extensions and backend specialization",
+        ));
+    }
     Ok(GpuCandidateAdmissionReport {
         adapter,
         enabled_features: enabled,
@@ -917,7 +1013,20 @@ fn limit_value(limits: GpuLimits, kind: GpuLimitKind) -> u64 {
     }
 }
 
-fn effective_limits(descriptor: &GpuContextDescriptor, supported: GpuLimits) -> GpuLimits {
+const ALL_LIMIT_KINDS: [GpuLimitKind; 5] = [
+    GpuLimitKind::MaxUniformBufferBindingSize,
+    GpuLimitKind::MaxStorageBufferBindingSize,
+    GpuLimitKind::MaxColorAttachments,
+    GpuLimitKind::MaxVertexBuffers,
+    GpuLimitKind::MaxBindingsPerGroup,
+];
+
+const fn g4a_limit_baseline() -> GpuLimits {
+    GpuLimits::from_validated_adapter_facts(64 * 1024, 128 * 1024 * 1024, 1, 8, 16)
+}
+
+fn effective_limits(descriptor: &GpuContextDescriptor) -> GpuLimits {
+    let baseline = g4a_limit_baseline();
     let value = |kind| {
         descriptor
             .limits
@@ -925,10 +1034,11 @@ fn effective_limits(descriptor: &GpuContextDescriptor, supported: GpuLimits) -> 
             .map(|constraint| {
                 constraint
                     .minimum
-                    .unwrap_or_else(|| limit_value(supported, kind))
+                    .unwrap_or_else(|| limit_value(baseline, kind))
+                    .max(limit_value(baseline, kind))
                     .min(constraint.maximum.unwrap_or(u64::MAX))
             })
-            .unwrap_or_else(|| limit_value(supported, kind))
+            .unwrap_or_else(|| limit_value(baseline, kind))
     };
     GpuLimits::from_validated_adapter_facts(
         value(GpuLimitKind::MaxUniformBufferBindingSize),
@@ -939,26 +1049,63 @@ fn effective_limits(descriptor: &GpuContextDescriptor, supported: GpuLimits) -> 
     )
 }
 
+fn derive_portability(
+    descriptor: &GpuContextDescriptor,
+    enabled: &BTreeSet<GpuCapabilityFeature>,
+    backend: GpuBackendFamily,
+) -> GpuPortabilityClass {
+    if backend == GpuBackendFamily::UnknownBackend {
+        return GpuPortabilityClass::Unsupported;
+    }
+    let specialized =
+        descriptor.allowed_backends.len() == 1 || descriptor.backend_preference.len() == 1;
+    if specialized {
+        GpuPortabilityClass::BackendSpecialized
+    } else if enabled.contains(&GpuCapabilityFeature::TimestampQuery) {
+        GpuPortabilityClass::PortableWithDeclaredExtensions
+    } else {
+        GpuPortabilityClass::PortableBaseline
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GpuCandidateSelection {
     pub(crate) candidate: GpuCandidateAdmissionReport,
     pub(crate) dispositions: Vec<GpuCandidateDisposition>,
+    pub(crate) evidence: GpuCandidateSelectionEvidence,
 }
 
+#[cfg(any(test, target_arch = "wasm32"))]
 pub(crate) fn select_candidate(
     descriptor: &GpuContextDescriptor,
     candidates: impl IntoIterator<Item = GpuAdapterFacts>,
     host_compatible: bool,
 ) -> Result<GpuCandidateSelection, GpuContextRequestError> {
+    select_candidate_with_host_evidence(
+        descriptor,
+        candidates
+            .into_iter()
+            .map(|candidate| (candidate, host_compatible)),
+    )
+}
+
+pub(crate) fn select_candidate_with_host_evidence(
+    descriptor: &GpuContextDescriptor,
+    candidates: impl IntoIterator<Item = (GpuAdapterFacts, bool)>,
+) -> Result<GpuCandidateSelection, GpuContextRequestError> {
     validate_descriptor(descriptor)?;
     let dispositions = candidates
         .into_iter()
-        .map(
-            |candidate| match evaluate_candidate(descriptor, candidate, host_compatible) {
+        .map(|(candidate, host_compatible)| {
+            match evaluate_candidate(descriptor, candidate.clone(), host_compatible) {
                 Ok(report) => GpuCandidateDisposition::Accepted(Box::new(report)),
-                Err(error) => GpuCandidateDisposition::Rejected(error),
-            },
-        )
+                Err(error) => GpuCandidateDisposition::Rejected(GpuRejectedCandidateReport {
+                    adapter: candidate,
+                    category: error.category,
+                    detail: error.detail,
+                }),
+            }
+        })
         .collect::<Vec<_>>();
     let mut admitted = dispositions
         .iter()
@@ -985,20 +1132,25 @@ pub(crate) fn select_candidate(
         .with_candidate_dispositions(dispositions));
     }
     Ok(GpuCandidateSelection {
+        evidence: GpuCandidateSelectionEvidence {
+            rank: candidate_rank(descriptor, &best),
+            reason: "lowest complete normalized rank",
+        },
         candidate: best,
         dispositions,
     })
 }
 
-type CandidateRank = (u8, u8, u8, u8, u8, Option<u32>, Option<u32>, Option<String>);
-
 fn candidate_rank(
     descriptor: &GpuContextDescriptor,
     candidate: &GpuCandidateAdmissionReport,
-) -> CandidateRank {
+) -> GpuCandidateRankEvidence {
     let adapter = candidate.adapter();
-    let fallback =
-        u8::from(adapter.software() == GpuSoftwareStatus::Software || adapter.fallback_requested());
+    let fallback = match adapter.fallback() {
+        GpuFallbackStatus::ConfirmedNotFallback => 0,
+        GpuFallbackStatus::Unknown => 1,
+        GpuFallbackStatus::ConfirmedFallback => 2,
+    };
     let power = match (descriptor.power_preference, adapter.class()) {
         (GpuPowerPreference::HighPerformance, GpuAdapterClass::Discrete)
         | (GpuPowerPreference::LowPower, GpuAdapterClass::Integrated) => 0,
@@ -1025,21 +1177,31 @@ fn candidate_rank(
         .get(&adapter.backend())
         .copied()
         .unwrap_or(u8::MAX);
-    (
+    GpuCandidateRankEvidence {
         fallback,
         power,
         portability,
-        class,
-        backend,
-        adapter.vendor(),
-        adapter.device(),
-        adapter.diagnostic_name().map(str::to_owned),
-    )
+        adapter_class: class,
+        backend_preference: backend,
+        vendor: adapter.vendor(),
+        device: adapter.device(),
+        diagnostic_name: adapter.diagnostic_name().map(str::to_owned),
+    }
 }
 
 fn sanitized_diagnostic(value: String) -> Option<String> {
     let value = value.trim();
-    (!value.is_empty()).then(|| value.chars().take(MAX_DIAGNOSTIC_BYTES).collect())
+    if value.is_empty() {
+        return None;
+    }
+    let mut bounded = String::new();
+    for character in value.chars() {
+        if bounded.len() + character.len_utf8() > MAX_DIAGNOSTIC_BYTES {
+            break;
+        }
+        bounded.push(character);
+    }
+    Some(bounded)
 }
 
 #[cfg(test)]
@@ -1056,12 +1218,12 @@ mod tests {
     };
 
     fn adapter() -> GpuAdapterFacts {
-        let limits = GpuLimits::new(4, 4, 4, 4, 4).unwrap();
+        let limits = baseline_limits();
         GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
-            false,
+            GpuFallbackStatus::ConfirmedNotFallback,
             GpuCapabilities::from_normalized_facts(
                 [GpuCapabilityFeature::Compute, GpuCapabilityFeature::Copy],
                 limits,
@@ -1078,6 +1240,10 @@ mod tests {
                 query_resolve_destination: Some(256),
             },
         )
+    }
+
+    fn baseline_limits() -> GpuLimits {
+        GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 1, 8, 16).unwrap()
     }
 
     #[test]
@@ -1152,14 +1318,14 @@ mod tests {
         facts.copy_destination = true;
         let supported = GpuCapabilities::from_normalized_facts(
             [GpuCapabilityFeature::Compute],
-            GpuLimits::new(2, 2, 2, 2, 2).unwrap(),
+            baseline_limits(),
             [(GpuTextureFormat::Rgba8Unorm, facts)],
         );
         let candidate = GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
-            false,
+            GpuFallbackStatus::ConfirmedNotFallback,
             supported,
             adapter().alignments(),
         );
@@ -1185,13 +1351,201 @@ mod tests {
     }
 
     #[test]
+    fn effective_limits_use_the_fixed_g4a_baseline_and_never_adapter_maxima() {
+        let baseline = baseline_limits();
+        let higher_limits = GpuLimits::new(256 * 1024, 512 * 1024 * 1024, 4, 16, 64).unwrap();
+        let source = adapter();
+        let higher = GpuAdapterFacts::new(
+            source.backend(),
+            source.class(),
+            source.software(),
+            source.fallback(),
+            GpuCapabilities::from_normalized_facts(
+                [GpuCapabilityFeature::Compute, GpuCapabilityFeature::Copy],
+                higher_limits,
+                [],
+            ),
+            source.alignments(),
+        );
+        let empty = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        assert_eq!(
+            evaluate_candidate(&empty, adapter(), true)
+                .unwrap()
+                .effective_limits(),
+            baseline
+        );
+        assert_eq!(
+            evaluate_candidate(&empty, higher.clone(), true)
+                .unwrap()
+                .effective_limits(),
+            baseline
+        );
+
+        let raised = empty
+            .clone()
+            .require_limit(GpuLimitKind::MaxVertexBuffers, 12);
+        assert_eq!(
+            evaluate_candidate(&raised, higher, true)
+                .unwrap()
+                .effective_limits()
+                .max_vertex_buffers(),
+            12
+        );
+        let capped = empty.permit_limit(GpuLimitKind::MaxUniformBufferBindingSize, 1024);
+        assert_eq!(
+            evaluate_candidate(&capped, adapter(), true)
+                .unwrap()
+                .effective_limits()
+                .max_uniform_buffer_binding_size(),
+            1024
+        );
+    }
+
+    #[test]
+    fn fallback_evidence_is_distinct_from_request_policy() {
+        let source = adapter();
+        let with_status = |software, fallback| {
+            GpuAdapterFacts::new(
+                source.backend(),
+                source.class(),
+                software,
+                fallback,
+                source.supported().clone(),
+                source.alignments(),
+            )
+        };
+        let empty = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        for (policy, fallback, expected_admitted) in [
+            (
+                GpuSoftwareFallbackPolicy::Allow,
+                GpuFallbackStatus::ConfirmedFallback,
+                true,
+            ),
+            (
+                GpuSoftwareFallbackPolicy::Allow,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                true,
+            ),
+            (
+                GpuSoftwareFallbackPolicy::Allow,
+                GpuFallbackStatus::Unknown,
+                true,
+            ),
+            (
+                GpuSoftwareFallbackPolicy::Require,
+                GpuFallbackStatus::ConfirmedFallback,
+                true,
+            ),
+            (
+                GpuSoftwareFallbackPolicy::Require,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                false,
+            ),
+            (
+                GpuSoftwareFallbackPolicy::Require,
+                GpuFallbackStatus::Unknown,
+                false,
+            ),
+            (
+                GpuSoftwareFallbackPolicy::Forbid,
+                GpuFallbackStatus::ConfirmedFallback,
+                false,
+            ),
+            (
+                GpuSoftwareFallbackPolicy::Forbid,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                true,
+            ),
+            (
+                GpuSoftwareFallbackPolicy::Forbid,
+                GpuFallbackStatus::Unknown,
+                false,
+            ),
+        ] {
+            let result = evaluate_candidate(
+                &empty.clone().with_fallback_policy(policy),
+                with_status(GpuSoftwareStatus::Hardware, fallback),
+                true,
+            );
+            assert_eq!(result.is_ok(), expected_admitted, "{policy:?} {fallback:?}");
+        }
+        assert!(matches!(
+            evaluate_candidate(
+                &empty.with_fallback_policy(GpuSoftwareFallbackPolicy::Forbid),
+                with_status(
+                    GpuSoftwareStatus::Software,
+                    GpuFallbackStatus::ConfirmedNotFallback,
+                ),
+                true,
+            ),
+            Err(error) if error.category() == GpuContextRequestErrorCategory::SoftwareFallbackPolicyViolation
+        ));
+    }
+
+    #[test]
+    fn portability_derivation_covers_extensions_specialization_and_unsupported_outcomes() {
+        let empty = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let extensions = BTreeSet::from([GpuCapabilityFeature::TimestampQuery]);
+        assert_eq!(
+            derive_portability(&empty, &BTreeSet::new(), GpuBackendFamily::Vulkan),
+            GpuPortabilityClass::PortableBaseline
+        );
+        assert_eq!(
+            derive_portability(&empty, &extensions, GpuBackendFamily::Vulkan),
+            GpuPortabilityClass::PortableWithDeclaredExtensions
+        );
+        let specialized = empty
+            .clone()
+            .with_allowed_backends([GpuBackendFamily::Vulkan]);
+        assert_eq!(
+            derive_portability(&specialized, &BTreeSet::new(), GpuBackendFamily::Vulkan),
+            GpuPortabilityClass::BackendSpecialized
+        );
+        assert_eq!(
+            derive_portability(&empty, &BTreeSet::new(), GpuBackendFamily::UnknownBackend),
+            GpuPortabilityClass::Unsupported
+        );
+        assert!(matches!(
+            evaluate_candidate(
+                &specialized.with_portability_policy(GpuPortabilityPolicy::RequirePortableBaseline),
+                adapter(),
+                true,
+            ),
+            Err(error) if error.category() == GpuContextRequestErrorCategory::NoCandidate
+        ));
+        let unsupported = GpuAdapterFacts::new(
+            GpuBackendFamily::UnknownBackend,
+            GpuAdapterClass::Unknown,
+            GpuSoftwareStatus::Unknown,
+            GpuFallbackStatus::Unknown,
+            adapter().supported().clone(),
+            adapter().alignments(),
+        );
+        assert!(matches!(
+            evaluate_candidate(&empty, unsupported, true),
+            Err(error) if error.category() == GpuContextRequestErrorCategory::NoCandidate
+        ));
+    }
+
+    #[test]
+    fn diagnostics_are_bounded_by_utf8_bytes_without_splitting_characters() {
+        let multibyte = sanitized_diagnostic("é".repeat(129)).unwrap();
+        assert_eq!(multibyte.len(), MAX_DIAGNOSTIC_BYTES);
+        assert!(multibyte.is_char_boundary(multibyte.len()));
+        assert_eq!(
+            sanitized_diagnostic("a".repeat(257)).unwrap().len(),
+            MAX_DIAGNOSTIC_BYTES
+        );
+    }
+
+    #[test]
     fn candidate_selection_is_order_independent_and_rejects_equal_best_candidates() {
         let discrete = adapter();
         let integrated = GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Integrated,
             GpuSoftwareStatus::Unknown,
-            false,
+            GpuFallbackStatus::ConfirmedNotFallback,
             discrete.supported().clone(),
             discrete.alignments(),
         );
@@ -1235,7 +1589,7 @@ mod tests {
         let merged_right = right.merge(&left).unwrap();
         assert!(merged_left.semantically_eq(&merged_right));
         let report = evaluate_candidate(&merged_left, adapter(), true).unwrap();
-        assert_eq!(report.effective_limits().max_vertex_buffers(), 2);
+        assert_eq!(report.effective_limits().max_vertex_buffers(), 3);
         assert!(matches!(
             left.require_limit(GpuLimitKind::MaxVertexBuffers, 5)
                 .merge(&right),
@@ -1247,7 +1601,8 @@ mod tests {
     fn rejected_candidates_are_retained_in_structured_no_candidate_outcome() {
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
             .with_allowed_backends([GpuBackendFamily::Metal]);
-        let error = select_candidate(&descriptor, [adapter()], true).unwrap_err();
+        let rejected = adapter().with_diagnostics("rejected Vulkan adapter".to_owned(), 1, 2);
+        let error = select_candidate(&descriptor, [rejected], true).unwrap_err();
         assert_eq!(
             error.category(),
             GpuContextRequestErrorCategory::NoCandidate
@@ -1257,6 +1612,9 @@ mod tests {
             error.candidate_dispositions(),
             [GpuCandidateDisposition::Rejected(rejection)]
                 if rejection.category() == GpuContextRequestErrorCategory::BackendFamilyForbidden
+                    && rejection.adapter().backend() == GpuBackendFamily::Vulkan
+                    && rejection.adapter().vendor() == Some(1)
+                    && rejection.adapter().device() == Some(2)
         ));
     }
 
@@ -1267,19 +1625,24 @@ mod tests {
             GpuBackendFamily::Metal,
             vulkan.class(),
             vulkan.software(),
-            vulkan.fallback_requested(),
+            vulkan.fallback(),
             vulkan.supported().clone(),
             vulkan.alignments(),
         );
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
             .with_backend_preference([GpuBackendFamily::Metal, GpuBackendFamily::Vulkan]);
+        let forward = select_candidate(&descriptor, [vulkan.clone(), metal.clone()], true).unwrap();
+        let reverse = select_candidate(&descriptor, [metal, vulkan], true).unwrap();
         assert_eq!(
-            select_candidate(&descriptor, [vulkan, metal], true)
-                .unwrap()
-                .candidate
-                .adapter()
-                .backend(),
+            forward.candidate.adapter().backend(),
             GpuBackendFamily::Metal
         );
+        assert_eq!(
+            reverse.candidate.adapter().backend(),
+            GpuBackendFamily::Metal
+        );
+        assert_eq!(forward.evidence, reverse.evidence);
+        assert_eq!(forward.evidence.reason(), "lowest complete normalized rank");
+        assert_eq!(forward.evidence.rank().backend_preference_priority(), 0);
     }
 }

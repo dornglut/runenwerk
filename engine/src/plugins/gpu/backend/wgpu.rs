@@ -1,20 +1,24 @@
 //! Private WGPU containment for G4A context admission and the one current-render loan.
 
+#[cfg(target_arch = "wasm32")]
+use crate::plugins::gpu::select_candidate;
 use crate::plugins::gpu::{
     GpuAdapterClass, GpuAdapterFacts, GpuAlignmentFacts, GpuBackendFamily,
     GpuCandidateSelectionKind, GpuCapabilities, GpuCapabilityFeature, GpuContext,
     GpuContextAdmissionReport, GpuContextDescriptor, GpuContextRequestError,
-    GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuLimits, GpuSoftwareStatus,
-    GpuTextureFormat, GpuTextureFormatCapabilities, admitted_device_facts, allocate_context_id,
-    select_candidate, validate_descriptor,
+    GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuFallbackStatus, GpuLimits,
+    GpuSoftwareStatus, GpuTextureFormat, GpuTextureFormatCapabilities, admitted_device_facts,
+    allocate_context_id, select_candidate_with_host_evidence, validate_descriptor,
 };
 use std::sync::Arc;
 use wgpu::{
-    Adapter, Backend, Device, DeviceDescriptor, DeviceType, ExperimentalFeatures, Features,
-    Instance, InstanceDescriptor, Limits, MemoryHints, Queue, RequestAdapterOptions, Surface,
+    Adapter, Backend, Backends, Device, DeviceDescriptor, DeviceType, ExperimentalFeatures,
+    Features, Instance, InstanceDescriptor, Limits, MemoryHints, Queue, Surface,
     SurfaceCapabilities, SurfaceConfiguration, SurfaceTarget, TextureFormat,
     TextureFormatFeatureFlags, TextureUsages, Trace,
 };
+#[cfg(target_arch = "wasm32")]
+use wgpu::{RequestAdapterError, RequestAdapterOptions};
 
 #[derive(Debug)]
 pub(crate) struct WgpuContextState {
@@ -58,36 +62,10 @@ async fn request_with_instance(
     compatible_surface: Option<&Surface<'_>>,
 ) -> Result<GpuContext, GpuContextRequestError> {
     validate_descriptor(&descriptor)?;
-    let adapter = instance
-        .request_adapter(&RequestAdapterOptions {
-            power_preference: map_power_preference(descriptor.power_preference()),
-            force_fallback_adapter: matches!(
-                descriptor.fallback_policy(),
-                crate::plugins::gpu::GpuSoftwareFallbackPolicy::Require
-            ),
-            compatible_surface,
-        })
-        .await
-        .map_err(|error| {
-            GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::BackendAdapterRequestFailure,
-                error.to_string(),
-            )
-        })?;
-    let adapter_facts = adapter_facts(
-        &adapter,
-        compatible_surface.is_some(),
-        matches!(
-            descriptor.fallback_policy(),
-            crate::plugins::gpu::GpuSoftwareFallbackPolicy::Require
-        ),
-    );
-    let selection = select_candidate(
-        &descriptor,
-        [adapter_facts.clone()],
-        compatible_surface.is_some(),
-    )?;
+    let (adapter, selection, selection_kind) =
+        select_backend_adapter(&instance, &descriptor, compatible_surface).await?;
     let candidate = selection.candidate;
+    let adapter_facts = candidate.adapter().clone();
     let requested_features = requested_features(&candidate);
     let (device, queue) = adapter
         .request_device(&DeviceDescriptor {
@@ -113,9 +91,10 @@ async fn request_with_instance(
         adapter: adapter_facts,
         device: device_facts,
         report: GpuContextAdmissionReport {
-            selected: GpuCandidateSelectionKind::BackendSelectedCandidate,
+            selected: selection_kind,
             candidate,
             candidate_dispositions: selection.dispositions,
+            selection_evidence: selection.evidence,
         },
         backend: WgpuContextState {
             instance,
@@ -124,6 +103,110 @@ async fn request_with_instance(
             queue: Arc::new(queue),
         },
     })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn select_backend_adapter(
+    instance: &Instance,
+    descriptor: &GpuContextDescriptor,
+    compatible_surface: Option<&Surface<'_>>,
+) -> Result<
+    (
+        Adapter,
+        crate::plugins::gpu::GpuCandidateSelection,
+        GpuCandidateSelectionKind,
+    ),
+    GpuContextRequestError,
+> {
+    let candidates = instance
+        .enumerate_adapters(Backends::all())
+        .into_iter()
+        .map(|adapter| {
+            let surface_supported =
+                compatible_surface.is_none_or(|surface| adapter.is_surface_supported(surface));
+            let facts = adapter_facts(&adapter, surface_supported, GpuFallbackStatus::Unknown);
+            (facts, adapter, surface_supported)
+        })
+        .collect::<Vec<_>>();
+    select_enumerated_adapter(descriptor, candidates).map(|(adapter, selection)| {
+        (
+            adapter,
+            selection,
+            GpuCandidateSelectionKind::DeterministicallyRanked,
+        )
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn select_enumerated_adapter<T>(
+    descriptor: &GpuContextDescriptor,
+    candidates: Vec<(GpuAdapterFacts, T, bool)>,
+) -> Result<(T, crate::plugins::gpu::GpuCandidateSelection), GpuContextRequestError> {
+    let facts = candidates
+        .iter()
+        .map(|(facts, _, surface_supported)| (facts.clone(), *surface_supported))
+        .collect::<Vec<_>>();
+    let selection = select_candidate_with_host_evidence(descriptor, facts)?;
+    let selected_facts = selection.candidate.adapter();
+    let adapter = candidates
+        .into_iter()
+        .find_map(|(facts, adapter, _)| (facts == *selected_facts).then_some(adapter))
+        .expect("a selected normalized candidate must retain its matching backend adapter");
+    Ok((adapter, selection))
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn select_backend_adapter(
+    instance: &Instance,
+    descriptor: &GpuContextDescriptor,
+    compatible_surface: Option<&Surface<'_>>,
+) -> Result<
+    (
+        Adapter,
+        crate::plugins::gpu::GpuCandidateSelection,
+        GpuCandidateSelectionKind,
+    ),
+    GpuContextRequestError,
+> {
+    let fallback_required = matches!(
+        descriptor.fallback_policy(),
+        crate::plugins::gpu::GpuSoftwareFallbackPolicy::Require
+    );
+    let adapter = instance
+        .request_adapter(&RequestAdapterOptions {
+            power_preference: map_power_preference(descriptor.power_preference()),
+            force_fallback_adapter: fallback_required,
+            compatible_surface,
+        })
+        .await
+        .map_err(map_request_adapter_error)?;
+    let facts = adapter_facts(
+        &adapter,
+        compatible_surface.is_some(),
+        if fallback_required {
+            GpuFallbackStatus::ConfirmedFallback
+        } else {
+            GpuFallbackStatus::Unknown
+        },
+    );
+    let selection = select_candidate(&descriptor, [facts], compatible_surface.is_some())?;
+    Ok((
+        adapter,
+        selection,
+        GpuCandidateSelectionKind::BackendSelectedCandidate,
+    ))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn map_request_adapter_error(error: RequestAdapterError) -> GpuContextRequestError {
+    let category = match error {
+        RequestAdapterError::NotFound { .. } => GpuContextRequestErrorCategory::NoCandidate,
+        RequestAdapterError::EnvNotSet => {
+            GpuContextRequestErrorCategory::BackendAdapterRequestFailure
+        }
+        _ => GpuContextRequestErrorCategory::BackendAdapterRequestFailure,
+    };
+    GpuContextRequestError::new(category, error.to_string())
 }
 
 impl GpuContext {
@@ -175,6 +258,7 @@ impl GpuContext {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 fn map_power_preference(
     preference: crate::plugins::gpu::GpuPowerPreference,
 ) -> wgpu::PowerPreference {
@@ -211,7 +295,7 @@ fn requested_limits(candidate: &crate::plugins::gpu::GpuCandidateAdmissionReport
 fn adapter_facts(
     adapter: &Adapter,
     host_compatible: bool,
-    fallback_requested: bool,
+    fallback: GpuFallbackStatus,
 ) -> GpuAdapterFacts {
     let info = adapter.get_info();
     let features = adapter.features();
@@ -260,7 +344,7 @@ fn adapter_facts(
         map_backend(info.backend),
         map_class(info.device_type),
         map_software(info.device_type),
-        fallback_requested,
+        fallback,
         GpuCapabilities::from_normalized_facts(supported, limits, formats),
         GpuAlignmentFacts {
             uniform_dynamic_offset: Some(u64::from(limits_for_alignment(
@@ -333,6 +417,60 @@ fn format_capabilities(
         copy_destination: features.allowed_usages.contains(TextureUsages::COPY_DST),
         block_dimensions: Some(format.block_dimensions()),
         block_copy_size: format.block_copy_size(None),
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod native_selection_tests {
+    use super::*;
+    use crate::plugins::gpu::{
+        GpuCapabilityRequirements, GpuContextDescriptor, GpuFallbackStatus, GpuLimits,
+    };
+
+    fn facts(class: GpuAdapterClass) -> GpuAdapterFacts {
+        GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            class,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts(
+                [GpuCapabilityFeature::Compute, GpuCapabilityFeature::Copy],
+                GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 1, 8, 16).unwrap(),
+                [],
+            ),
+            GpuAlignmentFacts {
+                uniform_dynamic_offset: Some(256),
+                storage_dynamic_offset: Some(256),
+                copy_buffer_offset: Some(4),
+                bytes_per_row: Some(256),
+                query_resolve_destination: Some(256),
+            },
+        )
+    }
+
+    #[test]
+    fn native_enumerated_candidates_are_ranked_before_retaining_the_adapter_handle() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_power_preference(crate::plugins::gpu::GpuPowerPreference::HighPerformance);
+        let forward = select_enumerated_adapter(
+            &descriptor,
+            vec![
+                (facts(GpuAdapterClass::Integrated), "integrated", true),
+                (facts(GpuAdapterClass::Discrete), "discrete", true),
+            ],
+        )
+        .unwrap();
+        let reverse = select_enumerated_adapter(
+            &descriptor,
+            vec![
+                (facts(GpuAdapterClass::Discrete), "discrete", true),
+                (facts(GpuAdapterClass::Integrated), "integrated", true),
+            ],
+        )
+        .unwrap();
+        assert_eq!(forward.0, "discrete");
+        assert_eq!(reverse.0, "discrete");
+        assert_eq!(forward.1.evidence, reverse.1.evidence);
     }
 }
 

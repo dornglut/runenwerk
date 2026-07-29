@@ -5,8 +5,7 @@ use engine::plugins::gpu::{
 use std::collections::BTreeSet;
 
 #[test]
-#[ignore = "requires exclusive access to an environment-provided GPU adapter"]
-fn headless_context_admission_reports_a_real_context_or_a_typed_backend_outcome() {
+fn headless_context_admission_reports_a_real_context_or_a_strict_environment_outcome() {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
             .with_label("engine headless context admission test");
@@ -43,9 +42,9 @@ fn headless_context_admission_reports_a_real_context_or_a_typed_backend_outcome(
         }
         Err(error) => assert!(matches!(
             error.category(),
-            GpuContextRequestErrorCategory::BackendAdapterRequestFailure
+            GpuContextRequestErrorCategory::NoCandidate
+                | GpuContextRequestErrorCategory::BackendAdapterRequestFailure
                 | GpuContextRequestErrorCategory::BackendDeviceRequestFailure
-                | GpuContextRequestErrorCategory::NoCandidate
         )),
     }
 }
