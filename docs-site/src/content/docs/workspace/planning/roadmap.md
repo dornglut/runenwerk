@@ -86,8 +86,9 @@ crate: runen_sdf
 ```
 
 Issue `#133` completed the retirement-only Runenwerk cutover after proving zero real
-consumers of the internal package. Runenwerk contains no `domain/sdf` package, source
-mirror, forwarding namespace, submodule, source include, or unused external dependency.
+consumers of the internal package. Runenwerk now contains no `domain/sdf` package,
+source mirror, forwarding namespace, submodule, source include, or unused external
+dependency.
 
 Reusable field mathematics and CPU reference queries belong to `dornglut/runen-sdf`.
 Runenwerk world/product integration remains in Runenwerk-owned domains and adapters.
