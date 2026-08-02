@@ -526,6 +526,35 @@ remains valid historical evidence for the code that was reviewed. Findings retai
 their IDs and receive explicit resolution revisions and reviewer confirmation rather
 than being silently rewritten as if they never existed.
 
+## Corrected-head implementation disposition record
+
+This is implementation evidence recorded after the review, not a replacement review,
+approval, or acceptance decision. Each disposition remains **implemented; pending a
+new independent complete-diff review** at the corrected exact head.
+
+| Finding | Disposition | Direct proof retained with the implementation |
+|---|---|---|
+| `G4A-CR-001` | Implemented; pending review | `api/context/admission.rs` routes headless `Presentation` through `GpuCapabilityAdmission`; its owner-local test proves required rejection, preferred degradation, and disabled verification. |
+| `G4A-CR-002` | Implemented; pending review | `backend/wgpu/adapter_mapping.rs::normalized_features` receives explicit surface evidence; its test and `engine/tests/gpu_context_admission.rs` prove headless facts exclude `Presentation`. |
+| `G4A-CR-003` | Implemented; pending review | `adapter_mapping.rs` maps compute and indirect work only from proven `DownlevelFlags`, conservatively suppressing unknown flags; owner-local known, missing, and unknown tests cover it. |
+| `G4A-CR-004` | Implemented; pending review | `facts.rs` separates `GpuAdapterLimits`, `GpuDeviceLimits`, and `GpuWorkloadBudget`; the admission test proves adapter support, actual device facts, and policy remain distinct. |
+| `G4A-CR-005` | Implemented; pending review | `device_request.rs` requests selected requestable alignments and reads `device.limits()`; `admitted_device_facts` rejects a post-creation alignment mismatch before publication. |
+| `G4A-CR-006` | Implemented; pending review | `device_request.rs::profile_limits` selects a complete named pinned-WGPU profile and tests every profile; pure admission rejects an adapter that cannot satisfy its selected profile. |
+| `G4A-CR-007` | Implemented; pending review | `admission.rs` uses the existing `GpuCapabilityAdmission::evaluate` as the sole required/preferred/disabled feature-strength evaluator. |
+| `G4A-CR-008` | Implemented; pending review | `GpuAdmissionContract` retains capability dispositions, enabled features, degradations, formats, alignments, workload budget, portability, and profile; `GpuAdmittedDeviceFacts` retains the contract plus complete candidate dispositions. |
+| `G4A-CR-009` | Implemented; pending review | `derive_portability` derives explicit evidence from admitted requirements and actual backend facts; baseline, extension, specialization, degradation, and unsupported cases are covered by owner-local tests. |
+| `G4A-CR-010` | Implemented; pending review | `GpuCandidateId` is opaque/nonpersistent and `with_exact_candidate` accepts only an admitted disclosed ID; the ambiguity test proves names do not rank candidates and exact retry is recorded. |
+| `G4A-CR-011` | Implemented; pending review | `selection.rs` returns `NoAdapterAvailable` for an empty observed set and `NoAdmissibleCandidate` with retained complete dispositions for rejection. |
+| `G4A-CR-012` | Implemented; pending review | `engine/tests/gpu_context_admission.rs` permits only typed `NoAdapterAvailable` as an environment absence; semantic, ambiguity, adapter, and device failures are asserted to fail. |
+| `G4A-CR-013` | Implemented; pending review | `identity.rs` owns `GpuContextIdAllocator`; tests use isolated allocators to prove nonzero allocation, uniqueness, and exhaustion without resetting production state. |
+| `G4A-CR-014` | Implemented; pending review | `diagnostics.rs` keeps UTF-8 byte-bounded detail and `Display` includes category, candidate summary, and correction; its test exercises a multibyte boundary. |
+| `G4A-CR-015` | Implemented; pending review | `api/context` and `backend/wgpu` are responsibility-based module trees with public/private roots, owner-local tests, and source guards proving a single private WGPU creation authority without forwarding aliases. |
+
+The corrected implementation preserves private WGPU ownership, deterministic native
+selection, strict fallback routes, deletion of renderer-owned device creation, and the
+accepted G4A/G7 compatibility boundary. G4B and G4C remain blocked pending their
+separate prerequisite work and are not activated by this correction.
+
 ## Final disposition
 
 ### G4A

@@ -1,4 +1,3 @@
-#[path = "wgpu.rs"]
-mod native;
+mod wgpu;
 
-pub(crate) use native::*;
+pub(crate) use wgpu::{WgpuContextState, request_headless};

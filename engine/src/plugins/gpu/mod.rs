@@ -60,10 +60,12 @@ mod tests {
         paths.sort();
         paths.dedup();
         let raw_backend_token = ["wgpu", "::"].concat();
+        let private_wgpu_backend_root = root.join("backend/wgpu");
 
         for path in paths {
             let source = fs::read_to_string(&path).expect("GPU boundary source should be readable");
-            let private_wgpu_backend = path.ends_with("backend/wgpu.rs");
+            let private_wgpu_backend =
+                path.starts_with(&private_wgpu_backend_root) || path == root.join("backend/mod.rs");
             for line in source.lines().filter(|line| {
                 let trimmed = line.trim_start();
                 !trimmed.starts_with("//") && !trimmed.starts_with('*')
@@ -85,12 +87,14 @@ mod tests {
     fn g4a_keeps_wgpu_authority_private_and_retired_renderer_authority_deleted() {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let gpu_root = manifest.join("src/plugins/gpu");
-        let backend = gpu_root.join("backend/wgpu.rs");
+        let backend = gpu_root.join("backend/wgpu");
+        let backend_root = backend.join("mod.rs");
+        let current_host = backend.join("current_host.rs");
         let wgpu_context = manifest.join("src/plugins/render/backend/wgpu_ctx.rs");
         let renderer_root = manifest.join("src/plugins/render");
 
         assert!(
-            backend.exists(),
+            backend_root.exists(),
             "G4A must retain exactly one private WGPU owner"
         );
         assert!(
@@ -102,8 +106,16 @@ mod tests {
 
         let context_source =
             fs::read_to_string(wgpu_context).expect("current host terminal should be readable");
-        let backend_source =
-            fs::read_to_string(&backend).expect("private WGPU backend should be readable");
+        let current_host_source =
+            fs::read_to_string(&current_host).expect("current-host bridge should be readable");
+        let mut backend_paths = Vec::new();
+        rust_sources_below(&backend, &mut backend_paths);
+        backend_paths.sort();
+        let backend_source = backend_paths
+            .iter()
+            .map(|path| fs::read_to_string(path).expect("private WGPU backend should be readable"))
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(
             !context_source.contains("pub device") && !context_source.contains("pub queue"),
             "WgpuCtx must not restore public device or queue authority"
@@ -131,15 +143,15 @@ mod tests {
             1,
             "G4A must retain exactly one bounded current-host bridge type"
         );
-        let bridge_definition = backend_source
+        let bridge_definition = current_host_source
             .split("struct CurrentHostSurfaceBridge")
             .nth(1)
             .and_then(|source| source.split("impl<'a> CurrentHostSurfaceBridge").next())
             .expect("current-host bridge definition should be present");
-        let bridge_implementation = backend_source
+        let bridge_implementation = current_host_source
             .split("impl<'a> CurrentHostSurfaceBridge")
             .nth(1)
-            .and_then(|source| source.split("#[cfg(not(target_arch = \"wasm32\"))]").next())
+            .and_then(|source| source.split("impl GpuContext").next())
             .expect("current-host bridge implementation should be present");
         assert!(
             !bridge_definition.contains("pub"),
@@ -177,6 +189,27 @@ mod tests {
                 && context_source.contains("get_current_texture"),
             "WgpuCtx must retain surface/configuration ownership and acquisition"
         );
+
+        let source_root = manifest.join("src");
+        let mut source_paths = Vec::new();
+        rust_sources_below(&source_root, &mut source_paths);
+        let creation_tokens = [
+            ["Instance", "::new(&InstanceDescriptor"].concat(),
+            ["request", "_adapter(&RequestAdapterOptions"].concat(),
+            ["request", "_device(&DeviceDescriptor"].concat(),
+        ];
+        for path in source_paths {
+            let source = fs::read_to_string(&path).expect("source should be readable");
+            for creation in &creation_tokens {
+                if source.contains(creation) {
+                    assert!(
+                        path.starts_with(&backend),
+                        "replaced instance/adapter/device creation escaped the private RunenGPU owner: {}",
+                        path.display()
+                    );
+                }
+            }
+        }
 
         let mut render_sources = Vec::new();
         rust_sources_below(&renderer_root, &mut render_sources);

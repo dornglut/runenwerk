@@ -32,13 +32,28 @@ fn headless_context_admission_reports_a_real_context_or_a_strict_environment_out
                     .supported()
                     .supports(GpuCapabilityFeature::Copy)
             );
+            assert!(
+                !context
+                    .adapter_facts()
+                    .supported()
+                    .supports(GpuCapabilityFeature::Presentation),
+                "headless admission must not claim surface presentation without surface evidence"
+            );
             assert_eq!(
                 context.adapter_facts(),
                 context.admission_report().candidate().adapter()
             );
             assert_eq!(
-                context.device_facts().effective_limits(),
-                context.admission_report().candidate().effective_limits()
+                context.device_facts().workload_budget(),
+                context.admission_report().candidate().workload_budget()
+            );
+            assert_eq!(
+                context.device_facts().admission_contract(),
+                context.admission_report().candidate().contract()
+            );
+            assert_eq!(
+                context.device_facts().candidate_dispositions(),
+                context.admission_report().candidate_dispositions()
             );
             assert_eq!(
                 context.admission_report().selection_kind(),
@@ -59,7 +74,6 @@ fn headless_context_admission_reports_a_real_context_or_a_strict_environment_out
             let rank = context.admission_report().selection_evidence().rank();
             assert_eq!(rank.vendor(), selected.vendor());
             assert_eq!(rank.device(), selected.device());
-            assert_eq!(rank.diagnostic_name(), selected.diagnostic_name());
             assert_eq!(
                 rank.fallback_priority(),
                 match selected.fallback() {
@@ -69,11 +83,30 @@ fn headless_context_admission_reports_a_real_context_or_a_strict_environment_out
                 }
             );
         }
-        Err(error) if error.category() == GpuContextRequestErrorCategory::NoCandidate => {}
-        Err(error) => panic!(
-            "unexpected native GPU context admission failure: {:?}: {:?}",
-            error.category(),
-            error.detail()
-        ),
+        Err(error) if accepts_environment_absence(error.category()) => {}
+        Err(error) => panic!("unexpected native GPU context admission failure: {error}"),
+    }
+}
+
+const fn accepts_environment_absence(category: GpuContextRequestErrorCategory) -> bool {
+    matches!(category, GpuContextRequestErrorCategory::NoAdapterAvailable)
+}
+
+#[test]
+fn strict_environment_contract_rejects_backend_and_device_failures() {
+    assert!(accepts_environment_absence(
+        GpuContextRequestErrorCategory::NoAdapterAvailable
+    ));
+    for category in [
+        GpuContextRequestErrorCategory::NoAdmissibleCandidate,
+        GpuContextRequestErrorCategory::AmbiguousAdapterSelection,
+        GpuContextRequestErrorCategory::BackendAdapterRequestFailure,
+        GpuContextRequestErrorCategory::BackendDeviceRequestFailure,
+        GpuContextRequestErrorCategory::MandatoryFeatureMissing,
+    ] {
+        assert!(
+            !accepts_environment_absence(category),
+            "{category:?} must fail this environment-dependent proof"
+        );
     }
 }

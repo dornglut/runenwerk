@@ -357,6 +357,8 @@ impl GpuCapabilities {
         self.features.contains(&feature)
     }
 
+    /// Generic logical capability limits. G4A additionally exposes typed adapter,
+    /// device, and workload facts so this value is never published as device truth.
     pub const fn limits(&self) -> GpuLimits {
         self.limits
     }
