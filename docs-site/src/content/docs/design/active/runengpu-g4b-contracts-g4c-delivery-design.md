@@ -1,6 +1,6 @@
 ---
 title: RunenGPU G4B Contracts and G4C Delivery Design
-description: Final ownership and delivery boundaries for source admission, shader-resource interfaces, mandatory WGSL agreement, and ordered WGPU realization.
+description: Final ownership and delivery boundaries for source admission, shader-resource and stage-IO compatibility, and ordered WGPU realization.
 status: active
 owner: gpu
 layer: framework/gpu
@@ -26,39 +26,39 @@ related_docs:
 
 ## Status and authority
 
-This design is the focused correction authorized by issue `#209` after accepted G4A
-and the accepted shader-authoring boundary:
+This focused design is authorized by issue `#209` after accepted G4A and the accepted
+shader-authoring boundary:
 
 ```text
 G4A accepted             501b9fd58e56d33708573e47faf0e5026b5a1ff2
 shader boundary accepted 23bc982703f93d15ac39dd71d61bae9e23854141
 ```
 
-It narrows and supersedes only the conflicting G4B interface/reflection/source-owner
-and G4C delivery details in the earlier G4 umbrella design. The earlier design remains
-authoritative for the broader G4 mission, G4A ownership, private WGPU direction,
-G5/G7 exclusions, and RunenRender boundary.
+It narrows and supersedes only the conflicting G4B interface, reflection,
+source-consistency, stage-IO, and G4C delivery details in the earlier G4 umbrella
+design. The earlier design remains authoritative for the broader G4 mission, G4A
+ownership, private WGPU direction, G5/G7 exclusions, and RunenRender boundary.
 
 The implementation specifications own exact phase requirements. GitHub issues own live
 activation and delivery. This document owns the durable architectural explanation.
 
-## Problem corrected
+## Problems corrected
 
-The accepted G4 direction was sound, but four G4B decisions and one G4C delivery
-boundary remained unsafe:
+The accepted direction was sound, but implementation was unsafe in six places:
 
 1. Shader-visible resource bindings were mixed with vertex-buffer and color-target
    pipeline state.
-2. Reflection was described as optional even though explicit declarations require
-   proof against the actual canonical WGSL accepted by the pinned backend.
-3. `SourceRevisionConflict` existed without a stateful owner capable of enforcing it
-   across admissions.
-4. The public authoring path was described conceptually but not proven through concrete
-   compute and render construction shapes.
-5. Resource realization, WGSL/layout/bind-group realization, pipeline realization,
-   migration, and deletion were combined into one broad G4C delivery.
+2. Reflection was optional even though canonical WGSL must agree with explicit
+   declarations.
+3. `SourceRevisionConflict` had no stateful owner.
+4. Public compute/render construction was not concrete enough to constrain ergonomics.
+5. Reflected vertex inputs and fragment outputs were not carried into later pipeline
+   compatibility after separating them from the resource interface.
+6. Resource, program/binding, and pipeline cutover were split without a viable
+   intermediate path for current consumers.
 
-The correction keeps one architecture while separating ownership and delivery.
+The correction keeps one architecture while separating semantic ownership, backend
+realization, and serialized migration.
 
 # Final ownership model
 
@@ -69,14 +69,14 @@ Runenwerk owns:
 - source roots and filesystem paths;
 - direct WGSL, WESL, Slang, or future authoring-language policy;
 - compiler pinning and normalized options;
-- module/dependency discovery;
+- module and dependency discovery;
 - deterministic canonical WGSL production;
 - source maps and authoring diagnostics;
 - file watching and reload scheduling;
-- atomic publication and last-known-good product fallback;
+- atomic artifact publication and last-known-good product fallback;
 - persisted artifact and reproducibility policy.
 
-None of these concerns enters the future-transferable RunenGPU public contract.
+None of those concerns enters the future-transferable RunenGPU public contract.
 
 ## Consumers own semantic meaning
 
@@ -96,12 +96,13 @@ G4B owns:
 source owner + source key + source revision + full canonical WGSL
 entry-point names and stages
 shader-visible resource interfaces
+normalized shader-stage-IO compatibility vocabulary
 binding keys and declarations
 bind-group and pipeline-layout descriptors
 specialization schemas and values
 compute and render pipeline descriptors
-runtime binding compatibility vocabulary
-mandatory interface-agreement comparison
+runtime binding compatibility
+mandatory resource-interface and stage-IO comparison algorithms
 ```
 
 G4B creates no WGPU object.
@@ -123,7 +124,7 @@ receive opaque typed handles only.
 
 ## Identity
 
-A source is identified by:
+An admitted source record contains:
 
 ```text
 GpuProgramSourceOwnerId
@@ -142,7 +143,7 @@ or backend handle.
 The full canonical WGSL bytes remain authoritative. The digest accelerates lookup and
 diagnostics but cannot authorize equality alone.
 
-## Stateful owner
+## Stateful consistency owner
 
 `GpuProgramSourceRegistry` is the one stateful G4B owner of source consistency.
 
@@ -152,19 +153,19 @@ It provides these semantics:
 - equal owner/key/revision with different canonical WGSL is
   `SourceRevisionConflict`;
 - a different revision is a distinct admitted record;
-- admitting a new revision does not silently invalidate descriptors or realizations
-  bound to an older revision;
-- capacity and retained-source bytes are explicitly bounded;
+- a new revision does not silently invalidate descriptors or realizations bound to an
+  older revision;
+- maximum records and retained source bytes are explicit;
 - pressure is structured and cannot silently evict live authority;
 - publication is transactional;
 - no consumer callback executes under registry locks.
 
-Runenwerk may choose capacity policy when creating the registry. Runenwerk does not
-become the source-consistency implementation owner.
+Runenwerk may choose registry capacity policy. It does not become the
+source-consistency implementation owner.
 
-# Shader-resource interface boundary
+# Resource-interface and stage-IO boundaries
 
-## Interface owns bindings only
+## Program interface owns resource bindings only
 
 `GpuProgramInterfaceDescriptor` owns shader-visible resource declarations:
 
@@ -189,8 +190,7 @@ The render pipeline descriptor owns:
 - vertex or instance step mode.
 
 These values describe how host buffers feed one pipeline invocation. They are not
-shader-resource bindings and do not belong in bind groups or the program resource
-interface.
+shader-resource bindings.
 
 ## Render output state remains pipeline state
 
@@ -203,22 +203,46 @@ The render pipeline descriptor also owns:
 - multisample state;
 - primitive and other accepted graphics state.
 
-Fragment output declarations in WGSL must agree with the selected entry point and
-pipeline state, but color-target attachment policy is not part of the shader-resource
-interface.
+Color-target attachment policy is not part of the shader-resource interface.
 
-This separation avoids two failures:
+## Shader-stage IO remains mandatory compatibility evidence
 
-- one program interface being needlessly split by different vertex-buffer or target
-  configurations;
-- resource-binding compatibility becoming contaminated with renderer attachment
-  semantics.
+Separating pipeline state from the resource interface must not weaken proof that the
+selected WGSL entry points and pipeline state agree.
+
+G4B therefore owns normalized observed-signature vocabulary and comparison algorithms:
+
+```text
+GpuObservedVertexInputSignature
+    entry point
+    unique user shader locations
+    normalized scalar/vector classes
+    builtins kept separate
+
+GpuObservedFragmentOutputSignature
+    entry point
+    unique user color locations
+    normalized scalar/vector classes
+    builtins kept separate
+```
+
+G4C2 invokes the pinned WGPU/Naga path, normalizes those signatures, and retains them
+with the realized program record. G4C3 compares:
+
+- the selected vertex signature against explicit vertex attributes;
+- the selected fragment signature against ordered color-target format classes.
+
+Buffer slots, offsets, strides, step modes, blend state, and write masks remain explicit
+pipeline policy and are not inferred from reflection.
+
+Missing, duplicate, extra, location-mismatched, or incompatible scalar/vector facts are
+`PipelineStageIoMismatch` before backend pipeline creation.
 
 # Mandatory canonical WGSL agreement
 
 ## Explicit declarations remain authority
 
-RunenGPU does not infer its public interface from reflection. The explicit typed
+RunenGPU does not infer its public interface from reflection. Explicit typed
 declarations remain authoritative because they provide stable framework-facing
 meaning, deterministic construction, structured diagnostics, and backend-neutral
 validation.
@@ -232,31 +256,33 @@ observe and normalize:
 - groups and bindings;
 - stage visibility;
 - resource classes and access;
-- texture dimensions, sample/storage facts and multisample state;
+- texture dimensions, sample/storage facts, and multisample state;
 - array cardinality;
-- applicable host-layout facts.
-
-Those observed facts are compared against the explicit G4B declarations.
+- applicable host-layout facts;
+- vertex-input and fragment-output signatures.
 
 The division of responsibility is exact:
 
 ```text
 G4B
-    owns expected facts
-    owns normalized comparison vocabulary
-    owns the single deterministic comparison algorithm
+    owns expected resource facts
+    owns resource and stage-IO comparison vocabulary
+    owns deterministic comparison algorithms
 
 G4C2
     invokes pinned WGSL/WGPU/Naga parsing and reflection
-    normalizes observed facts
-    supplies them to the G4B comparison
+    normalizes observed resource and stage-IO facts
+    proves resource-interface agreement
+    retains observed stage-IO signatures
+
+G4C3
+    compares retained stage-IO signatures to complete render pipeline state
 ```
 
-There is no second validator with different semantics.
-
 Reflection may reject disagreement and improve source-span diagnostics. It may not
-renumber, add, remove, infer, or mutate authoritative declarations. A disagreement is a
-structured `ProgramInterfaceMismatch`, not a fallback to inferred layouts.
+renumber, add, remove, infer, or mutate authoritative declarations or pipeline policy.
+Resource disagreement is `ProgramInterfaceMismatch`; stage-IO disagreement is
+`PipelineStageIoMismatch`.
 
 # Public construction shape
 
@@ -288,8 +314,8 @@ let pipeline = GpuComputePipelineDescriptor::builder(program, "scan")
     .build()?;
 ```
 
-Exact names may change during implementation, but the contract must preserve one
-bounded fallible terminal per semantic object and no raw WGPU.
+Exact names may change during implementation, but the contract preserves one bounded
+fallible terminal per semantic object and no raw WGPU.
 
 ## Render shape
 
@@ -312,16 +338,65 @@ let pipeline = GpuRenderPipelineDescriptor::builder(program, "vs_main")
     .build()?;
 ```
 
-Vertex-buffer input and color-target output state remain visibly separate from the
-resource interface.
+Vertex-buffer input and color-target output remain visibly separate from the resource
+interface and are checked against observed stage-IO signatures during G4C3.
 
-## Compatibility shape
+## Runtime binding shape
 
 Prepared bytes and logical resources become eligible for G4C2 bind-group realization
-only after explicit compatibility validation against the accepted resource interface.
-Current derives may prepare bytes; they do not prove compatibility.
+only after compatibility validation against the accepted resource interface. Current
+derives may prepare bytes; they do not prove compatibility.
 
 # Ordered G4C delivery
+
+## Why bridges are required
+
+A clean type-by-type cutover cannot assume that all downstream current consumers vanish
+at once:
+
+- after G4C1 owns resources, current renderer bind-group and pipeline creation still
+  needs those private resource objects until G4C2 replaces binding realization;
+- after G4C2 owns modules, layouts, and bind groups, current pipeline creation still
+  needs private program/layout objects until G4C3 replaces pipeline realization;
+- after G4C3 owns pipelines, current command encoding still needs private realized
+  objects until G5 replaces execution ownership.
+
+Leaving the old registries authoritative would create parallel authority. Exposing raw
+objects publicly would violate containment. The solution is a serialized successor
+bridge ladder.
+
+## Serialized successor bridge ladder
+
+```text
+G4C1
+    CurrentRenderResourceBridge
+        deleted by G4C2
+
+G4C2
+    CurrentRenderPipelineBridge
+        deleted by G4C3
+
+G4C3
+    CurrentRenderExecutionBridge
+        deleted by G5
+```
+
+Rules common to all bridges:
+
+- crate-private and process-local;
+- exactly one successor bridge remains at an accepted boundary;
+- the predecessor bridge is deleted before the successor bridge is accepted;
+- accepts only validated opaque handles;
+- repeats exact context, generation, and kind checks;
+- narrowly typed to audited current call sites;
+- no public accessor, `Deref`, `AsRef`, reusable raw handle, generic raw-WGPU callback,
+  arbitrary consumer closure, or broad `Device`/`Queue` access;
+- borrowed backend values cannot be stored, cloned into ownership, cached, returned,
+  persisted, or used as identity/lookup authority;
+- owns no semantic, descriptor, access, hazard, cache, execution, progress, completion,
+  or lifecycle truth;
+- source guards enumerate its exact call sites and reject a second bridge;
+- immediate successor owns deletion.
 
 ## G4C1 — resource realization
 
@@ -333,25 +408,30 @@ G4C1 owns private realization of:
 - samplers;
 - query sets.
 
-It also owns exact affinity checks, transactional resource registries, complete resource
-cache compatibility, migration of resource creation/lookup consumers, and deletion of
-fully replaced renderer-owned resource authority.
+It owns exact affinity checks, transactional resource registries, resource cache
+compatibility, migration of resource creation and ownership, and deletion of replaced
+renderer resource registries.
 
-G4C1 does not parse WGSL or create modules, layouts, bind groups, or pipelines.
+It leaves only `CurrentRenderResourceBridge` for existing renderer realization call
+sites. It does not parse WGSL or create modules, layouts, bind groups, or pipelines.
 
 ## G4C2 — program and binding realization
 
 G4C2 owns:
 
 - canonical WGSL module creation;
-- mandatory parser/reflection agreement;
+- mandatory resource-interface agreement;
+- normalized observed stage-IO signatures;
 - bind-group layouts;
 - pipeline layouts;
 - typed bind groups;
 - their private registries and caches.
 
-It consumes accepted G4C1 resource handles. It does not create compute or render
-pipelines and does not perform the final renderer-wide cutover.
+It consumes accepted G4C1 resource handles, migrates all resource-bridge consumers to
+typed bind-group realization, and deletes `CurrentRenderResourceBridge`.
+
+It leaves only `CurrentRenderPipelineBridge` for audited current compute/render pipeline
+creation. It does not own pipeline realization or final cutover.
 
 ## G4C3 — pipeline realization and final cutover
 
@@ -359,15 +439,15 @@ G4C3 owns:
 
 - compute pipeline realization;
 - render pipeline realization;
+- stage-IO compatibility;
 - complete pipeline cache keys;
-- migration of every remaining current realization consumer;
+- migration of every remaining realization consumer;
 - deletion of renderer-owned program/layout/bind-group/pipeline cache authority;
-- deletion of synthetic handles and G4-owned sidecar truth;
-- reduction of raw Device/Queue reach-through to one named scoped G5 bridge.
+- deletion of synthetic handles and G4-owned sidecar truth.
 
-The bridge can lend already validated private references only while current execution
-encodes accepted work. It cannot store, clone, cache, return, expose, or treat those
-references as authority. G5 owns bridge deletion.
+It migrates every pipeline-bridge call site and deletes `CurrentRenderPipelineBridge`.
+It leaves only `CurrentRenderExecutionBridge` for current command encoding. G5 owns
+that bridge's deletion.
 
 # Delivery and acceptance rules
 
@@ -375,14 +455,16 @@ Each child requires:
 
 1. one explicit issue activated from exact accepted `main`;
 2. one branch and one pull request;
-3. exact current-main consumer and deletion census;
+3. exact current-main consumer, raw-reach-through, bridge-call-site, and deletion census;
 4. focused deterministic and environment-dependent proof;
 5. complete migration of authority owned by that child;
-6. deletion of fully replaced authority without aliases or parallel paths;
-7. `cargo validate`, `git diff --check`, and the production docs build;
-8. repository-owned exact-head CI and Documentation Build;
-9. independent complete-diff review;
-10. accepted merge before the successor activates.
+6. deletion of fully replaced authority and predecessor bridge without aliases or
+   parallel paths;
+7. source guards proving the successor bridge's exact call sites and uniqueness;
+8. `cargo validate`, `git diff --check`, and the production docs build;
+9. repository-owned exact-head CI and Documentation Build;
+10. independent complete-diff review;
+11. accepted merge before the successor activates.
 
 Issue `#188` remains the G4C umbrella. It is not directly implemented.
 
@@ -397,6 +479,7 @@ This correction does not authorize:
 - inferred WGPU layout authority;
 - stable source, ABI, cache, capture, persistence, replay, wire, or cross-process handle
   formats;
+- overlapping migration bridges or a generic raw-WGPU callback;
 - G5 execution ownership;
 - G7 surfaces, presentation, replacement, loss, or reconstruction;
 - RunenRender image-formation implementation;
@@ -412,8 +495,11 @@ Stop and require another architecture decision when:
   renderer semantic identity;
 - mandatory WGSL agreement would require reflection to become sole authority;
 - source consistency cannot remain bounded and process-local;
-- a G4C child cannot delete the authority it fully replaces in the same slice;
-- correct implementation requires a second raw-WGPU bridge;
+- stage-IO compatibility cannot be expressed without moving vertex or target policy
+  into the resource interface;
+- a child cannot delete the authority or predecessor bridge it fully replaces;
+- correct implementation requires overlapping bridges, a broad callback, or public raw
+  backend access;
 - one child must consume an unmerged predecessor branch;
 - a stable persisted or public backend format becomes necessary;
 - implementation crosses into G5, G7, RunenRender, or extraction ownership.
