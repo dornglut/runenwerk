@@ -1,0 +1,197 @@
+// Decision-complete implementation specification for RunenGPU G4C2.
+// G4C2 starts only after accepted G4C1 and an explicitly activated child issue.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENGPU-G4C2",
+    title: "Program, Layout, and Binding Realization",
+    lifecycle_state: "planned-blocked",
+    implementation_authorization_status: "blocked-until-accepted-g4c1-and-explicit-g4c2-issue",
+    owner: "RunenGPU program and binding realization owner",
+    source_baseline: "accepted-g4c1-merge-to-be-recorded-by-g4c2-issue",
+    planning_issue: "dornglut/runenwerk#209",
+    implementation_issue: "pending-after-accepted-g4c1",
+    umbrella_issue: "dornglut/runenwerk#188",
+    parent_issue: "dornglut/runenwerk#167",
+    blocking_predecessor: "PT-RUNENGPU-G4C1",
+    successor: "PT-RUNENGPU-G4C3",
+
+    authority_docs: [
+        "AGENTS.md",
+        "TESTING.md",
+        "ARCHITECTURE.md",
+        "docs-site/src/content/docs/design/active/runengpu-shader-authoring-artifact-boundary.md",
+        "docs-site/src/content/docs/design/active/runengpu-g4b-contracts-g4c-delivery-design.md",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4b-program-interface-layout.ron",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c-wgpu-realization-cutover.ron",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c1-resource-realization.ron",
+    ],
+
+    goal: "Create one private context/device-generation-bound WGPU authority for canonical WGSL modules, mandatory parser/reflection agreement, bind-group layouts, pipeline layouts, typed bind groups, and their correctness-complete in-memory caches using accepted G4B contracts and accepted G4C1 resources, without realizing compute/render pipelines or performing final renderer cutover.",
+
+    dependency_direction: [
+        "Accepted G4B admitted source records, entry points, resource interfaces, and layouts -> G4C2 private WGSL and binding realization.",
+        "Accepted G4C1 opaque resources -> G4C2 runtime binding compatibility and typed bind groups.",
+        "Accepted G4C2 program/layout/bind-group realizations -> G4C3 compute/render pipeline realization.",
+    ],
+
+    realized_handle_contracts: [
+        "Opaque Clone non-Copy handles cover realized programs/modules, bind-group layouts, pipeline layouts, and bind groups.",
+        "Every handle retains GpuContextAffinity and complete admitted descriptor identity for typed inspection.",
+        "Handles expose no raw WGPU object, Naga IR, backend module output, pointer, callback escape hatch, persistence identity, or wire identity.",
+        "Bind-group handles retain exact layout identity and ordered realized binding values.",
+    ],
+
+    wgsl_realization_contract: [
+        "Consume only canonical WGSL admitted through the accepted G4B source registry.",
+        "Reject unknown, evicted-without-live-reference, foreign-owner, or source-revision-conflicting records before backend creation.",
+        "Create the private WGPU shader module only after source identity, entry-point declarations, requirements, and expected resource interface are validated.",
+        "Naga IR and backend-native outputs remain private ephemeral implementation facts and never become public identity, cache, persistence, replay, or wire formats.",
+        "Backend module creation failure publishes no authoritative realization or cache entry.",
+    ],
+
+    mandatory_reflection_agreement: [
+        "Invoke the pinned WGPU/Naga WGSL parser/reflection path for every canonical source before module publication.",
+        "Normalize observed entry-point names and stages, group/binding identities, stage visibility, resource classes, access, dimensions, sample/storage format facts, array cardinality, and applicable host-layout facts into the G4B comparison vocabulary.",
+        "Use the single G4B comparison algorithm to prove observed facts equal the explicit authoritative declarations.",
+        "Reject missing, additional, renumbered, stage-mismatched, type-mismatched, visibility-mismatched, shape-mismatched, or layout-incompatible facts as ProgramInterfaceMismatch.",
+        "Reflection may improve source-span diagnostics but may not mutate, infer, renumber, add, or remove authoritative declarations.",
+        "ProgramInterfaceMismatch is terminal for that realization request and cannot fall back to inferred WGPU layouts.",
+    ],
+
+    layout_realization_contract: [
+        "Realize bind-group layouts only from accepted complete GpuBindGroupLayoutDescriptor values.",
+        "Realize pipeline layouts only from accepted ordered unique group-layout descriptors.",
+        "Do not use WGPU automatic layout inference or shader reflection as layout authority.",
+        "Validate relevant admitted features, limits, dynamic-offset constraints, array cardinality, storage texture formats, and sampler/texture compatibility before backend creation.",
+        "Equal complete descriptors may reuse one cache-backed layout realization within one context/generation.",
+    ],
+
+    typed_bind_group_contract: [
+        "A bind-group request names one accepted realized layout and supplies ordered typed binding values.",
+        "Each value references accepted G4C1 resource handles or complete inline sampler semantics where the accepted API permits it.",
+        "Validate exact resource kind, usage, range, minimum size, dynamic-offset policy and alignment, texture view/format/sample/multisample facts, storage access, sampler class, array cardinality, and context/device-generation affinity before backend creation.",
+        "Reject unknown, duplicate, missing, extra, foreign, stale, or incompatible values with structured binding diagnostics.",
+        "Backend bind-group creation is transactional and publishes no partial authoritative entry.",
+    ],
+
+    validation_order: [
+        "Validate admitted source record and exact context affinity.",
+        "Reject stale device generation.",
+        "Validate expected program resource interface and declared entry points.",
+        "Parse or validate canonical WGSL and normalize observed reflection facts.",
+        "Run the single mandatory interface-agreement comparison.",
+        "Validate complete layout descriptors against admitted device facts.",
+        "Validate typed runtime binding values against the accepted interface and G4C1 realizations.",
+        "Look up complete typed cache keys and compare full equality.",
+        "Create private WGPU objects only after deterministic checks pass.",
+        "Publish registry entries transactionally only after backend creation succeeds.",
+    ],
+
+    registry_invariants: [
+        "Separate private registries own program/module, bind-group-layout, pipeline-layout, bind-group, and cache-diagnostic records.",
+        "Each registry instance is scoped to exactly one GpuContextId and GpuDeviceGeneration.",
+        "Each program entry retains the admitted source record, complete explicit interface, normalized observed reflection facts, and bounded diagnostics/provenance.",
+        "Each layout and bind-group entry retains its complete typed descriptor and exact dependency identities.",
+        "Equal duplicate requests return the same realization record; changed descriptors do not replace accepted identities.",
+        "Hash collisions cannot authorize reuse because full equality follows hashing.",
+        "No consumer callback executes under registry locks and no failure publishes partial state.",
+    ],
+
+    cache_key_contracts: [
+        "Program keys include context identity, device generation, source owner/key/revision, full canonical WGSL identity and digest, entry-point declarations, complete expected interface, normalized observed reflection facts, admitted requirements, and pinned WGPU/backend compatibility revision.",
+        "Bind-group-layout keys include context affinity, complete group descriptor, relevant admitted features/limits, and internal descriptor compatibility revision.",
+        "Pipeline-layout keys include context affinity, ordered complete group-layout identities, relevant admitted features/limits, and internal descriptor compatibility revision.",
+        "Bind-group keys include context affinity, complete layout identity, ordered typed values, complete G4C1 realization identities/ranges/generations, and relevant admitted facts.",
+        "Labels, filesystem paths, authoring compiler handles, source maps, renderer IDs, WGPU object addresses, and naked hashes are excluded.",
+    ],
+
+    cache_behavior: [
+        "Initial caches are in-memory, derived, discardable, reconstructable, and scoped to one context/device generation.",
+        "Full match returns an existing realization and emits Hit.",
+        "Absent entry creates ordinarily and emits Miss.",
+        "Incompatible derived entry emits Rejected and follows ordinary realization after discard or quarantine.",
+        "Parser/reflection disagreement is a semantic rejection, not a cache miss or fallback.",
+        "Backend creation failure emits RealizationFailed and publishes no authoritative entry.",
+        "No persisted module, layout, bind-group, Naga IR, backend output, or cross-process handle format is authorized.",
+    ],
+
+    current_consumer_migration: [
+        "Repeat the exact-current-main census for shader-module, binding-layout, pipeline-layout, bind-group, runtime-binding, parameter-byte, sidecar, renderer setup, material, UI, example, bench, and test consumers.",
+        "Migrate explicit program/interface/layout/bind-group realization through the G4C2 owner while retaining filesystem/watch/reload/LKG policy in Runenwerk and semantic shader meaning in RunenRender or other consumers.",
+        "Classify compute/render pipeline realization and final renderer cutover explicitly for G4C3 rather than changing them here.",
+        "Preserve existing G5 command encoding and G7 surface behavior as migration evidence only.",
+    ],
+
+    delete_after_migration: [
+        "Renderer-owned WGPU shader-module, bind-group-layout, pipeline-layout, and bind-group registries or caches fully replaced by G4C2.",
+        "Automatic or inferred WGPU layout authority.",
+        "Program/interface/layout/bind-group keys based only on strings, paths, TypeId, renderer IDs, labels, or naked hashes.",
+        "Parallel WGSL module or runtime binding realization paths outside the RunenGPU owner.",
+        "G4C2-owned program, interface, layout, binding, reflection, and cache truth in the temporary G3 execution sidecar.",
+    ],
+
+    structured_failures: [
+        "ForeignContext",
+        "StaleDeviceGeneration",
+        "UnknownAdmittedSource",
+        "SourceRevisionConflict",
+        "WgslParseOrValidationFailed",
+        "ProgramInterfaceMismatch",
+        "UnknownLayout",
+        "LayoutDescriptorInvalid",
+        "RuntimeBindingIncompatible",
+        "BindingValueMismatch",
+        "RegistryCapacityExceeded",
+        "CacheRejected",
+        "BackendProgramOrBindingRealizationFailure",
+    ],
+
+    deterministic_tests: [
+        "Foreign-context and stale-generation rejection precede backend access and cache-hit success.",
+        "Synthetic observed WGSL facts exercise every mandatory agreement field and exact mismatch category.",
+        "Reflection cannot add, remove, renumber, or mutate authoritative declarations.",
+        "Complete module/layout/bind-group keys are insertion-order-independent and include every correctness field.",
+        "Equal duplicate realization reuses one record; changed descriptor rejects transactionally.",
+        "Typed binding values reject wrong kind, range, size, alignment, format, sample class, access, array cardinality, foreign context, and stale generation.",
+        "Labels, provenance, source maps, and authoring paths do not split equal realizations.",
+        "Source and dependency guards reject renderer/ECS/application/product ownership and public raw WGPU/Naga authority.",
+    ],
+
+    environment_tests: [
+        "Parse and realize one representative canonical WGSL compute program and one representative render program on an admitted device without creating pipelines.",
+        "Prove explicit declarations agree with real pinned WGPU/Naga observed facts.",
+        "Reject one real WGSL/interface mismatch with a structured source-span diagnostic where available.",
+        "Realize representative bind-group and pipeline layouts and one typed bind group using accepted G4C1 resources.",
+        "Prove cache reuse within one context/generation and isolation across another context/generation.",
+    ],
+
+    exclusions: [
+        "No compute or render pipeline realization.",
+        "No final renderer-wide realization/cache cutover beyond module/layout/bind-group authority fully replaced here.",
+        "No authoring compiler, WESL, Slang, HLSL, GLSL, SPIR-V, source discovery, watch, reload scheduling, or last-known-good implementation.",
+        "No G5 execution, submission, progress, readback, cancellation, retirement, delayed destruction, or shutdown redesign.",
+        "No G7 surface, presentation, device replacement, loss, or reconstruction implementation.",
+        "No RunenRender semantics, package extraction, new dependency, stable format, compatibility facade, generated workflow state, inferred layout authority, or raw-WGPU escape hatch.",
+    ],
+
+    validation: [
+        "Focused deterministic and environment-dependent program/layout/binding realization proof.",
+        "Complete current-consumer and deletion census.",
+        "cargo validate",
+        "git diff --check",
+        "CI=true pnpm --dir docs-site build",
+        "Repository-owned exact-head CI and Documentation Build.",
+        "Independent complete-diff review with no unresolved blocking finding.",
+        "All tracked files remain below 131072 raw bytes.",
+    ],
+
+    acceptance: [
+        "One private context/generation-bound WGSL module, layout, and bind-group realization owner exists.",
+        "Every published module has mandatory pinned parser/reflection agreement with the explicit G4B authority.",
+        "Typed layouts and bind groups use accepted G4C1 resource handles and complete compatibility validation.",
+        "Program/layout/bind-group cache keys and outcomes are correctness-complete and structured.",
+        "Every replaced renderer-owned module/layout/bind-group authority is migrated and deleted without aliases or a parallel path.",
+        "Compute/render pipelines and final cutover remain blocked for G4C3.",
+        "Exact-head validation and independent review pass, then G4C3 may be activated from accepted main.",
+    ],
+)
