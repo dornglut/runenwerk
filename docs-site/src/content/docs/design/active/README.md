@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-03
 ---
 
 # Active Designs
@@ -121,6 +121,7 @@ architecture.
 - [RunenGPU Architecture Design](runengpu-architecture-design.md)
 - [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
 - [RunenGPU G4 Context, Program, and WGPU Realization Design](runengpu-g4-context-program-realization-design.md)
+- [RunenGPU Shader Authoring and Canonical WGSL Artifact Boundary](runengpu-shader-authoring-artifact-boundary.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 - [Runen Family Operational Hardening Design](runen-family-operational-hardening-design.md)
