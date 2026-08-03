@@ -21,6 +21,7 @@ pub enum GpuProgramContractCause {
     SpecializationUnknownMissingOrTypeMismatch,
     SpecializationRequirementConflict,
     SpecializationOverridesUnsupported,
+    PipelineDescriptorInvalid,
     InvalidDiagnosticMetadata,
 }
 
