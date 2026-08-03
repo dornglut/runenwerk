@@ -29,19 +29,19 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/planning/active-work.md",
     ],
 
-    goal: "Create one explicit WGSL-first RunenGPU authority for source admission, program and entry-point descriptors, shader-visible resource interfaces, typed binding declarations, bind-group and pipeline layouts, specialization, and deterministic compute/render pipeline descriptors; prove understandable public construction and rejection without realizing WGPU objects or granting renderer helpers ABI authority.",
+    goal: "Create one explicit WGSL-first RunenGPU authority for source admission, program and entry-point descriptors, shader-visible resource interfaces, typed binding declarations, separate shader-stage IO compatibility, bind-group and pipeline layouts, specialization, and deterministic compute/render pipeline descriptors; prove understandable public construction and rejection without realizing WGPU objects or granting renderer helpers ABI authority.",
 
     dependency_direction: [
         "Runenwerk source policy or a domain/renderer consumer supplies canonical WGSL artifacts and owner-local source identity to RunenGPU.",
-        "RunenGPU validates generic program, resource-interface, layout, specialization, and pipeline contracts independently of filesystem, renderer, ECS, application, and product semantics.",
-        "PT-RUNENGPU-G4C2 consumes accepted program/interface contracts for private WGSL module and binding realization.",
-        "PT-RUNENGPU-G4C3 consumes accepted pipeline descriptors for private WGPU pipeline realization and cutover.",
+        "RunenGPU validates generic program, resource-interface, shader-stage-IO, layout, specialization, and pipeline contracts independently of filesystem, renderer, ECS, application, and product semantics.",
+        "PT-RUNENGPU-G4C2 consumes accepted program/interface contracts for private WGSL module and binding realization and records normalized observed stage IO.",
+        "PT-RUNENGPU-G4C3 consumes accepted pipeline descriptors plus observed stage IO for private WGPU pipeline realization and cutover.",
     ],
 
     phase_ownership: [
         "G4A remains authoritative for context identity, device generation, adapter/device admission, normalized backend facts, and admitted requirements.",
-        "G4B owns canonical program-source admission, entry-point contracts, shader-visible resource interfaces, typed binding identity, deterministic layout/specialization descriptors, and generic compute/render pipeline descriptors.",
-        "G4C1 owns resource realization; G4C2 owns WGSL module, reflection agreement, layouts, and bind groups; G4C3 owns pipeline realization and final consumer cutover.",
+        "G4B owns program source identity, entry-point contracts, shader-visible resource interfaces, shader-stage-IO comparison vocabulary, typed binding identity, layouts, specialization, and generic pipeline descriptors.",
+        "G4C1 owns resource realization; G4C2 owns WGSL module, reflection agreement, normalized observed stage IO, layouts, and bind groups; G4C3 owns pipeline-stage-IO agreement, pipeline realization, and final consumer cutover.",
         "G5 owns execution and submission; G7 owns surfaces; RunenRender owns image-formation semantics; Runenwerk owns source discovery, authoring compilers, watching, reload scheduling, last-known-good artifacts, and product fallback.",
     ],
 
@@ -104,14 +104,26 @@ PhaseImplementationSpec(
         "The explicit interface is authoritative and cannot contain renderer flow, pass, material, view, target alias, lighting, or product identity.",
     ],
 
+    shader_stage_io_contract: [
+        "Shader-stage IO compatibility is separate from GpuProgramInterfaceDescriptor and from shader-resource binding compatibility.",
+        "GpuObservedVertexInputSignature records normalized vertex entry-point input locations and shader scalar/vector classes observed from canonical WGSL; it is realization evidence, not author-authored authority.",
+        "GpuObservedFragmentOutputSignature records normalized fragment output locations and shader scalar/vector classes observed from canonical WGSL; it is realization evidence, not color-target policy.",
+        "G4B owns the normalized stage-IO vocabulary and deterministic comparison algorithms.",
+        "G4C2 invokes the pinned WGSL/Naga path and retains observed stage-IO signatures with the realized program record.",
+        "G4C3 compares the selected render pipeline vertex attributes and ordered color-target format classes against the observed signatures before backend pipeline creation.",
+        "Missing, duplicate, extra, location-mismatched, or incompatible scalar/vector class facts return structured PipelineStageIoMismatch.",
+        "Reflection cannot create vertex-buffer slots, offsets, strides, step modes, color-target formats, blend state, or write masks; those remain explicit render-pipeline state.",
+    ],
+
     mandatory_wgsl_agreement: [
         "Explicit RunenGPU declarations remain authority; parser or reflection output is validation evidence only.",
         "Before PT-RUNENGPU-G4C2 publishes a WGSL module realization, the pinned WGSL parser/reflection path must prove declared entry-point names and stages, binding group/binding identities, stage visibility, resource classes, access, dimensions, sample/storage format facts, array cardinality, and applicable host-layout requirements agree with the explicit descriptors.",
-        "G4B owns the backend-neutral expected-interface contract and deterministic comparison vocabulary.",
-        "G4C2 owns invocation of the pinned WGPU/Naga parser/reflection path and translation of observed facts into that comparison vocabulary.",
-        "There is one comparison algorithm; G4B tests it with synthetic observed facts and G4C2 supplies real observed facts.",
-        "Reflection may reject disagreement and improve source-span diagnostics; it may not infer, renumber, add, remove, or mutate authoritative declarations or layouts.",
-        "Mismatch returns structured ProgramInterfaceMismatch before module, layout, bind-group, or pipeline publication.",
+        "The same reflection pass must normalize and retain vertex-input and fragment-output signatures for later G4C3 pipeline compatibility without placing them inside GpuProgramInterfaceDescriptor.",
+        "G4B owns the backend-neutral expected-interface and stage-IO comparison contracts.",
+        "G4C2 owns invocation of the pinned WGPU/Naga path and translation of observed facts into those contracts.",
+        "There is one resource-interface comparison algorithm and one stage-IO comparison algorithm; synthetic G4B tests and real G4C2/G4C3 facts use the same implementations.",
+        "Reflection may reject disagreement and improve source-span diagnostics; it may not infer, renumber, add, remove, or mutate authoritative declarations or pipeline state.",
+        "Resource mismatch returns ProgramInterfaceMismatch before module publication; stage-IO mismatch returns PipelineStageIoMismatch before pipeline publication.",
     ],
 
     layout_contracts: [
@@ -139,6 +151,7 @@ PhaseImplementationSpec(
     render_pipeline_descriptor: [
         "Contains exact admitted program source identity, vertex and optional fragment entry points, resource-interface identity, pipeline layout, specialization values, vertex-buffer layouts and attributes, primitive state, depth/stencil state, multisample state, ordered color-target states, and capability requirements.",
         "Uses normalized GPU formats and state vocabularies rather than raw WGPU enums.",
+        "Vertex attributes and color-target states are compared against observed canonical-WGSL stage-IO signatures during G4C3 realization.",
         "Contains no material meaning, lighting, visibility, view ID, RenderFlowId, RenderPassId, RenderFeatureId, target alias, shader path, surface handle, or product quality policy.",
         "Add only graphics options required by accepted current consumers; do not invent a universal graphics abstraction.",
     ],
@@ -173,6 +186,7 @@ PhaseImplementationSpec(
         "DuplicateBindingKey",
         "BindingDeclarationInvalid",
         "ProgramInterfaceMismatch",
+        "PipelineStageIoMismatch",
         "RuntimeBindingIncompatible",
         "SpecializationUnknownMissingOrTypeMismatch",
         "PipelineDescriptorInvalid",
@@ -189,7 +203,7 @@ PhaseImplementationSpec(
     current_source_migration: [
         "Translate explicit loaded canonical WGSL, source owner, semantic source key, revision, and bounded provenance from engine/src/plugins/render/shader without moving filesystem discovery or watch policy.",
         "Replace string-only PipelineKey, phase or label specialization, untyped binding layout hashes, and renderer pass/feature IDs as GPU correctness authority.",
-        "Move program, resource-interface, layout, specialization, and pipeline truth out of engine/src/plugins/render/adapters/gpu_work.rs sidecar into typed generic descriptors or references.",
+        "Move program, resource-interface, stage-IO comparison, layout, specialization, and pipeline truth out of engine/src/plugins/render/adapters/gpu_work.rs sidecar into typed generic descriptors or references.",
         "Migrate renderer setup, prepare, render-flow paths, applications, examples, benches, and tests to construct explicit G4B descriptors.",
         "Retain renderer semantic decisions and Runenwerk source policy outside RunenGPU.",
     ],
@@ -197,6 +211,7 @@ PhaseImplementationSpec(
     public_api_proof: [
         "Compute example: admit one canonical WGSL source, declare storage input at (0,0) and storage output at (0,1), build one resource interface, declare one compute entry point, and build one compute pipeline descriptor through fallible constructors.",
         "Render example: admit one canonical WGSL source, declare one uniform binding resource interface, declare vertex and fragment entry points, then build separate vertex-buffer input state and separate ordered color-target output state in the render pipeline descriptor.",
+        "Stage-IO example: compare explicit render pipeline vertex attributes and color target classes against normalized observed WGSL signatures without moving those values into the resource interface.",
         "Runtime compatibility example: validate prepared uniform or storage bytes and logical resources against the explicit interface before bind-group realization.",
         "Source consistency example: equal owner/key/revision/full-source admission is idempotent; different full source for the same tuple returns SourceRevisionConflict.",
         "Determinism example: descriptors and specialization values created from different insertion orders normalize to complete equality and equal hashes.",
@@ -211,12 +226,14 @@ PhaseImplementationSpec(
         "Stage visibility mismatch.",
         "Wrong buffer, texture, sampler, format, access, dimension, multisample state, or array count.",
         "Vertex-buffer or color-target state placed inside GpuProgramInterfaceDescriptor.",
+        "Vertex attribute location or class incompatible with observed vertex input signature.",
+        "Color target location or class incompatible with observed fragment output signature.",
         "Missing, unknown, duplicate, or type-mismatched specialization.",
         "Compute pipeline using a render entry point or render pipeline using a compute entry point.",
         "Source owner/key/revision reused with different canonical WGSL.",
         "Field construction bypassing validation.",
         "GpuUniform or GpuStorage derive treated as sufficient interface proof.",
-        "Reflection disagreement accepted or used to mutate explicit declarations.",
+        "Reflection disagreement accepted or used to mutate explicit declarations or pipeline state.",
     ],
 
     source_and_dependency_guards: [
@@ -225,13 +242,14 @@ PhaseImplementationSpec(
         "No TypeId or std::any::Any in G4B interface authority.",
         "No RenderFlowId, RenderPassId, RenderFeatureId, RenderTarget, material, view, lighting, or transport vocabulary.",
         "No vertex-input or fragment/color-target output state inside GpuProgramInterfaceDescriptor.",
+        "No reflected stage-IO fact treated as authoring or pipeline policy authority.",
         "No second source-consistency registry or parallel source admission path.",
         "No new macro package, dependency, persistence format, generated prompt, task database, truth certificate, execution lock, or temporary workflow.",
     ],
 
     exclusions: [
         "No WGPU resource, shader module, layout, bind-group, or pipeline realization.",
-        "No invocation of WGPU/Naga reflection; G4B owns expected facts and comparison, while G4C2 supplies real observed facts.",
+        "No invocation of WGPU/Naga reflection; G4B owns expected facts and comparison, while G4C2/G4C3 supply real observed facts.",
         "No cache implementation beyond deterministic full-key and compatibility contract tests.",
         "No command encoding, submission, progress, readback, retirement, surface, presentation, device-loss, or reconstruction behavior.",
         "No RunenRender semantics or external package extraction.",
@@ -239,7 +257,7 @@ PhaseImplementationSpec(
     ],
 
     validation: [
-        "Focused source-registry, descriptor, equality/hash, interface, specialization, runtime-compatibility, and negative tests.",
+        "Focused source-registry, descriptor, equality/hash, resource-interface, stage-IO, specialization, runtime-compatibility, and negative tests.",
         "Compile-pass and compile-fail public-contract proof for the bounded examples.",
         "Source, dependency, sidecar, and ownership guards plus complete current-consumer migration census.",
         "cargo validate",
@@ -253,10 +271,11 @@ PhaseImplementationSpec(
         "One bounded stateful source-admission authority enforces owner/key/revision/full-source consistency.",
         "One typed WGSL-first program and entry-point authority exists.",
         "One typed shader-resource interface authority replaces strings, TypeId, and naked hashes without absorbing vertex or color-target pipeline state.",
+        "One separate shader-stage-IO compatibility contract preserves vertex/fragment proof without contaminating the resource interface.",
         "Mandatory WGSL parser/reflection agreement is bound without making reflection authoritative or duplicating comparison logic.",
         "Compute and render pipeline descriptors are generic, complete, deterministic, renderer-semantic-free, and understandable through concrete public examples.",
         "Current derives remain explicitly transitional and cannot claim ABI or interface truth.",
-        "Program, resource-interface, layout, specialization, and pipeline truth no longer resides in the G3 execution sidecar.",
+        "Program, resource-interface, stage-IO, layout, specialization, and pipeline truth no longer resides in the G3 execution sidecar.",
         "Every current declaration consumer is migrated or explicitly classified for G4C1, G4C2, or G4C3.",
         "No G4C, G5, G7, RunenRender, compiler-frontend, dependency, or extraction implementation entered scope.",
         "Exact-head validation and independent review pass with no unresolved blocking finding.",
