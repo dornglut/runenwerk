@@ -2,13 +2,24 @@ use super::admission::{
     GpuCandidateAdmissionReport, GpuCandidateEnvironmentEvidence, GpuRejectedCandidateReport,
     evaluate_validated_candidate,
 };
-use super::descriptor::{GpuContextDescriptor, GpuPowerPreference};
+use super::descriptor::{GpuContextDescriptor, GpuDescriptorRetryIdentity, GpuPowerPreference};
 use super::diagnostics::{GpuContextRequestError, GpuContextRequestErrorCategory};
 use super::facts::{GpuAdapterFacts, GpuFallbackStatus, GpuPortabilityClass, GpuSoftwareStatus};
 use crate::plugins::gpu::{GpuCapabilityFeature, GpuTextureFormat, GpuTextureFormatCapabilities};
-use std::num::NonZeroU64;
+use std::{
+    collections::BTreeMap,
+    num::NonZeroU64,
+    sync::{
+        Mutex, OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
-/// Opaque, nonzero process-local candidate selector disclosed only for exact retries.
+/// Opaque, nonzero process-local candidate correlation value.
+///
+/// A value is accepted by `GpuContextDescriptor::with_exact_candidate` only when it was
+/// disclosed by a `GpuContextRequestErrorCategory::AmbiguousAdapterSelection` report and its
+/// bounded retry binding is still retained by this process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuCandidateId(NonZeroU64);
 
@@ -17,9 +28,79 @@ impl GpuCandidateId {
         self.0.get() != 0
     }
 
-    pub(crate) const fn from_ordinal(ordinal: u64) -> Self {
-        Self(NonZeroU64::new(ordinal).expect("candidate ordinals begin at one"))
+    pub(crate) fn allocate() -> Result<Self, GpuContextRequestError> {
+        let value = NEXT_CANDIDATE_RETRY_TOKEN
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                current.checked_add(1)
+            })
+            .map_err(|_| {
+                GpuContextRequestError::new(
+                    GpuContextRequestErrorCategory::CandidateRetryTokenExhausted,
+                    "the process-local candidate retry-token allocator is exhausted",
+                )
+            })?;
+        Ok(Self(
+            NonZeroU64::new(value).expect("candidate retry-token allocation starts nonzero"),
+        ))
     }
+}
+
+static NEXT_CANDIDATE_RETRY_TOKEN: AtomicU64 = AtomicU64::new(1);
+static CANDIDATE_RETRY_BINDINGS: OnceLock<
+    Mutex<BTreeMap<GpuCandidateId, GpuCandidateRetryBinding>>,
+> = OnceLock::new();
+const MAX_RETAINED_CANDIDATE_RETRY_TOKENS: usize = 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GpuCandidateRetryBinding {
+    descriptor: GpuDescriptorRetryIdentity,
+    candidate_set: Vec<GpuCanonicalCandidateInputKey>,
+    target: GpuCanonicalCandidateInputKey,
+}
+
+fn candidate_retry_bindings() -> &'static Mutex<BTreeMap<GpuCandidateId, GpuCandidateRetryBinding>>
+{
+    CANDIDATE_RETRY_BINDINGS.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn retain_candidate_retry_bindings(
+    bindings_to_retain: impl IntoIterator<Item = (GpuCandidateId, GpuCandidateRetryBinding)>,
+) -> Result<(), GpuContextRequestError> {
+    let bindings_to_retain = bindings_to_retain.into_iter().collect::<Vec<_>>();
+    if bindings_to_retain.len() > MAX_RETAINED_CANDIDATE_RETRY_TOKENS {
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::CandidateRetryTokenExhausted,
+            "one ambiguous candidate set exceeds the bounded retry-token registry",
+        ));
+    }
+
+    let mut retained = candidate_retry_bindings()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    for (id, binding) in bindings_to_retain {
+        retained.insert(id, binding);
+    }
+    while retained.len() > MAX_RETAINED_CANDIDATE_RETRY_TOKENS {
+        let Some(oldest) = retained.keys().next().copied() else {
+            break;
+        };
+        retained.remove(&oldest);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+fn retain_candidate_retry_binding(id: GpuCandidateId, binding: GpuCandidateRetryBinding) {
+    retain_candidate_retry_bindings([(id, binding)])
+        .expect("one test retry binding must fit the bounded registry");
+}
+
+fn candidate_retry_binding(id: GpuCandidateId) -> Option<GpuCandidateRetryBinding> {
+    candidate_retry_bindings()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&id)
+        .cloned()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -153,6 +234,9 @@ pub(crate) struct GpuCandidateInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GpuCandidateSelection {
     pub(crate) candidate: GpuCandidateAdmissionReport,
+    /// The newly enumerated backend input selected for this request. This stays private so an
+    /// exact retry can retain its disclosed public token without reconstructing a raw adapter.
+    pub(crate) backend_candidate_id: GpuCandidateId,
     pub(crate) dispositions: Vec<GpuCandidateDisposition>,
     pub(crate) evidence: GpuCandidateSelectionEvidence,
 }
@@ -181,12 +265,14 @@ pub(crate) fn select_candidate_with_host_evidence(
 ) -> Result<GpuCandidateSelection, GpuContextRequestError> {
     let mut candidates = candidates
         .into_iter()
-        .map(|(adapter, environment)| GpuCandidateInput {
-            id: GpuCandidateId::from_ordinal(1),
-            adapter,
-            environment,
+        .map(|(adapter, environment)| {
+            Ok(GpuCandidateInput {
+                id: GpuCandidateId::allocate()?,
+                adapter,
+                environment,
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, GpuContextRequestError>>()?;
     canonicalize_candidate_inputs(&mut candidates);
     select_candidate_inputs(descriptor, candidates)
 }
@@ -196,6 +282,24 @@ pub(crate) fn select_candidate_inputs(
     candidates: impl IntoIterator<Item = GpuCandidateInput>,
 ) -> Result<GpuCandidateSelection, GpuContextRequestError> {
     super::admission::validate_descriptor(descriptor)?;
+    let candidates = candidates.into_iter().collect::<Vec<_>>();
+    // Snapshot an existing retry binding before this request can publish any fresh tokens.
+    // The clone remains valid for this request even if another thread later evicts the registry
+    // entry while candidate evaluation is in progress.
+    let exact_retry = descriptor
+        .exact_candidate()
+        .map(|token| (token, candidate_retry_binding(token)));
+    let descriptor_retry_identity = descriptor.retry_identity();
+    let candidate_set = canonical_candidate_set(&candidates);
+    let identities_by_id = candidates
+        .iter()
+        .map(|candidate| {
+            (
+                candidate.id,
+                canonical_candidate_input_key(&candidate.adapter, candidate.environment),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
     let mut dispositions = candidates
         .into_iter()
         .map(|candidate| {
@@ -217,12 +321,6 @@ pub(crate) fn select_candidate_inputs(
             }
         })
         .collect::<Vec<_>>();
-    if dispositions.is_empty() {
-        return Err(GpuContextRequestError::new(
-            GpuContextRequestErrorCategory::NoAdapterAvailable,
-            "the backend reported no adapter candidates",
-        ));
-    }
     dispositions.sort_by_key(canonical_disposition_key);
     let mut admitted = dispositions
         .iter()
@@ -231,6 +329,61 @@ pub(crate) fn select_candidate_inputs(
             GpuCandidateDisposition::Rejected(_) => None,
         })
         .collect::<Vec<_>>();
+    if let Some((exact, binding)) = exact_retry {
+        let Some(binding) = binding else {
+            return Err(stale_candidate_retry_error(
+                "the disclosed process-local candidate retry token is unknown or expired",
+                dispositions,
+            ));
+        };
+        if binding.descriptor != descriptor_retry_identity || binding.candidate_set != candidate_set
+        {
+            return Err(stale_candidate_retry_error(
+                "the normalized request or observed candidate set changed since token disclosure",
+                dispositions,
+            ));
+        }
+        let matching = admitted
+            .iter()
+            .filter(|candidate| {
+                identities_by_id
+                    .get(&candidate.id())
+                    .is_some_and(|identity| identity == &binding.target)
+            })
+            .collect::<Vec<_>>();
+        return match matching.as_slice() {
+            [] => Err(stale_candidate_retry_error(
+                "the disclosed candidate is no longer admissible for this unchanged retry set",
+                dispositions,
+            )),
+            [candidate] => {
+                let backend_candidate_id = candidate.id();
+                let mut candidate = (*candidate).clone();
+                candidate.id = exact;
+                retoken_disposition(&mut dispositions, backend_candidate_id, exact);
+                Ok(GpuCandidateSelection {
+                    evidence: GpuCandidateSelectionEvidence {
+                        rank: candidate_rank(descriptor, matching[0]),
+                        reason: "exact process-local candidate retry",
+                    },
+                    candidate,
+                    backend_candidate_id,
+                    dispositions,
+                })
+            }
+            _ => Err(GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::AmbiguousAdapterSelection,
+                "the disclosed retry token still matches indistinguishable candidates",
+            )
+            .with_candidate_dispositions(dispositions)),
+        };
+    }
+    if dispositions.is_empty() {
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::NoAdapterAvailable,
+            "the backend reported no adapter candidates",
+        ));
+    }
     if admitted.is_empty() {
         return Err(GpuContextRequestError::new(
             GpuContextRequestErrorCategory::NoAdmissibleCandidate,
@@ -239,26 +392,6 @@ pub(crate) fn select_candidate_inputs(
         .with_candidate_dispositions(dispositions));
     }
     admitted.sort_by_key(|candidate| candidate_rank(descriptor, candidate));
-    if let Some(exact) = descriptor.exact_candidate() {
-        let Some(candidate) = admitted
-            .into_iter()
-            .find(|candidate| candidate.id() == exact)
-        else {
-            return Err(GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::NoAdmissibleCandidate,
-                "the exact process-local candidate retry is absent or no longer admissible",
-            )
-            .with_candidate_dispositions(dispositions));
-        };
-        return Ok(GpuCandidateSelection {
-            evidence: GpuCandidateSelectionEvidence {
-                rank: candidate_rank(descriptor, &candidate),
-                reason: "exact process-local candidate retry",
-            },
-            candidate,
-            dispositions,
-        });
-    }
     let best = admitted
         .first()
         .cloned()
@@ -266,6 +399,17 @@ pub(crate) fn select_candidate_inputs(
     if admitted.get(1).is_some_and(|second| {
         candidate_rank(descriptor, second) == candidate_rank(descriptor, &best)
     }) {
+        // Only an ambiguity report authorizes exact retry. Register every accepted candidate in
+        // one bounded transaction immediately before returning that report, so the report cannot
+        // expose a partially retained candidate set.
+        if let Err(error) = retain_ambiguous_retry_tokens(
+            descriptor_retry_identity,
+            candidate_set,
+            &identities_by_id,
+            &admitted,
+        ) {
+            return Err(error.with_candidate_dispositions(dispositions));
+        }
         return Err(GpuContextRequestError::new(
             GpuContextRequestErrorCategory::AmbiguousAdapterSelection,
             "best candidates remain indistinguishable after normalized ranking",
@@ -277,6 +421,7 @@ pub(crate) fn select_candidate_inputs(
             rank: candidate_rank(descriptor, &best),
             reason: "lowest complete normalized rank",
         },
+        backend_candidate_id: best.id(),
         candidate: best,
         dispositions,
     })
@@ -287,10 +432,65 @@ pub(crate) fn canonicalize_candidate_inputs(candidates: &mut [GpuCandidateInput]
     candidates.sort_by_key(|candidate| {
         canonical_candidate_input_key(&candidate.adapter, candidate.environment)
     });
-    for (offset, candidate) in candidates.iter_mut().enumerate() {
-        candidate.id = GpuCandidateId::from_ordinal(
-            u64::try_from(offset + 1).expect("candidate count fits process-local identifier"),
-        );
+}
+
+fn canonical_candidate_set(candidates: &[GpuCandidateInput]) -> Vec<GpuCanonicalCandidateInputKey> {
+    let mut candidate_set = candidates
+        .iter()
+        .map(|candidate| canonical_candidate_input_key(&candidate.adapter, candidate.environment))
+        .collect::<Vec<_>>();
+    candidate_set.sort();
+    candidate_set
+}
+
+fn retain_ambiguous_retry_tokens(
+    descriptor: GpuDescriptorRetryIdentity,
+    candidate_set: Vec<GpuCanonicalCandidateInputKey>,
+    identities_by_id: &BTreeMap<GpuCandidateId, GpuCanonicalCandidateInputKey>,
+    admitted: &[GpuCandidateAdmissionReport],
+) -> Result<(), GpuContextRequestError> {
+    let bindings = admitted.iter().map(|candidate| {
+        let target = identities_by_id
+            .get(&candidate.id())
+            .cloned()
+            .expect("every admitted candidate retains its canonical input identity");
+        (
+            candidate.id(),
+            GpuCandidateRetryBinding {
+                descriptor: descriptor.clone(),
+                candidate_set: candidate_set.clone(),
+                target,
+            },
+        )
+    });
+    retain_candidate_retry_bindings(bindings)
+}
+
+fn stale_candidate_retry_error(
+    detail: &'static str,
+    dispositions: Vec<GpuCandidateDisposition>,
+) -> GpuContextRequestError {
+    GpuContextRequestError::new(
+        GpuContextRequestErrorCategory::StaleCandidateRetryToken,
+        detail,
+    )
+    .with_candidate_dispositions(dispositions)
+}
+
+fn retoken_disposition(
+    dispositions: &mut [GpuCandidateDisposition],
+    backend_candidate_id: GpuCandidateId,
+    retry_token: GpuCandidateId,
+) {
+    for disposition in dispositions {
+        if disposition.id() != backend_candidate_id {
+            continue;
+        }
+        match disposition {
+            GpuCandidateDisposition::Accepted(report) => report.id = retry_token,
+            GpuCandidateDisposition::Rejected(report) => report.id = retry_token,
+        }
+        return;
     }
 }
 
@@ -338,7 +538,6 @@ struct GpuCanonicalAdapterKey {
     alignments: super::facts::GpuAlignmentFacts,
     vendor: Option<u32>,
     device: Option<u32>,
-    diagnostic_name: Option<String>,
     profile: super::facts::GpuDeviceRequestProfile,
     profile_supported: bool,
 }
@@ -366,7 +565,6 @@ fn canonical_adapter_key(adapter: &GpuAdapterFacts) -> GpuCanonicalAdapterKey {
         alignments: adapter.alignments(),
         vendor: adapter.vendor(),
         device: adapter.device(),
-        diagnostic_name: adapter.diagnostic_name().map(str::to_owned),
         profile: adapter.device_request_profile(),
         profile_supported: adapter.device_request_profile_supported(),
     }
@@ -393,42 +591,18 @@ fn canonical_format_capabilities(
 struct GpuCanonicalDispositionKey {
     adapter: GpuCanonicalAdapterKey,
     disposition_category: u8,
-    candidate_id: GpuCandidateId,
 }
 
 fn canonical_disposition_key(disposition: &GpuCandidateDisposition) -> GpuCanonicalDispositionKey {
     let (adapter, disposition_category) = match disposition {
         GpuCandidateDisposition::Accepted(report) => (report.adapter(), 0),
         GpuCandidateDisposition::Rejected(report) => {
-            (report.adapter(), 1 + error_category_rank(report.category()))
+            (report.adapter(), 1 + report.category().stable_order())
         }
     };
     GpuCanonicalDispositionKey {
         adapter: canonical_adapter_key(adapter),
         disposition_category,
-        candidate_id: disposition.id(),
-    }
-}
-
-const fn error_category_rank(category: GpuContextRequestErrorCategory) -> u8 {
-    match category {
-        GpuContextRequestErrorCategory::NoAdapterAvailable => 0,
-        GpuContextRequestErrorCategory::NoAdmissibleCandidate => 1,
-        GpuContextRequestErrorCategory::AmbiguousAdapterSelection => 2,
-        GpuContextRequestErrorCategory::BackendFamilyForbidden => 3,
-        GpuContextRequestErrorCategory::SoftwareFallbackPolicyViolation => 4,
-        GpuContextRequestErrorCategory::MandatoryFeatureMissing => 5,
-        GpuContextRequestErrorCategory::LimitBelowRequiredMinimum => 6,
-        GpuContextRequestErrorCategory::LimitAbovePermittedMaximum => 7,
-        GpuContextRequestErrorCategory::UnsupportedFormatRole => 8,
-        GpuContextRequestErrorCategory::AlignmentIncompatibility => 9,
-        GpuContextRequestErrorCategory::DeviceRequestProfileUnsupported => 10,
-        GpuContextRequestErrorCategory::ContradictoryRequest => 11,
-        GpuContextRequestErrorCategory::BackendAdapterRequestFailure => 12,
-        GpuContextRequestErrorCategory::BackendDeviceRequestFailure => 13,
-        GpuContextRequestErrorCategory::TemporaryHostCompatibilityFailure => 14,
-        GpuContextRequestErrorCategory::IdentityExhausted => 15,
-        GpuContextRequestErrorCategory::InvalidDegradation => 16,
     }
 }
 
@@ -484,18 +658,44 @@ mod tests {
     use super::*;
     use crate::plugins::gpu::{
         GpuAdapterClass, GpuAdapterFacts, GpuAdapterLimits, GpuAlignmentFacts, GpuBackendFamily,
-        GpuCapabilities, GpuCapabilityRequirements, GpuContextDescriptor, GpuFallbackStatus,
-        GpuLimits, GpuSoftwareStatus,
+        GpuCapabilities, GpuCapabilityFeature, GpuCapabilityRequirements, GpuContextDescriptor,
+        GpuFallbackStatus, GpuLimits, GpuSoftwareStatus,
     };
 
-    fn adapter() -> GpuAdapterFacts {
+    static RETRY_REGISTRY_TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct IsolatedRetryRegistry {
+        _serial: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl Drop for IsolatedRetryRegistry {
+        fn drop(&mut self) {
+            candidate_retry_bindings()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clear();
+        }
+    }
+
+    fn isolated_retry_registry() -> IsolatedRetryRegistry {
+        let serial = RETRY_REGISTRY_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        candidate_retry_bindings()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+        IsolatedRetryRegistry { _serial: serial }
+    }
+
+    fn adapter_with(features: impl IntoIterator<Item = GpuCapabilityFeature>) -> GpuAdapterFacts {
         GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
             GpuFallbackStatus::ConfirmedNotFallback,
             GpuCapabilities::from_normalized_facts(
-                [],
+                features,
                 GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 4, 8, 16).unwrap(),
                 [],
             ),
@@ -507,6 +707,25 @@ mod tests {
                 bytes_per_row: Some(256),
                 query_resolve_destination: Some(256),
             },
+        )
+    }
+
+    fn adapter() -> GpuAdapterFacts {
+        adapter_with([])
+    }
+
+    fn with_diagnostics(
+        adapter: GpuAdapterFacts,
+        name: &str,
+        driver: &str,
+        driver_info: &str,
+    ) -> GpuAdapterFacts {
+        adapter.with_diagnostics(
+            name.to_owned(),
+            7,
+            9,
+            driver.to_owned(),
+            driver_info.to_owned(),
         )
     }
 
@@ -536,9 +755,20 @@ mod tests {
     }
 
     #[test]
-    fn ambiguity_exposes_process_local_ids_and_exact_retry_never_uses_diagnostic_names() {
-        let first = adapter().with_diagnostics("alpha diagnostic".to_owned(), 7, 9);
-        let second = adapter().with_diagnostics("beta diagnostic".to_owned(), 7, 9);
+    fn exact_retry_tokens_bind_one_disclosed_candidate_without_diagnostic_identity() {
+        let _retry_registry = isolated_retry_registry();
+        let first = with_diagnostics(
+            adapter_with([GpuCapabilityFeature::Compute]),
+            "alpha diagnostic",
+            "driver alpha",
+            "driver-info alpha",
+        );
+        let second = with_diagnostics(
+            adapter_with([GpuCapabilityFeature::TimestampQuery]),
+            "beta diagnostic",
+            "driver beta",
+            "driver-info beta",
+        );
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
         let ambiguous =
             select_candidate(&descriptor, [second.clone(), first.clone()], true).unwrap_err();
@@ -546,31 +776,212 @@ mod tests {
             ambiguous.category(),
             GpuContextRequestErrorCategory::AmbiguousAdapterSelection
         );
-        let ids = ambiguous
+        let retry_token = ambiguous
             .candidate_dispositions()
             .iter()
+            .find(|disposition| {
+                disposition
+                    .adapter()
+                    .supported()
+                    .supports(GpuCapabilityFeature::Compute)
+            })
             .map(GpuCandidateDisposition::id)
-            .collect::<Vec<_>>();
-        assert_eq!(ids.len(), 2);
-        assert_ne!(ids[0], ids[1]);
-        assert!(ids.iter().all(|id| id.is_nonzero()));
+            .expect("compute candidate should disclose a retry token");
+        let alternate_retry_token = ambiguous
+            .candidate_dispositions()
+            .iter()
+            .find(|disposition| {
+                disposition
+                    .adapter()
+                    .supported()
+                    .supports(GpuCapabilityFeature::TimestampQuery)
+            })
+            .map(GpuCandidateDisposition::id)
+            .expect("timestamp candidate should disclose a retry token");
+        assert!(retry_token.is_nonzero());
+        assert!(alternate_retry_token.is_nonzero());
 
         let retry = select_candidate(
-            &descriptor.clone().with_exact_candidate(ids[1]),
-            [first, second],
+            &descriptor
+                .clone()
+                .with_label("new request diagnostic")
+                .with_exact_candidate(retry_token),
+            [
+                with_diagnostics(
+                    adapter_with([GpuCapabilityFeature::Compute]),
+                    "renamed alpha diagnostic",
+                    "different driver alpha",
+                    "different driver-info alpha",
+                ),
+                with_diagnostics(
+                    adapter_with([GpuCapabilityFeature::TimestampQuery]),
+                    "renamed beta diagnostic",
+                    "different driver beta",
+                    "different driver-info beta",
+                ),
+            ],
             true,
         )
         .unwrap();
-        assert_eq!(retry.candidate.id(), ids[1]);
+        assert_eq!(retry.candidate.id(), retry_token);
+        assert!(
+            retry
+                .candidate
+                .adapter()
+                .supported()
+                .supports(GpuCapabilityFeature::Compute)
+        );
         assert_eq!(
             retry.evidence.reason(),
             "exact process-local candidate retry"
+        );
+
+        let alternate_retry = select_candidate(
+            &descriptor
+                .clone()
+                .with_exact_candidate(alternate_retry_token),
+            [
+                with_diagnostics(
+                    adapter_with([GpuCapabilityFeature::Compute]),
+                    "another alpha diagnostic",
+                    "another driver alpha",
+                    "another driver-info alpha",
+                ),
+                with_diagnostics(
+                    adapter_with([GpuCapabilityFeature::TimestampQuery]),
+                    "another beta diagnostic",
+                    "another driver beta",
+                    "another driver-info beta",
+                ),
+            ],
+            true,
+        )
+        .unwrap();
+        assert_eq!(alternate_retry.candidate.id(), alternate_retry_token);
+        assert!(
+            alternate_retry
+                .candidate
+                .adapter()
+                .supported()
+                .supports(GpuCapabilityFeature::TimestampQuery)
+        );
+
+        let stale = select_candidate(
+            &descriptor.clone().with_exact_candidate(retry_token),
+            [second.clone()],
+            true,
+        )
+        .unwrap_err();
+        assert_eq!(
+            stale.category(),
+            GpuContextRequestErrorCategory::StaleCandidateRetryToken
+        );
+
+        let unknown = select_candidate(
+            &descriptor
+                .clone()
+                .with_exact_candidate(GpuCandidateId::allocate().unwrap()),
+            [second],
+            true,
+        )
+        .unwrap_err();
+        assert_eq!(
+            unknown.category(),
+            GpuContextRequestErrorCategory::StaleCandidateRetryToken
+        );
+    }
+
+    #[test]
+    fn deterministic_success_does_not_create_an_exact_retry_binding() {
+        let _retry_registry = isolated_retry_registry();
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let selected = select_candidate(&descriptor, [adapter()], true).unwrap();
+
+        assert!(candidate_retry_binding(selected.candidate.id()).is_none());
+    }
+
+    #[test]
+    fn exact_retry_cannot_evict_its_own_binding_when_registry_is_full() {
+        let _retry_registry = isolated_retry_registry();
+        let first = adapter_with([GpuCapabilityFeature::Compute]);
+        let second = adapter_with([GpuCapabilityFeature::TimestampQuery]);
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let ambiguous =
+            select_candidate(&descriptor, [first.clone(), second.clone()], true).unwrap_err();
+        let retry_token = ambiguous
+            .candidate_dispositions()
+            .iter()
+            .map(GpuCandidateDisposition::id)
+            .min()
+            .expect("ambiguity should disclose at least one retry token");
+        let binding = candidate_retry_binding(retry_token)
+            .expect("the ambiguity token must be retained before it is returned");
+
+        let retained_count = candidate_retry_bindings()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .len();
+        for _ in retained_count..MAX_RETAINED_CANDIDATE_RETRY_TOKENS {
+            retain_candidate_retry_binding(GpuCandidateId::allocate().unwrap(), binding.clone());
+        }
+        assert_eq!(
+            candidate_retry_bindings()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .len(),
+            MAX_RETAINED_CANDIDATE_RETRY_TOKENS
+        );
+        assert!(candidate_retry_binding(retry_token).is_some());
+
+        let retry = select_candidate(
+            &descriptor.clone().with_exact_candidate(retry_token),
+            [second, first],
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(retry.candidate.id(), retry_token);
+        assert!(
+            candidate_retry_binding(retry_token).is_some(),
+            "an exact retry must not evict the binding it is currently consuming"
+        );
+    }
+
+    #[test]
+    fn genuinely_indistinguishable_candidates_remain_ambiguous_after_retry() {
+        let _retry_registry = isolated_retry_registry();
+        let first = with_diagnostics(adapter(), "alpha", "driver alpha", "info alpha");
+        let second = with_diagnostics(adapter(), "beta", "driver beta", "info beta");
+        assert_eq!(
+            canonical_candidate_input_key(
+                &first,
+                GpuCandidateEnvironmentEvidence::current_host(true)
+            ),
+            canonical_candidate_input_key(
+                &second,
+                GpuCandidateEnvironmentEvidence::current_host(true)
+            ),
+            "diagnostic names and driver facts must not create retry identity"
+        );
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let ambiguous =
+            select_candidate(&descriptor, [first.clone(), second.clone()], true).unwrap_err();
+        let token = ambiguous.candidate_dispositions()[0].id();
+        let retry = select_candidate(
+            &descriptor.clone().with_exact_candidate(token),
+            [second, first],
+            true,
+        )
+        .unwrap_err();
+        assert_eq!(
+            retry.category(),
+            GpuContextRequestErrorCategory::AmbiguousAdapterSelection
         );
     }
 
     #[test]
     fn full_disposition_collection_is_invariant_to_input_order() {
-        let accepted = adapter().with_diagnostics("accepted".to_owned(), 1, 1);
+        let accepted = with_diagnostics(adapter(), "accepted", "driver", "info");
         let rejected = GpuAdapterFacts::new(
             GpuBackendFamily::UnknownBackend,
             GpuAdapterClass::Unknown,
@@ -584,12 +995,29 @@ mod tests {
             GpuAdapterLimits::new(GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 4, 8, 16).unwrap()),
             accepted.alignments(),
         )
-        .with_diagnostics("rejected".to_owned(), 2, 2);
+        .with_diagnostics(
+            "rejected".to_owned(),
+            2,
+            2,
+            "driver".to_owned(),
+            "info".to_owned(),
+        );
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
         let forward =
             select_candidate(&descriptor, [rejected.clone(), accepted.clone()], true).unwrap();
         let reverse = select_candidate(&descriptor, [accepted, rejected], true).unwrap();
-        assert_eq!(forward.dispositions, reverse.dispositions);
+        assert_eq!(
+            forward
+                .dispositions
+                .iter()
+                .map(canonical_disposition_key)
+                .collect::<Vec<_>>(),
+            reverse
+                .dispositions
+                .iter()
+                .map(canonical_disposition_key)
+                .collect::<Vec<_>>()
+        );
         assert!(
             GpuContextAdmissionReport {
                 selected: GpuCandidateSelectionKind::DeterministicallyRanked,

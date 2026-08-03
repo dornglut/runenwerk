@@ -118,7 +118,7 @@ async fn select_backend_adapter(
     let candidates = instance
         .enumerate_adapters(Backends::all())
         .into_iter()
-        .map(|adapter| {
+        .map(|adapter| -> Result<_, GpuContextRequestError> {
             // Absence of a surface is not surface compatibility evidence.
             let surface_supported =
                 compatible_surface.is_some_and(|surface| adapter.is_surface_supported(surface));
@@ -127,18 +127,18 @@ async fn select_backend_adapter(
             } else {
                 GpuCandidateEnvironmentEvidence::headless()
             };
-            NativeAdapterCandidate {
-                id: GpuCandidateId::from_ordinal(1),
+            Ok(NativeAdapterCandidate {
+                id: GpuCandidateId::allocate()?,
                 facts: adapter_facts(
                     &adapter,
                     surface_supported,
-                    GpuFallbackStatus::ConfirmedNotFallback,
+                    ordinary_enumeration_fallback_status(),
                 ),
                 adapter,
                 environment,
-            }
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, GpuContextRequestError>>()?;
     select_enumerated_adapter(descriptor, candidates).map(|(adapter, selection)| {
         (
             adapter,
@@ -165,6 +165,12 @@ const fn native_selection_route(policy: GpuSoftwareFallbackPolicy) -> NativeAdap
     }
 }
 
+/// Native enumeration does not prove that an adapter is non-fallback. Only the forced WGPU
+/// fallback path has evidence strong enough to publish `ConfirmedFallback`.
+const fn ordinary_enumeration_fallback_status() -> GpuFallbackStatus {
+    GpuFallbackStatus::Unknown
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn select_enumerated_adapter<T>(
     descriptor: &GpuContextDescriptor,
@@ -173,11 +179,6 @@ fn select_enumerated_adapter<T>(
     candidates.sort_by_key(|candidate| {
         canonical_candidate_input_key(&candidate.facts, candidate.environment)
     });
-    for (offset, candidate) in candidates.iter_mut().enumerate() {
-        candidate.id = GpuCandidateId::from_ordinal(
-            u64::try_from(offset + 1).expect("candidate count fits process-local identifier"),
-        );
-    }
     let selection = select_candidate_inputs(
         descriptor,
         candidates.iter().map(|candidate| GpuCandidateInput {
@@ -186,7 +187,7 @@ fn select_enumerated_adapter<T>(
             environment: candidate.environment,
         }),
     )?;
-    let selected = selection.candidate.id();
+    let selected = selection.backend_candidate_id;
     let adapter = candidates
         .into_iter()
         .find(|candidate| candidate.id == selected)
@@ -238,15 +239,11 @@ async fn select_backend_selected_adapter(
     let selection = select_candidate_inputs(
         descriptor,
         [GpuCandidateInput {
-            id: GpuCandidateId::from_ordinal(1),
+            id: GpuCandidateId::allocate()?,
             adapter: adapter_facts(
                 &adapter,
                 surface_supported,
-                if force_fallback_adapter {
-                    GpuFallbackStatus::ConfirmedFallback
-                } else {
-                    GpuFallbackStatus::Unknown
-                },
+                backend_selected_fallback_status(force_fallback_adapter),
             ),
             environment,
         }],
@@ -256,6 +253,14 @@ async fn select_backend_selected_adapter(
         selection,
         GpuCandidateSelectionKind::BackendSelectedCandidate,
     ))
+}
+
+const fn backend_selected_fallback_status(force_fallback_adapter: bool) -> GpuFallbackStatus {
+    if force_fallback_adapter {
+        GpuFallbackStatus::ConfirmedFallback
+    } else {
+        GpuFallbackStatus::Unknown
+    }
 }
 
 fn map_request_adapter_error(error: RequestAdapterError) -> GpuContextRequestError {
@@ -479,6 +484,19 @@ mod tests {
         assert_eq!(
             native_selection_route(GpuSoftwareFallbackPolicy::Require),
             NativeAdapterSelectionRoute::ForcedFallback
+        );
+        assert_eq!(
+            ordinary_enumeration_fallback_status(),
+            GpuFallbackStatus::Unknown,
+            "native enumeration must not claim non-fallback evidence without backend proof"
+        );
+        assert_eq!(
+            backend_selected_fallback_status(true),
+            GpuFallbackStatus::ConfirmedFallback
+        );
+        assert_eq!(
+            backend_selected_fallback_status(false),
+            GpuFallbackStatus::Unknown
         );
     }
 }

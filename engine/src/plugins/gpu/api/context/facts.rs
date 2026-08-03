@@ -159,6 +159,8 @@ pub struct GpuAdapterFacts {
     software: GpuSoftwareStatus,
     fallback: GpuFallbackStatus,
     diagnostic_name: Option<String>,
+    driver: Option<String>,
+    driver_info: Option<String>,
     vendor: Option<u32>,
     device: Option<u32>,
     supported: GpuCapabilities,
@@ -184,6 +186,8 @@ impl GpuAdapterFacts {
             software,
             fallback,
             diagnostic_name: None,
+            driver: None,
+            driver_info: None,
             vendor: None,
             device: None,
             supported,
@@ -194,8 +198,17 @@ impl GpuAdapterFacts {
         }
     }
 
-    pub(crate) fn with_diagnostics(mut self, name: String, vendor: u32, device: u32) -> Self {
+    pub(crate) fn with_diagnostics(
+        mut self,
+        name: String,
+        vendor: u32,
+        device: u32,
+        driver: String,
+        driver_info: String,
+    ) -> Self {
         self.diagnostic_name = super::diagnostics::sanitized_diagnostic(name);
+        self.driver = super::diagnostics::sanitized_diagnostic(driver);
+        self.driver_info = super::diagnostics::sanitized_diagnostic(driver_info);
         self.vendor = Some(vendor);
         self.device = Some(device);
         self
@@ -231,6 +244,16 @@ impl GpuAdapterFacts {
         self.diagnostic_name.as_deref()
     }
 
+    /// Sanitized backend diagnostic fact. It is not a rank, retry, or persistent identity.
+    pub fn driver(&self) -> Option<&str> {
+        self.driver.as_deref()
+    }
+
+    /// Sanitized backend diagnostic fact. It is not a rank, retry, or persistent identity.
+    pub fn driver_info(&self) -> Option<&str> {
+        self.driver_info.as_deref()
+    }
+
     pub const fn vendor(&self) -> Option<u32> {
         self.vendor
     }
@@ -257,6 +280,53 @@ impl GpuAdapterFacts {
 
     pub const fn device_request_profile_supported(&self) -> bool {
         self.device_profile_supported
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::gpu::{GpuAdapterClass, GpuBackendFamily, GpuCapabilities, GpuLimits};
+
+    fn adapter() -> GpuAdapterFacts {
+        GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::Unknown,
+            GpuCapabilities::from_normalized_facts(
+                [],
+                GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 1, 8, 16).unwrap(),
+                [],
+            ),
+            GpuAdapterLimits::new(GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 1, 8, 16).unwrap()),
+            GpuAlignmentFacts {
+                uniform_dynamic_offset: Some(256),
+                storage_dynamic_offset: Some(256),
+                copy_buffer_offset: Some(4),
+                bytes_per_row: Some(256),
+                query_resolve_destination: Some(256),
+            },
+        )
+    }
+
+    #[test]
+    fn adapter_driver_facts_are_sanitized_and_optional() {
+        let facts = adapter().with_diagnostics(
+            "adapter".to_owned(),
+            1,
+            2,
+            "driver".to_owned(),
+            "é".repeat(129),
+        );
+        assert_eq!(facts.driver(), Some("driver"));
+        assert_eq!(facts.driver_info().map(str::len), Some(256));
+        assert!(
+            adapter()
+                .with_diagnostics("adapter".to_owned(), 1, 2, " ".to_owned(), String::new())
+                .driver()
+                .is_none()
+        );
     }
 }
 

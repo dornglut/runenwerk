@@ -534,7 +534,7 @@ pub(crate) fn evaluate_candidate(
     validate_descriptor(descriptor)?;
     evaluate_validated_candidate(
         descriptor,
-        GpuCandidateId::from_ordinal(1),
+        GpuCandidateId::allocate()?,
         adapter,
         GpuCandidateEnvironmentEvidence::current_host(host_compatible),
     )
@@ -564,11 +564,18 @@ mod tests {
     }
 
     fn adapter(features: impl IntoIterator<Item = GpuCapabilityFeature>) -> GpuAdapterFacts {
+        adapter_with_fallback(features, GpuFallbackStatus::ConfirmedNotFallback)
+    }
+
+    fn adapter_with_fallback(
+        features: impl IntoIterator<Item = GpuCapabilityFeature>,
+        fallback: GpuFallbackStatus,
+    ) -> GpuAdapterFacts {
         GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
-            GpuFallbackStatus::ConfirmedNotFallback,
+            fallback,
             GpuCapabilities::from_normalized_facts(
                 features,
                 limits(),
@@ -596,7 +603,7 @@ mod tests {
         assert!(matches!(
             evaluate_validated_candidate(
                 &GpuContextDescriptor::new(required),
-                GpuCandidateId::from_ordinal(1),
+                GpuCandidateId::allocate().unwrap(),
                 candidate.clone(),
                 headless,
             ),
@@ -612,7 +619,7 @@ mod tests {
             .unwrap();
         let preferred = evaluate_validated_candidate(
             &GpuContextDescriptor::new(preferred),
-            GpuCandidateId::from_ordinal(1),
+            GpuCandidateId::allocate().unwrap(),
             candidate.clone(),
             headless,
         )
@@ -634,7 +641,7 @@ mod tests {
             .unwrap();
         let disabled = evaluate_validated_candidate(
             &GpuContextDescriptor::new(disabled),
-            GpuCandidateId::from_ordinal(1),
+            GpuCandidateId::allocate().unwrap(),
             candidate,
             headless,
         )
@@ -776,5 +783,30 @@ mod tests {
                 if error.category()
                     == GpuContextRequestErrorCategory::DeviceRequestProfileUnsupported
         ));
+    }
+
+    #[test]
+    fn forbid_requires_explicit_non_fallback_evidence() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_fallback_policy(GpuSoftwareFallbackPolicy::Forbid);
+        for fallback in [
+            GpuFallbackStatus::Unknown,
+            GpuFallbackStatus::ConfirmedFallback,
+        ] {
+            assert!(matches!(
+                evaluate_candidate(&descriptor, adapter_with_fallback([], fallback), true),
+                Err(error)
+                    if error.category()
+                        == GpuContextRequestErrorCategory::SoftwareFallbackPolicyViolation
+            ));
+        }
+        assert!(
+            evaluate_candidate(
+                &descriptor,
+                adapter_with_fallback([], GpuFallbackStatus::ConfirmedNotFallback),
+                true,
+            )
+            .is_ok()
+        );
     }
 }

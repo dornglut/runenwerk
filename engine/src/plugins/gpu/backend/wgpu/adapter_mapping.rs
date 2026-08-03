@@ -77,7 +77,13 @@ pub(super) fn adapter_facts(
         profile,
         profile_limits(profile).check_limits(&native_limits),
     )
-    .with_diagnostics(info.name, info.vendor, info.device)
+    .with_diagnostics(
+        info.name,
+        info.vendor,
+        info.device,
+        info.driver,
+        info.driver_info,
+    )
 }
 
 /// Maps only downlevel capabilities WGPU explicitly proves. Unknown flag bits suppress

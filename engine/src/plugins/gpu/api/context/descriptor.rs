@@ -2,7 +2,10 @@ use super::diagnostics::{GpuContextRequestError, GpuContextRequestErrorCategory}
 use super::facts::GpuAlignmentFacts;
 use super::sanitized_diagnostic;
 use super::selection::GpuCandidateId;
-use crate::plugins::gpu::{GpuCapabilityRequirements, GpuTextureFormat};
+use crate::plugins::gpu::{
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
+    GpuPreferredFallback, GpuTextureFormat,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -96,6 +99,22 @@ pub struct GpuContextDescriptor {
     pub(super) limits: BTreeMap<GpuLimitKind, GpuLimitConstraint>,
     pub(super) format_roles: BTreeSet<(GpuTextureFormat, GpuFormatRole)>,
     pub(super) alignments: BTreeMap<GpuAlignmentKind, u64>,
+}
+
+/// Request authority retained only while validating an opaque process-local retry token.
+/// Diagnostic text and the retry token itself are intentionally excluded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GpuDescriptorRetryIdentity {
+    power_preference: GpuPowerPreference,
+    fallback_policy: GpuSoftwareFallbackPolicy,
+    allowed_backends: BTreeSet<GpuBackendFamily>,
+    backend_preference: BTreeMap<GpuBackendFamily, u8>,
+    allowed_adapter_classes: BTreeSet<GpuAdapterClass>,
+    portability_policy: GpuPortabilityPolicy,
+    requirements: Vec<GpuCapabilityRequirement>,
+    limits: Vec<(GpuLimitKind, GpuLimitConstraint)>,
+    format_roles: BTreeSet<(GpuTextureFormat, GpuFormatRole)>,
+    alignments: BTreeMap<GpuAlignmentKind, u64>,
 }
 
 impl GpuContextDescriptor {
@@ -201,6 +220,25 @@ impl GpuContextDescriptor {
 
     pub const fn exact_candidate(&self) -> Option<GpuCandidateId> {
         self.exact_candidate
+    }
+
+    pub(crate) fn retry_identity(&self) -> GpuDescriptorRetryIdentity {
+        GpuDescriptorRetryIdentity {
+            power_preference: self.power_preference,
+            fallback_policy: self.fallback_policy,
+            allowed_backends: self.allowed_backends.clone(),
+            backend_preference: self.backend_preference.clone(),
+            allowed_adapter_classes: self.allowed_adapter_classes.clone(),
+            portability_policy: self.portability_policy,
+            requirements: self.requirements.iter().collect(),
+            limits: self
+                .limits
+                .iter()
+                .map(|(kind, constraint)| (*kind, *constraint))
+                .collect(),
+            format_roles: self.format_roles.clone(),
+            alignments: self.alignments.clone(),
+        }
     }
 
     pub(crate) fn allowed_backends(&self) -> &BTreeSet<GpuBackendFamily> {
@@ -415,6 +453,16 @@ fn merge_backend_preference(
 pub(crate) fn validate_descriptor_semantics(
     descriptor: &GpuContextDescriptor,
 ) -> Result<(), GpuContextRequestError> {
+    for requirement in descriptor.requirements.iter() {
+        if let GpuCapabilityRequirement::Preferred { feature, fallback } = requirement
+            && !preferred_degradation_is_valid(feature, fallback)
+        {
+            return Err(GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::InvalidDegradation,
+                format!("{feature:?} cannot use the {fallback:?} preferred degradation"),
+            ));
+        }
+    }
     for (kind, constraint) in &descriptor.limits {
         if constraint.minimum.is_some_and(|minimum| minimum == 0)
             || constraint.maximum.is_some_and(|maximum| maximum == 0)
@@ -446,6 +494,30 @@ pub(crate) fn validate_descriptor_semantics(
     Ok(())
 }
 
+/// G4A owns this explicit workload-level compatibility table. Generic G2/G3 capability
+/// requirements stay representable; only a context descriptor may admit their degradation.
+pub(crate) const fn preferred_degradation_is_valid(
+    feature: GpuCapabilityFeature,
+    fallback: GpuPreferredFallback,
+) -> bool {
+    match feature {
+        GpuCapabilityFeature::Compute
+        | GpuCapabilityFeature::RenderPipeline
+        | GpuCapabilityFeature::Copy
+        | GpuCapabilityFeature::IndirectDraw
+        | GpuCapabilityFeature::StorageTexture
+        | GpuCapabilityFeature::DepthAttachment => {
+            matches!(fallback, GpuPreferredFallback::SelectAlternativeWork)
+        }
+        GpuCapabilityFeature::TimestampQuery => {
+            matches!(fallback, GpuPreferredFallback::DisableInstrumentation)
+        }
+        GpuCapabilityFeature::Presentation => {
+            matches!(fallback, GpuPreferredFallback::ContinueWithoutFeature)
+        }
+    }
+}
+
 pub(crate) fn alignment_value(facts: GpuAlignmentFacts, kind: GpuAlignmentKind) -> Option<u64> {
     match kind {
         GpuAlignmentKind::UniformDynamicOffset => facts.uniform_dynamic_offset,
@@ -453,5 +525,51 @@ pub(crate) fn alignment_value(facts: GpuAlignmentFacts, kind: GpuAlignmentKind) 
         GpuAlignmentKind::CopyBufferOffset => facts.copy_buffer_offset,
         GpuAlignmentKind::BytesPerRow => facts.bytes_per_row,
         GpuAlignmentKind::QueryResolveDestination => facts.query_resolve_destination,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FEATURES: [GpuCapabilityFeature; 8] = [
+        GpuCapabilityFeature::Compute,
+        GpuCapabilityFeature::RenderPipeline,
+        GpuCapabilityFeature::Copy,
+        GpuCapabilityFeature::IndirectDraw,
+        GpuCapabilityFeature::StorageTexture,
+        GpuCapabilityFeature::DepthAttachment,
+        GpuCapabilityFeature::TimestampQuery,
+        GpuCapabilityFeature::Presentation,
+    ];
+    const FALLBACKS: [GpuPreferredFallback; 3] = [
+        GpuPreferredFallback::ContinueWithoutFeature,
+        GpuPreferredFallback::DisableInstrumentation,
+        GpuPreferredFallback::SelectAlternativeWork,
+    ];
+
+    #[test]
+    fn preferred_degradation_mapping_accepts_only_the_explicit_feature_pair() {
+        for feature in FEATURES {
+            for fallback in FALLBACKS {
+                let mut requirements = GpuCapabilityRequirements::new();
+                requirements
+                    .insert(GpuCapabilityRequirement::Preferred { feature, fallback })
+                    .unwrap();
+                let result =
+                    validate_descriptor_semantics(&GpuContextDescriptor::new(requirements));
+                assert_eq!(
+                    result.is_ok(),
+                    preferred_degradation_is_valid(feature, fallback),
+                    "{feature:?} with {fallback:?}"
+                );
+                if !preferred_degradation_is_valid(feature, fallback) {
+                    assert_eq!(
+                        result.unwrap_err().category(),
+                        GpuContextRequestErrorCategory::InvalidDegradation
+                    );
+                }
+            }
+        }
     }
 }
