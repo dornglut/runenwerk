@@ -1,0 +1,222 @@
+// Decision-complete implementation specification for RunenGPU G4C3.
+// G4C3 starts only after accepted G4C2 and an explicitly activated child issue.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENGPU-G4C3",
+    title: "Pipeline Realization and Final Renderer Cutover",
+    lifecycle_state: "planned-blocked",
+    implementation_authorization_status: "blocked-until-accepted-g4c2-and-explicit-g4c3-issue",
+    owner: "RunenGPU pipeline realization and cutover owner",
+    source_baseline: "accepted-g4c2-merge-to-be-recorded-by-g4c3-issue",
+    planning_issue: "dornglut/runenwerk#209",
+    implementation_issue: "pending-after-accepted-g4c2",
+    umbrella_issue: "dornglut/runenwerk#188",
+    parent_issue: "dornglut/runenwerk#167",
+    blocking_predecessor: "PT-RUNENGPU-G4C2",
+    successor: "PT-RUNENGPU-G5-planning",
+
+    authority_docs: [
+        "AGENTS.md",
+        "TESTING.md",
+        "ARCHITECTURE.md",
+        "docs-site/src/content/docs/design/active/runengpu-g4b-contracts-g4c-delivery-design.md",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4b-program-interface-layout.ron",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c-wgpu-realization-cutover.ron",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c1-resource-realization.ron",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c2-program-binding-realization.ron",
+    ],
+
+    goal: "Create one private context/device-generation-bound WGPU compute/render pipeline realization authority with mandatory shader-stage-IO agreement, correctness-complete cache keys, complete current-consumer migration, deletion of renderer-owned realization/cache authority and G4-owned sidecar truth, deletion of the G4C2 pipeline bridge, and one named scoped G5 execution bridge without implementing G5 execution or G7 surfaces.",
+
+    dependency_direction: [
+        "Accepted G4B compute/render pipeline descriptors and accepted G4C2 program records, observed stage-IO signatures, layouts, and bind groups -> G4C3 private WGPU pipelines.",
+        "G4C3 replaces every CurrentRenderPipelineBridge call site and deletes that bridge.",
+        "RunenRender and non-render consumers retain semantic lowering and receive opaque pipeline handles only.",
+        "Accepted G4C3 opaque resource/program/pipeline handles -> G5 execution through CurrentRenderExecutionBridge.",
+    ],
+
+    realized_handle_contracts: [
+        "Opaque Clone non-Copy handles cover realized compute and render pipelines.",
+        "Every pipeline handle retains exact GpuContextAffinity, admitted program/entry-point identity, complete pipeline descriptor identity, dependent layout identity, and successful stage-IO compatibility evidence where applicable.",
+        "Handles expose no public raw WGPU pipeline, shader module, layout, device, queue, pointer, persistence identity, or wire identity.",
+    ],
+
+    pipeline_realization_contract: [
+        "Realize compute pipelines only from accepted complete G4B compute descriptors and accepted G4C2 program/pipeline-layout realizations.",
+        "Realize render pipelines only from accepted complete G4B render descriptors and accepted G4C2 program/pipeline-layout realizations.",
+        "Validate entry-point stage, explicit resource interface, specialization, vertex-buffer input state, primitive state, depth/stencil state, multisample state, ordered color-target output state, and capability requirements before backend creation.",
+        "For render pipelines, compare the selected vertex entry point's observed input signature against explicit vertex attributes and compare the selected fragment entry point's observed output signature against explicit ordered color-target format classes.",
+        "Reject missing, duplicate, extra, location-mismatched, or incompatible scalar/vector class facts as PipelineStageIoMismatch before backend pipeline creation.",
+        "Builtins remain separate and cannot be satisfied by user vertex attributes or color targets.",
+        "Validate exact context/device-generation affinity for every dependent program, layout, bind group where applicable, resource-format fact, and admitted requirement.",
+        "Do not use renderer IDs, labels, paths, TypeId, inferred layouts, WGPU object addresses, or naked hashes as pipeline correctness authority.",
+        "Backend pipeline creation is transactional and publishes no partial authoritative entry.",
+    ],
+
+    stage_io_compatibility: [
+        "Use the single deterministic G4B stage-IO comparison algorithms with the normalized observed signatures retained by G4C2.",
+        "Vertex compatibility compares unique shader locations and normalized scalar/vector classes; buffer slots, byte offsets, strides, and step modes remain explicit pipeline state and are validated separately.",
+        "Fragment compatibility compares unique output locations and normalized scalar/vector classes against selected color-target format classes; blend state and write masks remain explicit pipeline state.",
+        "A vertex-only render pipeline requires no fragment-output comparison and must contain no color-target state that requires a fragment entry point.",
+        "An absent shader output cannot be satisfied by an extra color target, and an observed shader output cannot be silently dropped unless an accepted normalized rule explicitly permits the selected target/write-mask relation.",
+        "Stage-IO comparison evidence participates in pipeline realization diagnostics but is not a public or persisted identity format.",
+    ],
+
+    validation_order: [
+        "Validate the complete accepted G4B pipeline descriptor.",
+        "Reject foreign context for every realized dependency.",
+        "Reject stale device generation.",
+        "Validate accepted G4C2 program, entry-point, resource-interface-agreement, observed stage-IO, pipeline-layout, and specialization identities.",
+        "Run vertex-input and fragment-output compatibility for render pipelines.",
+        "Validate primitive, depth/stencil, multisample, color-target, format, limit, alignment, and feature facts against admitted device facts.",
+        "Look up a complete typed pipeline cache key and compare full equality.",
+        "Create the private WGPU pipeline only after all deterministic checks pass.",
+        "Publish the registry entry transactionally only after backend creation succeeds.",
+    ],
+
+    registry_invariants: [
+        "Separate private registries own compute-pipeline, render-pipeline, and cache-diagnostic records.",
+        "Each registry instance is scoped to exactly one GpuContextId and GpuDeviceGeneration.",
+        "Each entry retains its complete accepted G4B descriptor, exact G4C2 dependency identities, and stage-IO compatibility evidence where applicable.",
+        "Equal duplicate requests return the same realization record; changed descriptors do not replace accepted identities.",
+        "Hash collisions cannot authorize reuse because full equality follows hashing.",
+        "No failure publishes partial state and no consumer callback runs under registry locks.",
+        "Capacity pressure is bounded and structured; no live pipeline is silently evicted.",
+    ],
+
+    pipeline_cache_keys: [
+        "Compute keys include context identity, device generation, complete admitted program/module and compute entry-point identity, explicit resource-interface identity, pipeline-layout identity, complete specialization, complete compute descriptor, relevant enabled features/effective limits/alignments, and pinned WGPU/backend compatibility revision.",
+        "Render keys additionally include selected observed vertex-input and fragment-output signatures, complete vertex-buffer layouts and attributes, primitive state, depth/stencil state, multisample state, ordered color-target formats/blend/write state, stage-IO compatibility inputs, and every relevant admitted format fact.",
+        "Full canonical WGSL identity remains reachable through the accepted G4C2 program identity; a digest never replaces full equality.",
+        "Labels, provenance text, source maps, authoring paths, renderer IDs, target aliases, WGPU object addresses, and naked hashes are excluded.",
+    ],
+
+    cache_behavior: [
+        "Initial pipeline caches are in-memory, derived, discardable, reconstructable, and scoped to one context/device generation.",
+        "Full match returns an existing realization and emits Hit.",
+        "Absent entry creates ordinarily and emits Miss.",
+        "Incompatible derived entry emits Rejected and follows ordinary realization after discard or quarantine.",
+        "Stage-IO incompatibility is a semantic rejection, not a cache miss or backend fallback.",
+        "Backend creation failure emits RealizationFailed and publishes no authoritative entry.",
+        "A cache hit changes cost only and never changes semantics.",
+        "No persisted pipeline cache blob or cross-process pipeline handle is authorized.",
+    ],
+
+    final_consumer_migration: [
+        "Repeat the exact-current-main census for every direct and transitive raw WGPU resource/program/layout/bind-group/pipeline consumer across RunenGPU, renderer backend, renderer adapters, pipelines, shader, renderer runtime, applications, examples, benches, and tests.",
+        "Migrate compute/render pipeline creation and lookup through G4C3 opaque handles.",
+        "Migrate every CurrentRenderPipelineBridge call site to G4C3 pipeline realization and delete that bridge.",
+        "Migrate current resource/program/layout/bind-group consumers to the accepted G4C1/G4C2 owners where any residual path remains.",
+        "Replace broad reusable Device/Queue/backend-object reach-through with exactly one named crate-private scoped CurrentRenderExecutionBridge.",
+        "Move no image-formation, material, view, lighting, visibility, target, overlay, reconstruction, or product policy into RunenGPU.",
+        "Preserve current surface creation/configuration/acquisition/presentation only as G7-owned migration evidence.",
+    ],
+
+    g5_bridge_contract: [
+        "Delete CurrentRenderPipelineBridge and every call site before publishing G4C3 acceptance.",
+        "Permit exactly one crate-private module named CurrentRenderExecutionBridge after G4C3 acceptance.",
+        "The bridge exists only because the current execution adapter still requires borrowed private WGPU resources, bind groups, and pipelines until G5 replaces command encoding and submission ownership.",
+        "The bridge accepts only validated opaque G4C1/G4C2/G4C3 handles and exposes narrowly typed owner-local encoding terminals for the audited current execution call path; it exposes no public accessor, Deref, AsRef, reusable raw handle, generic raw-WGPU callback, or arbitrary consumer closure.",
+        "The bridge may lend borrowed WGPU references only for the dynamic extent of encoding already accepted G3/G4 work; borrowed values cannot be stored, cloned into ownership, cached, returned, exposed publicly, or used as lookup or descriptor authority.",
+        "The bridge owns no operation, access, hazard, initialization, requirement, source, interface, stage-IO, layout, pipeline descriptor, cache, progress, completion, or lifecycle truth.",
+        "Bridge lookup repeats exact context/device-generation, resource kind, program/interface/layout, and pipeline validation and invokes no external callback under registry locks.",
+        "Source and reach-through guards permit exactly this named bridge and its one audited execution call path and reject the deleted resource/pipeline bridges, a second execution bridge, or broad Device/Queue access.",
+        "G5 must migrate the execution call path and delete CurrentRenderExecutionBridge in the same accepted G5 cutover.",
+    ],
+
+    delete_after_migration: [
+        "CurrentRenderPipelineBridge and all of its call sites.",
+        "Renderer-owned WGPU compute-pipeline and render-pipeline registries or caches.",
+        "Any residual renderer-owned shader-module, sampler, bind-group-layout, pipeline-layout, bind-group, or reusable resource realization authority missed by G4C1/G4C2.",
+        "String-only PipelineKey and renderer flow/pass/feature, path, TypeId, label, vector-position, or naked-hash keys used as GPU correctness authority.",
+        "Backend aliases or compatibility facades forwarding renderer realization/cache authority.",
+        "Synthetic G2 handle construction outside RunenGPU and the RenderFlowId-derived GpuWorkResourceId owner bridge.",
+        "Program, resource-interface, observed-stage-IO, layout, binding, pipeline, cache, generation, and realization truth in the temporary G3 execution sidecar.",
+        "Public or broad WgpuCtx Device/Queue/backend-object reach-through outside CurrentRenderExecutionBridge.",
+        "Parallel old/new realization paths and forwarding modules.",
+    ],
+
+    retain_for_g5: [
+        "Prepared G3 graph and generic operation truth.",
+        "Residual operation-specific execution payload keyed by prepared-node identity only.",
+        "Command and pass encoding, uploads, updates, staging, query-resolution execution, queue submission, polling, progress, completion, cancellation, mapping/readback, retirement, delayed destruction, and shutdown.",
+        "CurrentRenderExecutionBridge, deleted by G5.",
+    ],
+
+    retain_for_g7: [
+        "Runenwerk window and event-loop policy.",
+        "Temporary compatible-surface admission evidence.",
+        "Surface creation, configuration, acquisition, presentation, generations, leases, device replacement, loss classification, and reconstruction reporting.",
+    ],
+
+    structured_failures: [
+        "ForeignContext",
+        "StaleDeviceGeneration",
+        "UnknownProgramOrLayoutRealization",
+        "PipelineDescriptorInvalid",
+        "EntryPointStageMismatch",
+        "ProgramInterfaceMismatch",
+        "PipelineStageIoMismatch",
+        "RequirementNotAdmitted",
+        "FormatOrAlignmentNotAdmitted",
+        "RegistryCapacityExceeded",
+        "CacheRejected",
+        "BackendPipelineRealizationFailure",
+        "CurrentRenderExecutionBridgeViolation",
+    ],
+
+    deterministic_tests: [
+        "Foreign-context and stale-generation rejection precede backend access and cache-hit success.",
+        "Complete compute and render keys are insertion-order-independent and include every correctness field.",
+        "Equal duplicate realization reuses one record; changed descriptor rejects transactionally.",
+        "Vertex-input and color-target state affect render-pipeline identity but remain absent from program resource-interface identity.",
+        "Vertex and fragment stage-IO comparisons reject missing, extra, duplicate, location-mismatched, and incompatible scalar/vector classes.",
+        "Builtins cannot be matched by user vertex attributes or color targets.",
+        "Vertex-only pipelines reject contradictory fragment/color-target state.",
+        "CurrentRenderPipelineBridge has zero remaining source references at G4C3 acceptance.",
+        "Labels, provenance, source maps, paths, and renderer IDs do not split equal realizations.",
+        "Cache hit, miss, incompatible rejection, and backend creation failure are distinct.",
+        "CurrentRenderExecutionBridge rejects foreign, stale, wrong-kind, storage, caching, return, and non-encoding attempts and has one audited execution call path.",
+        "Source/dependency/reach-through guards reject renderer-owned realization authority, synthetic handles, broad Device/Queue access, deleted predecessor bridges, second execution bridges, and G4-owned sidecar truth.",
+        "Complete current-consumer and deletion inventories are enforced.",
+    ],
+
+    environment_tests: [
+        "Create one representative compute pipeline and one representative render pipeline on an admitted device using accepted G4C2 modules/layouts.",
+        "Prove the representative render pipeline's explicit vertex attributes and color targets agree with real observed WGSL stage-IO signatures before WGPU creation.",
+        "Reject one real vertex-input mismatch and one real fragment-output/color-target mismatch with structured diagnostics before backend publication.",
+        "Prove cache reuse within one context/generation and isolation across another context/generation.",
+        "Reject actual feature, limit, format, multisample, or alignment incompatibility with structured facts.",
+        "Use CurrentRenderExecutionBridge to encode one representative current compute path and one representative render path without transferring G5 execution ownership.",
+        "Run current application/example smoke paths required to prove complete consumer cutover while leaving surfaces under G7.",
+    ],
+
+    exclusions: [
+        "No G5 command-encoding ownership, submission, progress, pressure, completion, mapping, readback, cancellation, retirement, delayed destruction, or shutdown redesign beyond preserving current execution through CurrentRenderExecutionBridge.",
+        "No raw-WGPU bridge other than CurrentRenderExecutionBridge after CurrentRenderPipelineBridge deletion and no generic callback escape hatch.",
+        "No G7 public surface, presentation, device replacement, loss, or reconstruction implementation.",
+        "No RunenRender semantics, render-tree wholesale move or rename, package extraction, new dependency, stable format, compatibility facade, generated workflow state, second bridge, or public raw-WGPU escape hatch.",
+    ],
+
+    validation: [
+        "Focused deterministic and environment-dependent pipeline/stage-IO/cutover proof.",
+        "Complete current-consumer, predecessor-bridge deletion, execution-bridge call-site, raw-WGPU reach-through, sidecar, migration, and authority-deletion census.",
+        "cargo validate",
+        "git diff --check",
+        "CI=true pnpm --dir docs-site build",
+        "Repository-owned exact-head CI and Documentation Build.",
+        "Independent complete-diff review with no unresolved blocking finding.",
+        "All tracked files remain below 131072 raw bytes.",
+    ],
+
+    acceptance: [
+        "One private context/generation-bound compute/render pipeline realization owner exists.",
+        "Every render pipeline has deterministic stage-IO agreement against the selected G4C2 program entry points before backend publication.",
+        "Pipeline cache keys and outcomes are correctness-complete and structured.",
+        "Every current consumer uses accepted G4C1/G4C2/G4C3 opaque realization authority.",
+        "CurrentRenderPipelineBridge and every replaced renderer-owned realization/cache authority, synthetic handle path, broad raw-WGPU accessor, and G4-owned sidecar field are deleted without aliases or a parallel path.",
+        "Exactly one CurrentRenderExecutionBridge remains for immediate G5 deletion; no broader raw-WGPU reach-through remains.",
+        "G5, G7, RunenRender semantics, and extraction remain separately unauthorized.",
+        "Exact-head validation and independent review pass; issue #188 may close only after accepted-main validation.",
+    ],
+)
