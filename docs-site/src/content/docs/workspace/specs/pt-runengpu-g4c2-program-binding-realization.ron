@@ -26,17 +26,19 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c1-resource-realization.ron",
     ],
 
-    goal: "Create one private context/device-generation-bound WGPU authority for canonical WGSL modules, mandatory parser/reflection agreement, bind-group layouts, pipeline layouts, typed bind groups, and their correctness-complete in-memory caches using accepted G4B contracts and accepted G4C1 resources, without realizing compute/render pipelines or performing final renderer cutover.",
+    goal: "Create one private context/device-generation-bound WGPU authority for canonical WGSL modules, mandatory parser/reflection agreement, normalized observed shader-stage IO, bind-group layouts, pipeline layouts, typed bind groups, and their correctness-complete in-memory caches using accepted G4B contracts and accepted G4C1 resources, without realizing compute/render pipelines or performing final renderer cutover.",
 
     dependency_direction: [
-        "Accepted G4B admitted source records, entry points, resource interfaces, and layouts -> G4C2 private WGSL and binding realization.",
+        "Accepted G4B admitted source records, entry points, resource interfaces, stage-IO comparison vocabulary, and layouts -> G4C2 private WGSL and binding realization.",
         "Accepted G4C1 opaque resources -> G4C2 runtime binding compatibility and typed bind groups.",
-        "Accepted G4C2 program/layout/bind-group realizations -> G4C3 compute/render pipeline realization.",
+        "Accepted G4C2 program records, including observed vertex-input and fragment-output signatures, plus layouts/bind groups -> G4C3 pipeline realization.",
     ],
 
     realized_handle_contracts: [
         "Opaque Clone non-Copy handles cover realized programs/modules, bind-group layouts, pipeline layouts, and bind groups.",
         "Every handle retains GpuContextAffinity and complete admitted descriptor identity for typed inspection.",
+        "Program handles retain normalized observed resource-interface facts and observed vertex-input/fragment-output signatures from the pinned WGSL/Naga path.",
+        "Observed stage-IO signatures are validation evidence only and cannot create vertex-buffer or color-target policy.",
         "Handles expose no raw WGPU object, Naga IR, backend module output, pointer, callback escape hatch, persistence identity, or wire identity.",
         "Bind-group handles retain exact layout identity and ordered realized binding values.",
     ],
@@ -45,17 +47,28 @@ PhaseImplementationSpec(
         "Consume only canonical WGSL admitted through the accepted G4B source registry.",
         "Reject unknown, evicted-without-live-reference, foreign-owner, or source-revision-conflicting records before backend creation.",
         "Create the private WGPU shader module only after source identity, entry-point declarations, requirements, and expected resource interface are validated.",
+        "Normalize and retain observed vertex entry-point input locations/classes and fragment entry-point output locations/classes for later G4C3 pipeline compatibility.",
         "Naga IR and backend-native outputs remain private ephemeral implementation facts and never become public identity, cache, persistence, replay, or wire formats.",
         "Backend module creation failure publishes no authoritative realization or cache entry.",
     ],
 
     mandatory_reflection_agreement: [
         "Invoke the pinned WGPU/Naga WGSL parser/reflection path for every canonical source before module publication.",
-        "Normalize observed entry-point names and stages, group/binding identities, stage visibility, resource classes, access, dimensions, sample/storage format facts, array cardinality, and applicable host-layout facts into the G4B comparison vocabulary.",
-        "Use the single G4B comparison algorithm to prove observed facts equal the explicit authoritative declarations.",
-        "Reject missing, additional, renumbered, stage-mismatched, type-mismatched, visibility-mismatched, shape-mismatched, or layout-incompatible facts as ProgramInterfaceMismatch.",
-        "Reflection may improve source-span diagnostics but may not mutate, infer, renumber, add, or remove authoritative declarations.",
+        "Normalize observed entry-point names and stages, group/binding identities, stage visibility, resource classes, access, dimensions, sample/storage format facts, array cardinality, applicable host-layout facts, vertex-input locations/classes, and fragment-output locations/classes into the G4B comparison vocabulary.",
+        "Use the single G4B resource-interface comparison algorithm to prove observed resource facts equal the explicit authoritative declarations.",
+        "Reject missing, additional, renumbered, stage-mismatched, type-mismatched, visibility-mismatched, shape-mismatched, or layout-incompatible resource facts as ProgramInterfaceMismatch.",
+        "Retain normalized stage-IO signatures with the program record; do not compare them to vertex buffers or color targets until G4C3 receives a complete render pipeline descriptor.",
+        "Reflection may improve source-span diagnostics but may not mutate, infer, renumber, add, or remove authoritative declarations or pipeline state.",
         "ProgramInterfaceMismatch is terminal for that realization request and cannot fall back to inferred WGPU layouts.",
+    ],
+
+    observed_stage_io_contract: [
+        "Observed vertex input signatures are keyed by exact vertex entry point and contain unique shader locations plus normalized scalar/vector classes.",
+        "Observed fragment output signatures are keyed by exact fragment entry point and contain unique color locations plus normalized scalar/vector classes.",
+        "Builtins are represented separately from user locations and cannot be mistaken for vertex attributes or color targets.",
+        "Duplicate or unsupported observed locations/classes reject program realization with a structured WGSL validation error.",
+        "Observed signatures participate in program realization and cache identity because they affect later pipeline compatibility.",
+        "Observed signatures are not public source identity, renderer semantics, persistence authority, or a replacement for explicit render pipeline state.",
     ],
 
     layout_realization_contract: [
@@ -78,8 +91,8 @@ PhaseImplementationSpec(
         "Validate admitted source record and exact context affinity.",
         "Reject stale device generation.",
         "Validate expected program resource interface and declared entry points.",
-        "Parse or validate canonical WGSL and normalize observed reflection facts.",
-        "Run the single mandatory interface-agreement comparison.",
+        "Parse or validate canonical WGSL and normalize observed resource-interface and stage-IO facts.",
+        "Run the single mandatory resource-interface agreement comparison.",
         "Validate complete layout descriptors against admitted device facts.",
         "Validate typed runtime binding values against the accepted interface and G4C1 realizations.",
         "Look up complete typed cache keys and compare full equality.",
@@ -90,7 +103,7 @@ PhaseImplementationSpec(
     registry_invariants: [
         "Separate private registries own program/module, bind-group-layout, pipeline-layout, bind-group, and cache-diagnostic records.",
         "Each registry instance is scoped to exactly one GpuContextId and GpuDeviceGeneration.",
-        "Each program entry retains the admitted source record, complete explicit interface, normalized observed reflection facts, and bounded diagnostics/provenance.",
+        "Each program entry retains the admitted source record, complete explicit resource interface, normalized observed resource facts, observed stage-IO signatures, and bounded diagnostics/provenance.",
         "Each layout and bind-group entry retains its complete typed descriptor and exact dependency identities.",
         "Equal duplicate requests return the same realization record; changed descriptors do not replace accepted identities.",
         "Hash collisions cannot authorize reuse because full equality follows hashing.",
@@ -98,7 +111,7 @@ PhaseImplementationSpec(
     ],
 
     cache_key_contracts: [
-        "Program keys include context identity, device generation, source owner/key/revision, full canonical WGSL identity and digest, entry-point declarations, complete expected interface, normalized observed reflection facts, admitted requirements, and pinned WGPU/backend compatibility revision.",
+        "Program keys include context identity, device generation, source owner/key/revision, full canonical WGSL identity and digest, entry-point declarations, complete expected resource interface, normalized observed resource facts, observed stage-IO signatures, admitted requirements, and pinned WGPU/backend compatibility revision.",
         "Bind-group-layout keys include context affinity, complete group descriptor, relevant admitted features/limits, and internal descriptor compatibility revision.",
         "Pipeline-layout keys include context affinity, ordered complete group-layout identities, relevant admitted features/limits, and internal descriptor compatibility revision.",
         "Bind-group keys include context affinity, complete layout identity, ordered typed values, complete G4C1 realization identities/ranges/generations, and relevant admitted facts.",
@@ -110,15 +123,15 @@ PhaseImplementationSpec(
         "Full match returns an existing realization and emits Hit.",
         "Absent entry creates ordinarily and emits Miss.",
         "Incompatible derived entry emits Rejected and follows ordinary realization after discard or quarantine.",
-        "Parser/reflection disagreement is a semantic rejection, not a cache miss or fallback.",
+        "Resource-interface disagreement is a semantic rejection, not a cache miss or fallback.",
         "Backend creation failure emits RealizationFailed and publishes no authoritative entry.",
-        "No persisted module, layout, bind-group, Naga IR, backend output, or cross-process handle format is authorized.",
+        "No persisted module, layout, bind-group, Naga IR, observed signature, backend output, or cross-process handle format is authorized.",
     ],
 
     current_consumer_migration: [
         "Repeat the exact-current-main census for shader-module, binding-layout, pipeline-layout, bind-group, runtime-binding, parameter-byte, sidecar, renderer setup, material, UI, example, bench, and test consumers.",
         "Migrate explicit program/interface/layout/bind-group realization through the G4C2 owner while retaining filesystem/watch/reload/LKG policy in Runenwerk and semantic shader meaning in RunenRender or other consumers.",
-        "Classify compute/render pipeline realization and final renderer cutover explicitly for G4C3 rather than changing them here.",
+        "Classify render-pipeline stage-IO comparison, compute/render pipeline realization, and final renderer cutover explicitly for G4C3 rather than changing them here.",
         "Preserve existing G5 command encoding and G7 surface behavior as migration evidence only.",
     ],
 
@@ -127,7 +140,7 @@ PhaseImplementationSpec(
         "Automatic or inferred WGPU layout authority.",
         "Program/interface/layout/bind-group keys based only on strings, paths, TypeId, renderer IDs, labels, or naked hashes.",
         "Parallel WGSL module or runtime binding realization paths outside the RunenGPU owner.",
-        "G4C2-owned program, interface, layout, binding, reflection, and cache truth in the temporary G3 execution sidecar.",
+        "G4C2-owned program, resource-interface, observed-stage-IO, layout, binding, reflection, and cache truth in the temporary G3 execution sidecar.",
     ],
 
     structured_failures: [
@@ -137,6 +150,7 @@ PhaseImplementationSpec(
         "SourceRevisionConflict",
         "WgslParseOrValidationFailed",
         "ProgramInterfaceMismatch",
+        "ObservedStageIoInvalid",
         "UnknownLayout",
         "LayoutDescriptorInvalid",
         "RuntimeBindingIncompatible",
@@ -148,9 +162,10 @@ PhaseImplementationSpec(
 
     deterministic_tests: [
         "Foreign-context and stale-generation rejection precede backend access and cache-hit success.",
-        "Synthetic observed WGSL facts exercise every mandatory agreement field and exact mismatch category.",
-        "Reflection cannot add, remove, renumber, or mutate authoritative declarations.",
-        "Complete module/layout/bind-group keys are insertion-order-independent and include every correctness field.",
+        "Synthetic observed WGSL resource facts exercise every mandatory agreement field and exact mismatch category.",
+        "Observed vertex/fragment signatures normalize independently of parser enumeration order and reject duplicate or unsupported user locations/classes.",
+        "Reflection cannot add, remove, renumber, or mutate authoritative declarations or pipeline state.",
+        "Complete module/layout/bind-group keys are insertion-order-independent and include every correctness field, including observed stage IO.",
         "Equal duplicate realization reuses one record; changed descriptor rejects transactionally.",
         "Typed binding values reject wrong kind, range, size, alignment, format, sample class, access, array cardinality, foreign context, and stale generation.",
         "Labels, provenance, source maps, and authoring paths do not split equal realizations.",
@@ -159,14 +174,15 @@ PhaseImplementationSpec(
 
     environment_tests: [
         "Parse and realize one representative canonical WGSL compute program and one representative render program on an admitted device without creating pipelines.",
-        "Prove explicit declarations agree with real pinned WGPU/Naga observed facts.",
-        "Reject one real WGSL/interface mismatch with a structured source-span diagnostic where available.",
+        "Prove explicit resource declarations agree with real pinned WGPU/Naga observed facts.",
+        "Retain real normalized vertex-input and fragment-output signatures for the representative render program.",
+        "Reject one real WGSL/resource-interface mismatch with a structured source-span diagnostic where available.",
         "Realize representative bind-group and pipeline layouts and one typed bind group using accepted G4C1 resources.",
         "Prove cache reuse within one context/generation and isolation across another context/generation.",
     ],
 
     exclusions: [
-        "No compute or render pipeline realization.",
+        "No compute or render pipeline realization and no comparison of stage IO against a render pipeline descriptor.",
         "No final renderer-wide realization/cache cutover beyond module/layout/bind-group authority fully replaced here.",
         "No authoring compiler, WESL, Slang, HLSL, GLSL, SPIR-V, source discovery, watch, reload scheduling, or last-known-good implementation.",
         "No G5 execution, submission, progress, readback, cancellation, retirement, delayed destruction, or shutdown redesign.",
@@ -187,11 +203,12 @@ PhaseImplementationSpec(
 
     acceptance: [
         "One private context/generation-bound WGSL module, layout, and bind-group realization owner exists.",
-        "Every published module has mandatory pinned parser/reflection agreement with the explicit G4B authority.",
+        "Every published module has mandatory pinned parser/reflection agreement with the explicit G4B resource authority.",
+        "Every render program retains normalized observed vertex-input and fragment-output signatures for G4C3.",
         "Typed layouts and bind groups use accepted G4C1 resource handles and complete compatibility validation.",
         "Program/layout/bind-group cache keys and outcomes are correctness-complete and structured.",
         "Every replaced renderer-owned module/layout/bind-group authority is migrated and deleted without aliases or a parallel path.",
-        "Compute/render pipelines and final cutover remain blocked for G4C3.",
+        "Compute/render pipelines and final stage-IO compatibility remain blocked for G4C3.",
         "Exact-head validation and independent review pass, then G4C3 may be activated from accepted main.",
     ],
 )
