@@ -1,7 +1,7 @@
 // Umbrella specification for the ordered RunenGPU G4C realization program.
 // This umbrella is not directly implementable and must never own one broad branch or PR.
 
-PhaseProgramSpec(
+PhaseImplementationSpec(
     phase_id: "PT-RUNENGPU-G4C",
     title: "WGPU Realization, Cache Compatibility, and Renderer Cutover Program",
     lifecycle_state: "planned-blocked-umbrella",
@@ -56,7 +56,7 @@ PhaseProgramSpec(
             specification: "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c2-program-binding-realization.ron",
             state: "blocked-until-accepted-g4c1-and-explicit-child-issue",
             predecessor: "PT-RUNENGPU-G4C1",
-            outcome: "Canonical WGSL modules, mandatory parser/reflection agreement, bind-group layouts, pipeline layouts, typed bind groups, and their caches.",
+            outcome: "Canonical WGSL modules, reflection agreement, bind-group layouts, pipeline layouts, typed bind groups, and their caches.",
         ),
         (
             phase_id: "PT-RUNENGPU-G4C3",
@@ -64,7 +64,7 @@ PhaseProgramSpec(
             specification: "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c3-pipeline-cutover.ron",
             state: "blocked-until-accepted-g4c2-and-explicit-child-issue",
             predecessor: "PT-RUNENGPU-G4C2",
-            outcome: "Compute/render pipelines, complete cache keys, current-consumer migration, deletion of renderer-owned realization/cache authority, and one bounded G5 bridge.",
+            outcome: "Compute/render pipelines, complete cache keys, current-consumer migration, deletion of renderer-owned realization/cache authority, and the single bounded G5 bridge.",
         ),
     ],
 
@@ -102,7 +102,7 @@ PhaseProgramSpec(
         "All tracked files remain below 131072 raw bytes.",
     ],
 
-    umbrella_acceptance: [
+    acceptance: [
         "PT-RUNENGPU-G4C1, G4C2, and G4C3 boundaries and dependencies remain explicit and non-overlapping.",
         "Issue #188 links the three accepted child issues and records their exact accepted merges.",
         "G4C3 proves complete migration and deletion; G4C1 or G4C2 cannot close the umbrella early.",
