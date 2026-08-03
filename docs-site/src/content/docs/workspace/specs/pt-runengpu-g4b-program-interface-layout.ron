@@ -7,7 +7,7 @@ PhaseImplementationSpec(
     lifecycle_state: "planned-blocked",
     implementation_authorization_status: "blocked-until-accepted-runenwerk-209-and-explicitly-activated-runenwerk-187",
     owner: "RunenGPU contract owner",
-    source_baseline: "23bc982703f93d15ac39dd71d61bae9e23854141",
+    source_baseline: "accepted-runenwerk-209-merge-to-be-recorded-by-runenwerk-187",
     planning_issue: "dornglut/runenwerk#209",
     implementation_issue: "dornglut/runenwerk#187",
     parent_issue: "dornglut/runenwerk#167",
