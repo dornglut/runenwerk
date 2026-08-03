@@ -12,6 +12,7 @@ pub enum GpuProgramContractCause {
     ProgramInterfaceMismatch,
     BindGroupLayoutInvalid,
     DuplicateBindGroupLayout,
+    RuntimeBindingIncompatible,
     InvalidDiagnosticMetadata,
 }
 

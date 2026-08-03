@@ -9,6 +9,7 @@ mod diagnostics;
 mod entry_point;
 mod interface;
 mod layout;
+mod runtime_binding;
 mod source;
 
 pub use contract_diagnostics::*;
@@ -17,4 +18,5 @@ pub use diagnostics::*;
 pub use entry_point::*;
 pub use interface::*;
 pub use layout::*;
+pub use runtime_binding::*;
 pub use source::*;
