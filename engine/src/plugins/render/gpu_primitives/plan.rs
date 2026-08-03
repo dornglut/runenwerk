@@ -449,6 +449,7 @@ fn dispatch_for_count(element_count: u32) -> [u32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{GpuCapabilityProfile, GpuContext, GpuContextDescriptor};
     use crate::plugins::render::{
         CompiledDrawSource, CompiledPassExecutionPlan, CounterResetDescriptor, DrawIndirectArgs,
         IndirectDrawArgsGenerationDescriptor, PrefixScanMode, RenderFlow, RenderShaderReference,
@@ -456,7 +457,6 @@ mod tests {
         compile_flow_plan,
     };
     use std::collections::{BTreeMap, BTreeSet};
-    use std::sync::Arc;
     use wgpu::util::DeviceExt;
 
     fn dispatch_plan_for_test(plan: &GpuPrimitiveExecutionPlan) -> GpuPrimitiveDispatchPlan {
@@ -809,9 +809,23 @@ mod tests {
 
     #[test]
     fn gpu_primitives_runtime_dispatch_writes_scan_scatter_and_draw_args_when_adapter_available() {
-        let Some((device, queue)) = runtime_primitive_device() else {
-            return;
+        let context = match pollster::block_on(GpuContext::request(GpuContextDescriptor::new(
+            GpuCapabilityProfile::ComputeBaseline.requirements(),
+        ))) {
+            Ok(context) => context,
+            Err(error) => {
+                println!("gpu primitive runtime dispatch test skipped: {error}");
+                return;
+            }
         };
+        let loan = context.current_render_device_queue();
+        let (device, queue) = (loan.device, loan.queue);
+        if !context
+            .device_facts()
+            .is_enabled(crate::plugins::gpu::GpuCapabilityFeature::Compute)
+        {
+            return;
+        }
         let element_count = 130_u32;
         let (flow, scan_input) = RenderFlow::new("test.primitive.runtime")
             .storage_array::<U32ScanElement>("scan.input", u64::from(element_count))
@@ -866,19 +880,19 @@ mod tests {
 
         let mut buffers = BTreeMap::<GpuBufferHandle, wgpu::Buffer>::new();
         insert_storage_buffer(
-            &device,
+            device,
             &mut buffers,
             scan_input.clone(),
             &vec![1_u32; element_count as usize],
         );
         insert_storage_buffer(
-            &device,
+            device,
             &mut buffers,
             scan_output.clone(),
             &vec![0_u32; element_count as usize],
         );
         insert_storage_buffer(
-            &device,
+            device,
             &mut buffers,
             source_indices.clone(),
             &(0..element_count)
@@ -886,15 +900,15 @@ mod tests {
                 .collect::<Vec<_>>(),
         );
         insert_storage_buffer(
-            &device,
+            device,
             &mut buffers,
             sorted_indices.clone(),
             &vec![0_u32; element_count as usize],
         );
-        insert_storage_buffer(&device, &mut buffers, draw_args.clone(), &[0_u32; 4]);
+        insert_storage_buffer(device, &mut buffers, draw_args.clone(), &[0_u32; 4]);
         for temporary in &dispatch_plan.temporary_storage {
             insert_storage_buffer(
-                &device,
+                device,
                 &mut buffers,
                 temporary.clone(),
                 &vec![0_u32; (temporary.descriptor().size_bytes() / 4) as usize],
@@ -908,10 +922,10 @@ mod tests {
             label: Some("gpu_primitive_runtime_test_encoder"),
         });
         for stage in &dispatch_plan.stages {
-            encode_runtime_primitive_stage(&device, &mut encoder, workspace_root, &buffers, stage);
+            encode_runtime_primitive_stage(device, &mut encoder, workspace_root, &buffers, stage);
         }
         let scan_readback = copy_storage_buffer_to_readback(
-            &device,
+            device,
             &mut encoder,
             buffers
                 .get(&scan_output)
@@ -919,7 +933,7 @@ mod tests {
             u64::from(element_count) * 4,
         );
         let scatter_readback = copy_storage_buffer_to_readback(
-            &device,
+            device,
             &mut encoder,
             buffers
                 .get(&sorted_indices)
@@ -927,7 +941,7 @@ mod tests {
             u64::from(element_count) * 4,
         );
         let args_readback = copy_storage_buffer_to_readback(
-            &device,
+            device,
             &mut encoder,
             buffers
                 .get(&draw_args)
@@ -936,9 +950,9 @@ mod tests {
         );
         queue.submit(std::iter::once(encoder.finish()));
 
-        let scan_values = read_u32_buffer(&device, &scan_readback);
-        let scatter_values = read_u32_buffer(&device, &scatter_readback);
-        let args_values = read_u32_buffer(&device, &args_readback);
+        let scan_values = read_u32_buffer(device, &scan_readback);
+        let scatter_values = read_u32_buffer(device, &scatter_readback);
+        let args_values = read_u32_buffer(device, &args_readback);
 
         assert_eq!(
             scan_values,
@@ -973,39 +987,6 @@ mod tests {
         let plan = GpuPrimitiveExecutionPlan::new("scan.plan", [GpuPrimitiveStep::from(scan)])
             .expect("valid primitive plan");
         dispatch_plan_for_test(&plan).stage_count()
-    }
-
-    fn runtime_primitive_device() -> Option<(Arc<wgpu::Device>, Arc<wgpu::Queue>)> {
-        let instance = wgpu::Instance::new(
-            &wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::PRIMARY,
-                ..wgpu::InstanceDescriptor::default()
-            }
-            .with_env(),
-        );
-        let adapter =
-            match pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                force_fallback_adapter: false,
-                compatible_surface: None,
-            })) {
-                Ok(adapter) => adapter,
-                Err(err) => {
-                    println!("gpu primitive runtime dispatch test skipped: no adapter: {err}");
-                    return None;
-                }
-            };
-        match pollster::block_on(crate::plugins::render::backend::request_device_and_queue(
-            &adapter,
-        )) {
-            Ok((device, queue, _timing)) => Some((device, queue)),
-            Err(err) => {
-                println!(
-                    "gpu primitive runtime dispatch test skipped: device request failed: {err}"
-                );
-                None
-            }
-        }
     }
 
     fn insert_storage_buffer(

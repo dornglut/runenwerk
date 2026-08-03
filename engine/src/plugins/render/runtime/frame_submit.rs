@@ -83,10 +83,7 @@ pub(crate) fn frame_render_submit_system(
         .target_size_px;
 
     let render_surface_id = prepared_frame.surface.render_surface_id;
-    let surface_size = gfx
-        .ctx
-        .surface_config(render_surface_id)
-        .map(|config| (config.width, config.height));
+    let surface_size = gfx.surface_size(render_surface_id);
     if surface_size != Some((target_w, target_h)) {
         gfx.resize(render_surface_id, target_w, target_h);
     }
@@ -493,10 +490,7 @@ fn render_additional_surfaces(
             .main_view()
             .ok_or_else(|| anyhow!("prepared render frame is missing a main surface view"))?
             .target_size_px;
-        let surface_size = gfx
-            .ctx
-            .surface_config(render_surface_id)
-            .map(|config| (config.width, config.height));
+        let surface_size = gfx.surface_size(render_surface_id);
         if surface_size != Some((target_w, target_h)) {
             gfx.resize(render_surface_id, target_w, target_h);
         }

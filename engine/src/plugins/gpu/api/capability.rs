@@ -238,6 +238,10 @@ pub struct GpuTextureFormatCapabilities {
     pub depth_stencil: bool,
     pub copy_source: bool,
     pub copy_destination: bool,
+    /// Texture-block dimensions are absent when the backend cannot report them.
+    pub block_dimensions: Option<(u32, u32)>,
+    /// Copy bytes per texture block are absent when the backend cannot report them.
+    pub block_copy_size: Option<u32>,
 }
 
 impl GpuTextureFormatCapabilities {
@@ -251,6 +255,8 @@ impl GpuTextureFormatCapabilities {
             depth_stencil: false,
             copy_source: false,
             copy_destination: false,
+            block_dimensions: None,
+            block_copy_size: None,
         }
     }
 }
@@ -351,6 +357,8 @@ impl GpuCapabilities {
         self.features.contains(&feature)
     }
 
+    /// Generic logical capability limits. G4A additionally exposes typed adapter,
+    /// device, and workload facts so this value is never published as device truth.
     pub const fn limits(&self) -> GpuLimits {
         self.limits
     }

@@ -1,20 +1,35 @@
-use engine::plugins::render::backend::RenderBackendTimingCapabilities;
+use engine::plugins::gpu::{
+    GpuCapabilities, GpuCapabilityAdmission, GpuCapabilityFeature, GpuCapabilityRequirement,
+    GpuCapabilityRequirements, GpuLimits,
+};
 use engine::plugins::render::inspect::{
     PassTimingSample, RenderDebugTimingsState, RenderGpuTimingCapability,
     RenderGpuTimingDiagnostic, RenderPassTimingEvidence, RenderReadinessBudgetKind,
     RenderReadinessBudgetMeasurements, RenderReadinessBudgetThreshold, RenderTimingSource,
     evaluate_render_readiness_budgets, summarize_gpu_pass_timing_evidence, summarize_pass_timings,
 };
-use wgpu::Features;
 
 #[test]
-fn render_gpu_timing_backend_capability_tracks_timestamp_query_feature() {
-    assert!(
-        !RenderBackendTimingCapabilities::from_adapter_features(Features::empty()).timestamp_query
+fn render_gpu_timing_admission_tracks_enabled_timestamp_query_feature() {
+    let mut requirements = GpuCapabilityRequirements::new();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TimestampQuery,
+        ))
+        .unwrap();
+    let capabilities = GpuCapabilities::from_normalized_facts(
+        [GpuCapabilityFeature::TimestampQuery],
+        GpuLimits::new(1, 1, 1, 1, 1).unwrap(),
+        [],
     );
     assert!(
-        RenderBackendTimingCapabilities::from_adapter_features(Features::TIMESTAMP_QUERY)
-            .timestamp_query
+        GpuCapabilityAdmission::evaluate(
+            "timing",
+            &requirements,
+            &capabilities,
+            [GpuCapabilityFeature::TimestampQuery],
+        )
+        .is_ok()
     );
 }
 

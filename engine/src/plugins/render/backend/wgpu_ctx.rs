@@ -1,12 +1,13 @@
-use super::{
-    RenderBackendTimingCapabilities, build_surface_config, configure_surface,
-    preferred_surface_format, request_device_and_queue,
+use super::{build_surface_config, preferred_surface_format};
+use crate::plugins::gpu::{
+    GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuContext,
+    GpuContextDescriptor, GpuPowerPreference, GpuPreferredFallback,
 };
 use anyhow::Result;
 use pollster::block_on;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use wgpu::*;
+use wgpu::{Surface, SurfaceConfiguration, SurfaceError, SurfaceTexture};
 use winit::window::Window;
 
 use super::RenderSurfaceId;
@@ -19,39 +20,37 @@ struct WgpuSurfaceState<'window> {
 
 #[derive(Debug)]
 pub struct WgpuCtx<'window> {
-    instance: Instance,
-    adapter: Adapter,
+    context: GpuContext,
     surfaces: BTreeMap<RenderSurfaceId, WgpuSurfaceState<'window>>,
-    pub device: Arc<Device>,
-    pub queue: Arc<Queue>,
-    pub timing_capabilities: RenderBackendTimingCapabilities,
 }
 
 impl<'window> WgpuCtx<'window> {
     async fn new_async(window: Arc<Window>) -> Result<Self> {
-        let instance = Instance::default();
-        let surface = instance.create_surface(Arc::clone(&window))?;
+        let mut requirements = GpuCapabilityProfile::DesktopPresentationBaseline.requirements();
+        requirements.insert(GpuCapabilityRequirement::Preferred {
+            feature: GpuCapabilityFeature::TimestampQuery,
+            fallback: GpuPreferredFallback::DisableInstrumentation,
+        })?;
+        let descriptor = GpuContextDescriptor::new(requirements)
+            .with_label("Runenwerk current host")
+            .with_provenance("temporary G7 host compatibility")
+            .with_power_preference(GpuPowerPreference::HighPerformance);
+        let (context, surface) =
+            GpuContext::request_for_current_host(descriptor, Arc::clone(&window)).await?;
 
-        let adapter = instance
-            .request_adapter(&RequestAdapterOptions {
-                power_preference: PowerPreference::HighPerformance,
-                force_fallback_adapter: false,
-                compatible_surface: Some(&surface),
-            })
-            .await?;
-
-        let (device, queue, timing_capabilities) = request_device_and_queue(&adapter).await?;
-
-        let size = window.inner_size();
-        let caps = surface.get_capabilities(&adapter);
-        let format = preferred_surface_format(&caps);
-        let surface_config =
-            build_surface_config(size.width, size.height, format, caps.alpha_modes[0]);
-        configure_surface(&surface, &device, &surface_config);
+        let surface_config = {
+            let bridge = context.current_host_surface_bridge();
+            let size = window.inner_size();
+            let caps = bridge.capabilities(&surface);
+            let format = preferred_surface_format(&caps);
+            let surface_config =
+                build_surface_config(size.width, size.height, format, caps.alpha_modes[0]);
+            bridge.configure(&surface, &surface_config);
+            surface_config
+        };
 
         Ok(Self {
-            instance,
-            adapter,
+            context,
             surfaces: BTreeMap::from([(
                 RenderSurfaceId::primary(),
                 WgpuSurfaceState {
@@ -59,9 +58,6 @@ impl<'window> WgpuCtx<'window> {
                     config: surface_config,
                 },
             )]),
-            device,
-            queue,
-            timing_capabilities,
         })
     }
 
@@ -75,16 +71,20 @@ impl<'window> WgpuCtx<'window> {
         window: Arc<Window>,
         target_size_px: (u32, u32),
     ) -> Result<()> {
-        let surface = self.instance.create_surface(window)?;
-        let caps = surface.get_capabilities(&self.adapter);
-        let format = preferred_surface_format(&caps);
-        let config = build_surface_config(
-            target_size_px.0,
-            target_size_px.1,
-            format,
-            caps.alpha_modes[0],
-        );
-        configure_surface(&surface, &self.device, &config);
+        let (surface, config) = {
+            let bridge = self.context.current_host_surface_bridge();
+            let surface = bridge.create_surface(window)?;
+            let caps = bridge.capabilities(&surface);
+            let format = preferred_surface_format(&caps);
+            let config = build_surface_config(
+                target_size_px.0,
+                target_size_px.1,
+                format,
+                caps.alpha_modes[0],
+            );
+            bridge.configure(&surface, &config);
+            (surface, config)
+        };
         self.surfaces
             .insert(render_surface_id, WgpuSurfaceState { surface, config });
         Ok(())
@@ -113,7 +113,9 @@ impl<'window> WgpuCtx<'window> {
         };
         state.config.width = width.max(1);
         state.config.height = height.max(1);
-        configure_surface(&state.surface, &self.device, &state.config);
+        self.context
+            .current_host_surface_bridge()
+            .configure(&state.surface, &state.config);
         true
     }
 
@@ -128,7 +130,7 @@ impl<'window> WgpuCtx<'window> {
             .get_current_texture()
     }
 
-    pub fn timing_capabilities(&self) -> RenderBackendTimingCapabilities {
-        self.timing_capabilities
+    pub(crate) fn context(&self) -> &GpuContext {
+        &self.context
     }
 }
