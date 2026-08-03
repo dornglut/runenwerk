@@ -11,6 +11,7 @@ mod interface;
 mod layout;
 mod runtime_binding;
 mod source;
+mod stage_io;
 
 pub use contract_diagnostics::*;
 pub use descriptor::*;
@@ -20,3 +21,4 @@ pub use interface::*;
 pub use layout::*;
 pub use runtime_binding::*;
 pub use source::*;
+pub use stage_io::*;

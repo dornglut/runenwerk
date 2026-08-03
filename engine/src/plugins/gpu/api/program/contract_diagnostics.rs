@@ -13,6 +13,8 @@ pub enum GpuProgramContractCause {
     BindGroupLayoutInvalid,
     DuplicateBindGroupLayout,
     RuntimeBindingIncompatible,
+    StageIoSignatureInvalid,
+    PipelineStageIoMismatch,
     InvalidDiagnosticMetadata,
 }
 
