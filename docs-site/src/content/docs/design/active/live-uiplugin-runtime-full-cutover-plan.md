@@ -17,7 +17,6 @@ related_docs:
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
   - ../../workspace/planning/decision-register.md
   - ../../workspace/complete-investigation-gate.md
   - ../../workspace/complete-design-gate.md
@@ -615,7 +614,6 @@ Allowed scope:
 docs-site/src/content/docs/reports/closeouts/**
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 owning design docs only for final truth and known gaps
 ```
@@ -716,7 +714,7 @@ A simple implementation agent must receive exactly one phase at a time. The prom
 
 ```text
 phase ID and title
-authority docs to read, including AGENTS.md, ARCHITECTURE.md, DOMAIN_MAP.md, TESTING.md, workflow gates, active-work, roadmap, production-tracks, and the owning design/architecture docs
+authority docs to read, including AGENTS.md, ARCHITECTURE.md, DOMAIN_MAP.md, TESTING.md, workflow gates, active-work, roadmap, and the owning design/architecture docs
 allowed files/crates
 forbidden files/crates
 expected public API shape

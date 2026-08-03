@@ -13,7 +13,6 @@ related_docs:
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
   - ../../workspace/planning/decision-register.md
   - ../../workspace/complete-investigation-gate.md
   - ../../workspace/complete-design-gate.md
@@ -188,7 +187,6 @@ engine tests/examples needed for live Counter proof
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
 

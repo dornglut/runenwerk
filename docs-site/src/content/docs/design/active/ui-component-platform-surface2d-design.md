@@ -20,7 +20,6 @@ related_docs:
   - ../../reports/investigations/surface2d-future-pressure-branch-review.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
   - ../../workspace/planning/decision-register.md
   - ../../workspace/workflow-lifecycle.md
   - ../../workspace/complete-investigation-gate.md
@@ -64,7 +63,6 @@ CRATES.md
 docs-site/src/content/docs/domain/ui/architecture.md
 docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
-docs-site/src/content/docs/workspace/planning/production-tracks.md
 docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md
 docs-site/src/content/docs/reports/investigations/phase-16-surface2d-source-investigation.md
 PR #56 Phase 15 closeout / Phase 16 planning hardening

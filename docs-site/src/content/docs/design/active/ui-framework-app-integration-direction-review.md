@@ -22,7 +22,6 @@ related_docs:
   - ../../workspace/planning/typed-app-program-ui-proof-001-planning.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
   - ../../workspace/planning/decision-register.md
   - ./live-uiplugin-runtime-and-surface-frame-rendering-design.md
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md

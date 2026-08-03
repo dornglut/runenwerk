@@ -18,7 +18,6 @@ related_docs:
   - ../../guidelines/programming-principles.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
 ---
 
 # Runenwerk Typed App Composition Plugin Framework Roadmap

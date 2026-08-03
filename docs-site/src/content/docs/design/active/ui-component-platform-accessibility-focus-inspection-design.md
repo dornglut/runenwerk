@@ -17,7 +17,6 @@ related_docs:
   - ../../domain/ui/roadmap.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
 ---
 
 # UI Component Platform Accessibility Focus And Inspection Design

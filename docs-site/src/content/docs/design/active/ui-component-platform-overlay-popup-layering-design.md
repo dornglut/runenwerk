@@ -9,7 +9,6 @@ last_reviewed: 2026-07-02
 related_docs:
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
   - ../../workspace/planning/completed-work.md
   - ../../workspace/planning/decision-register.md
   - ./ui-component-platform-generic-interaction-design.md

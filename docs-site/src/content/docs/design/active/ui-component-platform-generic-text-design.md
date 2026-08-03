@@ -16,7 +16,6 @@ related_docs:
   - ../../domain/ui/roadmap.md
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
   - ../../workspace/planning/decision-register.md
 ---
 

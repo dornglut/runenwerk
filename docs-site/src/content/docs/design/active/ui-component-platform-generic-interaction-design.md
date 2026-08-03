@@ -9,7 +9,6 @@ last_reviewed: 2026-06-30
 related_docs:
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/production-tracks.md
   - ./ui-component-platform-input-gesture-device-design.md
   - ./ui-component-platform-executable-interaction-story-design.md
   - ./ui-component-platform-executable-interaction-story-implementation-scope.md
