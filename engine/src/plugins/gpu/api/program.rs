@@ -8,6 +8,7 @@ mod descriptor;
 mod diagnostics;
 mod entry_point;
 mod interface;
+mod layout;
 mod source;
 
 pub use contract_diagnostics::*;
@@ -15,4 +16,5 @@ pub use descriptor::*;
 pub use diagnostics::*;
 pub use entry_point::*;
 pub use interface::*;
+pub use layout::*;
 pub use source::*;

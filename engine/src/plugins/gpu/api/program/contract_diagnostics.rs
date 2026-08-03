@@ -10,6 +10,8 @@ pub enum GpuProgramContractCause {
     BindingDeclarationInvalid,
     DuplicateBindingKey,
     ProgramInterfaceMismatch,
+    BindGroupLayoutInvalid,
+    DuplicateBindGroupLayout,
     InvalidDiagnosticMetadata,
 }
 
