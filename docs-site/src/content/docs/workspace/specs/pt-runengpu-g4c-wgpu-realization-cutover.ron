@@ -32,13 +32,13 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/planning/active-work.md",
     ],
 
-    goal: "Complete private context/device-generation-bound WGPU realization and remove renderer-owned realization authority through three independently reviewable ordered deliveries without collapsing resource realization, program/binding realization, pipeline realization, consumer migration, and deletion into one unsafe cutover.",
+    goal: "Complete private context/device-generation-bound WGPU realization and remove renderer-owned realization authority through three independently reviewable ordered deliveries with a serialized, narrowly scoped successor-bridge ladder, without collapsing resource realization, program/binding realization, pipeline realization, consumer migration, and deletion into one unsafe cutover.",
 
     dependency_direction: [
         "G2 logical resources -> G4C1 private resource realization.",
         "Accepted G4B canonical WGSL and resource-interface contracts plus accepted G4C1 resources -> G4C2 private program, layout, and bind-group realization.",
         "Accepted G4B pipeline descriptors plus accepted G4C2 programs/layouts/bind groups -> G4C3 private pipeline realization and final consumer cutover.",
-        "Accepted G4C3 opaque realizations -> G5 execution through one bounded temporary bridge.",
+        "Accepted G4C3 opaque realizations -> G5 execution through one bounded temporary execution bridge.",
     ],
 
     child_sequence: [
@@ -48,7 +48,7 @@ PhaseImplementationSpec(
             specification: "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c1-resource-realization.ron",
             state: "blocked-until-accepted-g4b-and-explicit-child-issue",
             predecessor: "PT-RUNENGPU-G4B",
-            outcome: "Private buffers, textures, views, samplers, and query sets with affinity, transactional registries, and resource cache compatibility.",
+            outcome: "Private buffers, textures, views, samplers, and query sets with affinity, transactional registries, resource cache compatibility, and one resource successor bridge deleted by G4C2.",
         ),
         (
             phase_id: "PT-RUNENGPU-G4C2",
@@ -56,7 +56,7 @@ PhaseImplementationSpec(
             specification: "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c2-program-binding-realization.ron",
             state: "blocked-until-accepted-g4c1-and-explicit-child-issue",
             predecessor: "PT-RUNENGPU-G4C1",
-            outcome: "Canonical WGSL modules, reflection agreement, bind-group layouts, pipeline layouts, typed bind groups, and their caches.",
+            outcome: "Canonical WGSL modules, reflection agreement, observed stage IO, bind-group layouts, pipeline layouts, typed bind groups, deletion of the resource bridge, and one pipeline successor bridge deleted by G4C3.",
         ),
         (
             phase_id: "PT-RUNENGPU-G4C3",
@@ -64,8 +64,18 @@ PhaseImplementationSpec(
             specification: "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c3-pipeline-cutover.ron",
             state: "blocked-until-accepted-g4c2-and-explicit-child-issue",
             predecessor: "PT-RUNENGPU-G4C2",
-            outcome: "Compute/render pipelines, complete cache keys, current-consumer migration, deletion of renderer-owned realization/cache authority, and the single bounded G5 bridge.",
+            outcome: "Compute/render pipelines, stage-IO agreement, complete cache keys, current-consumer migration, deletion of renderer-owned realization/cache authority and the pipeline bridge, and one execution bridge deleted by G5.",
         ),
+    ],
+
+    serialized_bridge_sequence: [
+        "After G4C1, exactly one crate-private CurrentRenderResourceBridge may lend validated private resource references only to audited current renderer realization call sites; G4C2 deletes it.",
+        "After G4C2, exactly one crate-private CurrentRenderPipelineBridge may lend validated private shader-module and pipeline-layout references only to audited current pipeline creation call sites; G4C3 deletes it.",
+        "After G4C3, exactly one crate-private CurrentRenderExecutionBridge may lend validated private resource/binding/pipeline references only while the current execution adapter encodes accepted work; G5 deletes it.",
+        "A predecessor bridge is deleted before its successor bridge is accepted; two G4C migration bridges never remain active at one accepted boundary.",
+        "Every bridge is narrowly typed, owner-local, non-public, non-authoritative, process-local, context/generation checked, source-guarded, and forbidden from storing, cloning, caching, returning, persisting, or treating borrowed backend objects as lookup or descriptor authority.",
+        "No bridge exposes Deref, AsRef, a reusable raw handle, a generic raw-WGPU callback, an arbitrary consumer closure, or broad Device/Queue access.",
+        "Each bridge has one immediate deletion owner and one complete call-site census; no compatibility bridge survives beyond that successor acceptance.",
     ],
 
     program_invariants: [
@@ -85,15 +95,16 @@ PhaseImplementationSpec(
     ],
 
     cross_child_migration_rules: [
-        "G4C1 may migrate resource allocation and lookup consumers only; it does not realize WGSL modules, layouts, bind groups, or pipelines.",
-        "G4C2 may migrate program, layout, and bind-group consumers only after accepted G4C1 resource handles exist; it does not realize compute/render pipelines or perform final renderer cutover.",
-        "G4C3 owns the complete current-consumer migration and deletion census for renderer-owned module/layout/bind-group/pipeline caches, synthetic logical handles, broad Device/Queue reach-through, and G4-owned sidecar truth.",
-        "Each child deletes authority it fully replaces in the same accepted slice and leaves no forwarding alias or parallel old/new path.",
-        "Temporary compatibility seams require one named owner and one later deletion phase; no child creates a generic raw-WGPU escape hatch.",
+        "G4C1 migrates resource creation/ownership and converts remaining renderer realization consumers to CurrentRenderResourceBridge; it does not realize WGSL modules, layouts, bind groups, or pipelines.",
+        "G4C2 consumes opaque G4C1 handles to realize programs/layouts/bind groups, deletes CurrentRenderResourceBridge, and converts remaining current pipeline creation to CurrentRenderPipelineBridge; it does not own pipeline realization.",
+        "G4C3 realizes pipelines, deletes CurrentRenderPipelineBridge, completes every current-consumer and deletion census, and leaves only CurrentRenderExecutionBridge for G5.",
+        "Each child deletes authority and predecessor bridges it fully replaces in the same accepted slice and leaves no forwarding alias or parallel old/new path.",
+        "No bridge owns operation, access, hazard, source, interface, stage-IO, layout, pipeline, cache, execution, progress, completion, or lifecycle truth.",
     ],
 
     validation: [
-        "Each child runs its focused deterministic and environment-dependent proof.",
+        "Each child runs focused deterministic and environment-dependent proof.",
+        "Each child proves its predecessor bridge has zero remaining references and its successor bridge has only the explicitly audited call sites.",
         "Each child runs cargo validate.",
         "Each child runs git diff --check.",
         "Each child runs CI=true pnpm --dir docs-site build.",
@@ -103,10 +114,10 @@ PhaseImplementationSpec(
     ],
 
     acceptance: [
-        "PT-RUNENGPU-G4C1, G4C2, and G4C3 boundaries and dependencies remain explicit and non-overlapping.",
+        "PT-RUNENGPU-G4C1, G4C2, and G4C3 boundaries, dependencies, bridge transitions, and deletion owners remain explicit and non-overlapping.",
         "Issue #188 links the three accepted child issues and records their exact accepted merges.",
         "G4C3 proves complete migration and deletion; G4C1 or G4C2 cannot close the umbrella early.",
-        "No one-shot G4C implementation branch, PR, compatibility facade, duplicate registry, second raw bridge, or premature G5/G7/RunenRender/extraction work exists.",
+        "No one-shot G4C implementation branch, PR, compatibility facade, duplicate registry, overlapping bridge set, broad raw escape hatch, or premature G5/G7/RunenRender/extraction work exists.",
         "The umbrella closes only after accepted G4C3 and accepted-main validation.",
     ],
 )
