@@ -104,11 +104,11 @@ architecture.
 - [UI Component Platform Progression Tree View Design](ui-component-platform-progression-tree-view-design.md)
 - [UI Component Platform Render Surface Output Design](ui-component-platform-render-surface-output-design.md)
 - [UI Component Platform Spatial Canvas Design](ui-component-platform-spatial-canvas-design.md)
-- [UI Component Platform State Binding / Host Intent Design](ui-component-platform-state-binding-and-host-intent-design.md)
+- [UI Component Platform State Binding / Host Intent Design](ui-component-platform-state-binding-host-intent-design.md)
 - [UI Component Platform Story Proof Envelope Design](ui-component-platform-story-proof-envelope-design.md)
 - [UI Component Platform Surface2D Design](ui-component-platform-surface2d-design.md)
 - [UI Component Platform Text Editing / Editable Text Behavior Design](ui-component-platform-text-editing-design.md)
-- [UI Component Platform Theme / State / Style Design](ui-component-platform-theme-state-and-style-design.md)
+- [UI Component Platform Theme / State / Style Design](ui-component-platform-theme-state-style-design.md)
 - [UI Component Platform Track Surface Design](ui-component-platform-track-surface-design.md)
 - [UI Component Platform Transitions / Effects Design](ui-component-platform-transitions-effects-design.md)
 
