@@ -4,12 +4,14 @@
 //! independent from renderer source discovery and later backend realization.
 
 mod contract_diagnostics;
+mod descriptor;
 mod diagnostics;
 mod entry_point;
 mod interface;
 mod source;
 
 pub use contract_diagnostics::*;
+pub use descriptor::*;
 pub use diagnostics::*;
 pub use entry_point::*;
 pub use interface::*;
