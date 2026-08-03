@@ -1,0 +1,167 @@
+// Decision-complete implementation specification for RunenGPU G4C1.
+// G4C1 starts only after accepted G4B and an explicitly activated child issue.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENGPU-G4C1",
+    title: "Context-Bound Resource Realization",
+    lifecycle_state: "planned-blocked",
+    implementation_authorization_status: "blocked-until-accepted-g4b-and-explicit-g4c1-issue",
+    owner: "RunenGPU resource realization owner",
+    source_baseline: "accepted-g4b-merge-to-be-recorded-by-g4c1-issue",
+    planning_issue: "dornglut/runenwerk#209",
+    implementation_issue: "pending-after-accepted-planning",
+    umbrella_issue: "dornglut/runenwerk#188",
+    parent_issue: "dornglut/runenwerk#167",
+    blocking_predecessor: "PT-RUNENGPU-G4B",
+    successor: "PT-RUNENGPU-G4C2",
+
+    authority_docs: [
+        "AGENTS.md",
+        "TESTING.md",
+        "ARCHITECTURE.md",
+        "docs-site/src/content/docs/design/active/runengpu-g4b-contracts-g4c-delivery-design.md",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4a-context-admission.ron",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4b-program-interface-layout.ron",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c-wgpu-realization-cutover.ron",
+    ],
+
+    goal: "Create one private context/device-generation-bound WGPU realization authority for buffers, textures, texture views, samplers, and query sets, with transactional registries, complete compatibility keys, structured cache facts, current resource-consumer migration, and deletion of fully replaced resource authority without realizing programs, layouts, bind groups, or pipelines.",
+
+    dependency_direction: [
+        "Accepted G2 logical resource descriptors and G4A admitted context facts -> G4C1 private resource realization.",
+        "Accepted G4C1 opaque resource handles -> G4C2 typed bind-group realization and G5 execution.",
+        "RunenRender and non-render consumers retain semantic resource intent but do not own reusable WGPU resources.",
+    ],
+
+    realized_handle_contracts: [
+        "Opaque Clone non-Copy handle families cover realized buffers, textures, texture views, samplers, and query sets.",
+        "Each handle retains exact logical resource identity and GpuContextAffinity for typed inspection.",
+        "Handles expose no raw WGPU object, pointer, Deref, AsRef, callback escape hatch, persistence identity, or wire identity.",
+        "A texture-view handle retains parent texture realization identity and exact normalized view descriptor.",
+    ],
+
+    realization_timing: [
+        "Persistent and imported buffers and textures are explicitly realized before graph execution.",
+        "Transient graph resources are realized in one bounded graph-realization pass after G3 preparation and before G5 encoding.",
+        "Texture views may be cache-backed lazy only within an already realized parent texture.",
+        "Samplers may be explicit or cache-backed lazy from complete normalized descriptors.",
+        "Query sets are explicitly realized.",
+        "G5 encoding cannot create undeclared logical resources or bypass realization compatibility.",
+    ],
+
+    validation_order: [
+        "Validate the complete logical resource descriptor.",
+        "Reject foreign context for every already realized input.",
+        "Reject stale device generation.",
+        "Validate admitted feature, limit, format, usage, size, alignment, and memory-intent facts.",
+        "Validate import/source generation and reconstruction facts where applicable.",
+        "Look up a complete typed registry or cache key and compare full equality.",
+        "Create the private WGPU object only after deterministic validation succeeds.",
+        "Publish the registry entry transactionally only after backend creation succeeds.",
+    ],
+
+    registry_invariants: [
+        "Separate private registries own buffer, texture, texture-view, sampler, query-set, and cache-diagnostic records.",
+        "Each registry instance is scoped to exactly one GpuContextId and GpuDeviceGeneration.",
+        "Each authoritative entry retains complete normalized source descriptor and bounded provenance.",
+        "Equal duplicate requests return the same realization record.",
+        "One logical identity with a different descriptor returns DescriptorChangedForIdentity rather than replacing the record.",
+        "Hash collisions cannot authorize reuse because full typed equality follows hashing.",
+        "Failures publish no partial entry and no consumer callback runs under registry locks.",
+        "Capacity pressure is bounded and structured; no live realization is silently evicted.",
+    ],
+
+    resource_key_contracts: [
+        "Buffer keys include context identity, device generation, logical identity, complete size/usage/memory/reconstruction/import descriptor, source generation where applicable, and relevant admitted limits/alignments.",
+        "Texture keys include context identity, device generation, logical identity, complete extent/dimension/mip/sample/format/usage/reconstruction/import descriptor, source generation, and relevant admitted format/limit facts.",
+        "Texture-view keys include parent realization identity, context affinity, complete subresource range, view dimension, aspect, and normalized format override.",
+        "Sampler keys include complete address, filtering, comparison, LOD, anisotropy, and other admitted sampler semantics required by current consumers.",
+        "Query-set keys include context identity, generation, exact query kind, count, and admitted feature/limit facts.",
+        "Labels, diagnostic paths, WGPU object addresses, and renderer semantic IDs are excluded.",
+    ],
+
+    cache_behavior: [
+        "Initial caches are in-memory, derived, discardable, reconstructable, and scoped to one context/device generation.",
+        "Full match returns the existing realization and emits Hit.",
+        "Absent entry creates ordinarily and emits Miss.",
+        "Incompatible entry emits Rejected and follows ordinary realization after discarding or quarantining derived state.",
+        "Backend creation failure emits RealizationFailed and publishes no authoritative entry.",
+        "A cache hit changes cost only and never changes semantics.",
+        "No stable persisted WGPU cache blob or cross-process resource handle is authorized.",
+    ],
+
+    current_consumer_migration: [
+        "Repeat the exact-current-main census for every direct and transitive buffer, texture, texture-view, sampler, and query-set allocator, registry, cache, synthetic handle, import, dynamic target, material resource, UI resource, example, bench, and test consumer.",
+        "Migrate resource creation and lookup through the G4C1 owner while preserving renderer/domain semantics outside RunenGPU.",
+        "Classify program/layout/bind-group/pipeline consumers explicitly for G4C2 or G4C3 rather than changing them here.",
+        "Retain current command encoding, uploads, staging, submission, readback, surface, and presentation only as G5/G7-owned migration evidence.",
+    ],
+
+    delete_after_migration: [
+        "Renderer-owned reusable WGPU buffer, texture, texture-view, sampler, and query-set allocators or registries fully replaced by G4C1.",
+        "Synthetic GpuBufferHandle, GpuTextureHandle, GpuTextureViewHandle, GpuSamplerHandle, and GpuQuerySetHandle construction outside the RunenGPU owner.",
+        "Resource cache keys based only on strings, renderer IDs, vector positions, labels, TypeId, or naked hashes.",
+        "Forwarding aliases or parallel old/new resource realization paths.",
+        "G4C1-owned resource realization and cache truth in the temporary G3 execution sidecar.",
+    ],
+
+    structured_failures: [
+        "ForeignContext",
+        "StaleDeviceGeneration",
+        "UnknownLogicalResource",
+        "DescriptorChangedForIdentity",
+        "ResourceKindMismatch",
+        "RequirementNotAdmitted",
+        "FormatOrAlignmentNotAdmitted",
+        "ImportGenerationMismatch",
+        "RegistryCapacityExceeded",
+        "CacheRejected",
+        "BackendResourceRealizationFailure",
+    ],
+
+    deterministic_tests: [
+        "Foreign-context and stale-generation rejection precede backend access and cache-hit success.",
+        "Complete keys are insertion-order-independent and include every correctness field.",
+        "Equal duplicate realization reuses one record; changed descriptor for one logical identity rejects transactionally.",
+        "Texture views cannot cross or outlive parent affinity in registry logic.",
+        "Cache hit, miss, incompatible rejection, and backend creation failure are distinct.",
+        "Labels and diagnostic provenance do not split equal realizations.",
+        "Source and dependency guards reject renderer/ECS/application/product ownership and public raw WGPU.",
+        "Consumer and deletion guards reject synthetic handles and replaced resource registries.",
+    ],
+
+    environment_tests: [
+        "Realize representative buffer, texture, texture view, sampler, and query set on an admitted device.",
+        "Reject actual adapter limit, usage, format, or alignment incompatibility with structured facts.",
+        "Prove cache reuse within one context/generation and isolation across another context/generation.",
+        "Exercise one current representative resource path without realizing a shader module or pipeline.",
+    ],
+
+    exclusions: [
+        "No WGSL module, reflection, bind-group-layout, pipeline-layout, bind-group, compute-pipeline, or render-pipeline realization.",
+        "No final renderer-wide realization/cache cutover beyond resource authority fully replaced here.",
+        "No G5 execution, upload ownership, command encoding, submission, progress, completion, readback, cancellation, retirement, delayed destruction, or shutdown redesign.",
+        "No G7 surface, presentation, device replacement, loss, or reconstruction implementation.",
+        "No RunenRender semantics, package extraction, dependency addition, stable format, compatibility facade, generated workflow state, or raw-WGPU escape hatch.",
+    ],
+
+    validation: [
+        "Focused deterministic and environment-dependent resource realization proof.",
+        "Complete current-consumer and deletion census.",
+        "cargo validate",
+        "git diff --check",
+        "CI=true pnpm --dir docs-site build",
+        "Repository-owned exact-head CI and Documentation Build.",
+        "Independent complete-diff review with no unresolved blocking finding.",
+        "All tracked files remain below 131072 raw bytes.",
+    ],
+
+    acceptance: [
+        "One private context/generation-bound resource realization owner exists.",
+        "All accepted G2 resource families have opaque realized handles and transactional registries.",
+        "Resource cache keys and outcomes are correctness-complete and structured.",
+        "Every replaced renderer-owned resource authority is migrated and deleted without aliases or a parallel path.",
+        "Programs, layouts, bind groups, and pipelines remain blocked for G4C2/G4C3.",
+        "Exact-head validation and independent review pass, then G4C2 may be activated from accepted main.",
+    ],
+)
