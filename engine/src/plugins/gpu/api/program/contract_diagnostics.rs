@@ -23,6 +23,7 @@ pub enum GpuProgramContractCause {
     SpecializationOverridesUnsupported,
     PipelineDescriptorInvalid,
     VertexInputStateInvalid,
+    RenderAttachmentStateInvalid,
     InvalidDiagnosticMetadata,
 }
 
