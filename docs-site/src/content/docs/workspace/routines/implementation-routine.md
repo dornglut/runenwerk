@@ -37,7 +37,7 @@ For architecture-sensitive, reusable, platform, public API, production-track, wo
 - `docs-site/src/content/docs/guidelines/programming-principles.md`
 - the owning design, ADR, planning record, issue, or crate/domain docs
 
-For phase or production-track implementation, also read the current `active-work.md`, `roadmap.md`, `production-tracks.md`, and any prior closeout report consumed by the work.
+For phase or production-track implementation, also read the current `active-work.md`, `roadmap.md`, and any prior closeout report consumed by the work.
 
 ## Working files to inspect
 
