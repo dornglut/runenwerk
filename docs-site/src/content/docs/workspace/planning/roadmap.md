@@ -63,6 +63,13 @@ Runenwerk host, source, and product policy
 
 Non-render consumers may lower directly into RunenGPU without depending on RunenRender.
 
+## Accepted RunenSDF cutover
+
+Standalone field mathematics is owned by `dornglut/runen-sdf`. Runenwerk now contains
+no `domain/sdf` package, source mirror, forwarding namespace, submodule, source include,
+or unused external dependency. Runenwerk retains only product/domain integration that
+belongs above the standalone public boundary.
+
 ## RunenGPU accepted foundation
 
 ```text
