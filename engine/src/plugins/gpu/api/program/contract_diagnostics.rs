@@ -15,6 +15,12 @@ pub enum GpuProgramContractCause {
     RuntimeBindingIncompatible,
     StageIoSignatureInvalid,
     PipelineStageIoMismatch,
+    InvalidSpecializationKey,
+    InvalidSpecializationValue,
+    DuplicateSpecializationKey,
+    SpecializationUnknownMissingOrTypeMismatch,
+    SpecializationRequirementConflict,
+    SpecializationOverridesUnsupported,
     InvalidDiagnosticMetadata,
 }
 
