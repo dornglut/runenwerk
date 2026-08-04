@@ -1,5 +1,5 @@
 use super::*;
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{GpuProgramSourceKey, GpuProgramSourceProvenance, GpuWorkResourceId};
 use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::{
     CompiledDrawBufferPlan, CompiledDrawSource, CompiledResourceRef,
@@ -201,6 +201,11 @@ impl Renderer {
             runtime_resources,
         )?;
 
+        admit_resolved_program_source(
+            &mut self.flow_pipeline_cache,
+            &shader,
+            format!("compute pass {}", pass.pass_id),
+        )?;
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
@@ -334,6 +339,11 @@ impl Renderer {
             runtime_resources,
         )?;
 
+        admit_resolved_program_source(
+            &mut self.flow_pipeline_cache,
+            &shader,
+            format!("fullscreen pass {}", plan.pass_id),
+        )?;
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
@@ -530,6 +540,11 @@ impl Renderer {
             runtime_resources,
         )?;
 
+        admit_resolved_program_source(
+            &mut self.flow_pipeline_cache,
+            &shader,
+            format!("graphics pass {}", plan.pass_id),
+        )?;
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
@@ -1075,6 +1090,23 @@ impl Renderer {
             ),
         }
     }
+}
+
+fn admit_resolved_program_source(
+    cache: &mut FlowPipelineArtifactCache,
+    shader: &super::provenance::ResolvedShaderMaterial<'_>,
+    provenance_detail: impl Into<String>,
+) -> Result<()> {
+    cache.admit_program_source(
+        GpuProgramSourceKey::new(shader.pipeline_identity.as_str())?,
+        shader.revision,
+        shader.source,
+        GpuProgramSourceProvenance::new(
+            "render-flow-resolved-program",
+            Some(provenance_detail.into()),
+        )?,
+    )?;
+    Ok(())
 }
 
 fn reject_material_shader_fallback(

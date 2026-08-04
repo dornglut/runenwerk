@@ -1,3 +1,4 @@
+use super::pipeline_cache::FlowPipelineArtifactCache;
 use super::*;
 use crate::plugins::render::api::{
     RenderFixedStepIterationUniform, SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL,
