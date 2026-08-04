@@ -9,11 +9,14 @@ use crate::plugins::gpu::{
 ///
 /// Runenwerk source production policy remains outside this type. The renderer
 /// owns one process-local source-owner identity and one registry so consumer
-/// flows cannot create parallel source-consistency authority.
+/// flows cannot create parallel source-consistency authority. Every source
+/// admitted through the retaining path remains reachable for the renderer
+/// lifetime, independently of flow and backend-artifact cache retirement.
 #[derive(Debug)]
 pub(crate) struct RendererProgramSourceAuthority {
     owner: GpuProgramSourceOwnerId,
     registry: GpuProgramSourceRegistry,
+    retained_sources: Vec<GpuAdmittedProgramSource>,
 }
 
 impl RendererProgramSourceAuthority {
@@ -24,6 +27,7 @@ impl RendererProgramSourceAuthority {
         Ok(Self {
             owner: GpuProgramSourceOwnerId::allocate()?,
             registry: GpuProgramSourceRegistry::new(max_records, max_retained_source_bytes)?,
+            retained_sources: Vec::new(),
         })
     }
 
@@ -51,12 +55,34 @@ impl RendererProgramSourceAuthority {
             .admit_wgsl(identity, canonical_wgsl, provenance)
     }
 
+    pub(crate) fn admit_and_retain_wgsl(
+        &mut self,
+        key: GpuProgramSourceKey,
+        renderer_revision: u64,
+        canonical_wgsl: impl Into<String>,
+        provenance: GpuProgramSourceProvenance,
+    ) -> Result<GpuAdmittedProgramSource, GpuProgramSourceError> {
+        let admitted = self.admit_wgsl(key, renderer_revision, canonical_wgsl, provenance)?;
+        if !self
+            .retained_sources
+            .iter()
+            .any(|retained| retained.is_same_record(&admitted))
+        {
+            self.retained_sources.push(admitted.clone());
+        }
+        Ok(admitted)
+    }
+
     pub(crate) const fn owner(&self) -> GpuProgramSourceOwnerId {
         self.owner
     }
 
     pub(crate) fn stats(&self) -> GpuProgramSourceRegistryStats {
         self.registry.stats()
+    }
+
+    pub(crate) fn retained_source_count(&self) -> usize {
+        self.retained_sources.len()
     }
 }
 
@@ -103,6 +129,23 @@ mod tests {
         assert_eq!(fallback.identity().revision().get(), 1);
         assert_eq!(loaded.identity().revision().get(), 2);
         assert_eq!(authority.stats().retained_records(), 2);
+        assert_eq!(authority.retained_source_count(), 0);
+    }
+
+    #[test]
+    fn retaining_admission_is_idempotent_and_renderer_lifetime_owned() {
+        let mut authority = authority();
+        let source = "@compute @workgroup_size(1) fn cs_main() {}";
+        let first = authority
+            .admit_and_retain_wgsl(key(), 7, source, provenance("first consumer"))
+            .expect("first source should admit");
+        let repeated = authority
+            .admit_and_retain_wgsl(key(), 7, source, provenance("second consumer"))
+            .expect("identical source should remain idempotent");
+
+        assert!(first.is_same_record(&repeated));
+        assert_eq!(authority.stats().retained_records(), 1);
+        assert_eq!(authority.retained_source_count(), 1);
     }
 
     #[test]
@@ -142,5 +185,6 @@ mod tests {
 
         assert_eq!(error.cause(), GpuProgramSourceCause::InvalidSourceRevision);
         assert_eq!(authority.stats().retained_records(), 0);
+        assert_eq!(authority.retained_source_count(), 0);
     }
 }
