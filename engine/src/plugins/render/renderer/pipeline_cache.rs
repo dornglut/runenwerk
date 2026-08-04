@@ -1,6 +1,9 @@
 use super::render_flow::RendererProgramSourceAuthority;
 use super::{DEFAULT_COMPUTE_SHADER, DEFAULT_FULLSCREEN_SHADER, DEFAULT_GRAPHICS_SHADER};
-use crate::plugins::gpu::{GpuProgramSourceKey, GpuProgramSourceProvenance};
+use crate::plugins::gpu::{
+    GpuAdmittedProgramSource, GpuProgramSourceError, GpuProgramSourceKey,
+    GpuProgramSourceProvenance,
+};
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::pipelines::{FlowPassBindGroupKey, FlowPassPipelineKey};
 use std::collections::HashMap;
@@ -40,27 +43,12 @@ pub struct FlowPipelineArtifactCache {
 
 impl Default for FlowPipelineArtifactCache {
     fn default() -> Self {
-        let mut program_sources = RendererProgramSourceAuthority::new(
+        let program_sources = RendererProgramSourceAuthority::new(
             RENDERER_PROGRAM_SOURCE_MAX_RECORDS,
             RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES,
         )
         .expect("renderer program-source authority policy is nonzero and process-local");
-        admit_builtin_program_source(
-            &mut program_sources,
-            "builtin:compute",
-            DEFAULT_COMPUTE_SHADER,
-        );
-        admit_builtin_program_source(
-            &mut program_sources,
-            "builtin:fullscreen",
-            DEFAULT_FULLSCREEN_SHADER,
-        );
-        admit_builtin_program_source(
-            &mut program_sources,
-            "builtin:graphics",
-            DEFAULT_GRAPHICS_SHADER,
-        );
-        Self {
+        let mut cache = Self {
             shader_modules: HashMap::new(),
             bind_group_layouts: HashMap::new(),
             pipeline_layouts: HashMap::new(),
@@ -70,7 +58,11 @@ impl Default for FlowPipelineArtifactCache {
             bind_groups: HashMap::new(),
             stats: RendererPipelineCacheStats::default(),
             program_sources,
-        }
+        };
+        admit_builtin_program_source(&mut cache, "builtin:compute", DEFAULT_COMPUTE_SHADER);
+        admit_builtin_program_source(&mut cache, "builtin:fullscreen", DEFAULT_FULLSCREEN_SHADER);
+        admit_builtin_program_source(&mut cache, "builtin:graphics", DEFAULT_GRAPHICS_SHADER);
+        cache
     }
 }
 
@@ -86,6 +78,21 @@ impl FlowPipelineArtifactCache {
             program_source_retentions: self.program_sources.retained_source_count(),
             ..self.stats
         }
+    }
+
+    pub(crate) fn admit_program_source(
+        &mut self,
+        key: GpuProgramSourceKey,
+        renderer_revision: u64,
+        canonical_wgsl: impl Into<String>,
+        provenance: GpuProgramSourceProvenance,
+    ) -> Result<GpuAdmittedProgramSource, GpuProgramSourceError> {
+        self.program_sources.admit_and_retain_wgsl(
+            key,
+            renderer_revision,
+            canonical_wgsl,
+            provenance,
+        )
     }
 
     pub fn get_or_create_shader_module<F>(
@@ -224,13 +231,9 @@ impl FlowPipelineArtifactCache {
     }
 }
 
-fn admit_builtin_program_source(
-    authority: &mut RendererProgramSourceAuthority,
-    key: &str,
-    source: &str,
-) {
-    authority
-        .admit_and_retain_wgsl(
+fn admit_builtin_program_source(cache: &mut FlowPipelineArtifactCache, key: &str, source: &str) {
+    cache
+        .admit_program_source(
             GpuProgramSourceKey::new(key).expect("builtin source key is static and valid"),
             0,
             source,
@@ -269,6 +272,48 @@ mod tests {
     }
 
     #[test]
+    fn cache_source_admission_is_idempotent_retained_and_conflict_checked() {
+        let mut cache = FlowPipelineArtifactCache::default();
+        let key = || {
+            GpuProgramSourceKey::new("asset:test-resolved-program")
+                .expect("test source key should be valid")
+        };
+        let provenance = || {
+            GpuProgramSourceProvenance::new(
+                "renderer-resolved-program-test",
+                Some("asset-backed source".to_owned()),
+            )
+            .expect("test provenance should be valid")
+        };
+        let source = "@compute @workgroup_size(1) fn cs_main() {}";
+        let first = cache
+            .admit_program_source(key(), 4, source, provenance())
+            .expect("resolved source should admit");
+        let repeated = cache
+            .admit_program_source(key(), 4, source, provenance())
+            .expect("identical source should remain idempotent");
+
+        assert!(first.is_same_record(&repeated));
+        assert_eq!(cache.stats().program_source_records, 4);
+        assert_eq!(cache.stats().program_source_retentions, 4);
+
+        let error = cache
+            .admit_program_source(
+                key(),
+                4,
+                "@compute @workgroup_size(8) fn cs_main() {}",
+                provenance(),
+            )
+            .expect_err("different source text must allocate a new renderer revision");
+        assert_eq!(
+            error.cause(),
+            crate::plugins::gpu::GpuProgramSourceCause::SourceRevisionConflict
+        );
+        assert_eq!(cache.stats().program_source_records, 4);
+        assert_eq!(cache.stats().program_source_retentions, 4);
+    }
+
+    #[test]
     fn independent_renderer_caches_do_not_share_source_owner_identity() {
         let first = FlowPipelineArtifactCache::default().stats();
         let second = FlowPipelineArtifactCache::default().stats();
@@ -277,11 +322,24 @@ mod tests {
     }
 
     #[test]
-    fn flow_retirement_does_not_drop_renderer_builtin_program_sources() {
+    fn flow_retirement_does_not_drop_renderer_program_sources() {
         let mut cache = FlowPipelineArtifactCache::default();
+        cache
+            .admit_program_source(
+                GpuProgramSourceKey::new("asset:retained-across-flow-retirement")
+                    .expect("test source key should be valid"),
+                1,
+                "@compute @workgroup_size(1) fn cs_main() {}",
+                GpuProgramSourceProvenance::new(
+                    "renderer-resolved-program-test",
+                    Some("flow retirement".to_owned()),
+                )
+                .expect("test provenance should be valid"),
+            )
+            .expect("resolved source should admit");
         cache.retain_flows(&[]);
 
-        assert_eq!(cache.stats().program_source_records, 3);
-        assert_eq!(cache.stats().program_source_retentions, 3);
+        assert_eq!(cache.stats().program_source_records, 4);
+        assert_eq!(cache.stats().program_source_retentions, 4);
     }
 }
