@@ -1,4 +1,6 @@
 use super::*;
+use crate::plugins::gpu::{GpuProgramSourceKey, GpuProgramSourceRevision};
+use crate::plugins::render::pipelines::FlowPassPipelineVariant;
 use crate::plugins::render::{RenderFeatureId, RenderPassId};
 
 enum RuntimeBindingResource<'a> {
@@ -185,13 +187,22 @@ impl Renderer {
             });
         }
 
+        let (program_source_key, pipeline_variant) =
+            split_shader_pipeline_identity(shader_identity)?;
+        let normalized_revision = shader_revision.checked_add(1).ok_or_else(|| {
+            anyhow::anyhow!(
+                "renderer shader revision '{}' cannot normalize into a nonzero G4B source revision",
+                shader_revision
+            )
+        })?;
         let pipeline_key = FlowPassPipelineKey {
             flow_id: flow.flow_id,
             pass_id,
             pass_kind,
             feature_id: pass_feature_id,
-            shader_identity: shader_identity.to_string(),
-            shader_revision,
+            program_source_key: GpuProgramSourceKey::new(program_source_key)?,
+            program_source_revision: GpuProgramSourceRevision::try_from_raw(normalized_revision)?,
+            pipeline_variant,
             bind_group_layout_signature_hash: hash_bind_group_layout_entries(
                 &bind_group_layout_entries,
             ),
@@ -252,9 +263,9 @@ impl Renderer {
                 RuntimeBindingResource::SamplerPlaceholder => {
                     let sampler = shared_sampler.as_ref().ok_or_else(|| {
                         anyhow::anyhow!(
-							"pass '{}' resolved sampler placeholder but no sampler instance was available",
-							pass_id
-						)
+                            "pass '{}' resolved sampler placeholder but no sampler instance was available",
+                            pass_id
+                        )
                     })?;
                     BindingResource::Sampler(sampler)
                 }
@@ -288,5 +299,51 @@ impl Renderer {
         };
 
         Ok((pipeline_key, Some(bind_group_layout), Some(bind_group)))
+    }
+}
+
+const COMPUTE_SPECIALIZATION_SEPARATOR: &str = "|constants:";
+
+fn split_shader_pipeline_identity(identity: &str) -> Result<(&str, FlowPassPipelineVariant)> {
+    let Some((program_source_key, specialization)) =
+        identity.split_once(COMPUTE_SPECIALIZATION_SEPARATOR)
+    else {
+        return Ok((identity, FlowPassPipelineVariant::Default));
+    };
+    if program_source_key.is_empty() || specialization.is_empty() {
+        bail!(
+            "renderer pipeline identity '{}' has an invalid compute specialization boundary",
+            identity
+        );
+    }
+    Ok((
+        program_source_key,
+        FlowPassPipelineVariant::ComputeSpecialization(specialization.to_string()),
+    ))
+}
+
+#[cfg(test)]
+mod pipeline_identity_tests {
+    use super::*;
+
+    #[test]
+    fn pipeline_identity_separates_source_from_compute_specialization() {
+        let (source, variant) =
+            split_shader_pipeline_identity("asset:compute.wgsl|constants:COUNT=4,MODE=2").unwrap();
+        assert_eq!(source, "asset:compute.wgsl");
+        assert_eq!(
+            variant,
+            FlowPassPipelineVariant::ComputeSpecialization("COUNT=4,MODE=2".to_string())
+        );
+
+        let (source, variant) = split_shader_pipeline_identity("builtin:graphics").unwrap();
+        assert_eq!(source, "builtin:graphics");
+        assert_eq!(variant, FlowPassPipelineVariant::Default);
+    }
+
+    #[test]
+    fn pipeline_identity_rejects_empty_split_components() {
+        assert!(split_shader_pipeline_identity("|constants:COUNT=4").is_err());
+        assert!(split_shader_pipeline_identity("builtin:compute|constants:").is_err());
     }
 }

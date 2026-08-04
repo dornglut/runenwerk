@@ -1,5 +1,22 @@
+use crate::plugins::gpu::{GpuProgramSourceKey, GpuProgramSourceRevision};
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
 use wgpu::TextureFormat;
+
+/// Renderer-local backend-artifact partition that is independent of program-source identity.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FlowPassPipelineVariant {
+    Default,
+    ComputeSpecialization(String),
+}
+
+impl FlowPassPipelineVariant {
+    pub fn diagnostic_label(&self) -> &str {
+        match self {
+            Self::Default => "default",
+            Self::ComputeSpecialization(signature) => signature.as_str(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FlowPassPipelineKey {
@@ -7,8 +24,9 @@ pub struct FlowPassPipelineKey {
     pub pass_id: RenderPassId,
     pub pass_kind: FlowPassKind,
     pub feature_id: Option<RenderFeatureId>,
-    pub shader_identity: String,
-    pub shader_revision: u64,
+    pub program_source_key: GpuProgramSourceKey,
+    pub program_source_revision: GpuProgramSourceRevision,
+    pub pipeline_variant: FlowPassPipelineVariant,
     pub bind_group_layout_signature_hash: u64,
     // Core owns the full pipeline key type. Feature domains can contribute a
     // specialization fragment hash that is folded into this key.
@@ -26,12 +44,13 @@ pub struct FlowPassPipelineKey {
 impl FlowPassPipelineKey {
     pub fn stats_key(&self) -> String {
         format!(
-            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}:{}:{}",
+            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
             self.flow_id,
             self.pass_id,
             self.pass_kind,
-            self.shader_identity,
-            self.shader_revision,
+            self.program_source_key,
+            self.program_source_revision,
+            self.pipeline_variant.diagnostic_label(),
             self.bind_group_layout_signature_hash,
             self.material_specialization_fragment_hash,
             self.view_signature_hash,
@@ -91,8 +110,9 @@ mod tests {
             pass_id: RenderPassId::try_from_raw(1).unwrap(),
             pass_kind: FlowPassKind::Fullscreen,
             feature_id: None,
-            shader_identity: "shader".to_string(),
-            shader_revision: 1,
+            program_source_key: GpuProgramSourceKey::new("shader").unwrap(),
+            program_source_revision: GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+            pipeline_variant: FlowPassPipelineVariant::Default,
             bind_group_layout_signature_hash: 2,
             material_specialization_fragment_hash: 3,
             view_signature_hash: 4,
@@ -107,9 +127,17 @@ mod tests {
     }
 
     #[test]
-    fn stats_key_reflects_material_and_view_signatures() {
+    fn stats_key_reflects_source_variant_material_and_view_signatures() {
         let key = sample_key();
         let same = sample_key();
+        let mut changed_source = key.clone();
+        changed_source.program_source_key = GpuProgramSourceKey::new("other-shader").unwrap();
+        let mut changed_revision = key.clone();
+        changed_revision.program_source_revision =
+            GpuProgramSourceRevision::try_from_raw(2).unwrap();
+        let mut changed_variant = key.clone();
+        changed_variant.pipeline_variant =
+            FlowPassPipelineVariant::ComputeSpecialization("COUNT=4".to_string());
         let mut changed_material = key.clone();
         changed_material.material_specialization_fragment_hash = 99;
         let mut changed_view = key.clone();
@@ -118,6 +146,9 @@ mod tests {
         changed_feature_runtime.feature_runtime_version = 11;
 
         assert_eq!(key.stats_key(), same.stats_key());
+        assert_ne!(key.stats_key(), changed_source.stats_key());
+        assert_ne!(key.stats_key(), changed_revision.stats_key());
+        assert_ne!(key.stats_key(), changed_variant.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());
         assert_ne!(key.stats_key(), changed_feature_runtime.stats_key());
