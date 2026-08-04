@@ -24,6 +24,8 @@ pub enum GpuProgramContractCause {
     PipelineDescriptorInvalid,
     VertexInputStateInvalid,
     RenderAttachmentStateInvalid,
+    RenderPrimitiveStateInvalid,
+    RenderMultisampleStateInvalid,
     InvalidDiagnosticMetadata,
 }
 
