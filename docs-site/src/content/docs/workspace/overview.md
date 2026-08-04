@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-08-04
 ---
 
 # Runenwerk Workspace
@@ -15,10 +15,10 @@ This page is a short orientation map.
 ## Active workflow
 
 - [Start Here](start-here.md)
+- [Engineering Workflow](engineering-workflow.md)
 - [Operating Model](operating-model.md)
 - [Authority Model](authority-model.md)
 - [Documentation Structure](documentation-structure.md)
-- [Workspace Routines](routines/README.md)
 - [Planning Records](planning/README.md)
 
 ## Top-level areas
