@@ -23,8 +23,8 @@ const RETIRED_AUTHORITY_FILENAMES: &[&str] = &[
 ];
 
 const TEXT_EXTENSIONS: &[&str] = &[
-    "md", "mdx", "ron", "rs", "py", "toml", "yaml", "yml", "json", "ts", "tsx",
-    "js", "mjs", "cjs", "sh", "ps1",
+    "md", "mdx", "ron", "rs", "py", "toml", "yaml", "yml", "json", "ts", "tsx", "js", "mjs", "cjs",
+    "sh", "ps1",
 ];
 
 #[test]
@@ -87,8 +87,10 @@ fn should_skip_directory(repository_root: &Path, directory: &Path) -> bool {
     let relative = directory.strip_prefix(repository_root).unwrap_or(directory);
     let normalized = relative.to_string_lossy().replace('\\', "/");
 
-    matches!(normalized.as_str(), ".git" | "target" | "tools/xtask/target")
-        || normalized.ends_with("/target")
+    matches!(
+        normalized.as_str(),
+        ".git" | "target" | "tools/xtask/target"
+    ) || normalized.ends_with("/target")
         || normalized.contains("/node_modules")
         || normalized.starts_with("docs-site/src/content/docs/reports")
         || normalized.starts_with("docs-site/src/content/docs/design/archived")
