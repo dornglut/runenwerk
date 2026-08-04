@@ -5,8 +5,9 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-08-04
 related:
+  - ./engineering-workflow.md
   - ./architecture-governance-review.md
   - ./design-implementation-triage.md
   - ./roadmap-items.yaml
@@ -16,7 +17,6 @@ related:
   - ./repo-execution-priority-checklist.md
   - ./roadmap-index.md
   - ./diagrams/value-weighted-dependency-roadmap.puml
-  - ./routines/architecture-governance-review-routine.md
 ---
 
 # Roadmap Planning Methods
@@ -102,10 +102,7 @@ Use RAID notes when a score is hard to trust. A high-value item with weak confid
 
 ## Architecture Governance Methods
 
-Use the architecture governance review when a roadmap item changes ownership, dependency direction, or migration policy:
-
-- [architecture-governance-review.md](./architecture-governance-review.md)
-- [routines/architecture-governance-review-routine.md](./routines/architecture-governance-review-routine.md)
+Use [Architecture Governance Review](./architecture-governance-review.md) through [Engineering Workflow](./engineering-workflow.md) when a roadmap item changes ownership, dependency direction, public contracts, or migration policy.
 
 The critical adoption choice is selective use:
 
