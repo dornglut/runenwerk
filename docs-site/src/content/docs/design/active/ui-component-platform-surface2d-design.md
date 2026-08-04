@@ -2,6 +2,7 @@
 title: UI Component Platform Surface2D Design
 description: Active-folder design reference with completed Phase 16 evidence for the generic 2D coordinate, navigation, transform, bounds, overlay, input, and large-content primitive for reusable UI surfaces.
 status: active
+lifecycle_exception: active_phase_evidence
 owner: ui
 layer: domain
 canonical: true
