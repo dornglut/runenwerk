@@ -3,6 +3,7 @@ use super::super::{
     GpuBindingClass, GpuEntryPointName, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
     GpuShaderStage, GpuSpecializationValueSet,
 };
+use super::requirements::{hash_requirements, insert_pipeline_requirement};
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
 };
@@ -52,21 +53,29 @@ impl GpuComputePipelineDescriptor {
             ));
         }
 
+        let operation = "construct GPU compute pipeline descriptor";
         let mut requirements = additional_requirements;
-        insert_requirement(
+        insert_pipeline_requirement(
+            operation,
+            entry_point.to_string(),
             &mut requirements,
             GpuCapabilityRequirement::Required(GpuCapabilityFeature::Compute),
-            &entry_point,
         )?;
         for requirement in specialization.requirements().iter() {
-            insert_requirement(&mut requirements, requirement, &entry_point)?;
+            insert_pipeline_requirement(
+                operation,
+                entry_point.to_string(),
+                &mut requirements,
+                requirement,
+            )?;
         }
         for binding in program.interface().bindings() {
             if binding.kind().class() == GpuBindingClass::StorageTexture {
-                insert_requirement(
+                insert_pipeline_requirement(
+                    operation,
+                    entry_point.to_string(),
                     &mut requirements,
                     GpuCapabilityRequirement::Required(GpuCapabilityFeature::StorageTexture),
-                    &entry_point,
                 )?;
             }
         }
@@ -124,44 +133,5 @@ impl Hash for GpuComputePipelineDescriptor {
         self.0.layout.hash(state);
         self.0.specialization.hash(state);
         hash_requirements(&self.0.requirements, state);
-    }
-}
-
-fn insert_requirement(
-    requirements: &mut GpuCapabilityRequirements,
-    requirement: GpuCapabilityRequirement,
-    entry_point: &GpuEntryPointName,
-) -> Result<(), GpuProgramContractError> {
-    requirements.insert(requirement).map_err(|error| {
-        GpuProgramContractError::invalid(
-            "construct GPU compute pipeline descriptor",
-            format!("{entry_point}: {error}"),
-            GpuProgramContractCause::PipelineDescriptorInvalid,
-            "remove conflicting capability requirements from the pipeline inputs",
-        )
-    })
-}
-
-fn hash_requirements<State: core::hash::Hasher>(
-    requirements: &GpuCapabilityRequirements,
-    state: &mut State,
-) {
-    requirements.iter().len().hash(state);
-    for requirement in requirements.iter() {
-        match requirement {
-            GpuCapabilityRequirement::Required(feature) => {
-                0u8.hash(state);
-                feature.hash(state);
-            }
-            GpuCapabilityRequirement::Preferred { feature, fallback } => {
-                1u8.hash(state);
-                feature.hash(state);
-                fallback.hash(state);
-            }
-            GpuCapabilityRequirement::Disabled(feature) => {
-                2u8.hash(state);
-                feature.hash(state);
-            }
-        }
     }
 }
