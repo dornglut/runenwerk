@@ -47,6 +47,21 @@ impl GpuColorWriteMask {
     }
 }
 
+/// Typed color-target state independent of raw backend enums.
+///
+/// Raw WGPU formats cannot enter the generic descriptor:
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::{
+///     GpuBlendMode, GpuColorTargetStateDescriptor, GpuColorWriteMask,
+/// };
+///
+/// let _target = GpuColorTargetStateDescriptor::new(
+///     wgpu::TextureFormat::Rgba8Unorm,
+///     GpuBlendMode::Replace,
+///     GpuColorWriteMask::ALL,
+/// );
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuColorTargetStateDescriptor {
     format: GpuTextureFormat,

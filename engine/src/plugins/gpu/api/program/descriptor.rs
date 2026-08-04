@@ -18,6 +18,14 @@ struct GpuProgramDescriptorInner {
 }
 
 /// Immutable admitted program contract retained by later realization records.
+///
+/// The record cannot be fabricated without source admission and validation:
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuProgramDescriptor;
+///
+/// let _fabricated = GpuProgramDescriptor(());
+/// ```
 #[derive(Debug, Clone)]
 pub struct GpuProgramDescriptor(Arc<GpuProgramDescriptorInner>);
 
