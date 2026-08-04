@@ -1,7 +1,6 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuProgramSourceKey, GpuProgramSourceProvenance,
-    GpuWorkResourceId,
+    GpuAdmittedProgramSource, GpuProgramSourceKey, GpuProgramSourceProvenance, GpuWorkResourceId,
 };
 use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::{
