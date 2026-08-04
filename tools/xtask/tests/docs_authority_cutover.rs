@@ -1,7 +1,7 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-const RETIRED_AUTHORITY_FILENAMES: &[&str] = &[
+const RETIRED_AUTHORITY_MARKERS: &[&str] = &[
     "workflow-lifecycle.md",
     "complete-investigation-gate.md",
     "complete-design-gate.md",
@@ -20,6 +20,17 @@ const RETIRED_AUTHORITY_FILENAMES: &[&str] = &[
     "public-api-review-routine.md",
     "crate-implementation-routine.md",
     "parallel-roadmap-batch-routine.md",
+    "routines/README.md",
+    "task-cards/README.md",
+    "codex-task.md",
+    "docs-cleanup-task.md",
+    "github-connector-task.md",
+    "implementation-task.md",
+    "phase-closeout-task.md",
+    "review-task.md",
+    "roadmap-update-task.md",
+    "track-manager-task.md",
+    "prompt-templates/implementation-batch.md",
 ];
 
 const TEXT_EXTENSIONS: &[&str] = &[
@@ -41,7 +52,7 @@ fn current_repository_authority_does_not_reference_retired_workflow_pages() {
 
     assert!(
         violations.is_empty(),
-        "current repository authority still references retired workflow pages:\n{}",
+        "current repository authority still references retired workflow artifacts:\n{}",
         violations.join("\n")
     );
 }
@@ -74,10 +85,10 @@ fn inspect_tree(
         let Ok(text) = fs::read_to_string(&path) else {
             continue;
         };
-        for filename in RETIRED_AUTHORITY_FILENAMES {
-            if text.contains(filename) {
+        for marker in RETIRED_AUTHORITY_MARKERS {
+            if text.contains(marker) {
                 let relative = path.strip_prefix(repository_root).unwrap_or(&path);
-                violations.push(format!("{}: {filename}", relative.display()));
+                violations.push(format!("{}: {marker}", relative.display()));
             }
         }
     }
