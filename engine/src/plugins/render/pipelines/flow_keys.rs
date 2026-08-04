@@ -1,4 +1,4 @@
-use crate::plugins::gpu::{GpuProgramSourceKey, GpuProgramSourceRevision};
+use crate::plugins::gpu::GpuProgramSourceIdentity;
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
 use wgpu::TextureFormat;
 
@@ -24,8 +24,7 @@ pub struct FlowPassPipelineKey {
     pub pass_id: RenderPassId,
     pub pass_kind: FlowPassKind,
     pub feature_id: Option<RenderFeatureId>,
-    pub program_source_key: GpuProgramSourceKey,
-    pub program_source_revision: GpuProgramSourceRevision,
+    pub program_source_identity: GpuProgramSourceIdentity,
     pub pipeline_variant: FlowPassPipelineVariant,
     pub bind_group_layout_signature_hash: u64,
     // Core owns the full pipeline key type. Feature domains can contribute a
@@ -44,12 +43,11 @@ pub struct FlowPassPipelineKey {
 impl FlowPassPipelineKey {
     pub fn stats_key(&self) -> String {
         format!(
-            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}:{}:{}",
             self.flow_id,
             self.pass_id,
             self.pass_kind,
-            self.program_source_key,
-            self.program_source_revision,
+            self.program_source_identity.diagnostic_label(),
             self.pipeline_variant.diagnostic_label(),
             self.bind_group_layout_signature_hash,
             self.material_specialization_fragment_hash,
@@ -103,15 +101,25 @@ impl From<RenderPassKind> for FlowPassKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{
+        GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceRevision,
+    };
 
-    fn sample_key() -> FlowPassPipelineKey {
+    fn source_identity(key: &str) -> GpuProgramSourceIdentity {
+        GpuProgramSourceIdentity::new(
+            GpuProgramSourceOwnerId::allocate().unwrap(),
+            GpuProgramSourceKey::new(key).unwrap(),
+            GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+        )
+    }
+
+    fn sample_key(program_source_identity: GpuProgramSourceIdentity) -> FlowPassPipelineKey {
         FlowPassPipelineKey {
             flow_id: RenderFlowId::try_from_raw(1).unwrap(),
             pass_id: RenderPassId::try_from_raw(1).unwrap(),
             pass_kind: FlowPassKind::Fullscreen,
             feature_id: None,
-            program_source_key: GpuProgramSourceKey::new("shader").unwrap(),
-            program_source_revision: GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+            program_source_identity,
             pipeline_variant: FlowPassPipelineVariant::Default,
             bind_group_layout_signature_hash: 2,
             material_specialization_fragment_hash: 3,
@@ -128,13 +136,11 @@ mod tests {
 
     #[test]
     fn stats_key_reflects_source_variant_material_and_view_signatures() {
-        let key = sample_key();
-        let same = sample_key();
+        let identity = source_identity("shader");
+        let key = sample_key(identity.clone());
+        let same = sample_key(identity);
         let mut changed_source = key.clone();
-        changed_source.program_source_key = GpuProgramSourceKey::new("other-shader").unwrap();
-        let mut changed_revision = key.clone();
-        changed_revision.program_source_revision =
-            GpuProgramSourceRevision::try_from_raw(2).unwrap();
+        changed_source.program_source_identity = source_identity("other-shader");
         let mut changed_variant = key.clone();
         changed_variant.pipeline_variant =
             FlowPassPipelineVariant::ComputeSpecialization("COUNT=4".to_string());
@@ -147,7 +153,6 @@ mod tests {
 
         assert_eq!(key.stats_key(), same.stats_key());
         assert_ne!(key.stats_key(), changed_source.stats_key());
-        assert_ne!(key.stats_key(), changed_revision.stats_key());
         assert_ne!(key.stats_key(), changed_variant.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());

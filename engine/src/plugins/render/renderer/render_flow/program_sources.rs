@@ -31,13 +31,11 @@ impl RendererProgramSourceAuthority {
         })
     }
 
-    pub(crate) fn admit_wgsl(
-        &mut self,
+    pub(crate) fn identity(
+        &self,
         key: GpuProgramSourceKey,
         renderer_revision: u64,
-        canonical_wgsl: impl Into<String>,
-        provenance: GpuProgramSourceProvenance,
-    ) -> Result<GpuAdmittedProgramSource, GpuProgramSourceError> {
+    ) -> Result<GpuProgramSourceIdentity, GpuProgramSourceError> {
         let normalized_revision = renderer_revision.checked_add(1).ok_or_else(|| {
             GpuProgramSourceError::Invalid {
                 operation: "normalize renderer program-source revision",
@@ -46,11 +44,21 @@ impl RendererProgramSourceAuthority {
                 correction: "start a fresh renderer source owner before the zero-based revision space is exhausted",
             }
         })?;
-        let identity = GpuProgramSourceIdentity::new(
+        Ok(GpuProgramSourceIdentity::new(
             self.owner,
             key,
             GpuProgramSourceRevision::try_from_raw(normalized_revision)?,
-        );
+        ))
+    }
+
+    pub(crate) fn admit_wgsl(
+        &mut self,
+        key: GpuProgramSourceKey,
+        renderer_revision: u64,
+        canonical_wgsl: impl Into<String>,
+        provenance: GpuProgramSourceProvenance,
+    ) -> Result<GpuAdmittedProgramSource, GpuProgramSourceError> {
+        let identity = self.identity(key, renderer_revision)?;
         self.registry
             .admit_wgsl(identity, canonical_wgsl, provenance)
     }
@@ -107,6 +115,9 @@ mod tests {
     #[test]
     fn renderer_revisions_normalize_into_one_nonzero_owner_domain() {
         let mut authority = authority();
+        let expected_fallback = authority
+            .identity(key(), 0)
+            .expect("fallback identity should normalize");
         let fallback = authority
             .admit_wgsl(
                 key(),
@@ -124,6 +135,7 @@ mod tests {
             )
             .expect("loaded source should admit");
 
+        assert_eq!(fallback.identity(), &expected_fallback);
         assert_eq!(fallback.identity().owner(), authority.owner());
         assert_eq!(loaded.identity().owner(), authority.owner());
         assert_eq!(fallback.identity().revision().get(), 1);

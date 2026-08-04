@@ -1,5 +1,5 @@
 use super::*;
-use crate::plugins::gpu::{GpuProgramSourceKey, GpuProgramSourceRevision};
+use crate::plugins::gpu::GpuProgramSourceKey;
 use crate::plugins::render::pipelines::FlowPassPipelineVariant;
 use crate::plugins::render::{RenderFeatureId, RenderPassId};
 
@@ -189,19 +189,16 @@ impl Renderer {
 
         let (program_source_key, pipeline_variant) =
             split_shader_pipeline_identity(shader_identity)?;
-        let normalized_revision = shader_revision.checked_add(1).ok_or_else(|| {
-            anyhow::anyhow!(
-                "renderer shader revision '{}' cannot normalize into a nonzero G4B source revision",
-                shader_revision
-            )
-        })?;
+        let program_source_identity = self.flow_pipeline_cache.program_source_identity(
+            GpuProgramSourceKey::new(program_source_key)?,
+            shader_revision,
+        )?;
         let pipeline_key = FlowPassPipelineKey {
             flow_id: flow.flow_id,
             pass_id,
             pass_kind,
             feature_id: pass_feature_id,
-            program_source_key: GpuProgramSourceKey::new(program_source_key)?,
-            program_source_revision: GpuProgramSourceRevision::try_from_raw(normalized_revision)?,
+            program_source_identity,
             pipeline_variant,
             bind_group_layout_signature_hash: hash_bind_group_layout_entries(
                 &bind_group_layout_entries,

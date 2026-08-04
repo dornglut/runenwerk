@@ -1,7 +1,7 @@
 use super::render_flow::RendererProgramSourceAuthority;
 use super::{DEFAULT_COMPUTE_SHADER, DEFAULT_FULLSCREEN_SHADER, DEFAULT_GRAPHICS_SHADER};
 use crate::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuProgramSourceError, GpuProgramSourceKey,
+    GpuAdmittedProgramSource, GpuProgramSourceError, GpuProgramSourceIdentity, GpuProgramSourceKey,
     GpuProgramSourceProvenance,
 };
 use crate::plugins::render::RenderFlowId;
@@ -78,6 +78,14 @@ impl FlowPipelineArtifactCache {
             program_source_retentions: self.program_sources.retained_source_count(),
             ..self.stats
         }
+    }
+
+    pub(crate) fn program_source_identity(
+        &self,
+        key: GpuProgramSourceKey,
+        renderer_revision: u64,
+    ) -> Result<GpuProgramSourceIdentity, GpuProgramSourceError> {
+        self.program_sources.identity(key, renderer_revision)
     }
 
     pub(crate) fn admit_program_source(
@@ -286,6 +294,9 @@ mod tests {
             .expect("test provenance should be valid")
         };
         let source = "@compute @workgroup_size(1) fn cs_main() {}";
+        let expected_identity = cache
+            .program_source_identity(key(), 4)
+            .expect("source identity should normalize before admission");
         let first = cache
             .admit_program_source(key(), 4, source, provenance())
             .expect("resolved source should admit");
@@ -293,6 +304,7 @@ mod tests {
             .admit_program_source(key(), 4, source, provenance())
             .expect("identical source should remain idempotent");
 
+        assert_eq!(first.identity(), &expected_identity);
         assert!(first.is_same_record(&repeated));
         assert_eq!(cache.stats().program_source_records, 4);
         assert_eq!(cache.stats().program_source_retentions, 4);
