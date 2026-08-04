@@ -95,4 +95,4 @@ A phase specification may provide a bounded implementation handoff when an accep
 
 Planning changes are reviewed against the owning issue, accepted architecture, current code where behavior claims are made, and the repository authority model.
 
-Run the documentation checks required by [Engineering Workflow](../engineering-workflow.md) and [TESTING.md](../../../../../TESTING.md). Report inspection as inspection and executable validation as validation.
+Run the documentation checks required by [Engineering Workflow](../engineering-workflow.md) and [TESTING.md](../../../../../../TESTING.md). Report inspection as inspection and executable validation as validation.
