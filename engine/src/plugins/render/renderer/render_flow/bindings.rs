@@ -1,5 +1,5 @@
 use super::*;
-use crate::plugins::gpu::GpuProgramSourceKey;
+use crate::plugins::gpu::GpuProgramSourceIdentity;
 use crate::plugins::render::pipelines::FlowPassPipelineVariant;
 use crate::plugins::render::{RenderFeatureId, RenderPassId};
 
@@ -28,8 +28,8 @@ impl Renderer {
         pass_id: RenderPassId,
         pass_kind: FlowPassKind,
         pass_feature_id: Option<RenderFeatureId>,
-        shader_identity: &str,
-        shader_revision: u64,
+        program_source_identity: &GpuProgramSourceIdentity,
+        pipeline_variant: FlowPassPipelineVariant,
         bindings: &CompiledPassBindings,
         visibility: ShaderStages,
         allow_depth_sampling: bool,
@@ -187,18 +187,12 @@ impl Renderer {
             });
         }
 
-        let (program_source_key, pipeline_variant) =
-            split_shader_pipeline_identity(shader_identity)?;
-        let program_source_identity = self.flow_pipeline_cache.program_source_identity(
-            GpuProgramSourceKey::new(program_source_key)?,
-            shader_revision,
-        )?;
         let pipeline_key = FlowPassPipelineKey {
             flow_id: flow.flow_id,
             pass_id,
             pass_kind,
             feature_id: pass_feature_id,
-            program_source_identity,
+            program_source_identity: program_source_identity.clone(),
             pipeline_variant,
             bind_group_layout_signature_hash: hash_bind_group_layout_entries(
                 &bind_group_layout_entries,
@@ -296,51 +290,5 @@ impl Renderer {
         };
 
         Ok((pipeline_key, Some(bind_group_layout), Some(bind_group)))
-    }
-}
-
-const COMPUTE_SPECIALIZATION_SEPARATOR: &str = "|constants:";
-
-fn split_shader_pipeline_identity(identity: &str) -> Result<(&str, FlowPassPipelineVariant)> {
-    let Some((program_source_key, specialization)) =
-        identity.split_once(COMPUTE_SPECIALIZATION_SEPARATOR)
-    else {
-        return Ok((identity, FlowPassPipelineVariant::Default));
-    };
-    if program_source_key.is_empty() || specialization.is_empty() {
-        bail!(
-            "renderer pipeline identity '{}' has an invalid compute specialization boundary",
-            identity
-        );
-    }
-    Ok((
-        program_source_key,
-        FlowPassPipelineVariant::ComputeSpecialization(specialization.to_string()),
-    ))
-}
-
-#[cfg(test)]
-mod pipeline_identity_tests {
-    use super::*;
-
-    #[test]
-    fn pipeline_identity_separates_source_from_compute_specialization() {
-        let (source, variant) =
-            split_shader_pipeline_identity("asset:compute.wgsl|constants:COUNT=4,MODE=2").unwrap();
-        assert_eq!(source, "asset:compute.wgsl");
-        assert_eq!(
-            variant,
-            FlowPassPipelineVariant::ComputeSpecialization("COUNT=4,MODE=2".to_string())
-        );
-
-        let (source, variant) = split_shader_pipeline_identity("builtin:graphics").unwrap();
-        assert_eq!(source, "builtin:graphics");
-        assert_eq!(variant, FlowPassPipelineVariant::Default);
-    }
-
-    #[test]
-    fn pipeline_identity_rejects_empty_split_components() {
-        assert!(split_shader_pipeline_identity("|constants:COUNT=4").is_err());
-        assert!(split_shader_pipeline_identity("builtin:compute|constants:").is_err());
     }
 }

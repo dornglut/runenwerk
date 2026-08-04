@@ -5,7 +5,7 @@ const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_pa
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 
 #[test]
-fn resolved_renderer_programs_admit_before_wgpu_shader_module_creation() {
+fn resolved_renderer_programs_admit_before_pipeline_key_and_wgpu_realization() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let source = read(&manifest_dir, EXECUTE_PASSES);
     let paths = [
@@ -34,6 +34,12 @@ fn resolved_renderer_programs_admit_before_wgpu_shader_module_creation() {
             label,
             "resolved source admission",
         );
+        let key_resolution = unique_position(
+            section,
+            ".resolve_compiled_bind_group(",
+            label,
+            "pipeline-key and bind-group resolution",
+        );
         let module_creation = unique_position(
             section,
             ".get_or_create_shader_module(",
@@ -41,8 +47,17 @@ fn resolved_renderer_programs_admit_before_wgpu_shader_module_creation() {
             "WGPU shader-module creation",
         );
         assert!(
-            admission < module_creation,
-            "{label} creates or obtains a WGPU shader module before admitting its exact resolved canonical WGSL source"
+            admission < key_resolution,
+            "{label} constructs renderer cache identity before admitting its exact resolved canonical WGSL source"
+        );
+        assert!(
+            key_resolution < module_creation,
+            "{label} creates or obtains a WGPU shader module before pipeline-key resolution"
+        );
+        assert_eq!(
+            section.matches("admitted_source.identity(),").count(),
+            1,
+            "{label} must hand the retained admitted source identity into key construction exactly once"
         );
         assert_eq!(
             section.matches("ShaderSource::Wgsl(").count(),
@@ -50,6 +65,60 @@ fn resolved_renderer_programs_admit_before_wgpu_shader_module_creation() {
             "{label} must have exactly one current WGPU WGSL realization site"
         );
     }
+}
+
+#[test]
+fn compute_specialization_remains_separate_from_source_identity() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let execution = read(&manifest_dir, EXECUTE_PASSES);
+    let compute = section(
+        &execution,
+        "fn encode_compute_pass(",
+        "fn encode_fullscreen_pass(",
+        EXECUTE_PASSES,
+    );
+
+    assert_eq!(
+        compute
+            .matches("shader_pipeline_variant_with_constants(")
+            .count(),
+        1,
+        "compute execution must derive one renderer-local specialization variant"
+    );
+    assert_eq!(
+        compute.matches("pipeline_variant,").count(),
+        1,
+        "compute execution must pass specialization independently from admitted source identity"
+    );
+    assert!(
+        !compute.contains("shader_pipeline_identity_with_constants("),
+        "compute specialization must not be recombined with source identity"
+    );
+
+    let variant_helper = section(
+        &execution,
+        "fn shader_pipeline_variant_with_constants(",
+        "fn render_vertex_format_to_wgpu(",
+        EXECUTE_PASSES,
+    );
+    assert_eq!(
+        variant_helper
+            .matches("FlowPassPipelineVariant::Default")
+            .count(),
+        1,
+        "empty compute specialization must use the default renderer-local variant"
+    );
+    assert_eq!(
+        variant_helper
+            .matches("FlowPassPipelineVariant::ComputeSpecialization(signature)")
+            .count(),
+        1,
+        "nonempty compute specialization must produce one explicit renderer-local variant"
+    );
+    assert!(
+        !variant_helper.contains("|constants:"),
+        "compute specialization must not recreate the deleted combined identity encoding"
+    );
 }
 
 #[test]
@@ -63,6 +132,10 @@ fn renderer_program_source_admission_has_one_retaining_gateway() {
         "fn admit_resolved_program_source(",
         "fn reject_material_shader_fallback(",
         EXECUTE_PASSES,
+    );
+    assert!(
+        execution_gateway.contains(") -> Result<GpuAdmittedProgramSource>"),
+        "resolved renderer source admission must return the retained admitted record"
     );
     assert_eq!(
         execution_gateway

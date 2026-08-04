@@ -33,55 +33,71 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
 }
 
 #[test]
-fn binding_resolution_obtains_owner_scoped_identity_from_the_cache_authority() {
+fn binding_resolution_consumes_admitted_source_identity() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bindings = read(&manifest_dir, BINDINGS);
 
     assert_eq!(
-        bindings.matches(".program_source_identity(").count(),
+        bindings
+            .matches("program_source_identity: &GpuProgramSourceIdentity")
+            .count(),
         1,
-        "binding resolution must obtain one owner-scoped identity from the cache authority"
+        "binding resolution must accept one admitted owner-scoped source identity"
     );
     assert_eq!(
-        bindings.matches("program_source_identity,").count(),
+        bindings
+            .matches("program_source_identity: program_source_identity.clone(),")
+            .count(),
         1,
-        "the owner-scoped identity must enter the pipeline key exactly once"
+        "the admitted owner-scoped identity must enter the pipeline key exactly once"
     );
-    assert!(
-        !bindings.contains("GpuProgramSourceRevision::try_from_raw("),
-        "binding resolution must not own revision normalization"
+    assert_eq!(
+        bindings
+            .matches("pipeline_variant: FlowPassPipelineVariant")
+            .count(),
+        1,
+        "renderer-local pipeline variation must be passed independently"
     );
-    assert!(
-        !bindings.contains("shader_revision.checked_add(1)"),
-        "binding resolution must not own zero-to-one-based revision normalization"
-    );
+    for forbidden in [
+        ".program_source_identity(",
+        "GpuProgramSourceKey::new(",
+        "shader_identity: &str",
+        "shader_revision: u64",
+        "split_shader_pipeline_identity(",
+        "COMPUTE_SPECIALIZATION_SEPARATOR",
+    ] {
+        assert!(
+            !bindings.contains(forbidden),
+            "pre-admission or combined source identity authority returned to binding resolution: {forbidden}"
+        );
+    }
 }
 
 #[test]
-fn renderer_source_authority_owns_identity_normalization_once() {
+fn renderer_source_authority_normalizes_identity_only_during_admission() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let cache = read(&manifest_dir, PIPELINE_CACHE);
     let authority = read(&manifest_dir, PROGRAM_SOURCES);
 
+    assert!(
+        !cache.contains("pub(crate) fn program_source_identity("),
+        "the renderer cache must not expose a pre-admission identity gateway"
+    );
     assert_eq!(
-        cache
-            .matches("pub(crate) fn program_source_identity(")
-            .count(),
+        cache.matches("pub(crate) fn admit_program_source(").count(),
         1,
-        "the renderer cache must expose one owner-scoped identity gateway"
+        "the renderer cache must expose one admitted-source gateway"
     );
     let cache_gateway = section(
         &cache,
-        "pub(crate) fn program_source_identity(",
         "pub(crate) fn admit_program_source(",
+        "pub fn get_or_create_shader_module<",
         PIPELINE_CACHE,
     );
     assert_eq!(
-        cache_gateway
-            .matches("self.program_sources.identity(")
-            .count(),
+        cache_gateway.matches(".admit_and_retain_wgsl(").count(),
         1,
-        "the cache identity gateway must delegate to the one renderer source authority"
+        "the cache admission gateway must delegate to the one retaining source authority"
     );
 
     assert_eq!(
@@ -113,7 +129,7 @@ fn renderer_source_authority_owns_identity_normalization_once() {
             .matches("self.identity(key, renderer_revision)?")
             .count(),
         1,
-        "source admission must use the same identity-normalization operation as cache keys"
+        "source admission must use the one identity-normalization operation"
     );
 }
 

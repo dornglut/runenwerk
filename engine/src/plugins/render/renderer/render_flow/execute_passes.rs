@@ -1,9 +1,13 @@
 use super::*;
-use crate::plugins::gpu::{GpuProgramSourceKey, GpuProgramSourceProvenance, GpuWorkResourceId};
+use crate::plugins::gpu::{
+    GpuAdmittedProgramSource, GpuProgramSourceKey, GpuProgramSourceProvenance,
+    GpuWorkResourceId,
+};
 use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::{
     CompiledDrawBufferPlan, CompiledDrawSource, CompiledResourceRef,
 };
+use crate::plugins::render::pipelines::FlowPassPipelineVariant;
 use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderIndirectDrawArgsKind,
     RenderPrimitiveTopology, RenderRasterState, RenderShaderConstant, RenderVertexFormat,
@@ -155,10 +159,7 @@ impl Renderer {
             .iter()
             .map(|constant| (constant.name.as_str(), constant.value as f64))
             .collect::<Vec<_>>();
-        let shader_pipeline_identity = shader_pipeline_identity_with_constants(
-            shader.pipeline_identity.as_str(),
-            &pass.shader_constants,
-        );
+        let pipeline_variant = shader_pipeline_variant_with_constants(&pass.shader_constants);
         let dispatch = flow_inputs
             .projected_dispatch_workgroups
             .get(&pass.pass_id)
@@ -180,6 +181,11 @@ impl Renderer {
             );
         }
 
+        let admitted_source = admit_resolved_program_source(
+            &mut self.flow_pipeline_cache,
+            &shader,
+            format!("compute pass {}", pass.pass_id),
+        )?;
         let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
             device,
             frame_texture,
@@ -188,8 +194,8 @@ impl Renderer {
             pass.pass_id,
             FlowPassKind::Compute,
             pass.feature_id,
-            shader_pipeline_identity.as_str(),
-            shader.revision,
+            admitted_source.identity(),
+            pipeline_variant,
             &pass.bindings,
             ShaderStages::COMPUTE,
             true,
@@ -201,11 +207,6 @@ impl Renderer {
             runtime_resources,
         )?;
 
-        admit_resolved_program_source(
-            &mut self.flow_pipeline_cache,
-            &shader,
-            format!("compute pass {}", pass.pass_id),
-        )?;
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
@@ -317,6 +318,11 @@ impl Renderer {
             plan.shader.as_ref(),
             plan.pass_id,
         )?;
+        let admitted_source = admit_resolved_program_source(
+            &mut self.flow_pipeline_cache,
+            &shader,
+            format!("fullscreen pass {}", plan.pass_id),
+        )?;
 
         let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
             device,
@@ -326,8 +332,8 @@ impl Renderer {
             plan.pass_id,
             FlowPassKind::Fullscreen,
             plan.feature_id,
-            shader.pipeline_identity.as_str(),
-            shader.revision,
+            admitted_source.identity(),
+            FlowPassPipelineVariant::Default,
             &plan.bindings,
             ShaderStages::VERTEX_FRAGMENT,
             true,
@@ -339,11 +345,6 @@ impl Renderer {
             runtime_resources,
         )?;
 
-        admit_resolved_program_source(
-            &mut self.flow_pipeline_cache,
-            &shader,
-            format!("fullscreen pass {}", plan.pass_id),
-        )?;
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
@@ -516,6 +517,11 @@ impl Renderer {
             plan.shader.as_ref(),
             plan.pass_id,
         )?;
+        let admitted_source = admit_resolved_program_source(
+            &mut self.flow_pipeline_cache,
+            &shader,
+            format!("graphics pass {}", plan.pass_id),
+        )?;
 
         let vertex_layout_signature_hash = plan.draw_buffers.vertex_layout_signature_hash();
         let raster_state_signature_hash = plan.raster_state.signature_hash();
@@ -527,8 +533,8 @@ impl Renderer {
             plan.pass_id,
             FlowPassKind::Graphics,
             plan.feature_id,
-            shader.pipeline_identity.as_str(),
-            shader.revision,
+            admitted_source.identity(),
+            FlowPassPipelineVariant::Default,
             &plan.bindings,
             ShaderStages::VERTEX_FRAGMENT,
             true,
@@ -540,11 +546,6 @@ impl Renderer {
             runtime_resources,
         )?;
 
-        admit_resolved_program_source(
-            &mut self.flow_pipeline_cache,
-            &shader,
-            format!("graphics pass {}", plan.pass_id),
-        )?;
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
@@ -1096,8 +1097,8 @@ fn admit_resolved_program_source(
     cache: &mut FlowPipelineArtifactCache,
     shader: &super::provenance::ResolvedShaderMaterial<'_>,
     provenance_detail: impl Into<String>,
-) -> Result<()> {
-    cache.admit_program_source(
+) -> Result<GpuAdmittedProgramSource> {
+    let admitted_source = cache.admit_program_source(
         GpuProgramSourceKey::new(shader.pipeline_identity.as_str())?,
         shader.revision,
         shader.source,
@@ -1106,7 +1107,7 @@ fn admit_resolved_program_source(
             Some(provenance_detail.into()),
         )?,
     )?;
-    Ok(())
+    Ok(admitted_source)
 }
 
 fn reject_material_shader_fallback(
@@ -1346,12 +1347,11 @@ fn render_vertex_step_mode_to_wgpu(value: RenderVertexStepMode) -> VertexStepMod
     }
 }
 
-fn shader_pipeline_identity_with_constants(
-    base: &str,
+fn shader_pipeline_variant_with_constants(
     constants: &[RenderShaderConstant],
-) -> String {
+) -> FlowPassPipelineVariant {
     if constants.is_empty() {
-        return base.to_string();
+        return FlowPassPipelineVariant::Default;
     }
 
     let mut ordered = constants
@@ -1364,7 +1364,7 @@ fn shader_pipeline_identity_with_constants(
         .map(|(name, value)| format!("{name}={value}"))
         .collect::<Vec<_>>()
         .join(",");
-    format!("{base}|constants:{signature}")
+    FlowPassPipelineVariant::ComputeSpecialization(signature)
 }
 
 fn render_vertex_format_to_wgpu(value: RenderVertexFormat) -> VertexFormat {
