@@ -5,11 +5,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-08-04
 related:
+  - ./engineering-workflow.md
   - ./planning-methods.md
   - ./planning-and-implementation-workflow.md
-  - ./routines/architecture-governance-review-routine.md
   - ./diagrams/design-intake-roadmap-automation.puml
   - ./roadmap-decision-register.md
   - ./design-implementation-triage.md
@@ -89,12 +89,13 @@ Keep roadmap score changes in [roadmap-decision-register.md](./roadmap-decision-
 
 The current enforcement stack already includes:
 
-- `task docs:validate`;
-- `./quiet_full_gate.sh`;
+- `cargo validate`;
+- `git diff --check`;
+- the production documentation build;
 - Rust architecture guard tests such as editor viewport and runtime boundary guards;
 - focused crate tests for domain invariants.
 
-Recommended next enforcement improvement: add a dependency-direction fitness function that reads `cargo metadata` and fails if a crate violates `guidelines/domain-map.md`. This should live as a tool or test before it is made part of the full gate.
+Recommended next enforcement improvement: add a dependency-direction fitness function that reads `cargo metadata` and fails if a crate violates `guidelines/domain-map.md`. This should live as a tool or test before it is made part of the repository baseline.
 
 ### ATAM-lite
 
@@ -134,7 +135,7 @@ Use Team Topologies as lightweight ownership labels:
 | Stream-aligned | Product surfaces such as editor workflows, Draw workflows, and runtime-preview flows. |
 | Platform | Shared execution substrate, product jobs, query snapshots, publication barriers, diagnostics, and docs workflow. |
 | Complicated subsystem | Render internals, ECS runtime internals, net replication, native tablet backends, and future physics/animation internals. |
-| Enabling | Architecture audits, public API reviews, docs refactors, migration routines, and fitness-function development. |
+| Enabling | Architecture audits, public API reviews, docs refactors, migration work, and fitness-function development. |
 
 Use these labels to set expectations for collaboration and review, not to create process overhead.
 
@@ -151,14 +152,11 @@ Adopt these methods as a governance addendum to the planning model:
 
 This improves the current planning system without replacing the existing Runenwerk architecture doctrine.
 
-## AI Workflow Use
+## Workflow Use
 
-Use the governance workflow before implementation when a task may affect dependency direction, domain ownership, ADR-worthy decisions, migration strategy, tradeoffs, enforcement, or ownership mode.
+Apply these governance lenses through [Engineering Workflow](./engineering-workflow.md). Architectural or extraction work must inspect current code and accepted authority, compare alternatives, define ownership and migration, record durable decisions in the owning ADR or design, and validate the reviewed head before merge.
 
-- Routine: [routines/architecture-governance-review-routine.md](./routines/architecture-governance-review-routine.md)
-- Workflow helper: `task ai:architecture-governance -- --task "<task>" --scope "<scope>"`
-
-This automation may generate prompts, checklists, first commands, validation expectations, and stop conditions. It must not bypass repository inspection, accepted ADR/design gates, or human/agent review of architecture decisions.
+Do not create a separate routine, generated prompt, checklist database, or lifecycle state machine for architecture governance. The owning issue, accepted design or ADR, pull request, code, tests, and repository validation remain authoritative.
 
 Design intake into the roadmap system is shown in [design-intake-roadmap-automation.puml](./diagrams/design-intake-roadmap-automation.puml).
 
