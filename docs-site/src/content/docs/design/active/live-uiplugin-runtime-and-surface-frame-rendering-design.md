@@ -1,11 +1,11 @@
 ---
 title: Live UiPlugin Runtime And Surface Frame Rendering
-description: Design-gate record for the live engine UiPlugin runtime, app-facing typed screen/action ergonomics, and staged generic surface-frame render publication.
+description: Design record for the live engine UiPlugin runtime, app-facing typed screen/action ergonomics, and staged generic surface-frame render publication.
 status: active
 owner: ui
 layer: design
 canonical: true
-last_reviewed: 2026-07-06
+last_reviewed: 2026-08-04
 related_docs:
   - ../../architecture/ui-framework-architecture.md
   - ./ui-framework-app-integration-direction-review.md
@@ -14,10 +14,8 @@ related_docs:
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
-  - ../../workspace/complete-investigation-gate.md
-  - ../../workspace/complete-design-gate.md
-  - ../../workspace/complete-merge-readiness-gate.md
-  - ../../workspace/evidence-quality-taxonomy.md
+  - ../../workspace/engineering-workflow.md
+  - ../../workspace/authority-model.md
   - ../../guidelines/programming-principles.md
 ---
 
@@ -25,11 +23,11 @@ related_docs:
 
 ID: `PT-UI-RUNTIME-PLATFORM-001`
 
-Lifecycle state: `active-planning` design-gate complete / implementation-planning required.
+Planning state: design accepted; implementation requires a separate owning issue and pull request.
 
 Implementation status: not started and not authorized by this document.
 
-## Design-gate result
+## Design review result
 
 This design accepts the investigation result from:
 
@@ -37,15 +35,15 @@ This design accepts the investigation result from:
 docs-site/src/content/docs/reports/investigations/live-uiplugin-runtime-current-state-investigation.md
 ```
 
-Complete investigation gate status: complete for current-state, authority, owner, dependency, vocabulary, capability, alternatives, confidence, and blocker evidence.
+Investigation evidence: complete for current-state, authority, owner, dependency, vocabulary, capability, alternatives, confidence, and blocker evidence.
 
-Complete design gate status: complete for opening a separate implementation-planning PR. Runtime implementation remains blocked until that later PR records exact owner files, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, stop conditions, and acceptance criteria.
+Design evidence: complete for opening a separate implementation-planning pull request. Runtime implementation remains blocked until that later pull request records exact owner files, allowed files/crates, forbidden files/crates, validation envelope, evidence expectation, stop conditions, and acceptance criteria.
 
 Required final position:
 
 ```text
-PT-UI-RUNTIME-PLATFORM-001 investigation/design gate is complete.
-Runtime implementation is still not started; open a separate implementation-planning PR with exact contract.
+PT-UI-RUNTIME-PLATFORM-001 investigation and design are complete.
+Runtime implementation is still not started; open a separate implementation-planning pull request with an exact contract.
 ```
 
 ## Target direction
@@ -314,7 +312,7 @@ manual prepared frame resource writes
 
 | Principle | Status | Evidence / resolution |
 |---|---|---|
-| KISS | Pass for design gate | Primary path is direct: `app.mount_ui(Screen)` -> source/program/evaluator -> frame submission. |
+| KISS | Pass for design review | Primary path is direct: `app.mount_ui(Screen)` -> source/program/evaluator -> frame submission. |
 | DRY | Pass | `ui_surface`, `ui_hosts`, `ui_evaluator`, `ui_runtime_view`, and `ui_render_data` are reused instead of duplicated in a broad runtime-platform crate. |
 | YAGNI | Pass | No code, crate, SDF, SpatialCanvas, `foundation/meta`, or generic plugin framework is added by PR #74. |
 | SOLID | Pass | Proposed module split gives screen/source/action/host/events/render/report separate reasons to change. |
@@ -326,23 +324,21 @@ manual prepared frame resource writes
 
 Docs-only PR #74 did not run local commands in this connector-only session.
 
-The future implementation-planning PR must require, at minimum:
+The future implementation-planning PR must require the canonical repository baseline plus focused tests for every touched owner. At minimum:
 
 ```text
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 cargo test -p engine <focused UiPlugin/runtime tests>
 cargo test -p ui_app_integration
 cargo test -p ui_hosts
 cargo test -p ui_surface
 cargo test -p ui_evaluator
 cargo test -p ui_runtime_view
-cargo test --workspace
-python tools/docs/validate_docs.py
-git diff --check
-git status --short --branch
-git diff --stat main...HEAD
 ```
 
-Cargo scope may be refined only if the implementation contract proves a smaller or different crate set is sufficient. Do not claim optional cargo validation unless it is actually run.
+Focused scope may be refined only if the implementation contract proves a smaller or different crate set is sufficient. Do not claim optional validation unless it is actually run.
 
 ## Evidence expectation for the future implementation PR
 
@@ -362,6 +358,8 @@ UiPlugin publishes frame submission without RenderPlugin querying UI semantics
 Counter live app proof reports source, program, runtime, action, mutation, and render facts
 scene/debug compatibility producer behavior is unchanged or explicitly migrated
 ```
+
+Evidence reporting must distinguish source inspection, local executable validation, exact-head CI, user-reported evidence, and unverified claims.
 
 ## Implementation sequencing
 
@@ -485,11 +483,11 @@ Forbidden files/crates: next implementation start before closeout truth.
 
 Tests/proofs: docs validation and diff hygiene after closeout edits.
 
-Stop conditions: stop if validation or lifecycle truth is unavailable and not explicitly recorded.
+Stop conditions: stop if validation or planning truth is unavailable and not explicitly recorded.
 
-## Acceptance criteria for this design gate
+## Acceptance criteria for this design record
 
-This design gate is accepted when:
+This design record is accepted when:
 
 ```text
 current-state investigation exists and is linked
@@ -505,7 +503,7 @@ implementation sequence and stop conditions are present
 runtime implementation remains not authorized
 ```
 
-This document satisfies those criteria for design/planning. It does not satisfy active implementation authorization.
+This document satisfies those criteria for design/planning. It does not grant active implementation authorization.
 
 ## Stop conditions
 
@@ -532,4 +530,4 @@ making ui_app_integration the final framework
 
 ## Next step
 
-Open a separate implementation-planning PR for the first runtime slice. That PR must use this design and the investigation report as authority, then record the exact implementation contract before any Rust code is written.
+Open a separate implementation-planning pull request for the first runtime slice. That pull request must use this design and the investigation report as authority, then record the exact implementation contract before any Rust code is written.
