@@ -1,4 +1,8 @@
 use super::render_flow::RendererProgramSourceAuthority;
+use super::{DEFAULT_COMPUTE_SHADER, DEFAULT_FULLSCREEN_SHADER, DEFAULT_GRAPHICS_SHADER};
+use crate::plugins::gpu::{
+    GpuAdmittedProgramSource, GpuProgramSourceKey, GpuProgramSourceProvenance,
+};
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::pipelines::{FlowPassBindGroupKey, FlowPassPipelineKey};
 use std::collections::HashMap;
@@ -20,6 +24,7 @@ pub struct RendererPipelineCacheStats {
     pub program_source_bytes: usize,
     pub program_source_max_records: usize,
     pub program_source_max_bytes: usize,
+    pub program_source_retentions: usize,
 }
 
 #[derive(Debug)]
@@ -33,10 +38,33 @@ pub struct FlowPipelineArtifactCache {
     pub bind_groups: HashMap<FlowPassBindGroupKey, BindGroup>,
     pub stats: RendererPipelineCacheStats,
     program_sources: RendererProgramSourceAuthority,
+    builtin_program_sources: [GpuAdmittedProgramSource; 3],
 }
 
 impl Default for FlowPipelineArtifactCache {
     fn default() -> Self {
+        let mut program_sources = RendererProgramSourceAuthority::new(
+            RENDERER_PROGRAM_SOURCE_MAX_RECORDS,
+            RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES,
+        )
+        .expect("renderer program-source authority policy is nonzero and process-local");
+        let builtin_program_sources = [
+            admit_builtin_program_source(
+                &mut program_sources,
+                "builtin:compute",
+                DEFAULT_COMPUTE_SHADER,
+            ),
+            admit_builtin_program_source(
+                &mut program_sources,
+                "builtin:fullscreen",
+                DEFAULT_FULLSCREEN_SHADER,
+            ),
+            admit_builtin_program_source(
+                &mut program_sources,
+                "builtin:graphics",
+                DEFAULT_GRAPHICS_SHADER,
+            ),
+        ];
         Self {
             shader_modules: HashMap::new(),
             bind_group_layouts: HashMap::new(),
@@ -46,11 +74,8 @@ impl Default for FlowPipelineArtifactCache {
             samplers: HashMap::new(),
             bind_groups: HashMap::new(),
             stats: RendererPipelineCacheStats::default(),
-            program_sources: RendererProgramSourceAuthority::new(
-                RENDERER_PROGRAM_SOURCE_MAX_RECORDS,
-                RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES,
-            )
-            .expect("renderer program-source authority policy is nonzero and process-local"),
+            program_sources,
+            builtin_program_sources,
         }
     }
 }
@@ -64,6 +89,7 @@ impl FlowPipelineArtifactCache {
             program_source_bytes: source_stats.retained_source_bytes(),
             program_source_max_records: source_stats.max_records(),
             program_source_max_bytes: source_stats.max_retained_source_bytes(),
+            program_source_retentions: self.builtin_program_sources.len(),
             ..self.stats
         }
     }
@@ -204,25 +230,52 @@ impl FlowPipelineArtifactCache {
     }
 }
 
+fn admit_builtin_program_source(
+    authority: &mut RendererProgramSourceAuthority,
+    key: &str,
+    source: &str,
+) -> GpuAdmittedProgramSource {
+    authority
+        .admit_wgsl(
+            GpuProgramSourceKey::new(key).expect("builtin source key is static and valid"),
+            0,
+            source,
+            GpuProgramSourceProvenance::new("renderer-builtin-fallback", Some(key.to_owned()))
+                .expect("builtin source provenance is static and valid"),
+        )
+        .expect("builtin canonical WGSL source must admit before renderer realization")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn renderer_cache_owns_one_bounded_program_source_registry() {
+    fn renderer_cache_admits_and_retains_all_builtin_program_sources() {
         let cache = FlowPipelineArtifactCache::default();
         let stats = cache.stats();
 
         assert_ne!(stats.program_source_owner, 0);
-        assert_eq!(stats.program_source_records, 0);
-        assert_eq!(stats.program_source_bytes, 0);
+        assert_eq!(stats.program_source_records, 3);
+        assert_eq!(stats.program_source_retentions, 3);
         assert_eq!(
-            stats.program_source_max_records,
-            RENDERER_PROGRAM_SOURCE_MAX_RECORDS
+            cache.builtin_program_sources[0].canonical_wgsl(),
+            DEFAULT_COMPUTE_SHADER
         );
         assert_eq!(
-            stats.program_source_max_bytes,
-            RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES
+            cache.builtin_program_sources[1].canonical_wgsl(),
+            DEFAULT_FULLSCREEN_SHADER
+        );
+        assert_eq!(
+            cache.builtin_program_sources[2].canonical_wgsl(),
+            DEFAULT_GRAPHICS_SHADER
+        );
+        assert!(
+            cache.builtin_program_sources.iter().all(|source| source
+                .identity()
+                .owner()
+                .diagnostic_raw()
+                == stats.program_source_owner)
         );
     }
 
@@ -232,5 +285,14 @@ mod tests {
         let second = FlowPipelineArtifactCache::default().stats();
 
         assert_ne!(first.program_source_owner, second.program_source_owner);
+    }
+
+    #[test]
+    fn flow_retirement_does_not_drop_renderer_builtin_program_sources() {
+        let mut cache = FlowPipelineArtifactCache::default();
+        cache.retain_flows(&[]);
+
+        assert_eq!(cache.stats().program_source_records, 3);
+        assert_eq!(cache.stats().program_source_retentions, 3);
     }
 }
