@@ -91,6 +91,16 @@ impl GpuColorTargetStateDescriptor {
         self.write_mask
     }
 
+    pub const fn has_blendable_alpha_channel(self) -> bool {
+        matches!(
+            self.format,
+            GpuTextureFormat::Rgba8Unorm
+                | GpuTextureFormat::Rgba8UnormSrgb
+                | GpuTextureFormat::Bgra8Unorm
+                | GpuTextureFormat::Bgra8UnormSrgb
+        )
+    }
+
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
         let (class, width) = match self.format {
             GpuTextureFormat::Rgba8Unorm

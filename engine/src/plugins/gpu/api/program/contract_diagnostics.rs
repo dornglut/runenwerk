@@ -26,6 +26,7 @@ pub enum GpuProgramContractCause {
     RenderAttachmentStateInvalid,
     RenderPrimitiveStateInvalid,
     RenderMultisampleStateInvalid,
+    RenderPipelineStateInvalid,
     InvalidDiagnosticMetadata,
 }
 
