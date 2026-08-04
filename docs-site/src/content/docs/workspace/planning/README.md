@@ -1,170 +1,98 @@
 ---
 title: Planning Records
-description: Markdown-first planning records for scriptless Runenwerk workflow.
+description: Concise Markdown planning summaries for Runenwerk.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-07
+last_reviewed: 2026-08-04
 related_docs:
+  - ../engineering-workflow.md
   - ../authority-model.md
-  - ../workflow-lifecycle.md
-  - ../complete-investigation-gate.md
-  - ../complete-design-gate.md
-  - ../evidence-quality-taxonomy.md
-  - ../complete-merge-readiness-gate.md
-  - ../routines/roadmap-update-routine.md
-  - ../routines/track-orchestration-routine.md
-  - ../specs/phase-implementation-spec.md
-  - ../../guidelines/programming-principles.md
+  - ../documentation-structure.md
+  - ./roadmap.md
 ---
 
 # Planning Records
 
-Planning is Markdown-first from the scriptless workflow cutover onward.
+Runenwerk keeps planning readable without creating a second work-management system.
 
-Use these files:
-
-- [Active Work](active-work.md)
-- [Roadmap](roadmap.md)
-- [Deferred Work](deferred-work.md)
-- [Completed Work](completed-work.md)
-- [Decision Register](decision-register.md)
-
-## Rule
-
-A planning change must be understandable by reading Markdown. Do not require generated views, rendered diagrams, YAML parsing, Taskfile tasks, local scripts, or phase specs to know the current state.
-
-Legacy YAML and generated Markdown may remain as migration context or optional mirrors. If they disagree with these planning records, update the Markdown planning record first and report the mirror drift.
-
-Phase implementation specs may be used as compact handoff contracts for one phase, but they derive from accepted Markdown authority and must not replace planning records.
-
-## Lifecycle rule
-
-Use [`../workflow-lifecycle.md`](../workflow-lifecycle.md) when a planning change changes state.
-
-Use [`../complete-investigation-gate.md`](../complete-investigation-gate.md) before planning makes design, activation, or implementation decisions when current reality, ownership, authority, alternatives, evidence, or confidence is not already proven.
-
-Use [`../complete-design-gate.md`](../complete-design-gate.md) before planning authorizes implementation for architecture-sensitive, reusable, platform, public API, production-track, workflow, or domain-boundary work.
-
-Use [`../../guidelines/programming-principles.md`](../../guidelines/programming-principles.md) when planning activates non-trivial implementation, reusable platform work, public API changes, production-track work, workflow authority changes, or phase completion.
-
-Use [`../evidence-quality-taxonomy.md`](../evidence-quality-taxonomy.md) when planning records depend on validation, current behavior, confidence, or freshness claims.
-
-Use [`../complete-merge-readiness-gate.md`](../complete-merge-readiness-gate.md) before planning marks a PR/branch/phase as merge-ready or completed by merge.
-
-Use [`../routines/track-orchestration-routine.md`](../routines/track-orchestration-routine.md) when one goal owns a production track but implementation must proceed through bounded phase PRs.
-
-Common state transitions:
+## Authority split
 
 ```text
-idea -> investigating
-investigating -> proposed-design
-proposed-design -> accepted-direction
-accepted-direction -> track-candidate
-track-candidate -> production-track
-production-track -> active-planning
-active-planning -> active-implementation
-active-implementation -> review
-review -> completed
-active-planning -> deferred
-accepted-direction -> superseded
+GitHub issue
+  live task state, scope, owner, blockers, and acceptance criteria
+
+accepted ADR or design
+  durable architecture, ownership, dependency direction, and migration
+
+roadmap
+  high-level sequence and dependencies
+
+pull request
+  proposed diff, review findings, validation, and merge evidence
+
+code and tests
+  current behavior
+
+reports and archive
+  historical evidence and context
 ```
 
-Architecture acceptance does not authorize implementation. Active implementation requires exact owner, complete implementation contract, allowed files/crates, forbidden files/crates, principle compliance matrix, module decomposition map, maintainability review status, validation envelope, evidence expectation, stop conditions, and complete investigation/design gate evidence where applicable.
+Do not copy live issue or pull-request state into stable architecture documents. Do not use planning files as execution ledgers, branch trackers, CI dashboards, generated task databases, or implementation authorization certificates.
 
-A track manager may own strategic sequencing, but each implementation phase still needs separate active-implementation authorization.
+## Maintained planning files
 
-## Track orchestration planning rule
+- [Active Work](active-work.md) — concise cross-project summary of current focus and blockers.
+- [Roadmap](roadmap.md) — durable high-level sequence and dependencies.
+- [Deferred Work](deferred-work.md) — work intentionally postponed, with reason and reactivation condition.
+- [Completed Work](completed-work.md) — short historical index linking accepted evidence.
+- [Decision Register](decision-register.md) — durable planning decisions that materially change priority, sequence, ownership, or disposition.
 
-A one-shot track goal is valid only as manager intent.
+GitHub issues remain authoritative when a summary disagrees with live work state. Correct the summary rather than creating another planning record.
+
+## Planning rules
+
+1. Give each live task one owning GitHub issue.
+2. Keep the roadmap at milestone and dependency level; do not enumerate branch execution state.
+3. Put architecture and public-contract decisions in an accepted ADR or design before implementation when the engineering workflow classifies the change as architectural or extraction work.
+4. Record delivery evidence in the pull request, not in the roadmap.
+5. Keep completed-work entries short; use a closeout report only when durable historical evidence would otherwise bloat the index.
+6. Name why deferred work is deferred and what would reactivate it.
+7. Cross-link owners instead of duplicating their content.
+8. Remove obsolete planning authority after current consumers are migrated; do not preserve compatibility pages without a real consumer and removal condition.
+
+## Work states
+
+Use the operational states defined by [Engineering Workflow](../engineering-workflow.md):
 
 ```text
-One goal may own the whole production track.
-Implementation still proceeds through bounded phase PRs.
-One implementation agent receives exactly one phase.
+proposed
+active
+blocked
+done
+deferred
 ```
 
-Track orchestration planning must keep these claims explicit:
+Durable documents may additionally be `accepted`, `superseded`, or `archived` when those words describe document authority rather than task execution.
 
-```text
-current track
-current phase
-current lifecycle state
-current branch/PR when applicable
-previous phase closeout state
-next phase activation condition
-implementation authorization status
-```
+Do not invent intermediate process states merely to record review ceremony. A pull request and its checks already own delivery and merge state.
 
-Do not mark the next phase active implementation until the previous phase has truthful completion or explicitly scheduled closeout and the next phase has exact implementation authorization.
+## Updating planning truth
 
-## Phase spec planning rule
+When work changes:
 
-Use [`../specs/phase-implementation-spec.md`](../specs/phase-implementation-spec.md) when a phase needs a compact handoff contract.
+- update the owning issue first;
+- update the roadmap only when high-level sequence or dependency truth changed;
+- update active work only when the concise current-focus summary changed;
+- update deferred or completed indexes only when disposition changed;
+- add a decision-register entry only for a durable planning decision;
+- keep exact branch heads, workflow run IDs, and transient diagnostics in the pull request.
 
-A phase spec may support planning and implementation handoff. It does not replace:
+A phase specification may provide a bounded implementation handoff when an accepted design calls for one. It derives from the owning issue and accepted architecture; it does not replace them or create a parallel lifecycle.
 
-```text
-active-work truth
-roadmap state
-production-track order
-decision-register transitions
-complete investigation gate evidence
-complete design gate evidence
-merge-readiness gate
-phase closeout truth
-```
+## Review and validation
 
-Use RON for phase specs. Use JSONL for append-only event/log/trace streams.
+Planning changes are reviewed against the owning issue, accepted architecture, current code where behavior claims are made, and the repository authority model.
 
-## Update checklist
-
-- Active work has one clear current focus or an explicit no-current-focus state.
-- Roadmap entries name state, owner, authority, evidence, known gaps, and next action.
-- Planning decisions point to complete investigation gate evidence where applicable.
-- Active implementation entries point to complete design gate evidence where applicable.
-- Active implementation entries name the complete implementation contract, allowed files/crates, forbidden files/crates, principle compliance matrix, module decomposition map, maintainability review status, validation envelope, evidence expectation, and stop conditions.
-- Reusable/platform/public API entries include or link feature support, future-use-case pressure, hierarchy/composition where relevant, ergonomics/usability evidence, principle compliance evidence, and module decomposition evidence.
-- Merge/completion entries name evidence classes, principle compliance status, maintainability/decomposition status, validation status, merge readiness status when applicable, and branch cleanup impact when applicable.
-- Deferred work names the reason and reactivation condition.
-- Completed work links evidence and remains a short index.
-- Production tracks name strategic order, track type, gates, activation condition, and current blocker.
-- Track orchestration entries name current phase, closeout state, merge-readiness state, and next safe action.
-- Phase specs derive from accepted docs and do not become parallel authority.
-- Decision register explains priority changes and records state transitions where relevant.
-- Closeout detail goes under `../../reports/closeouts/` when it would bloat planning records.
-
-## Common entry fields
-
-Use these fields across planning records where applicable:
-
-```text
-ID:
-Title:
-State:
-Owner:
-Authority:
-Evidence classes:
-Complete investigation gate:
-Complete design gate:
-Merge readiness:
-Implementation contract:
-Allowed files/crates:
-Forbidden files/crates:
-Principle compliance matrix:
-Module decomposition map:
-Maintainability review status:
-Feature support matrix:
-Future-use-case pressure matrix:
-Hierarchy/composition matrix:
-Ergonomics/usability:
-Phase spec:
-Evidence:
-Validation:
-Known gaps:
-Stop conditions:
-Next action:
-```
-
-Specific files may add fields such as `Track type`, `Validation`, `Reason deferred`, `Reactivation condition`, `Completed on`, `State transition`, `Branch cleanup`, `Merge readiness`, `Programming-principle compliance`, `Maintainability/decomposition`, `Current phase`, `Closeout state`, `Implementation authorization`, or `Next phase activation condition`.
+Run the documentation checks required by [Engineering Workflow](../engineering-workflow.md) and [TESTING.md](../../../../../TESTING.md). Report inspection as inspection and executable validation as validation.
