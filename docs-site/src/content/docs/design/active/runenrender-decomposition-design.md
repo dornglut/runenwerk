@@ -418,7 +418,7 @@ TemporalCoverage
 MotionContract
 ```
 
-Views, representations, inputs, materials, media, emitters, and derived state state the
+Views, representations, inputs, materials, media, emitters, and derived state declare the
 time intervals for which they are valid.
 
 Supported future observation models may include global shutter, rolling shutter,
@@ -708,7 +708,7 @@ other declared numerical modes without redefining scene semantics.
 
 ```text
 view set
-render-output set
+render output set
 method selection
 accuracy policy
 determinism policy
