@@ -5,13 +5,11 @@ status: superseded
 owner: app-program
 layer: workspace
 canonical: false
-last_reviewed: 2026-07-05
+last_reviewed: 2026-08-04
 related_docs:
   - ./active-work.md
-  - ../workflow-lifecycle.md
-  - ../complete-investigation-gate.md
-  - ../complete-design-gate.md
-  - ../complete-merge-readiness-gate.md
+  - ../engineering-workflow.md
+  - ../authority-model.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/typed-app-program-and-ui-proof-design.md
   - ../../reports/investigations/typed-app-program-current-state-investigation.md
@@ -25,7 +23,7 @@ related_docs:
 
 ## Status
 
-Lifecycle state: `superseded`.
+Document status: `superseded`.
 
 This planning contract is no longer the active implementation foundation.
 
