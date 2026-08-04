@@ -1,11 +1,11 @@
 ---
 title: Runenwerk Typed App Composition Plugin Framework Roadmap
-description: Proposed proof-gated continuation path for typed app composition, plugin suites, extension points, host profiles, and domain contribution registries without premature shared extraction.
+description: Proposed proof-based continuation path for typed app composition, plugin suites, extension points, host profiles, and domain contribution registries without premature shared extraction.
 status: active
 owner: workspace
 layer: architecture
 canonical: false
-last_reviewed: 2026-06-27
+last_reviewed: 2026-08-04
 related_docs:
   - ./runenwerk-typed-app-composition-plugin-framework-design.md
   - ./runenwerk-domain-workbench-north-star.md
@@ -13,7 +13,8 @@ related_docs:
   - ./ui-program-architecture-owner-map.md
   - ./ui-component-platform-base-control-packages-design.md
   - ./ui-component-platform-ownership-realignment-design.md
-  - ../../workspace/workflow-lifecycle.md
+  - ../../workspace/engineering-workflow.md
+  - ../../workspace/authority-model.md
   - ../../guidelines/domain-program-architecture-pattern.md
   - ../../guidelines/programming-principles.md
   - ../../workspace/planning/active-work.md
@@ -24,15 +25,15 @@ related_docs:
 
 ## Status
 
-Documentation folder status: `active`.
+Documentation status: `active`.
 
-Workflow lifecycle state: `proposed-design` companion.
+Decision status: proposed companion roadmap for the architecture direction.
 
-Target decision: `proposed-design -> accepted-direction` for the companion design only.
+Target decision: accept, revise, or reject the companion design; this roadmap remains reference material until an owning issue activates a bounded slice.
 
 This document is not an active production track, not active implementation, and not a replacement for the current UI Component Platform roadmap.
 
-If the companion design is accepted, this roadmap remains a reference until a planning update promotes a specific slice into `active-planning` or `active-implementation`.
+If the companion design is accepted, this roadmap remains a reference until a planning update activates a specific slice through an owning issue and pull request.
 
 ## Decision summary
 
@@ -64,7 +65,7 @@ design the pattern
 
 ### Keep work scriptless-readable
 
-Every phase must be understandable by reading repository files. Local commands may add evidence, but they are not the authority for design acceptance or planning state.
+Every phase must be understandable by reading repository files. Local commands add executable evidence; GitHub issues, accepted designs, pull requests, code, tests, and the repository validation authority remain the owners of live work and acceptance truth.
 
 ### Preserve the current UI roadmap
 
@@ -97,7 +98,7 @@ ECS system registration should remain ergonomic and runtime-focused. Static cont
 
 ### Goal
 
-Accept the companion design as `accepted-direction`, not as implementation authorization.
+Accept the companion design as architecture direction, not as implementation authorization.
 
 ### Scope
 
@@ -109,10 +110,10 @@ runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md
 ### Acceptance criteria
 
 ```text
-- Design doc has lifecycle state and decision summary.
+- Design doc has a clear decision status and summary.
 - Roadmap doc is explicitly not active implementation.
 - No root docs are bloated.
-- No active planning state is changed.
+- No live issue state is changed by this document alone.
 - No Rust implementation is included.
 - No shared extraction is authorized.
 ```
@@ -122,17 +123,14 @@ runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md
 A decision-register entry may record:
 
 ```text
-State transition:
-  proposed-design -> accepted-direction
-
 Decision:
   Accept the typed app-composition/plugin framework design as cross-cutting architecture direction and reference.
 
 Not authorized:
-  production-track, active-implementation, foundation/meta, shared plugin extraction.
+  production track, active implementation, foundation/meta, shared plugin extraction.
 
 Follow-up:
-  Use this direction to review/refactor Phase 11 base control package work. Reconsider production-track promotion only after UI and one non-UI proof.
+  Use this direction to review/refactor Phase 11 base control package work. Reconsider implementation activation only after UI and one non-UI proof.
 ```
 
 ## Phase B — UI control contribution proof
@@ -198,14 +196,14 @@ foundation/meta
 ### Validation envelope
 
 ```text
-cargo fmt --all --check
-cargo check -p ui_controls
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 cargo test -p ui_controls control_package
 cargo test -p ui_controls control_catalog
 cargo test -p ui_controls control_layout
 cargo test -p ui_controls control_render
 cargo test -p ui_controls base_control
-git diff --check
 ```
 
 ## Phase C — Host profile and compatibility proof
