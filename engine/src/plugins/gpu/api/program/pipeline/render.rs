@@ -1,11 +1,11 @@
 use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
+use super::super::requirement_identity::hash_capability_requirements;
 use super::super::{
-    GpuBindingClass, GpuEntryPointName, GpuExpectedFragmentOutputSignature,
-    GpuExpectedVertexInputSignature, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
-    GpuShaderStage, GpuSpecializationValueSet,
+    GpuEntryPointName, GpuExpectedFragmentOutputSignature, GpuExpectedVertexInputSignature,
+    GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage, GpuSpecializationValueSet,
 };
 use super::render_state::GpuRenderPipelineStateDescriptor;
-use super::requirements::{hash_requirements, insert_pipeline_requirement};
+use super::requirements::insert_pipeline_requirement;
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
 };
@@ -124,7 +124,7 @@ impl GpuRenderPipelineDescriptor {
                 GpuCapabilityRequirement::Required(GpuCapabilityFeature::DepthAttachment),
             )?;
         }
-        for requirement in specialization.requirements().iter() {
+        for requirement in program.requirements().iter() {
             insert_pipeline_requirement(
                 operation,
                 entry_points.diagnostic_label(),
@@ -132,15 +132,13 @@ impl GpuRenderPipelineDescriptor {
                 requirement,
             )?;
         }
-        for binding in program.interface().bindings() {
-            if binding.kind().class() == GpuBindingClass::StorageTexture {
-                insert_pipeline_requirement(
-                    operation,
-                    entry_points.diagnostic_label(),
-                    &mut requirements,
-                    GpuCapabilityRequirement::Required(GpuCapabilityFeature::StorageTexture),
-                )?;
-            }
+        for requirement in specialization.requirements().iter() {
+            insert_pipeline_requirement(
+                operation,
+                entry_points.diagnostic_label(),
+                &mut requirements,
+                requirement,
+            )?;
         }
 
         Ok(Self(Arc::new(GpuRenderPipelineDescriptorInner {
@@ -226,6 +224,6 @@ impl Hash for GpuRenderPipelineDescriptor {
         self.0.state.hash(state);
         self.0.layout.hash(state);
         self.0.specialization.hash(state);
-        hash_requirements(&self.0.requirements, state);
+        hash_capability_requirements(&self.0.requirements, state);
     }
 }

@@ -1,7 +1,12 @@
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
-use super::interface::{GpuProgramInterfaceDescriptor, GpuShaderStage};
+use super::interface::{GpuBindingClass, GpuProgramInterfaceDescriptor, GpuShaderStage};
+use super::requirement_identity::hash_capability_requirements;
 use super::source::GpuAdmittedProgramSource;
+use crate::plugins::gpu::{
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
+};
+use core::hash::Hash;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -9,6 +14,7 @@ struct GpuProgramDescriptorInner {
     source: GpuAdmittedProgramSource,
     interface: GpuProgramInterfaceDescriptor,
     entry_points: Vec<GpuEntryPointDescriptor>,
+    requirements: GpuCapabilityRequirements,
 }
 
 /// Immutable admitted program contract retained by later realization records.
@@ -77,10 +83,29 @@ impl GpuProgramDescriptor {
             }
         }
 
+        let mut requirements = GpuCapabilityRequirements::new();
+        for binding in interface.bindings() {
+            if binding.kind().class() == GpuBindingClass::StorageTexture {
+                requirements
+                    .insert(GpuCapabilityRequirement::Required(
+                        GpuCapabilityFeature::StorageTexture,
+                    ))
+                    .map_err(|error| {
+                        GpuProgramContractError::invalid(
+                            "construct admitted GPU program",
+                            format!("{}: {error}", source.identity().diagnostic_label()),
+                            GpuProgramContractCause::ProgramInterfaceMismatch,
+                            "remove conflicting capability requirements implied by the program interface",
+                        )
+                    })?;
+            }
+        }
+
         Ok(Self(Arc::new(GpuProgramDescriptorInner {
             source,
             interface,
             entry_points,
+            requirements,
         })))
     }
 
@@ -113,6 +138,10 @@ impl GpuProgramDescriptor {
             .map(|index| &self.0.entry_points[index])
     }
 
+    pub fn requirements(&self) -> &GpuCapabilityRequirements {
+        &self.0.requirements
+    }
+
     pub fn is_same_record(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
@@ -123,15 +152,17 @@ impl PartialEq for GpuProgramDescriptor {
         self.0.source == other.0.source
             && self.0.interface == other.0.interface
             && self.0.entry_points == other.0.entry_points
+            && self.0.requirements == other.0.requirements
     }
 }
 
 impl Eq for GpuProgramDescriptor {}
 
-impl core::hash::Hash for GpuProgramDescriptor {
+impl Hash for GpuProgramDescriptor {
     fn hash<State: core::hash::Hasher>(&self, state: &mut State) {
-        core::hash::Hash::hash(&self.0.source, state);
-        core::hash::Hash::hash(&self.0.interface, state);
-        core::hash::Hash::hash(&self.0.entry_points, state);
+        self.0.source.hash(state);
+        self.0.interface.hash(state);
+        self.0.entry_points.hash(state);
+        hash_capability_requirements(&self.0.requirements, state);
     }
 }

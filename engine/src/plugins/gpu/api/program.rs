@@ -10,6 +10,7 @@ mod entry_point;
 mod interface;
 mod layout;
 mod pipeline;
+mod requirement_identity;
 mod runtime_binding;
 mod source;
 mod specialization;

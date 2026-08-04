@@ -1,9 +1,10 @@
 use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
+use super::super::requirement_identity::hash_capability_requirements;
 use super::super::{
-    GpuBindingClass, GpuEntryPointName, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
-    GpuShaderStage, GpuSpecializationValueSet,
+    GpuEntryPointName, GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage,
+    GpuSpecializationValueSet,
 };
-use super::requirements::{hash_requirements, insert_pipeline_requirement};
+use super::requirements::insert_pipeline_requirement;
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
 };
@@ -61,7 +62,7 @@ impl GpuComputePipelineDescriptor {
             &mut requirements,
             GpuCapabilityRequirement::Required(GpuCapabilityFeature::Compute),
         )?;
-        for requirement in specialization.requirements().iter() {
+        for requirement in program.requirements().iter() {
             insert_pipeline_requirement(
                 operation,
                 entry_point.to_string(),
@@ -69,15 +70,13 @@ impl GpuComputePipelineDescriptor {
                 requirement,
             )?;
         }
-        for binding in program.interface().bindings() {
-            if binding.kind().class() == GpuBindingClass::StorageTexture {
-                insert_pipeline_requirement(
-                    operation,
-                    entry_point.to_string(),
-                    &mut requirements,
-                    GpuCapabilityRequirement::Required(GpuCapabilityFeature::StorageTexture),
-                )?;
-            }
+        for requirement in specialization.requirements().iter() {
+            insert_pipeline_requirement(
+                operation,
+                entry_point.to_string(),
+                &mut requirements,
+                requirement,
+            )?;
         }
 
         Ok(Self(Arc::new(GpuComputePipelineDescriptorInner {
@@ -132,6 +131,6 @@ impl Hash for GpuComputePipelineDescriptor {
         self.0.entry_point.hash(state);
         self.0.layout.hash(state);
         self.0.specialization.hash(state);
-        hash_requirements(&self.0.requirements, state);
+        hash_capability_requirements(&self.0.requirements, state);
     }
 }
