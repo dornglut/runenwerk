@@ -1,3 +1,4 @@
+use super::render_flow::RendererProgramSourceAuthority;
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::pipelines::{FlowPassBindGroupKey, FlowPassPipelineKey};
 use std::collections::HashMap;
@@ -6,14 +7,22 @@ use wgpu::{
     ShaderModule,
 };
 
+const RENDERER_PROGRAM_SOURCE_MAX_RECORDS: usize = 1024;
+const RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES: usize = 64 * 1024 * 1024;
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RendererPipelineCacheStats {
     pub hits: u64,
     pub misses: u64,
     pub failures: u64,
+    pub program_source_owner: u64,
+    pub program_source_records: usize,
+    pub program_source_bytes: usize,
+    pub program_source_max_records: usize,
+    pub program_source_max_bytes: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct FlowPipelineArtifactCache {
     pub shader_modules: HashMap<FlowPassPipelineKey, ShaderModule>,
     pub bind_group_layouts: HashMap<FlowPassPipelineKey, BindGroupLayout>,
@@ -23,11 +32,40 @@ pub struct FlowPipelineArtifactCache {
     pub samplers: HashMap<FlowPassPipelineKey, Sampler>,
     pub bind_groups: HashMap<FlowPassBindGroupKey, BindGroup>,
     pub stats: RendererPipelineCacheStats,
+    program_sources: RendererProgramSourceAuthority,
+}
+
+impl Default for FlowPipelineArtifactCache {
+    fn default() -> Self {
+        Self {
+            shader_modules: HashMap::new(),
+            bind_group_layouts: HashMap::new(),
+            pipeline_layouts: HashMap::new(),
+            compute_pipelines: HashMap::new(),
+            render_pipelines: HashMap::new(),
+            samplers: HashMap::new(),
+            bind_groups: HashMap::new(),
+            stats: RendererPipelineCacheStats::default(),
+            program_sources: RendererProgramSourceAuthority::new(
+                RENDERER_PROGRAM_SOURCE_MAX_RECORDS,
+                RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES,
+            )
+            .expect("renderer program-source authority policy is nonzero and process-local"),
+        }
+    }
 }
 
 impl FlowPipelineArtifactCache {
     pub fn stats(&self) -> RendererPipelineCacheStats {
-        self.stats
+        let source_stats = self.program_sources.stats();
+        RendererPipelineCacheStats {
+            program_source_owner: self.program_sources.owner().diagnostic_raw(),
+            program_source_records: source_stats.retained_records(),
+            program_source_bytes: source_stats.retained_source_bytes(),
+            program_source_max_records: source_stats.max_records(),
+            program_source_max_bytes: source_stats.max_retained_source_bytes(),
+            ..self.stats
+        }
     }
 
     pub fn get_or_create_shader_module<F>(
@@ -163,5 +201,36 @@ impl FlowPipelineArtifactCache {
             .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.bind_groups
             .retain(|key, _| active_flow_ids.contains(&key.pipeline.flow_id));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renderer_cache_owns_one_bounded_program_source_registry() {
+        let cache = FlowPipelineArtifactCache::default();
+        let stats = cache.stats();
+
+        assert_ne!(stats.program_source_owner, 0);
+        assert_eq!(stats.program_source_records, 0);
+        assert_eq!(stats.program_source_bytes, 0);
+        assert_eq!(
+            stats.program_source_max_records,
+            RENDERER_PROGRAM_SOURCE_MAX_RECORDS
+        );
+        assert_eq!(
+            stats.program_source_max_bytes,
+            RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES
+        );
+    }
+
+    #[test]
+    fn independent_renderer_caches_do_not_share_source_owner_identity() {
+        let first = FlowPipelineArtifactCache::default().stats();
+        let second = FlowPipelineArtifactCache::default().stats();
+
+        assert_ne!(first.program_source_owner, second.program_source_owner);
     }
 }
