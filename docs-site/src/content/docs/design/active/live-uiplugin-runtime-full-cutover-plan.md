@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: design
 canonical: true
-last_reviewed: 2026-07-07
+last_reviewed: 2026-08-04
 related_docs:
   - ../../architecture/live-uiplugin-runtime-platform-architecture.md
   - ../../architecture/diagrams/live-uiplugin-runtime-platform.puml
@@ -18,10 +18,8 @@ related_docs:
   - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
-  - ../../workspace/complete-investigation-gate.md
-  - ../../workspace/complete-design-gate.md
-  - ../../workspace/complete-merge-readiness-gate.md
-  - ../../workspace/evidence-quality-taxonomy.md
+  - ../../workspace/engineering-workflow.md
+  - ../../workspace/authority-model.md
   - ../../guidelines/programming-principles.md
 ---
 
@@ -29,7 +27,7 @@ related_docs:
 
 ID: `PT-UI-RUNTIME-PLATFORM-002`
 
-Lifecycle state: `active-planning` full-platform cutover contract draft.
+Planning state: active planning for a full-platform cutover; implementation remains separately authorized per phase.
 
 Implementation status: not started and not authorized by this planning PR.
 
@@ -41,7 +39,7 @@ Required position:
 
 ```text
 Plan the whole Live UiPlugin Runtime Platform cutover now.
-Implement it through gated phase PRs.
+Implement it through bounded phase PRs.
 Do not start runtime Rust work from this docs-only planning PR.
 ```
 
@@ -71,17 +69,15 @@ docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-platform.
 docs-site/src/content/docs/architecture/diagrams/live-uiplugin-runtime-sequence.puml
 ```
 
-This planning file owns phase sequencing and gates. The architecture doc owns current rendering facts, app/engine flow, producer-generic render-boundary decision, SDF-backend deferral, agent operation, tracing/history, Counter screen contract, authoring, live reload, state persistence, phase-spec decision, and diagram source.
+This planning file owns phase sequencing and activation conditions. The architecture doc owns current rendering facts, app/engine flow, producer-generic render-boundary decision, SDF-backend deferral, agent operation, tracing/history, Counter screen contract, authoring, live reload, state persistence, phase-spec decision, and diagram source.
 
 ## Implementation-documentation authorities checked
 
 | Authority | How this plan uses it |
 |---|---|
-| `workspace/workflow-lifecycle.md` | Keeps this PR in planning, not implementation. |
-| `workspace/complete-investigation-gate.md` | Inherits PR #74 investigation and adds render/app-engine feature mapping. |
-| `workspace/complete-design-gate.md` | Requires owner, dependency, validation, stop-condition, and acceptance criteria before implementation. |
-| `workspace/complete-merge-readiness-gate.md` | Defines the report shape every implementation PR must satisfy. |
-| `workspace/evidence-quality-taxonomy.md` | Separates connector/source/planning evidence from local command validation. |
+| `workspace/engineering-workflow.md` | Keeps live task state in issues, architecture in accepted designs, delivery evidence in PRs, and implementation bounded by explicit ownership, migration, validation, and stop conditions. |
+| `TESTING.md` | Defines repository validation authority and exact-head evidence expectations. |
+| `workspace/authority-model.md` | Prevents this phase plan from becoming parallel live task or implementation authority. |
 | `guidelines/programming-principles.md` | Enforces KISS/DRY/YAGNI/SOLID/separation constraints in every phase. |
 | `architecture/ui-framework-architecture.md` | Keeps source/program/runtime/render ownership separated. |
 | `architecture/live-uiplugin-runtime-platform-architecture.md` | Owns runtime-specific architecture, render-boundary ordering, SDF-backend deferral, diagrams, agent/trace model, Counter contract, reload, persistence, and phase-spec decisions. |
@@ -668,16 +664,14 @@ Workflow hardening item — phase implementation spec artifact and validator
 
 ## Validation envelope
 
-Every implementation phase must run the smallest focused crate/test set required by its scope plus docs and diff hygiene. The default final gate is:
+Every implementation phase must run the smallest focused crate/test set required by its scope plus the canonical repository baseline:
 
 ```text
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 cargo test -p engine <focused phase tests>
 phase-owned domain crate tests when touched or depended on
-cargo test --workspace before broad runtime/render migration or final product proof
-python tools/docs/validate_docs.py
-git diff --check
-git status --short --branch
-git diff --stat main...HEAD
 ```
 
 Phase 012 must additionally record:
@@ -714,7 +708,7 @@ A simple implementation agent must receive exactly one phase at a time. The prom
 
 ```text
 phase ID and title
-authority docs to read, including AGENTS.md, ARCHITECTURE.md, DOMAIN_MAP.md, TESTING.md, workflow gates, active-work, roadmap, and the owning design/architecture docs
+authority docs to read, including AGENTS.md, ARCHITECTURE.md, DOMAIN_MAP.md, TESTING.md, engineering-workflow.md, active-work, roadmap, and the owning design/architecture docs
 allowed files/crates
 forbidden files/crates
 expected public API shape
