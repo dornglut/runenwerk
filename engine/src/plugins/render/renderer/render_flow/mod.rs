@@ -1,3 +1,4 @@
+use super::pipeline_cache::FlowPipelineArtifactCache;
 use super::*;
 use crate::plugins::render::api::{
     RenderFixedStepIterationUniform, SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL,
@@ -36,6 +37,7 @@ mod execute;
 mod execute_passes;
 mod gpu_timing;
 mod preflight_cache;
+mod program_sources;
 mod provenance;
 mod runtime_resources;
 
@@ -50,6 +52,7 @@ pub(super) use gpu_timing::{
     PendingGpuPassTimingReadback, read_gpu_pass_timing_evidence,
 };
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
+pub(crate) use program_sources::RendererProgramSourceAuthority;
 pub(super) use provenance::{
     EncodedPassEvidence, EncodedPipelinePass, collect_pass_material_binding_evidence,
     collect_pass_resource_truth, compiled_storage_access_to_storage_texture_access,

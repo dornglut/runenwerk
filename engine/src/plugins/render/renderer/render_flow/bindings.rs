@@ -1,4 +1,6 @@
 use super::*;
+use crate::plugins::gpu::GpuProgramSourceIdentity;
+use crate::plugins::render::pipelines::FlowPassPipelineVariant;
 use crate::plugins::render::{RenderFeatureId, RenderPassId};
 
 enum RuntimeBindingResource<'a> {
@@ -26,8 +28,8 @@ impl Renderer {
         pass_id: RenderPassId,
         pass_kind: FlowPassKind,
         pass_feature_id: Option<RenderFeatureId>,
-        shader_identity: &str,
-        shader_revision: u64,
+        program_source_identity: &GpuProgramSourceIdentity,
+        pipeline_variant: FlowPassPipelineVariant,
         bindings: &CompiledPassBindings,
         visibility: ShaderStages,
         allow_depth_sampling: bool,
@@ -190,8 +192,8 @@ impl Renderer {
             pass_id,
             pass_kind,
             feature_id: pass_feature_id,
-            shader_identity: shader_identity.to_string(),
-            shader_revision,
+            program_source_identity: program_source_identity.clone(),
+            pipeline_variant,
             bind_group_layout_signature_hash: hash_bind_group_layout_entries(
                 &bind_group_layout_entries,
             ),
@@ -252,9 +254,9 @@ impl Renderer {
                 RuntimeBindingResource::SamplerPlaceholder => {
                     let sampler = shared_sampler.as_ref().ok_or_else(|| {
                         anyhow::anyhow!(
-							"pass '{}' resolved sampler placeholder but no sampler instance was available",
-							pass_id
-						)
+                            "pass '{}' resolved sampler placeholder but no sampler instance was available",
+                            pass_id
+                        )
                     })?;
                     BindingResource::Sampler(sampler)
                 }
