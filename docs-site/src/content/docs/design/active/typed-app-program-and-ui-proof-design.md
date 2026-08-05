@@ -5,12 +5,11 @@ status: active
 owner: ui
 layer: design
 canonical: false
-last_reviewed: 2026-07-04
+last_reviewed: 2026-08-04
 related_docs:
   - ../../reports/investigations/typed-app-program-current-state-investigation.md
-  - ../../workspace/workflow-lifecycle.md
-  - ../../workspace/complete-investigation-gate.md
-  - ../../workspace/complete-design-gate.md
+  - ../../workspace/engineering-workflow.md
+  - ../../workspace/authority-model.md
   - ../../guidelines/domain-program-architecture-pattern.md
   - ./runenwerk-domain-workbench-north-star.md
   - ./ui-program-architecture.md
@@ -76,7 +75,7 @@ ECS-owned app/domain semantics
 renderer-owned product truth
 ```
 
-Implementation requires an active-work entry or equivalent planning contract naming exact files/crates, validation commands, evidence expectations, stop conditions, and module decomposition.
+Implementation requires an owning issue and pull request under [Engineering Workflow](../../workspace/engineering-workflow.md), naming exact files/crates, validation commands, evidence expectations, stop conditions, and module decomposition.
 
 ## Design Goals
 
@@ -622,7 +621,7 @@ Use as second-domain pressure only. Do not implement now.
 
 ## Module Decomposition For First Implementation Proof
 
-Exact file placement remains gated by implementation planning. If implemented inside existing UI proof/test crates, expected decomposition should resemble:
+Exact file placement remains bounded by implementation planning. If implemented inside existing UI proof/test crates, expected decomposition should resemble:
 
 ```text
 app_program/
@@ -662,26 +661,27 @@ shared foundation app framework
 
 ## Validation Plan For Future Implementation
 
-Minimum validation commands after code exists:
+Minimum validation after code exists:
 
 ```bash
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 cargo test -p ui_testing counter_app
 cargo test -p ui_hosts route
 cargo test -p ui_program event
 cargo test -p ui_binding host_data
 cargo test -p ui_evaluator
-cargo test --workspace
-python tools/docs/validate_docs.py
-git diff --check
 ```
 
-Exact commands must be narrowed during implementation planning based on changed crates.
+Exact focused commands must be narrowed during implementation planning based on changed crates.
 
-Docs-only design validation before merge:
+Docs-only design validation before merge uses the same repository baseline:
 
 ```bash
-python tools/docs/validate_docs.py
+cargo validate
 git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
 ## Principle Compliance

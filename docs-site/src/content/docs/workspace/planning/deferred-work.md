@@ -4,34 +4,37 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-27
+last_reviewed: 2026-08-04
 related_docs:
-  - ../workflow-lifecycle.md
+  - ../engineering-workflow.md
+  - ./README.md
 ---
 
 # Deferred Work
 
 Use this file for intentionally postponed planning work.
 
+GitHub issues own live deferred state. This page is a concise cross-project index and must not become a second task database.
+
 ## Entry shape
 
 ```text
 ID:
 Title:
-State:
-Lifecycle state: deferred
+State: deferred
 Reason deferred:
 Reactivation condition:
 Owner:
 Blocked by:
+Owning issue:
 Notes:
 ```
 
 ## Rules
 
 - Deferred does not mean completed.
-- Deferred work must name a reason.
-- Reactivation must require explicit planning update.
-- Legacy deferred files may remain as optional mirrors.
-- Use `../workflow-lifecycle.md` before deferring, reactivating, superseding, or rejecting work.
-- Do not reactivate deferred work directly into implementation. Move through active planning first unless an accepted planning record says otherwise.
+- Deferred work must name a reason and a concrete reactivation condition.
+- Update the owning issue before changing this summary.
+- Reactivation requires an explicit planning decision and moves the owning issue back to `proposed`, `active`, or `blocked` as appropriate.
+- Do not preserve optional mirrors of live state.
+- Follow [Engineering Workflow](../engineering-workflow.md) before implementation resumes.

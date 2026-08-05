@@ -5,13 +5,11 @@ status: active
 owner: ui
 layer: workspace
 canonical: false
-last_reviewed: 2026-07-05
+last_reviewed: 2026-08-04
 related_docs:
   - ./active-work.md
-  - ../workflow-lifecycle.md
-  - ../complete-investigation-gate.md
-  - ../complete-design-gate.md
-  - ../complete-merge-readiness-gate.md
+  - ../engineering-workflow.md
+  - ../authority-model.md
   - ../../design/active/ui-framework-app-integration-direction-review.md
   - ../../design/active/runenwerk-ui-story-driven-golden-workflow-design.md
   - ../../design/active/ui-runtime-rendering-pipeline-roadmap.md
@@ -26,13 +24,13 @@ related_docs:
 
 ## Status
 
-Lifecycle state: `active-planning`.
+Planning status: active.
 
-Implementation authorization after this docs PR: conditional.
+Implementation authorization: conditional on an owning issue and pull request following [Engineering Workflow](../engineering-workflow.md).
 
-This document is the implementation-planning contract for the first real Runenwerk UI framework proof. It authorizes a later implementation branch only if this document is reviewed/merged and the implementation stays within the exact files, dependencies, tests, and stop conditions below.
+This document is the implementation-planning contract for the first real Runenwerk UI framework proof. It supports a later implementation branch only if the owning issue and pull request accept this scope and the implementation stays within the exact files, dependencies, tests, and stop conditions below.
 
-This PR remains docs-only.
+This planning change remains docs-only.
 
 ## Purpose
 
@@ -116,7 +114,7 @@ Historical pressure evidence:
 docs-site/src/content/docs/reports/investigations/typed-app-program-ui-proof-001-superseded-planning-archive.md
 ```
 
-## Current lifecycle relationship
+## Current planning relationship
 
 ```text
 PT-UI-FRAMEWORK-APP-INTEGRATION-001 — completed direction decision through PR #70
@@ -807,6 +805,9 @@ Do not claim full UiStory production readiness if the proof produces only UiAppI
 Required before implementation PR merge:
 
 ```bash
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 cargo test -p ui_app_integration
 cargo test -p ui_app_integration --test counter_ui_story_proof
 cargo test -p ui_app_integration --test counter_ui_story_fail_closed
@@ -814,18 +815,16 @@ cargo test -p ui_program event
 cargo test -p ui_program_lowering
 cargo test -p ui_definition
 cargo test -p ui_controls control_package
-cargo test --workspace
-python tools/docs/validate_docs.py
-git diff --check
 ```
 
 If exact filters differ after implementation, the implementation PR must explain the substitution and show equivalent coverage.
 
-Docs-only planning PR validation:
+Docs-only planning PR validation uses the same repository baseline:
 
 ```bash
-python tools/docs/validate_docs.py
+cargo validate
 git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
 ## Non-owned responsibilities

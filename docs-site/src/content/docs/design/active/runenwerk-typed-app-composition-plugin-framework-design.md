@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: architecture
 canonical: false
-last_reviewed: 2026-06-27
+last_reviewed: 2026-08-04
 related_docs:
   - ./runenwerk-domain-workbench-north-star.md
   - ./ui-program-architecture.md
@@ -13,7 +13,8 @@ related_docs:
   - ./ui-component-platform-base-control-packages-design.md
   - ./ui-component-platform-ownership-realignment-design.md
   - ./runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md
-  - ../../workspace/workflow-lifecycle.md
+  - ../../workspace/engineering-workflow.md
+  - ../../workspace/authority-model.md
   - ../../guidelines/runenwerk-architecture.md
   - ../../guidelines/domain-program-architecture-pattern.md
   - ../../guidelines/programming-principles.md
@@ -24,11 +25,11 @@ related_docs:
 
 ## Status
 
-Documentation folder status: `active`.
+Documentation status: `active`.
 
-Workflow lifecycle state: `proposed-design`.
+Decision status: proposed architecture direction.
 
-Target decision: `proposed-design -> accepted-direction`.
+Target decision: accept, revise, or reject the direction through its owning issue and review.
 
 This document is a proposed architecture direction. It is not an active implementation plan, not a production track, and not approval to create a broad shared framework.
 
@@ -38,7 +39,7 @@ Architecture acceptance is not implementation authorization.
 
 Runenwerk should compose products from typed app recipes and plugin suites. Plugins contribute capabilities through typed extension points. Domains own contribution meaning, validation, descriptors, catalogs, compilers, evaluators, migrations, fixtures, and diagnostics. The shared composition layer owns structure: plugin manifests, plugin graph ordering, extension routing, capability matching, host compatibility, freeze points, and assembly reports.
 
-The design should be accepted only as architecture direction. Implementation remains gated through existing owner tracks, starting with the UI Component Platform Phase 11 proof and then one non-UI proof such as MaterialNodes or ProcgenNodes before shared extraction.
+The design should be accepted only as architecture direction. Implementation remains separately authorized through existing owner tracks, starting with the UI Component Platform Phase 11 proof and then one non-UI proof such as MaterialNodes or ProcgenNodes before shared extraction.
 
 ## Not authorized by this design
 
@@ -426,15 +427,14 @@ Risk: presets become opaque inheritance chains.
 
 Safeguard: every preset expansion appears in reports and can be overridden or rejected explicitly.
 
-## Implementation gate
+## Implementation authorization
 
 No implementation is authorized by this design alone.
 
-Implementation requires:
+Implementation requires an owning issue and pull request that follow [Engineering Workflow](../../workspace/engineering-workflow.md) and record:
 
 ```text
-accepted-direction decision record
-active planning entry
+accepted architecture direction
 exact owner crates/files
 scope and non-goals
 validation envelope
@@ -462,7 +462,7 @@ This design can be accepted as direction if:
 
 ## Continuation rule
 
-If accepted, this design should become `accepted-direction`, not `production-track` and not `active-implementation`.
+If accepted, this document records accepted architecture direction, not a production track or implementation authorization.
 
 Immediate continuation:
 
