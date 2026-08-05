@@ -7,6 +7,7 @@ const RETIRED_AUTHORITY_MARKERS: &[&str] = &[
     "complete-design-gate.md",
     "evidence-quality-taxonomy.md",
     "complete-merge-readiness-gate.md",
+    "production-tracks",
     "track-orchestration-routine.md",
     "investigation-routine.md",
     "implementation-routine.md",
