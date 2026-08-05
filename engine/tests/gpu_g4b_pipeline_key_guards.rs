@@ -20,9 +20,7 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "renderer-local pipeline variation must remain separate from source identity"
     );
     assert!(
-        flow_keys.contains(
-            "pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor"
-        ),
+        flow_keys.contains("pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor"),
         "renderer pipeline keys must retain the complete typed primary bind-group layout"
     );
     for forbidden in [
@@ -97,9 +95,7 @@ fn primary_bind_group_layout_is_typed_before_wgpu_realization() {
         "binding resolution must construct one complete typed primary bind-group layout"
     );
     assert_eq!(
-        bindings
-            .matches("primary_bind_group_layout,")
-            .count(),
+        bindings.matches("primary_bind_group_layout,").count(),
         1,
         "the typed primary layout must enter the pipeline key exactly once"
     );

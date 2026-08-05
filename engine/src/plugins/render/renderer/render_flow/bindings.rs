@@ -200,8 +200,7 @@ impl Renderer {
                 )?)
             })
             .collect::<Result<Vec<_>>>()?;
-        let primary_bind_group_layout =
-            GpuBindGroupLayoutDescriptor::new(0, binding_declarations)?;
+        let primary_bind_group_layout = GpuBindGroupLayoutDescriptor::new(0, binding_declarations)?;
         let bind_group_layout_entries = primary_bind_group_layout
             .bindings()
             .map(wgpu_bind_group_layout_entry)
@@ -386,13 +385,13 @@ fn wgpu_binding_type(kind: GpuBindingKind) -> Result<BindingType> {
                 GpuTextureSampleClass::Sint => TextureSampleType::Sint,
                 GpuTextureSampleClass::Uint => TextureSampleType::Uint,
             },
-            view_dimension: wgpu_texture_view_dimension(
-                kind.texture_view_dimension().ok_or_else(|| {
+            view_dimension: wgpu_texture_view_dimension(kind.texture_view_dimension().ok_or_else(
+                || {
                     anyhow::anyhow!(
                         "sampled-texture binding is missing its normalized view dimension"
                     )
-                })?,
-            ),
+                },
+            )?),
             multisampled: kind.is_multisampled_texture(),
         },
         GpuBindingClass::StorageTexture => BindingType::StorageTexture {
@@ -406,13 +405,13 @@ fn wgpu_binding_type(kind: GpuBindingKind) -> Result<BindingType> {
             format: wgpu_texture_format(kind.storage_texture_format().ok_or_else(|| {
                 anyhow::anyhow!("storage-texture binding is missing its normalized format")
             })?),
-            view_dimension: wgpu_texture_view_dimension(
-                kind.texture_view_dimension().ok_or_else(|| {
+            view_dimension: wgpu_texture_view_dimension(kind.texture_view_dimension().ok_or_else(
+                || {
                     anyhow::anyhow!(
                         "storage-texture binding is missing its normalized view dimension"
                     )
-                })?,
-            ),
+                },
+            )?),
         },
         GpuBindingClass::Sampler => BindingType::Sampler(
             match kind.sampler_class().ok_or_else(|| {
@@ -478,4 +477,3 @@ fn wgpu_texture_view_dimension(dimension: GpuTextureViewDimension) -> TextureVie
         GpuTextureViewDimension::D3 => TextureViewDimension::D3,
     }
 }
-
