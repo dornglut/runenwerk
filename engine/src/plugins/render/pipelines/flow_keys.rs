@@ -1,5 +1,6 @@
-use crate::plugins::gpu::GpuProgramSourceIdentity;
+use crate::plugins::gpu::{GpuBindGroupLayoutDescriptor, GpuProgramSourceIdentity};
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
+use std::hash::{Hash, Hasher};
 use wgpu::TextureFormat;
 
 /// Renderer-local backend-artifact partition that is independent of program-source identity.
@@ -26,7 +27,8 @@ pub struct FlowPassPipelineKey {
     pub feature_id: Option<RenderFeatureId>,
     pub program_source_identity: GpuProgramSourceIdentity,
     pub pipeline_variant: FlowPassPipelineVariant,
-    pub bind_group_layout_signature_hash: u64,
+    // Current renderer group 0. Material group 1 remains a separately classified migration.
+    pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor,
     // Core owns the full pipeline key type. Feature domains can contribute a
     // specialization fragment hash that is folded into this key.
     pub material_specialization_fragment_hash: u64,
@@ -49,7 +51,7 @@ impl FlowPassPipelineKey {
             self.pass_kind,
             self.program_source_identity.diagnostic_label(),
             self.pipeline_variant.diagnostic_label(),
-            self.bind_group_layout_signature_hash,
+            diagnostic_hash(&self.primary_bind_group_layout),
             self.material_specialization_fragment_hash,
             self.view_signature_hash,
             self.feature_runtime_version,
@@ -57,6 +59,12 @@ impl FlowPassPipelineKey {
             self.raster_state_signature_hash
         )
     }
+}
+
+fn diagnostic_hash(value: &impl Hash) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -102,7 +110,9 @@ impl From<RenderPassKind> for FlowPassKind {
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceRevision,
+        GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
+        GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceRevision, GpuSamplerClass,
+        GpuShaderStage, GpuShaderStages,
     };
 
     fn source_identity(key: &str) -> GpuProgramSourceIdentity {
@@ -113,6 +123,24 @@ mod tests {
         )
     }
 
+    fn primary_layout(
+        bindings: impl IntoIterator<Item = GpuBindingDeclaration>,
+    ) -> GpuBindGroupLayoutDescriptor {
+        GpuBindGroupLayoutDescriptor::new(0, bindings).unwrap()
+    }
+
+    fn sampler_binding() -> GpuBindingDeclaration {
+        GpuBindingDeclaration::new(
+            GpuBindingKey::try_new(0, 0).unwrap(),
+            GpuShaderStages::one(GpuShaderStage::Fragment),
+            GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+            None,
+            "sample-sampler",
+            GpuBindingProvenance::new("flow-key-test", None).unwrap(),
+        )
+        .unwrap()
+    }
+
     fn sample_key(program_source_identity: GpuProgramSourceIdentity) -> FlowPassPipelineKey {
         FlowPassPipelineKey {
             flow_id: RenderFlowId::try_from_raw(1).unwrap(),
@@ -121,7 +149,7 @@ mod tests {
             feature_id: None,
             program_source_identity,
             pipeline_variant: FlowPassPipelineVariant::Default,
-            bind_group_layout_signature_hash: 2,
+            primary_bind_group_layout: primary_layout([]),
             material_specialization_fragment_hash: 3,
             view_signature_hash: 4,
             feature_runtime_version: 5,
@@ -135,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn stats_key_reflects_source_variant_material_and_view_signatures() {
+    fn stats_key_reflects_typed_layout_source_variant_material_and_view_signatures() {
         let identity = source_identity("shader");
         let key = sample_key(identity.clone());
         let same = sample_key(identity);
@@ -144,6 +172,8 @@ mod tests {
         let mut changed_variant = key.clone();
         changed_variant.pipeline_variant =
             FlowPassPipelineVariant::ComputeSpecialization("COUNT=4".to_string());
+        let mut changed_layout = key.clone();
+        changed_layout.primary_bind_group_layout = primary_layout([sampler_binding()]);
         let mut changed_material = key.clone();
         changed_material.material_specialization_fragment_hash = 99;
         let mut changed_view = key.clone();
@@ -154,6 +184,7 @@ mod tests {
         assert_eq!(key.stats_key(), same.stats_key());
         assert_ne!(key.stats_key(), changed_source.stats_key());
         assert_ne!(key.stats_key(), changed_variant.stats_key());
+        assert_ne!(key.stats_key(), changed_layout.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());
         assert_ne!(key.stats_key(), changed_feature_runtime.stats_key());
