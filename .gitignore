@@ -30,5 +30,3 @@ editor-scenes/workspaces/*.workspace.ron
 credentials.json
 service-account*.json
 secrets/
-
-# Temporary pull-request base synchronization marker
