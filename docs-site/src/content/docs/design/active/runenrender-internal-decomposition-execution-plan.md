@@ -5,7 +5,7 @@ status: active
 owner: render
 layer: engine/render
 canonical: true
-last_reviewed: 2026-08-04
+last_reviewed: 2026-08-05
 related_docs:
   - ./runengpu-architecture-design.md
   - ./runengpu-g3-access-work-graph-design.md
@@ -46,7 +46,11 @@ cutover gates. GitHub issues own accepted work and live status. Pull requests ow
 delivery and exact-head review evidence. The roadmap owns high-level sequence and
 dependencies. This plan does not duplicate a live implementation ledger.
 
-Only an owning issue and accepted phase specification authorize implementation.
+Implementation requires an owning GitHub issue, accepted durable architecture or ADR
+where required, an exact-current census, and the repository workflow and validation
+gates. A phase specification may remain only when a proven executable consumer or
+separately accepted bounded handoff requires it; it is not an independent
+implementation-authorization certificate.
 
 ## Target repositories
 
