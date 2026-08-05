@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-05
 related_docs:
   - ../engineering-workflow.md
   - ./active-work.md
@@ -17,6 +17,7 @@ related_docs:
   - ../../design/active/runengpu-g4-context-program-realization-design.md
   - ../../design/active/runengpu-shader-authoring-artifact-boundary.md
   - ../../design/active/runengpu-g4b-contracts-g4c-delivery-design.md
+  - ../../design/active/runenrender-decomposition-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/2026-08-03-runengpu-g4b-g4c-finalization.md
   - ../specs/pt-runengpu-g4b-program-interface-layout.ron
@@ -203,15 +204,39 @@ includes, submodules, branch dependencies, or compatibility paths.
 
 ## RunenRender sequence
 
-RunenRender implementation remains blocked until accepted external RunenGPU cutover.
-Its separately owned R phases must prove:
+RunenRender implementation remains blocked until accepted external RunenGPU cutover and
+a separately authorized R-phase issue.
 
-- semantic prepared render scenes and views;
-- logical targets, providers, materials, media, emitters, visibility, and transport;
-- incremental preparation and cache/history invalidation;
-- lowering into accepted RunenGPU contracts;
-- image-formation correctness, reconstruction, and cost;
-- clean standalone extraction only after internal conformance.
+Every R phase preserves this semantic spine:
+
+```text
+RenderSceneStore
+    -> RenderSceneCommit(RenderSceneSnapshot + RenderChangeSet)
+
+RenderSceneSnapshot + RenderRequest + RenderInputSet
+    -> RenderMethod
+        -> RenderPlan
+            -> AdmittedRenderPlan
+                -> RenderWorkSet
+                    -> RunenGPU
+```
+
+Durable sequence:
+
+```text
+R1  scene revisions, identities, relationships, and cheap snapshots
+R2  space, time, typed dynamic inputs, and availability
+R3  representation offers, sampling footprints, protocols, and narrow results
+R4  views, outputs, measurement, materials, methods, and planning
+R5  founding analytic and field/SDF method through RunenGPU
+R6  derived state, residency, sessions, and invalidation
+R7  multiview, multi-output, surface, readback, and merge integration
+R8  scalability, extension, operational, and extraction conformance
+RX  standalone RunenRender transfer and clean cutover
+```
+
+The canonical RunenRender design owns detailed semantics and conformance. This roadmap
+owns only sequence and dependency direction.
 
 G4 is GPU/backend decontamination and substrate work. It does not implement or extract
 RunenRender semantics.
