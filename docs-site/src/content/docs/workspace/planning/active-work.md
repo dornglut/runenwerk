@@ -16,6 +16,8 @@ related_docs:
   - ../../design/active/runengpu-g4-context-program-realization-design.md
   - ../../design/active/runengpu-shader-authoring-artifact-boundary.md
   - ../../design/active/runengpu-g4b-contracts-g4c-delivery-design.md
+  - ../../design/active/runenrender-decomposition-design.md
+  - ../../design/active/runenrender-internal-decomposition-execution-plan.md
   - ../../reports/investigations/2026-08-03-runengpu-g4b-g4c-finalization.md
   - ../specs/pt-runengpu-g4a-context-admission.ron
   - ../specs/pt-runengpu-g4b-program-interface-layout.ron
@@ -158,12 +160,27 @@ G5, G7, RunenRender implementation, and package extraction remain unauthorized.
 
 ## RunenRender boundary
 
-RunenRender remains S0/design only until accepted external RunenGPU cutover and its own
-separately bounded R-phase work.
+RunenRender remains architecture/design only until accepted external RunenGPU cutover
+and a separately authorized R-phase issue.
 
-RunenRender owns image-formation meaning: prepared scenes, views, logical targets,
-materials, media, emitters, visibility, lighting, transport, reconstruction, history,
-overlays, and lowering into generic RunenGPU contracts.
+Its permanent semantic spine is:
+
+```text
+RenderSceneStore
+    -> RenderSceneCommit(RenderSceneSnapshot + RenderChangeSet)
+
+RenderSceneSnapshot + RenderRequest + RenderInputSet
+    -> RenderMethod
+        -> RenderPlan
+            -> AdmittedRenderPlan
+                -> RenderWorkSet
+                    -> RunenGPU
+```
+
+The canonical RunenRender design owns scene revision, representation, protocol,
+material, method, planning, output, derived-state, session, scalability, and
+conformance semantics. This page records only the current dependency gate and does not
+authorize an R phase or duplicate the R1-R8 plan.
 
 G4 removes GPU/backend realization authority from the current render tree. It does not
 rename, move, wrap, or extract the renderer wholesale and does not implement image

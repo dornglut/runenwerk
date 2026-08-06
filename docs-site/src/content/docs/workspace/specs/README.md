@@ -5,12 +5,11 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-04
 related_docs:
   - ../authority-model.md
+  - ../engineering-workflow.md
   - ../operating-model.md
-  - ../workflow-lifecycle.md
-  - ../routines/track-orchestration-routine.md
   - ./phase-implementation-spec.md
   - ../../design/active/runengpu-g4b-contracts-g4c-delivery-design.md
 ---
@@ -69,7 +68,7 @@ proof logs, and any future track-manager execution ledger.
 
 ## Tooling rule
 
-No validator is required for this workflow layer yet.
+No dedicated spec validator is required yet.
 
-Validator or script support is downstream work and must not become workflow authority
-unless an accepted design grants it that role for a named scope.
+Any future validator must remain subordinate to accepted Markdown authority and the
+repository validation commands defined by [Engineering Workflow](../engineering-workflow.md).

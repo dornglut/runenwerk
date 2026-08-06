@@ -1,5 +1,23 @@
+use crate::plugins::gpu::{GpuBindGroupLayoutDescriptor, GpuProgramSourceIdentity};
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
+use std::hash::{Hash, Hasher};
 use wgpu::TextureFormat;
+
+/// Renderer-local backend-artifact partition that is independent of program-source identity.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FlowPassPipelineVariant {
+    Default,
+    ComputeSpecialization(String),
+}
+
+impl FlowPassPipelineVariant {
+    pub fn diagnostic_label(&self) -> &str {
+        match self {
+            Self::Default => "default",
+            Self::ComputeSpecialization(signature) => signature.as_str(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FlowPassPipelineKey {
@@ -7,9 +25,10 @@ pub struct FlowPassPipelineKey {
     pub pass_id: RenderPassId,
     pub pass_kind: FlowPassKind,
     pub feature_id: Option<RenderFeatureId>,
-    pub shader_identity: String,
-    pub shader_revision: u64,
-    pub bind_group_layout_signature_hash: u64,
+    pub program_source_identity: GpuProgramSourceIdentity,
+    pub pipeline_variant: FlowPassPipelineVariant,
+    // Current renderer group 0. Material group 1 remains a separately classified migration.
+    pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor,
     // Core owns the full pipeline key type. Feature domains can contribute a
     // specialization fragment hash that is folded into this key.
     pub material_specialization_fragment_hash: u64,
@@ -30,9 +49,9 @@ impl FlowPassPipelineKey {
             self.flow_id,
             self.pass_id,
             self.pass_kind,
-            self.shader_identity,
-            self.shader_revision,
-            self.bind_group_layout_signature_hash,
+            self.program_source_identity.diagnostic_label(),
+            self.pipeline_variant.diagnostic_label(),
+            self.primary_bind_group_layout_diagnostic_hash(),
             self.material_specialization_fragment_hash,
             self.view_signature_hash,
             self.feature_runtime_version,
@@ -40,6 +59,16 @@ impl FlowPassPipelineKey {
             self.raster_state_signature_hash
         )
     }
+
+    pub fn primary_bind_group_layout_diagnostic_hash(&self) -> u64 {
+        diagnostic_hash(&self.primary_bind_group_layout)
+    }
+}
+
+fn diagnostic_hash(value: &impl Hash) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -84,16 +113,47 @@ impl From<RenderPassKind> for FlowPassKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{
+        GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
+        GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceRevision, GpuSamplerClass,
+        GpuShaderStage, GpuShaderStages,
+    };
 
-    fn sample_key() -> FlowPassPipelineKey {
+    fn source_identity(key: &str) -> GpuProgramSourceIdentity {
+        GpuProgramSourceIdentity::new(
+            GpuProgramSourceOwnerId::allocate().unwrap(),
+            GpuProgramSourceKey::new(key).unwrap(),
+            GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+        )
+    }
+
+    fn primary_layout(
+        bindings: impl IntoIterator<Item = GpuBindingDeclaration>,
+    ) -> GpuBindGroupLayoutDescriptor {
+        GpuBindGroupLayoutDescriptor::new(0, bindings).unwrap()
+    }
+
+    fn sampler_binding() -> GpuBindingDeclaration {
+        GpuBindingDeclaration::new(
+            GpuBindingKey::try_new(0, 0).unwrap(),
+            GpuShaderStages::one(GpuShaderStage::Fragment),
+            GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+            None,
+            "sample-sampler",
+            GpuBindingProvenance::new("flow-key-test", None).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn sample_key(program_source_identity: GpuProgramSourceIdentity) -> FlowPassPipelineKey {
         FlowPassPipelineKey {
             flow_id: RenderFlowId::try_from_raw(1).unwrap(),
             pass_id: RenderPassId::try_from_raw(1).unwrap(),
             pass_kind: FlowPassKind::Fullscreen,
             feature_id: None,
-            shader_identity: "shader".to_string(),
-            shader_revision: 1,
-            bind_group_layout_signature_hash: 2,
+            program_source_identity,
+            pipeline_variant: FlowPassPipelineVariant::Default,
+            primary_bind_group_layout: primary_layout([]),
             material_specialization_fragment_hash: 3,
             view_signature_hash: 4,
             feature_runtime_version: 5,
@@ -107,9 +167,17 @@ mod tests {
     }
 
     #[test]
-    fn stats_key_reflects_material_and_view_signatures() {
-        let key = sample_key();
-        let same = sample_key();
+    fn stats_key_reflects_typed_layout_source_variant_material_and_view_signatures() {
+        let identity = source_identity("shader");
+        let key = sample_key(identity.clone());
+        let same = sample_key(identity);
+        let mut changed_source = key.clone();
+        changed_source.program_source_identity = source_identity("other-shader");
+        let mut changed_variant = key.clone();
+        changed_variant.pipeline_variant =
+            FlowPassPipelineVariant::ComputeSpecialization("COUNT=4".to_string());
+        let mut changed_layout = key.clone();
+        changed_layout.primary_bind_group_layout = primary_layout([sampler_binding()]);
         let mut changed_material = key.clone();
         changed_material.material_specialization_fragment_hash = 99;
         let mut changed_view = key.clone();
@@ -118,6 +186,9 @@ mod tests {
         changed_feature_runtime.feature_runtime_version = 11;
 
         assert_eq!(key.stats_key(), same.stats_key());
+        assert_ne!(key.stats_key(), changed_source.stats_key());
+        assert_ne!(key.stats_key(), changed_variant.stats_key());
+        assert_ne!(key.stats_key(), changed_layout.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());
         assert_ne!(key.stats_key(), changed_feature_runtime.stats_key());

@@ -2,9 +2,7 @@ use super::{
     GpuBindingKind, GpuBindingKindInner, GpuSamplerClass, GpuStorageBufferAccess,
     GpuStorageTextureAccess, GpuTextureSampleClass, GpuTextureViewDimension,
 };
-use crate::plugins::gpu::{
-    GpuProgramContractCause, GpuProgramContractError, GpuTextureFormat,
-};
+use crate::plugins::gpu::{GpuProgramContractCause, GpuProgramContractError, GpuTextureFormat};
 use core::num::NonZeroU64;
 
 impl GpuBindingKind {

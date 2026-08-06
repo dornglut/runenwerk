@@ -288,7 +288,9 @@ impl Renderer {
                                     bind_group_layout_signature_hash: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.bind_group_layout_signature_hash)
+                                        .map(
+                                            FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash,
+                                        )
                                         .unwrap_or_default(),
                                     material_specialization_fragment_hash: evidence
                                         .pipeline_key
