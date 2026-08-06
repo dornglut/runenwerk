@@ -55,10 +55,9 @@ pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(crate) use program_sources::RendererProgramSourceAuthority;
 pub(super) use provenance::{
     EncodedPassEvidence, EncodedPipelinePass, collect_pass_material_binding_evidence,
-    collect_pass_resource_truth, compiled_storage_access_to_storage_texture_access,
-    execution_flow_pass_kind, execution_pass_authoring_index, execution_pass_feature_id,
-    execution_pass_id, execution_pass_kind_name, feature_runtime_version,
-    hash_bind_group_layout_entries, hash_view_signature, material_specialization_fragment_hash,
+    collect_pass_resource_truth, execution_flow_pass_kind, execution_pass_authoring_index,
+    execution_pass_feature_id, execution_pass_id, execution_pass_kind_name,
+    feature_runtime_version, hash_view_signature, material_specialization_fragment_hash,
     pass_consumes_material_resources, resolve_shader_material, resolve_shader_material_for_packet,
 };
 pub(crate) use runtime_resources::{

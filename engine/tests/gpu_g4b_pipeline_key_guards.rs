@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 const FLOW_KEYS: &str = "src/plugins/render/pipelines/flow_keys.rs";
 const BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings.rs";
+const EXECUTE: &str = "src/plugins/render/renderer/render_flow/execute.rs";
+const RENDER_FLOW_MOD: &str = "src/plugins/render/renderer/render_flow/mod.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
 
@@ -19,11 +21,23 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         flow_keys.contains("pub pipeline_variant: FlowPassPipelineVariant"),
         "renderer-local pipeline variation must remain separate from source identity"
     );
+    assert!(
+        flow_keys.contains("pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor"),
+        "renderer pipeline keys must retain the complete typed primary bind-group layout"
+    );
+    assert_eq!(
+        flow_keys
+            .matches("pub fn primary_bind_group_layout_diagnostic_hash(&self) -> u64")
+            .count(),
+        1,
+        "primary-layout diagnostics must derive through one typed-layout accessor"
+    );
     for forbidden in [
         "pub shader_identity: String",
         "pub shader_revision: u64",
         "pub program_source_key: GpuProgramSourceKey",
         "pub program_source_revision: GpuProgramSourceRevision",
+        "bind_group_layout_signature_hash",
     ] {
         assert!(
             !flow_keys.contains(forbidden),
@@ -69,6 +83,66 @@ fn binding_resolution_consumes_admitted_source_identity() {
         assert!(
             !bindings.contains(forbidden),
             "pre-admission or combined source identity authority returned to binding resolution: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn primary_bind_group_layout_is_typed_before_wgpu_realization() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let bindings = read(&manifest_dir, BINDINGS);
+    let execute = read(&manifest_dir, EXECUTE);
+    let render_flow_mod = read(&manifest_dir, RENDER_FLOW_MOD);
+
+    assert!(
+        bindings.contains("kind: GpuBindingKind"),
+        "resolved bindings must retain typed G4B binding kinds"
+    );
+    assert_eq!(
+        bindings
+            .matches("GpuBindGroupLayoutDescriptor::new(0, binding_declarations)?")
+            .count(),
+        1,
+        "binding resolution must construct one complete typed primary bind-group layout"
+    );
+    assert_eq!(
+        bindings.matches("primary_bind_group_layout,").count(),
+        1,
+        "the typed primary layout must enter the pipeline key exactly once"
+    );
+    assert!(
+        bindings.contains(".map(wgpu_bind_group_layout_entry)"),
+        "WGPU layout realization must consume the typed G4B declarations"
+    );
+    for forbidden in [
+        "layout_ty: BindingType",
+        "hash_bind_group_layout_entries(",
+        "bind_group_layout_signature_hash:",
+    ] {
+        assert!(
+            !bindings.contains(forbidden),
+            "superseded raw or hash-only primary-layout authority returned: {forbidden}"
+        );
+    }
+
+    assert_eq!(
+        execute
+            .matches("FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash")
+            .count(),
+        1,
+        "execution provenance must derive its diagnostic hash from the typed layout"
+    );
+    assert!(
+        !execute.contains(".bind_group_layout_signature_hash"),
+        "execution must not read a removed raw layout-hash field from the pipeline key"
+    );
+    for forbidden in [
+        "compiled_storage_access_to_storage_texture_access,",
+        "hash_bind_group_layout_entries,",
+    ] {
+        assert!(
+            !render_flow_mod.contains(forbidden),
+            "superseded render-flow re-export returned: {forbidden}"
         );
     }
 }
