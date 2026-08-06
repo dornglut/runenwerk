@@ -1,7 +1,6 @@
 use super::{
-    GpuBindingClass, GpuBindingKind, GpuBindingKindInner, GpuSamplerClass,
-    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
-    GpuTextureViewDimension,
+    GpuBindingClass, GpuBindingKind, GpuBindingKindInner, GpuSamplerClass, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureSampleClass, GpuTextureViewDimension,
 };
 use crate::plugins::gpu::GpuTextureFormat;
 use core::num::NonZeroU64;

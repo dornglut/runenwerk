@@ -2,7 +2,6 @@ use super::super::super::contract_diagnostics::{GpuProgramContractCause, GpuProg
 use super::key::GpuBindingKey;
 use super::kind::GpuBindingKind;
 use super::stage::GpuShaderStages;
-use core::hash::Hash;
 use core::num::NonZeroU32;
 
 const MAX_DIAGNOSTIC_FIELD_BYTES: usize = 256;

@@ -3,13 +3,13 @@ use core::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuProgramContractCause {
     InvalidEntryPointName,
-EntryPointMissing,
+    EntryPointMissing,
     DuplicateEntryPoint,
     InvalidBindingKey,
     EmptyStageVisibility,
     BindingDeclarationInvalid,
     DuplicateBindingKey,
-ProgramInterfaceMismatch,
+    ProgramInterfaceMismatch,
     BindGroupLayoutInvalid,
     DuplicateBindGroupLayout,
     RuntimeBindingIncompatible,
