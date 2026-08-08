@@ -310,22 +310,32 @@ impl Renderer {
                                     color_formats: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.color_formats.clone())
+                                        .and_then(|key| key.render_pipeline_state.as_ref())
+                                        .and_then(|state| state.fragment_output())
+                                        .map(|output| {
+                                            output
+                                                .color_targets()
+                                                .map(|target| target.format())
+                                                .collect()
+                                        })
                                         .unwrap_or_default(),
                                     depth_format: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .and_then(|key| key.depth_format),
+                                        .and_then(|key| key.render_pipeline_state.as_ref())
+                                        .and_then(|state| state.depth_stencil())
+                                        .map(|depth| depth.format()),
                                     sample_count: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.sample_count)
+                                        .and_then(|key| key.render_pipeline_state.as_ref())
+                                        .map(|state| state.multisample().sample_count())
                                         .unwrap_or(1),
-                                    primitive_topology_class: evidence
+                                    primitive_topology: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.primitive_topology_class)
-                                        .unwrap_or(FlowPrimitiveTopologyClass::None),
+                                        .and_then(|key| key.render_pipeline_state.as_ref())
+                                        .map(|state| state.primitive().topology()),
                                     material_binding,
                                     render_targets: pass_resource_truth.render_targets,
                                     sampled_textures: pass_resource_truth.sampled_textures,
@@ -853,7 +863,7 @@ impl Renderer {
                             capture_point: RenderCapturePointIdentity {
                                 flow_id: "frame".to_string(),
                                 pass_id: "frame.final".to_string(),
-                                stage: CaptureStage::Final,
+                                stage,
                                 resource_id: SURFACE_COLOR_RESOURCE_LABEL.to_string(),
                                 texture_class: selector.texture_class,
                             },
