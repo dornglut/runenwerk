@@ -203,7 +203,10 @@ impl Renderer {
         let compute_descriptor = match &pipeline_key.pipeline_descriptor {
             FlowPassPipelineDescriptor::Compute(descriptor) => descriptor,
             FlowPassPipelineDescriptor::Render(_) => {
-                bail!("compute pass '{}' resolved a render pipeline descriptor", pass.pass_id)
+                bail!(
+                    "compute pass '{}' resolved a render pipeline descriptor",
+                    pass.pass_id
+                )
             }
         };
 
@@ -213,7 +216,11 @@ impl Renderer {
                     device.create_shader_module(ShaderModuleDescriptor {
                         label: Some("engine_compiled_compute_shader"),
                         source: ShaderSource::Wgsl(
-                            compute_descriptor.program().source().canonical_wgsl().into(),
+                            compute_descriptor
+                                .program()
+                                .source()
+                                .canonical_wgsl()
+                                .into(),
                         ),
                     })
                 });
@@ -348,7 +355,10 @@ impl Renderer {
         let render_descriptor = match &pipeline_key.pipeline_descriptor {
             FlowPassPipelineDescriptor::Render(descriptor) => descriptor,
             FlowPassPipelineDescriptor::Compute(_) => {
-                bail!("fullscreen pass '{}' resolved a compute pipeline descriptor", plan.pass_id)
+                bail!(
+                    "fullscreen pass '{}' resolved a compute pipeline descriptor",
+                    plan.pass_id
+                )
             }
         };
 
@@ -405,10 +415,10 @@ impl Renderer {
 
         let shader_constant_values =
             wgpu_specialization_constants(render_descriptor.specialization());
-        let fragment_entry_point = render_descriptor
-            .entry_points()
-            .fragment()
-            .ok_or_else(|| anyhow::anyhow!("fullscreen render descriptor is missing fragment entry point"))?;
+        let fragment_entry_point =
+            render_descriptor.entry_points().fragment().ok_or_else(|| {
+                anyhow::anyhow!("fullscreen render descriptor is missing fragment entry point")
+            })?;
         let pipeline =
             self.flow_pipeline_cache
                 .get_or_create_render_pipeline(pipeline_key.clone(), || {
@@ -564,7 +574,10 @@ impl Renderer {
         let render_descriptor = match &pipeline_key.pipeline_descriptor {
             FlowPassPipelineDescriptor::Render(descriptor) => descriptor,
             FlowPassPipelineDescriptor::Compute(_) => {
-                bail!("graphics pass '{}' resolved a compute pipeline descriptor", plan.pass_id)
+                bail!(
+                    "graphics pass '{}' resolved a compute pipeline descriptor",
+                    plan.pass_id
+                )
             }
         };
 
@@ -624,10 +637,10 @@ impl Renderer {
             build_vertex_buffer_layouts(&plan.draw_buffers, &vertex_attribute_sets);
         let shader_constant_values =
             wgpu_specialization_constants(render_descriptor.specialization());
-        let fragment_entry_point = render_descriptor
-            .entry_points()
-            .fragment()
-            .ok_or_else(|| anyhow::anyhow!("graphics render descriptor is missing fragment entry point"))?;
+        let fragment_entry_point =
+            render_descriptor.entry_points().fragment().ok_or_else(|| {
+                anyhow::anyhow!("graphics render descriptor is missing fragment entry point")
+            })?;
 
         let pipeline =
             self.flow_pipeline_cache
