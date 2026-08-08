@@ -8,11 +8,13 @@ use crate::plugins::gpu::GpuBindingKey;
 use crate::plugins::render::api::{PassParamBinding, RenderFlowAuthoringError};
 use crate::plugins::render::{RenderFlow, RenderIndirectDrawResource};
 
+#[derive(Debug)]
 pub(crate) struct ProceduralUniformBinding {
     pub(crate) key: GpuBindingKey,
     pub(crate) projection: PassParamBinding,
 }
 
+#[derive(Debug)]
 pub(crate) struct ProceduralPassLowering {
     pub(crate) uniform_bindings: Vec<ProceduralUniformBinding>,
     pub(crate) draw_source: ProceduralDrawSource,
