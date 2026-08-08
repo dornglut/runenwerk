@@ -3,7 +3,7 @@ use anyhow::Result;
 use engine::plugins::GpuWorkResourceId;
 use engine::plugins::{
     DiagnosticsConfigResource, RenderFlow, RenderPlugin, ScenePlugin, SchedulerDiagnosticsPlugin,
-    default_plugins,
+    default_plugins, gpu::GpuBindingKey,
 };
 use engine::prelude::*;
 use winit::keyboard::KeyCode;
@@ -135,6 +135,7 @@ fn env_flag_or(key: &str, default: bool) -> bool {
 }
 
 fn register_editor_render_flow(app: &mut App) -> Result<()> {
+    let scene_product_uniform_binding = GpuBindingKey::try_new(0, 0)?;
     let (flow, scene_product_uniform) = RenderFlow::new(EDITOR_MAIN_FLOW_ID)
         .with_state::<EditorViewportRenderState>()
         .uniform_buffer::<crate::runtime::resources::EditorViewportSceneProductUniform>(
@@ -155,6 +156,7 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .material_scene_shader_asset(EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID)
         .clear_color(EDITOR_VIEWPORT_BACKGROUND_CLEAR)
         .uniform_from_state_with_surface_to(
+            scene_product_uniform_binding,
             scene_product_uniform.clone(),
             EditorViewportRenderState::compose_scene_product_uniform,
         )
@@ -165,6 +167,7 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .order_after(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .shader_asset(EDITOR_VIEWPORT_PICKING_PRODUCT_SHADER_ID)
         .uniform_from_state_with_surface_to(
+            scene_product_uniform_binding,
             scene_product_uniform.clone(),
             EditorViewportRenderState::compose_scene_product_uniform,
         )
@@ -176,6 +179,7 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .shader_asset(EDITOR_VIEWPORT_OVERLAY_PRODUCT_SHADER_ID)
         .clear_color(EDITOR_VIEWPORT_TRANSPARENT_CLEAR)
         .uniform_from_state_with_surface_to(
+            scene_product_uniform_binding,
             scene_product_uniform,
             EditorViewportRenderState::compose_scene_product_uniform,
         )
