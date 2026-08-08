@@ -36,9 +36,7 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "renderer pipeline keys must retain the complete typed primary bind-group layout"
     );
     assert!(
-        flow_keys.contains(
-            "pub render_pipeline_state: Option<GpuRenderPipelineStateDescriptor>"
-        ),
+        flow_keys.contains("pub render_pipeline_state: Option<GpuRenderPipelineStateDescriptor>"),
         "renderer pipeline keys must retain one complete typed G4B render-pipeline state"
     );
     assert_eq!(
@@ -191,7 +189,9 @@ fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
 
     assert_eq!(
         bindings
-            .matches("gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?")
+            .matches(
+                "gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?"
+            )
             .count(),
         1,
         "binding resolution must normalize one aggregate render-pipeline state before publishing the key"
