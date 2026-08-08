@@ -572,11 +572,7 @@ impl RenderFragmentPassDescriptor {
         self
     }
 
-    pub fn write_local_texture(
-        mut self,
-        binding: GpuBindingKey,
-        label: impl Into<String>,
-    ) -> Self {
+    pub fn write_local_texture(mut self, binding: GpuBindingKey, label: impl Into<String>) -> Self {
         let resource = RenderFragmentLabelRef::local(label);
         self.write_textures.push(resource.clone());
         self.shader_bindings
