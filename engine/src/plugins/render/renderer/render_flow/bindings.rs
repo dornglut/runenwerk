@@ -44,7 +44,6 @@ impl Renderer {
         allow_depth_sampling: bool,
         color_formats: Vec<TextureFormat>,
         depth_format: Option<TextureFormat>,
-        _vertex_layout_signature_hash: u64,
         raster_state_signature_hash: u64,
         primitive_topology_class: FlowPrimitiveTopologyClass,
         runtime_resources: &'a FlowRuntimeResources,
