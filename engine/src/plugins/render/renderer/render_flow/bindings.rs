@@ -1,13 +1,12 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingClass,
-    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
-    GpuBlendMode as GpuPipelineBlendMode, GpuCapabilityRequirements,
-    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
+    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration,
+    GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode as GpuPipelineBlendMode,
+    GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
+    GpuCompareFunction, GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
     GpuDepthStencilStateDescriptor, GpuEntryPointDescriptor, GpuEntryPointName,
-    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat,
-    GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
+    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
     GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
     GpuProgramInterfaceDescriptor, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
     GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
@@ -347,9 +346,7 @@ fn gpu_program_interface_for_layout(
     layout: &GpuPipelineLayoutDescriptor,
 ) -> Result<GpuProgramInterfaceDescriptor> {
     Ok(GpuProgramInterfaceDescriptor::new(
-        layout
-            .groups()
-            .flat_map(|group| group.bindings().cloned()),
+        layout.groups().flat_map(|group| group.bindings().cloned()),
     )?)
 }
 
@@ -419,9 +416,7 @@ fn gpu_pipeline_descriptor_for_pass(
                 )?,
             ))
         }
-        _ => bail!(
-            "pass kind '{pass_kind:?}' cannot construct a shader pipeline descriptor"
-        ),
+        _ => bail!("pass kind '{pass_kind:?}' cannot construct a shader pipeline descriptor"),
     }
 }
 
