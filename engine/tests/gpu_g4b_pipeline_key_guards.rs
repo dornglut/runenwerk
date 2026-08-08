@@ -32,8 +32,8 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "backend lowering must have one typed specialization accessor"
     );
     assert!(
-        flow_keys.contains("pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor"),
-        "renderer pipeline keys must retain the complete typed primary bind-group layout"
+        flow_keys.contains("pub pipeline_layout: GpuPipelineLayoutDescriptor"),
+        "renderer pipeline keys must retain one complete typed G4B pipeline layout"
     );
     assert!(
         flow_keys.contains("pub render_pipeline_state: Option<GpuRenderPipelineStateDescriptor>"),
@@ -41,17 +41,17 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
     );
     assert_eq!(
         flow_keys
-            .matches("pub fn primary_bind_group_layout_diagnostic_hash(&self) -> u64")
+            .matches("pub fn pipeline_layout_diagnostic_hash(&self) -> u64")
             .count(),
         1,
-        "primary-layout diagnostics must derive through one typed-layout accessor"
+        "pipeline-layout diagnostics must derive through one typed-layout accessor"
     );
     assert_eq!(
         flow_keys
-            .matches("pub fn render_pipeline_state_diagnostic_hash(&self) -> u64")
+            .matches("pub fn primary_bind_group_layout_diagnostic_hash(&self) -> u64")
             .count(),
         1,
-        "render-state diagnostics must derive through one typed aggregate-state accessor"
+        "legacy group-0 provenance diagnostics must derive through the typed pipeline layout"
     );
     for forbidden in [
         "pub shader_identity: String",
@@ -60,6 +60,7 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "pub program_source_revision: GpuProgramSourceRevision",
         "ComputeSpecialization(String)",
         "bind_group_layout_signature_hash",
+        "pub primary_bind_group_layout:",
         "pub vertex_layout_signature_hash: u64",
         "pub vertex_input_state: GpuVertexInputStateDescriptor",
         "pub color_formats:",
@@ -119,49 +120,85 @@ fn binding_resolution_consumes_admitted_source_identity() {
 }
 
 #[test]
-fn primary_bind_group_layout_is_typed_before_wgpu_realization() {
+fn complete_pipeline_layout_is_typed_before_pipeline_key_publication() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let flow_keys = read(&manifest_dir, FLOW_KEYS);
     let bindings = read(&manifest_dir, BINDINGS);
     let execute = read(&manifest_dir, EXECUTE);
     let render_flow_mod = read(&manifest_dir, RENDER_FLOW_MOD);
 
     assert!(
         bindings.contains("kind: GpuBindingKind"),
-        "resolved bindings must retain typed G4B binding kinds"
+        "resolved primary bindings must retain typed G4B binding kinds"
     );
     assert_eq!(
         bindings
             .matches("GpuBindGroupLayoutDescriptor::new(0, binding_declarations)?")
             .count(),
         1,
-        "binding resolution must construct one complete typed primary bind-group layout"
+        "binding resolution must construct one complete typed group-0 layout"
     );
     assert_eq!(
-        bindings.matches("primary_bind_group_layout,").count(),
+        bindings
+            .matches("GpuBindGroupLayoutDescriptor::new(1, declarations)?")
+            .count(),
         1,
-        "the typed primary layout must enter the pipeline key exactly once"
+        "material resource declarations must normalize to one typed group-1 layout"
     );
+    assert_eq!(
+        bindings
+            .matches("GpuPipelineLayoutDescriptor::new(groups)?")
+            .count(),
+        1,
+        "binding resolution must construct one complete logical typed pipeline layout"
+    );
+    assert_eq!(
+        bindings.matches("pipeline_layout,").count(),
+        1,
+        "the complete typed pipeline layout must enter the pipeline key exactly once"
+    );
+    for required in [
+        "GpuBindingKey::try_new(1, texture_binding_identity)?",
+        "GpuBindingKind::sampled_texture(",
+        "GpuTextureSampleClass::FloatFilterable",
+        "GpuBindingKind::sampler(GpuSamplerClass::Filtering)",
+        "GpuTextureViewDimension::D2",
+        "GpuTextureViewDimension::D3",
+    ] {
+        assert!(
+            bindings.contains(required),
+            "material group-1 layout is not normalized through the expected typed G4B vocabulary: {required}"
+        );
+    }
     assert!(
         bindings.contains(".map(wgpu_bind_group_layout_entry)"),
-        "WGPU layout realization must consume the typed G4B declarations"
+        "current group-0 WGPU layout realization must consume typed G4B declarations"
     );
     for forbidden in [
         "layout_ty: BindingType",
         "hash_bind_group_layout_entries(",
         "bind_group_layout_signature_hash:",
+        "primary_bind_group_layout: primary_bind_group_layout",
     ] {
         assert!(
             !bindings.contains(forbidden),
-            "superseded raw or hash-only primary-layout authority returned: {forbidden}"
+            "superseded raw or group-0-only pipeline-layout authority returned: {forbidden}"
         );
     }
-
+    assert!(
+        !flow_keys.contains("pub primary_bind_group_layout:"),
+        "group-0-only layout authority must not return to FlowPassPipelineKey"
+    );
+    assert!(
+        flow_keys.contains("diagnostic_hash(&self.pipeline_layout.group(0))"),
+        "legacy group-0 provenance diagnostics must be projections of the typed pipeline layout"
+    );
     assert_eq!(
         execute
             .matches("FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash")
             .count(),
         1,
-        "execution provenance must derive its diagnostic hash from the typed layout"
+        "execution provenance must derive its group-0 diagnostic hash from the typed pipeline layout"
     );
     assert!(
         !execute.contains(".bind_group_layout_signature_hash"),
