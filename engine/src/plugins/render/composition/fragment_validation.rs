@@ -2,7 +2,8 @@ use super::{
     RenderFragmentDescriptor, RenderFragmentDiagnostic, RenderFragmentDiagnosticKind,
     RenderFragmentDiagnosticReport, RenderFragmentLabelRef, RenderFragmentPackageDescriptor,
     RenderFragmentPassDescriptor, RenderFragmentPassKind, RenderFragmentResourceDescriptor,
-    RenderFragmentResourceKind, RenderFragmentShaderBinding, SUPPORTED_RENDER_FRAGMENT_SCHEMA_VERSION,
+    RenderFragmentResourceKind, RenderFragmentShaderBinding,
+    SUPPORTED_RENDER_FRAGMENT_SCHEMA_VERSION,
 };
 use std::collections::BTreeSet;
 
