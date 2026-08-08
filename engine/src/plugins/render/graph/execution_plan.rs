@@ -1,9 +1,13 @@
 use super::{
     CompiledPassDescriptor, RenderPassKind, RenderPassNode, RenderPassViewScope, ResourceGraph,
 };
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{
+    GpuBindingKey, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuWorkResourceId,
+};
 use crate::plugins::render::RenderImportedTextureSemantic;
-use crate::plugins::render::api::ComputeDispatchDescriptor;
+use crate::plugins::render::api::{
+    ComputeDispatchDescriptor, RenderShaderBindingResource,
+};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::{
@@ -155,20 +159,38 @@ pub struct CompiledBindGroupPlan {
 #[derive(Debug, Clone)]
 pub enum CompiledBindingEntry {
     SampledTexture {
+        key: GpuBindingKey,
         resource: CompiledResourceRef,
     },
-    Sampler,
+    Sampler {
+        key: GpuBindingKey,
+    },
     StorageTexture {
+        key: GpuBindingKey,
         resource: CompiledResourceRef,
         access: CompiledStorageAccess,
     },
     UniformBuffer {
+        key: GpuBindingKey,
         resource: GpuWorkResourceId,
     },
     StorageBuffer {
+        key: GpuBindingKey,
         resource: CompiledResourceRef,
         access: CompiledStorageAccess,
     },
+}
+
+impl CompiledBindingEntry {
+    pub const fn key(&self) -> GpuBindingKey {
+        match self {
+            Self::SampledTexture { key, .. }
+            | Self::Sampler { key }
+            | Self::StorageTexture { key, .. }
+            | Self::UniformBuffer { key, .. }
+            | Self::StorageBuffer { key, .. } => *key,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -436,68 +458,86 @@ fn compile_dispatch_plan(node: &RenderPassNode) -> Option<CompiledDispatchPlan> 
 }
 
 fn compile_pass_bindings(node: &RenderPassNode, resources: &ResourceGraph) -> CompiledPassBindings {
-    let mut bind_group = CompiledBindGroupPlan::default();
+    let mut entries = node
+        .shader_bindings
+        .iter()
+        .map(|binding| compile_shader_binding(binding, resources))
+        .collect::<Vec<_>>();
+    entries.sort_by_key(CompiledBindingEntry::key);
+
     let mut uniform_order = Vec::<GpuWorkResourceId>::new();
-    let mut storage_order = Vec::<CompiledStorageBinding>::new();
     let mut seen_uniforms = BTreeSet::<GpuWorkResourceId>::new();
-
-    for resource in &node.sampled_textures {
-        bind_group
-            .entries
-            .push(CompiledBindingEntry::SampledTexture {
-                resource: compile_resource_ref(resource, resources),
-            });
-        bind_group.entries.push(CompiledBindingEntry::Sampler);
-    }
-
-    for resource in &node.write_textures {
-        bind_group
-            .entries
-            .push(CompiledBindingEntry::StorageTexture {
-                resource: compile_resource_ref(resource, resources),
-                access: CompiledStorageAccess::WriteOnly,
-            });
-    }
-
     for binding in &node.uniform_bindings {
         let resource = *binding.uniform_id();
-        bind_group
-            .entries
-            .push(CompiledBindingEntry::UniformBuffer { resource });
         if seen_uniforms.insert(resource) {
             uniform_order.push(resource);
         }
     }
-
-    for (resource, access) in collect_storage_usage(node, resources) {
-        let compiled = compile_resource_ref(&resource, resources);
-        bind_group
-            .entries
-            .push(CompiledBindingEntry::StorageBuffer {
-                resource: compiled.clone(),
-                access,
-            });
-        storage_order.push(CompiledStorageBinding {
-            resource: compiled,
-            access,
-        });
-    }
-
     for resource in &node.fixed_step_iteration_uniforms {
-        bind_group
-            .entries
-            .push(CompiledBindingEntry::UniformBuffer {
-                resource: *resource,
-            });
         if seen_uniforms.insert(*resource) {
             uniform_order.push(*resource);
         }
     }
 
+    let storage_order = collect_storage_usage(node, resources)
+        .into_iter()
+        .map(|(resource, access)| CompiledStorageBinding {
+            resource: compile_resource_ref(&resource, resources),
+            access,
+        })
+        .collect();
+
     CompiledPassBindings {
-        bind_group,
+        bind_group: CompiledBindGroupPlan { entries },
         uniform_order,
         storage_order,
+    }
+}
+
+fn compile_shader_binding(
+    binding: &crate::plugins::render::api::RenderShaderBinding,
+    resources: &ResourceGraph,
+) -> CompiledBindingEntry {
+    let key = binding.key();
+    match binding.resource() {
+        RenderShaderBindingResource::SampledTexture(resource) => CompiledBindingEntry::SampledTexture {
+            key,
+            resource: compile_resource_ref(resource, resources),
+        },
+        RenderShaderBindingResource::Sampler => CompiledBindingEntry::Sampler { key },
+        RenderShaderBindingResource::StorageTexture { resource, access } => {
+            CompiledBindingEntry::StorageTexture {
+                key,
+                resource: compile_resource_ref(resource, resources),
+                access: compiled_storage_texture_access(*access),
+            }
+        }
+        RenderShaderBindingResource::UniformBuffer(resource) => CompiledBindingEntry::UniformBuffer {
+            key,
+            resource: *resource,
+        },
+        RenderShaderBindingResource::StorageBuffer { resource, access } => {
+            CompiledBindingEntry::StorageBuffer {
+                key,
+                resource: compile_resource_ref(resource, resources),
+                access: compiled_storage_buffer_access(*access),
+            }
+        }
+    }
+}
+
+const fn compiled_storage_buffer_access(access: GpuStorageBufferAccess) -> CompiledStorageAccess {
+    match access {
+        GpuStorageBufferAccess::ReadOnly => CompiledStorageAccess::ReadOnly,
+        GpuStorageBufferAccess::ReadWrite => CompiledStorageAccess::ReadWrite,
+    }
+}
+
+const fn compiled_storage_texture_access(access: GpuStorageTextureAccess) -> CompiledStorageAccess {
+    match access {
+        GpuStorageTextureAccess::ReadOnly => CompiledStorageAccess::ReadOnly,
+        GpuStorageTextureAccess::WriteOnly => CompiledStorageAccess::WriteOnly,
+        GpuStorageTextureAccess::ReadWrite => CompiledStorageAccess::ReadWrite,
     }
 }
 
@@ -671,6 +711,7 @@ fn compile_resource_ref(
 mod tests {
     use super::*;
     use crate::plugins::gpu::GpuWorkResourceIdAllocator;
+    use crate::plugins::render::api::{RenderShaderBinding, RenderShaderBindingResource};
     use crate::plugins::render::{RenderPassKind, RenderPassNode};
     use std::num::NonZeroU64;
 
@@ -688,6 +729,10 @@ mod tests {
             .expect("test local value is nonzero")
     }
 
+    fn key(binding: u64) -> GpuBindingKey {
+        GpuBindingKey::try_new(0, binding).unwrap()
+    }
+
     fn storage_read_write_pass() -> (RenderPassNode, ResourceGraph, GpuWorkResourceId) {
         let storage_id = resource(7);
         let mut resources = ResourceGraph::default();
@@ -702,11 +747,18 @@ mod tests {
         );
         pass.storage_reads.push(storage_id);
         pass.storage_writes.push(storage_id);
+        pass.shader_bindings.push(RenderShaderBinding::new(
+            key(4),
+            RenderShaderBindingResource::StorageBuffer {
+                resource: storage_id,
+                access: GpuStorageBufferAccess::ReadWrite,
+            },
+        ));
         (pass, resources, storage_id)
     }
 
     #[test]
-    fn storage_resource_in_reads_and_writes_emits_single_read_write_binding() {
+    fn explicit_storage_binding_key_survives_compilation() {
         let (pass, resources, storage_id) = storage_read_write_pass();
         let bindings = compile_pass_bindings(&pass, &resources);
 
@@ -715,9 +767,11 @@ mod tests {
             .entries
             .iter()
             .filter_map(|entry| match entry {
-                CompiledBindingEntry::StorageBuffer { resource, access } => {
-                    Some((resource.clone(), *access))
-                }
+                CompiledBindingEntry::StorageBuffer {
+                    key,
+                    resource,
+                    access,
+                } => Some((*key, resource.clone(), *access)),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -726,6 +780,7 @@ mod tests {
         assert_eq!(
             storage_bindings[0],
             (
+                key(4),
                 CompiledResourceRef::Imported(storage_id),
                 CompiledStorageAccess::ReadWrite
             )
@@ -741,7 +796,7 @@ mod tests {
     }
 
     #[test]
-    fn write_texture_emits_write_only_storage_texture_binding() {
+    fn explicit_storage_texture_binding_key_survives_compilation() {
         let texture_id = resource(8);
         let mut resources = ResourceGraph::default();
         resources.add_resource(RenderResourceDeclaration::declare_storage_texture(
@@ -754,6 +809,13 @@ mod tests {
             RenderPassKind::Compute,
         );
         pass.write_textures.push(texture_id);
+        pass.shader_bindings.push(RenderShaderBinding::new(
+            key(9),
+            RenderShaderBindingResource::StorageTexture {
+                resource: texture_id,
+                access: GpuStorageTextureAccess::WriteOnly,
+            },
+        ));
 
         let bindings = compile_pass_bindings(&pass, &resources);
         let storage_textures = bindings
@@ -761,9 +823,11 @@ mod tests {
             .entries
             .iter()
             .filter_map(|entry| match entry {
-                CompiledBindingEntry::StorageTexture { resource, access } => {
-                    Some((resource.clone(), *access))
-                }
+                CompiledBindingEntry::StorageTexture {
+                    key,
+                    resource,
+                    access,
+                } => Some((*key, resource.clone(), *access)),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -771,6 +835,7 @@ mod tests {
         assert_eq!(
             storage_textures,
             vec![(
+                key(9),
                 CompiledResourceRef::FlowOwned(texture_id),
                 CompiledStorageAccess::WriteOnly,
             )]
@@ -778,62 +843,49 @@ mod tests {
     }
 
     #[test]
-    fn storage_binding_order_is_stable_with_read_priority_and_write_only_appends() {
-        let read_only = resource(1);
-        let shared = resource(2);
-        let write_only = resource(3);
-
+    fn compiled_bind_group_sorts_by_explicit_key_not_category_or_vector_order() {
+        let sampled = resource(1);
+        let storage = resource(2);
         let mut resources = ResourceGraph::default();
         resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
-            read_only,
-            "test.read_only",
+            storage,
+            "test.storage",
         ));
-        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
-            shared,
-            "test.shared",
+        resources.add_resource(RenderResourceDeclaration::declare_storage_texture(
+            sampled,
+            "test.texture",
         ));
-        resources.add_resource(RenderResourceDeclaration::declare_imported_external_buffer(
-            write_only,
-            "test.write_only",
-        ));
-
         let mut pass = RenderPassNode::new(
             RenderPassId::try_from_raw(11).unwrap(),
             "test.order",
             RenderPassKind::Compute,
         );
-        pass.storage_reads.extend([read_only, shared]);
-        pass.storage_writes.extend([shared, write_only]);
+        pass.shader_bindings.extend([
+            RenderShaderBinding::new(
+                key(7),
+                RenderShaderBindingResource::StorageBuffer {
+                    resource: storage,
+                    access: GpuStorageBufferAccess::ReadOnly,
+                },
+            ),
+            RenderShaderBinding::new(
+                key(2),
+                RenderShaderBindingResource::StorageTexture {
+                    resource: sampled,
+                    access: GpuStorageTextureAccess::WriteOnly,
+                },
+            ),
+        ]);
 
         let bindings = compile_pass_bindings(&pass, &resources);
-        let storage_bindings = bindings
-            .bind_group
-            .entries
-            .iter()
-            .filter_map(|entry| match entry {
-                CompiledBindingEntry::StorageBuffer { resource, access } => {
-                    Some((resource.clone(), *access))
-                }
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-
         assert_eq!(
-            storage_bindings,
-            vec![
-                (
-                    CompiledResourceRef::Imported(read_only),
-                    CompiledStorageAccess::ReadOnly,
-                ),
-                (
-                    CompiledResourceRef::Imported(shared),
-                    CompiledStorageAccess::ReadWrite,
-                ),
-                (
-                    CompiledResourceRef::Imported(write_only),
-                    CompiledStorageAccess::ReadWrite,
-                ),
-            ]
+            bindings
+                .bind_group
+                .entries
+                .iter()
+                .map(CompiledBindingEntry::key)
+                .collect::<Vec<_>>(),
+            vec![key(2), key(7)]
         );
     }
 
