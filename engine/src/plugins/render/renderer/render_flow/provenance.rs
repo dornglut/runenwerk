@@ -438,16 +438,6 @@ pub fn resolve_shader_material_for_packet<'a>(
     }
 }
 
-pub fn hash_bind_group_layout_entries(entries: &[BindGroupLayoutEntry]) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    for entry in entries {
-        entry.binding.hash(&mut hasher);
-        entry.visibility.bits().hash(&mut hasher);
-        format!("{:?}", entry.ty).hash(&mut hasher);
-    }
-    hasher.finish()
-}
-
 pub fn hash_view_signature(view_id: &str, surface_size: (u32, u32)) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     view_id.hash(&mut hasher);
@@ -489,16 +479,6 @@ pub fn feature_runtime_version(
         .unwrap_or_default()
         .hash(&mut hasher);
     hasher.finish()
-}
-
-pub fn compiled_storage_access_to_storage_texture_access(
-    access: CompiledStorageAccess,
-) -> StorageTextureAccess {
-    match access {
-        CompiledStorageAccess::ReadOnly => StorageTextureAccess::ReadOnly,
-        CompiledStorageAccess::WriteOnly => StorageTextureAccess::WriteOnly,
-        CompiledStorageAccess::ReadWrite => StorageTextureAccess::ReadWrite,
-    }
 }
 
 pub fn pass_consumes_material_resources(
