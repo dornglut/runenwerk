@@ -4,11 +4,17 @@ use super::descriptors::{
     ProceduralVisualDescriptor,
 };
 use super::validation::validate_procedural_pass;
+use crate::plugins::gpu::GpuBindingKey;
 use crate::plugins::render::api::{PassParamBinding, RenderFlowAuthoringError};
 use crate::plugins::render::{RenderFlow, RenderIndirectDrawResource};
 
+pub(crate) struct ProceduralUniformBinding {
+    pub(crate) key: GpuBindingKey,
+    pub(crate) projection: PassParamBinding,
+}
+
 pub(crate) struct ProceduralPassLowering {
-    pub(crate) uniform_bindings: Vec<PassParamBinding>,
+    pub(crate) uniform_bindings: Vec<ProceduralUniformBinding>,
     pub(crate) draw_source: ProceduralDrawSource,
 }
 
@@ -70,7 +76,7 @@ pub(crate) fn lower_procedural_pass(
     builder = apply_target(builder, target);
 
     for uniform_binding in lowering.uniform_bindings {
-        builder = builder.push_uniform_binding(uniform_binding);
+        builder = builder.push_uniform_binding(uniform_binding.key, uniform_binding.projection);
     }
 
     builder = match lowering.draw_source {
