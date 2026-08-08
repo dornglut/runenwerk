@@ -48,7 +48,7 @@ pub fn collect_pass_resource_truth(
         CompiledPassExecutionPlan::Compute(plan) => {
             for entry in &plan.bindings.bind_group.entries {
                 match entry {
-                    CompiledBindingEntry::SampledTexture { resource } => {
+                    CompiledBindingEntry::SampledTexture { resource, .. } => {
                         push_resolved_resource_id(
                             pass_id,
                             resource,
@@ -95,7 +95,7 @@ pub fn collect_pass_resource_truth(
             }
             for entry in &plan.bindings.bind_group.entries {
                 match entry {
-                    CompiledBindingEntry::SampledTexture { resource } => {
+                    CompiledBindingEntry::SampledTexture { resource, .. } => {
                         push_resolved_resource_id(
                             pass_id,
                             resource,
@@ -304,8 +304,8 @@ pub fn execution_pass_id(pass: &CompiledPassExecutionPlan) -> RenderPassId {
 pub fn execution_pass_feature_id(pass: &CompiledPassExecutionPlan) -> Option<RenderFeatureId> {
     match pass {
         CompiledPassExecutionPlan::Compute(value) => value.feature_id,
-        CompiledPassExecutionPlan::Fullscreen(value) => value.feature_id,
-        CompiledPassExecutionPlan::Graphics(value) => value.feature_id,
+        CompiledPassExecutionPlan::Fullscreen(value)
+        | CompiledPassExecutionPlan::Graphics(value) => value.feature_id,
         CompiledPassExecutionPlan::Copy(value) => value.feature_id,
         CompiledPassExecutionPlan::Present(value) => value.feature_id,
         CompiledPassExecutionPlan::BuiltinUiComposite(value) => Some(value.feature_id),
