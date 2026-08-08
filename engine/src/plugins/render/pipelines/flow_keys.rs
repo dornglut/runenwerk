@@ -230,7 +230,8 @@ mod tests {
         let mut changed_layout = key.clone();
         changed_layout.primary_bind_group_layout = primary_layout([sampler_binding()]);
         let mut changed_render_state = key.clone();
-        changed_render_state.render_pipeline_state = Some(render_pipeline_state(vertex_input_state()));
+        changed_render_state.render_pipeline_state =
+            Some(render_pipeline_state(vertex_input_state()));
         let mut changed_material = key.clone();
         changed_material.material_specialization_fragment_hash = 99;
         let mut changed_view = key.clone();
