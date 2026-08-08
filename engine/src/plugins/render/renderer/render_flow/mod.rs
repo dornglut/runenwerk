@@ -55,8 +55,9 @@ pub(super) use provenance::{
     EncodedPassEvidence, EncodedPipelinePass, collect_pass_material_binding_evidence,
     collect_pass_resource_truth, execution_flow_pass_kind, execution_pass_authoring_index,
     execution_pass_feature_id, execution_pass_id, execution_pass_kind_name,
-    feature_runtime_version, hash_view_signature, material_specialization_fragment_hash,
-    pass_consumes_material_resources, resolve_shader_material, resolve_shader_material_for_packet,
+    execution_pass_shader_reference, feature_runtime_version, hash_view_signature,
+    material_specialization_fragment_hash, pass_consumes_material_resources,
+    resolve_shader_material, resolve_shader_material_for_packet,
 };
 pub(crate) use runtime_resources::{
     FlowRuntimeResources, ResolvedBufferRef, ResolvedColorTargetView, ResolvedDepthTargetView,
