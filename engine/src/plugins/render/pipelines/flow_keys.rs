@@ -1,5 +1,6 @@
 use crate::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuProgramSourceIdentity, GpuSpecializationValueSet,
+    GpuVertexInputStateDescriptor,
 };
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
 use std::hash::{Hash, Hasher};
@@ -40,6 +41,7 @@ pub struct FlowPassPipelineKey {
     pub pipeline_variant: FlowPassPipelineVariant,
     // Current renderer group 0. Material group 1 remains a separately classified migration.
     pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor,
+    pub vertex_input_state: GpuVertexInputStateDescriptor,
     // Core owns the full pipeline key type. Feature domains can contribute a
     // specialization fragment hash that is folded into this key.
     pub material_specialization_fragment_hash: u64,
@@ -47,7 +49,6 @@ pub struct FlowPassPipelineKey {
     pub feature_runtime_version: u64,
     pub color_formats: Vec<TextureFormat>,
     pub depth_format: Option<TextureFormat>,
-    pub vertex_layout_signature_hash: u64,
     pub raster_state_signature_hash: u64,
     pub sample_count: u32,
     pub primitive_topology_class: FlowPrimitiveTopologyClass,
@@ -63,16 +64,20 @@ impl FlowPassPipelineKey {
             self.program_source_identity.diagnostic_label(),
             self.pipeline_variant.diagnostic_label(),
             self.primary_bind_group_layout_diagnostic_hash(),
+            self.vertex_input_state_diagnostic_hash(),
             self.material_specialization_fragment_hash,
             self.view_signature_hash,
             self.feature_runtime_version,
-            self.vertex_layout_signature_hash,
             self.raster_state_signature_hash
         )
     }
 
     pub fn primary_bind_group_layout_diagnostic_hash(&self) -> u64 {
         diagnostic_hash(&self.primary_bind_group_layout)
+    }
+
+    pub fn vertex_input_state_diagnostic_hash(&self) -> u64 {
+        diagnostic_hash(&self.vertex_input_state)
     }
 }
 
@@ -129,7 +134,8 @@ mod tests {
         GpuCapabilityRequirements, GpuProgramSourceKey, GpuProgramSourceOwnerId,
         GpuProgramSourceRevision, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
         GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
-        GpuSpecializationSchema, GpuSpecializationValue,
+        GpuSpecializationSchema, GpuSpecializationValue, GpuVertexAttribute,
+        GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexStepMode,
     };
 
     fn source_identity(key: &str) -> GpuProgramSourceIdentity {
@@ -144,6 +150,17 @@ mod tests {
         bindings: impl IntoIterator<Item = GpuBindingDeclaration>,
     ) -> GpuBindGroupLayoutDescriptor {
         GpuBindGroupLayoutDescriptor::new(0, bindings).unwrap()
+    }
+
+    fn vertex_input_state() -> GpuVertexInputStateDescriptor {
+        GpuVertexInputStateDescriptor::new([GpuVertexBufferLayoutDescriptor::new(
+            0,
+            12,
+            GpuVertexStepMode::Vertex,
+            [GpuVertexAttribute::new(0, 0, GpuVertexFormat::Float32x3)],
+        )
+        .unwrap()])
+        .unwrap()
     }
 
     fn specialization(name: &str, value: GpuSpecializationValue) -> GpuSpecializationValueSet {
@@ -180,12 +197,12 @@ mod tests {
             program_source_identity,
             pipeline_variant: FlowPassPipelineVariant::Default,
             primary_bind_group_layout: primary_layout([]),
+            vertex_input_state: GpuVertexInputStateDescriptor::new([]).unwrap(),
             material_specialization_fragment_hash: 3,
             view_signature_hash: 4,
             feature_runtime_version: 5,
             color_formats: vec![TextureFormat::Rgba8Unorm],
             depth_format: None,
-            vertex_layout_signature_hash: 0,
             raster_state_signature_hash: 0,
             sample_count: 1,
             primitive_topology_class: FlowPrimitiveTopologyClass::TriangleList,
@@ -193,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn stats_key_reflects_typed_layout_source_variant_material_and_view_signatures() {
+    fn stats_key_reflects_typed_layout_source_variant_vertex_material_and_view_signatures() {
         let identity = source_identity("shader");
         let key = sample_key(identity.clone());
         let same = sample_key(identity);
@@ -209,6 +226,8 @@ mod tests {
         );
         let mut changed_layout = key.clone();
         changed_layout.primary_bind_group_layout = primary_layout([sampler_binding()]);
+        let mut changed_vertex = key.clone();
+        changed_vertex.vertex_input_state = vertex_input_state();
         let mut changed_material = key.clone();
         changed_material.material_specialization_fragment_hash = 99;
         let mut changed_view = key.clone();
@@ -225,6 +244,7 @@ mod tests {
             changed_variant_type.stats_key()
         );
         assert_ne!(key.stats_key(), changed_layout.stats_key());
+        assert_ne!(key.stats_key(), changed_vertex.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());
         assert_ne!(key.stats_key(), changed_feature_runtime.stats_key());

@@ -33,12 +33,23 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         flow_keys.contains("pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor"),
         "renderer pipeline keys must retain the complete typed primary bind-group layout"
     );
+    assert!(
+        flow_keys.contains("pub vertex_input_state: GpuVertexInputStateDescriptor"),
+        "renderer pipeline keys must retain complete typed G4B vertex-input state"
+    );
     assert_eq!(
         flow_keys
             .matches("pub fn primary_bind_group_layout_diagnostic_hash(&self) -> u64")
             .count(),
         1,
         "primary-layout diagnostics must derive through one typed-layout accessor"
+    );
+    assert_eq!(
+        flow_keys
+            .matches("pub fn vertex_input_state_diagnostic_hash(&self) -> u64")
+            .count(),
+        1,
+        "vertex-input diagnostics must derive through one typed-state accessor"
     );
     for forbidden in [
         "pub shader_identity: String",
@@ -47,6 +58,7 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "pub program_source_revision: GpuProgramSourceRevision",
         "ComputeSpecialization(String)",
         "bind_group_layout_signature_hash",
+        "pub vertex_layout_signature_hash: u64",
     ] {
         assert!(
             !flow_keys.contains(forbidden),
@@ -154,6 +166,39 @@ fn primary_bind_group_layout_is_typed_before_wgpu_realization() {
             "superseded render-flow re-export returned: {forbidden}"
         );
     }
+}
+
+#[test]
+fn vertex_input_state_is_typed_before_pipeline_key_publication() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let bindings = read(&manifest_dir, BINDINGS);
+
+    assert_eq!(
+        bindings
+            .matches("let vertex_input_state = gpu_vertex_input_state_for_pass(flow, pass_id)?;")
+            .count(),
+        1,
+        "binding resolution must normalize one typed vertex-input state before publishing the pipeline key"
+    );
+    assert_eq!(
+        bindings.matches("vertex_input_state,").count(),
+        1,
+        "the typed vertex-input state must enter the pipeline key exactly once"
+    );
+    for required in [
+        "GpuVertexBufferLayoutDescriptor::new(",
+        "GpuVertexAttribute::new(",
+        "GpuVertexInputStateDescriptor::new(layouts)",
+    ] {
+        assert!(
+            bindings.contains(required),
+            "renderer vertex declarations are not normalized through typed G4B state: {required}"
+        );
+    }
+    assert!(
+        !bindings.contains("vertex_layout_signature_hash,"),
+        "the legacy naked vertex-layout hash must not enter pipeline correctness"
+    );
 }
 
 #[test]

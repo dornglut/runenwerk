@@ -3,10 +3,14 @@ use crate::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuBindingKey,
     GpuBindingKind, GpuBindingProvenance, GpuProgramSourceIdentity, GpuSamplerClass,
     GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension,
+    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexAttribute,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineVariant;
-use crate::plugins::render::{RenderFeatureId, RenderPassId};
+use crate::plugins::render::{
+    RenderFeatureId, RenderPassId, RenderVertexFormat, RenderVertexStepMode,
+};
 
 enum RuntimeBindingResource<'a> {
     TextureView(TextureView),
@@ -40,7 +44,7 @@ impl Renderer {
         allow_depth_sampling: bool,
         color_formats: Vec<TextureFormat>,
         depth_format: Option<TextureFormat>,
-        vertex_layout_signature_hash: u64,
+        _vertex_layout_signature_hash: u64,
         raster_state_signature_hash: u64,
         primitive_topology_class: FlowPrimitiveTopologyClass,
         runtime_resources: &'a FlowRuntimeResources,
@@ -205,6 +209,7 @@ impl Renderer {
             .bindings()
             .map(wgpu_bind_group_layout_entry)
             .collect::<Result<Vec<_>>>()?;
+        let vertex_input_state = gpu_vertex_input_state_for_pass(flow, pass_id)?;
 
         let pipeline_key = FlowPassPipelineKey {
             flow_id: flow.flow_id,
@@ -214,6 +219,7 @@ impl Renderer {
             program_source_identity: program_source_identity.clone(),
             pipeline_variant,
             primary_bind_group_layout,
+            vertex_input_state,
             material_specialization_fragment_hash: material_specialization_fragment_hash(
                 packet,
                 pass_feature_id,
@@ -222,7 +228,6 @@ impl Renderer {
             feature_runtime_version: feature_runtime_version(packet, pass_feature_id),
             color_formats,
             depth_format,
-            vertex_layout_signature_hash,
             raster_state_signature_hash,
             sample_count: 1,
             primitive_topology_class,
@@ -307,6 +312,78 @@ impl Renderer {
         };
 
         Ok((pipeline_key, Some(bind_group_layout), Some(bind_group)))
+    }
+}
+
+fn gpu_vertex_input_state_for_pass(
+    flow: &CompiledRenderFlowPlan,
+    pass_id: RenderPassId,
+) -> Result<GpuVertexInputStateDescriptor> {
+    let pass = flow
+        .execution
+        .passes
+        .iter()
+        .find(|pass| execution_pass_id(pass) == pass_id)
+        .ok_or_else(|| anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan"))?;
+
+    let layouts = match pass {
+        CompiledPassExecutionPlan::Graphics(plan) => plan
+            .draw_buffers
+            .vertex_buffers
+            .iter()
+            .map(|binding| &binding.layout)
+            .chain(plan.draw_buffers.instance_buffer_layouts.iter())
+            .map(|layout| {
+                GpuVertexBufferLayoutDescriptor::new(
+                    layout.slot,
+                    layout.array_stride,
+                    gpu_vertex_step_mode(layout.step_mode),
+                    layout.attributes.iter().map(|attribute| {
+                        GpuVertexAttribute::new(
+                            attribute.shader_location,
+                            attribute.offset,
+                            gpu_vertex_format(attribute.format),
+                        )
+                    }),
+                )
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()?,
+        CompiledPassExecutionPlan::Compute(_) | CompiledPassExecutionPlan::Fullscreen(_) => {
+            Vec::new()
+        }
+        _ => {
+            bail!(
+                "pass '{}' cannot construct pipeline vertex-input state for execution kind '{}'",
+                pass_id,
+                execution_pass_kind_name(pass)
+            );
+        }
+    };
+
+    Ok(GpuVertexInputStateDescriptor::new(layouts)?)
+}
+
+fn gpu_vertex_step_mode(value: RenderVertexStepMode) -> GpuVertexStepMode {
+    match value {
+        RenderVertexStepMode::Vertex => GpuVertexStepMode::Vertex,
+        RenderVertexStepMode::Instance => GpuVertexStepMode::Instance,
+    }
+}
+
+fn gpu_vertex_format(value: RenderVertexFormat) -> GpuVertexFormat {
+    match value {
+        RenderVertexFormat::Float32 => GpuVertexFormat::Float32,
+        RenderVertexFormat::Float32x2 => GpuVertexFormat::Float32x2,
+        RenderVertexFormat::Float32x3 => GpuVertexFormat::Float32x3,
+        RenderVertexFormat::Float32x4 => GpuVertexFormat::Float32x4,
+        RenderVertexFormat::Uint32 => GpuVertexFormat::Uint32,
+        RenderVertexFormat::Uint32x2 => GpuVertexFormat::Uint32x2,
+        RenderVertexFormat::Uint32x3 => GpuVertexFormat::Uint32x3,
+        RenderVertexFormat::Uint32x4 => GpuVertexFormat::Uint32x4,
+        RenderVertexFormat::Sint32 => GpuVertexFormat::Sint32,
+        RenderVertexFormat::Sint32x2 => GpuVertexFormat::Sint32x2,
+        RenderVertexFormat::Sint32x3 => GpuVertexFormat::Sint32x3,
+        RenderVertexFormat::Sint32x4 => GpuVertexFormat::Sint32x4,
     }
 }
 
