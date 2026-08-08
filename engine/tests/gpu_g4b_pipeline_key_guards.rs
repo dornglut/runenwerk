@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 const FLOW_KEYS: &str = "src/plugins/render/pipelines/flow_keys.rs";
 const BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings.rs";
+const EXECUTION_PLAN: &str = "src/plugins/render/graph/execution_plan.rs";
+const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes.rs";
 const EXECUTE: &str = "src/plugins/render/renderer/render_flow/execute.rs";
 const RENDER_FLOW_MOD: &str = "src/plugins/render/renderer/render_flow/mod.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
@@ -171,7 +173,10 @@ fn primary_bind_group_layout_is_typed_before_wgpu_realization() {
 #[test]
 fn vertex_input_state_is_typed_before_pipeline_key_publication() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let flow_keys = read(&manifest_dir, FLOW_KEYS);
     let bindings = read(&manifest_dir, BINDINGS);
+    let execution_plan = read(&manifest_dir, EXECUTION_PLAN);
+    let execute_passes = read(&manifest_dir, EXECUTE_PASSES);
 
     assert_eq!(
         bindings
@@ -195,10 +200,17 @@ fn vertex_input_state_is_typed_before_pipeline_key_publication() {
             "renderer vertex declarations are not normalized through typed G4B state: {required}"
         );
     }
-    assert!(
-        !bindings.contains("vertex_layout_signature_hash,"),
-        "the legacy naked vertex-layout hash must not enter pipeline correctness"
-    );
+    for (path, source) in [
+        (FLOW_KEYS, flow_keys.as_str()),
+        (BINDINGS, bindings.as_str()),
+        (EXECUTION_PLAN, execution_plan.as_str()),
+        (EXECUTE_PASSES, execute_passes.as_str()),
+    ] {
+        assert!(
+            !source.contains("vertex_layout_signature_hash"),
+            "superseded naked vertex-layout hash authority returned in {path}"
+        );
+    }
 }
 
 #[test]
