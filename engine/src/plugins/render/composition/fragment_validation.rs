@@ -2,7 +2,7 @@ use super::{
     RenderFragmentDescriptor, RenderFragmentDiagnostic, RenderFragmentDiagnosticKind,
     RenderFragmentDiagnosticReport, RenderFragmentLabelRef, RenderFragmentPackageDescriptor,
     RenderFragmentPassDescriptor, RenderFragmentPassKind, RenderFragmentResourceDescriptor,
-    RenderFragmentResourceKind, SUPPORTED_RENDER_FRAGMENT_SCHEMA_VERSION,
+    RenderFragmentResourceKind, RenderFragmentShaderBinding, SUPPORTED_RENDER_FRAGMENT_SCHEMA_VERSION,
 };
 use std::collections::BTreeSet;
 
@@ -103,6 +103,7 @@ fn validate_fragment(
     let pass_labels = validate_pass_labels(package, fragment, diagnostics);
     for pass in &fragment.passes {
         validate_pass_shape(package, fragment, pass, diagnostics);
+        validate_shader_binding_identity(package, fragment, pass, diagnostics);
         validate_pass_references(
             package,
             fragment,
@@ -285,6 +286,101 @@ fn validate_pass_shape(
             }
         }
         RenderFragmentPassKind::BuiltinUiComposite => {}
+    }
+}
+
+fn validate_shader_binding_identity(
+    package: &RenderFragmentPackageDescriptor,
+    fragment: &RenderFragmentDescriptor,
+    pass: &RenderFragmentPassDescriptor,
+    diagnostics: &mut Vec<RenderFragmentDiagnostic>,
+) {
+    let mut keys = BTreeSet::new();
+    let mut sampled_binding_resources = Vec::new();
+    let mut storage_binding_resources = Vec::new();
+
+    for binding in &pass.shader_bindings {
+        match binding {
+            RenderFragmentShaderBinding::SampledTexture {
+                texture_binding,
+                sampler_binding,
+                resource,
+            } => {
+                sampled_binding_resources.push(resource);
+                for key in [*texture_binding, *sampler_binding] {
+                    validate_fragment_binding_key(
+                        package,
+                        fragment,
+                        pass,
+                        key,
+                        &mut keys,
+                        diagnostics,
+                    );
+                }
+            }
+            RenderFragmentShaderBinding::StorageTexture { binding, resource } => {
+                storage_binding_resources.push(resource);
+                validate_fragment_binding_key(
+                    package,
+                    fragment,
+                    pass,
+                    *binding,
+                    &mut keys,
+                    diagnostics,
+                );
+            }
+        }
+    }
+
+    if sampled_binding_resources != pass.sample_textures.iter().collect::<Vec<_>>() {
+        diagnostics.push(pass_shape_error(
+            package,
+            fragment,
+            pass,
+            "sampled-texture resource roles and explicit shader bindings must match exactly",
+        ));
+    }
+    if storage_binding_resources != pass.write_textures.iter().collect::<Vec<_>>() {
+        diagnostics.push(pass_shape_error(
+            package,
+            fragment,
+            pass,
+            "storage-texture resource roles and explicit shader bindings must match exactly",
+        ));
+    }
+}
+
+fn validate_fragment_binding_key(
+    package: &RenderFragmentPackageDescriptor,
+    fragment: &RenderFragmentDescriptor,
+    pass: &RenderFragmentPassDescriptor,
+    key: crate::plugins::gpu::GpuBindingKey,
+    keys: &mut BTreeSet<crate::plugins::gpu::GpuBindingKey>,
+    diagnostics: &mut Vec<RenderFragmentDiagnostic>,
+) {
+    if key.group() != 0 {
+        diagnostics.push(pass_shape_error(
+            package,
+            fragment,
+            pass,
+            format!(
+                "fragment shader binding group {} binding {} is invalid; current render-flow fragment bindings belong to logical group 0",
+                key.group(),
+                key.binding()
+            ),
+        ));
+    }
+    if !keys.insert(key) {
+        diagnostics.push(pass_shape_error(
+            package,
+            fragment,
+            pass,
+            format!(
+                "fragment declares duplicate shader binding group {} binding {}",
+                key.group(),
+                key.binding()
+            ),
+        ));
     }
 }
 
