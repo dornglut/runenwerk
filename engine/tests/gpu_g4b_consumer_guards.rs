@@ -8,6 +8,9 @@ const RUNTIME_BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings
 const PRIMITIVE_PLAN: &str = "src/plugins/render/gpu_primitives/plan.rs";
 const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
+const FRAGMENTS: &str = "src/plugins/render/composition/fragments.rs";
+const FRAGMENT_VALIDATION: &str = "src/plugins/render/composition/fragment_validation.rs";
+const FRAGMENT_MERGE: &str = "src/plugins/render/graph/merge.rs";
 
 #[test]
 fn renderer_shader_binding_identity_is_explicit_and_never_vector_derived() {
@@ -75,6 +78,72 @@ fn renderer_shader_binding_identity_is_explicit_and_never_vector_derived() {
     assert!(
         !primitives.contains("fn stage_binding_resources("),
         "primitive runtime proof must not reconstruct shader bindings from read/write vector order"
+    );
+}
+
+#[test]
+fn fragment_composition_preserves_explicit_shader_binding_identity() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let fragments = read(&manifest_dir, FRAGMENTS);
+    let validation = read(&manifest_dir, FRAGMENT_VALIDATION);
+    let merge = read(&manifest_dir, FRAGMENT_MERGE);
+
+    assert!(
+        fragments.contains("pub shader_bindings: Vec<RenderFragmentShaderBinding>"),
+        "fragment pass descriptors must retain explicit shader binding records"
+    );
+    for required in [
+        "texture_binding: GpuBindingKey",
+        "sampler_binding: GpuBindingKey",
+        "binding: GpuBindingKey",
+    ] {
+        assert!(
+            fragments.contains(required),
+            "fragment shader binding identity is missing {required:?}"
+        );
+    }
+    assert!(
+        validation.contains("fn validate_shader_binding_identity("),
+        "fragment validation must own shader-binding identity validation"
+    );
+    assert!(
+        validation.contains("if key.group() != 0"),
+        "fragment bindings must reject groups outside the current logical group-0 contract"
+    );
+    assert!(
+        validation.contains("if !keys.insert(key)"),
+        "fragment bindings must reject duplicate typed keys before merge"
+    );
+    assert!(
+        validation.contains(
+            "sampled-texture resource roles and explicit shader bindings must match exactly"
+        ),
+        "fragment sampled-texture role truth must not drift from explicit shader bindings"
+    );
+    assert!(
+        validation.contains(
+            "storage-texture resource roles and explicit shader bindings must match exactly"
+        ),
+        "fragment storage-texture role truth must not drift from explicit shader bindings"
+    );
+
+    let merge_pass = section(
+        &merge,
+        "fn merge_pass_into_flow(",
+        "fn apply_compute_view_scope(",
+        FRAGMENT_MERGE,
+    );
+    assert!(
+        merge_pass.contains("for binding in &pass.shader_bindings"),
+        "fragment merge must lower retained explicit shader binding records"
+    );
+    assert!(
+        !merge_pass.contains("for sample in &pass.sample_textures"),
+        "fragment merge must not reconstruct sampled-texture slot identity from resource vectors"
+    );
+    assert!(
+        !merge_pass.contains("for write in &pass.write_textures"),
+        "fragment merge must not reconstruct storage-texture slot identity from resource vectors"
     );
 }
 
