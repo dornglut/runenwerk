@@ -116,12 +116,16 @@ fn binding_resolution_constructs_complete_descriptor_from_admitted_source() {
         "compute and render paths must construct admitted generic program descriptors"
     );
     assert_eq!(
-        bindings.matches("GpuComputePipelineDescriptor::new(").count(),
+        bindings
+            .matches("GpuComputePipelineDescriptor::new(")
+            .count(),
         1,
         "compute passes must publish one complete generic compute descriptor"
     );
     assert_eq!(
-        bindings.matches("GpuRenderPipelineDescriptor::new(").count(),
+        bindings
+            .matches("GpuRenderPipelineDescriptor::new(")
+            .count(),
         1,
         "render passes must publish one complete generic render descriptor"
     );
