@@ -1184,6 +1184,7 @@ fn gpu_timing_diagnostic_evidence_for_pass(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::GpuBindingKey;
     use crate::plugins::render::{
         GpuStorage, GpuUniform, RenderFlow, RenderGpuWorkInstrumentation, compile_flow_plan,
         prepare_render_gpu_work,
@@ -1217,20 +1218,26 @@ mod tests {
             .with_state::<TestState>()
             .storage_array::<TestCell>("cells", 4)
             .expect("render flow authoring should succeed");
+        let uniform_binding =
+            GpuBindingKey::try_new(0, 0).expect("fixed-step test uniform binding should be valid");
+        let storage_binding =
+            GpuBindingKey::try_new(0, 1).expect("fixed-step test storage binding should be valid");
+        let iteration_binding = GpuBindingKey::try_new(0, 2)
+            .expect("fixed-step test iteration-uniform binding should be valid");
         let flow = flow
             .compute_pass("step.a")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(uniform_binding, TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells.clone())
+            .bind_storage(storage_binding, cells.clone())
             .dispatch_from_state(TestState::dispatch)
             .finish()
             .compute_pass("step.b")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(uniform_binding, TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells)
+            .bind_storage(storage_binding, cells)
             .dispatch_from_state(TestState::dispatch)
             .finish()
-            .fixed_step_region("simulation", 4, ["step.a", "step.b"])
+            .fixed_step_region(iteration_binding, "simulation", 4, ["step.a", "step.b"])
             .expect("render flow authoring should succeed")
             .validate()
             .expect("fixed-step test flow should validate");
