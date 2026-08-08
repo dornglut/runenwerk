@@ -4,13 +4,13 @@ use crate::plugins::gpu::{
     GpuBindingKind, GpuBindingProvenance, GpuBlendMode as GpuPipelineBlendMode,
     GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
     GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor,
-    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat,
-    GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor,
-    GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramSourceIdentity,
-    GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
-    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass,
-    GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-    GpuVertexInputStateDescriptor, GpuVertexStepMode,
+    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
+    GpuPrimitiveStateDescriptor, GpuPrimitiveTopology as GpuPipelinePrimitiveTopology,
+    GpuProgramSourceIdentity, GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage,
+    GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat,
+    GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexAttribute,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineVariant;
 use crate::plugins::render::{
@@ -325,7 +325,9 @@ fn gpu_render_pipeline_state_for_pass(
         .passes
         .iter()
         .find(|pass| execution_pass_id(pass) == pass_id)
-        .ok_or_else(|| anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan")
+        })?;
     let vertex_input = gpu_vertex_input_state_for_execution_pass(pass, pass_id)?;
 
     match pass {
@@ -342,8 +344,7 @@ fn gpu_render_pipeline_state_for_pass(
             if depth_format.is_some() {
                 bail!("fullscreen pass '{}' cannot carry depth state", pass_id);
             }
-            let fragment_output =
-                gpu_fragment_output_state(color_formats, RenderBlendMode::Alpha)?;
+            let fragment_output = gpu_fragment_output_state(color_formats, RenderBlendMode::Alpha)?;
             Ok(Some(GpuRenderPipelineStateDescriptor::new(
                 vertex_input,
                 Some(fragment_output),
