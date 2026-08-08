@@ -383,9 +383,12 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
         "compiled raster state must not retain a naked hash producer after aggregate-state adoption"
     );
 
-    assert!(
-        execute.contains(".render_pipeline_state()"),
-        "execution provenance must derive render-state diagnostics from complete descriptor authority"
+    assert_eq!(
+        execute
+            .matches("FlowPassPipelineKey::render_pipeline_state")
+            .count(),
+        4,
+        "execution provenance must derive each render-state diagnostic from complete descriptor authority"
     );
     for forbidden in [
         "key.render_pipeline_state.as_ref()",
