@@ -1,4 +1,6 @@
-use crate::plugins::gpu::{GpuBindGroupLayoutDescriptor, GpuProgramSourceIdentity};
+use crate::plugins::gpu::{
+    GpuBindGroupLayoutDescriptor, GpuProgramSourceIdentity, GpuSpecializationValueSet,
+};
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
 use std::hash::{Hash, Hasher};
 use wgpu::TextureFormat;
@@ -7,14 +9,23 @@ use wgpu::TextureFormat;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FlowPassPipelineVariant {
     Default,
-    ComputeSpecialization(String),
+    ComputeSpecialization(GpuSpecializationValueSet),
 }
 
 impl FlowPassPipelineVariant {
-    pub fn diagnostic_label(&self) -> &str {
+    pub fn specialization(&self) -> Option<&GpuSpecializationValueSet> {
         match self {
-            Self::Default => "default",
-            Self::ComputeSpecialization(signature) => signature.as_str(),
+            Self::Default => None,
+            Self::ComputeSpecialization(values) => Some(values),
+        }
+    }
+
+    pub fn diagnostic_label(&self) -> String {
+        match self {
+            Self::Default => "default".to_string(),
+            Self::ComputeSpecialization(values) => {
+                format!("compute-specialization:{:016x}", diagnostic_hash(values))
+            }
         }
     }
 }
@@ -115,8 +126,10 @@ mod tests {
     use super::*;
     use crate::plugins::gpu::{
         GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
-        GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceRevision, GpuSamplerClass,
-        GpuShaderStage, GpuShaderStages,
+        GpuCapabilityRequirements, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+        GpuProgramSourceRevision, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
+        GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
+        GpuSpecializationSchema, GpuSpecializationValue,
     };
 
     fn source_identity(key: &str) -> GpuProgramSourceIdentity {
@@ -131,6 +144,26 @@ mod tests {
         bindings: impl IntoIterator<Item = GpuBindingDeclaration>,
     ) -> GpuBindGroupLayoutDescriptor {
         GpuBindGroupLayoutDescriptor::new(0, bindings).unwrap()
+    }
+
+    fn specialization(
+        name: &str,
+        value: GpuSpecializationValue,
+    ) -> GpuSpecializationValueSet {
+        let key = GpuSpecializationKey::new(name).unwrap();
+        let schema = GpuSpecializationSchema::new([GpuSpecializationDeclaration::new(
+            key.clone(),
+            value.value_type(),
+            None,
+            GpuCapabilityRequirements::new(),
+        )
+        .unwrap()])
+        .unwrap();
+        GpuSpecializationValueSet::new(
+            schema,
+            [GpuSpecializationEntry::new(key, value)],
+        )
+        .unwrap()
     }
 
     fn sampler_binding() -> GpuBindingDeclaration {
@@ -174,8 +207,13 @@ mod tests {
         let mut changed_source = key.clone();
         changed_source.program_source_identity = source_identity("other-shader");
         let mut changed_variant = key.clone();
-        changed_variant.pipeline_variant =
-            FlowPassPipelineVariant::ComputeSpecialization("COUNT=4".to_string());
+        changed_variant.pipeline_variant = FlowPassPipelineVariant::ComputeSpecialization(
+            specialization("COUNT", GpuSpecializationValue::U32(4)),
+        );
+        let mut changed_variant_type = key.clone();
+        changed_variant_type.pipeline_variant = FlowPassPipelineVariant::ComputeSpecialization(
+            specialization("COUNT", GpuSpecializationValue::I32(4)),
+        );
         let mut changed_layout = key.clone();
         changed_layout.primary_bind_group_layout = primary_layout([sampler_binding()]);
         let mut changed_material = key.clone();
@@ -188,6 +226,8 @@ mod tests {
         assert_eq!(key.stats_key(), same.stats_key());
         assert_ne!(key.stats_key(), changed_source.stats_key());
         assert_ne!(key.stats_key(), changed_variant.stats_key());
+        assert_ne!(changed_variant, changed_variant_type);
+        assert_ne!(changed_variant.stats_key(), changed_variant_type.stats_key());
         assert_ne!(key.stats_key(), changed_layout.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());

@@ -1,4 +1,4 @@
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{GpuSpecializationValue, GpuWorkResourceId};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::{ComputeDispatchDescriptor, PassParamBinding};
 use crate::plugins::render::{GpuParams, GpuStorage, RenderPassId, ShaderHandle};
@@ -40,23 +40,26 @@ pub enum RenderShaderReference {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenderShaderConstant {
     pub name: String,
-    pub value: i64,
+    pub value: GpuSpecializationValue,
 }
 
 impl RenderShaderConstant {
-    pub fn new(name: impl Into<String>, value: i64) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        value: impl Into<GpuSpecializationValue>,
+    ) -> Self {
         Self {
             name: name.into(),
-            value,
+            value: value.into(),
         }
     }
 
     pub fn u32(name: impl Into<String>, value: u32) -> Self {
-        Self::new(name, i64::from(value))
+        Self::new(name, value)
     }
 
     pub fn i32(name: impl Into<String>, value: i32) -> Self {
-        Self::new(name, i64::from(value))
+        Self::new(name, value)
     }
 }
 

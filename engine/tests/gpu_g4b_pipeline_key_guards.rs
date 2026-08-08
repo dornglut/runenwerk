@@ -22,6 +22,14 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "renderer-local pipeline variation must remain separate from source identity"
     );
     assert!(
+        flow_keys.contains("ComputeSpecialization(GpuSpecializationValueSet)"),
+        "compute pipeline variation must retain complete typed G4B specialization values"
+    );
+    assert!(
+        flow_keys.contains("pub fn specialization(&self) -> Option<&GpuSpecializationValueSet>"),
+        "backend lowering must have one typed specialization accessor"
+    );
+    assert!(
         flow_keys.contains("pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor"),
         "renderer pipeline keys must retain the complete typed primary bind-group layout"
     );
@@ -37,11 +45,12 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "pub shader_revision: u64",
         "pub program_source_key: GpuProgramSourceKey",
         "pub program_source_revision: GpuProgramSourceRevision",
+        "ComputeSpecialization(String)",
         "bind_group_layout_signature_hash",
     ] {
         assert!(
             !flow_keys.contains(forbidden),
-            "duplicate source identity authority returned to FlowPassPipelineKey: {forbidden}"
+            "duplicate or untyped pipeline correctness authority returned to FlowPassPipelineKey: {forbidden}"
         );
     }
 }

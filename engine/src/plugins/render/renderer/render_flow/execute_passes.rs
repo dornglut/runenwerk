@@ -1,6 +1,9 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuProgramSourceKey, GpuProgramSourceProvenance, GpuWorkResourceId,
+    GpuAdmittedProgramSource, GpuCapabilityRequirements, GpuProgramSourceKey,
+    GpuProgramSourceProvenance, GpuSpecializationDeclaration, GpuSpecializationEntry,
+    GpuSpecializationKey, GpuSpecializationSchema, GpuSpecializationValue,
+    GpuSpecializationValueSet, GpuWorkResourceId,
 };
 use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::{
@@ -153,12 +156,7 @@ impl Renderer {
             DEFAULT_COMPUTE_SHADER,
             "builtin:compute",
         );
-        let shader_constant_values = pass
-            .shader_constants
-            .iter()
-            .map(|constant| (constant.name.as_str(), constant.value as f64))
-            .collect::<Vec<_>>();
-        let pipeline_variant = shader_pipeline_variant_with_constants(&pass.shader_constants);
+        let pipeline_variant = compute_pipeline_variant_from_constants(&pass.shader_constants)?;
         let dispatch = flow_inputs
             .projected_dispatch_workgroups
             .get(&pass.pass_id)
@@ -226,6 +224,7 @@ impl Renderer {
                 })
         });
 
+        let shader_constant_values = wgpu_specialization_constants(&pipeline_key.pipeline_variant);
         let pipeline =
             self.flow_pipeline_cache
                 .get_or_create_compute_pipeline(pipeline_key.clone(), || {
@@ -1346,24 +1345,51 @@ fn render_vertex_step_mode_to_wgpu(value: RenderVertexStepMode) -> VertexStepMod
     }
 }
 
-fn shader_pipeline_variant_with_constants(
+fn compute_pipeline_variant_from_constants(
     constants: &[RenderShaderConstant],
-) -> FlowPassPipelineVariant {
+) -> Result<FlowPassPipelineVariant> {
     if constants.is_empty() {
-        return FlowPassPipelineVariant::Default;
+        return Ok(FlowPassPipelineVariant::Default);
     }
 
-    let mut ordered = constants
-        .iter()
-        .map(|constant| (constant.name.as_str(), constant.value))
-        .collect::<Vec<_>>();
-    ordered.sort_by(|left, right| left.0.cmp(right.0));
-    let signature = ordered
-        .into_iter()
-        .map(|(name, value)| format!("{name}={value}"))
-        .collect::<Vec<_>>()
-        .join(",");
-    FlowPassPipelineVariant::ComputeSpecialization(signature)
+    let mut declarations = Vec::with_capacity(constants.len());
+    let mut entries = Vec::with_capacity(constants.len());
+    for constant in constants {
+        let key = GpuSpecializationKey::new(constant.name.clone())?;
+        declarations.push(GpuSpecializationDeclaration::new(
+            key.clone(),
+            constant.value.value_type(),
+            None,
+            GpuCapabilityRequirements::new(),
+        )?);
+        entries.push(GpuSpecializationEntry::new(key, constant.value));
+    }
+
+    let schema = GpuSpecializationSchema::new(declarations)?;
+    let values = GpuSpecializationValueSet::new(schema, entries)?;
+    Ok(FlowPassPipelineVariant::ComputeSpecialization(values))
+}
+
+fn wgpu_specialization_constants(
+    variant: &FlowPassPipelineVariant,
+) -> Vec<(&str, f64)> {
+    let Some(values) = variant.specialization() else {
+        return Vec::new();
+    };
+    values
+        .entries()
+        .map(|entry| {
+            let value = match entry.value() {
+                GpuSpecializationValue::Bool(value) => {
+                    if value { 1.0 } else { 0.0 }
+                }
+                GpuSpecializationValue::U32(value) => f64::from(value),
+                GpuSpecializationValue::I32(value) => f64::from(value),
+                GpuSpecializationValue::F32(value) => f64::from(value.get()),
+            };
+            (entry.key().as_str(), value)
+        })
+        .collect()
 }
 
 fn render_vertex_format_to_wgpu(value: RenderVertexFormat) -> VertexFormat {
@@ -1440,5 +1466,48 @@ mod tests {
             TextureFormat::Rgba8Unorm,
             TextureFormat::Depth32Float
         ));
+    }
+
+    #[test]
+    fn typed_compute_specialization_normalizes_order_and_preserves_types() {
+        let first = compute_pipeline_variant_from_constants(&[
+            RenderShaderConstant::u32("COUNT", 4),
+            RenderShaderConstant::i32("OFFSET", -1),
+        ])
+        .unwrap();
+        let reordered = compute_pipeline_variant_from_constants(&[
+            RenderShaderConstant::i32("OFFSET", -1),
+            RenderShaderConstant::u32("COUNT", 4),
+        ])
+        .unwrap();
+        let signed_count = compute_pipeline_variant_from_constants(&[
+            RenderShaderConstant::i32("COUNT", 4),
+            RenderShaderConstant::i32("OFFSET", -1),
+        ])
+        .unwrap();
+
+        assert_eq!(first, reordered);
+        assert_ne!(first, signed_count);
+        assert_eq!(
+            wgpu_specialization_constants(&first),
+            [("COUNT", 4.0), ("OFFSET", -1.0)]
+        );
+    }
+
+    #[test]
+    fn typed_compute_specialization_rejects_invalid_or_duplicate_keys() {
+        assert!(
+            compute_pipeline_variant_from_constants(&[RenderShaderConstant::u32(
+                "a=1,b", 2
+            )])
+            .is_err()
+        );
+        assert!(
+            compute_pipeline_variant_from_constants(&[
+                RenderShaderConstant::u32("COUNT", 1),
+                RenderShaderConstant::u32("COUNT", 2),
+            ])
+            .is_err()
+        );
     }
 }

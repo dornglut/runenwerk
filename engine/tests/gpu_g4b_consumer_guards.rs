@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+const PASS_GRAPH: &str = "src/plugins/render/graph/pass_graph.rs";
 const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 
@@ -68,8 +69,9 @@ fn resolved_renderer_programs_admit_before_pipeline_key_and_wgpu_realization() {
 }
 
 #[test]
-fn compute_specialization_remains_separate_from_source_identity() {
+fn compute_specialization_is_typed_and_separate_from_source_identity() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let graph = read(&manifest_dir, PASS_GRAPH);
     let execution = read(&manifest_dir, EXECUTE_PASSES);
     let compute = section(
         &execution,
@@ -78,12 +80,20 @@ fn compute_specialization_remains_separate_from_source_identity() {
         EXECUTE_PASSES,
     );
 
+    assert!(
+        graph.contains("pub value: GpuSpecializationValue"),
+        "renderer compute constants must retain typed G4B specialization values"
+    );
+    assert!(
+        !graph.contains("pub value: i64"),
+        "renderer compute constants must not erase U32/I32 specialization type identity"
+    );
     assert_eq!(
         compute
-            .matches("shader_pipeline_variant_with_constants(")
+            .matches("compute_pipeline_variant_from_constants(")
             .count(),
         1,
-        "compute execution must derive one renderer-local specialization variant"
+        "compute execution must derive one typed renderer-local specialization variant"
     );
     assert_eq!(
         compute.matches("pipeline_variant,").count(),
@@ -94,30 +104,66 @@ fn compute_specialization_remains_separate_from_source_identity() {
         !compute.contains("shader_pipeline_identity_with_constants("),
         "compute specialization must not be recombined with source identity"
     );
+    let key_resolution = unique_position(
+        compute,
+        ".resolve_compiled_bind_group(",
+        "compute",
+        "pipeline-key resolution",
+    );
+    let backend_constants = unique_position(
+        compute,
+        "wgpu_specialization_constants(&pipeline_key.pipeline_variant)",
+        "compute",
+        "typed specialization backend lowering",
+    );
+    assert!(
+        key_resolution < backend_constants,
+        "WGPU specialization constants must derive from the typed pipeline-key authority"
+    );
 
     let variant_helper = section(
         &execution,
-        "fn shader_pipeline_variant_with_constants(",
+        "fn compute_pipeline_variant_from_constants(",
+        "fn wgpu_specialization_constants(",
+        EXECUTE_PASSES,
+    );
+    for required in [
+        "GpuSpecializationKey::new(",
+        "GpuSpecializationDeclaration::new(",
+        "GpuSpecializationSchema::new(",
+        "GpuSpecializationValueSet::new(",
+        "FlowPassPipelineVariant::ComputeSpecialization(values)",
+    ] {
+        assert!(
+            variant_helper.contains(required),
+            "typed compute specialization lowering is missing {required:?}"
+        );
+    }
+    for forbidden in [
+        "ComputeSpecialization(signature)",
+        "format!(\"{name}={value}\")",
+        ".join(\",\")",
+        "|constants:",
+    ] {
+        assert!(
+            !variant_helper.contains(forbidden),
+            "string-encoded specialization authority returned: {forbidden}"
+        );
+    }
+
+    let backend_helper = section(
+        &execution,
+        "fn wgpu_specialization_constants(",
         "fn render_vertex_format_to_wgpu(",
         EXECUTE_PASSES,
     );
-    assert_eq!(
-        variant_helper
-            .matches("FlowPassPipelineVariant::Default")
-            .count(),
-        1,
-        "empty compute specialization must use the default renderer-local variant"
-    );
-    assert_eq!(
-        variant_helper
-            .matches("FlowPassPipelineVariant::ComputeSpecialization(signature)")
-            .count(),
-        1,
-        "nonempty compute specialization must produce one explicit renderer-local variant"
+    assert!(
+        backend_helper.contains("variant.specialization()"),
+        "backend specialization lowering must consume the typed variant"
     );
     assert!(
-        !variant_helper.contains("|constants:"),
-        "compute specialization must not recreate the deleted combined identity encoding"
+        !backend_helper.contains("RenderShaderConstant"),
+        "WGPU specialization lowering must not bypass typed G4B specialization authority"
     );
 }
 
