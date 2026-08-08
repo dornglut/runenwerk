@@ -258,8 +258,8 @@ fn merge_pass_into_flow(
             {
                 builder = builder.shader_asset(path.clone());
             }
-            for write in &pass.write_textures {
-                builder = builder.write_texture(write.resolve(namespace));
+            for binding in &pass.storage_texture_bindings {
+                builder = builder.write_texture(binding.key, binding.resource.resolve(namespace));
             }
             if let Some(dispatch) = pass.compute_dispatch {
                 builder = builder.dispatch(dispatch);
@@ -282,11 +282,15 @@ fn merge_pass_into_flow(
                     }
                 }
             }
-            for sample in &pass.sample_textures {
-                builder = builder.sample_texture(sample.resolve(namespace));
+            for binding in &pass.sampled_texture_bindings {
+                builder = builder.sample_texture(
+                    binding.texture_key,
+                    binding.sampler_key,
+                    binding.resource.resolve(namespace),
+                );
             }
-            for write in &pass.write_textures {
-                builder = builder.write_texture(write.resolve(namespace));
+            for binding in &pass.storage_texture_bindings {
+                builder = builder.write_texture(binding.key, binding.resource.resolve(namespace));
             }
             for color in &pass.color_outputs {
                 builder = builder.write_color_target(color.resolve(namespace));
@@ -315,11 +319,15 @@ fn merge_pass_into_flow(
                     }
                 }
             }
-            for sample in &pass.sample_textures {
-                builder = builder.sample_texture(sample.resolve(namespace));
+            for binding in &pass.sampled_texture_bindings {
+                builder = builder.sample_texture(
+                    binding.texture_key,
+                    binding.sampler_key,
+                    binding.resource.resolve(namespace),
+                );
             }
-            for write in &pass.write_textures {
-                builder = builder.write_texture(write.resolve(namespace));
+            for binding in &pass.storage_texture_bindings {
+                builder = builder.write_texture(binding.key, binding.resource.resolve(namespace));
             }
             for color in &pass.color_outputs {
                 builder = builder.write_color_target(color.resolve(namespace));
