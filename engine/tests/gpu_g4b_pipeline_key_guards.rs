@@ -36,8 +36,10 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "renderer pipeline keys must retain the complete typed primary bind-group layout"
     );
     assert!(
-        flow_keys.contains("pub vertex_input_state: GpuVertexInputStateDescriptor"),
-        "renderer pipeline keys must retain complete typed G4B vertex-input state"
+        flow_keys.contains(
+            "pub render_pipeline_state: Option<GpuRenderPipelineStateDescriptor>"
+        ),
+        "renderer pipeline keys must retain one complete typed G4B render-pipeline state"
     );
     assert_eq!(
         flow_keys
@@ -48,10 +50,10 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
     );
     assert_eq!(
         flow_keys
-            .matches("pub fn vertex_input_state_diagnostic_hash(&self) -> u64")
+            .matches("pub fn render_pipeline_state_diagnostic_hash(&self) -> u64")
             .count(),
         1,
-        "vertex-input diagnostics must derive through one typed-state accessor"
+        "render-state diagnostics must derive through one typed aggregate-state accessor"
     );
     for forbidden in [
         "pub shader_identity: String",
@@ -61,6 +63,14 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "ComputeSpecialization(String)",
         "bind_group_layout_signature_hash",
         "pub vertex_layout_signature_hash: u64",
+        "pub vertex_input_state: GpuVertexInputStateDescriptor",
+        "pub color_formats:",
+        "pub depth_format:",
+        "pub raster_state_signature_hash:",
+        "pub sample_count:",
+        "pub primitive_topology_class:",
+        "FlowPrimitiveTopologyClass",
+        "use wgpu::TextureFormat",
     ] {
         assert!(
             !flow_keys.contains(forbidden),
@@ -171,35 +181,77 @@ fn primary_bind_group_layout_is_typed_before_wgpu_realization() {
 }
 
 #[test]
-fn vertex_input_state_is_typed_before_pipeline_key_publication() {
+fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flow_keys = read(&manifest_dir, FLOW_KEYS);
     let bindings = read(&manifest_dir, BINDINGS);
     let execution_plan = read(&manifest_dir, EXECUTION_PLAN);
     let execute_passes = read(&manifest_dir, EXECUTE_PASSES);
+    let render_flow_mod = read(&manifest_dir, RENDER_FLOW_MOD);
 
     assert_eq!(
         bindings
-            .matches("let vertex_input_state = gpu_vertex_input_state_for_pass(flow, pass_id)?;")
+            .matches("gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?")
             .count(),
         1,
-        "binding resolution must normalize one typed vertex-input state before publishing the pipeline key"
+        "binding resolution must normalize one aggregate render-pipeline state before publishing the key"
     );
     assert_eq!(
-        bindings.matches("vertex_input_state,").count(),
+        bindings.matches("render_pipeline_state,").count(),
         1,
-        "the typed vertex-input state must enter the pipeline key exactly once"
+        "the aggregate render-pipeline state must enter the pipeline key exactly once"
     );
     for required in [
+        "GpuRenderPipelineStateDescriptor::new(",
+        "GpuColorTargetStateDescriptor::new(",
+        "GpuPrimitiveStateDescriptor::new(",
+        "GpuDepthStencilStateDescriptor::new(",
+        "GpuMultisampleStateDescriptor::default()",
         "GpuVertexBufferLayoutDescriptor::new(",
         "GpuVertexAttribute::new(",
         "GpuVertexInputStateDescriptor::new(layouts)",
     ] {
         assert!(
             bindings.contains(required),
-            "renderer vertex declarations are not normalized through typed G4B state: {required}"
+            "renderer render state is not normalized through complete typed G4B state: {required}"
         );
     }
+    for forbidden in [
+        "pub vertex_input_state: GpuVertexInputStateDescriptor",
+        "pub color_formats:",
+        "pub depth_format:",
+        "pub raster_state_signature_hash:",
+        "pub sample_count:",
+        "pub primitive_topology_class:",
+        "FlowPrimitiveTopologyClass",
+    ] {
+        assert!(
+            !flow_keys.contains(forbidden),
+            "separate render-state correctness authority returned to the pipeline key: {forbidden}"
+        );
+    }
+    for (path, source) in [
+        (BINDINGS, bindings.as_str()),
+        (EXECUTION_PLAN, execution_plan.as_str()),
+        (EXECUTE_PASSES, execute_passes.as_str()),
+        (RENDER_FLOW_MOD, render_flow_mod.as_str()),
+    ] {
+        for forbidden in [
+            "raster_state_signature_hash",
+            "primitive_topology_class",
+            "FlowPrimitiveTopologyClass",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "superseded raw render-state authority returned in {path}: {forbidden}"
+            );
+        }
+    }
+    assert!(
+        !execution_plan.contains("pub fn signature_hash(self)"),
+        "compiled raster state must not retain a naked hash producer after aggregate-state adoption"
+    );
+
     for (path, source) in [
         (FLOW_KEYS, flow_keys.as_str()),
         (BINDINGS, bindings.as_str()),
