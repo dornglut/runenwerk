@@ -44,10 +44,7 @@ pub struct RenderShaderConstant {
 }
 
 impl RenderShaderConstant {
-    pub fn new(
-        name: impl Into<String>,
-        value: impl Into<GpuSpecializationValue>,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, value: impl Into<GpuSpecializationValue>) -> Self {
         Self {
             name: name.into(),
             value: value.into(),

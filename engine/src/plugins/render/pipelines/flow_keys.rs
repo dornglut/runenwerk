@@ -146,10 +146,7 @@ mod tests {
         GpuBindGroupLayoutDescriptor::new(0, bindings).unwrap()
     }
 
-    fn specialization(
-        name: &str,
-        value: GpuSpecializationValue,
-    ) -> GpuSpecializationValueSet {
+    fn specialization(name: &str, value: GpuSpecializationValue) -> GpuSpecializationValueSet {
         let key = GpuSpecializationKey::new(name).unwrap();
         let schema = GpuSpecializationSchema::new([GpuSpecializationDeclaration::new(
             key.clone(),
@@ -159,11 +156,7 @@ mod tests {
         )
         .unwrap()])
         .unwrap();
-        GpuSpecializationValueSet::new(
-            schema,
-            [GpuSpecializationEntry::new(key, value)],
-        )
-        .unwrap()
+        GpuSpecializationValueSet::new(schema, [GpuSpecializationEntry::new(key, value)]).unwrap()
     }
 
     fn sampler_binding() -> GpuBindingDeclaration {
@@ -227,7 +220,10 @@ mod tests {
         assert_ne!(key.stats_key(), changed_source.stats_key());
         assert_ne!(key.stats_key(), changed_variant.stats_key());
         assert_ne!(changed_variant, changed_variant_type);
-        assert_ne!(changed_variant.stats_key(), changed_variant_type.stats_key());
+        assert_ne!(
+            changed_variant.stats_key(),
+            changed_variant_type.stats_key()
+        );
         assert_ne!(key.stats_key(), changed_layout.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());

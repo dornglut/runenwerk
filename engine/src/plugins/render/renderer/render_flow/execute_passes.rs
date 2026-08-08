@@ -1370,9 +1370,7 @@ fn compute_pipeline_variant_from_constants(
     Ok(FlowPassPipelineVariant::ComputeSpecialization(values))
 }
 
-fn wgpu_specialization_constants(
-    variant: &FlowPassPipelineVariant,
-) -> Vec<(&str, f64)> {
+fn wgpu_specialization_constants(variant: &FlowPassPipelineVariant) -> Vec<(&str, f64)> {
     let Some(values) = variant.specialization() else {
         return Vec::new();
     };
@@ -1381,7 +1379,11 @@ fn wgpu_specialization_constants(
         .map(|entry| {
             let value = match entry.value() {
                 GpuSpecializationValue::Bool(value) => {
-                    if value { 1.0 } else { 0.0 }
+                    if value {
+                        1.0
+                    } else {
+                        0.0
+                    }
                 }
                 GpuSpecializationValue::U32(value) => f64::from(value),
                 GpuSpecializationValue::I32(value) => f64::from(value),
@@ -1497,10 +1499,8 @@ mod tests {
     #[test]
     fn typed_compute_specialization_rejects_invalid_or_duplicate_keys() {
         assert!(
-            compute_pipeline_variant_from_constants(&[RenderShaderConstant::u32(
-                "a=1,b", 2
-            )])
-            .is_err()
+            compute_pipeline_variant_from_constants(&[RenderShaderConstant::u32("a=1,b", 2)])
+                .is_err()
         );
         assert!(
             compute_pipeline_variant_from_constants(&[
