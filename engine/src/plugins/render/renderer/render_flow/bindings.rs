@@ -324,7 +324,9 @@ fn gpu_vertex_input_state_for_pass(
         .passes
         .iter()
         .find(|pass| execution_pass_id(pass) == pass_id)
-        .ok_or_else(|| anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan")
+        })?;
 
     let layouts = match pass {
         CompiledPassExecutionPlan::Graphics(plan) => plan
