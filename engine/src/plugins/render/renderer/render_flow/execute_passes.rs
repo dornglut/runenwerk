@@ -198,8 +198,6 @@ impl Renderer {
             true,
             Vec::new(),
             None,
-            0,
-            FlowPrimitiveTopologyClass::None,
             runtime_resources,
         )?;
 
@@ -336,8 +334,6 @@ impl Renderer {
             true,
             vec![color_target.format],
             None,
-            0,
-            FlowPrimitiveTopologyClass::TriangleList,
             runtime_resources,
         )?;
 
@@ -519,7 +515,6 @@ impl Renderer {
             format!("graphics pass {}", plan.pass_id),
         )?;
 
-        let raster_state_signature_hash = plan.raster_state.signature_hash();
         let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
             device,
             frame_texture,
@@ -535,8 +530,6 @@ impl Renderer {
             true,
             vec![color_target.format],
             depth_target.as_ref().map(|value| value.format),
-            raster_state_signature_hash,
-            primitive_topology_class(plan.raster_state.primitive_topology()),
             runtime_resources,
         )?;
 
@@ -1249,16 +1242,6 @@ fn render_primitive_topology_to_wgpu(value: RenderPrimitiveTopology) -> Primitiv
         RenderPrimitiveTopology::LineList => PrimitiveTopology::LineList,
         RenderPrimitiveTopology::LineStrip => PrimitiveTopology::LineStrip,
         RenderPrimitiveTopology::PointList => PrimitiveTopology::PointList,
-    }
-}
-
-fn primitive_topology_class(value: RenderPrimitiveTopology) -> FlowPrimitiveTopologyClass {
-    match value {
-        RenderPrimitiveTopology::TriangleList => FlowPrimitiveTopologyClass::TriangleList,
-        RenderPrimitiveTopology::TriangleStrip => FlowPrimitiveTopologyClass::TriangleStrip,
-        RenderPrimitiveTopology::LineList => FlowPrimitiveTopologyClass::LineList,
-        RenderPrimitiveTopology::LineStrip => FlowPrimitiveTopologyClass::LineStrip,
-        RenderPrimitiveTopology::PointList => FlowPrimitiveTopologyClass::PointList,
     }
 }
 
