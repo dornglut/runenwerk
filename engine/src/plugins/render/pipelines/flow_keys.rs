@@ -1,10 +1,9 @@
 use crate::plugins::gpu::{
-    GpuBindGroupLayoutDescriptor, GpuProgramSourceIdentity, GpuSpecializationValueSet,
-    GpuVertexInputStateDescriptor,
+    GpuBindGroupLayoutDescriptor, GpuProgramSourceIdentity, GpuRenderPipelineStateDescriptor,
+    GpuSpecializationValueSet,
 };
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
 use std::hash::{Hash, Hasher};
-use wgpu::TextureFormat;
 
 /// Renderer-local backend-artifact partition that is independent of program-source identity.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -41,34 +40,29 @@ pub struct FlowPassPipelineKey {
     pub pipeline_variant: FlowPassPipelineVariant,
     // Current renderer group 0. Material group 1 remains a separately classified migration.
     pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor,
-    pub vertex_input_state: GpuVertexInputStateDescriptor,
+    // Render passes retain one complete typed G4B state contract. Compute has no render state.
+    pub render_pipeline_state: Option<GpuRenderPipelineStateDescriptor>,
     // Core owns the full pipeline key type. Feature domains can contribute a
     // specialization fragment hash that is folded into this key.
     pub material_specialization_fragment_hash: u64,
     pub view_signature_hash: u64,
     pub feature_runtime_version: u64,
-    pub color_formats: Vec<TextureFormat>,
-    pub depth_format: Option<TextureFormat>,
-    pub raster_state_signature_hash: u64,
-    pub sample_count: u32,
-    pub primitive_topology_class: FlowPrimitiveTopologyClass,
 }
 
 impl FlowPassPipelineKey {
     pub fn stats_key(&self) -> String {
         format!(
-            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}:{}:{}",
+            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}:{}",
             self.flow_id,
             self.pass_id,
             self.pass_kind,
             self.program_source_identity.diagnostic_label(),
             self.pipeline_variant.diagnostic_label(),
             self.primary_bind_group_layout_diagnostic_hash(),
-            self.vertex_input_state_diagnostic_hash(),
+            self.render_pipeline_state_diagnostic_hash(),
             self.material_specialization_fragment_hash,
             self.view_signature_hash,
             self.feature_runtime_version,
-            self.raster_state_signature_hash
         )
     }
 
@@ -76,8 +70,8 @@ impl FlowPassPipelineKey {
         diagnostic_hash(&self.primary_bind_group_layout)
     }
 
-    pub fn vertex_input_state_diagnostic_hash(&self) -> u64 {
-        diagnostic_hash(&self.vertex_input_state)
+    pub fn render_pipeline_state_diagnostic_hash(&self) -> u64 {
+        diagnostic_hash(&self.render_pipeline_state)
     }
 }
 
@@ -91,16 +85,6 @@ fn diagnostic_hash(value: &impl Hash) -> u64 {
 pub struct FlowPassBindGroupKey {
     pub pipeline: FlowPassPipelineKey,
     pub resource_generation_signature_hash: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum FlowPrimitiveTopologyClass {
-    None,
-    TriangleList,
-    TriangleStrip,
-    LineList,
-    LineStrip,
-    PointList,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -130,12 +114,15 @@ impl From<RenderPassKind> for FlowPassKind {
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
-        GpuCapabilityRequirements, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+        GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode,
+        GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
+        GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
+        GpuPrimitiveStateDescriptor, GpuProgramSourceKey, GpuProgramSourceOwnerId,
         GpuProgramSourceRevision, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
         GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
-        GpuSpecializationSchema, GpuSpecializationValue, GpuVertexAttribute,
-        GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexStepMode,
+        GpuSpecializationSchema, GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
+        GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+        GpuVertexStepMode,
     };
 
     fn source_identity(key: &str) -> GpuProgramSourceIdentity {
@@ -160,6 +147,25 @@ mod tests {
             [GpuVertexAttribute::new(0, 0, GpuVertexFormat::Float32x3)],
         )
         .unwrap()])
+        .unwrap()
+    }
+
+    fn render_pipeline_state(
+        vertex_input: GpuVertexInputStateDescriptor,
+    ) -> GpuRenderPipelineStateDescriptor {
+        let color_target = GpuColorTargetStateDescriptor::new(
+            GpuTextureFormat::Rgba8Unorm,
+            GpuBlendMode::Alpha,
+            GpuColorWriteMask::ALL,
+        )
+        .unwrap();
+        GpuRenderPipelineStateDescriptor::new(
+            vertex_input,
+            Some(GpuFragmentOutputStateDescriptor::new([color_target])),
+            GpuPrimitiveStateDescriptor::default(),
+            None,
+            GpuMultisampleStateDescriptor::default(),
+        )
         .unwrap()
     }
 
@@ -197,20 +203,17 @@ mod tests {
             program_source_identity,
             pipeline_variant: FlowPassPipelineVariant::Default,
             primary_bind_group_layout: primary_layout([]),
-            vertex_input_state: GpuVertexInputStateDescriptor::new([]).unwrap(),
+            render_pipeline_state: Some(render_pipeline_state(
+                GpuVertexInputStateDescriptor::new([]).unwrap(),
+            )),
             material_specialization_fragment_hash: 3,
             view_signature_hash: 4,
             feature_runtime_version: 5,
-            color_formats: vec![TextureFormat::Rgba8Unorm],
-            depth_format: None,
-            raster_state_signature_hash: 0,
-            sample_count: 1,
-            primitive_topology_class: FlowPrimitiveTopologyClass::TriangleList,
         }
     }
 
     #[test]
-    fn stats_key_reflects_typed_layout_source_variant_vertex_material_and_view_signatures() {
+    fn stats_key_reflects_typed_layout_source_variant_render_material_and_view_signatures() {
         let identity = source_identity("shader");
         let key = sample_key(identity.clone());
         let same = sample_key(identity);
@@ -226,8 +229,8 @@ mod tests {
         );
         let mut changed_layout = key.clone();
         changed_layout.primary_bind_group_layout = primary_layout([sampler_binding()]);
-        let mut changed_vertex = key.clone();
-        changed_vertex.vertex_input_state = vertex_input_state();
+        let mut changed_render_state = key.clone();
+        changed_render_state.render_pipeline_state = Some(render_pipeline_state(vertex_input_state()));
         let mut changed_material = key.clone();
         changed_material.material_specialization_fragment_hash = 99;
         let mut changed_view = key.clone();
@@ -244,7 +247,7 @@ mod tests {
             changed_variant_type.stats_key()
         );
         assert_ne!(key.stats_key(), changed_layout.stats_key());
-        assert_ne!(key.stats_key(), changed_vertex.stats_key());
+        assert_ne!(key.stats_key(), changed_render_state.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());
         assert_ne!(key.stats_key(), changed_feature_runtime.stats_key());
