@@ -1,15 +1,21 @@
 use super::*;
 use crate::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuBindingKey,
-    GpuBindingKind, GpuBindingProvenance, GpuProgramSourceIdentity, GpuSamplerClass,
-    GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexAttribute,
-    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
-    GpuVertexStepMode,
+    GpuBindingKind, GpuBindingProvenance, GpuBlendMode as GpuPipelineBlendMode,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
+    GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor,
+    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat,
+    GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor,
+    GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramSourceIdentity,
+    GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
+    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass,
+    GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
+    GpuVertexInputStateDescriptor, GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineVariant;
 use crate::plugins::render::{
-    RenderFeatureId, RenderPassId, RenderVertexFormat, RenderVertexStepMode,
+    RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderFeatureId, RenderPassId,
+    RenderPrimitiveTopology, RenderRasterState, RenderVertexFormat, RenderVertexStepMode,
 };
 
 enum RuntimeBindingResource<'a> {
@@ -44,8 +50,6 @@ impl Renderer {
         allow_depth_sampling: bool,
         color_formats: Vec<TextureFormat>,
         depth_format: Option<TextureFormat>,
-        raster_state_signature_hash: u64,
-        primitive_topology_class: FlowPrimitiveTopologyClass,
         runtime_resources: &'a FlowRuntimeResources,
     ) -> Result<(
         FlowPassPipelineKey,
@@ -208,7 +212,8 @@ impl Renderer {
             .bindings()
             .map(wgpu_bind_group_layout_entry)
             .collect::<Result<Vec<_>>>()?;
-        let vertex_input_state = gpu_vertex_input_state_for_pass(flow, pass_id)?;
+        let render_pipeline_state =
+            gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?;
 
         let pipeline_key = FlowPassPipelineKey {
             flow_id: flow.flow_id,
@@ -218,18 +223,13 @@ impl Renderer {
             program_source_identity: program_source_identity.clone(),
             pipeline_variant,
             primary_bind_group_layout,
-            vertex_input_state,
+            render_pipeline_state,
             material_specialization_fragment_hash: material_specialization_fragment_hash(
                 packet,
                 pass_feature_id,
             ),
             view_signature_hash: hash_view_signature(packet.view_id.as_str(), packet.surface_size),
             feature_runtime_version: feature_runtime_version(packet, pass_feature_id),
-            color_formats,
-            depth_format,
-            raster_state_signature_hash,
-            sample_count: 1,
-            primitive_topology_class,
         };
 
         if bind_group_layout_entries.is_empty() {
@@ -314,19 +314,70 @@ impl Renderer {
     }
 }
 
-fn gpu_vertex_input_state_for_pass(
+fn gpu_render_pipeline_state_for_pass(
     flow: &CompiledRenderFlowPlan,
     pass_id: RenderPassId,
-) -> Result<GpuVertexInputStateDescriptor> {
+    color_formats: &[TextureFormat],
+    depth_format: Option<TextureFormat>,
+) -> Result<Option<GpuRenderPipelineStateDescriptor>> {
     let pass = flow
         .execution
         .passes
         .iter()
         .find(|pass| execution_pass_id(pass) == pass_id)
-        .ok_or_else(|| {
-            anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan")
-        })?;
+        .ok_or_else(|| anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan"))?;
+    let vertex_input = gpu_vertex_input_state_for_execution_pass(pass, pass_id)?;
 
+    match pass {
+        CompiledPassExecutionPlan::Compute(_) => {
+            if !color_formats.is_empty() || depth_format.is_some() {
+                bail!(
+                    "compute pass '{}' cannot carry render attachment state",
+                    pass_id
+                );
+            }
+            Ok(None)
+        }
+        CompiledPassExecutionPlan::Fullscreen(_) => {
+            if depth_format.is_some() {
+                bail!("fullscreen pass '{}' cannot carry depth state", pass_id);
+            }
+            let fragment_output =
+                gpu_fragment_output_state(color_formats, RenderBlendMode::Alpha)?;
+            Ok(Some(GpuRenderPipelineStateDescriptor::new(
+                vertex_input,
+                Some(fragment_output),
+                GpuPrimitiveStateDescriptor::default(),
+                None,
+                GpuMultisampleStateDescriptor::default(),
+            )?))
+        }
+        CompiledPassExecutionPlan::Graphics(plan) => {
+            let fragment_output =
+                gpu_fragment_output_state(color_formats, plan.raster_state.state.blend_mode)?;
+            let primitive = gpu_primitive_state(plan.raster_state.state)?;
+            let depth_stencil =
+                gpu_depth_stencil_state(depth_format, plan.raster_state.state.depth_policy)?;
+            Ok(Some(GpuRenderPipelineStateDescriptor::new(
+                vertex_input,
+                Some(fragment_output),
+                primitive,
+                depth_stencil,
+                GpuMultisampleStateDescriptor::default(),
+            )?))
+        }
+        _ => bail!(
+            "pass '{}' cannot construct render-pipeline state for execution kind '{}'",
+            pass_id,
+            execution_pass_kind_name(pass)
+        ),
+    }
+}
+
+fn gpu_vertex_input_state_for_execution_pass(
+    pass: &CompiledPassExecutionPlan,
+    pass_id: RenderPassId,
+) -> Result<GpuVertexInputStateDescriptor> {
     let layouts = match pass {
         CompiledPassExecutionPlan::Graphics(plan) => plan
             .draw_buffers
@@ -362,6 +413,71 @@ fn gpu_vertex_input_state_for_pass(
     };
 
     Ok(GpuVertexInputStateDescriptor::new(layouts)?)
+}
+
+fn gpu_fragment_output_state(
+    color_formats: &[TextureFormat],
+    blend_mode: RenderBlendMode,
+) -> Result<GpuFragmentOutputStateDescriptor> {
+    let targets = color_formats
+        .iter()
+        .copied()
+        .map(|format| {
+            let format = gpu_texture_format_from_wgpu(format)?;
+            let blend = if format == GpuTextureFormat::R32Uint
+                || matches!(blend_mode, RenderBlendMode::Replace)
+            {
+                GpuPipelineBlendMode::Replace
+            } else {
+                GpuPipelineBlendMode::Alpha
+            };
+            Ok(GpuColorTargetStateDescriptor::new(
+                format,
+                blend,
+                GpuColorWriteMask::ALL,
+            )?)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(GpuFragmentOutputStateDescriptor::new(targets))
+}
+
+fn gpu_primitive_state(state: RenderRasterState) -> Result<GpuPrimitiveStateDescriptor> {
+    let topology = match state.primitive_topology {
+        RenderPrimitiveTopology::TriangleList => GpuPipelinePrimitiveTopology::TriangleList,
+        RenderPrimitiveTopology::TriangleStrip => GpuPipelinePrimitiveTopology::TriangleStrip,
+        RenderPrimitiveTopology::LineList => GpuPipelinePrimitiveTopology::LineList,
+        RenderPrimitiveTopology::LineStrip => GpuPipelinePrimitiveTopology::LineStrip,
+        RenderPrimitiveTopology::PointList => GpuPipelinePrimitiveTopology::PointList,
+    };
+    let strip_index_format = topology.is_strip().then_some(GpuIndexFormat::Uint32);
+    let cull_mode = match state.cull_mode {
+        RenderCullMode::None => GpuPipelineCullMode::None,
+        RenderCullMode::Front => GpuPipelineCullMode::Front,
+        RenderCullMode::Back => GpuPipelineCullMode::Back,
+    };
+    Ok(GpuPrimitiveStateDescriptor::new(
+        topology,
+        strip_index_format,
+        GpuFrontFace::CounterClockwise,
+        cull_mode,
+    )?)
+}
+
+fn gpu_depth_stencil_state(
+    depth_format: Option<TextureFormat>,
+    policy: RenderDepthPolicy,
+) -> Result<Option<GpuDepthStencilStateDescriptor>> {
+    let Some(format) = depth_format else {
+        return Ok(None);
+    };
+    if matches!(policy, RenderDepthPolicy::Disabled) {
+        return Ok(None);
+    }
+    Ok(Some(GpuDepthStencilStateDescriptor::new(
+        gpu_texture_format_from_wgpu(format)?,
+        !matches!(policy, RenderDepthPolicy::ReadOnly),
+        GpuCompareFunction::LessEqual,
+    )?))
 }
 
 fn gpu_vertex_step_mode(value: RenderVertexStepMode) -> GpuVertexStepMode {
@@ -529,7 +645,7 @@ fn gpu_texture_format_from_wgpu(format: TextureFormat) -> Result<GpuTextureForma
         TextureFormat::R32Uint => Ok(GpuTextureFormat::R32Uint),
         TextureFormat::Depth32Float => Ok(GpuTextureFormat::Depth32Float),
         unsupported => bail!(
-            "current render storage texture format {unsupported:?} has no accepted G4B normalized format"
+            "current render texture format {unsupported:?} has no accepted G4B normalized format"
         ),
     }
 }
