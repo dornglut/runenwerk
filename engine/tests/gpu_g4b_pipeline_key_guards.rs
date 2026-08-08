@@ -9,6 +9,9 @@ const EXECUTE: &str = "src/plugins/render/renderer/render_flow/execute.rs";
 const RENDER_FLOW_MOD: &str = "src/plugins/render/renderer/render_flow/mod.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
+const MATERIAL_COMPILER_BINDINGS: &str = "src/plugins/render/material_compiler/bindings.rs";
+const MATERIAL_WGPU_PREPARE: &str = "src/plugins/render/renderer/prepare.rs";
+const MATERIAL_HANDOFF: &str = "../apps/runenwerk_editor/src/material_lab/renderer_handoff.rs";
 
 #[test]
 fn renderer_pipeline_key_owns_one_complete_g4b_pipeline_descriptor() {
@@ -251,7 +254,10 @@ fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
         "complete program-interface truth must derive from the accepted typed layout"
     );
     for required in [
-        "GpuBindingKey::try_new(1, texture_binding_identity)?",
+        "GpuBindingKey::try_new(",
+        "u64::from(binding.bind_group)",
+        "u64::from(binding.texture_binding)",
+        "u64::from(binding.sampler_binding)",
         "GpuBindingKind::sampled_texture(",
         "GpuTextureSampleClass::FloatFilterable",
         "GpuBindingKind::sampler(GpuSamplerClass::Filtering)",
@@ -305,6 +311,65 @@ fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
             !render_flow_mod.contains(forbidden),
             "superseded render-flow re-export returned: {forbidden}"
         );
+    }
+}
+
+#[test]
+fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let compiler = read(&manifest_dir, MATERIAL_COMPILER_BINDINGS);
+    let handoff = read(&manifest_dir, MATERIAL_HANDOFF);
+    let g4b = read(&manifest_dir, BINDINGS);
+    let wgpu_realization = read(&manifest_dir, MATERIAL_WGPU_PREPARE);
+
+    let compact = |source: &str| {
+        source
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>()
+    };
+    let handoff_compact = compact(&handoff);
+    let g4b_compact = compact(&g4b);
+    let wgpu_compact = compact(&wgpu_realization);
+
+    assert!(
+        compiler.contains("resource_slot_index.saturating_mul(2)"),
+        "compiler-owned material WGSL allocation remains the sole allowed resource-slot arithmetic"
+    );
+    assert!(
+        handoff.contains("compiler_resource_bindings")
+            && handoff.contains("compiler_binding_for_resolved_resource"),
+        "Material Lab must transport and semantically join compiler binding evidence"
+    );
+    assert!(
+        g4b_compact.contains(
+            "GpuBindingKey::try_new(u64::from(binding.bind_group),u64::from(binding.texture_binding),)?"
+        ) && g4b_compact.contains(
+            "GpuBindingKey::try_new(u64::from(binding.bind_group),u64::from(binding.sampler_binding),)?"
+        ),
+        "G4B group-one declarations must construct typed keys from transported compiler coordinates"
+    );
+    assert!(
+        wgpu_realization.contains("Self::material_wgpu_binding_indices(binding)")
+            && wgpu_realization.contains("(binding.texture_binding, binding.sampler_binding)"),
+        "temporary WGPU material realization must project transported shader binding indices"
+    );
+
+    for (path, source) in [
+        (MATERIAL_HANDOFF, handoff_compact.as_str()),
+        (BINDINGS, g4b_compact.as_str()),
+        (MATERIAL_WGPU_PREPARE, wgpu_compact.as_str()),
+    ] {
+        for forbidden in [
+            "resource_slot_index.saturating_mul(2)",
+            "resource_slot_index*2",
+            "resource_slot_index*2+1",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "downstream material shader binding identity must not be reconstructed from resource slots in {path}: {forbidden}"
+            );
+        }
     }
 }
 

@@ -150,7 +150,10 @@ fn slice_rgba8_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::render::{PreparedMaterialTextureKind, RenderTextureTargetFormat};
+    use crate::plugins::render::{
+        PreparedMaterialTextureBindingLocation, PreparedMaterialTextureKind,
+        RenderTextureTargetFormat,
+    };
 
     #[test]
     fn texture_preview_upload_residency_path() {
@@ -163,6 +166,7 @@ mod tests {
         let binding = PreparedMaterialTextureBinding::new(
             0,
             "preview",
+            PreparedMaterialTextureBindingLocation::new(0, 1, 0, 1),
             "artifact.7",
             path.to_string_lossy(),
             PreparedMaterialTextureKind::Texture3D,

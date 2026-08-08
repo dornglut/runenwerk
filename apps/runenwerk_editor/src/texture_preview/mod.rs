@@ -10,7 +10,8 @@ use engine::plugins::render::inspect::{
     TexturePreviewChannelMode, TexturePreviewUploadRequest, prepare_texture_preview_upload_proof,
 };
 use engine::plugins::render::{
-    PreparedMaterialTextureBinding, PreparedMaterialTextureKind, RenderDynamicTextureRetention,
+    PreparedMaterialTextureBinding, PreparedMaterialTextureBindingLocation,
+    PreparedMaterialTextureKind, RenderDynamicTextureRetention,
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderTextureSampleMode, RenderTextureTargetUsage,
     RenderTextureUploadAlphaMode,
@@ -503,6 +504,7 @@ fn prepared_texture_binding(
     PreparedMaterialTextureBinding::new(
         0,
         "texture_preview",
+        PreparedMaterialTextureBindingLocation::new(0, 1, 0, 1),
         artifact.artifact_id.raw().to_string(),
         artifact_path,
         texture_kind,

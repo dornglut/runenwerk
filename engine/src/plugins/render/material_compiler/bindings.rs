@@ -61,6 +61,8 @@ impl SceneMaterialTableResourceLayoutEntry {
         CompiledMaterialResourceBinding {
             node_id: u64::from(self.resource_slot_index),
             binding_key: format!("scene_table_resource_{}", self.resource_slot_index),
+            resource_slot_index: self.resource_slot_index,
+            material_table_slot: None,
             bind_group: self.bind_group,
             texture_binding: self.texture_binding,
             sampler_binding: self.sampler_binding,
@@ -87,6 +89,8 @@ impl SceneMaterialTableResourceSlotMapping {
         CompiledMaterialResourceBinding {
             node_id: self.node_id,
             binding_key: self.binding_key.clone(),
+            resource_slot_index: self.resource_slot_index,
+            material_table_slot: Some(self.slot_index),
             bind_group: 1,
             texture_binding: self.texture_binding,
             sampler_binding: self.sampler_binding,
@@ -193,6 +197,8 @@ fn compiled_resource_binding_for_resource(
     CompiledMaterialResourceBinding {
         node_id: resource.node_id.raw(),
         binding_key: resource.binding_key.clone(),
+        resource_slot_index,
+        material_table_slot: None,
         bind_group: 1,
         texture_binding: resource_slot_index.saturating_mul(2),
         sampler_binding: resource_slot_index.saturating_mul(2).saturating_add(1),

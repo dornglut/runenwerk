@@ -441,21 +441,40 @@ fn gpu_material_bind_group_layout_for_pass(
         return Ok(None);
     };
 
+    gpu_material_bind_group_layout(material)
+}
+
+fn gpu_material_bind_group_layout(
+    material: &crate::plugins::render::PreparedMaterialFeatureContribution,
+) -> Result<Option<GpuBindGroupLayoutDescriptor>> {
+    let declarations = gpu_material_binding_declarations(material)?;
+    if declarations.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(GpuBindGroupLayoutDescriptor::new(1, declarations)?))
+}
+
+fn gpu_material_binding_declarations(
+    material: &crate::plugins::render::PreparedMaterialFeatureContribution,
+) -> Result<Vec<GpuBindingDeclaration>> {
     let mut bindings = material
         .instances
         .iter()
         .flat_map(|instance| instance.texture_bindings.iter())
         .collect::<Vec<_>>();
-    if bindings.is_empty() {
-        return Ok(None);
-    }
-    bindings.sort_by_key(|binding| binding.resource_slot_index);
+    bindings.sort_by_key(|binding| {
+        (
+            binding.bind_group,
+            binding.texture_binding,
+            binding.sampler_binding,
+            binding.resource_slot_index,
+        )
+    });
 
     let visibility = GpuShaderStages::one(GpuShaderStage::Fragment);
     let mut declarations = Vec::with_capacity(bindings.len() * 2);
     for binding in bindings {
-        let texture_binding = binding.resource_slot_index.saturating_mul(2);
-        let texture_binding_identity = u64::from(texture_binding);
         let view_dimension = match binding.texture_kind {
             crate::plugins::render::PreparedMaterialTextureKind::Texture2D => {
                 GpuTextureViewDimension::D2
@@ -465,7 +484,10 @@ fn gpu_material_bind_group_layout_for_pass(
             }
         };
         declarations.push(GpuBindingDeclaration::new(
-            GpuBindingKey::try_new(1, texture_binding_identity)?,
+            GpuBindingKey::try_new(
+                u64::from(binding.bind_group),
+                u64::from(binding.texture_binding),
+            )?,
             visibility,
             GpuBindingKind::sampled_texture(
                 GpuTextureSampleClass::FloatFilterable,
@@ -480,7 +502,10 @@ fn gpu_material_bind_group_layout_for_pass(
             )?,
         )?);
         declarations.push(GpuBindingDeclaration::new(
-            GpuBindingKey::try_new(1, texture_binding_identity.saturating_add(1))?,
+            GpuBindingKey::try_new(
+                u64::from(binding.bind_group),
+                u64::from(binding.sampler_binding),
+            )?,
             visibility,
             GpuBindingKind::sampler(GpuSamplerClass::Filtering),
             None,
@@ -492,7 +517,7 @@ fn gpu_material_bind_group_layout_for_pass(
         )?);
     }
 
-    Ok(Some(GpuBindGroupLayoutDescriptor::new(1, declarations)?))
+    Ok(declarations)
 }
 
 fn gpu_render_pipeline_state_for_pass(
@@ -851,5 +876,96 @@ fn wgpu_texture_view_dimension(dimension: GpuTextureViewDimension) -> TextureVie
         GpuTextureViewDimension::Cube => TextureViewDimension::Cube,
         GpuTextureViewDimension::CubeArray => TextureViewDimension::CubeArray,
         GpuTextureViewDimension::D3 => TextureViewDimension::D3,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::render::{
+        PreparedMaterialBindingTable, PreparedMaterialFeatureContribution,
+        PreparedMaterialInstanceInput, PreparedMaterialParameterPayloadV1,
+        PreparedMaterialTextureBinding, PreparedMaterialTextureBindingLocation,
+        PreparedMaterialTextureKind,
+    };
+
+    fn material_with_bindings(
+        texture_bindings: Vec<PreparedMaterialTextureBinding>,
+    ) -> PreparedMaterialFeatureContribution {
+        PreparedMaterialFeatureContribution {
+            instances: vec![PreparedMaterialInstanceInput {
+                material_instance_id: "material.product.1".to_string(),
+                specialization_key_fragment: "material.first_slice".to_string(),
+                parameter_payload: PreparedMaterialParameterPayloadV1::default(),
+                texture_bindings,
+            }],
+            binding_table: PreparedMaterialBindingTable::default(),
+            scene_bundle: None,
+            model_mesh_material_selections: Vec::new(),
+        }
+    }
+
+    fn texture_binding(
+        resource_slot_index: u32,
+        bind_group: u32,
+        texture_binding: u32,
+        sampler_binding: u32,
+    ) -> PreparedMaterialTextureBinding {
+        PreparedMaterialTextureBinding::new(
+            resource_slot_index as u64 + 1,
+            format!("texture_{resource_slot_index}"),
+            PreparedMaterialTextureBindingLocation::new(
+                resource_slot_index,
+                bind_group,
+                texture_binding,
+                sampler_binding,
+            ),
+            format!("artifact.{resource_slot_index}"),
+            ".runenwerk/artifacts/texture.ktx2",
+            PreparedMaterialTextureKind::Texture2D,
+            "texture-cache",
+        )
+    }
+
+    #[test]
+    fn material_group_one_declarations_use_transported_compiler_coordinates() {
+        let material = material_with_bindings(vec![texture_binding(91, 1, 31, 47)]);
+
+        let declarations =
+            gpu_material_binding_declarations(&material).expect("typed declarations should form");
+        let keys = declarations
+            .iter()
+            .map(|declaration| declaration.key())
+            .collect::<Vec<_>>();
+        assert_eq!(keys.len(), 2);
+        assert_eq!(keys[0].group(), 1);
+        assert_eq!(keys[0].binding(), 31);
+        assert_eq!(keys[1].group(), 1);
+        assert_eq!(keys[1].binding(), 47);
+
+        let layout = gpu_material_bind_group_layout(&material)
+            .expect("typed group-one layout should form")
+            .expect("one material binding should publish a layout");
+        assert_eq!(layout.group(), 1);
+        assert!(layout.binding(31).is_some());
+        assert!(layout.binding(47).is_some());
+        assert!(layout.binding(182).is_none());
+    }
+
+    #[test]
+    fn material_group_one_layout_rejects_invalid_or_duplicate_transported_keys() {
+        let invalid_group = material_with_bindings(vec![texture_binding(0, 2, 31, 47)]);
+        let error = gpu_material_bind_group_layout(&invalid_group).expect_err(
+            "material group-one layout must reject a non-group-one compiler coordinate",
+        );
+        assert!(error.to_string().contains("exact group"));
+
+        let duplicate = material_with_bindings(vec![
+            texture_binding(0, 1, 31, 47),
+            texture_binding(1, 1, 31, 47),
+        ]);
+        let error = gpu_material_bind_group_layout(&duplicate)
+            .expect_err("material group-one layout must reject duplicate final GPU keys");
+        assert!(error.to_string().contains("DuplicateBindingKey"));
     }
 }

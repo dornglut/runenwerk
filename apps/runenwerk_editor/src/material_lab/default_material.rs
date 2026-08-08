@@ -127,7 +127,8 @@ pub(crate) fn ensure_default_scene_material_preview_at(
         scene_shader_path.clone(),
         compiled.scene_identity,
         Vec::new(),
-    );
+    )
+    .with_compiler_resource_bindings(compiled.resource_bindings);
 
     shader_registry.register_shader_with_id(EDITOR_MATERIAL_PREVIEW_SHADER_ID, preview_shader_path);
     shader_registry.register_shader_with_id(scene_shader_path.clone(), scene_shader_path);

@@ -499,11 +499,18 @@ impl Renderer {
         if bindings.is_empty() {
             return None;
         }
-        bindings.sort_by_key(|binding| binding.resource_slot_index);
+        bindings.sort_by_key(|binding| {
+            (
+                binding.bind_group,
+                binding.texture_binding,
+                binding.sampler_binding,
+                binding.resource_slot_index,
+            )
+        });
 
         let mut layout_entries = Vec::with_capacity(bindings.len() * 2);
         for binding in &bindings {
-            let texture_binding = binding.resource_slot_index.saturating_mul(2);
+            let (texture_binding, sampler_binding) = Self::material_wgpu_binding_indices(binding);
             layout_entries.push(BindGroupLayoutEntry {
                 binding: texture_binding,
                 visibility: ShaderStages::FRAGMENT,
@@ -522,7 +529,7 @@ impl Renderer {
                 count: None,
             });
             layout_entries.push(BindGroupLayoutEntry {
-                binding: texture_binding + 1,
+                binding: sampler_binding,
                 visibility: ShaderStages::FRAGMENT,
                 ty: BindingType::Sampler(SamplerBindingType::Filtering),
                 count: None,
@@ -589,21 +596,23 @@ impl Renderer {
                 mipmap_filter: FilterMode::Nearest,
                 ..Default::default()
             });
-            let texture_binding = binding.resource_slot_index.saturating_mul(2);
+            let binding_indices = Self::material_wgpu_binding_indices(binding);
             texture_views.push(view);
             samplers.push(sampler);
-            bind_group_bindings.push(texture_binding);
+            bind_group_bindings.push(binding_indices);
             textures.push(texture);
         }
 
         let mut bind_group_entries = Vec::with_capacity(bind_group_bindings.len() * 2);
-        for (index, texture_binding) in bind_group_bindings.iter().copied().enumerate() {
+        for (index, (texture_binding, sampler_binding)) in
+            bind_group_bindings.iter().copied().enumerate()
+        {
             bind_group_entries.push(BindGroupEntry {
                 binding: texture_binding,
                 resource: BindingResource::TextureView(&texture_views[index]),
             });
             bind_group_entries.push(BindGroupEntry {
-                binding: texture_binding + 1,
+                binding: sampler_binding,
                 resource: BindingResource::Sampler(&samplers[index]),
             });
         }
@@ -622,6 +631,15 @@ impl Renderer {
             _texture_views: texture_views,
             _samplers: samplers,
         })
+    }
+
+    // Current WGPU realization is intentionally temporary G4C2 code. It
+    // projects the transported shader ABI indices exactly; it does not
+    // allocate or derive them from a material resource-table slot.
+    fn material_wgpu_binding_indices(
+        binding: &crate::plugins::render::PreparedMaterialTextureBinding,
+    ) -> (u32, u32) {
+        (binding.texture_binding, binding.sampler_binding)
     }
 
     fn resolve_ui_prepared_with_gate(
@@ -1121,6 +1139,9 @@ fn hash_prepared_feature_contribution(
                     binding.node_id.hash(&mut hasher);
                     binding.binding_key.hash(&mut hasher);
                     binding.resource_slot_index.hash(&mut hasher);
+                    binding.bind_group.hash(&mut hasher);
+                    binding.texture_binding.hash(&mut hasher);
+                    binding.sampler_binding.hash(&mut hasher);
                     binding.artifact_id.hash(&mut hasher);
                     binding.artifact_path.hash(&mut hasher);
                     binding.texture_kind.hash(&mut hasher);
@@ -1166,7 +1187,8 @@ mod tests {
         PreparedMaterialInstanceInput, PreparedMaterialOutputTarget,
         PreparedMaterialParameterInput, PreparedMaterialParameterKind,
         PreparedMaterialParameterPayloadV1, PreparedMaterialParameterProfile,
-        PreparedMaterialTextureBinding, PreparedMaterialTextureKind,
+        PreparedMaterialTextureBinding, PreparedMaterialTextureBindingLocation,
+        PreparedMaterialTextureKind,
     };
 
     #[test]
@@ -1313,6 +1335,21 @@ mod tests {
     }
 
     #[test]
+    fn material_wgpu_realization_projects_transported_shader_binding_indices() {
+        let binding = PreparedMaterialTextureBinding::new(
+            7,
+            "albedo",
+            PreparedMaterialTextureBindingLocation::new(93, 1, 41, 59),
+            "artifact.7",
+            ".runenwerk/artifacts/texture.ktx2",
+            PreparedMaterialTextureKind::Texture2D,
+            "cache",
+        );
+
+        assert_eq!(Renderer::material_wgpu_binding_indices(&binding), (41, 59));
+    }
+
+    #[test]
     fn material_ktx2_upload_reads_exact_base_level_bytes() {
         let bytes = build_rgba8_ktx2(2, 2, 1, [12, 34, 56, 255]);
         let path = std::env::temp_dir().join(format!(
@@ -1323,6 +1360,7 @@ mod tests {
         let binding = PreparedMaterialTextureBinding::new(
             7,
             "albedo",
+            PreparedMaterialTextureBindingLocation::new(0, 1, 0, 1),
             "artifact.7",
             path.to_string_lossy(),
             PreparedMaterialTextureKind::Texture2D,
@@ -1353,6 +1391,7 @@ mod tests {
         let binding = PreparedMaterialTextureBinding::new(
             7,
             "albedo",
+            PreparedMaterialTextureBindingLocation::new(0, 1, 0, 1),
             "artifact.7",
             path.to_string_lossy(),
             PreparedMaterialTextureKind::Texture2D,

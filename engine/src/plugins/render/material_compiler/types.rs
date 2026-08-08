@@ -17,6 +17,13 @@ pub struct CompiledMaterialShader {
 pub struct CompiledMaterialResourceBinding {
     pub node_id: u64,
     pub binding_key: String,
+    /// Compiler-owned resource-plan identity. This is a stable discriminator for
+    /// correspondence and diagnostics; it is not a downstream shader-binding
+    /// allocation input.
+    pub resource_slot_index: u32,
+    /// Present only for a generated scene-material-table shader. It identifies
+    /// the material-table slot whose semantic resource emitted this record.
+    pub material_table_slot: Option<u32>,
     pub bind_group: u32,
     pub texture_binding: u32,
     pub sampler_binding: u32,
