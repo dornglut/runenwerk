@@ -1,3 +1,4 @@
+use crate::plugins::gpu::{GpuBindingKey, GpuStorageTextureAccess};
 use crate::plugins::render::{
     RenderDrawDescriptor, RenderPassKind, RenderPassViewScope, RenderTargetAliasKind,
     RenderTextureTargetFormat,
@@ -431,14 +432,32 @@ impl RenderFragmentShaderReference {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderFragmentSampledTextureBinding {
+    pub texture_key: GpuBindingKey,
+    pub sampler_key: GpuBindingKey,
+    pub resource: RenderFragmentLabelRef,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderFragmentStorageTextureBinding {
+    pub key: GpuBindingKey,
+    pub resource: RenderFragmentLabelRef,
+    pub access: GpuStorageTextureAccess,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderFragmentPassDescriptor {
     pub label: String,
     pub kind: RenderFragmentPassKind,
     pub view_scope: RenderPassViewScope,
     pub shader: Option<RenderFragmentShaderReference>,
+    /// Resource/hazard role only; shader identity lives in `sampled_texture_bindings`.
     pub sample_textures: Vec<RenderFragmentLabelRef>,
+    pub sampled_texture_bindings: Vec<RenderFragmentSampledTextureBinding>,
+    /// Resource/hazard role only; shader identity lives in `storage_texture_bindings`.
     pub write_textures: Vec<RenderFragmentLabelRef>,
+    pub storage_texture_bindings: Vec<RenderFragmentStorageTextureBinding>,
     pub color_outputs: Vec<RenderFragmentLabelRef>,
     pub write_surface_color: bool,
     pub depth_target: Option<RenderFragmentLabelRef>,
@@ -461,7 +480,9 @@ impl RenderFragmentPassDescriptor {
             view_scope: RenderPassViewScope::AllViews,
             shader: None,
             sample_textures: Vec::new(),
+            sampled_texture_bindings: Vec::new(),
             write_textures: Vec::new(),
+            storage_texture_bindings: Vec::new(),
             color_outputs: Vec::new(),
             write_surface_color: false,
             depth_target: None,
@@ -521,15 +542,36 @@ impl RenderFragmentPassDescriptor {
         self
     }
 
-    pub fn sample_local_texture(mut self, label: impl Into<String>) -> Self {
-        self.sample_textures
-            .push(RenderFragmentLabelRef::local(label));
+    pub fn sample_local_texture(
+        mut self,
+        texture_key: GpuBindingKey,
+        sampler_key: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
+        let resource = RenderFragmentLabelRef::local(label);
+        self.sample_textures.push(resource.clone());
+        self.sampled_texture_bindings
+            .push(RenderFragmentSampledTextureBinding {
+                texture_key,
+                sampler_key,
+                resource,
+            });
         self
     }
 
-    pub fn write_local_texture(mut self, label: impl Into<String>) -> Self {
-        self.write_textures
-            .push(RenderFragmentLabelRef::local(label));
+    pub fn write_local_texture(
+        mut self,
+        key: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
+        let resource = RenderFragmentLabelRef::local(label);
+        self.write_textures.push(resource.clone());
+        self.storage_texture_bindings
+            .push(RenderFragmentStorageTextureBinding {
+                key,
+                resource,
+                access: GpuStorageTextureAccess::WriteOnly,
+            });
         self
     }
 
