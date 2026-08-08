@@ -57,10 +57,7 @@ impl ProceduralPassBuilder {
             .allocate_uniform_resource::<U>(self.descriptor.label.as_str())?;
         self.uniform_bindings.push(ProceduralUniformBinding {
             key: binding,
-            projection: PassParamBinding::uniform_state(
-                uniform.diagnostic_identity(),
-                projection,
-            ),
+            projection: PassParamBinding::uniform_state(uniform.diagnostic_identity(), projection),
         });
         Ok(self)
     }
