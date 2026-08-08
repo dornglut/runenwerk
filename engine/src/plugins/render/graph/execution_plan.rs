@@ -647,19 +647,6 @@ fn compile_raster_state(state: RenderRasterState) -> CompiledRasterState {
     CompiledRasterState { state }
 }
 
-impl CompiledDrawBufferPlan {
-    pub fn vertex_layout_signature_hash(&self) -> u64 {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        for binding in &self.vertex_buffers {
-            binding.layout.hash(&mut hasher);
-        }
-        for layout in &self.instance_buffer_layouts {
-            layout.hash(&mut hasher);
-        }
-        hasher.finish()
-    }
-}
-
 fn compile_resource_ref(
     resource: &GpuWorkResourceId,
     resources: &ResourceGraph,
