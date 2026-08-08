@@ -209,6 +209,8 @@ fn validate_pass_shape(
     pass: &RenderFragmentPassDescriptor,
     diagnostics: &mut Vec<RenderFragmentDiagnostic>,
 ) {
+    validate_shader_binding_shape(package, fragment, pass, diagnostics);
+
     match pass.kind {
         RenderFragmentPassKind::Compute => {
             if pass.compute_dispatch.is_none() {
@@ -285,6 +287,89 @@ fn validate_pass_shape(
             }
         }
         RenderFragmentPassKind::BuiltinUiComposite => {}
+    }
+}
+
+fn validate_shader_binding_shape(
+    package: &RenderFragmentPackageDescriptor,
+    fragment: &RenderFragmentDescriptor,
+    pass: &RenderFragmentPassDescriptor,
+    diagnostics: &mut Vec<RenderFragmentDiagnostic>,
+) {
+    let sampled_roles_match = pass.sample_textures.len() == pass.sampled_texture_bindings.len()
+        && pass
+            .sample_textures
+            .iter()
+            .zip(&pass.sampled_texture_bindings)
+            .all(|(resource, binding)| resource == &binding.resource);
+    if !sampled_roles_match {
+        diagnostics.push(pass_shape_error(
+            package,
+            fragment,
+            pass,
+            "sampled-texture resource roles must have one matching explicit texture/sampler binding record",
+        ));
+    }
+
+    let storage_roles_match = pass.write_textures.len() == pass.storage_texture_bindings.len()
+        && pass
+            .write_textures
+            .iter()
+            .zip(&pass.storage_texture_bindings)
+            .all(|(resource, binding)| resource == &binding.resource);
+    if !storage_roles_match {
+        diagnostics.push(pass_shape_error(
+            package,
+            fragment,
+            pass,
+            "storage-texture resource roles must have one matching explicit shader binding record",
+        ));
+    }
+
+    let mut keys = BTreeSet::new();
+    for binding in &pass.sampled_texture_bindings {
+        for key in [binding.texture_key, binding.sampler_key] {
+            if key.group() != 0 {
+                diagnostics.push(pass_shape_error(
+                    package,
+                    fragment,
+                    pass,
+                    format!("fragment pass binding {key} must belong to primary group 0"),
+                ));
+            }
+            if !keys.insert(key) {
+                diagnostics.push(pass_shape_error(
+                    package,
+                    fragment,
+                    pass,
+                    format!("fragment pass declares duplicate shader binding key {key}"),
+                ));
+            }
+        }
+    }
+    for binding in &pass.storage_texture_bindings {
+        if binding.key.group() != 0 {
+            diagnostics.push(pass_shape_error(
+                package,
+                fragment,
+                pass,
+                format!(
+                    "fragment pass binding {} must belong to primary group 0",
+                    binding.key
+                ),
+            ));
+        }
+        if !keys.insert(binding.key) {
+            diagnostics.push(pass_shape_error(
+                package,
+                fragment,
+                pass,
+                format!(
+                    "fragment pass declares duplicate shader binding key {}",
+                    binding.key
+                ),
+            ));
+        }
     }
 }
 
