@@ -28,6 +28,7 @@ enum RuntimeBindingResource<'a> {
 }
 
 struct RuntimeBindingResolved<'a> {
+    key: GpuBindingKey,
     kind: GpuBindingKind,
     resource: RuntimeBindingResource<'a>,
     resource_identity: Option<RuntimeResourceKey>,
@@ -62,7 +63,7 @@ impl Renderer {
         let mut resolved_entries = Vec::<RuntimeBindingResolved<'a>>::new();
         for entry in &bindings.bind_group.entries {
             match entry {
-                CompiledBindingEntry::SampledTexture { resource } => {
+                CompiledBindingEntry::SampledTexture { key, resource } => {
                     let resource_key = runtime_resources.resolve_resource_key(
                         pass_id,
                         resource,
@@ -93,6 +94,7 @@ impl Renderer {
                         GpuTextureSampleClass::FloatFilterable
                     };
                     resolved_entries.push(RuntimeBindingResolved {
+                        key: *key,
                         kind: GpuBindingKind::sampled_texture(
                             sample_class,
                             GpuTextureViewDimension::D2,
@@ -108,8 +110,9 @@ impl Renderer {
                         cacheable: texture.generation.is_some(),
                     });
                 }
-                CompiledBindingEntry::Sampler => {
+                CompiledBindingEntry::Sampler { key } => {
                     resolved_entries.push(RuntimeBindingResolved {
+                        key: *key,
                         kind: GpuBindingKind::sampler(GpuSamplerClass::Filtering),
                         resource: RuntimeBindingResource::SamplerPlaceholder,
                         resource_identity: None,
@@ -117,7 +120,11 @@ impl Renderer {
                         cacheable: true,
                     });
                 }
-                CompiledBindingEntry::StorageTexture { resource, access } => {
+                CompiledBindingEntry::StorageTexture {
+                    key,
+                    resource,
+                    access,
+                } => {
                     let resource_key = runtime_resources.resolve_resource_key(
                         pass_id,
                         resource,
@@ -143,6 +150,7 @@ impl Renderer {
                         );
                     }
                     resolved_entries.push(RuntimeBindingResolved {
+                        key: *key,
                         kind: GpuBindingKind::storage_texture(
                             gpu_storage_texture_access(*access),
                             gpu_texture_format_from_wgpu(texture.format)?,
@@ -158,10 +166,11 @@ impl Renderer {
                         cacheable: texture.generation.is_some(),
                     });
                 }
-                CompiledBindingEntry::UniformBuffer { resource } => {
+                CompiledBindingEntry::UniformBuffer { key, resource } => {
                     let buffer =
                         runtime_resources.resolve_uniform_buffer_for_pass(pass_id, *resource)?;
                     resolved_entries.push(RuntimeBindingResolved {
+                        key: *key,
                         kind: GpuBindingKind::uniform_buffer(false, None),
                         resource: RuntimeBindingResource::Buffer(buffer.buffer),
                         resource_identity: Some(buffer.id),
@@ -169,9 +178,14 @@ impl Renderer {
                         cacheable: buffer.generation.is_some(),
                     });
                 }
-                CompiledBindingEntry::StorageBuffer { resource, access } => {
+                CompiledBindingEntry::StorageBuffer {
+                    key,
+                    resource,
+                    access,
+                } => {
                     let buffer = runtime_resources.resolve_storage_buffer_ref(pass_id, resource)?;
                     resolved_entries.push(RuntimeBindingResolved {
+                        key: *key,
                         kind: GpuBindingKind::storage_buffer(
                             gpu_storage_buffer_access(*access),
                             false,
@@ -189,20 +203,13 @@ impl Renderer {
         let gpu_visibility = gpu_shader_stages_from_wgpu(visibility)?;
         let binding_declarations = resolved_entries
             .iter()
-            .enumerate()
-            .map(|(binding, value)| {
-                let binding = u64::try_from(binding).map_err(|_| {
-                    anyhow::anyhow!(
-                        "pass '{}' declares more bindings than can be represented by G4B binding identity",
-                        pass_id
-                    )
-                })?;
+            .map(|value| {
                 Ok(GpuBindingDeclaration::new(
-                    GpuBindingKey::try_new(0, binding)?,
+                    value.key,
                     gpu_visibility,
                     value.kind,
                     None,
-                    format!("pass-{pass_id}-binding-{binding}"),
+                    format!("pass-{pass_id}-binding-{}", value.key.binding()),
                     GpuBindingProvenance::new(
                         "render-flow-primary-bind-group",
                         Some(format!("pass {pass_id}")),
@@ -265,8 +272,8 @@ impl Renderer {
         let mut bind_group_entries = Vec::<BindGroupEntry<'_>>::new();
         let mut can_cache_bind_group = true;
         let mut signature_hasher = std::collections::hash_map::DefaultHasher::new();
-        for (binding, value) in resolved_entries.iter().enumerate() {
-            (binding as u32).hash(&mut signature_hasher);
+        for value in &resolved_entries {
+            value.key.hash(&mut signature_hasher);
             if value.cacheable {
                 value.resource_identity.hash(&mut signature_hasher);
                 value.generation_token.hash(&mut signature_hasher);
@@ -287,7 +294,7 @@ impl Renderer {
                 RuntimeBindingResource::Buffer(buffer) => buffer.as_entire_binding(),
             };
             bind_group_entries.push(BindGroupEntry {
-                binding: binding as u32,
+                binding: value.key.binding(),
                 resource,
             });
         }
