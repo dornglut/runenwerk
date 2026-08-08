@@ -443,7 +443,7 @@ pub fn bind_group_entry_count(pass: &CompiledPassExecutionPlan) -> usize {
 pub fn binding_entry_resource_label(entry: &CompiledBindingEntry) -> &'static str {
     match entry {
         CompiledBindingEntry::SampledTexture { .. } => "sampled_texture",
-        CompiledBindingEntry::Sampler => "sampler",
+        CompiledBindingEntry::Sampler { .. } => "sampler",
         CompiledBindingEntry::StorageTexture { .. } => "storage_texture",
         CompiledBindingEntry::UniformBuffer { .. } => "uniform_buffer",
         CompiledBindingEntry::StorageBuffer { .. } => "storage_buffer",
