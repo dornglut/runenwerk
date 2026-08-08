@@ -1,18 +1,22 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuBindingKey,
-    GpuBindingKind, GpuBindingProvenance, GpuBlendMode as GpuPipelineBlendMode,
+    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingClass,
+    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
+    GpuBlendMode as GpuPipelineBlendMode, GpuCapabilityRequirements,
     GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor,
-    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
-    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
-    GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramSourceIdentity,
+    GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
+    GpuDepthStencilStateDescriptor, GpuEntryPointDescriptor, GpuEntryPointName,
+    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat,
+    GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
+    GpuProgramInterfaceDescriptor, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
     GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
-    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass,
-    GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-    GpuVertexInputStateDescriptor, GpuVertexStepMode,
+    GpuSpecializationValueSet, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat,
+    GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexAttribute,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode,
 };
-use crate::plugins::render::pipelines::FlowPassPipelineVariant;
+use crate::plugins::render::pipelines::FlowPassPipelineDescriptor;
 use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderFeatureId, RenderPassId,
     RenderPrimitiveTopology, RenderRasterState, RenderVertexFormat, RenderVertexStepMode,
@@ -43,8 +47,8 @@ impl Renderer {
         pass_id: RenderPassId,
         pass_kind: FlowPassKind,
         pass_feature_id: Option<RenderFeatureId>,
-        program_source_identity: &GpuProgramSourceIdentity,
-        pipeline_variant: FlowPassPipelineVariant,
+        program_source: &GpuAdmittedProgramSource,
+        specialization: GpuSpecializationValueSet,
         bindings: &CompiledPassBindings,
         visibility: ShaderStages,
         allow_depth_sampling: bool,
@@ -216,16 +220,20 @@ impl Renderer {
             gpu_pipeline_layout_for_pass(packet, flow, pass_id, &primary_bind_group_layout)?;
         let render_pipeline_state =
             gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?;
+        let pipeline_descriptor = gpu_pipeline_descriptor_for_pass(
+            program_source,
+            pass_kind,
+            pipeline_layout,
+            render_pipeline_state,
+            specialization,
+        )?;
 
         let pipeline_key = FlowPassPipelineKey {
             flow_id: flow.flow_id,
             pass_id,
             pass_kind,
             feature_id: pass_feature_id,
-            program_source_identity: program_source_identity.clone(),
-            pipeline_variant,
-            pipeline_layout,
-            render_pipeline_state,
+            pipeline_descriptor,
         };
 
         if bind_group_layout_entries.is_empty() {
@@ -333,6 +341,88 @@ fn gpu_pipeline_layout_for_pass(
         groups.push(material_group);
     }
     Ok(GpuPipelineLayoutDescriptor::new(groups)?)
+}
+
+fn gpu_program_interface_for_layout(
+    layout: &GpuPipelineLayoutDescriptor,
+) -> Result<GpuProgramInterfaceDescriptor> {
+    Ok(GpuProgramInterfaceDescriptor::new(
+        layout
+            .groups()
+            .flat_map(|group| group.bindings().cloned()),
+    )?)
+}
+
+fn gpu_pipeline_descriptor_for_pass(
+    source: &GpuAdmittedProgramSource,
+    pass_kind: FlowPassKind,
+    layout: GpuPipelineLayoutDescriptor,
+    render_state: Option<GpuRenderPipelineStateDescriptor>,
+    specialization: GpuSpecializationValueSet,
+) -> Result<FlowPassPipelineDescriptor> {
+    let interface = gpu_program_interface_for_layout(&layout)?;
+    match pass_kind {
+        FlowPassKind::Compute => {
+            if render_state.is_some() {
+                bail!("compute pipeline descriptor cannot carry render state");
+            }
+            let entry_point = GpuEntryPointName::new("cs_main")?;
+            let program = GpuProgramDescriptor::new(
+                source.clone(),
+                interface.clone(),
+                [GpuEntryPointDescriptor::new(
+                    entry_point.clone(),
+                    GpuShaderStage::Compute,
+                    interface,
+                )],
+            )?;
+            Ok(FlowPassPipelineDescriptor::Compute(
+                GpuComputePipelineDescriptor::new(
+                    program,
+                    entry_point,
+                    layout,
+                    specialization,
+                    GpuCapabilityRequirements::new(),
+                )?,
+            ))
+        }
+        FlowPassKind::Fullscreen | FlowPassKind::Graphics => {
+            let render_state = render_state.ok_or_else(|| {
+                anyhow::anyhow!("render pipeline descriptor requires typed render state")
+            })?;
+            let vertex = GpuEntryPointName::new("vs_main")?;
+            let fragment = GpuEntryPointName::new("fs_main")?;
+            let program = GpuProgramDescriptor::new(
+                source.clone(),
+                interface.clone(),
+                [
+                    GpuEntryPointDescriptor::new(
+                        vertex.clone(),
+                        GpuShaderStage::Vertex,
+                        interface.clone(),
+                    ),
+                    GpuEntryPointDescriptor::new(
+                        fragment.clone(),
+                        GpuShaderStage::Fragment,
+                        interface,
+                    ),
+                ],
+            )?;
+            Ok(FlowPassPipelineDescriptor::Render(
+                GpuRenderPipelineDescriptor::new(
+                    program,
+                    GpuRenderEntryPoints::new(vertex, Some(fragment)),
+                    render_state,
+                    layout,
+                    specialization,
+                    GpuCapabilityRequirements::new(),
+                )?,
+            ))
+        }
+        _ => bail!(
+            "pass kind '{pass_kind:?}' cannot construct a shader pipeline descriptor"
+        ),
+    }
 }
 
 fn gpu_material_bind_group_layout_for_pass(
