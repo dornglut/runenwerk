@@ -139,14 +139,14 @@ mod tests {
         GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode,
         GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
         GpuEntryPointDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-        GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor,
-        GpuProgramInterfaceDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
-        GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
-        GpuProgramSourceRevision, GpuRenderEntryPoints, GpuSamplerClass, GpuShaderStage,
-        GpuShaderStages, GpuSpecializationDeclaration, GpuSpecializationEntry,
-        GpuSpecializationKey, GpuSpecializationSchema, GpuSpecializationValue, GpuTextureFormat,
-        GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-        GpuVertexInputStateDescriptor, GpuVertexStepMode,
+        GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor, GpuProgramInterfaceDescriptor,
+        GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+        GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
+        GpuRenderEntryPoints, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
+        GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
+        GpuSpecializationSchema, GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
+        GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+        GpuVertexStepMode,
     };
 
     fn admitted_source(key: &str) -> GpuAdmittedProgramSource {
@@ -180,9 +180,7 @@ mod tests {
 
     fn interface(layout: &GpuPipelineLayoutDescriptor) -> GpuProgramInterfaceDescriptor {
         GpuProgramInterfaceDescriptor::new(
-            layout
-                .groups()
-                .flat_map(|group| group.bindings().cloned()),
+            layout.groups().flat_map(|group| group.bindings().cloned()),
         )
         .unwrap()
     }
@@ -263,11 +261,7 @@ mod tests {
                     GpuShaderStage::Vertex,
                     interface.clone(),
                 ),
-                GpuEntryPointDescriptor::new(
-                    fragment.clone(),
-                    GpuShaderStage::Fragment,
-                    interface,
-                ),
+                GpuEntryPointDescriptor::new(fragment.clone(), GpuShaderStage::Fragment, interface),
             ],
         )
         .unwrap();
