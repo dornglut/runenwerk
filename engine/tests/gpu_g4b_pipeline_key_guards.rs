@@ -53,6 +53,13 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         1,
         "legacy group-0 provenance diagnostics must derive through the typed pipeline layout"
     );
+    assert_eq!(
+        flow_keys
+            .matches("pub fn render_pipeline_state_diagnostic_hash(&self) -> u64")
+            .count(),
+        1,
+        "render-state diagnostics must remain derived through one typed aggregate-state accessor"
+    );
     for forbidden in [
         "pub shader_identity: String",
         "pub shader_revision: u64",
