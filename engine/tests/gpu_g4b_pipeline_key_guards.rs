@@ -11,61 +11,64 @@ const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
 
 #[test]
-fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
+fn renderer_pipeline_key_owns_one_complete_g4b_pipeline_descriptor() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flow_keys = read(&manifest_dir, FLOW_KEYS);
 
-    assert!(
-        flow_keys.contains("pub program_source_identity: GpuProgramSourceIdentity"),
-        "renderer pipeline keys must retain one owner-scoped G4B source identity"
-    );
-    assert!(
-        flow_keys.contains("pub pipeline_variant: FlowPassPipelineVariant"),
-        "renderer-local pipeline variation must remain separate from source identity"
-    );
-    assert!(
-        flow_keys.contains("ComputeSpecialization(GpuSpecializationValueSet)"),
-        "compute pipeline variation must retain complete typed G4B specialization values"
-    );
-    assert!(
-        flow_keys.contains("pub fn specialization(&self) -> Option<&GpuSpecializationValueSet>"),
-        "backend lowering must have one typed specialization accessor"
-    );
-    assert!(
-        flow_keys.contains("pub pipeline_layout: GpuPipelineLayoutDescriptor"),
-        "renderer pipeline keys must retain one complete typed G4B pipeline layout"
-    );
-    assert!(
-        flow_keys.contains("pub render_pipeline_state: Option<GpuRenderPipelineStateDescriptor>"),
-        "renderer pipeline keys must retain one complete typed G4B render-pipeline state"
+    for required in [
+        "pub enum FlowPassPipelineDescriptor",
+        "Compute(GpuComputePipelineDescriptor)",
+        "Render(GpuRenderPipelineDescriptor)",
+        "pub pipeline_descriptor: FlowPassPipelineDescriptor",
+        "pub fn program(&self) -> &GpuProgramDescriptor",
+        "pub fn layout(&self) -> &GpuPipelineLayoutDescriptor",
+        "pub fn specialization(&self) -> &GpuSpecializationValueSet",
+        "pub fn render_state(&self) -> Option<&GpuRenderPipelineStateDescriptor>",
+    ] {
+        assert!(
+            flow_keys.contains(required),
+            "renderer pipeline keys must retain complete generic G4B descriptor authority: {required}"
+        );
+    }
+    assert_eq!(
+        flow_keys
+            .matches("pub fn pipeline_descriptor_diagnostic_hash(&self) -> u64")
+            .count(),
+        1,
+        "complete pipeline diagnostics must derive through one descriptor accessor"
     );
     assert_eq!(
         flow_keys
             .matches("pub fn pipeline_layout_diagnostic_hash(&self) -> u64")
             .count(),
         1,
-        "pipeline-layout diagnostics must derive through one typed-layout accessor"
+        "pipeline-layout diagnostics must derive through one descriptor-backed accessor"
     );
     assert_eq!(
         flow_keys
             .matches("pub fn primary_bind_group_layout_diagnostic_hash(&self) -> u64")
             .count(),
         1,
-        "legacy group-0 provenance diagnostics must derive through the typed pipeline layout"
+        "legacy group-0 provenance diagnostics must derive through the complete descriptor"
     );
     assert_eq!(
         flow_keys
             .matches("pub fn render_pipeline_state_diagnostic_hash(&self) -> u64")
             .count(),
         1,
-        "render-state diagnostics must remain derived through one typed aggregate-state accessor"
+        "render-state diagnostics must remain derived through the complete descriptor"
     );
     for forbidden in [
         "pub shader_identity: String",
         "pub shader_revision: u64",
         "pub program_source_key: GpuProgramSourceKey",
         "pub program_source_revision: GpuProgramSourceRevision",
-        "ComputeSpecialization(String)",
+        "pub program_source_identity:",
+        "pub pipeline_variant:",
+        "FlowPassPipelineVariant",
+        "ComputeSpecialization(",
+        "pub pipeline_layout:",
+        "pub render_pipeline_state:",
         "bind_group_layout_signature_hash",
         "pub primary_bind_group_layout:",
         "pub vertex_layout_signature_hash: u64",
@@ -83,38 +86,60 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
     ] {
         assert!(
             !flow_keys.contains(forbidden),
-            "duplicate, runtime-only, or untyped pipeline correctness authority returned to FlowPassPipelineKey: {forbidden}"
+            "parallel, runtime-only, or untyped pipeline correctness authority returned to FlowPassPipelineKey: {forbidden}"
         );
     }
 }
 
 #[test]
-fn binding_resolution_consumes_admitted_source_identity() {
+fn binding_resolution_constructs_complete_descriptor_from_admitted_source() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bindings = read(&manifest_dir, BINDINGS);
 
     assert_eq!(
         bindings
-            .matches("program_source_identity: &GpuProgramSourceIdentity")
+            .matches("program_source: &GpuAdmittedProgramSource")
             .count(),
         1,
-        "binding resolution must accept one admitted owner-scoped source identity"
+        "binding resolution must accept the admitted source record itself"
     );
     assert_eq!(
         bindings
-            .matches("program_source_identity: program_source_identity.clone(),")
+            .matches("specialization: GpuSpecializationValueSet")
             .count(),
         1,
-        "the admitted owner-scoped identity must enter the pipeline key exactly once"
+        "binding resolution must accept one normalized typed specialization set"
+    );
+    assert_eq!(
+        bindings.matches("GpuProgramDescriptor::new(").count(),
+        2,
+        "compute and render paths must construct admitted generic program descriptors"
+    );
+    assert_eq!(
+        bindings.matches("GpuComputePipelineDescriptor::new(").count(),
+        1,
+        "compute passes must publish one complete generic compute descriptor"
+    );
+    assert_eq!(
+        bindings.matches("GpuRenderPipelineDescriptor::new(").count(),
+        1,
+        "render passes must publish one complete generic render descriptor"
     );
     assert_eq!(
         bindings
-            .matches("pipeline_variant: FlowPassPipelineVariant")
+            .matches("GpuProgramInterfaceDescriptor::new(")
             .count(),
         1,
-        "renderer-local pipeline variation must be passed independently"
+        "the admitted program interface must be derived once from the typed logical layout"
+    );
+    assert!(
+        bindings.contains("pipeline_descriptor,"),
+        "the complete generic descriptor must enter the renderer key exactly once"
     );
     for forbidden in [
+        "program_source_identity: &GpuProgramSourceIdentity",
+        "program_source_identity: program_source_identity.clone(),",
+        "pipeline_variant: FlowPassPipelineVariant",
         ".program_source_identity(",
         "GpuProgramSourceKey::new(",
         "shader_identity: &str",
@@ -124,7 +149,7 @@ fn binding_resolution_consumes_admitted_source_identity() {
     ] {
         assert!(
             !bindings.contains(forbidden),
-            "pre-admission or combined source identity authority returned to binding resolution: {forbidden}"
+            "pre-admission or parallel pipeline authority returned to binding resolution: {forbidden}"
         );
     }
 }
@@ -179,7 +204,7 @@ fn renderer_runtime_hashes_are_diagnostic_only() {
 }
 
 #[test]
-fn complete_pipeline_layout_is_typed_before_pipeline_key_publication() {
+fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flow_keys = read(&manifest_dir, FLOW_KEYS);
     let bindings = read(&manifest_dir, BINDINGS);
@@ -211,10 +236,9 @@ fn complete_pipeline_layout_is_typed_before_pipeline_key_publication() {
         1,
         "binding resolution must construct one complete logical typed pipeline layout"
     );
-    assert_eq!(
-        bindings.matches("pipeline_layout,").count(),
-        1,
-        "the complete typed pipeline layout must enter the pipeline key exactly once"
+    assert!(
+        bindings.contains("gpu_program_interface_for_layout(&layout)?"),
+        "complete program-interface truth must derive from the accepted typed layout"
     );
     for required in [
         "GpuBindingKey::try_new(1, texture_binding_identity)?",
@@ -249,15 +273,15 @@ fn complete_pipeline_layout_is_typed_before_pipeline_key_publication() {
         "group-0-only layout authority must not return to FlowPassPipelineKey"
     );
     assert!(
-        flow_keys.contains("diagnostic_hash(&self.pipeline_layout.group(0))"),
-        "legacy group-0 provenance diagnostics must be projections of the typed pipeline layout"
+        flow_keys.contains("diagnostic_hash(&self.pipeline_descriptor.layout().group(0))"),
+        "legacy group-0 provenance diagnostics must be projections of the complete descriptor"
     );
     assert_eq!(
         execute
             .matches("FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash")
             .count(),
         1,
-        "execution provenance must derive its group-0 diagnostic hash from the typed pipeline layout"
+        "execution provenance must derive its group-0 diagnostic hash from descriptor-backed layout truth"
     );
     assert!(
         !execute.contains(".bind_group_layout_signature_hash"),
@@ -275,7 +299,7 @@ fn complete_pipeline_layout_is_typed_before_pipeline_key_publication() {
 }
 
 #[test]
-fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
+fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flow_keys = read(&manifest_dir, FLOW_KEYS);
     let bindings = read(&manifest_dir, BINDINGS);
@@ -291,12 +315,11 @@ fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
             )
             .count(),
         1,
-        "binding resolution must normalize one aggregate render-pipeline state before publishing the key"
+        "binding resolution must normalize one aggregate render-pipeline state before publishing the descriptor"
     );
-    assert_eq!(
-        bindings.matches("render_pipeline_state,").count(),
-        1,
-        "the aggregate render-pipeline state must enter the pipeline key exactly once"
+    assert!(
+        bindings.contains("GpuRenderPipelineDescriptor::new("),
+        "aggregate render state must enter the complete generic render descriptor"
     );
     for required in [
         "GpuRenderPipelineStateDescriptor::new(",
@@ -314,6 +337,7 @@ fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
         );
     }
     for forbidden in [
+        "pub render_pipeline_state:",
         "pub vertex_input_state: GpuVertexInputStateDescriptor",
         "pub color_formats:",
         "pub depth_format:",
@@ -350,10 +374,11 @@ fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
     );
 
     assert!(
-        execute.contains("key.render_pipeline_state.as_ref()"),
-        "execution provenance must derive render-state diagnostics from the typed aggregate"
+        execute.contains("key.render_pipeline_state()"),
+        "execution provenance must derive render-state diagnostics from complete descriptor authority"
     );
     for forbidden in [
+        "key.render_pipeline_state.as_ref()",
         "key.color_formats",
         "key.depth_format",
         "key.sample_count",
@@ -375,6 +400,39 @@ fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
         assert!(
             !source.contains("vertex_layout_signature_hash"),
             "superseded naked vertex-layout hash authority returned in {path}"
+        );
+    }
+}
+
+#[test]
+fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let execute_passes = read(&manifest_dir, EXECUTE_PASSES);
+
+    for required in [
+        "compute_descriptor.program().source().canonical_wgsl()",
+        "render_descriptor.program().source().canonical_wgsl()",
+        "compute_descriptor.entry_point().as_str()",
+        "render_descriptor.entry_points().vertex().as_str()",
+        "wgpu_specialization_constants(compute_descriptor.specialization())",
+        "wgpu_specialization_constants(render_descriptor.specialization())",
+    ] {
+        assert!(
+            execute_passes.contains(required),
+            "current WGPU realization must consume complete G4B descriptor semantics: {required}"
+        );
+    }
+    for forbidden in [
+        "FlowPassPipelineVariant",
+        "pipeline_key.pipeline_variant",
+        "entry_point: Some(\"cs_main\")",
+        "entry_point: Some(\"vs_main\")",
+        "entry_point: Some(\"fs_main\")",
+        "ShaderSource::Wgsl(shader.source.into())",
+    ] {
+        assert!(
+            !execute_passes.contains(forbidden),
+            "parallel shader pipeline semantics bypassed complete G4B descriptor authority: {forbidden}"
         );
     }
 }
