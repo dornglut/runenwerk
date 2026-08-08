@@ -199,7 +199,6 @@ impl Renderer {
             Vec::new(),
             None,
             0,
-            0,
             FlowPrimitiveTopologyClass::None,
             runtime_resources,
         )?;
@@ -337,7 +336,6 @@ impl Renderer {
             true,
             vec![color_target.format],
             None,
-            0,
             0,
             FlowPrimitiveTopologyClass::TriangleList,
             runtime_resources,
@@ -521,7 +519,6 @@ impl Renderer {
             format!("graphics pass {}", plan.pass_id),
         )?;
 
-        let vertex_layout_signature_hash = plan.draw_buffers.vertex_layout_signature_hash();
         let raster_state_signature_hash = plan.raster_state.signature_hash();
         let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
             device,
@@ -538,7 +535,6 @@ impl Renderer {
             true,
             vec![color_target.format],
             depth_target.as_ref().map(|value| value.format),
-            vertex_layout_signature_hash,
             raster_state_signature_hash,
             primitive_topology_class(plan.raster_state.primitive_topology()),
             runtime_resources,
