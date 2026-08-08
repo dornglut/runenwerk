@@ -9,7 +9,7 @@ use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::{
     CompiledDrawBufferPlan, CompiledDrawSource, CompiledResourceRef,
 };
-use crate::plugins::render::pipelines::FlowPassPipelineVariant;
+use crate::plugins::render::pipelines::FlowPassPipelineDescriptor;
 use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderIndirectDrawArgsKind,
     RenderPrimitiveTopology, RenderRasterState, RenderShaderConstant, RenderVertexFormat,
@@ -156,7 +156,7 @@ impl Renderer {
             DEFAULT_COMPUTE_SHADER,
             "builtin:compute",
         );
-        let pipeline_variant = compute_pipeline_variant_from_constants(&pass.shader_constants)?;
+        let specialization = compute_specialization_from_constants(&pass.shader_constants)?;
         let dispatch = flow_inputs
             .projected_dispatch_workgroups
             .get(&pass.pass_id)
@@ -191,8 +191,8 @@ impl Renderer {
             pass.pass_id,
             FlowPassKind::Compute,
             pass.feature_id,
-            admitted_source.identity(),
-            pipeline_variant,
+            &admitted_source,
+            specialization,
             &pass.bindings,
             ShaderStages::COMPUTE,
             true,
@@ -200,13 +200,21 @@ impl Renderer {
             None,
             runtime_resources,
         )?;
+        let compute_descriptor = match &pipeline_key.pipeline_descriptor {
+            FlowPassPipelineDescriptor::Compute(descriptor) => descriptor,
+            FlowPassPipelineDescriptor::Render(_) => {
+                bail!("compute pass '{}' resolved a render pipeline descriptor", pass.pass_id)
+            }
+        };
 
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
                     device.create_shader_module(ShaderModuleDescriptor {
                         label: Some("engine_compiled_compute_shader"),
-                        source: ShaderSource::Wgsl(shader.source.into()),
+                        source: ShaderSource::Wgsl(
+                            compute_descriptor.program().source().canonical_wgsl().into(),
+                        ),
                     })
                 });
 
@@ -221,7 +229,8 @@ impl Renderer {
                 })
         });
 
-        let shader_constant_values = wgpu_specialization_constants(&pipeline_key.pipeline_variant);
+        let shader_constant_values =
+            wgpu_specialization_constants(compute_descriptor.specialization());
         let pipeline =
             self.flow_pipeline_cache
                 .get_or_create_compute_pipeline(pipeline_key.clone(), || {
@@ -229,7 +238,7 @@ impl Renderer {
                         label: Some("engine_compiled_compute_pipeline"),
                         layout: pipeline_layout.as_ref(),
                         module: &shader_module,
-                        entry_point: Some("cs_main"),
+                        entry_point: Some(compute_descriptor.entry_point().as_str()),
                         compilation_options: PipelineCompilationOptions {
                             constants: shader_constant_values.as_slice(),
                             ..PipelineCompilationOptions::default()
@@ -327,8 +336,8 @@ impl Renderer {
             plan.pass_id,
             FlowPassKind::Fullscreen,
             plan.feature_id,
-            admitted_source.identity(),
-            FlowPassPipelineVariant::Default,
+            &admitted_source,
+            empty_specialization_value_set()?,
             &plan.bindings,
             ShaderStages::VERTEX_FRAGMENT,
             true,
@@ -336,13 +345,21 @@ impl Renderer {
             None,
             runtime_resources,
         )?;
+        let render_descriptor = match &pipeline_key.pipeline_descriptor {
+            FlowPassPipelineDescriptor::Render(descriptor) => descriptor,
+            FlowPassPipelineDescriptor::Compute(_) => {
+                bail!("fullscreen pass '{}' resolved a compute pipeline descriptor", plan.pass_id)
+            }
+        };
 
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
                     device.create_shader_module(ShaderModuleDescriptor {
                         label: Some("engine_compiled_fullscreen_shader"),
-                        source: ShaderSource::Wgsl(shader.source.into()),
+                        source: ShaderSource::Wgsl(
+                            render_descriptor.program().source().canonical_wgsl().into(),
+                        ),
                     })
                 });
 
@@ -386,6 +403,12 @@ impl Renderer {
             ))
         };
 
+        let shader_constant_values =
+            wgpu_specialization_constants(render_descriptor.specialization());
+        let fragment_entry_point = render_descriptor
+            .entry_points()
+            .fragment()
+            .ok_or_else(|| anyhow::anyhow!("fullscreen render descriptor is missing fragment entry point"))?;
         let pipeline =
             self.flow_pipeline_cache
                 .get_or_create_render_pipeline(pipeline_key.clone(), || {
@@ -394,14 +417,20 @@ impl Renderer {
                         layout: pipeline_layout.as_ref(),
                         vertex: VertexState {
                             module: &shader_module,
-                            entry_point: Some("vs_main"),
-                            compilation_options: PipelineCompilationOptions::default(),
+                            entry_point: Some(render_descriptor.entry_points().vertex().as_str()),
+                            compilation_options: PipelineCompilationOptions {
+                                constants: shader_constant_values.as_slice(),
+                                ..PipelineCompilationOptions::default()
+                            },
                             buffers: &[],
                         },
                         fragment: Some(FragmentState {
                             module: &shader_module,
-                            entry_point: Some("fs_main"),
-                            compilation_options: PipelineCompilationOptions::default(),
+                            entry_point: Some(fragment_entry_point.as_str()),
+                            compilation_options: PipelineCompilationOptions {
+                                constants: shader_constant_values.as_slice(),
+                                ..PipelineCompilationOptions::default()
+                            },
                             targets: &[Some(ColorTargetState {
                                 format: color_target.format,
                                 blend: blend_state_for_color_format(color_target.format),
@@ -523,8 +552,8 @@ impl Renderer {
             plan.pass_id,
             FlowPassKind::Graphics,
             plan.feature_id,
-            admitted_source.identity(),
-            FlowPassPipelineVariant::Default,
+            &admitted_source,
+            empty_specialization_value_set()?,
             &plan.bindings,
             ShaderStages::VERTEX_FRAGMENT,
             true,
@@ -532,13 +561,21 @@ impl Renderer {
             depth_target.as_ref().map(|value| value.format),
             runtime_resources,
         )?;
+        let render_descriptor = match &pipeline_key.pipeline_descriptor {
+            FlowPassPipelineDescriptor::Render(descriptor) => descriptor,
+            FlowPassPipelineDescriptor::Compute(_) => {
+                bail!("graphics pass '{}' resolved a compute pipeline descriptor", plan.pass_id)
+            }
+        };
 
         let shader_module =
             self.flow_pipeline_cache
                 .get_or_create_shader_module(pipeline_key.clone(), || {
                     device.create_shader_module(ShaderModuleDescriptor {
                         label: Some("engine_compiled_graphics_shader"),
-                        source: ShaderSource::Wgsl(shader.source.into()),
+                        source: ShaderSource::Wgsl(
+                            render_descriptor.program().source().canonical_wgsl().into(),
+                        ),
                     })
                 });
 
@@ -585,6 +622,12 @@ impl Renderer {
         let vertex_attribute_sets = build_vertex_attribute_sets(&plan.draw_buffers);
         let vertex_buffer_layouts =
             build_vertex_buffer_layouts(&plan.draw_buffers, &vertex_attribute_sets);
+        let shader_constant_values =
+            wgpu_specialization_constants(render_descriptor.specialization());
+        let fragment_entry_point = render_descriptor
+            .entry_points()
+            .fragment()
+            .ok_or_else(|| anyhow::anyhow!("graphics render descriptor is missing fragment entry point"))?;
 
         let pipeline =
             self.flow_pipeline_cache
@@ -594,14 +637,20 @@ impl Renderer {
                         layout: pipeline_layout.as_ref(),
                         vertex: VertexState {
                             module: &shader_module,
-                            entry_point: Some("vs_main"),
-                            compilation_options: PipelineCompilationOptions::default(),
+                            entry_point: Some(render_descriptor.entry_points().vertex().as_str()),
+                            compilation_options: PipelineCompilationOptions {
+                                constants: shader_constant_values.as_slice(),
+                                ..PipelineCompilationOptions::default()
+                            },
                             buffers: &vertex_buffer_layouts,
                         },
                         fragment: Some(FragmentState {
                             module: &shader_module,
-                            entry_point: Some("fs_main"),
-                            compilation_options: PipelineCompilationOptions::default(),
+                            entry_point: Some(fragment_entry_point.as_str()),
+                            compilation_options: PipelineCompilationOptions {
+                                constants: shader_constant_values.as_slice(),
+                                ..PipelineCompilationOptions::default()
+                            },
                             targets: &[Some(ColorTargetState {
                                 format: color_target.format,
                                 blend: blend_state_for_policy(
@@ -1324,11 +1373,18 @@ fn render_vertex_step_mode_to_wgpu(value: RenderVertexStepMode) -> VertexStepMod
     }
 }
 
-fn compute_pipeline_variant_from_constants(
+fn empty_specialization_value_set() -> Result<GpuSpecializationValueSet> {
+    Ok(GpuSpecializationValueSet::new(
+        GpuSpecializationSchema::new([])?,
+        [],
+    )?)
+}
+
+fn compute_specialization_from_constants(
     constants: &[RenderShaderConstant],
-) -> Result<FlowPassPipelineVariant> {
+) -> Result<GpuSpecializationValueSet> {
     if constants.is_empty() {
-        return Ok(FlowPassPipelineVariant::Default);
+        return empty_specialization_value_set();
     }
 
     let mut declarations = Vec::with_capacity(constants.len());
@@ -1345,14 +1401,10 @@ fn compute_pipeline_variant_from_constants(
     }
 
     let schema = GpuSpecializationSchema::new(declarations)?;
-    let values = GpuSpecializationValueSet::new(schema, entries)?;
-    Ok(FlowPassPipelineVariant::ComputeSpecialization(values))
+    Ok(GpuSpecializationValueSet::new(schema, entries)?)
 }
 
-fn wgpu_specialization_constants(variant: &FlowPassPipelineVariant) -> Vec<(&str, f64)> {
-    let Some(values) = variant.specialization() else {
-        return Vec::new();
-    };
+fn wgpu_specialization_constants(values: &GpuSpecializationValueSet) -> Vec<(&str, f64)> {
     values
         .entries()
         .map(|entry| {
@@ -1451,17 +1503,17 @@ mod tests {
 
     #[test]
     fn typed_compute_specialization_normalizes_order_and_preserves_types() {
-        let first = compute_pipeline_variant_from_constants(&[
+        let first = compute_specialization_from_constants(&[
             RenderShaderConstant::u32("COUNT", 4),
             RenderShaderConstant::i32("OFFSET", -1),
         ])
         .unwrap();
-        let reordered = compute_pipeline_variant_from_constants(&[
+        let reordered = compute_specialization_from_constants(&[
             RenderShaderConstant::i32("OFFSET", -1),
             RenderShaderConstant::u32("COUNT", 4),
         ])
         .unwrap();
-        let signed_count = compute_pipeline_variant_from_constants(&[
+        let signed_count = compute_specialization_from_constants(&[
             RenderShaderConstant::i32("COUNT", 4),
             RenderShaderConstant::i32("OFFSET", -1),
         ])
@@ -1478,11 +1530,11 @@ mod tests {
     #[test]
     fn typed_compute_specialization_rejects_invalid_or_duplicate_keys() {
         assert!(
-            compute_pipeline_variant_from_constants(&[RenderShaderConstant::u32("a=1,b", 2)])
+            compute_specialization_from_constants(&[RenderShaderConstant::u32("a=1,b", 2)])
                 .is_err()
         );
         assert!(
-            compute_pipeline_variant_from_constants(&[
+            compute_specialization_from_constants(&[
                 RenderShaderConstant::u32("COUNT", 1),
                 RenderShaderConstant::u32("COUNT", 2),
             ])
