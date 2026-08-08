@@ -56,9 +56,13 @@ fn resolved_renderer_programs_admit_before_pipeline_key_and_wgpu_realization() {
             "{label} creates or obtains a WGPU shader module before pipeline-key resolution"
         );
         assert_eq!(
-            section.matches("admitted_source.identity(),").count(),
+            section.matches("&admitted_source,").count(),
             1,
-            "{label} must hand the retained admitted source identity into key construction exactly once"
+            "{label} must hand the retained admitted source record into complete descriptor construction exactly once"
+        );
+        assert!(
+            !section.contains("admitted_source.identity(),"),
+            "{label} must not collapse the retained admitted source record back to identity-only key authority"
         );
         assert_eq!(
             section.matches("ShaderSource::Wgsl(").count(),
@@ -90,19 +94,23 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
     );
     assert_eq!(
         compute
-            .matches("compute_pipeline_variant_from_constants(")
+            .matches("compute_specialization_from_constants(")
             .count(),
         1,
-        "compute execution must derive one typed renderer-local specialization variant"
+        "compute execution must derive one normalized typed G4B specialization value set"
     );
     assert_eq!(
-        compute.matches("pipeline_variant,").count(),
+        compute.matches("specialization,").count(),
         1,
-        "compute execution must pass specialization independently from admitted source identity"
+        "compute execution must pass typed specialization independently from the admitted source record"
     );
     assert!(
         !compute.contains("shader_pipeline_identity_with_constants("),
         "compute specialization must not be recombined with source identity"
+    );
+    assert!(
+        !compute.contains("FlowPassPipelineVariant"),
+        "renderer-local specialization wrapper authority must remain retired"
     );
     let key_resolution = unique_position(
         compute,
@@ -112,18 +120,18 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
     );
     let backend_constants = unique_position(
         compute,
-        "wgpu_specialization_constants(&pipeline_key.pipeline_variant)",
+        "wgpu_specialization_constants(compute_descriptor.specialization())",
         "compute",
-        "typed specialization backend lowering",
+        "complete-descriptor specialization backend lowering",
     );
     assert!(
         key_resolution < backend_constants,
-        "WGPU specialization constants must derive from the typed pipeline-key authority"
+        "WGPU specialization constants must derive from complete typed pipeline-descriptor authority"
     );
 
-    let variant_helper = section(
+    let specialization_helper = section(
         &execution,
-        "fn compute_pipeline_variant_from_constants(",
+        "fn compute_specialization_from_constants(",
         "fn wgpu_specialization_constants(",
         EXECUTE_PASSES,
     );
@@ -132,22 +140,22 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
         "GpuSpecializationDeclaration::new(",
         "GpuSpecializationSchema::new(",
         "GpuSpecializationValueSet::new(",
-        "FlowPassPipelineVariant::ComputeSpecialization(values)",
     ] {
         assert!(
-            variant_helper.contains(required),
+            specialization_helper.contains(required),
             "typed compute specialization lowering is missing {required:?}"
         );
     }
     for forbidden in [
+        "FlowPassPipelineVariant",
         "ComputeSpecialization(signature)",
         "format!(\"{name}={value}\")",
         ".join(\",\")",
         "|constants:",
     ] {
         assert!(
-            !variant_helper.contains(forbidden),
-            "string-encoded specialization authority returned: {forbidden}"
+            !specialization_helper.contains(forbidden),
+            "string-encoded or renderer-local specialization authority returned: {forbidden}"
         );
     }
 
@@ -158,8 +166,12 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
         EXECUTE_PASSES,
     );
     assert!(
-        backend_helper.contains("variant.specialization()"),
-        "backend specialization lowering must consume the typed variant"
+        backend_helper.contains("values: &GpuSpecializationValueSet"),
+        "backend specialization lowering must accept the typed G4B value set directly"
+    );
+    assert!(
+        backend_helper.contains("values.entries()"),
+        "backend specialization lowering must project constants from typed G4B entries"
     );
     assert!(
         !backend_helper.contains("RenderShaderConstant"),
