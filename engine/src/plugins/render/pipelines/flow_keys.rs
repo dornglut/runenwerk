@@ -192,9 +192,9 @@ mod tests {
         GpuSpecializationValueSet::new(schema, [GpuSpecializationEntry::new(key, value)]).unwrap()
     }
 
-    fn sampler_binding(group: u32, binding: u32) -> GpuBindingDeclaration {
+    fn sampler_binding(group: u64, binding: u64) -> GpuBindingDeclaration {
         GpuBindingDeclaration::new(
-            GpuBindingKey::try_new(group, u64::from(binding)).unwrap(),
+            GpuBindingKey::try_new(group, binding).unwrap(),
             GpuShaderStages::one(GpuShaderStage::Fragment),
             GpuBindingKind::sampler(GpuSamplerClass::Filtering),
             None,
