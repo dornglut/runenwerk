@@ -5,10 +5,8 @@ use crate::plugins::gpu::{
     GpuBindingKey, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuWorkResourceId,
 };
 use crate::plugins::render::RenderImportedTextureSemantic;
-use crate::plugins::render::api::{
-    ComputeDispatchDescriptor, RenderShaderBindingResource,
-};
 use crate::plugins::render::api::ids::RenderFeatureId;
+use crate::plugins::render::api::{ComputeDispatchDescriptor, RenderShaderBindingResource};
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::{
     RenderDrawDescriptor, RenderDrawSource, RenderFixedStepRegionId, RenderIndirectDrawArgsKind,
@@ -500,10 +498,12 @@ fn compile_shader_binding(
 ) -> CompiledBindingEntry {
     let key = binding.key();
     match binding.resource() {
-        RenderShaderBindingResource::SampledTexture(resource) => CompiledBindingEntry::SampledTexture {
-            key,
-            resource: compile_resource_ref(resource, resources),
-        },
+        RenderShaderBindingResource::SampledTexture(resource) => {
+            CompiledBindingEntry::SampledTexture {
+                key,
+                resource: compile_resource_ref(resource, resources),
+            }
+        }
         RenderShaderBindingResource::Sampler => CompiledBindingEntry::Sampler { key },
         RenderShaderBindingResource::StorageTexture { resource, access } => {
             CompiledBindingEntry::StorageTexture {
@@ -512,10 +512,12 @@ fn compile_shader_binding(
                 access: compiled_storage_texture_access(*access),
             }
         }
-        RenderShaderBindingResource::UniformBuffer(resource) => CompiledBindingEntry::UniformBuffer {
-            key,
-            resource: *resource,
-        },
+        RenderShaderBindingResource::UniformBuffer(resource) => {
+            CompiledBindingEntry::UniformBuffer {
+                key,
+                resource: *resource,
+            }
+        }
         RenderShaderBindingResource::StorageBuffer { resource, access } => {
             CompiledBindingEntry::StorageBuffer {
                 key,
