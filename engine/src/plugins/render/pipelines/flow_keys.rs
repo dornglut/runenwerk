@@ -42,16 +42,12 @@ pub struct FlowPassPipelineKey {
     pub pipeline_layout: GpuPipelineLayoutDescriptor,
     // Render passes retain one complete typed G4B state contract. Compute has no render state.
     pub render_pipeline_state: Option<GpuRenderPipelineStateDescriptor>,
-    // These renderer-local runtime partitions remain explicitly classified for a later deletion audit.
-    pub material_specialization_fragment_hash: u64,
-    pub view_signature_hash: u64,
-    pub feature_runtime_version: u64,
 }
 
 impl FlowPassPipelineKey {
     pub fn stats_key(&self) -> String {
         format!(
-            "flow:{}:{}:{:?}:{}:{}:{}:{}:{}:{}:{}",
+            "flow:{}:{}:{:?}:{}:{}:{}:{}",
             self.flow_id,
             self.pass_id,
             self.pass_kind,
@@ -59,9 +55,6 @@ impl FlowPassPipelineKey {
             self.pipeline_variant.diagnostic_label(),
             self.pipeline_layout_diagnostic_hash(),
             self.render_pipeline_state_diagnostic_hash(),
-            self.material_specialization_fragment_hash,
-            self.view_signature_hash,
-            self.feature_runtime_version,
         )
     }
 
@@ -216,14 +209,11 @@ mod tests {
             render_pipeline_state: Some(render_pipeline_state(
                 GpuVertexInputStateDescriptor::new([]).unwrap(),
             )),
-            material_specialization_fragment_hash: 3,
-            view_signature_hash: 4,
-            feature_runtime_version: 5,
         }
     }
 
     #[test]
-    fn stats_key_reflects_typed_layout_source_variant_render_material_and_view_signatures() {
+    fn stats_key_reflects_typed_source_variant_layout_and_render_state() {
         let identity = source_identity("shader");
         let key = sample_key(identity.clone());
         let same = sample_key(identity);
@@ -246,12 +236,6 @@ mod tests {
         let mut changed_render_state = key.clone();
         changed_render_state.render_pipeline_state =
             Some(render_pipeline_state(vertex_input_state()));
-        let mut changed_material = key.clone();
-        changed_material.material_specialization_fragment_hash = 99;
-        let mut changed_view = key.clone();
-        changed_view.view_signature_hash = 42;
-        let mut changed_feature_runtime = key.clone();
-        changed_feature_runtime.feature_runtime_version = 11;
 
         assert_eq!(key.stats_key(), same.stats_key());
         assert_ne!(key.stats_key(), changed_source.stats_key());
@@ -264,8 +248,5 @@ mod tests {
         assert_ne!(key.stats_key(), changed_group0_layout.stats_key());
         assert_ne!(key.stats_key(), changed_group1_layout.stats_key());
         assert_ne!(key.stats_key(), changed_render_state.stats_key());
-        assert_ne!(key.stats_key(), changed_material.stats_key());
-        assert_ne!(key.stats_key(), changed_view.stats_key());
-        assert_ne!(key.stats_key(), changed_feature_runtime.stats_key());
     }
 }
