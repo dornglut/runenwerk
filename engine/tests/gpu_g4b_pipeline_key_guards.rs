@@ -76,11 +76,14 @@ fn renderer_pipeline_key_uses_one_owner_scoped_g4b_source_identity() {
         "pub sample_count:",
         "pub primitive_topology_class:",
         "FlowPrimitiveTopologyClass",
+        "pub material_specialization_fragment_hash:",
+        "pub view_signature_hash:",
+        "pub feature_runtime_version:",
         "use wgpu::TextureFormat",
     ] {
         assert!(
             !flow_keys.contains(forbidden),
-            "duplicate or untyped pipeline correctness authority returned to FlowPassPipelineKey: {forbidden}"
+            "duplicate, runtime-only, or untyped pipeline correctness authority returned to FlowPassPipelineKey: {forbidden}"
         );
     }
 }
@@ -122,6 +125,55 @@ fn binding_resolution_consumes_admitted_source_identity() {
         assert!(
             !bindings.contains(forbidden),
             "pre-admission or combined source identity authority returned to binding resolution: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn renderer_runtime_hashes_are_diagnostic_only() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let flow_keys = read(&manifest_dir, FLOW_KEYS);
+    let bindings = read(&manifest_dir, BINDINGS);
+    let execute = read(&manifest_dir, EXECUTE);
+
+    for forbidden in [
+        "material_specialization_fragment_hash",
+        "view_signature_hash",
+        "feature_runtime_version",
+    ] {
+        assert!(
+            !flow_keys.contains(forbidden),
+            "renderer runtime diagnostic partition returned to pipeline-key identity: {forbidden}"
+        );
+    }
+    for forbidden in [
+        "material_specialization_fragment_hash(",
+        "hash_view_signature(",
+        "feature_runtime_version(",
+    ] {
+        assert!(
+            !bindings.contains(forbidden),
+            "binding resolution must not use renderer runtime diagnostics to partition backend artifacts: {forbidden}"
+        );
+    }
+    for required in [
+        "material_specialization_fragment_hash(",
+        "hash_view_signature(",
+        "feature_runtime_version(",
+    ] {
+        assert!(
+            execute.contains(required),
+            "renderer provenance must retain the runtime diagnostic projection: {required}"
+        );
+    }
+    for forbidden in [
+        "key.material_specialization_fragment_hash",
+        "key.view_signature_hash",
+        "key.feature_runtime_version",
+    ] {
+        assert!(
+            !execute.contains(forbidden),
+            "renderer provenance must not recover runtime diagnostics from pipeline-key authority: {forbidden}"
         );
     }
 }
