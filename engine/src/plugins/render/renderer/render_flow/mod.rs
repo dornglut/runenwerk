@@ -22,9 +22,7 @@ use crate::plugins::render::inspect::{
     ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry, RuntimeResourceReuse,
     resource_kind_name,
 };
-use crate::plugins::render::pipelines::{
-    FlowPassBindGroupKey, FlowPassKind, FlowPassPipelineKey, FlowPrimitiveTopologyClass,
-};
+use crate::plugins::render::pipelines::{FlowPassBindGroupKey, FlowPassKind, FlowPassPipelineKey};
 use crate::plugins::render::{RenderResourceDeclaration, current_runtime_gpu_capabilities};
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
