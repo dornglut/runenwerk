@@ -11,6 +11,7 @@ const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const FRAGMENTS: &str = "src/plugins/render/composition/fragments.rs";
 const FRAGMENT_VALIDATION: &str = "src/plugins/render/composition/fragment_validation.rs";
 const FRAGMENT_MERGE: &str = "src/plugins/render/graph/merge.rs";
+const FLOW_VALIDATION: &str = "src/plugins/render/graph/validation.rs";
 
 #[test]
 fn renderer_shader_binding_identity_is_explicit_and_never_vector_derived() {
@@ -144,6 +145,25 @@ fn fragment_composition_preserves_explicit_shader_binding_identity() {
     assert!(
         !merge_pass.contains("for write in &pass.write_textures"),
         "fragment merge must not reconstruct storage-texture slot identity from resource vectors"
+    );
+}
+
+#[test]
+fn render_flow_validates_explicit_shader_binding_identity() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let validation = read(&manifest_dir, FLOW_VALIDATION);
+
+    assert!(
+        validation.contains("fn validate_pass_shader_binding_identity("),
+        "direct RenderFlow validation must own explicit shader-binding identity checks"
+    );
+    assert!(
+        validation.contains("if key.group() != 0"),
+        "direct RenderFlow bindings must reject groups outside the current logical group-0 contract"
+    );
+    assert!(
+        validation.contains("if !keys.insert(key)"),
+        "direct RenderFlow bindings must reject duplicate typed keys before descriptor publication"
     );
 }
 

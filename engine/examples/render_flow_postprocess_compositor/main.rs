@@ -1,4 +1,5 @@
 use anyhow::Result;
+use engine::plugins::gpu::GpuBindingKey;
 use engine::plugins::render::{GpuStorage, RenderFlow};
 
 #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -7,6 +8,11 @@ struct BloomCell {
 }
 
 fn main() -> Result<()> {
+    // This planning example's established ping-pong pair occupies the two
+    // explicit group-0 storage slots.
+    let bloom_a_binding = binding_key(0);
+    let bloom_b_binding = binding_key(1);
+
     let flow = RenderFlow::new("post.flow")
         .with_surface_color()
         .expect("render flow authoring should succeed")
@@ -14,12 +20,12 @@ fn main() -> Result<()> {
         .expect("render flow authoring should succeed")
         .compute_pass("post.bloom_extract")
         .shader_asset("assets/shaders/bloom_extract.wgsl")
-        .bind_ping_pong_storage("post.bloom")
+        .bind_ping_pong_storage(bloom_a_binding, bloom_b_binding, "post.bloom")
         .dispatch([1, 1, 1])
         .finish()
         .fullscreen_pass("post.compose")
         .shader_asset("assets/shaders/blur_y.wgsl")
-        .bind_ping_pong_storage("post.bloom")
+        .bind_ping_pong_storage(bloom_a_binding, bloom_b_binding, "post.bloom")
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .finish()
@@ -32,4 +38,8 @@ fn main() -> Result<()> {
         .collect::<Vec<_>>();
     println!("postprocess flow order: {}", order.join(" -> "));
     Ok(())
+}
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("postprocess flow binding should fit GpuBindingKey")
 }

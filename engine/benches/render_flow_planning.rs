@@ -1,4 +1,5 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use engine::plugins::gpu::GpuBindingKey;
 use engine::plugins::render::features::world::sdf_raymarch::{
     RenderSdfDistanceMipLevel, RenderSdfRaymarchAccelerationReport, RenderSdfRaymarchCandidate,
     RenderSdfRaymarchCandidateList,
@@ -81,6 +82,10 @@ const BENCH_BOID_COUNT: u32 = 4096;
 const BENCH_GRID_CELLS_X: u32 = 64;
 const BENCH_GRID_CELLS_Y: u32 = 64;
 const BENCH_GRID_CELL_COUNT: u32 = BENCH_GRID_CELLS_X * BENCH_GRID_CELLS_Y;
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("benchmark binding should fit GpuBindingKey")
+}
 
 #[derive(Debug, Clone, Resource)]
 struct BenchState {
@@ -914,13 +919,17 @@ fn build_simple_fullscreen_flow() -> RenderFlow {
 }
 
 fn build_boids_flow() -> RenderFlow {
+    let compute_params_binding = binding_key(0);
+    let boids_a_binding = binding_key(1);
+    let boids_b_binding = binding_key(2);
+
     RenderFlow::new("bench.boids")
         .with_state::<BenchState>()
         .double_buffer_storage_array::<BoidInstance>("boids.instances", 4096)
         .expect("render flow authoring should succeed")
         .compute_pass("boids.simulate")
-        .bind_ping_pong_storage("boids.instances")
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, "boids.instances")
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_workgroups)
         .finish()
@@ -984,6 +993,18 @@ fn build_procedural_boids_flow() -> RenderFlow {
         stage_label(&grid_plan, BoundedUniformGrid2dStage::SimulateNeighbors).to_string();
     let publish_draw = stage_label(&grid_plan, BoundedUniformGrid2dStage::PublishDraw).to_string();
 
+    // These mirror `boids_compute.wgsl`: params at 0, the ping-pong pair at
+    // 1 and 2, then the four grid buffers. The procedural draw shader owns a
+    // separate group-0 uniform at binding 0.
+    let compute_params_binding = binding_key(0);
+    let boids_a_binding = binding_key(1);
+    let boids_b_binding = binding_key(2);
+    let grid_cell_counts_binding = binding_key(3);
+    let grid_cell_offsets_binding = binding_key(4);
+    let grid_scatter_cursors_binding = binding_key(5);
+    let grid_sorted_indices_binding = binding_key(6);
+    let draw_params_binding = binding_key(0);
+
     let instance_buffer = ProceduralBufferBinding::storage(
         boid_instances.a().clone(),
         procedural_boid_instance_layout(),
@@ -991,82 +1012,82 @@ fn build_procedural_boids_flow() -> RenderFlow {
 
     let flow = flow
         .compute_pass("bench.procedural_boids.seed_or_hold")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, boid_instances.name())
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .finish()
         .compute_pass(clear_counts.clone())
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, boid_instances.name())
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_grid_workgroups)
         .finish()
         .compute_pass(count_cells.clone())
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, boid_instances.name())
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .finish()
         .compute_pass(scan_counts.clone())
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, boid_instances.name())
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_scan_workgroups)
         .finish()
         .compute_pass(reset_cursors.clone())
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, boid_instances.name())
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_grid_workgroups)
         .finish()
         .compute_pass(scatter_indices.clone())
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, boid_instances.name())
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .finish()
         .compute_pass(simulate_neighbors.clone())
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, boid_instances.name())
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .finish()
         .compute_pass(publish_draw.clone())
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts)
-        .bind_storage(grid_cell_offsets)
-        .bind_storage(grid_scatter_cursors)
-        .bind_storage(grid_sorted_indices)
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(boids_a_binding, boids_b_binding, boid_instances.name())
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts)
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets)
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors)
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices)
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_boids_workgroups)
         .finish();
@@ -1084,7 +1105,10 @@ fn build_procedural_boids_flow() -> RenderFlow {
             )),
         )
         .expect("procedural boids builder should be valid")
-        .uniform_from_state_with_surface(BenchState::procedural_boids_draw_params)
+        .uniform_from_state_with_surface(
+            draw_params_binding,
+            BenchState::procedural_boids_draw_params,
+        )
         .expect("render flow authoring should succeed")
         .finish()
         .expect("procedural boids pass should lower");
@@ -1113,6 +1137,11 @@ fn stage_label(plan: &BoundedUniformGrid2dBuildPlan, stage: BoundedUniformGrid2d
 }
 
 fn build_compositor_flow() -> RenderFlow {
+    let compute_params_binding = binding_key(0);
+    let history_a_binding = binding_key(1);
+    let history_b_binding = binding_key(2);
+    let compose_params_binding = binding_key(0);
+
     RenderFlow::new("bench.compositor")
         .with_state::<BenchState>()
         .with_surface_color()
@@ -1121,14 +1150,14 @@ fn build_compositor_flow() -> RenderFlow {
         .double_buffer_storage_array::<BoidInstance>("post.history", 2048)
         .expect("render flow authoring should succeed")
         .compute_pass("post.extract")
-        .bind_ping_pong_storage("post.history")
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(history_a_binding, history_b_binding, "post.history")
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch([8, 8, 1])
         .finish()
         .fullscreen_pass("post.compose")
-        .bind_ping_pong_storage("post.history")
-        .uniform_from_state_with_surface(BenchState::compose_params)
+        .bind_ping_pong_storage(history_a_binding, history_b_binding, "post.history")
+        .uniform_from_state_with_surface(compose_params_binding, BenchState::compose_params)
         .expect("render flow authoring should succeed")
         .write_surface_color()
         .expect("render flow authoring should succeed")
@@ -1141,6 +1170,10 @@ fn build_compositor_flow() -> RenderFlow {
 }
 
 fn build_sdf_like_flow() -> RenderFlow {
+    let compute_params_binding = binding_key(0);
+    let field_binding = binding_key(1);
+    let compose_params_binding = binding_key(0);
+
     let (flow, field) = RenderFlow::new("bench.sdf")
         .storage_array::<BoidInstance>("sdf.field", 2048)
         .expect("render flow authoring should succeed");
@@ -1148,14 +1181,14 @@ fn build_sdf_like_flow() -> RenderFlow {
         .with_surface_color()
         .expect("render flow authoring should succeed")
         .compute_pass("sdf.compute")
-        .bind_storage(field.clone())
-        .uniform_from_state(BenchState::compute_params)
+        .bind_storage(field_binding, field.clone())
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch([8, 8, 1])
         .finish()
         .fullscreen_pass("sdf.compose")
-        .bind_storage(field)
-        .uniform_from_state_with_surface(BenchState::compose_params)
+        .bind_storage(field_binding, field)
+        .uniform_from_state_with_surface(compose_params_binding, BenchState::compose_params)
         .expect("render flow authoring should succeed")
         .write_surface_color()
         .expect("render flow authoring should succeed")
@@ -1165,6 +1198,11 @@ fn build_sdf_like_flow() -> RenderFlow {
 }
 
 fn build_mixed_ui_flow() -> RenderFlow {
+    let compute_params_binding = binding_key(0);
+    let cells_a_binding = binding_key(1);
+    let cells_b_binding = binding_key(2);
+    let compose_params_binding = binding_key(0);
+
     RenderFlow::new("bench.mixed_ui")
         .with_state::<BenchState>()
         .with_surface_color()
@@ -1173,14 +1211,14 @@ fn build_mixed_ui_flow() -> RenderFlow {
         .double_buffer_storage_array::<BoidInstance>("mixed.cells", 1024)
         .expect("render flow authoring should succeed")
         .compute_pass("mixed.simulate")
-        .bind_ping_pong_storage("mixed.cells")
-        .uniform_from_state(BenchState::compute_params)
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "mixed.cells")
+        .uniform_from_state(compute_params_binding, BenchState::compute_params)
         .expect("render flow authoring should succeed")
         .dispatch_from_state(BenchState::dispatch_workgroups)
         .finish()
         .fullscreen_pass("mixed.compose")
-        .bind_ping_pong_storage("mixed.cells")
-        .uniform_from_state_with_surface(BenchState::compose_params)
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "mixed.cells")
+        .uniform_from_state_with_surface(compose_params_binding, BenchState::compose_params)
         .expect("render flow authoring should succeed")
         .write_surface_color()
         .expect("render flow authoring should succeed")

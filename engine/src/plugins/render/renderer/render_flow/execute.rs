@@ -1237,7 +1237,11 @@ mod tests {
             .bind_storage(storage_binding, cells)
             .dispatch_from_state(TestState::dispatch)
             .finish()
-            .fixed_step_region(iteration_binding, "simulation", 4, ["step.a", "step.b"])
+            .fixed_step_region(
+                "simulation",
+                4,
+                [("step.a", iteration_binding), ("step.b", iteration_binding)],
+            )
             .expect("render flow authoring should succeed")
             .validate()
             .expect("fixed-step test flow should validate");

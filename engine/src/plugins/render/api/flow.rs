@@ -872,8 +872,12 @@ mod tests {
         RenderVertexFormat, compile_flow_plan,
     };
 
+    fn binding_in_group(group: u64, binding: u64) -> GpuBindingKey {
+        GpuBindingKey::try_new(group, binding).expect("test binding key should be valid")
+    }
+
     fn binding(index: u64) -> GpuBindingKey {
-        GpuBindingKey::try_new(0, index).expect("test binding key should be valid")
+        binding_in_group(0, index)
     }
 
     #[derive(Debug, Clone, Copy, GpuStorage)]
@@ -1195,6 +1199,45 @@ mod tests {
         assert!(err.issues.iter().any(|issue| matches!(
             issue,
             RenderFlowValidationIssue::FixedStepRegionPassesNotContiguous { .. }
+        )));
+    }
+
+    #[test]
+    fn shader_bindings_reject_duplicate_keys_and_non_primary_groups() {
+        let (flow, cells) = RenderFlow::new("test.binding.duplicate")
+            .with_state::<TestState>()
+            .storage_array::<TestCell>("test.cells", 4)
+            .expect("render flow authoring should succeed");
+        let duplicate_key = binding(0);
+        let duplicate = flow
+            .compute_pass("test.binding.duplicate")
+            .uniform_from_state(duplicate_key, TestState::params)
+            .expect("render flow authoring should succeed")
+            .bind_storage(duplicate_key, cells)
+            .dispatch_from_state(TestState::dispatch)
+            .finish()
+            .validation_report()
+            .expect_err("duplicate shader keys must fail flow validation");
+        assert!(duplicate.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::DuplicateShaderBindingKey { key, .. }
+                if *key == duplicate_key
+        )));
+
+        let non_primary_key = binding_in_group(1, 0);
+        let non_primary = RenderFlow::new("test.binding.non-primary")
+            .with_state::<TestState>()
+            .compute_pass("test.binding.non-primary")
+            .uniform_from_state(non_primary_key, TestState::params)
+            .expect("render flow authoring should succeed")
+            .dispatch_from_state(TestState::dispatch)
+            .finish()
+            .validation_report()
+            .expect_err("non-primary shader groups must fail flow validation");
+        assert!(non_primary.issues.iter().any(|issue| matches!(
+            issue,
+            RenderFlowValidationIssue::ShaderBindingOutsidePrimaryGroup { key, .. }
+                if *key == non_primary_key
         )));
     }
 

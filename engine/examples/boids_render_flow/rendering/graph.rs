@@ -1,6 +1,7 @@
 use crate::rendering::{
     BoidAgent, BoidsRenderState, DEFAULT_BOID_COUNT, DEFAULT_GRID_CELLS_X, DEFAULT_GRID_CELLS_Y,
 };
+use engine::plugins::gpu::GpuBindingKey;
 use engine::plugins::render::{
     BoundedUniformGrid2dBuildPlan, BoundedUniformGrid2dConfig, BoundedUniformGrid2dStage,
     ProceduralBufferBinding, ProceduralPassDescriptor, ProceduralTargetDescriptor, RenderFlow,
@@ -56,6 +57,20 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         stage_label(&grid_plan, BoundedUniformGrid2dStage::SimulateNeighbors).to_string();
     let publish_draw = stage_label(&grid_plan, BoundedUniformGrid2dStage::PublishDraw).to_string();
 
+    // `boids_compute.wgsl` declares these group-0 slots in this order. The
+    // fixed-step iteration uniform remains an explicit flow-owned slot after
+    // the shader's authored compute resources.
+    let compute_params_binding = binding_key(0);
+    let boid_instances_a_binding = binding_key(1);
+    let boid_instances_b_binding = binding_key(2);
+    let grid_cell_counts_binding = binding_key(3);
+    let grid_cell_offsets_binding = binding_key(4);
+    let grid_scatter_cursors_binding = binding_key(5);
+    let grid_sorted_indices_binding = binding_key(6);
+    let fixed_step_iteration_binding = binding_key(7);
+    // `boids_compose.wgsl` declares its draw parameters at group 0, binding 0.
+    let draw_params_binding = binding_key(0);
+
     let instance_layout = boid_instance_layout();
     let instance_buffer =
         ProceduralBufferBinding::storage(boid_instances.a().clone(), instance_layout);
@@ -63,90 +78,131 @@ pub(crate) fn build_render_flow() -> RenderFlow {
     let flow = flow
         .compute_pass("boids.seed_or_hold")
         .shader_asset("assets/shaders/boids_compute.wgsl")
-        .uniform_from_state(BoidsRenderState::seed_params)
+        .uniform_from_state(compute_params_binding, BoidsRenderState::seed_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
+        .bind_ping_pong_storage(
+            boid_instances_a_binding,
+            boid_instances_b_binding,
+            boid_instances.name(),
+        )
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
         .compute_pass(clear_counts.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
-        .uniform_from_state(BoidsRenderState::clear_counts_params)
+        .uniform_from_state(
+            compute_params_binding,
+            BoidsRenderState::clear_counts_params,
+        )
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
+        .bind_ping_pong_storage(
+            boid_instances_a_binding,
+            boid_instances_b_binding,
+            boid_instances.name(),
+        )
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_grid_workgroups)
         .finish()
         .compute_pass(count_cells.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
-        .uniform_from_state(BoidsRenderState::count_cells_params)
+        .uniform_from_state(compute_params_binding, BoidsRenderState::count_cells_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
+        .bind_ping_pong_storage(
+            boid_instances_a_binding,
+            boid_instances_b_binding,
+            boid_instances.name(),
+        )
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
         .compute_pass(scan_counts.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
-        .uniform_from_state(BoidsRenderState::scan_counts_params)
+        .uniform_from_state(compute_params_binding, BoidsRenderState::scan_counts_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
+        .bind_ping_pong_storage(
+            boid_instances_a_binding,
+            boid_instances_b_binding,
+            boid_instances.name(),
+        )
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_scan_workgroups)
         .finish()
         .compute_pass(reset_cursors.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
-        .uniform_from_state(BoidsRenderState::reset_cursors_params)
+        .uniform_from_state(
+            compute_params_binding,
+            BoidsRenderState::reset_cursors_params,
+        )
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
+        .bind_ping_pong_storage(
+            boid_instances_a_binding,
+            boid_instances_b_binding,
+            boid_instances.name(),
+        )
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_grid_workgroups)
         .finish()
         .compute_pass(scatter_indices.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
-        .uniform_from_state(BoidsRenderState::scatter_indices_params)
+        .uniform_from_state(
+            compute_params_binding,
+            BoidsRenderState::scatter_indices_params,
+        )
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
+        .bind_ping_pong_storage(
+            boid_instances_a_binding,
+            boid_instances_b_binding,
+            boid_instances.name(),
+        )
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
         .compute_pass(simulate_neighbors.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
-        .uniform_from_state(BoidsRenderState::compute_params)
+        .uniform_from_state(compute_params_binding, BoidsRenderState::compute_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts.clone())
-        .bind_storage(grid_cell_offsets.clone())
-        .bind_storage(grid_scatter_cursors.clone())
-        .bind_storage(grid_sorted_indices.clone())
+        .bind_ping_pong_storage(
+            boid_instances_a_binding,
+            boid_instances_b_binding,
+            boid_instances.name(),
+        )
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts.clone())
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
         .compute_pass(publish_draw.clone())
         .shader_asset("assets/shaders/boids_compute.wgsl")
-        .uniform_from_state(BoidsRenderState::publish_params)
+        .uniform_from_state(compute_params_binding, BoidsRenderState::publish_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage(boid_instances.name())
-        .bind_storage(grid_cell_counts)
-        .bind_storage(grid_cell_offsets)
-        .bind_storage(grid_scatter_cursors)
-        .bind_storage(grid_sorted_indices)
+        .bind_ping_pong_storage(
+            boid_instances_a_binding,
+            boid_instances_b_binding,
+            boid_instances.name(),
+        )
+        .bind_storage(grid_cell_counts_binding, grid_cell_counts)
+        .bind_storage(grid_cell_offsets_binding, grid_cell_offsets)
+        .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors)
+        .bind_storage(grid_sorted_indices_binding, grid_sorted_indices)
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish();
 
@@ -155,14 +211,14 @@ pub(crate) fn build_render_flow() -> RenderFlow {
             "boids.fixed_step",
             4,
             [
-                "boids.seed_or_hold",
-                clear_counts.as_str(),
-                count_cells.as_str(),
-                scan_counts.as_str(),
-                reset_cursors.as_str(),
-                scatter_indices.as_str(),
-                simulate_neighbors.as_str(),
-                publish_draw.as_str(),
+                ("boids.seed_or_hold", fixed_step_iteration_binding),
+                (clear_counts.as_str(), fixed_step_iteration_binding),
+                (count_cells.as_str(), fixed_step_iteration_binding),
+                (scan_counts.as_str(), fixed_step_iteration_binding),
+                (reset_cursors.as_str(), fixed_step_iteration_binding),
+                (scatter_indices.as_str(), fixed_step_iteration_binding),
+                (simulate_neighbors.as_str(), fixed_step_iteration_binding),
+                (publish_draw.as_str(), fixed_step_iteration_binding),
             ],
         )
         .expect("render flow authoring should succeed");
@@ -181,7 +237,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
             ),
         )
         .expect("boids.draw procedural builder should be valid")
-        .uniform_from_state_with_surface(BoidsRenderState::draw_params)
+        .uniform_from_state_with_surface(draw_params_binding, BoidsRenderState::draw_params)
         .expect("render flow authoring should succeed")
         .finish()
         .expect("boids.draw procedural pass should lower");
@@ -192,6 +248,10 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .finish()
         .validate()
         .expect("boids_render_flow should validate")
+}
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("boids shader binding should fit GpuBindingKey")
 }
 
 fn stage_label(plan: &BoundedUniformGrid2dBuildPlan, stage: BoundedUniformGrid2dStage) -> &str {
