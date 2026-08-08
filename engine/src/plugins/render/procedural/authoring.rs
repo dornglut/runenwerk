@@ -1,7 +1,7 @@
 use super::descriptors::ProceduralPassDescriptor;
-use super::lowering::{ProceduralPassLowering, lower_procedural_pass};
+use super::lowering::{ProceduralPassLowering, ProceduralUniformBinding, lower_procedural_pass};
 use super::validation::validate_procedural_pass;
-use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
+use crate::plugins::gpu::{GpuBindingKey, GpuBufferHandle, GpuWorkResourceId};
 use crate::plugins::render::api::{PassParamBinding, RenderFlow, RenderFlowAuthoringError};
 use crate::plugins::render::{
     DrawIndexedIndirectArgs, DrawIndirectArgs, GpuParams, IndirectDrawArgsBuffer,
@@ -12,7 +12,7 @@ use crate::plugins::render::{
 pub struct ProceduralPassBuilder {
     flow: RenderFlow,
     descriptor: ProceduralPassDescriptor,
-    uniform_bindings: Vec<PassParamBinding>,
+    uniform_bindings: Vec<ProceduralUniformBinding>,
     draw_source: ProceduralDrawSource,
 }
 
@@ -44,6 +44,7 @@ impl ProceduralPassBuilder {
 
     pub fn uniform_from_state<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         projection: F,
     ) -> Result<Self, RenderFlowAuthoringError>
     where
@@ -54,15 +55,19 @@ impl ProceduralPassBuilder {
         let uniform = self
             .flow
             .allocate_uniform_resource::<U>(self.descriptor.label.as_str())?;
-        self.uniform_bindings.push(PassParamBinding::uniform_state(
-            uniform.diagnostic_identity(),
-            projection,
-        ));
+        self.uniform_bindings.push(ProceduralUniformBinding {
+            key: binding,
+            projection: PassParamBinding::uniform_state(
+                uniform.diagnostic_identity(),
+                projection,
+            ),
+        });
         Ok(self)
     }
 
     pub fn uniform_from_state_with_surface<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         projection: F,
     ) -> Result<Self, RenderFlowAuthoringError>
     where
@@ -73,29 +78,37 @@ impl ProceduralPassBuilder {
         let uniform = self
             .flow
             .allocate_uniform_resource::<U>(self.descriptor.label.as_str())?;
-        self.uniform_bindings
-            .push(PassParamBinding::uniform_state_with_surface(
+        self.uniform_bindings.push(ProceduralUniformBinding {
+            key: binding,
+            projection: PassParamBinding::uniform_state_with_surface(
                 uniform.diagnostic_identity(),
                 projection,
-            ));
+            ),
+        });
         Ok(self)
     }
 
-    pub fn uniform_from_state_to<S, U, F>(mut self, handle: GpuBufferHandle, projection: F) -> Self
+    pub fn uniform_from_state_to<S, U, F>(
+        mut self,
+        binding: GpuBindingKey,
+        handle: GpuBufferHandle,
+        projection: F,
+    ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
-        self.uniform_bindings.push(PassParamBinding::uniform_state(
-            handle.diagnostic_identity(),
-            projection,
-        ));
+        self.uniform_bindings.push(ProceduralUniformBinding {
+            key: binding,
+            projection: PassParamBinding::uniform_state(handle.diagnostic_identity(), projection),
+        });
         self
     }
 
     pub fn uniform_from_state_with_surface_to<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         handle: GpuBufferHandle,
         projection: F,
     ) -> Self
@@ -104,11 +117,13 @@ impl ProceduralPassBuilder {
         U: GpuParams + Send + Sync + 'static,
         F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
-        self.uniform_bindings
-            .push(PassParamBinding::uniform_state_with_surface(
+        self.uniform_bindings.push(ProceduralUniformBinding {
+            key: binding,
+            projection: PassParamBinding::uniform_state_with_surface(
                 handle.diagnostic_identity(),
                 projection,
-            ));
+            ),
+        });
         self
     }
 
