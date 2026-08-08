@@ -185,6 +185,7 @@ fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
     let bindings = read(&manifest_dir, BINDINGS);
     let execution_plan = read(&manifest_dir, EXECUTION_PLAN);
     let execute_passes = read(&manifest_dir, EXECUTE_PASSES);
+    let execute = read(&manifest_dir, EXECUTE);
     let render_flow_mod = read(&manifest_dir, RENDER_FLOW_MOD);
 
     assert_eq!(
@@ -251,6 +252,23 @@ fn render_pipeline_state_is_typed_before_pipeline_key_publication() {
         !execution_plan.contains("pub fn signature_hash(self)"),
         "compiled raster state must not retain a naked hash producer after aggregate-state adoption"
     );
+
+    assert!(
+        execute.contains("key.render_pipeline_state.as_ref()"),
+        "execution provenance must derive render-state diagnostics from the typed aggregate"
+    );
+    for forbidden in [
+        "key.color_formats",
+        "key.depth_format",
+        "key.sample_count",
+        "key.primitive_topology_class",
+        "FlowPrimitiveTopologyClass",
+    ] {
+        assert!(
+            !execute.contains(forbidden),
+            "execution provenance returned to removed raw render-state key authority: {forbidden}"
+        );
+    }
 
     for (path, source) in [
         (FLOW_KEYS, flow_keys.as_str()),
