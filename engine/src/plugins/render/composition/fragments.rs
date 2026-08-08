@@ -1,3 +1,4 @@
+use crate::plugins::gpu::GpuBindingKey;
 use crate::plugins::render::{
     RenderDrawDescriptor, RenderPassKind, RenderPassViewScope, RenderTargetAliasKind,
     RenderTextureTargetFormat,
@@ -431,13 +432,45 @@ impl RenderFragmentShaderReference {
     }
 }
 
+/// Explicit shader-slot ownership for fragment-authored texture resources.
+///
+/// Resource-role vectors on the pass remain composition/access semantics only;
+/// `GpuBindingKey` values here are the exclusive shader binding identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderFragmentShaderBinding {
+    SampledTexture {
+        texture_binding: GpuBindingKey,
+        sampler_binding: GpuBindingKey,
+        resource: RenderFragmentLabelRef,
+    },
+    StorageTexture {
+        binding: GpuBindingKey,
+        resource: RenderFragmentLabelRef,
+    },
+}
+
+impl RenderFragmentShaderBinding {
+    pub fn resource(&self) -> &RenderFragmentLabelRef {
+        match self {
+            Self::SampledTexture { resource, .. } | Self::StorageTexture { resource, .. } => {
+                resource
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderFragmentPassDescriptor {
     pub label: String,
     pub kind: RenderFragmentPassKind,
     pub view_scope: RenderPassViewScope,
     pub shader: Option<RenderFragmentShaderReference>,
+    pub shader_bindings: Vec<RenderFragmentShaderBinding>,
+    /// Resource-role truth for fragment validation/composition. Shader slot
+    /// identity lives exclusively in `shader_bindings`.
     pub sample_textures: Vec<RenderFragmentLabelRef>,
+    /// Resource-role truth for fragment validation/composition. Shader slot
+    /// identity lives exclusively in `shader_bindings`.
     pub write_textures: Vec<RenderFragmentLabelRef>,
     pub color_outputs: Vec<RenderFragmentLabelRef>,
     pub write_surface_color: bool,
@@ -460,6 +493,7 @@ impl RenderFragmentPassDescriptor {
             kind,
             view_scope: RenderPassViewScope::AllViews,
             shader: None,
+            shader_bindings: Vec::new(),
             sample_textures: Vec::new(),
             write_textures: Vec::new(),
             color_outputs: Vec::new(),
@@ -521,15 +555,32 @@ impl RenderFragmentPassDescriptor {
         self
     }
 
-    pub fn sample_local_texture(mut self, label: impl Into<String>) -> Self {
-        self.sample_textures
-            .push(RenderFragmentLabelRef::local(label));
+    pub fn sample_local_texture(
+        mut self,
+        texture_binding: GpuBindingKey,
+        sampler_binding: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
+        let resource = RenderFragmentLabelRef::local(label);
+        self.sample_textures.push(resource.clone());
+        self.shader_bindings
+            .push(RenderFragmentShaderBinding::SampledTexture {
+                texture_binding,
+                sampler_binding,
+                resource,
+            });
         self
     }
 
-    pub fn write_local_texture(mut self, label: impl Into<String>) -> Self {
-        self.write_textures
-            .push(RenderFragmentLabelRef::local(label));
+    pub fn write_local_texture(
+        mut self,
+        binding: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
+        let resource = RenderFragmentLabelRef::local(label);
+        self.write_textures.push(resource.clone());
+        self.shader_bindings
+            .push(RenderFragmentShaderBinding::StorageTexture { binding, resource });
         self
     }
 
