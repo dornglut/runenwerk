@@ -2,8 +2,81 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const PASS_GRAPH: &str = "src/plugins/render/graph/pass_graph.rs";
+const PASS_BINDINGS: &str = "src/plugins/render/api/bindings.rs";
+const EXECUTION_PLAN: &str = "src/plugins/render/graph/execution_plan.rs";
+const RUNTIME_BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings.rs";
+const PRIMITIVE_PLAN: &str = "src/plugins/render/gpu_primitives/plan.rs";
 const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
+
+#[test]
+fn renderer_shader_binding_identity_is_explicit_and_never_vector_derived() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let authoring = read(&manifest_dir, PASS_BINDINGS);
+    let execution = read(&manifest_dir, EXECUTION_PLAN);
+    let runtime = read(&manifest_dir, RUNTIME_BINDINGS);
+    let primitives = read(&manifest_dir, PRIMITIVE_PLAN);
+
+    assert!(
+        authoring.contains("key: GpuBindingKey"),
+        "render shader bindings must retain typed G4B binding identity at the authoring boundary"
+    );
+    assert!(
+        authoring.contains("pub const fn key(&self) -> GpuBindingKey"),
+        "render shader bindings must expose their typed key without reconstructing it downstream"
+    );
+
+    let compile_bindings = section(
+        &execution,
+        "fn compile_pass_bindings(",
+        "fn collect_storage_usage(",
+        EXECUTION_PLAN,
+    );
+    assert!(
+        compile_bindings.contains("entries.sort_by_key(CompiledBindingEntry::key)"),
+        "compiled bind-group entries must normalize by retained typed binding key"
+    );
+    assert!(
+        !compile_bindings.contains(".enumerate()"),
+        "compiled shader binding identity must never derive from vector position"
+    );
+    assert!(
+        compile_bindings.contains("let key = binding.key();"),
+        "compiled shader bindings must retain the authoring key"
+    );
+
+    let runtime_bindings = section(
+        &runtime,
+        "pub(super) fn resolve_compiled_bind_group",
+        "fn gpu_pipeline_layout_for_pass(",
+        RUNTIME_BINDINGS,
+    );
+    assert!(
+        !runtime_bindings.contains(".enumerate()"),
+        "runtime G4B declarations and WGPU bind-group entries must not rebuild binding identity from vector position"
+    );
+    assert!(
+        runtime_bindings.contains("value.key,"),
+        "runtime G4B declarations must use the retained typed key"
+    );
+    assert!(
+        runtime_bindings.contains("binding: value.key.binding()"),
+        "WGPU bind-group entries must project their binding index from retained typed authority"
+    );
+
+    assert!(
+        primitives.contains("shader_bindings: Vec<GpuPrimitiveShaderBinding>"),
+        "generated GPU primitive stages must retain explicit shader binding records"
+    );
+    assert!(
+        primitives.contains("GpuBindingKey::try_new(0, binding)"),
+        "built-in primitive WGSL bindings must be encoded as typed keys at stage construction"
+    );
+    assert!(
+        !primitives.contains("fn stage_binding_resources("),
+        "primitive runtime proof must not reconstruct shader bindings from read/write vector order"
+    );
+}
 
 #[test]
 fn resolved_renderer_programs_admit_before_pipeline_key_and_wgpu_realization() {
