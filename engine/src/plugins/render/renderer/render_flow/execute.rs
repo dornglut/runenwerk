@@ -863,7 +863,7 @@ impl Renderer {
                             capture_point: RenderCapturePointIdentity {
                                 flow_id: "frame".to_string(),
                                 pass_id: "frame.final".to_string(),
-                                stage,
+                                stage: CaptureStage::Final,
                                 resource_id: SURFACE_COLOR_RESOURCE_LABEL.to_string(),
                                 texture_class: selector.texture_class,
                             },
