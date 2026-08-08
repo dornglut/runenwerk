@@ -292,21 +292,19 @@ impl Renderer {
                                             FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash,
                                         )
                                         .unwrap_or_default(),
-                                    material_specialization_fragment_hash: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.material_specialization_fragment_hash)
-                                        .unwrap_or_default(),
-                                    view_signature_hash: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.view_signature_hash)
-                                        .unwrap_or_default(),
-                                    feature_runtime_version: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.feature_runtime_version)
-                                        .unwrap_or_default(),
+                                    material_specialization_fragment_hash:
+                                        material_specialization_fragment_hash(
+                                            &invocation_packet,
+                                            execution_pass_feature_id(pass),
+                                        ),
+                                    view_signature_hash: hash_view_signature(
+                                        invocation_packet.view_id.as_str(),
+                                        invocation_packet.surface_size,
+                                    ),
+                                    feature_runtime_version: feature_runtime_version(
+                                        &invocation_packet,
+                                        execution_pass_feature_id(pass),
+                                    ),
                                     color_formats: evidence
                                         .pipeline_key
                                         .as_ref()
