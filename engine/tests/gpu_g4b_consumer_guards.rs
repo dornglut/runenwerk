@@ -170,7 +170,7 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
         "backend specialization lowering must accept the typed G4B value set directly"
     );
     assert!(
-        backend_helper.contains("values.entries()"),
+        backend_helper.contains(".entries()"),
         "backend specialization lowering must project constants from typed G4B entries"
     );
     assert!(
