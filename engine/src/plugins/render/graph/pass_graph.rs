@@ -1,6 +1,8 @@
 use crate::plugins::gpu::{GpuSpecializationValue, GpuWorkResourceId};
 use crate::plugins::render::api::ids::RenderFeatureId;
-use crate::plugins::render::api::{ComputeDispatchDescriptor, PassParamBinding};
+use crate::plugins::render::api::{
+    ComputeDispatchDescriptor, PassParamBinding, RenderShaderBinding,
+};
 use crate::plugins::render::{GpuParams, GpuStorage, RenderPassId, ShaderHandle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -449,7 +451,10 @@ pub struct RenderPassNode {
     pub shape_intent: RenderPassShapeIntent,
     pub shader: Option<RenderShaderReference>,
     pub shader_constants: Vec<RenderShaderConstant>,
-    /// Render-owned storage binding semantics. Generic access and hazard truth
+    /// Explicit shader-visible binding identity. `GpuBindingKey` is authoritative;
+    /// the resource/hazard vectors below must not be used to reconstruct slots.
+    pub shader_bindings: Vec<RenderShaderBinding>,
+    /// Render-owned storage hazard semantics. Generic access and hazard truth
     /// is derived immediately by the RunenGPU work adapter.
     pub storage_reads: Vec<GpuWorkResourceId>,
     pub storage_writes: Vec<GpuWorkResourceId>,
@@ -497,6 +502,7 @@ impl RenderPassNode {
             shape_intent: RenderPassShapeIntent::Default,
             shader: None,
             shader_constants: Vec::new(),
+            shader_bindings: Vec::new(),
             storage_reads: Vec::new(),
             storage_writes: Vec::new(),
             color_outputs: Vec::new(),
