@@ -1,6 +1,6 @@
 use crate::plugins::gpu::{
-    GpuBindGroupLayoutDescriptor, GpuProgramSourceIdentity, GpuRenderPipelineStateDescriptor,
-    GpuSpecializationValueSet,
+    GpuBindGroupLayoutDescriptor, GpuPipelineLayoutDescriptor, GpuProgramSourceIdentity,
+    GpuRenderPipelineStateDescriptor, GpuSpecializationValueSet,
 };
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
 use std::hash::{Hash, Hasher};
@@ -38,12 +38,11 @@ pub struct FlowPassPipelineKey {
     pub feature_id: Option<RenderFeatureId>,
     pub program_source_identity: GpuProgramSourceIdentity,
     pub pipeline_variant: FlowPassPipelineVariant,
-    // Current renderer group 0. Material group 1 remains a separately classified migration.
-    pub primary_bind_group_layout: GpuBindGroupLayoutDescriptor,
+    // Complete logical shader-visible bind-group layout for this pass. Backend realization remains G4C.
+    pub pipeline_layout: GpuPipelineLayoutDescriptor,
     // Render passes retain one complete typed G4B state contract. Compute has no render state.
     pub render_pipeline_state: Option<GpuRenderPipelineStateDescriptor>,
-    // Core owns the full pipeline key type. Feature domains can contribute a
-    // specialization fragment hash that is folded into this key.
+    // These renderer-local runtime partitions remain explicitly classified for a later deletion audit.
     pub material_specialization_fragment_hash: u64,
     pub view_signature_hash: u64,
     pub feature_runtime_version: u64,
@@ -58,7 +57,7 @@ impl FlowPassPipelineKey {
             self.pass_kind,
             self.program_source_identity.diagnostic_label(),
             self.pipeline_variant.diagnostic_label(),
-            self.primary_bind_group_layout_diagnostic_hash(),
+            self.pipeline_layout_diagnostic_hash(),
             self.render_pipeline_state_diagnostic_hash(),
             self.material_specialization_fragment_hash,
             self.view_signature_hash,
@@ -66,8 +65,12 @@ impl FlowPassPipelineKey {
         )
     }
 
+    pub fn pipeline_layout_diagnostic_hash(&self) -> u64 {
+        diagnostic_hash(&self.pipeline_layout)
+    }
+
     pub fn primary_bind_group_layout_diagnostic_hash(&self) -> u64 {
-        diagnostic_hash(&self.primary_bind_group_layout)
+        diagnostic_hash(&self.pipeline_layout.group(0))
     }
 
     pub fn render_pipeline_state_diagnostic_hash(&self) -> u64 {
@@ -133,10 +136,17 @@ mod tests {
         )
     }
 
-    fn primary_layout(
+    fn bind_group_layout(
+        group: u32,
         bindings: impl IntoIterator<Item = GpuBindingDeclaration>,
     ) -> GpuBindGroupLayoutDescriptor {
-        GpuBindGroupLayoutDescriptor::new(0, bindings).unwrap()
+        GpuBindGroupLayoutDescriptor::new(group, bindings).unwrap()
+    }
+
+    fn pipeline_layout(
+        groups: impl IntoIterator<Item = GpuBindGroupLayoutDescriptor>,
+    ) -> GpuPipelineLayoutDescriptor {
+        GpuPipelineLayoutDescriptor::new(groups).unwrap()
     }
 
     fn vertex_input_state() -> GpuVertexInputStateDescriptor {
@@ -182,9 +192,9 @@ mod tests {
         GpuSpecializationValueSet::new(schema, [GpuSpecializationEntry::new(key, value)]).unwrap()
     }
 
-    fn sampler_binding() -> GpuBindingDeclaration {
+    fn sampler_binding(group: u32, binding: u32) -> GpuBindingDeclaration {
         GpuBindingDeclaration::new(
-            GpuBindingKey::try_new(0, 0).unwrap(),
+            GpuBindingKey::try_new(group, u64::from(binding)).unwrap(),
             GpuShaderStages::one(GpuShaderStage::Fragment),
             GpuBindingKind::sampler(GpuSamplerClass::Filtering),
             None,
@@ -202,7 +212,7 @@ mod tests {
             feature_id: None,
             program_source_identity,
             pipeline_variant: FlowPassPipelineVariant::Default,
-            primary_bind_group_layout: primary_layout([]),
+            pipeline_layout: pipeline_layout([]),
             render_pipeline_state: Some(render_pipeline_state(
                 GpuVertexInputStateDescriptor::new([]).unwrap(),
             )),
@@ -227,8 +237,12 @@ mod tests {
         changed_variant_type.pipeline_variant = FlowPassPipelineVariant::ComputeSpecialization(
             specialization("COUNT", GpuSpecializationValue::I32(4)),
         );
-        let mut changed_layout = key.clone();
-        changed_layout.primary_bind_group_layout = primary_layout([sampler_binding()]);
+        let mut changed_group0_layout = key.clone();
+        changed_group0_layout.pipeline_layout =
+            pipeline_layout([bind_group_layout(0, [sampler_binding(0, 0)])]);
+        let mut changed_group1_layout = key.clone();
+        changed_group1_layout.pipeline_layout =
+            pipeline_layout([bind_group_layout(1, [sampler_binding(1, 0)])]);
         let mut changed_render_state = key.clone();
         changed_render_state.render_pipeline_state =
             Some(render_pipeline_state(vertex_input_state()));
@@ -247,7 +261,8 @@ mod tests {
             changed_variant.stats_key(),
             changed_variant_type.stats_key()
         );
-        assert_ne!(key.stats_key(), changed_layout.stats_key());
+        assert_ne!(key.stats_key(), changed_group0_layout.stats_key());
+        assert_ne!(key.stats_key(), changed_group1_layout.stats_key());
         assert_ne!(key.stats_key(), changed_render_state.stats_key());
         assert_ne!(key.stats_key(), changed_material.stats_key());
         assert_ne!(key.stats_key(), changed_view.stats_key());
