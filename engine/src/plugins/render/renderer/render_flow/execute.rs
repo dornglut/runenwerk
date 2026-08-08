@@ -308,7 +308,7 @@ impl Renderer {
                                     color_formats: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .and_then(|key| key.render_pipeline_state.as_ref())
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
                                         .and_then(|state| state.fragment_output())
                                         .map(|output| {
                                             output
@@ -320,19 +320,19 @@ impl Renderer {
                                     depth_format: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .and_then(|key| key.render_pipeline_state.as_ref())
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
                                         .and_then(|state| state.depth_stencil())
                                         .map(|depth| depth.format()),
                                     sample_count: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .and_then(|key| key.render_pipeline_state.as_ref())
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
                                         .map(|state| state.multisample().sample_count())
                                         .unwrap_or(1),
                                     primitive_topology: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .and_then(|key| key.render_pipeline_state.as_ref())
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
                                         .map(|state| state.primitive().topology()),
                                     material_binding,
                                     render_targets: pass_resource_truth.render_targets,
