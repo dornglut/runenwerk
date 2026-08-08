@@ -984,7 +984,8 @@ fn add_shader_binding(
     key: GpuBindingKey,
     resource: RenderShaderBindingResource,
 ) {
-    pass.shader_bindings.push(RenderShaderBinding::new(key, resource));
+    pass.shader_bindings
+        .push(RenderShaderBinding::new(key, resource));
 }
 
 fn add_uniform_state_binding<S, U, F>(
