@@ -981,7 +981,7 @@ fn collect_binding_alias_requirements(
 ) {
     for entry in entries {
         match entry {
-            CompiledBindingEntry::SampledTexture { resource } => {
+            CompiledBindingEntry::SampledTexture { resource, .. } => {
                 collect_alias_requirement(resource, AliasUseRole::SampledTexture, requirements);
             }
             CompiledBindingEntry::StorageTexture { resource, .. } => {
@@ -991,7 +991,9 @@ fn collect_binding_alias_requirements(
                     requirements,
                 );
             }
-            CompiledBindingEntry::StorageBuffer { resource, access } => {
+            CompiledBindingEntry::StorageBuffer {
+                resource, access, ..
+            } => {
                 if matches!(
                     access,
                     CompiledStorageAccess::ReadOnly
@@ -1001,7 +1003,7 @@ fn collect_binding_alias_requirements(
                     collect_alias_requirement(resource, AliasUseRole::StorageBuffer, requirements);
                 }
             }
-            CompiledBindingEntry::Sampler | CompiledBindingEntry::UniformBuffer { .. } => {}
+            CompiledBindingEntry::Sampler { .. } | CompiledBindingEntry::UniformBuffer { .. } => {}
         }
     }
 }
@@ -1271,24 +1273,29 @@ fn hash_bindings(bindings: &CompiledPassBindings, hasher: &mut impl Hasher) {
     }
     bindings.bind_group.entries.len().hash(hasher);
     for entry in &bindings.bind_group.entries {
+        entry.key().hash(hasher);
         match entry {
-            CompiledBindingEntry::SampledTexture { resource } => {
+            CompiledBindingEntry::SampledTexture { resource, .. } => {
                 "sampled_texture".hash(hasher);
                 hash_compiled_resource_ref(Some(resource), hasher);
             }
-            CompiledBindingEntry::Sampler => {
+            CompiledBindingEntry::Sampler { .. } => {
                 "sampler".hash(hasher);
             }
-            CompiledBindingEntry::StorageTexture { resource, access } => {
+            CompiledBindingEntry::StorageTexture {
+                resource, access, ..
+            } => {
                 "storage_texture".hash(hasher);
                 hash_compiled_resource_ref(Some(resource), hasher);
                 hash_storage_access(*access, hasher);
             }
-            CompiledBindingEntry::UniformBuffer { resource } => {
+            CompiledBindingEntry::UniformBuffer { resource, .. } => {
                 "uniform_buffer".hash(hasher);
                 resource.hash(hasher);
             }
-            CompiledBindingEntry::StorageBuffer { resource, access } => {
+            CompiledBindingEntry::StorageBuffer {
+                resource, access, ..
+            } => {
                 "storage_buffer".hash(hasher);
                 hash_compiled_resource_ref(Some(resource), hasher);
                 hash_storage_access(*access, hasher);

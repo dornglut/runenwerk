@@ -1,9 +1,9 @@
+use crate::plugins::gpu::{GpuPrimitiveTopology, GpuTextureFormat};
 use crate::plugins::render::inspect::RenderCapturePointIdentity;
-use crate::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
+use crate::plugins::render::pipelines::FlowPassKind;
 use crate::plugins::render::{
     RenderFragmentMergeReport, RenderFragmentProvenanceElementKind, RenderFragmentProvenanceRecord,
 };
-use wgpu::TextureFormat;
 
 #[derive(Debug, Clone, Default, ecs::Component, ecs::Resource)]
 pub struct RenderPassProvenanceState {
@@ -37,10 +37,10 @@ pub struct RenderPassProvenanceRecord {
     pub material_specialization_fragment_hash: u64,
     pub view_signature_hash: u64,
     pub feature_runtime_version: u64,
-    pub color_formats: Vec<TextureFormat>,
-    pub depth_format: Option<TextureFormat>,
+    pub color_formats: Vec<GpuTextureFormat>,
+    pub depth_format: Option<GpuTextureFormat>,
     pub sample_count: u32,
-    pub primitive_topology_class: FlowPrimitiveTopologyClass,
+    pub primitive_topology: Option<GpuPrimitiveTopology>,
     pub material_binding: RenderPassMaterialBindingEvidence,
     pub render_targets: Vec<String>,
     pub sampled_textures: Vec<String>,

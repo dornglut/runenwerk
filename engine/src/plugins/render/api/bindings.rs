@@ -1,4 +1,6 @@
-use crate::plugins::gpu::GpuWorkResourceId;
+use crate::plugins::gpu::{
+    GpuBindingKey, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuWorkResourceId,
+};
 use crate::plugins::render::graph::{RenderPassNode, ResourceGraph};
 use crate::plugins::render::renderer::frame_bindings::RenderFrameDataRegistry;
 use crate::plugins::render::{GpuParams, GpuUniform, RenderPassId};
@@ -8,6 +10,58 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use thiserror::Error;
+
+/// Explicit shader-visible resource identity for one render pass.
+///
+/// `GpuBindingKey` is the only shader slot identity. Resource hazard/access
+/// lists and uniform projections remain separate execution semantics and must
+/// never be used to reconstruct binding numbers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderShaderBinding {
+    key: GpuBindingKey,
+    resource: RenderShaderBindingResource,
+}
+
+impl RenderShaderBinding {
+    pub const fn new(key: GpuBindingKey, resource: RenderShaderBindingResource) -> Self {
+        Self { key, resource }
+    }
+
+    pub const fn key(&self) -> GpuBindingKey {
+        self.key
+    }
+
+    pub const fn resource(&self) -> &RenderShaderBindingResource {
+        &self.resource
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderShaderBindingResource {
+    SampledTexture(GpuWorkResourceId),
+    Sampler,
+    StorageTexture {
+        resource: GpuWorkResourceId,
+        access: GpuStorageTextureAccess,
+    },
+    UniformBuffer(GpuWorkResourceId),
+    StorageBuffer {
+        resource: GpuWorkResourceId,
+        access: GpuStorageBufferAccess,
+    },
+}
+
+impl RenderShaderBindingResource {
+    pub const fn resource_id(&self) -> Option<GpuWorkResourceId> {
+        match self {
+            Self::SampledTexture(resource)
+            | Self::StorageTexture { resource, .. }
+            | Self::UniformBuffer(resource)
+            | Self::StorageBuffer { resource, .. } => Some(*resource),
+            Self::Sampler => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ProjectedUniformBuffer {

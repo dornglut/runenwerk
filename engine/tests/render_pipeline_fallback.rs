@@ -1,16 +1,14 @@
+use engine::plugins::gpu::{GpuPrimitiveTopology, GpuTextureFormat};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCapturePointIdentity,
     RenderPassMaterialBindingEvidence, RenderPassProvenanceRecord,
     RenderPipelineFallbackDiagnostic, RenderPipelineFallbackDiagnosticSeverity,
     RenderPipelineFallbackInspectionRequest, inspect_render_pipeline_fallback,
 };
-use engine::plugins::render::pipelines::{
-    FlowPassKind, FlowPrimitiveTopologyClass, PipelineCacheStats,
-};
+use engine::plugins::render::pipelines::{FlowPassKind, PipelineCacheStats};
 use engine::plugins::render::shader::{
     ShaderRegistryEvent, ShaderRegistryEventKind, ShaderReloadPollReport, ShaderReloadPollStatus,
 };
-use wgpu::TextureFormat;
 
 #[test]
 fn render_pipeline_fallback_reports_ready_cache_and_prior_valid_shader_failure() {
@@ -203,10 +201,10 @@ fn pipeline_pass(
         material_specialization_fragment_hash,
         view_signature_hash: 33,
         feature_runtime_version: 12,
-        color_formats: vec![TextureFormat::Rgba8Unorm],
+        color_formats: vec![GpuTextureFormat::Rgba8Unorm],
         depth_format: None,
         sample_count: 1,
-        primitive_topology_class: FlowPrimitiveTopologyClass::TriangleList,
+        primitive_topology: Some(GpuPrimitiveTopology::TriangleList),
         material_binding: RenderPassMaterialBindingEvidence {
             consumes_material_resources,
             prepared_material_available: consumes_material_resources,

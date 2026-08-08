@@ -288,42 +288,52 @@ impl Renderer {
                                     bind_group_layout_signature_hash: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.bind_group_layout_signature_hash)
+                                        .map(
+                                            FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash,
+                                        )
                                         .unwrap_or_default(),
-                                    material_specialization_fragment_hash: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.material_specialization_fragment_hash)
-                                        .unwrap_or_default(),
-                                    view_signature_hash: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.view_signature_hash)
-                                        .unwrap_or_default(),
-                                    feature_runtime_version: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.feature_runtime_version)
-                                        .unwrap_or_default(),
+                                    material_specialization_fragment_hash:
+                                        material_specialization_fragment_hash(
+                                            &invocation_packet,
+                                            execution_pass_feature_id(pass),
+                                        ),
+                                    view_signature_hash: hash_view_signature(
+                                        invocation_packet.view_id.as_str(),
+                                        invocation_packet.surface_size,
+                                    ),
+                                    feature_runtime_version: feature_runtime_version(
+                                        &invocation_packet,
+                                        execution_pass_feature_id(pass),
+                                    ),
                                     color_formats: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.color_formats.clone())
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
+                                        .and_then(|state| state.fragment_output())
+                                        .map(|output| {
+                                            output
+                                                .color_targets()
+                                                .map(|target| target.format())
+                                                .collect()
+                                        })
                                         .unwrap_or_default(),
                                     depth_format: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .and_then(|key| key.depth_format),
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
+                                        .and_then(|state| state.depth_stencil())
+                                        .map(|depth| depth.format()),
                                     sample_count: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.sample_count)
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
+                                        .map(|state| state.multisample().sample_count())
                                         .unwrap_or(1),
-                                    primitive_topology_class: evidence
+                                    primitive_topology: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.primitive_topology_class)
-                                        .unwrap_or(FlowPrimitiveTopologyClass::None),
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
+                                        .map(|state| state.primitive().topology()),
                                     material_binding,
                                     render_targets: pass_resource_truth.render_targets,
                                     sampled_textures: pass_resource_truth.sampled_textures,

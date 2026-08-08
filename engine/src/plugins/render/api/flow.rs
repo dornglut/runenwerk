@@ -1,11 +1,13 @@
 use crate::plugins::gpu::{
-    GpuBufferHandle, GpuResourceLifetime, GpuWorkResourceId, GpuWorkResourceIdAllocator,
+    GpuBindingKey, GpuBufferHandle, GpuResourceLifetime, GpuWorkResourceId,
+    GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::api::{
     BuiltinUiCompositePassBuilder, ComputePassBuilder, CopyPassBuilder, FullscreenPassBuilder,
     GraphicsPassBuilder, ParamProjectionError, PassUniformProjection, PresentPassBuilder,
     ProjectedUniformSet, RenderDoubleBuffer, RenderFixedStepIterationUniform,
-    RenderFlowAuthoringError, project_uniform_bindings_for_pass,
+    RenderFlowAuthoringError, RenderShaderBinding, RenderShaderBindingResource,
+    project_uniform_bindings_for_pass,
 };
 use crate::plugins::render::graph::compile_flow_plan;
 use crate::plugins::render::procedural::{
@@ -258,10 +260,10 @@ impl RenderFlow {
         mut self,
         label: impl Into<String>,
         max_substeps: u32,
-        pass_labels: I,
+        pass_bindings: I,
     ) -> Result<Self, RenderFlowAuthoringError>
     where
-        I: IntoIterator<Item = S>,
+        I: IntoIterator<Item = (S, GpuBindingKey)>,
         S: AsRef<str>,
     {
         let label = label.into();
@@ -285,26 +287,27 @@ impl RenderFlow {
             max_substeps,
             iteration_uniform,
         };
-        let pass_ids = pass_labels
+        let pass_bindings = pass_bindings
             .into_iter()
-            .map(|pass_label| {
+            .map(|(pass_label, binding)| {
                 let pass_label = pass_label.as_ref();
-                self.resolve_pass_id(pass_label).unwrap_or_else(|| {
+                let pass_id = self.resolve_pass_id(pass_label).unwrap_or_else(|| {
                     panic!(
                         "pass label '{}' is not registered in flow '{}'",
                         pass_label,
                         self.label()
                     )
-                })
+                });
+                (pass_id, binding)
             })
             .collect::<Vec<_>>();
         assert!(
-            !pass_ids.is_empty(),
+            !pass_bindings.is_empty(),
             "fixed-step region '{}' must include at least one pass",
             label
         );
 
-        for pass_id in pass_ids {
+        for (pass_id, binding) in pass_bindings {
             let pass = self
                 .graph
                 .passes
@@ -314,6 +317,10 @@ impl RenderFlow {
                 .expect("resolved pass should exist in flow graph");
             pass.fixed_step_region = Some(membership.clone());
             push_unique_resource_id(&mut pass.fixed_step_iteration_uniforms, iteration_uniform);
+            pass.shader_bindings.push(RenderShaderBinding::new(
+                binding,
+                RenderShaderBindingResource::UniformBuffer(iteration_uniform),
+            ));
         }
 
         Ok(self)
@@ -827,6 +834,15 @@ impl RenderFlow {
             pass.shader_constants = stage.constants;
             pass.compute_dispatch =
                 Some(crate::plugins::render::api::ComputeDispatchDescriptor::Fixed(stage.dispatch));
+            for binding in &stage.shader_bindings {
+                pass.shader_bindings.push(RenderShaderBinding::new(
+                    binding.key(),
+                    RenderShaderBindingResource::StorageBuffer {
+                        resource: binding.buffer().diagnostic_identity(),
+                        access: binding.access(),
+                    },
+                ));
+            }
             for read in stage.reads {
                 push_unique_resource_id(&mut pass.storage_reads, read.diagnostic_identity());
             }
@@ -855,6 +871,10 @@ mod tests {
         RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
         RenderVertexFormat, compile_flow_plan,
     };
+
+    fn binding(index: u64) -> GpuBindingKey {
+        GpuBindingKey::try_new(0, index).expect("test binding key should be valid")
+    }
 
     #[derive(Debug, Clone, Copy, GpuStorage)]
     struct TestCell {
@@ -939,7 +959,7 @@ mod tests {
         let receiving_flow = receiving_flow
             .with_state::<TestState>()
             .compute_pass("foreign.uniform")
-            .uniform_from_state_to(foreign_handle, TestState::params)
+            .uniform_from_state_to(binding(0), foreign_handle, TestState::params)
             .finish();
         let error = receiving_flow
             .validation_report()
@@ -961,7 +981,7 @@ mod tests {
             .expect("render flow authoring should succeed");
         let flow = flow
             .compute_pass("uniform.layout.mismatch")
-            .uniform_from_state_to(handle, TestState::other_params)
+            .uniform_from_state_to(binding(0), handle, TestState::other_params)
             .finish();
 
         let error = flow
@@ -980,7 +1000,7 @@ mod tests {
             .expect("render flow authoring should succeed");
         let flow = flow
             .compute_pass("uniform.storage.mismatch")
-            .bind_storage(handle)
+            .bind_storage(binding(0), handle)
             .finish();
 
         let error = flow
@@ -1011,7 +1031,7 @@ mod tests {
 
         let receiving_flow = receiving_flow
             .compute_pass("foreign.storage")
-            .bind_storage(foreign_handle)
+            .bind_storage(binding(0), foreign_handle)
             .finish();
         let error = receiving_flow
             .validation_report()
@@ -1038,15 +1058,15 @@ mod tests {
             .double_buffer_storage_array::<TestCell>("test.cells", 4)
             .expect("render flow authoring should succeed")
             .compute_pass("test.compute")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(binding(0), TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_ping_pong_storage("test.cells")
+            .bind_ping_pong_storage(binding(1), binding(2), "test.cells")
             .dispatch_from_state(TestState::dispatch)
             .finish()
             .graphics_pass("test.graphics")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(binding(0), TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_ping_pong_storage("test.cells")
+            .bind_ping_pong_storage(binding(1), binding(2), "test.cells")
             .write_color_target("test.color")
             .draw(3, 1)
             .finish()
@@ -1099,18 +1119,22 @@ mod tests {
             .expect("render flow authoring should succeed");
         let flow = flow
             .compute_pass("test.step.a")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(binding(0), TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells.clone())
+            .bind_storage(binding(1), cells.clone())
             .dispatch_from_state(TestState::dispatch)
             .finish()
             .compute_pass("test.step.b")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(binding(0), TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells)
+            .bind_storage(binding(1), cells)
             .dispatch_from_state(TestState::dispatch)
             .finish()
-            .fixed_step_region("test.simulation", 4, ["test.step.a", "test.step.b"])
+            .fixed_step_region(
+                "test.simulation",
+                4,
+                [("test.step.a", binding(2)), ("test.step.b", binding(2))],
+            )
             .expect("render flow authoring should succeed")
             .validate()
             .expect("fixed-step region should validate");
@@ -1142,24 +1166,28 @@ mod tests {
             .expect("render flow authoring should succeed");
         let err = flow
             .compute_pass("test.step.a")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(binding(0), TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells.clone())
+            .bind_storage(binding(1), cells.clone())
             .dispatch_from_state(TestState::dispatch)
             .finish()
             .compute_pass("test.outside")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(binding(0), TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells.clone())
+            .bind_storage(binding(1), cells.clone())
             .dispatch_from_state(TestState::dispatch)
             .finish()
             .compute_pass("test.step.b")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(binding(0), TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells)
+            .bind_storage(binding(1), cells)
             .dispatch_from_state(TestState::dispatch)
             .finish()
-            .fixed_step_region("test.simulation", 4, ["test.step.a", "test.step.b"])
+            .fixed_step_region(
+                "test.simulation",
+                4,
+                [("test.step.a", binding(2)), ("test.step.b", binding(2))],
+            )
             .expect("render flow authoring should succeed")
             .validation_report()
             .expect_err("interleaved repeat region must be rejected");
