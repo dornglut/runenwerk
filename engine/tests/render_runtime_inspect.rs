@@ -1,4 +1,6 @@
-use engine::plugins::gpu::{GpuCapabilityFeature, GpuWorkResourceId};
+use engine::plugins::gpu::{
+    GpuCapabilityFeature, GpuPrimitiveTopology, GpuTextureFormat, GpuWorkResourceId,
+};
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, PreparedRenderFrameInspection,
     ProductSurfaceDiagnosticInspectionEntry, RenderCaptureIdentity, RenderCapturePointIdentity,
@@ -21,7 +23,7 @@ use engine::plugins::render::inspect::{
     inspect_texture_resources, resource_kind_name, summarize_gpu_pass_timing_evidence,
     summarize_pass_timings, validate_render_replay_manifest,
 };
-use engine::plugins::render::pipelines::{FlowPassKind, FlowPrimitiveTopologyClass};
+use engine::plugins::render::pipelines::FlowPassKind;
 use engine::plugins::render::{
     FeatureContributionStatus, FeatureFallbackPolicy, GfxFrameTimings, PreparedFlowInputs,
     PreparedFlowInvocation, PreparedFlowInvocationId, PreparedFlowInvocationRequest,
@@ -50,7 +52,6 @@ use product::{
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use ui_render_data::{ProductSurfaceTextureBindingSource, ViewportSurfaceBindingRegistry};
-use wgpu::TextureFormat;
 
 #[derive(Debug, Clone, Copy, engine::plugins::render::GpuStorage)]
 struct InspectStorage {
@@ -1126,10 +1127,10 @@ fn render_runtime_inspect_pass_provenance_state_preserves_required_human_fields(
             material_specialization_fragment_hash: 11,
             view_signature_hash: 12,
             feature_runtime_version: 13,
-            color_formats: vec![TextureFormat::Rgba8Unorm],
+            color_formats: vec![GpuTextureFormat::Rgba8Unorm],
             depth_format: None,
             sample_count: 1,
-            primitive_topology_class: FlowPrimitiveTopologyClass::TriangleList,
+            primitive_topology: Some(GpuPrimitiveTopology::TriangleList),
             material_binding: RenderPassMaterialBindingEvidence::default(),
             render_targets: vec!["surface.color".to_string()],
             sampled_textures: vec!["surface.color".to_string()],
