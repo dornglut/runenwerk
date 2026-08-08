@@ -226,12 +226,6 @@ impl Renderer {
             pipeline_variant,
             pipeline_layout,
             render_pipeline_state,
-            material_specialization_fragment_hash: material_specialization_fragment_hash(
-                packet,
-                pass_feature_id,
-            ),
-            view_signature_hash: hash_view_signature(packet.view_id.as_str(), packet.surface_size),
-            feature_runtime_version: feature_runtime_version(packet, pass_feature_id),
         };
 
         if bind_group_layout_entries.is_empty() {
