@@ -1,6 +1,6 @@
 use crate::plugins::gpu::{
-    GpuBindGroupLayoutDescriptor, GpuPipelineLayoutDescriptor, GpuProgramSourceIdentity,
-    GpuRenderPipelineStateDescriptor, GpuSpecializationValueSet,
+    GpuPipelineLayoutDescriptor, GpuProgramSourceIdentity, GpuRenderPipelineStateDescriptor,
+    GpuSpecializationValueSet,
 };
 use crate::plugins::render::{RenderFeatureId, RenderFlowId, RenderPassId, RenderPassKind};
 use std::hash::{Hash, Hasher};
@@ -117,15 +117,15 @@ impl From<RenderPassKind> for FlowPassKind {
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode,
-        GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-        GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
-        GpuPrimitiveStateDescriptor, GpuProgramSourceKey, GpuProgramSourceOwnerId,
-        GpuProgramSourceRevision, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
-        GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
-        GpuSpecializationSchema, GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
-        GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
-        GpuVertexStepMode,
+        GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
+        GpuBindingProvenance, GpuBlendMode, GpuCapabilityRequirements,
+        GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuFragmentOutputStateDescriptor,
+        GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor, GpuProgramSourceKey,
+        GpuProgramSourceOwnerId, GpuProgramSourceRevision, GpuSamplerClass, GpuShaderStage,
+        GpuShaderStages, GpuSpecializationDeclaration, GpuSpecializationEntry,
+        GpuSpecializationKey, GpuSpecializationSchema, GpuSpecializationValue, GpuTextureFormat,
+        GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
+        GpuVertexInputStateDescriptor, GpuVertexStepMode,
     };
 
     fn source_identity(key: &str) -> GpuProgramSourceIdentity {
