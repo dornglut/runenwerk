@@ -5,12 +5,12 @@ use crate::plugins::gpu::{
     GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
     GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor,
     GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
-    GpuPrimitiveStateDescriptor, GpuPrimitiveTopology as GpuPipelinePrimitiveTopology,
-    GpuProgramSourceIdentity, GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage,
-    GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat,
-    GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexAttribute,
-    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
-    GpuVertexStepMode,
+    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramSourceIdentity,
+    GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
+    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass,
+    GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
+    GpuVertexInputStateDescriptor, GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineVariant;
 use crate::plugins::render::{
@@ -212,6 +212,8 @@ impl Renderer {
             .bindings()
             .map(wgpu_bind_group_layout_entry)
             .collect::<Result<Vec<_>>>()?;
+        let pipeline_layout =
+            gpu_pipeline_layout_for_pass(packet, flow, pass_id, &primary_bind_group_layout)?;
         let render_pipeline_state =
             gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?;
 
@@ -222,7 +224,7 @@ impl Renderer {
             feature_id: pass_feature_id,
             program_source_identity: program_source_identity.clone(),
             pipeline_variant,
-            primary_bind_group_layout,
+            pipeline_layout,
             render_pipeline_state,
             material_specialization_fragment_hash: material_specialization_fragment_hash(
                 packet,
@@ -312,6 +314,99 @@ impl Renderer {
 
         Ok((pipeline_key, Some(bind_group_layout), Some(bind_group)))
     }
+}
+
+fn gpu_pipeline_layout_for_pass(
+    packet: &RendererPreparedPacket,
+    flow: &CompiledRenderFlowPlan,
+    pass_id: RenderPassId,
+    primary_bind_group_layout: &GpuBindGroupLayoutDescriptor,
+) -> Result<GpuPipelineLayoutDescriptor> {
+    let pass = flow
+        .execution
+        .passes
+        .iter()
+        .find(|pass| execution_pass_id(pass) == pass_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan")
+        })?;
+
+    let mut groups = Vec::new();
+    if primary_bind_group_layout.bindings().len() != 0 {
+        groups.push(primary_bind_group_layout.clone());
+    }
+    if let Some(material_group) = gpu_material_bind_group_layout_for_pass(packet, pass)? {
+        groups.push(material_group);
+    }
+    Ok(GpuPipelineLayoutDescriptor::new(groups)?)
+}
+
+fn gpu_material_bind_group_layout_for_pass(
+    packet: &RendererPreparedPacket,
+    pass: &CompiledPassExecutionPlan,
+) -> Result<Option<GpuBindGroupLayoutDescriptor>> {
+    if !pass_consumes_material_resources(
+        execution_pass_feature_id(pass),
+        execution_pass_shader_reference(pass),
+    ) {
+        return Ok(None);
+    }
+    let Some(material) = packet.prepared_material.as_ref() else {
+        return Ok(None);
+    };
+
+    let mut bindings = material
+        .instances
+        .iter()
+        .flat_map(|instance| instance.texture_bindings.iter())
+        .collect::<Vec<_>>();
+    if bindings.is_empty() {
+        return Ok(None);
+    }
+    bindings.sort_by_key(|binding| binding.resource_slot_index);
+
+    let visibility = GpuShaderStages::one(GpuShaderStage::Fragment);
+    let mut declarations = Vec::with_capacity(bindings.len() * 2);
+    for binding in bindings {
+        let texture_binding = binding.resource_slot_index.saturating_mul(2);
+        let texture_binding_identity = u64::from(texture_binding);
+        let view_dimension = match binding.texture_kind {
+            crate::plugins::render::PreparedMaterialTextureKind::Texture2D => {
+                GpuTextureViewDimension::D2
+            }
+            crate::plugins::render::PreparedMaterialTextureKind::Texture3D => {
+                GpuTextureViewDimension::D3
+            }
+        };
+        declarations.push(GpuBindingDeclaration::new(
+            GpuBindingKey::try_new(1, texture_binding_identity)?,
+            visibility,
+            GpuBindingKind::sampled_texture(
+                GpuTextureSampleClass::FloatFilterable,
+                view_dimension,
+                false,
+            )?,
+            None,
+            format!("material-texture-slot-{}", binding.resource_slot_index),
+            GpuBindingProvenance::new(
+                "render-material-resource-bind-group",
+                Some(format!("resource slot {}", binding.resource_slot_index)),
+            )?,
+        )?);
+        declarations.push(GpuBindingDeclaration::new(
+            GpuBindingKey::try_new(1, texture_binding_identity.saturating_add(1))?,
+            visibility,
+            GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+            None,
+            format!("material-sampler-slot-{}", binding.resource_slot_index),
+            GpuBindingProvenance::new(
+                "render-material-resource-bind-group",
+                Some(format!("resource slot {}", binding.resource_slot_index)),
+            )?,
+        )?);
+    }
+
+    Ok(Some(GpuBindGroupLayoutDescriptor::new(1, declarations)?))
 }
 
 fn gpu_render_pipeline_state_for_pass(
