@@ -95,16 +95,22 @@ fn renderer_pipeline_key_owns_one_complete_g4b_pipeline_descriptor() {
 fn binding_resolution_constructs_complete_descriptor_from_admitted_source() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bindings = read(&manifest_dir, BINDINGS);
+    let resolver = section(
+        &bindings,
+        "pub(super) fn resolve_compiled_bind_group<'a>(",
+        ") -> Result<(",
+        BINDINGS,
+    );
 
     assert_eq!(
-        bindings
+        resolver
             .matches("program_source: &GpuAdmittedProgramSource")
             .count(),
         1,
         "binding resolution must accept the admitted source record itself"
     );
     assert_eq!(
-        bindings
+        resolver
             .matches("specialization: GpuSpecializationValueSet")
             .count(),
         1,
@@ -378,7 +384,7 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
     );
 
     assert!(
-        execute.contains("key.render_pipeline_state()"),
+        execute.contains(".render_pipeline_state()"),
         "execution provenance must derive render-state diagnostics from complete descriptor authority"
     );
     for forbidden in [
@@ -412,18 +418,55 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
 fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let execute_passes = read(&manifest_dir, EXECUTE_PASSES);
+    let compute = section(
+        &execute_passes,
+        "fn encode_compute_pass(",
+        "fn encode_fullscreen_pass(",
+        EXECUTE_PASSES,
+    );
+    let fullscreen = section(
+        &execute_passes,
+        "fn encode_fullscreen_pass(",
+        "fn encode_graphics_pass(",
+        EXECUTE_PASSES,
+    );
+    let graphics = section(
+        &execute_passes,
+        "fn encode_graphics_pass(",
+        "fn encode_texture_copy(",
+        EXECUTE_PASSES,
+    );
 
-    for required in [
-        "compute_descriptor.program().source().canonical_wgsl()",
-        "render_descriptor.program().source().canonical_wgsl()",
-        "compute_descriptor.entry_point().as_str()",
-        "render_descriptor.entry_points().vertex().as_str()",
-        "wgpu_specialization_constants(compute_descriptor.specialization())",
-        "wgpu_specialization_constants(render_descriptor.specialization())",
+    for (label, source) in [
+        ("compute", compute),
+        ("fullscreen", fullscreen),
+        ("graphics", graphics),
     ] {
         assert!(
-            execute_passes.contains(required),
-            "current WGPU realization must consume complete G4B descriptor semantics: {required}"
+            source.contains(".canonical_wgsl()"),
+            "{label} WGPU shader-module realization must consume admitted source from the complete descriptor"
+        );
+    }
+    assert!(
+        compute.contains("compute_descriptor.entry_point().as_str()"),
+        "compute WGPU realization must consume its typed descriptor entry point"
+    );
+    assert!(
+        compute.contains("wgpu_specialization_constants(compute_descriptor.specialization())"),
+        "compute WGPU realization must consume typed descriptor specialization"
+    );
+    for (label, source) in [("fullscreen", fullscreen), ("graphics", graphics)] {
+        assert!(
+            source.contains("render_descriptor.entry_points().vertex().as_str()"),
+            "{label} WGPU realization must consume its typed vertex entry point"
+        );
+        assert!(
+            source.contains("fragment_entry_point.as_str()"),
+            "{label} WGPU realization must consume its typed fragment entry point"
+        );
+        assert!(
+            source.contains("wgpu_specialization_constants(render_descriptor.specialization())"),
+            "{label} WGPU realization must consume typed descriptor specialization"
         );
     }
     for forbidden in [
