@@ -8,14 +8,13 @@ use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::UI_RENDER_FEATURE_ID;
 use crate::plugins::render::{
     RenderDrawDescriptor, RenderDrawSource, RenderFixedStepRegionId, RenderIndirectDrawArgsKind,
-    RenderPassId, RenderPrimitiveTopology, RenderRasterState, RenderResourceDeclaration,
-    RenderShaderConstant, RenderShaderReference, RenderTargetAliasKey, RenderTargetAliasKind,
-    RenderVertexAttribute, RenderVertexBufferLayout, RenderVertexStepMode,
+    RenderPassId, RenderRasterState, RenderResourceDeclaration, RenderShaderConstant,
+    RenderShaderReference, RenderTargetAliasKey, RenderTargetAliasKind, RenderVertexAttribute,
+    RenderVertexBufferLayout, RenderVertexStepMode,
 };
 use std::any::TypeId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, Default)]
 pub struct CompiledFlowExecutionPlan {
@@ -232,18 +231,6 @@ pub enum CompiledDrawSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CompiledRasterState {
     pub state: RenderRasterState,
-}
-
-impl CompiledRasterState {
-    pub const fn primitive_topology(self) -> RenderPrimitiveTopology {
-        self.state.primitive_topology
-    }
-
-    pub fn signature_hash(self) -> u64 {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        self.hash(&mut hasher);
-        hasher.finish()
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
