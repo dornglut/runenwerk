@@ -449,7 +449,9 @@ fn dispatch_for_count(element_count: u32) -> [u32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::gpu::{GpuCapabilityProfile, GpuContext, GpuContextDescriptor};
+    use crate::plugins::gpu::{
+        GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuSpecializationValue,
+    };
     use crate::plugins::render::{
         CompiledDrawSource, CompiledPassExecutionPlan, CounterResetDescriptor, DrawIndirectArgs,
         IndirectDrawArgsGenerationDescriptor, PrefixScanMode, RenderFlow, RenderShaderReference,
@@ -764,10 +766,10 @@ mod tests {
                 pass.shader.as_ref(),
                 Some(RenderShaderReference::AssetPath(path))
                     if path == GPU_PRIMITIVE_INDIRECT_DRAW_ARGS_SHADER
-            ) && pass
-                .shader_constants
-                .iter()
-                .any(|constant| constant.name == "INSTANCE_COUNT" && constant.value == 130)
+            ) && pass.shader_constants.iter().any(|constant| {
+                constant.name == "INSTANCE_COUNT"
+                    && constant.value == GpuSpecializationValue::U32(130)
+            })
         }));
 
         let draw = compiled
@@ -1065,7 +1067,21 @@ mod tests {
         let constants = stage
             .constants
             .iter()
-            .map(|constant| (constant.name.as_str(), constant.value as f64))
+            .map(|constant| {
+                let value = match constant.value {
+                    GpuSpecializationValue::Bool(value) => {
+                        if value {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                    GpuSpecializationValue::U32(value) => f64::from(value),
+                    GpuSpecializationValue::I32(value) => f64::from(value),
+                    GpuSpecializationValue::F32(value) => f64::from(value.get()),
+                };
+                (constant.name.as_str(), value)
+            })
             .collect::<Vec<_>>();
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("gpu_primitive_runtime_test_pipeline"),
