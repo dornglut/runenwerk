@@ -5,7 +5,7 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-09
 related_docs:
   - ./runengpu-architecture-design.md
   - ./runengpu-g3-access-work-graph-design.md
@@ -38,9 +38,11 @@ The accepted G3 implementation merge is:
 39d6fe65a334502bdfba0b1a2ce3b365099fcf28
 ```
 
-The intervening accepted commit is validation/workflow maintenance only. G4 Rust
-implementation remains unauthorized until this planning authority is accepted and a
-separate ordered implementation issue is active.
+The intervening accepted commit is validation/workflow maintenance only. G4A and G4B
+are now accepted; issue `#224` is the final G4C1 documentation correction. G4C1 source
+implementation remains blocked by `#224`, and G4C2/G4C3 remain blocked by their ordered
+predecessors. This broad design defers detailed G4C delivery semantics to the focused
+G4B/G4C design and child specifications.
 
 G4 is implemented as three independent, ordered slices:
 
@@ -418,9 +420,10 @@ programmatic category.
 
 ## Raw WGPU containment
 
-WGPU types live only in private backend modules, except for one explicitly temporary
-crate-private G5 execution bridge defined under G4C. The future-transferable public API
-must not expose:
+WGPU types live only in private backend modules. During the ordered migration, the one
+current object-reference bridge for its accepted boundary and the separate
+crate-private `CurrentRenderDeviceQueue` operation loan remain private seams; neither
+changes the future-transferable public API, which must not expose:
 
 ```text
 wgpu::Instance
@@ -788,19 +791,18 @@ Initial caches are in-memory, derived, discardable, reconstructable, and scoped 
 context/device generation. No stable persisted pipeline cache, source schema, capture,
 ABI, or wire format is authorized.
 
-Compatibility includes:
+Registry scope provides the admitted context identity and device generation. Validation
+checks admitted context facts before lookup or creation; it does not duplicate a huge
+device/context fact set into every authoritative map key. Compatibility therefore uses
+the facts that remain semantically relevant to the record or any derived-cache candidate:
 
 ```text
-internal cache and descriptor schema revisions
-WGPU version and backend compatibility revision
-backend family, adapter class, software/fallback fact
-available adapter and relevant driver facts
-context identity and device generation
+internal descriptor/cache schema revisions
+WGPU/backend compatibility revision where required by the realized kind
 source kind, key, revision, full admitted source identity, and digest
 program interface and specialization
 complete resource, layout, and pipeline descriptors
-exact enabled features and effective limits
-relevant formats and alignments
+the admitted feature, limit, format, and alignment facts that affect that descriptor
 ```
 
 Behavior:
@@ -816,13 +818,25 @@ RealizationFailed   no entry published
 A cache hit changes cost, never semantics. Full equality follows hashing. Stats
 separate hits, misses, rejections, corruption, and creation failures.
 
-## Private WGPU ownership and temporary G5 execution bridge
+## Private WGPU ownership, object-reference bridges, and operation loan
 
 After G4C, only private RunenGPU backend modules own reusable WGPU resources, modules,
 layouts, bind groups, pipelines, instance, adapter, device, and queue.
 
-The current renderer still owns G5 encoding until G5. G4C therefore permits exactly one
-named crate-private scoped execution bridge:
+The current renderer still owns G5 encoding until G5. The ordered child cutover therefore
+permits exactly one object-reference migration bridge at each accepted boundary:
+
+```text
+G4C1 CurrentRenderResourceBridge
+    -> G4C2 CurrentRenderPipelineBridge
+        -> G4C3 CurrentRenderExecutionBridge
+            -> deleted by G5
+```
+
+Each successor fully replaces and deletes its predecessor before acceptance; carried
+predecessor terminals only shrink, while a successor may add newly realized terminals
+owned by that phase that exact-current-main uncut consumers still require. The G4C3
+execution bridge has these properties:
 
 - it lives at the private RunenGPU backend boundary;
 - only the existing bounded render execution adapter may call it;
@@ -836,7 +850,17 @@ named crate-private scoped execution bridge:
 - guards permit only this path;
 - G5 deletes it when encoding/submission moves into RunenGPU.
 
-This is a migration terminal, not stable raw-WGPU authority or a general escape hatch.
+This is an object-reference migration terminal, not stable raw-WGPU authority or a
+general escape hatch.
+
+`CurrentRenderDeviceQueue` is a different temporary seam: a crate-private,
+source-guarded backend-operation loan to current uncut code. It is not counted as a
+second object-reference bridge and is not folded into any object-reference bridge. It
+is non-public, non-authoritative, purpose-bound, inaccessible through `Deref`/`AsRef`,
+and cannot become a generic callback or native-interop API. Its operation classes and
+exact call sites shrink independently: G4C1 removes generic resource creation; G4C2
+also removes module/layout/bind-group creation; G4C3 also removes pipeline creation;
+G5 migrates encoding/upload/submission/copy/map/readback users and deletes the loan.
 Current render files may otherwise retain WGPU command/pass encoders, surface textures,
 and presentation only where explicitly G5/G7-owned.
 
@@ -848,7 +872,9 @@ and presentation only where explicitly G5/G7-owned.
 4. realize typed bind groups and pipelines through the context;
 5. migrate renderer setup, targets, materials, UI passes, flow-runtime caches, apps,
    examples, tests, and benchmarks;
-6. replace broad raw backend access with the single named scoped G5 bridge;
+6. replace broad object-reference reach-through with the one serialized scoped bridge
+   for its accepted boundary, while independently removing each G4C-owned creation class
+   from `CurrentRenderDeviceQueue`;
 7. remove renderer keys substituting paths, pass/feature IDs, or naked hashes for full
    G4 descriptors;
 8. remove renderer-owned resource/program/layout/bind-group/pipeline registries;
@@ -874,7 +900,8 @@ backend aliases forwarding renderer cache authority
 synthetic G2 handle construction outside RunenGPU
 RenderFlowId-derived GpuWorkResourceId owner bridge
 G4-owned sidecar fields
-public or broad WgpuCtx backend-object reach-through
+public or broad WgpuCtx backend-object reach-through outside the one accepted
+object-reference bridge and the separately bounded CurrentRenderDeviceQueue operation loan
 ```
 
 Retain until G5:
@@ -887,6 +914,7 @@ uploads and query-resolution execution
 queue submission and polling
 completion, readback, cancellation, retirement, shutdown
 the single named scoped execution bridge
+CurrentRenderDeviceQueue operation loan until its remaining G5 users migrate
 ```
 
 Retain until G7:
@@ -977,7 +1005,8 @@ architecture is invented.
 Guards reject:
 
 - public raw `Device`, `Queue`, or WGPU re-exports;
-- any raw-WGPU reach-through except the single named scoped G5 bridge;
+- any raw-WGPU object-reference reach-through except the one named scoped bridge, or
+  operation-loan access outside the separately bounded `CurrentRenderDeviceQueue`;
 - a public or second host-compatibility path;
 - renderer-owned reusable module/layout/bind-group/pipeline caches;
 - `RenderFlowId`-derived GPU resource ownership;
@@ -1027,12 +1056,12 @@ Implementation stops for owner decision if it requires:
 
 - a new dependency or package;
 - a stable persisted cache, source, ABI, capture, replay, or wire format;
-- public raw-WGPU access or a second raw-WGPU bridge;
+- public raw-WGPU access, a second object-reference bridge, or a broad operation loan;
 - public host compatibility or reusable G7 surface authority;
 - unsafe code outside accepted policy;
 - a speculative second backend abstraction;
 - G5 progress, completion, readback, retirement, or shutdown beyond preserving current
-  encoding through the one named bridge;
+  encoding through the one named bridge and separately bounded operation loan;
 - RunenRender semantic implementation;
 - a compatibility facade, forwarding package, or duplicate cache;
 - an ADR changing accepted dependency direction or repository ownership.
@@ -1046,10 +1075,12 @@ G4A creates an async, headless, normalized, generation-aware context admission b
 with no public host/surface compatibility. G4B creates explicit typed WGSL-first
 program, interface, binding, specialization, and pipeline contracts with full semantic
 identity. G4C realizes those values through private WGPU registries, rejects stale and
-foreign generations, uses correctness-complete derived caches, migrates every consumer,
-and deletes renderer-owned GPU realization authority. One narrow crate-private G5
-execution bridge preserves current encoding during the ordered cutover and is deleted
-by G5.
+foreign generations, uses authoritative logical-identity registries plus optional
+correctness-checked derived caches, migrates every consumer, and deletes renderer-owned
+GPU realization authority. One narrow object-reference bridge preserves the required
+current terminal at each accepted G4C boundary; separately,
+`CurrentRenderDeviceQueue` monotonically loses G4C-owned creation operations and G5
+deletes it with the remaining operation users.
 
 G5 remains execution and lifecycle. G7 remains surfaces and device loss. RunenRender
 remains semantic image formation. No package extraction or Rust implementation is

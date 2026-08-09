@@ -78,6 +78,15 @@ PhaseImplementationSpec(
         "The set of carried-forward predecessor terminals monotonically shrinks. A successor may add only newly realized terminal classes owned by that phase that exact-current-main uncut consumers still require. Migrated predecessor terminals disappear, and no successor may reintroduce a predecessor terminal already eliminated by its owning phase. Each bridge has one immediate deletion owner and a complete terminal/call-site census.",
     ],
 
+    current_render_device_queue_cutover: [
+        "CurrentRenderDeviceQueue is a separate crate-private backend-operation loan to current uncut code, not an object-reference migration bridge, not part of CurrentRenderResourceBridge, and not a second bridge for uniqueness accounting.",
+        "The loan is non-public, non-authoritative, source-guarded, purpose-bound, inaccessible through Deref or AsRef, and forbidden from becoming a generic callback, raw-WGPU escape hatch, or future native-interop API.",
+        "After G4C1, generic buffer/texture/view/sampler/query-set creation through CurrentRenderDeviceQueue has zero remaining call sites.",
+        "After G4C2, ShaderModule, BindGroupLayout, PipelineLayout, and BindGroup creation through the loan additionally have zero remaining call sites.",
+        "After G4C3, compute/render pipeline creation through the loan additionally has zero remaining call sites.",
+        "G5 migrates the remaining encoding/upload/submission/copy/map/readback operation users and deletes CurrentRenderDeviceQueue. Source guards enumerate the exact allowed operation classes and call sites at every accepted boundary and prove a monotonic shrink.",
+    ],
+
     program_invariants: [
         "Issue #188 remains an umbrella tracker and is never implemented by one branch or pull request.",
         "Each child has one issue, one branch, one pull request, one exact-head validation set, one complete-diff review, and one accepted merge before its successor activates.",
@@ -87,6 +96,13 @@ PhaseImplementationSpec(
         "Full typed key equality follows hashing; hash collision cannot authorize reuse.",
         "Registry publication is transactional and backend failure publishes no partial authoritative entry.",
         "Caches are in-memory, derived, discardable, reconstructable, and scoped to one context/device generation.",
+        "An authoritative registry maps one typed logical identity to its realization record; derived caches are optional cost optimizations only. Equal descriptors never make distinct logical identities alias, and full typed equality follows any hash candidate.",
+        "RunenGPU owns opaque GpuWorkResourceId owner-scope allocation. The RenderFlowId-derived owner-scope bridge is deleted by G4C1; renderer invocation/history mappings retain distinct typed G2 handles before realization and never place renderer identity in G4C correctness keys.",
+        "Owned resources may be created by G4C1. Imported resources require an explicit accepted concrete import-source contract or yield ImportSourceUnavailable/unresolved-import; renderer provenance is not that source and SurfaceAcquired remains G7-only.",
+        "Deterministic descriptor/capability/affinity incompatibility rejects before backend creation. Backend validation/device/OOM failure after admission is a backend/context or implementation-defect category, never ordinary cache control flow, and backend strings are diagnostic only.",
+        "G4C1 owns logical-record liveness, bounded registry reclamation, and unretained derived-state removal; G5 owns in-flight retention, completion, cancellation, delayed backend retirement/destruction, and shutdown.",
+        "G4C1 creates backend resource objects only. G5 owns upload/update/copy/staging/query-resolution/map/readback execution; checked initialization intent cannot authorize create_buffer_init, queue.write_buffer, queue.write_texture, or another public transfer path in G4C1.",
+        "Sampler compatibility uses every semantic field of the accepted normalized GpuSamplerDescriptor, not nonexistent anisotropy state. Registry scope supplies one admitted context/device generation; validation, not duplicated context fact sets, establishes admission before lookup.",
         "No stable persisted backend cache, source, ABI, capture, replay, wire, or cross-process handle format is authorized.",
         "Only private RunenGPU backend modules own reusable WGPU objects after G4C3.",
         "G5 retains execution, uploads, submission, progress, completion, readback, cancellation, retirement, and shutdown ownership.",

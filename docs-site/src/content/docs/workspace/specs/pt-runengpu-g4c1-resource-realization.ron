@@ -25,12 +25,14 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c-wgpu-realization-cutover.ron",
     ],
 
-    goal: "Create one private context/device-generation-bound WGPU realization authority for buffers, textures, texture views, samplers, and query sets, with transactional registries, complete compatibility keys, structured cache facts, current resource-consumer migration, deletion of fully replaced resource authority, and one narrowly scoped successor bridge that G4C2 replaces and deletes without realizing programs, layouts, bind groups, or pipelines.",
+    goal: "Create one private context/device-generation-bound WGPU realization authority for buffers, textures, texture views, samplers, and query sets, with transactional authoritative logical-identity registries, optional derived cache facts, bounded reclamation, current resource-consumer migration, deletion of fully replaced resource authority, and one narrowly scoped object-reference successor bridge that G4C2 replaces and deletes without realizing programs, layouts, bind groups, or pipelines.",
 
     dependency_direction: [
         "Accepted G2 logical resource descriptors and G4A admitted context facts -> G4C1 private resource realization.",
+        "RunenGPU-owned opaque owner-scope allocation -> GpuWorkResourceIdAllocator -> typed G2 logical handles; renderer invocation/history mappings retain distinct handles without placing renderer identity in generic G4C1 keys.",
         "Accepted G4C1 opaque resource handles -> G4C2 typed bind-group realization and, through the serialized bridge terminals, unchanged G5 execution.",
         "Audited current G4C2, G4C3, and G5 consumers may borrow G4C1 resources only through purpose-typed CurrentRenderResourceBridge terminals while their semantic operation remains owned by its existing phase.",
+        "The separate CurrentRenderDeviceQueue backend-operation loan may retain only its G5 or later-G4C operation classes; it is neither an object-reference bridge nor a CurrentRenderResourceBridge terminal.",
         "RunenRender and non-render consumers retain semantic resource intent but do not own reusable WGPU resources.",
     ],
 
@@ -42,7 +44,7 @@ PhaseImplementationSpec(
     ],
 
     realization_timing: [
-        "Persistent and imported buffers and textures are explicitly realized before graph execution.",
+        "Owned persistent buffers and textures are explicitly realized before graph execution; imported resources are realized only after an explicit accepted concrete import-source contract admits their source.",
         "Transient graph resources are realized in one bounded graph-realization pass after G3 preparation and before G5 encoding.",
         "Texture views may be cache-backed lazy only within an already realized parent texture.",
         "Samplers may be explicit or cache-backed lazy from complete normalized descriptors.",
@@ -55,40 +57,68 @@ PhaseImplementationSpec(
         "Reject foreign context for every already realized input.",
         "Reject stale device generation.",
         "Validate admitted feature, limit, format, usage, size, alignment, and memory-intent facts.",
-        "Validate import/source generation and reconstruction facts where applicable.",
-        "Look up a complete typed registry or cache key and compare full equality.",
+        "For an imported resource, validate an admitted concrete import source; current renderer semantic/provenance facts alone yield ImportSourceUnavailable or an unresolved-import outcome, and SurfaceAcquired is rejected as G7-only.",
+        "Look up the authoritative typed logical-identity registry record and compare the retained complete semantic descriptor with full typed equality; any derived cache may only select a candidate.",
         "Create the private WGPU object only after deterministic validation succeeds.",
         "Publish the registry entry transactionally only after backend creation succeeds.",
     ],
 
+    owner_scope_identity: [
+        "GpuWorkResourceId identifies one logical resource inside one owner scope. RunenGPU owns opaque owner-scope allocation, which feeds GpuWorkResourceIdAllocator and the existing typed G2 logical handles.",
+        "The current RenderFlowId-derived owner scope is a G4C1 deletion target. RenderFlowId, invocation_id, view_id, renderer labels/paths, naked hashes, and WGPU addresses are never generic G4C1 resource identity or registry-key fields.",
+        "Renderer invocation/history policy may map its own key to a distinct retained typed G2 logical handle for every concurrently distinct resource. G4C1 receives only that handle, normalized descriptor facts, and affinity; two concurrently distinct resources must already have different handles.",
+        "Do not introduce public GpuResourceInstanceId or another parallel identity layer unless exact-current-main proof establishes that existing typed G2 handles plus GPU-owned owner scopes are insufficient; stop for that decision instead.",
+    ],
+
+    import_source_contract: [
+        "GpuResourceOwnership::Owned may create the private backend object in G4C1.",
+        "Imported plus an admitted concrete source may be realized only through an explicit accepted import-source contract.",
+        "Imported without that source returns ImportSourceUnavailable or an unresolved-import outcome. Current renderer import semantic/provenance data is not a backend import source.",
+        "GpuResourceOwnership::SurfaceAcquired remains G7-only.",
+        "No public wgpu::Buffer/wgpu::Texture import, renderer-ID import key, raw Vulkan/Metal/D3D handle, speculative external-memory API, or unsafe generic import escape hatch is authorized.",
+    ],
+
+    backend_creation_failure_semantics: [
+        "Deterministic descriptor, capability, usage, format, alignment, import-source, and affinity incompatibility is rejected by RunenGPU before backend creation.",
+        "Backend validation, device, or OOM failure after deterministic admission is a backend/context failure or implementation-defect category, not ordinary cache/compatibility control flow; backend error strings are bounded diagnostics, never semantic classification.",
+        "Failed backend creation publishes no realization record. Do not make ordinary public realization asynchronous solely to manufacture ordinary constructor Result semantics without exact pinned-WGPU evidence.",
+    ],
+
     registry_invariants: [
-        "Separate private registries own buffer, texture, texture-view, sampler, query-set, and cache-diagnostic records.",
+        "Separate private authoritative registries own buffer, texture, texture-view, sampler, and query-set logical-identity -> realization-record mappings. Derived caches, if any, are separate non-authoritative cost optimizations.",
         "Each registry instance is scoped to exactly one GpuContextId and GpuDeviceGeneration.",
         "Each authoritative entry retains complete normalized source descriptor and bounded provenance.",
-        "Equal duplicate requests return the same realization record.",
+        "The same logical identity with the same complete semantic descriptor returns the same realization record.",
         "One logical identity with a different descriptor returns DescriptorChangedForIdentity rather than replacing the record.",
+        "Different logical identities with identical descriptors remain different logical resources and must never alias merely because a descriptor matches; cross-logical deduplication is not required.",
         "Hash collisions cannot authorize reuse because full typed equality follows hashing.",
         "Failures publish no partial entry and no consumer callback runs under registry locks.",
         "Capacity pressure is bounded and structured; no live realization is silently evicted.",
     ],
 
     resource_key_contracts: [
-        "Buffer keys include context identity, device generation, logical identity, complete size/usage/memory/reconstruction/import descriptor, source generation where applicable, and relevant admitted limits/alignments.",
-        "Texture keys include context identity, device generation, logical identity, complete extent/dimension/mip/sample/format/usage/reconstruction/import descriptor, source generation, and relevant admitted format/limit facts.",
-        "Texture-view keys include parent realization identity, context affinity, complete subresource range, view dimension, aspect, and normalized format override.",
-        "Sampler keys include complete address, filtering, comparison, LOD, anisotropy, and other admitted sampler semantics required by current consumers.",
-        "Query-set keys include context identity, generation, exact query kind, count, and admitted feature/limit facts.",
+        "Registry scope supplies one context/device generation. The authoritative buffer record is selected by typed logical identity and retains the complete size/usage/memory/reconstruction/import descriptor and source generation where applicable.",
+        "The authoritative texture record is selected by typed logical identity and retains the complete extent/dimension/mip/sample/format/usage/reconstruction/import descriptor and source generation where applicable.",
+        "The authoritative texture-view record is selected by its typed logical identity and retains parent realization identity plus complete subresource range, view dimension, aspect, and normalized format override.",
+        "The authoritative sampler record is selected by typed logical identity and retains every semantic field of the accepted normalized GpuSamplerDescriptor: address modes, filtering, comparison, and LOD range. It does not require nonexistent anisotropy state.",
+        "The authoritative query-set record is selected by typed logical identity and retains exact query kind, count, and admitted feature/limit facts.",
+        "Admission validates relevant device/context facts before lookup; those facts need not be duplicated wholesale in every map key merely because the registry is conceptually complete.",
         "Labels, diagnostic paths, WGPU object addresses, and renderer semantic IDs are excluded.",
     ],
 
     cache_behavior: [
-        "Initial caches are in-memory, derived, discardable, reconstructable, and scoped to one context/device generation.",
-        "Full match returns the existing realization and emits Hit.",
-        "Absent entry creates ordinarily and emits Miss.",
-        "Incompatible entry emits Rejected and follows ordinary realization after discarding or quarantining derived state.",
-        "Backend creation failure emits RealizationFailed and publishes no authoritative entry.",
-        "A cache hit changes cost only and never changes semantics.",
+        "The authoritative registry, not a cache, decides whether one logical identity reuses its realization record.",
+        "Any initial cache is in-memory, derived, discardable, reconstructable, scoped to one context/device generation, and may only select a candidate for full equality validation.",
+        "A derived cache hit changes cost only and never semantics; an absent, incompatible, or corrupt derived entry cannot create aliases and follows ordinary registry realization after discard or quarantine.",
+        "A backend/context creation failure emits RealizationFailed or its structured backend category and publishes no authoritative entry.",
         "No stable persisted WGPU cache blob or cross-process resource handle is authorized.",
+    ],
+
+    liveness_and_transfer_boundary: [
+        "G4C1 owns logical-handle/realization-record liveness, bounded registry reclamation, and removal of unretained derived state.",
+        "G5 owns submission ownership, in-flight resource retention, completion, cancellation, delayed backend retirement/destruction, and shutdown. G4C1 introduces no second submission/fence retirement model.",
+        "G4C1 creates backend resource objects only. G5 owns upload/update/copy/staging/query-resolution/map/readback execution.",
+        "GpuBufferInitialization and GpuTextureInitialization remain checked logical intent. create_buffer_init, queue.write_buffer, queue.write_texture, staging, copies, map/poll, and readback cannot become a second G4C1 transfer authority; any later creation-time initialization optimization must be semantically equivalent to the accepted G5 transfer contract.",
     ],
 
     successor_migration_bridge: [
@@ -99,14 +129,21 @@ PhaseImplementationSpec(
         "A terminal may support an unchanged later-phase operation using its lexical borrow, but the bridge never performs or owns binding, pipeline creation, command encoding, uploads, submission, or any other operation.",
         "The bridge owns validated access only and no logical resource descriptor, interface, binding, layout, pipeline, access, hazard, cache, execution, or lifecycle truth.",
         "Bridge lookup repeats exact context/device-generation and resource-kind validation and invokes no external callback under registry locks.",
-        "Source guards permit exactly this named bridge and its audited current call sites and reject any second resource bridge or broad raw-WGPU reach-through.",
+        "Source guards permit exactly this named object-reference bridge and its audited current call sites and reject any second resource bridge or broad raw resource reach-through. CurrentRenderDeviceQueue is separately guarded as an operation loan and is not folded into this bridge.",
         "G4C2 must delete CurrentRenderResourceBridge in the same accepted G4C2 slice, migrating terminals it now owns and carrying only proven residual resource terminals into its single successor bridge.",
+    ],
+
+    current_render_device_queue_cutover: [
+        "CurrentRenderDeviceQueue is a separate crate-private backend-operation loan, not an object-reference bridge, not a CurrentRenderResourceBridge terminal, and not a second bridge for uniqueness accounting.",
+        "After G4C1, generic buffer/texture/view/sampler/query-set creation through this loan has zero remaining call sites. The loan remains non-public, non-authoritative, source-guarded, purpose-bound, inaccessible through Deref/AsRef, and never a generic callback or future native-interop API.",
+        "Its remaining G5 operation classes and exact call sites are enumerated by source guards and may only shrink in G4C2, G4C3, and G5; G5 deletes the loan.",
     ],
 
     current_consumer_migration: [
         "Repeat the exact-current-main census for every direct and transitive buffer, texture, texture-view, sampler, and query-set allocator, registry, cache, synthetic handle, import, dynamic target, material resource, UI resource, example, bench, and test consumer.",
         "Migrate resource creation, ownership, identity, and lookup through the G4C1 owner while preserving renderer/domain semantics outside RunenGPU.",
         "Convert every unavoidable audited current resource consumer to the single CurrentRenderResourceBridge terminal for its G4C2, G4C3, or G5-owned operation rather than leaving renderer-owned resource creation, a parallel registry, or broad raw reach-through.",
+        "Remove generic resource creation from CurrentRenderDeviceQueue while retaining only its separately enumerated G5 or later-G4C operation users; do not misclassify that loan as an object-reference bridge.",
         "Classify program/layout/bind-group/pipeline consumers explicitly for G4C2 or G4C3, and record which resource terminals remain proven necessary at each successor boundary, without changing their semantic contracts here.",
         "Retain current command encoding, uploads, staging, submission, readback, surface, and presentation as G5/G7-owned operations; a G5 operation may lexically consume a bridge borrow without moving execution ownership into G4C1.",
     ],
@@ -116,7 +153,7 @@ PhaseImplementationSpec(
         "Synthetic GpuBufferHandle, GpuTextureHandle, GpuTextureViewHandle, GpuSamplerHandle, and GpuQuerySetHandle construction outside the RunenGPU owner.",
         "Resource cache keys based only on strings, renderer IDs, vector positions, labels, TypeId, or naked hashes.",
         "Forwarding aliases or parallel old/new resource realization paths.",
-        "Broad raw resource access outside the one accepted CurrentRenderResourceBridge at the G4C1 boundary.",
+        "Broad raw resource access outside the one accepted CurrentRenderResourceBridge at the G4C1 boundary, and generic resource creation through the separately guarded CurrentRenderDeviceQueue operation loan.",
         "G4C1-owned resource realization and cache truth in the temporary G3 execution sidecar.",
     ],
 
@@ -129,22 +166,27 @@ PhaseImplementationSpec(
         "RequirementNotAdmitted",
         "FormatOrAlignmentNotAdmitted",
         "ImportGenerationMismatch",
+        "ImportSourceUnavailable",
         "RegistryCapacityExceeded",
         "CacheRejected",
-        "BackendResourceRealizationFailure",
+        "BackendOrContextRealizationFailure",
+        "ImplementationDefect",
         "CurrentRenderResourceBridgeViolation",
     ],
 
     deterministic_tests: [
         "Foreign-context and stale-generation rejection precede backend access and cache-hit success.",
-        "Complete keys are insertion-order-independent and include every correctness field.",
+        "Full typed descriptor equality authorizes registry reuse after any hash candidate; no derived cache or equal descriptor aliases different logical identities.",
         "Equal duplicate realization reuses one record; changed descriptor for one logical identity rejects transactionally.",
+        "Concurrent invocation/history resources retain distinct typed logical handles before G4C1; renderer invocation, view, flow, labels, paths, hashes, and WGPU addresses never enter generic registry identity.",
+        "Owned versus imported source admission distinguishes concrete accepted sources from renderer semantic/provenance facts and yields ImportSourceUnavailable for an unadmitted import.",
         "Texture views cannot cross or outlive parent affinity in registry logic.",
-        "Cache hit, miss, incompatible rejection, and backend creation failure are distinct.",
+        "Derived-cache hit, miss, incompatible rejection, backend/context failure, and implementation defect are distinct; failed backend construction publishes no registry record.",
+        "G4C1 liveness/reclamation cannot retain in-flight submissions or delayed backend destruction, and checked initialization cannot introduce create_buffer_init, queue.write_buffer, queue.write_texture, staging, copy, map, or readback authority.",
         "Labels and diagnostic provenance do not split equal realizations.",
         "CurrentRenderResourceBridge rejects foreign, stale, wrong-kind, escape, storage, caching, return, identity, and bridge-owned encoding/upload/submission attempts, and has only audited purpose-typed current terminals.",
         "Source and dependency guards reject renderer/ECS/application/product ownership and public raw WGPU.",
-        "Consumer and deletion guards reject synthetic handles, replaced resource registries, broad raw access, and a second resource bridge.",
+        "Consumer and deletion guards reject synthetic handles, replaced resource registries, broad raw access, a second object-reference bridge, and every generic resource-creation class through CurrentRenderDeviceQueue after G4C1.",
     ],
 
     environment_tests: [
@@ -157,7 +199,7 @@ PhaseImplementationSpec(
     exclusions: [
         "No WGSL module, reflection, bind-group-layout, pipeline-layout, bind-group, compute-pipeline, or render-pipeline realization.",
         "No final renderer-wide realization/cache cutover beyond resource authority fully replaced here.",
-        "No raw-WGPU bridge other than the single named CurrentRenderResourceBridge at the G4C1 boundary and no generic callback escape hatch.",
+        "No object-reference raw-WGPU bridge other than the single named CurrentRenderResourceBridge at the G4C1 boundary. CurrentRenderDeviceQueue remains a separately bounded operation loan with no generic resource creation after G4C1 and no generic callback escape hatch.",
         "No G5 execution, upload ownership, command encoding, submission, progress, completion, readback, cancellation, retirement, delayed destruction, or shutdown redesign; an unchanged G5 operation may only use a lexical bridge borrow.",
         "No G7 surface, presentation, device replacement, loss, or reconstruction implementation.",
         "No RunenRender semantics, package extraction, dependency addition, stable format, compatibility facade, generated workflow state, or public raw-WGPU escape hatch.",
@@ -177,7 +219,9 @@ PhaseImplementationSpec(
     acceptance: [
         "One private context/generation-bound resource realization owner exists.",
         "All accepted G2 resource families have opaque realized handles and transactional registries.",
-        "Resource cache keys and outcomes are correctness-complete and structured.",
+        "Each authoritative registry preserves one logical identity -> realization record, rejects DescriptorChangedForIdentity, and never aliases distinct logical identities merely because descriptors match; any cache is derived and non-authoritative.",
+        "Owned resources are created only after deterministic admission, imports without an accepted concrete source return structured truth, backend/context failure publishes nothing, and SurfaceAcquired remains G7-only.",
+        "G4C1 has removed generic resource creation from CurrentRenderDeviceQueue while keeping that separately classified operation loan only for its monotonically shrinking later-phase users.",
         "Every replaced renderer-owned resource authority is migrated and deleted without aliases or a parallel path.",
         "Exactly one CurrentRenderResourceBridge remains for G4C2 replacement and deletion, serving every exact audited current G4C2/G4C3/G5 resource terminal; no broader raw resource reach-through remains.",
         "Programs, layouts, bind groups, and pipelines remain blocked for G4C2/G4C3.",

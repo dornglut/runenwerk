@@ -56,18 +56,23 @@ Documentation Build `31320663084`.
 
 ## Only authorized RunenGPU continuation
 
-Issue `#222` is the only authorized RunenGPU documentation correction: it corrects the
-pre-G5 G4C bridge ladder without authorizing source implementation.
+Issue `#224` is the only authorized RunenGPU documentation correction: it finalizes
+G4C1 realization and migration semantics without authorizing source implementation.
 
 Current status is deliberately narrow:
 
-- `#222` — only authorized RunenGPU documentation correction.
-- `#212` — census complete; implementation blocked by `#222`.
+- `#224` — only authorized RunenGPU documentation correction.
+- `#212` — census retained; the existing implementation branch is retained but untouched
+  and implementation is blocked by `#224`.
 - `#213` — blocked.
 - `#214` — blocked.
 
-Do not create a G4C1 implementation branch or modify Rust until #222 is accepted and the
-separately authorized implementation start condition is re-established.
+The retained implementation branch is
+`codex/runengpu-g4c1-resource-realization`. It remains zero commits and zero changed
+files from accepted main `810f3e31174a84dd494c11eea1616092142e11bc`; do not modify or
+replace it. Only after #224 is accepted and its squash commit has accepted-main CI and
+Documentation Build proof may that still-empty branch move to the new accepted main and
+re-establish #212 as the sole active implementation slice.
 
 When later authorized, G4C1 will own private context/device-generation-bound realization
 of:
@@ -86,6 +91,13 @@ affinity-validated resource references only; the consumer's semantic operation r
 in its existing phase. G4C2 must replace and delete it with a successor carrying only
 proven residual terminals. It does not parse WGSL, create layouts/bind groups or
 pipelines, implement G5 execution, own G7 surfaces, or absorb RunenRender semantics.
+
+`CurrentRenderDeviceQueue` is separately a crate-private backend-operation loan, not a
+second object-reference bridge and not part of `CurrentRenderResourceBridge`. G4C1
+removes generic buffer/texture/view/sampler/query-set creation through it; G4C2 then
+removes module/layout/bind-group creation; G4C3 removes pipeline creation; G5 migrates
+the remaining operation users and deletes it. Its source-guarded operation classes and
+exact call sites only shrink.
 
 The start census must explicitly revisit current texture-preview/resource-preparation
 shape where material-prepared data carries shader-binding coordinates that are irrelevant

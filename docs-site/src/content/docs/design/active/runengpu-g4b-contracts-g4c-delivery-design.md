@@ -5,7 +5,7 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-09
 related_docs:
   - ./runengpu-architecture-design.md
   - ./runengpu-g4-context-program-realization-design.md
@@ -367,7 +367,46 @@ Leaving the old registries authoritative would create parallel authority. Exposi
 objects publicly would violate containment. The solution is a serialized successor
 bridge ladder.
 
-## Serialized successor bridge ladder
+## Two distinct temporary seams
+
+The serialized ladder below is the complete **object-reference migration bridge**
+ladder. At every accepted G4C boundary, exactly one object-reference migration bridge
+may remain.
+
+`CurrentRenderDeviceQueue` is not an object-reference bridge. It is a distinct,
+crate-private backend-operation loan to exact current uncut code. It must not be hidden,
+counted as a second object-reference bridge, or folded into
+`CurrentRenderResourceBridge`. It remains non-public, source-guarded,
+non-authoritative, and purpose-bound: it has no `Deref`/`AsRef`, reusable raw handle,
+generic callback, or future native-interop meaning.
+
+Its authorized operation classes and exact call sites are an independent monotonic
+cutover:
+
+```text
+after G4C1
+    no generic buffer/texture/view/sampler/query-set creation through
+    CurrentRenderDeviceQueue
+
+after G4C2
+    additionally no ShaderModule / BindGroupLayout / PipelineLayout / BindGroup
+    creation through it
+
+after G4C3
+    additionally no compute/render pipeline creation through it
+
+after G5
+    encoding / uploads / submission / copy / map / readback users migrate
+    and CurrentRenderDeviceQueue is deleted
+```
+
+The current source census is evidence for this split: the loan directly enters the
+renderer execution path and two runtime-evidence paths, while the transitive renderer
+code still performs both realization and G5 operations. Each child must enumerate the
+remaining operation classes and exact call sites in source guards, prove that they only
+shrink, and leave no broad `Device`/`Queue` access behind.
+
+## Serialized object-reference successor bridge ladder
 
 ```text
 G4C1
@@ -389,7 +428,7 @@ G4C3
 Rules common to all bridges:
 
 - crate-private and process-local;
-- exactly one serialized bridge remains at each accepted boundary;
+- exactly one object-reference migration bridge remains at each accepted boundary;
 - a successor replaces its predecessor; the predecessor is deleted before the successor
   is accepted, so no bridge overlap remains;
 - the set of carried-forward predecessor terminals monotonically shrinks;
@@ -423,9 +462,89 @@ G4C1 owns private realization of:
 - samplers;
 - query sets.
 
-It owns exact affinity checks, transactional resource registries, resource cache
-compatibility, migration of resource creation and ownership, and deletion of replaced
-renderer resource registries.
+It owns exact affinity checks, transactional authoritative resource registries,
+bounded registry reclamation, migration of resource creation and ownership, and deletion
+of replaced renderer resource registries. A derived cache is an optional cost
+optimization only; it never substitutes for the registry.
+
+### Logical identity and owner scopes
+
+`GpuWorkResourceId` remains one logical resource identity inside one owner scope. The
+owner-scope sequence is:
+
+```text
+RunenGPU-owned opaque owner-scope allocation
+    -> GpuWorkResourceIdAllocator
+        -> typed G2 logical handles
+```
+
+The current `RenderFlowId`-derived owner scope is a temporary GPU identity bridge and a
+G4C1 deletion target. Renderer flow declarations remain templates and policy, not
+generic resource identity. For invocation uniforms and history textures, the renderer
+may map its invocation/history key to a distinct retained typed G2 logical handle for
+each concurrently distinct resource; G4C1 receives only that handle, its normalized
+descriptor, and context/device-generation facts. Two concurrent resources must have
+different typed handles before realization.
+
+`invocation_id`, `view_id`, `RenderFlowId`, renderer labels and paths, naked hashes, and
+WGPU addresses never become generic G4C1 resource identity or registry-key fields. Do
+not introduce a public `GpuResourceInstanceId` unless an exact-current-main proof shows
+that typed G2 handles plus GPU-owned owner scopes are insufficient; that finding stops
+for a separate decision rather than inventing another identity system.
+
+### Imports, creation, and backend failures
+
+`GpuResourceOwnership::Owned` may create a private backend object in G4C1. Current
+renderer import semantics and provenance are not a backend import source: an imported
+buffer or texture may be realized only when an explicit accepted import-source contract
+admits a concrete source. An import without one yields the structured
+`ImportSourceUnavailable` or unresolved-import outcome. `SurfaceAcquired` remains G7
+only. G4C1 introduces no public `wgpu::Buffer`/`wgpu::Texture` import, renderer-ID key,
+native-handle import, external-memory API, or unsafe generic import escape hatch.
+
+Deterministic descriptor, capability, and affinity incompatibility is rejected by
+RunenGPU before backend creation. Backend validation, device, or OOM failure after that
+admission is a backend/context failure or implementation-defect category, not ordinary
+cache/compatibility control flow; backend error text is bounded diagnostics, never its
+semantic classification. Publication remains transactional and failed construction
+publishes no realization. Ordinary public realization is not made async merely to
+manufacture constructor `Result` semantics.
+
+### Authoritative registry, cache, and liveness
+
+The authoritative registry maps logical identity to a realization record. It is scoped
+to one context/device generation, so admission validates relevant context facts before
+lookup rather than copying a huge context fact set into every map key. A derived cache
+may select a candidate only; hashing never authorizes correctness and full typed equality
+does.
+
+```text
+same logical identity + same complete descriptor
+    -> same realization record
+same logical identity + changed descriptor
+    -> DescriptorChangedForIdentity
+different logical identity + identical descriptor
+    -> different logical resource; never aliases merely because descriptors match
+```
+
+Cross-logical deduplication is not required. A later sampler or texture-view cache, if
+evidence warrants one, is separately derived and non-authoritative; labels, provenance,
+and backend pointers are not semantic key fields. Sampler compatibility covers every
+semantic field of the accepted normalized `GpuSamplerDescriptor`, not nonexistent
+anisotropy state.
+
+G4C1 owns logical-handle/realization-record liveness, bounded registry reclamation, and
+removal of unretained derived state. G5 alone owns submission, in-flight retention,
+completion, cancellation, delayed backend retirement/destruction, and shutdown. G4C1
+does not invent a second fence or submission retirement model.
+
+Backend resource-object creation belongs to G4C1. Upload/update/copy/staging,
+query-resolution, map/poll, and readback belong to G5. `GpuBufferInitialization` and
+`GpuTextureInitialization` remain checked logical intent; `create_buffer_init`,
+`queue.write_buffer`, `queue.write_texture`, staging, copies, and readback cannot create
+a second G4C1 transfer authority. If creation-time initialization is later retained as
+an optimization, it must be semantically equivalent to the one accepted G5 transfer
+contract.
 
 It leaves only `CurrentRenderResourceBridge` for the exact audited current consumers
 whose operation remains in G4C2, G4C3, or G5. The bridge may lend purpose-typed,
