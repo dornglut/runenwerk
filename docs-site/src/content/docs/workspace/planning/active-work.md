@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-09
+last_reviewed: 2026-08-10
 related_docs:
   - ../engineering-workflow.md
   - ./roadmap.md
@@ -56,25 +56,22 @@ Documentation Build `31320663084`.
 
 ## Only authorized RunenGPU continuation
 
-Issue `#224` is the only authorized RunenGPU documentation correction: it finalizes
-G4C1 realization and migration semantics without authorizing source implementation.
+Issue `#224` was accepted through PR `#225`. Accepted `main` is
+`302ac87a7c68f80bf2d6bf77c81f615f11c01b88`.
 
 Current status is deliberately narrow:
 
-- `#224` — only authorized RunenGPU documentation correction.
-- `#212` — census retained; the existing implementation branch is retained but untouched
-  and implementation is blocked by `#224`.
+- `#212` — the sole active RunenGPU implementation slice.
+- branch — `codex/runengpu-g4c1-resource-realization`.
+- current internal unit — logical resource owner-scope authority.
 - `#213` — blocked.
 - `#214` — blocked.
 
-The retained implementation branch is
-`codex/runengpu-g4c1-resource-realization`. It remains zero commits and zero changed
-files from accepted main `810f3e31174a84dd494c11eea1616092142e11bc`; do not modify or
-replace it. Only after #224 is accepted and its squash commit has accepted-main CI and
-Documentation Build proof may that still-empty branch move to the new accepted main and
-re-establish #212 as the sole active implementation slice.
+The active unit replaces renderer-derived logical resource owner scopes with private
+RunenGPU process-local identity authority. It does not realize WGPU resources, introduce
+realization registries, migrate renderer resource authority, or implement G5 execution.
 
-When later authorized, G4C1 will own private context/device-generation-bound realization
+The remaining G4C1 work will own private context/device-generation-bound realization
 of:
 
 - buffers;

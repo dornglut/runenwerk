@@ -24,7 +24,6 @@ use crate::plugins::render::{
 };
 use crate::runtime::{CatchupBudget, FixedTimeConfig, FixedTimeState};
 use std::collections::BTreeMap;
-use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub const SURFACE_COLOR_RESOURCE_LABEL: &str = "surface.color";
@@ -54,8 +53,6 @@ impl RenderFlow {
         let label = label.into();
         let flow_id = RenderFlowId::try_from_raw(NEXT_FLOW_ID.fetch_add(1, Ordering::Relaxed))
             .expect("render flow id sequence starts at one");
-        let owner_scope =
-            NonZeroU64::new(flow_id.raw()).expect("validated render flow ids are nonzero");
 
         Self {
             graph: RenderFlowGraph::new(flow_id, label),
@@ -63,7 +60,7 @@ impl RenderFlow {
             resource_ids_by_label: BTreeMap::new(),
             ping_pong_storage: BTreeMap::new(),
             next_pass_id: RenderPassIdSequence::default(),
-            next_resource_id: GpuWorkResourceIdAllocator::for_owner_scope(owner_scope),
+            next_resource_id: GpuWorkResourceIdAllocator::new(),
             next_fixed_step_region_id: 1,
         }
     }
@@ -871,6 +868,7 @@ mod tests {
         RenderTextureSizePolicy, RenderTextureTargetFormat, RenderVertexBufferLayout,
         RenderVertexFormat, compile_flow_plan,
     };
+    use std::num::NonZeroU64;
 
     fn binding_in_group(group: u64, binding: u64) -> GpuBindingKey {
         GpuBindingKey::try_new(group, binding).expect("test binding key should be valid")

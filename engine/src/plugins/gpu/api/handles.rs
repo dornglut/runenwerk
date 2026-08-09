@@ -341,6 +341,18 @@ mod tests {
     }
 
     #[test]
+    fn scope_free_allocator_constructs_typed_handles() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let handle = allocator
+            .allocate_buffer_handle(buffer_descriptor("scope-free buffer"))
+            .expect("scope-free allocator should allocate a typed buffer handle");
+
+        let (owner_scope, local) = handle.diagnostic_identity().diagnostic_parts();
+        assert_ne!(owner_scope, 0);
+        assert_eq!(local, 1);
+    }
+
+    #[test]
     fn handle_clone_preserves_identity_and_lease() {
         let mut allocator =
             GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(9).unwrap());

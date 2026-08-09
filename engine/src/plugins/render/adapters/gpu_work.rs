@@ -16,7 +16,6 @@ use crate::plugins::render::{
     RenderTargetAliasKind,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use std::num::NonZeroU64;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RenderGpuWorkAdapterError {
@@ -65,8 +64,6 @@ pub enum RenderGpuWorkAdapterError {
         pass_id: RenderPassId,
         field: &'static str,
     },
-    #[error("render GPU-work lowering received invalid zero flow identity")]
-    InvalidFlowIdentity,
 }
 
 /// Whether the temporary adapter should include the current timestamp-query
@@ -1078,10 +1075,7 @@ fn lower_timing_resources(
     if query_count == 0 {
         return Err(RenderGpuWorkAdapterError::EmptyTimingWork);
     }
-    let mut allocator = adapter_allocator_after_plan(plan)?;
-    let query_id = allocator.allocate()?;
-    let resolve_id = allocator.allocate()?;
-    let readback_id = allocator.allocate()?;
+    let mut allocator = GpuWorkResourceIdAllocator::new();
     let query_label = gpu_label(format!("{}.timestamp_queries", plan.flow_label))?;
     let query_common = GpuResourceCommon::owned(
         query_label.clone(),
@@ -1090,10 +1084,11 @@ fn lower_timing_resources(
         GpuReconstruction::SourceBacked,
         gpu_provenance(query_label.clone()),
     )?;
-    let query_set = GpuQuerySetHandle::from_descriptor(
-        query_id,
-        GpuQuerySetDescriptor::new(query_common, GpuQueryKind::Timestamp, query_count)?,
-    );
+    let query_set = allocator.allocate_query_set_handle(GpuQuerySetDescriptor::new(
+        query_common,
+        GpuQueryKind::Timestamp,
+        query_count,
+    )?)?;
     let byte_len = u64::from(query_count) * 8;
     let resolve_label = gpu_label(format!("{}.timestamp_resolve", plan.flow_label))?;
     let resolve_common = GpuResourceCommon::owned(
@@ -1103,18 +1098,15 @@ fn lower_timing_resources(
         GpuReconstruction::SourceBacked,
         gpu_provenance(resolve_label.clone()),
     )?;
-    let resolve_buffer = GpuBufferHandle::from_descriptor(
-        resolve_id,
-        GpuBufferDescriptor::new(
-            resolve_common,
-            byte_len,
-            GpuBufferUsages::new(
-                &resolve_label,
-                [GpuBufferUsage::QueryResolve, GpuBufferUsage::CopySource],
-            )?,
-            GpuBufferInitialization::Uninitialized,
+    let resolve_buffer = allocator.allocate_buffer_handle(GpuBufferDescriptor::new(
+        resolve_common,
+        byte_len,
+        GpuBufferUsages::new(
+            &resolve_label,
+            [GpuBufferUsage::QueryResolve, GpuBufferUsage::CopySource],
         )?,
-    );
+        GpuBufferInitialization::Uninitialized,
+    )?)?;
     let readback_label = gpu_label(format!("{}.timestamp_readback", plan.flow_label))?;
     let readback_common = GpuResourceCommon::owned(
         readback_label.clone(),
@@ -1123,15 +1115,12 @@ fn lower_timing_resources(
         GpuReconstruction::SourceBacked,
         gpu_provenance(readback_label.clone()),
     )?;
-    let readback_buffer = GpuBufferHandle::from_descriptor(
-        readback_id,
-        GpuBufferDescriptor::new(
-            readback_common,
-            byte_len,
-            GpuBufferUsages::new(&readback_label, [GpuBufferUsage::CopyDestination])?,
-            GpuBufferInitialization::Uninitialized,
-        )?,
-    );
+    let readback_buffer = allocator.allocate_buffer_handle(GpuBufferDescriptor::new(
+        readback_common,
+        byte_len,
+        GpuBufferUsages::new(&readback_label, [GpuBufferUsage::CopyDestination])?,
+        GpuBufferInitialization::Uninitialized,
+    )?)?;
     Ok(TimingResources {
         query_set,
         resolve_buffer,
@@ -1164,25 +1153,6 @@ fn lower_timing_work(
         readback_label,
         readback_operation,
     })
-}
-
-fn adapter_allocator_after_plan(
-    plan: &CompiledRenderFlowPlan,
-) -> Result<GpuWorkResourceIdAllocator, RenderGpuWorkAdapterError> {
-    let owner = NonZeroU64::new(plan.flow_id.raw())
-        .ok_or(RenderGpuWorkAdapterError::InvalidFlowIdentity)?;
-    let max_local = plan
-        .resources
-        .resources
-        .iter()
-        .map(|resource| resource.id().diagnostic_parts().1)
-        .max()
-        .unwrap_or(0);
-    let mut allocator = GpuWorkResourceIdAllocator::for_owner_scope(owner);
-    for _ in 0..max_local {
-        let _ = allocator.allocate()?;
-    }
-    Ok(allocator)
 }
 
 fn resource_is_graph_entry(resource: &GpuResourceRef, plan: &CompiledRenderFlowPlan) -> bool {
@@ -1393,6 +1363,88 @@ mod tests {
             .expect("prepared test node should exist")
     }
 
+    fn timing_resource_identities(work: &PreparedRenderWorkPlan) -> [GpuWorkResourceId; 3] {
+        let resolve = work
+            .graph()
+            .nodes()
+            .iter()
+            .find_map(|prepared| match prepared.node().operation() {
+                GpuWorkOperation::Resolve(operation) => Some(operation),
+                _ => None,
+            })
+            .expect("timestamped work should contain a resolve operation");
+        let query_set = resolve.source().diagnostic_identity();
+        let resolve_buffer = resolve.destination().diagnostic_identity();
+        let readback_buffer = work
+            .graph()
+            .nodes()
+            .iter()
+            .find_map(|prepared| match prepared.node().operation() {
+                GpuWorkOperation::Copy(GpuCopyOperation::BufferToBuffer {
+                    source,
+                    destination,
+                }) if source.buffer().diagnostic_identity() == resolve_buffer => {
+                    Some(destination.buffer().diagnostic_identity())
+                }
+                _ => None,
+            })
+            .expect("timestamped work should contain a resolve-buffer readback copy");
+        [query_set, resolve_buffer, readback_buffer]
+    }
+
+    fn semantic_topological_order(work: &PreparedRenderWorkPlan) -> Vec<(GpuWorkNodeKind, String)> {
+        work.graph()
+            .topological_order()
+            .iter()
+            .map(|id| {
+                let node = work
+                    .graph()
+                    .nodes()
+                    .iter()
+                    .find(|node| node.id() == *id)
+                    .expect("topological node should be prepared");
+                (node.node().kind(), node.node().label().as_str().to_string())
+            })
+            .collect()
+    }
+
+    fn semantic_dependencies(
+        work: &PreparedRenderWorkPlan,
+    ) -> Vec<(String, String, Vec<&'static str>)> {
+        let label_for = |id| {
+            work.graph()
+                .nodes()
+                .iter()
+                .find(|node| node.id() == id)
+                .expect("dependency node should be prepared")
+                .node()
+                .label()
+                .as_str()
+                .to_string()
+        };
+        work.graph()
+            .dependencies()
+            .iter()
+            .map(|dependency| {
+                let reasons = dependency
+                    .reasons()
+                    .iter()
+                    .map(|reason| match reason {
+                        GpuDependencyReason::ReadAfterWrite { .. } => "read-after-write",
+                        GpuDependencyReason::WriteAfterRead { .. } => "write-after-read",
+                        GpuDependencyReason::WriteAfterWrite { .. } => "write-after-write",
+                        GpuDependencyReason::ExplicitNonData { .. } => "explicit-non-data",
+                    })
+                    .collect();
+                (
+                    label_for(dependency.before()),
+                    label_for(dependency.after()),
+                    reasons,
+                )
+            })
+            .collect()
+    }
+
     #[test]
     fn adapter_lowers_render_roles_whole_resources_attachments_and_projected_dispatch() {
         let plan = adapter_test_plan();
@@ -1547,6 +1599,80 @@ mod tests {
             Some(GpuCapabilityRequirement::Required(
                 GpuCapabilityFeature::TimestampQuery
             ))
+        );
+    }
+
+    #[test]
+    fn timing_resources_use_a_fresh_scope_without_changing_prepared_semantics() {
+        let plan = adapter_test_plan();
+        let compute_id = pass_id(&plan, "adapter.compute");
+        let dispatches = BTreeMap::from([(compute_id, [2, 1, 1])]);
+        let first = prepare_render_gpu_work(
+            &plan,
+            &dispatches,
+            (320, 180),
+            RenderGpuWorkInstrumentation::TimestampQueries,
+        )
+        .expect("first timestamped work should prepare");
+        let second = prepare_render_gpu_work(
+            &plan,
+            &dispatches,
+            (320, 180),
+            RenderGpuWorkInstrumentation::TimestampQueries,
+        )
+        .expect("second timestamped work should prepare");
+
+        let flow_owner_scopes = plan
+            .resources
+            .resources
+            .iter()
+            .map(|resource| resource.id().diagnostic_parts().0)
+            .collect::<BTreeSet<_>>();
+        let first_timing = timing_resource_identities(&first);
+        let second_timing = timing_resource_identities(&second);
+        let first_timing_scopes = first_timing
+            .iter()
+            .map(|identity| identity.diagnostic_parts().0)
+            .collect::<BTreeSet<_>>();
+        let second_timing_scopes = second_timing
+            .iter()
+            .map(|identity| identity.diagnostic_parts().0)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(first_timing_scopes.len(), 1);
+        assert_eq!(second_timing_scopes.len(), 1);
+        assert!(first_timing_scopes.is_disjoint(&flow_owner_scopes));
+        assert!(second_timing_scopes.is_disjoint(&flow_owner_scopes));
+        assert_ne!(first_timing_scopes, second_timing_scopes);
+        assert_eq!(
+            first_timing
+                .iter()
+                .map(|identity| identity.diagnostic_parts().1)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            second_timing
+                .iter()
+                .map(|identity| identity.diagnostic_parts().1)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            semantic_topological_order(&first),
+            semantic_topological_order(&second)
+        );
+        assert_eq!(
+            semantic_dependencies(&first),
+            semantic_dependencies(&second)
+        );
+        assert_eq!(
+            first
+                .ordered_render_pass_ids()
+                .expect("first prepared graph should order render passes"),
+            second
+                .ordered_render_pass_ids()
+                .expect("second prepared graph should order render passes")
         );
     }
 
