@@ -392,9 +392,11 @@ Rules common to all bridges:
 - exactly one serialized bridge remains at each accepted boundary;
 - a successor replaces its predecessor; the predecessor is deleted before the successor
   is accepted, so no bridge overlap remains;
-- each bridge carries only the exact current-main-proven terminals still required at its
-  boundary; terminals migrated to the owning child disappear;
-- successor capability narrows monotonically toward G5 rather than re-expanding access;
+- the set of carried-forward predecessor terminals monotonically shrinks;
+- a successor may add only newly realized terminal classes owned by that phase that
+  exact-current-main uncut consumers still require;
+- migrated predecessor terminals disappear, and no successor may reintroduce a
+  predecessor terminal already eliminated by its owning phase;
 - accepts only validated opaque handles;
 - repeats exact context, generation, and kind checks;
 - narrowly typed to audited current call sites;

@@ -75,7 +75,7 @@ PhaseImplementationSpec(
         "A successor replaces and deletes its predecessor before successor acceptance; two G4C migration bridges never remain active at one accepted boundary.",
         "Every bridge is narrowly typed, owner-local, non-public, non-authoritative, process-local, context/generation checked, source-guarded, and forbidden from storing, cloning, caching, returning, persisting, or treating borrowed backend objects as lookup or descriptor authority.",
         "No bridge exposes Deref, AsRef, a reusable raw handle, a generic raw-WGPU callback, an arbitrary consumer closure, or broad Device/Queue access; borrowed references do not escape their lexical use.",
-        "Each successor retains only current-main-proven residual terminals, migrated terminals disappear, capability narrows monotonically toward G5, and each bridge has one immediate deletion owner and complete terminal/call-site census.",
+        "The set of carried-forward predecessor terminals monotonically shrinks. A successor may add only newly realized terminal classes owned by that phase that exact-current-main uncut consumers still require. Migrated predecessor terminals disappear, and no successor may reintroduce a predecessor terminal already eliminated by its owning phase. Each bridge has one immediate deletion owner and a complete terminal/call-site census.",
     ],
 
     program_invariants: [
