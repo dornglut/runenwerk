@@ -69,13 +69,13 @@ PhaseImplementationSpec(
     ],
 
     serialized_bridge_sequence: [
-        "After G4C1, exactly one crate-private CurrentRenderResourceBridge may lend validated private resource references only to audited current renderer realization call sites; G4C2 deletes it.",
-        "After G4C2, exactly one crate-private CurrentRenderPipelineBridge may lend validated private shader-module and pipeline-layout references only to audited current pipeline creation call sites; G4C3 deletes it.",
-        "After G4C3, exactly one crate-private CurrentRenderExecutionBridge may lend validated private resource/binding/pipeline references only while the current execution adapter encodes accepted work; G5 deletes it.",
-        "A predecessor bridge is deleted before its successor bridge is accepted; two G4C migration bridges never remain active at one accepted boundary.",
+        "After G4C1, exactly one crate-private CurrentRenderResourceBridge may lend purpose-typed affinity-validated resource references to every audited current consumer whose semantic operation remains in G4C2, G4C3, or G5; it performs none of those operations and G4C2 supersedes and deletes it.",
+        "After G4C2, exactly one crate-private CurrentRenderPipelineBridge supersedes the deleted resource bridge and carries only proven still-required G4C1 resource terminals plus G4C2 program/layout/bind-group terminals for current pipeline creation and unchanged encoding; it does not own G5 and G4C3 supersedes and deletes it.",
+        "After G4C3, exactly one crate-private CurrentRenderExecutionBridge carries only accepted resource/bind-group/pipeline terminals needed by the unchanged G5 encoder; it lends validated references but does not encode or submit, and G5 deletes it.",
+        "A successor replaces and deletes its predecessor before successor acceptance; two G4C migration bridges never remain active at one accepted boundary.",
         "Every bridge is narrowly typed, owner-local, non-public, non-authoritative, process-local, context/generation checked, source-guarded, and forbidden from storing, cloning, caching, returning, persisting, or treating borrowed backend objects as lookup or descriptor authority.",
-        "No bridge exposes Deref, AsRef, a reusable raw handle, a generic raw-WGPU callback, an arbitrary consumer closure, or broad Device/Queue access.",
-        "Each bridge has one immediate deletion owner and one complete call-site census; no compatibility bridge survives beyond that successor acceptance.",
+        "No bridge exposes Deref, AsRef, a reusable raw handle, a generic raw-WGPU callback, an arbitrary consumer closure, or broad Device/Queue access; borrowed references do not escape their lexical use.",
+        "The set of carried-forward predecessor terminals monotonically shrinks. A successor may add only newly realized terminal classes owned by that phase that exact-current-main uncut consumers still require. Migrated predecessor terminals disappear, and no successor may reintroduce a predecessor terminal already eliminated by its owning phase. Each bridge has one immediate deletion owner and a complete terminal/call-site census.",
     ],
 
     program_invariants: [
@@ -95,16 +95,16 @@ PhaseImplementationSpec(
     ],
 
     cross_child_migration_rules: [
-        "G4C1 migrates resource creation/ownership and converts remaining renderer realization consumers to CurrentRenderResourceBridge; it does not realize WGSL modules, layouts, bind groups, or pipelines.",
-        "G4C2 consumes opaque G4C1 handles to realize programs/layouts/bind groups, deletes CurrentRenderResourceBridge, and converts remaining current pipeline creation to CurrentRenderPipelineBridge; it does not own pipeline realization.",
-        "G4C3 realizes pipelines, deletes CurrentRenderPipelineBridge, completes every current-consumer and deletion census, and leaves only CurrentRenderExecutionBridge for G5.",
+        "G4C1 migrates resource creation/ownership and uses CurrentRenderResourceBridge only to lend purpose-typed references to exact audited G4C2/G4C3/G5 consumers; it does not realize WGSL modules, layouts, bind groups, pipelines, or their operations.",
+        "G4C2 consumes opaque G4C1 handles to realize programs/layouts/bind groups, deletes CurrentRenderResourceBridge, and replaces it with CurrentRenderPipelineBridge carrying only residual resource terminals plus the G4C2 program/layout/bind-group terminals still proven necessary; it does not own pipeline realization or G5 execution.",
+        "G4C3 realizes pipelines, deletes CurrentRenderPipelineBridge, completes every current-consumer and deletion census, and leaves only CurrentRenderExecutionBridge with accepted resource/bind-group/pipeline terminals for unchanged G5 encoding.",
         "Each child deletes authority and predecessor bridges it fully replaces in the same accepted slice and leaves no forwarding alias or parallel old/new path.",
-        "No bridge owns operation, access, hazard, source, interface, stage-IO, layout, pipeline, cache, execution, progress, completion, or lifecycle truth.",
+        "No bridge owns operation, descriptor, resource, program, layout, pipeline, access, hazard, source, interface, stage-IO, cache, encoding, upload, submission, execution, progress, completion, or lifecycle truth.",
     ],
 
     validation: [
         "Each child runs focused deterministic and environment-dependent proof.",
-        "Each child proves its predecessor bridge has zero remaining references and its successor bridge has only the explicitly audited call sites.",
+        "Each child proves its predecessor bridge has zero remaining source references and its one successor bridge has only explicitly audited, current-main-proven residual terminals and call sites.",
         "Each child runs cargo validate.",
         "Each child runs git diff --check.",
         "Each child runs CI=true pnpm --dir docs-site build.",

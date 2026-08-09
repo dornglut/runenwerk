@@ -28,14 +28,14 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c1-resource-realization.ron",
     ],
 
-    goal: "Create one private context/device-generation-bound WGPU authority for canonical WGSL modules, mandatory version-matched Naga evidence, WGPU module acceptance, normalized observed shader-stage IO, bind-group layouts, pipeline layouts, typed bind groups, and correctness-complete caches; delete the G4C1 resource bridge; retain one narrowly scoped pipeline-successor bridge deleted by G4C3; and avoid realizing compute/render pipelines or performing final renderer cutover.",
+    goal: "Create one private context/device-generation-bound WGPU authority for canonical WGSL modules, mandatory version-matched Naga evidence, WGPU module acceptance, normalized observed shader-stage IO, bind-group layouts, pipeline layouts, typed bind groups, and correctness-complete caches; supersede and delete the G4C1 resource bridge with one narrowly scoped pipeline-successor bridge that carries only proven residual resource terminals plus G4C2 program/layout/bind-group terminals; and avoid realizing compute/render pipelines or performing final renderer cutover.",
 
     dependency_direction: [
         "Accepted G4B admitted source records, entry points, resource interfaces, stage-IO comparison vocabulary, and layouts -> G4C2 private WGSL and binding realization.",
         "Accepted G4C1 opaque resources -> G4C2 runtime binding compatibility and typed bind groups.",
         "The existing engine-private direct Naga dependency parses and validates canonical WGSL for normalized evidence; the original canonical WGSL text remains the only WGPU shader source submitted for backend realization.",
-        "G4C2 replaces every CurrentRenderResourceBridge call site and deletes that bridge.",
-        "Accepted G4C2 program records, observed stage-IO signatures, layouts, and bind groups -> G4C3 through opaque handles and CurrentRenderPipelineBridge where the still-current renderer pipeline owner requires borrowed private objects.",
+        "G4C2 deletes CurrentRenderResourceBridge and replaces it with CurrentRenderPipelineBridge, which carries only the proven residual G4C1 resource terminals that G4C2 does not itself migrate.",
+        "Accepted G4C2 program records, observed stage-IO signatures, layouts, and bind groups -> G4C3 through opaque handles and CurrentRenderPipelineBridge, which also carries only the program/layout/bind-group terminals still required by current pipeline creation and unchanged G5 encoding.",
     ],
 
     pinned_parser_baseline: [
@@ -110,7 +110,7 @@ PhaseImplementationSpec(
         "Validate exact resource kind, usage, range, minimum size, dynamic-offset policy and alignment, texture view/format/sample/multisample facts, storage access, sampler class, array cardinality, and context/device-generation affinity before backend creation.",
         "Reject unknown, duplicate, missing, extra, foreign, stale, or incompatible values with structured binding diagnostics.",
         "Backend bind-group creation is transactional and publishes no partial authoritative entry.",
-        "Every current bind-group consumer migrated here uses typed G4C1 handles directly, so CurrentRenderResourceBridge is deleted before G4C2 acceptance.",
+        "Every current bind-group consumer that G4C2 owns uses typed G4C1 handles directly, so CurrentRenderResourceBridge is deleted before G4C2 acceptance while only separately proven residual resource terminals move into CurrentRenderPipelineBridge.",
     ],
 
     validation_order: [
@@ -154,34 +154,35 @@ PhaseImplementationSpec(
     ],
 
     successor_migration_bridge: [
-        "Delete CurrentRenderResourceBridge and every call site before publishing G4C2 acceptance.",
+        "Delete CurrentRenderResourceBridge before publishing G4C2 acceptance; it has zero remaining source references and its still-required access is represented only by the successor's proven residual terminals.",
         "Permit exactly one crate-private module named CurrentRenderPipelineBridge after G4C2 acceptance.",
-        "The bridge exists only because current renderer-owned compute/render pipeline creation still requires borrowed private module and pipeline-layout objects until G4C3 replaces pipeline realization.",
-        "The bridge accepts validated opaque G4C2 program and pipeline-layout handles and exposes only narrowly typed owner-local terminals for audited current compute/render pipeline creation call sites; it exposes no public accessor, Deref, AsRef, reusable raw handle, generic raw-WGPU callback, or arbitrary consumer closure.",
-        "The bridge may lend borrowed shader-module and pipeline-layout references only for immediate current pipeline creation; borrowed values cannot be stored, cloned into ownership, cached, returned, used for command encoding, or treated as program/layout/pipeline identity.",
-        "The bridge does not expose raw resources or bind groups, does not validate stage IO, and owns no source, interface, layout, pipeline descriptor, cache, execution, or lifecycle truth.",
+        "The bridge exists only because audited current pipeline-creation and unchanged G5 encoding operations still require the proven residual G4C1 resources and G4C2 program/layout/bind-group objects until G4C3 supersedes it.",
+        "The bridge accepts validated opaque G4C1 resource and G4C2 program, bind-group-layout, pipeline-layout, and bind-group handles and exposes only narrowly typed owner-local terminals for exact audited current pipeline-creation and encoding consumers; it exposes no public accessor, Deref, AsRef, reusable raw handle, generic raw-WGPU callback, or arbitrary consumer closure.",
+        "The bridge may lend borrowed resource, shader-module, layout, and bind-group references only for lexical use through those purpose-typed terminals; borrowed values cannot escape, be stored, cloned into ownership, cached, returned, persisted, or treated as resource/program/layout/pipeline identity.",
+        "A terminal may support its unchanged later-phase operation, but the bridge never performs or owns pipeline realization, command encoding, uploads, submission, or any other operation.",
+        "The bridge owns validated access only; it does not validate stage IO and owns no resource, source, interface, layout, pipeline descriptor, cache, execution, or lifecycle truth.",
         "Bridge lookup repeats exact context/device-generation and handle-kind validation and invokes no external callback under registry locks.",
-        "Source guards permit exactly this named bridge and audited current pipeline call sites and reject a second pipeline bridge, the deleted resource bridge, or broad raw-WGPU reach-through.",
-        "G4C3 must migrate every pipeline creation call site and delete CurrentRenderPipelineBridge before publishing G4C3 acceptance.",
+        "Source guards permit exactly this named bridge and its audited current terminals and reject a second pipeline bridge, the deleted resource bridge, or broad raw-WGPU reach-through.",
+        "G4C3 must delete CurrentRenderPipelineBridge before publishing G4C3 acceptance, migrating terminals it owns and carrying only proven residual resource/bind-group terminals plus newly realized G4C3 pipeline terminals into its single execution successor bridge.",
     ],
 
     current_consumer_migration: [
         "Repeat the exact-current-main census for shader-module, binding-layout, pipeline-layout, bind-group, runtime-binding, parameter-byte, sidecar, renderer setup, material, UI, example, bench, and test consumers.",
         "Repeat the dependency census for every direct Naga and WGPU use and record the exact module that owns private WGSL evidence.",
         "Migrate explicit program/interface/layout/bind-group realization through the G4C2 owner while retaining filesystem/watch/reload/LKG policy in Runenwerk and semantic shader meaning in RunenRender or other consumers.",
-        "Migrate every CurrentRenderResourceBridge call site to typed G4C2 bind-group realization and delete that bridge.",
-        "Convert unavoidable current renderer pipeline creation to CurrentRenderPipelineBridge rather than leaving renderer-owned module/layout registries or a parallel G4C2 realization path.",
+        "Migrate CurrentRenderResourceBridge terminals that G4C2 owns to typed G4C2 bind-group realization, delete that predecessor bridge, and record the only residual resource terminals that the successor may retain.",
+        "Convert unavoidable current renderer pipeline creation and unchanged G5 encoding access to CurrentRenderPipelineBridge terminals rather than leaving renderer-owned resource/module/layout/bind-group registries or a parallel G4C2 realization path.",
         "Classify render-pipeline stage-IO comparison, compute/render pipeline realization, and final renderer cutover explicitly for G4C3 rather than changing them here.",
-        "Preserve existing G5 command encoding and G7 surface behavior as migration evidence only.",
+        "Preserve existing G5 command encoding and G7 surface behavior as migration evidence and ownership; an unchanged G5 operation may lexically consume a successor-terminal borrow without moving execution into G4C2.",
     ],
 
     delete_after_migration: [
-        "CurrentRenderResourceBridge and all of its call sites.",
+        "CurrentRenderResourceBridge and every source reference to it; each still-required access must instead be an exact CurrentRenderPipelineBridge terminal or a G4C2-owned realization path.",
         "Renderer-owned WGPU shader-module, bind-group-layout, pipeline-layout, and bind-group registries or caches fully replaced by G4C2.",
         "Automatic or inferred WGPU layout authority.",
         "Program/interface/layout/bind-group keys based only on strings, paths, TypeId, renderer IDs, labels, or naked hashes.",
         "Parallel WGSL module, Naga evidence, or runtime binding realization paths outside the RunenGPU owner.",
-        "Broad raw module/layout access outside CurrentRenderPipelineBridge.",
+        "Broad raw resource/module/layout/bind-group access outside the one accepted CurrentRenderPipelineBridge at the G4C2 boundary.",
         "G4C2-owned program, resource-interface, observed-stage-IO, layout, binding, evidence, and cache truth in the temporary G3 execution sidecar.",
     ],
 
@@ -216,7 +217,7 @@ PhaseImplementationSpec(
         "Equal duplicate realization reuses one record; changed descriptor rejects transactionally.",
         "Typed binding values reject wrong kind, range, size, alignment, format, sample class, access, array cardinality, foreign context, and stale generation.",
         "CurrentRenderResourceBridge has zero remaining source references at G4C2 acceptance.",
-        "CurrentRenderPipelineBridge rejects foreign, stale, wrong-kind, storage, caching, encoding, and return attempts and has only audited current pipeline creation call sites.",
+        "CurrentRenderPipelineBridge rejects foreign, stale, wrong-kind, escape, storage, caching, return, identity, and bridge-owned pipeline/encoding/upload/submission attempts and has only audited purpose-typed current terminals.",
         "Labels, provenance, source maps, authoring paths, and raw Naga handles do not split equal realizations.",
         "Source and dependency guards reject public Naga/WGPU authority, a second evidence path, renderer/ECS/application/product ownership, broad access, and a second bridge.",
     ],
@@ -228,7 +229,7 @@ PhaseImplementationSpec(
         "Retain real normalized vertex-input and fragment-output signatures for the representative render program.",
         "Reject one direct-Naga parse/validation failure, one resource-interface mismatch, and one bounded Naga/WGPU path disagreement fixture where the pinned APIs permit deterministic construction.",
         "Realize representative bind-group and pipeline layouts and one typed bind group using accepted G4C1 resources.",
-        "Exercise one current representative compute or render pipeline creation through CurrentRenderPipelineBridge without implementing G4C3 pipeline authority.",
+        "Exercise one current representative compute or render pipeline-creation terminal and one unchanged G5 encoding terminal through CurrentRenderPipelineBridge without implementing G4C3 pipeline authority or moving G5 ownership.",
         "Prove cache reuse within one context/generation and isolation across another context/generation.",
     ],
 
@@ -243,10 +244,10 @@ PhaseImplementationSpec(
     exclusions: [
         "No compute or render pipeline realization under RunenGPU authority and no comparison of stage IO against a G4B render pipeline descriptor.",
         "No final renderer-wide realization/cache cutover beyond module/layout/bind-group authority fully replaced here.",
-        "No raw-WGPU bridge other than CurrentRenderPipelineBridge after CurrentRenderResourceBridge deletion and no generic callback escape hatch.",
+        "No raw-WGPU bridge other than CurrentRenderPipelineBridge after CurrentRenderResourceBridge deletion; its accepted residual resource/program/layout/bind-group terminals do not create a generic callback escape hatch.",
         "No new Naga/WGPU dependency or feature change when exact-current-main already proves the accepted direct baseline; any required dependency-baseline change stops for separate authorization.",
         "No authoring compiler, WESL, Slang, HLSL, GLSL, SPIR-V, source discovery, watch, reload scheduling, or last-known-good implementation.",
-        "No G5 execution, submission, progress, readback, cancellation, retirement, delayed destruction, or shutdown redesign.",
+        "No G5 execution, submission, progress, readback, cancellation, retirement, delayed destruction, or shutdown redesign; an unchanged G5 operation may only use a lexical successor-terminal borrow.",
         "No G7 surface, presentation, device replacement, loss, or reconstruction implementation.",
         "No RunenRender semantics, package extraction, stable format, compatibility facade, generated workflow state, inferred layout authority, or public raw-WGPU escape hatch.",
     ],
@@ -269,8 +270,8 @@ PhaseImplementationSpec(
         "Every published program has direct Naga parse/validation evidence, explicit G4B resource agreement, retained stage-IO signatures, and WGPU acceptance of the same canonical WGSL text.",
         "Typed layouts and bind groups use accepted G4C1 resource handles and complete compatibility validation.",
         "Program/layout/bind-group cache keys and outcomes are correctness-complete and structured.",
-        "CurrentRenderResourceBridge and every replaced renderer-owned module/layout/bind-group authority are deleted without aliases or a parallel path.",
-        "Exactly one CurrentRenderPipelineBridge remains for immediate G4C3 deletion; no broader raw program/layout reach-through remains.",
+        "CurrentRenderResourceBridge and every replaced renderer-owned module/layout/bind-group authority are deleted without aliases or a parallel path; each still-required resource terminal is either G4C2-owned or an exact CurrentRenderPipelineBridge terminal.",
+        "Exactly one CurrentRenderPipelineBridge remains for G4C3 replacement and deletion, carrying only proven residual resource terminals plus current program/layout/bind-group terminals; no broader raw reach-through remains.",
         "Compute/render pipelines and final stage-IO compatibility remain blocked for G4C3.",
         "Exact-head validation and independent review pass, then G4C3 may be activated from accepted main.",
     ],

@@ -354,10 +354,12 @@ derives may prepare bytes; they do not prove compatibility.
 A clean type-by-type cutover cannot assume that all downstream current consumers vanish
 at once:
 
-- after G4C1 owns resources, current renderer bind-group and pipeline creation still
-  needs those private resource objects until G4C2 replaces binding realization;
-- after G4C2 owns modules, layouts, and bind groups, current pipeline creation still
-  needs private program/layout objects until G4C3 replaces pipeline realization;
+- after G4C1 owns resources, audited current consumers can still need private resource
+  references while their semantic operation remains in G4C2, G4C3, or the unchanged
+  G5 execution path;
+- after G4C2 owns modules, layouts, and bind groups, audited current consumers can still
+  need the proven residual resource references plus private program, layout, and binding
+  references while pipeline realization or the unchanged G5 execution path remains;
 - after G4C3 owns pipelines, current command encoding still needs private realized
   objects until G5 replaces execution ownership.
 
@@ -370,22 +372,31 @@ bridge ladder.
 ```text
 G4C1
     CurrentRenderResourceBridge
-        deleted by G4C2
+        purpose-typed terminals for exact audited G4C2/G4C3/G5 consumers
+        superseded and deleted by G4C2
 
 G4C2
     CurrentRenderPipelineBridge
-        deleted by G4C3
+        residual G4C1 resource terminals plus G4C2 program/layout/bind-group terminals
+        superseded and deleted by G4C3
 
 G4C3
     CurrentRenderExecutionBridge
+        accepted resource/bind-group/pipeline terminals for the unchanged G5 encoder
         deleted by G5
 ```
 
 Rules common to all bridges:
 
 - crate-private and process-local;
-- exactly one successor bridge remains at an accepted boundary;
-- the predecessor bridge is deleted before the successor bridge is accepted;
+- exactly one serialized bridge remains at each accepted boundary;
+- a successor replaces its predecessor; the predecessor is deleted before the successor
+  is accepted, so no bridge overlap remains;
+- the set of carried-forward predecessor terminals monotonically shrinks;
+- a successor may add only newly realized terminal classes owned by that phase that
+  exact-current-main uncut consumers still require;
+- migrated predecessor terminals disappear, and no successor may reintroduce a
+  predecessor terminal already eliminated by its owning phase;
 - accepts only validated opaque handles;
 - repeats exact context, generation, and kind checks;
 - narrowly typed to audited current call sites;
@@ -393,8 +404,12 @@ Rules common to all bridges:
   arbitrary consumer closure, or broad `Device`/`Queue` access;
 - borrowed backend values cannot be stored, cloned into ownership, cached, returned,
   persisted, or used as identity/lookup authority;
-- owns no semantic, descriptor, access, hazard, cache, execution, progress, completion,
-  or lifecycle truth;
+- owns validated lexical access only: never resource, descriptor, program, layout,
+  bind-group, pipeline, encoding, upload, submission, semantic, access, hazard, cache,
+  execution, progress, completion, or lifecycle truth;
+- the semantic operation remains owned by its phase. For example, an unchanged G5
+  operation may lexically use a borrowed resource reference, but no bridge performs or
+  owns encoding, uploads, submission, or other execution;
 - source guards enumerate its exact call sites and reject a second bridge;
 - immediate successor owns deletion.
 
@@ -412,8 +427,10 @@ It owns exact affinity checks, transactional resource registries, resource cache
 compatibility, migration of resource creation and ownership, and deletion of replaced
 renderer resource registries.
 
-It leaves only `CurrentRenderResourceBridge` for existing renderer realization call
-sites. It does not parse WGSL or create modules, layouts, bind groups, or pipelines.
+It leaves only `CurrentRenderResourceBridge` for the exact audited current consumers
+whose operation remains in G4C2, G4C3, or G5. The bridge may lend purpose-typed,
+affinity-validated resource references, but it does not perform those operations, parse
+WGSL, or create modules, layouts, bind groups, or pipelines.
 
 ## G4C2 — program and binding realization
 
@@ -427,11 +444,13 @@ G4C2 owns:
 - typed bind groups;
 - their private registries and caches.
 
-It consumes accepted G4C1 resource handles, migrates all resource-bridge consumers to
-typed bind-group realization, and deletes `CurrentRenderResourceBridge`.
+It consumes accepted G4C1 resource handles, migrates the resource terminals it now owns
+to typed bind-group realization, and deletes `CurrentRenderResourceBridge` as a bridge.
+Its single replacement, `CurrentRenderPipelineBridge`, carries forward only proven
+residual G4C1 resource terminals together with the new G4C2 program, layout, and
+bind-group terminals still required by current pipeline creation or unchanged encoding.
 
-It leaves only `CurrentRenderPipelineBridge` for audited current compute/render pipeline
-creation. It does not own pipeline realization or final cutover.
+It does not own pipeline realization, G5 execution, or final cutover.
 
 ## G4C3 — pipeline realization and final cutover
 
@@ -445,9 +464,10 @@ G4C3 owns:
 - deletion of renderer-owned program/layout/bind-group/pipeline cache authority;
 - deletion of synthetic handles and G4-owned sidecar truth.
 
-It migrates every pipeline-bridge call site and deletes `CurrentRenderPipelineBridge`.
-It leaves only `CurrentRenderExecutionBridge` for current command encoding. G5 owns
-that bridge's deletion.
+It migrates the pipeline-bridge terminals it replaces and deletes
+`CurrentRenderPipelineBridge`. It leaves only `CurrentRenderExecutionBridge`, carrying
+the accepted resource, bind-group, and pipeline terminals needed by the unchanged G5
+encoder. That bridge lends validated references only; G5 owns encoding and its deletion.
 
 # Delivery and acceptance rules
 
@@ -459,8 +479,9 @@ Each child requires:
 4. focused deterministic and environment-dependent proof;
 5. complete migration of authority owned by that child;
 6. deletion of fully replaced authority and predecessor bridge without aliases or
-   parallel paths;
-7. source guards proving the successor bridge's exact call sites and uniqueness;
+   parallel paths, while the one successor retains only proven residual terminals;
+7. source guards proving the successor bridge's exact terminals, call sites, and
+   uniqueness;
 8. `cargo validate`, `git diff --check`, and the production docs build;
 9. repository-owned exact-head CI and Documentation Build;
 10. independent complete-diff review;
@@ -497,7 +518,8 @@ Stop and require another architecture decision when:
 - source consistency cannot remain bounded and process-local;
 - stage-IO compatibility cannot be expressed without moving vertex or target policy
   into the resource interface;
-- a child cannot delete the authority or predecessor bridge it fully replaces;
+- a child cannot delete the authority or predecessor bridge it fully replaces while
+  preserving only the audited still-required successor terminals;
 - correct implementation requires overlapping bridges, a broad callback, or public raw
   backend access;
 - one child must consume an unmerged predecessor branch;
