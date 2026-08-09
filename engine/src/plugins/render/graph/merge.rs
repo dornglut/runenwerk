@@ -3,7 +3,8 @@ use crate::plugins::render::composition::{
     RenderFragmentDescriptor, RenderFragmentDiagnostic, RenderFragmentDiagnosticKind,
     RenderFragmentLabelRef, RenderFragmentMergeReport, RenderFragmentPackageDescriptor,
     RenderFragmentPassDescriptor, RenderFragmentPassKind, RenderFragmentProvenanceElementKind,
-    RenderFragmentProvenanceRecord, RenderFragmentResourceKind, validate_fragment_package,
+    RenderFragmentProvenanceRecord, RenderFragmentResourceKind, RenderFragmentShaderBinding,
+    validate_fragment_package,
 };
 use crate::plugins::render::{
     RenderFlow, RenderFlowAuthoringError, RenderPassViewScope, RenderTargetAliasKind,
@@ -258,8 +259,10 @@ fn merge_pass_into_flow(
             {
                 builder = builder.shader_asset(path.clone());
             }
-            for write in &pass.write_textures {
-                builder = builder.write_texture(write.resolve(namespace));
+            for binding in &pass.shader_bindings {
+                if let RenderFragmentShaderBinding::StorageTexture { binding, resource } = binding {
+                    builder = builder.write_texture(*binding, resource.resolve(namespace));
+                }
             }
             if let Some(dispatch) = pass.compute_dispatch {
                 builder = builder.dispatch(dispatch);
@@ -282,11 +285,23 @@ fn merge_pass_into_flow(
                     }
                 }
             }
-            for sample in &pass.sample_textures {
-                builder = builder.sample_texture(sample.resolve(namespace));
-            }
-            for write in &pass.write_textures {
-                builder = builder.write_texture(write.resolve(namespace));
+            for binding in &pass.shader_bindings {
+                match binding {
+                    RenderFragmentShaderBinding::SampledTexture {
+                        texture_binding,
+                        sampler_binding,
+                        resource,
+                    } => {
+                        builder = builder.sample_texture(
+                            *texture_binding,
+                            *sampler_binding,
+                            resource.resolve(namespace),
+                        );
+                    }
+                    RenderFragmentShaderBinding::StorageTexture { binding, resource } => {
+                        builder = builder.write_texture(*binding, resource.resolve(namespace));
+                    }
+                }
             }
             for color in &pass.color_outputs {
                 builder = builder.write_color_target(color.resolve(namespace));
@@ -315,11 +330,23 @@ fn merge_pass_into_flow(
                     }
                 }
             }
-            for sample in &pass.sample_textures {
-                builder = builder.sample_texture(sample.resolve(namespace));
-            }
-            for write in &pass.write_textures {
-                builder = builder.write_texture(write.resolve(namespace));
+            for binding in &pass.shader_bindings {
+                match binding {
+                    RenderFragmentShaderBinding::SampledTexture {
+                        texture_binding,
+                        sampler_binding,
+                        resource,
+                    } => {
+                        builder = builder.sample_texture(
+                            *texture_binding,
+                            *sampler_binding,
+                            resource.resolve(namespace),
+                        );
+                    }
+                    RenderFragmentShaderBinding::StorageTexture { binding, resource } => {
+                        builder = builder.write_texture(*binding, resource.resolve(namespace));
+                    }
+                }
             }
             for color in &pass.color_outputs {
                 builder = builder.write_color_target(color.resolve(namespace));

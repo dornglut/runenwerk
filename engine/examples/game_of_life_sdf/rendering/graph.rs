@@ -1,7 +1,15 @@
 use crate::rendering::{DEFAULT_GRID_CELL_COUNT, GameOfLifeCell, GameOfLifeRenderState};
+use engine::plugins::gpu::GpuBindingKey;
 use engine::plugins::render::RenderFlow;
 
 pub(crate) fn build_render_flow() -> RenderFlow {
+    // `game_of_life_{compute,compose}.wgsl` use params at binding 0 and the
+    // ping-pong storage pair at bindings 1 and 2.
+    let compute_params_binding = binding_key(0);
+    let cells_a_binding = binding_key(1);
+    let cells_b_binding = binding_key(2);
+    let compose_params_binding = binding_key(0);
+
     RenderFlow::new("game_of_life_sdf")
         .with_state::<GameOfLifeRenderState>()
         .with_surface_color()
@@ -11,16 +19,22 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .expect("render flow authoring should succeed")
         .compute_pass("simulate")
         .shader_asset("assets/shaders/game_of_life_compute.wgsl")
-        .uniform_from_state(GameOfLifeRenderState::compute_params)
+        .uniform_from_state(
+            compute_params_binding,
+            GameOfLifeRenderState::compute_params,
+        )
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage("cells")
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "cells")
         .dispatch_from_state(GameOfLifeRenderState::dispatch_workgroups)
         .finish()
         .fullscreen_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
-        .uniform_from_state_with_surface(GameOfLifeRenderState::compose_params)
+        .uniform_from_state_with_surface(
+            compose_params_binding,
+            GameOfLifeRenderState::compose_params,
+        )
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage("cells")
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "cells")
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .finish()
@@ -29,6 +43,11 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .finish()
         .validate()
         .expect("game_of_life_sdf flow should validate")
+}
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding)
+        .expect("game-of-life shader binding should fit GpuBindingKey")
 }
 
 #[cfg(test)]

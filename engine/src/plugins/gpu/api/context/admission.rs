@@ -522,6 +522,10 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
         GpuCapabilityFeature::TimestampQuery
             | GpuCapabilityFeature::StorageTexture
             | GpuCapabilityFeature::IndirectDraw
+            | GpuCapabilityFeature::TextureBindingArray
+            | GpuCapabilityFeature::BufferBindingArray
+            | GpuCapabilityFeature::StorageResourceBindingArray
+            | GpuCapabilityFeature::UniformBufferBindingArray
     )
 }
 
@@ -703,6 +707,35 @@ mod tests {
     }
 
     #[test]
+    fn unrequested_binding_array_support_is_not_published_as_enabled_device_fact() {
+        let candidate = evaluate_candidate(
+            &GpuContextDescriptor::new(GpuCapabilityRequirements::new()),
+            adapter([GpuCapabilityFeature::TextureBindingArray]),
+            true,
+        )
+        .unwrap();
+        assert!(
+            candidate
+                .adapter()
+                .supported()
+                .supports(GpuCapabilityFeature::TextureBindingArray)
+        );
+        assert!(
+            !candidate
+                .enabled_features()
+                .any(|feature| feature == GpuCapabilityFeature::TextureBindingArray)
+        );
+
+        let device = admitted_device_facts(
+            &candidate,
+            GpuDeviceLimits::new(limits(), alignments()),
+            Vec::new(),
+        )
+        .unwrap();
+        assert!(!device.is_enabled(GpuCapabilityFeature::TextureBindingArray));
+    }
+
+    #[test]
     fn portability_uses_admitted_contract_not_backend_preference() {
         let baseline = evaluate_candidate(
             &GpuContextDescriptor::new(GpuCapabilityRequirements::new())
@@ -732,6 +765,32 @@ mod tests {
             extension.portability(),
             GpuPortabilityClass::PortableWithDeclaredExtensions
         );
+
+        let mut binding_arrays = GpuCapabilityRequirements::new();
+        binding_arrays
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TextureBindingArray,
+            ))
+            .unwrap();
+        let binding_array_extension = evaluate_candidate(
+            &GpuContextDescriptor::new(binding_arrays.clone()),
+            adapter([GpuCapabilityFeature::TextureBindingArray]),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            binding_array_extension.portability(),
+            GpuPortabilityClass::PortableWithDeclaredExtensions
+        );
+        assert!(matches!(
+            evaluate_candidate(
+                &GpuContextDescriptor::new(binding_arrays)
+                    .with_portability_policy(GpuPortabilityPolicy::RequirePortableBaseline),
+                adapter([GpuCapabilityFeature::TextureBindingArray]),
+                true,
+            ),
+            Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdmissibleCandidate
+        ));
 
         let specialized = evaluate_candidate(
             &GpuContextDescriptor::new(GpuCapabilityRequirements::new())

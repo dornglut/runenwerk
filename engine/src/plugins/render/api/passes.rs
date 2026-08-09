@@ -1,8 +1,11 @@
-use crate::plugins::gpu::{GpuBufferHandle, GpuWorkResourceId};
+use crate::plugins::gpu::{
+    GpuBindingKey, GpuBufferHandle, GpuStorageBufferAccess, GpuStorageTextureAccess,
+    GpuWorkResourceId,
+};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::api::{
     ComputeDispatchBinding, ComputeDispatchDescriptor, PassParamBinding, RenderFlow,
-    RenderFlowAuthoringError,
+    RenderFlowAuthoringError, RenderShaderBinding, RenderShaderBindingResource,
 };
 use crate::plugins::render::graph::RenderShaderReference;
 use crate::plugins::render::{
@@ -51,6 +54,7 @@ impl ComputePassBuilder {
 
     pub fn uniform_from_state<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         projection: F,
     ) -> Result<Self, RenderFlowAuthoringError>
     where
@@ -59,11 +63,16 @@ impl ComputePassBuilder {
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
-        add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, binding, uniform_id, projection);
         Ok(self)
     }
 
-    pub fn uniform_from_state_to<S, U, F>(mut self, handle: GpuBufferHandle, projection: F) -> Self
+    pub fn uniform_from_state_to<S, U, F>(
+        mut self,
+        binding: GpuBindingKey,
+        handle: GpuBufferHandle,
+        projection: F,
+    ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
@@ -71,32 +80,66 @@ impl ComputePassBuilder {
     {
         add_uniform_state_binding::<S, U, F>(
             &mut self.pass,
+            binding,
             handle.diagnostic_identity(),
             projection,
         );
         self
     }
 
-    pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
+    pub fn bind_storage(mut self, binding: GpuBindingKey, handle: GpuBufferHandle) -> Self {
         let id = handle.diagnostic_identity();
+        add_shader_binding(
+            &mut self.pass,
+            binding,
+            RenderShaderBindingResource::StorageBuffer {
+                resource: id,
+                access: GpuStorageBufferAccess::ReadWrite,
+            },
+        );
         push_unique_resource(&mut self.pass.storage_reads, id);
         push_unique_resource(&mut self.pass.storage_writes, id);
         self
     }
 
-    pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
+    pub fn write_texture(
+        mut self,
+        binding: GpuBindingKey,
+        resource_label: impl Into<String>,
+    ) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        add_shader_binding(
+            &mut self.pass,
+            binding,
+            RenderShaderBindingResource::StorageTexture {
+                resource: id,
+                access: GpuStorageTextureAccess::WriteOnly,
+            },
+        );
         push_unique_resource(&mut self.pass.write_textures, id);
         self
     }
 
-    pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
+    pub fn bind_ping_pong_storage(
+        mut self,
+        a_binding: GpuBindingKey,
+        b_binding: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
         let label = label.into();
         let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
-        push_unique_resource(&mut self.pass.storage_reads, a_id);
-        push_unique_resource(&mut self.pass.storage_reads, b_id);
-        push_unique_resource(&mut self.pass.storage_writes, a_id);
-        push_unique_resource(&mut self.pass.storage_writes, b_id);
+        for (binding, id) in [(a_binding, a_id), (b_binding, b_id)] {
+            add_shader_binding(
+                &mut self.pass,
+                binding,
+                RenderShaderBindingResource::StorageBuffer {
+                    resource: id,
+                    access: GpuStorageBufferAccess::ReadWrite,
+                },
+            );
+            push_unique_resource(&mut self.pass.storage_reads, id);
+            push_unique_resource(&mut self.pass.storage_writes, id);
+        }
         self
     }
 
@@ -115,12 +158,22 @@ impl ComputePassBuilder {
         self
     }
 
-    pub fn reads_current(self, label: impl Into<String>) -> Self {
-        self.bind_ping_pong_storage(label)
+    pub fn reads_current(
+        self,
+        a_binding: GpuBindingKey,
+        b_binding: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
+        self.bind_ping_pong_storage(a_binding, b_binding, label)
     }
 
-    pub fn writes_next(self, label: impl Into<String>) -> Self {
-        self.bind_ping_pong_storage(label)
+    pub fn writes_next(
+        self,
+        a_binding: GpuBindingKey,
+        b_binding: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
+        self.bind_ping_pong_storage(a_binding, b_binding, label)
     }
 
     pub fn order_after(mut self, pass_label: impl Into<String>) -> Self {
@@ -179,6 +232,7 @@ impl FullscreenPassBuilder {
 
     pub fn uniform_from_state<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         projection: F,
     ) -> Result<Self, RenderFlowAuthoringError>
     where
@@ -187,12 +241,13 @@ impl FullscreenPassBuilder {
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
-        add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, binding, uniform_id, projection);
         Ok(self)
     }
 
     pub fn uniform_from_state_with_surface<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         projection: F,
     ) -> Result<Self, RenderFlowAuthoringError>
     where
@@ -201,11 +256,21 @@ impl FullscreenPassBuilder {
         F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
         let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
-        add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
+        add_uniform_state_with_surface_binding::<S, U, F>(
+            &mut self.pass,
+            binding,
+            uniform_id,
+            projection,
+        );
         Ok(self)
     }
 
-    pub fn uniform_from_state_to<S, U, F>(mut self, handle: GpuBufferHandle, projection: F) -> Self
+    pub fn uniform_from_state_to<S, U, F>(
+        mut self,
+        binding: GpuBindingKey,
+        handle: GpuBufferHandle,
+        projection: F,
+    ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
@@ -213,6 +278,7 @@ impl FullscreenPassBuilder {
     {
         add_uniform_state_binding::<S, U, F>(
             &mut self.pass,
+            binding,
             handle.diagnostic_identity(),
             projection,
         );
@@ -221,6 +287,7 @@ impl FullscreenPassBuilder {
 
     pub fn uniform_from_state_with_surface_to<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         handle: GpuBufferHandle,
         projection: F,
     ) -> Self
@@ -231,34 +298,85 @@ impl FullscreenPassBuilder {
     {
         add_uniform_state_with_surface_binding::<S, U, F>(
             &mut self.pass,
+            binding,
             handle.diagnostic_identity(),
             projection,
         );
         self
     }
 
-    pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
-        push_unique_resource(&mut self.pass.storage_reads, handle.diagnostic_identity());
+    pub fn bind_storage(mut self, binding: GpuBindingKey, handle: GpuBufferHandle) -> Self {
+        let id = handle.diagnostic_identity();
+        add_shader_binding(
+            &mut self.pass,
+            binding,
+            RenderShaderBindingResource::StorageBuffer {
+                resource: id,
+                access: GpuStorageBufferAccess::ReadOnly,
+            },
+        );
+        push_unique_resource(&mut self.pass.storage_reads, id);
         self
     }
 
-    pub fn sample_texture(mut self, resource_label: impl Into<String>) -> Self {
+    pub fn sample_texture(
+        mut self,
+        texture_binding: GpuBindingKey,
+        sampler_binding: GpuBindingKey,
+        resource_label: impl Into<String>,
+    ) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        add_shader_binding(
+            &mut self.pass,
+            texture_binding,
+            RenderShaderBindingResource::SampledTexture(id),
+        );
+        add_shader_binding(
+            &mut self.pass,
+            sampler_binding,
+            RenderShaderBindingResource::Sampler,
+        );
         push_unique_resource(&mut self.pass.sampled_textures, id);
         self
     }
 
-    pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
+    pub fn write_texture(
+        mut self,
+        binding: GpuBindingKey,
+        resource_label: impl Into<String>,
+    ) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        add_shader_binding(
+            &mut self.pass,
+            binding,
+            RenderShaderBindingResource::StorageTexture {
+                resource: id,
+                access: GpuStorageTextureAccess::WriteOnly,
+            },
+        );
         push_unique_resource(&mut self.pass.write_textures, id);
         self
     }
 
-    pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
+    pub fn bind_ping_pong_storage(
+        mut self,
+        a_binding: GpuBindingKey,
+        b_binding: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
         let label = label.into();
         let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
-        push_unique_resource(&mut self.pass.storage_reads, a_id);
-        push_unique_resource(&mut self.pass.storage_reads, b_id);
+        for (binding, id) in [(a_binding, a_id), (b_binding, b_id)] {
+            add_shader_binding(
+                &mut self.pass,
+                binding,
+                RenderShaderBindingResource::StorageBuffer {
+                    resource: id,
+                    access: GpuStorageBufferAccess::ReadOnly,
+                },
+            );
+            push_unique_resource(&mut self.pass.storage_reads, id);
+        }
         self
     }
 
@@ -342,6 +460,7 @@ impl GraphicsPassBuilder {
 
     pub fn uniform_from_state<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         projection: F,
     ) -> Result<Self, RenderFlowAuthoringError>
     where
@@ -350,12 +469,13 @@ impl GraphicsPassBuilder {
         F: Fn(&S) -> U + Send + Sync + 'static,
     {
         let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
-        add_uniform_state_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
+        add_uniform_state_binding::<S, U, F>(&mut self.pass, binding, uniform_id, projection);
         Ok(self)
     }
 
     pub fn uniform_from_state_with_surface<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         projection: F,
     ) -> Result<Self, RenderFlowAuthoringError>
     where
@@ -364,11 +484,21 @@ impl GraphicsPassBuilder {
         F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
     {
         let uniform_id = allocate_uniform_id::<U>(&mut self.flow, &self.pass)?;
-        add_uniform_state_with_surface_binding::<S, U, F>(&mut self.pass, uniform_id, projection);
+        add_uniform_state_with_surface_binding::<S, U, F>(
+            &mut self.pass,
+            binding,
+            uniform_id,
+            projection,
+        );
         Ok(self)
     }
 
-    pub fn uniform_from_state_to<S, U, F>(mut self, handle: GpuBufferHandle, projection: F) -> Self
+    pub fn uniform_from_state_to<S, U, F>(
+        mut self,
+        binding: GpuBindingKey,
+        handle: GpuBufferHandle,
+        projection: F,
+    ) -> Self
     where
         S: ecs::Resource + Send + Sync + 'static,
         U: GpuParams + Send + Sync + 'static,
@@ -376,6 +506,7 @@ impl GraphicsPassBuilder {
     {
         add_uniform_state_binding::<S, U, F>(
             &mut self.pass,
+            binding,
             handle.diagnostic_identity(),
             projection,
         );
@@ -384,6 +515,7 @@ impl GraphicsPassBuilder {
 
     pub fn uniform_from_state_with_surface_to<S, U, F>(
         mut self,
+        binding: GpuBindingKey,
         handle: GpuBufferHandle,
         projection: F,
     ) -> Self
@@ -394,33 +526,84 @@ impl GraphicsPassBuilder {
     {
         add_uniform_state_with_surface_binding::<S, U, F>(
             &mut self.pass,
+            binding,
             handle.diagnostic_identity(),
             projection,
         );
         self
     }
 
-    pub fn bind_storage(mut self, handle: GpuBufferHandle) -> Self {
-        push_unique_resource(&mut self.pass.storage_reads, handle.diagnostic_identity());
+    pub fn bind_storage(mut self, binding: GpuBindingKey, handle: GpuBufferHandle) -> Self {
+        let id = handle.diagnostic_identity();
+        add_shader_binding(
+            &mut self.pass,
+            binding,
+            RenderShaderBindingResource::StorageBuffer {
+                resource: id,
+                access: GpuStorageBufferAccess::ReadOnly,
+            },
+        );
+        push_unique_resource(&mut self.pass.storage_reads, id);
         self
     }
 
-    pub fn bind_ping_pong_storage(mut self, label: impl Into<String>) -> Self {
+    pub fn bind_ping_pong_storage(
+        mut self,
+        a_binding: GpuBindingKey,
+        b_binding: GpuBindingKey,
+        label: impl Into<String>,
+    ) -> Self {
         let label = label.into();
         let (a_id, b_id) = require_ping_pong_storage(&self.flow, label.as_str());
-        push_unique_resource(&mut self.pass.storage_reads, a_id);
-        push_unique_resource(&mut self.pass.storage_reads, b_id);
+        for (binding, id) in [(a_binding, a_id), (b_binding, b_id)] {
+            add_shader_binding(
+                &mut self.pass,
+                binding,
+                RenderShaderBindingResource::StorageBuffer {
+                    resource: id,
+                    access: GpuStorageBufferAccess::ReadOnly,
+                },
+            );
+            push_unique_resource(&mut self.pass.storage_reads, id);
+        }
         self
     }
 
-    pub fn sample_texture(mut self, resource_label: impl Into<String>) -> Self {
+    pub fn sample_texture(
+        mut self,
+        texture_binding: GpuBindingKey,
+        sampler_binding: GpuBindingKey,
+        resource_label: impl Into<String>,
+    ) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        add_shader_binding(
+            &mut self.pass,
+            texture_binding,
+            RenderShaderBindingResource::SampledTexture(id),
+        );
+        add_shader_binding(
+            &mut self.pass,
+            sampler_binding,
+            RenderShaderBindingResource::Sampler,
+        );
         push_unique_resource(&mut self.pass.sampled_textures, id);
         self
     }
 
-    pub fn write_texture(mut self, resource_label: impl Into<String>) -> Self {
+    pub fn write_texture(
+        mut self,
+        binding: GpuBindingKey,
+        resource_label: impl Into<String>,
+    ) -> Self {
         let id = require_resource_id(&self.flow, resource_label.into().as_str());
+        add_shader_binding(
+            &mut self.pass,
+            binding,
+            RenderShaderBindingResource::StorageTexture {
+                resource: id,
+                access: GpuStorageTextureAccess::WriteOnly,
+            },
+        );
         push_unique_resource(&mut self.pass.write_textures, id);
         self
     }
@@ -629,7 +812,17 @@ impl GraphicsPassBuilder {
         self
     }
 
-    pub(crate) fn push_uniform_binding(mut self, binding: PassParamBinding) -> Self {
+    pub(crate) fn push_uniform_binding(
+        mut self,
+        binding_key: GpuBindingKey,
+        binding: PassParamBinding,
+    ) -> Self {
+        let uniform_id = *binding.uniform_id();
+        add_shader_binding(
+            &mut self.pass,
+            binding_key,
+            RenderShaderBindingResource::UniformBuffer(uniform_id),
+        );
         self.pass.uniform_bindings.push(binding);
         self
     }
@@ -786,8 +979,18 @@ where
         .diagnostic_identity_ref())
 }
 
+fn add_shader_binding(
+    pass: &mut RenderPassNode,
+    key: GpuBindingKey,
+    resource: RenderShaderBindingResource,
+) {
+    pass.shader_bindings
+        .push(RenderShaderBinding::new(key, resource));
+}
+
 fn add_uniform_state_binding<S, U, F>(
     pass: &mut RenderPassNode,
+    binding: GpuBindingKey,
     uniform_id: GpuWorkResourceId,
     projection: F,
 ) where
@@ -795,12 +998,18 @@ fn add_uniform_state_binding<S, U, F>(
     U: GpuParams + Send + Sync + 'static,
     F: Fn(&S) -> U + Send + Sync + 'static,
 {
+    add_shader_binding(
+        pass,
+        binding,
+        RenderShaderBindingResource::UniformBuffer(uniform_id),
+    );
     pass.uniform_bindings
         .push(PassParamBinding::uniform_state(uniform_id, projection));
 }
 
 fn add_uniform_state_with_surface_binding<S, U, F>(
     pass: &mut RenderPassNode,
+    binding: GpuBindingKey,
     uniform_id: GpuWorkResourceId,
     projection: F,
 ) where
@@ -808,6 +1017,11 @@ fn add_uniform_state_with_surface_binding<S, U, F>(
     U: GpuParams + Send + Sync + 'static,
     F: Fn(&S, (u32, u32)) -> U + Send + Sync + 'static,
 {
+    add_shader_binding(
+        pass,
+        binding,
+        RenderShaderBindingResource::UniformBuffer(uniform_id),
+    );
     pass.uniform_bindings
         .push(PassParamBinding::uniform_state_with_surface(
             uniform_id, projection,

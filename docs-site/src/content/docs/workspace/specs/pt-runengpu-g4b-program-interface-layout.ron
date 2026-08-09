@@ -117,7 +117,7 @@ PhaseImplementationSpec(
 
     mandatory_wgsl_agreement: [
         "Explicit RunenGPU declarations remain authority; parser or reflection output is validation evidence only.",
-        "Before PT-RUNENGPU-G4C2 publishes a WGSL module realization, the pinned WGSL parser/reflection path must prove declared entry-point names and stages, binding group/binding identities, stage visibility, resource classes, access, dimensions, sample/storage format facts, array cardinality, and applicable host-layout requirements agree with the explicit descriptors.",
+        "Before PT-RUNENGPU-G4C2 publishes a WGSL module realization, the pinned WGSL parser/reflection path must prove declared entry-point names and stages, binding group/binding identities, resource classes, access, dimensions, sample/storage format facts, array cardinality, and applicable host-layout requirements agree with the explicit descriptors; observed statically-used stages must be a subset of declared binding visibility, which may be a strict accessibility superset.",
         "The same reflection pass must normalize and retain vertex-input and fragment-output signatures for later G4C3 pipeline compatibility without placing them inside GpuProgramInterfaceDescriptor.",
         "G4B owns the backend-neutral expected-interface and stage-IO comparison contracts.",
         "G4C2 owns invocation of the pinned WGPU/Naga path and translation of observed facts into those contracts.",

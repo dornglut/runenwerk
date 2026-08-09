@@ -1,5 +1,6 @@
 use super::picker_projection::{first_palette_descriptor_key, palette_contains_descriptor};
 use super::*;
+use engine::plugins::render::CompiledMaterialResourceBinding;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorMaterialPreviewProduct {
@@ -19,6 +20,10 @@ pub struct EditorMaterialPreviewProduct {
     pub renderer_parameter_profile: MaterialRendererParameterProfile,
     pub viewport_product_id: ExpressionProductId,
     pub resolved_resources: Vec<ResolvedMaterialResource>,
+    /// Exact interface evidence published by the compiler that generated this
+    /// preview's WGSL. Empty evidence is not a fallback: renderer handoff
+    /// rejects any resolved resource without its matching compiler record.
+    pub compiler_resource_bindings: Vec<CompiledMaterialResourceBinding>,
 }
 
 impl EditorMaterialPreviewProduct {
@@ -58,7 +63,16 @@ impl EditorMaterialPreviewProduct {
             renderer_parameter_profile,
             viewport_product_id,
             resolved_resources: resolved_resources.into_iter().collect(),
+            compiler_resource_bindings: Vec::new(),
         }
+    }
+
+    pub fn with_compiler_resource_bindings(
+        mut self,
+        bindings: impl IntoIterator<Item = CompiledMaterialResourceBinding>,
+    ) -> Self {
+        self.compiler_resource_bindings = bindings.into_iter().collect();
+        self
     }
 
     pub fn product_id(&self) -> MaterialProductId {
@@ -74,6 +88,10 @@ pub struct EditorSceneMaterialTableShaderBundle {
     pub shader_identity: String,
     pub material_table_identity: String,
     pub resource_layout_identity: String,
+    /// Compiler-owned layout identity paired with the generated WGSL.
+    pub compiler_resource_layout_identity: String,
+    /// Exact compiler records for each scene-material-table semantic resource.
+    pub compiler_resource_bindings: Vec<CompiledMaterialResourceBinding>,
 }
 
 impl EditorSceneMaterialTableShaderBundle {
@@ -92,7 +110,19 @@ impl EditorSceneMaterialTableShaderBundle {
             shader_identity: shader_identity.into(),
             material_table_identity: material_table_identity.into(),
             resource_layout_identity: resource_layout_identity.into(),
+            compiler_resource_layout_identity: String::new(),
+            compiler_resource_bindings: Vec::new(),
         }
+    }
+
+    pub fn with_compiler_resource_interface(
+        mut self,
+        compiler_resource_layout_identity: impl Into<String>,
+        bindings: impl IntoIterator<Item = CompiledMaterialResourceBinding>,
+    ) -> Self {
+        self.compiler_resource_layout_identity = compiler_resource_layout_identity.into();
+        self.compiler_resource_bindings = bindings.into_iter().collect();
+        self
     }
 
     pub fn matches_scene_table(

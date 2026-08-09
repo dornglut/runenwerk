@@ -974,6 +974,17 @@ mod tests {
             std::path::Path::new(&bundle.shader_path).exists(),
             "generated scene table shader bundle must be written before renderer handoff"
         );
+        assert!(
+            !bundle.compiler_resource_layout_identity.is_empty(),
+            "scene-table bundle must retain the compiler layout identity paired with its WGSL"
+        );
+        assert_eq!(bundle.compiler_resource_bindings.len(), 2);
+        assert!(
+            bundle
+                .compiler_resource_bindings
+                .iter()
+                .all(|binding| binding.material_table_slot.is_some())
+        );
         let mut shader_registry = ShaderRegistryResource::new();
         let mut material_feature = PreparedMaterialFeatureResource::default();
 

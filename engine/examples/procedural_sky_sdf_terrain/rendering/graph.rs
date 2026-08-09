@@ -1,20 +1,33 @@
 use crate::rendering::ProceduralSkyTerrainState;
+use engine::plugins::gpu::GpuBindingKey;
 use engine::plugins::render::RenderFlow;
 
 pub(crate) fn build_render_flow() -> RenderFlow {
+    // `procedural_sky_sdf_terrain_compose.wgsl` declares its only resource at
+    // group 0, binding 0.
+    let compose_params_binding = binding_key(0);
+
     RenderFlow::new("procedural_sky_sdf_terrain")
         .with_state::<ProceduralSkyTerrainState>()
         .with_surface_color()
         .expect("render flow authoring should succeed")
         .fullscreen_pass("terrain.compose")
         .shader_asset("assets/shaders/procedural_sky_sdf_terrain_compose.wgsl")
-        .uniform_from_state_with_surface(ProceduralSkyTerrainState::compose_params)
+        .uniform_from_state_with_surface(
+            compose_params_binding,
+            ProceduralSkyTerrainState::compose_params,
+        )
         .expect("render flow authoring should succeed")
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .finish()
         .validate()
         .expect("procedural_sky_sdf_terrain should validate")
+}
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding)
+        .expect("procedural-terrain shader binding should fit GpuBindingKey")
 }
 
 #[cfg(test)]

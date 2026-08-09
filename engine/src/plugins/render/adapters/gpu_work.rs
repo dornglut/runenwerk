@@ -1356,12 +1356,14 @@ mod tests {
             .expect("depth target should be valid")
             .storage_array::<TestElement>("adapter.storage", 64)
             .expect("storage should be valid");
+        let storage_binding =
+            GpuBindingKey::try_new(0, 0).expect("adapter test storage binding should be valid");
         flow.compute_pass("adapter.compute")
-            .bind_storage(storage.clone())
+            .bind_storage(storage_binding, storage.clone())
             .dispatch_from_state(TestState::dispatch)
             .finish()
             .graphics_pass("adapter.render")
-            .bind_storage(storage)
+            .bind_storage(storage_binding, storage)
             .write_color_target("adapter.color")
             .depth_target("adapter.depth")
             .clear_color([0.125, 0.25, 0.5, 1.0])

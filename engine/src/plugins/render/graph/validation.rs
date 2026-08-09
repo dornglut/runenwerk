@@ -1,4 +1,4 @@
-use crate::plugins::gpu::{GpuBufferUsage, GpuWorkResourceId};
+use crate::plugins::gpu::{GpuBindingKey, GpuBufferUsage, GpuWorkResourceId};
 use crate::plugins::render::api::{SURFACE_COLOR_RESOURCE_LABEL, SURFACE_DEPTH_RESOURCE_LABEL};
 use crate::plugins::render::graph::{
     RenderDrawSource, RenderFlowGraph, RenderIndirectDrawArgsKind, RenderPassKind, RenderPassNode,
@@ -77,6 +77,20 @@ pub enum RenderFlowValidationIssue {
     DuplicatePassId {
         pass_id: RenderPassId,
         pass_label: String,
+    },
+
+    #[error(
+        "pass '{pass_label}' declares shader binding {key} outside the current logical group-0 contract"
+    )]
+    ShaderBindingOutsidePrimaryGroup {
+        pass_label: String,
+        key: GpuBindingKey,
+    },
+
+    #[error("pass '{pass_label}' declares duplicate shader binding key {key}")]
+    DuplicateShaderBindingKey {
+        pass_label: String,
+        key: GpuBindingKey,
     },
 
     #[error("pass '{pass_label}' orders after unknown pass '{ordered_before_id:?}'")]
@@ -594,6 +608,7 @@ pub fn validate_flow_graph(
 
     for pass in &graph.passes.passes {
         validate_pass_shape(pass, &mut issues);
+        validate_pass_shader_binding_identity(pass, &mut issues);
 
         for ordered_before_id in &pass.non_data_order_after {
             if !pass_lookup.contains_key(ordered_before_id) {
@@ -724,6 +739,30 @@ pub fn validate_flow_graph(
         Ok(FlowValidationReport { lexical_pass_ids })
     } else {
         Err(RenderFlowValidationError::from(issues))
+    }
+}
+
+fn validate_pass_shader_binding_identity(
+    pass: &RenderPassNode,
+    issues: &mut Vec<RenderFlowValidationIssue>,
+) {
+    let mut keys = BTreeSet::new();
+    for binding in &pass.shader_bindings {
+        let key = binding.key();
+        if key.group() != 0 {
+            issues.push(
+                RenderFlowValidationIssue::ShaderBindingOutsidePrimaryGroup {
+                    pass_label: pass.label.clone(),
+                    key,
+                },
+            );
+        }
+        if !keys.insert(key) {
+            issues.push(RenderFlowValidationIssue::DuplicateShaderBindingKey {
+                pass_label: pass.label.clone(),
+                key,
+            });
+        }
     }
 }
 

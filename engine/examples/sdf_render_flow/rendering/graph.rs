@@ -1,7 +1,16 @@
 use crate::rendering::{Sdf3dRenderState, SdfHistoryProbe};
+use engine::plugins::gpu::GpuBindingKey;
 use engine::plugins::render::RenderFlow;
 
 pub(crate) fn build_render_flow() -> RenderFlow {
+    // The flow's established binding contract is the uniform at binding 0 and
+    // the history probe pair at bindings 1 and 2. `sdf_render_flow_3d_compose`
+    // consumes the compose uniform at binding 0.
+    let prepare_params_binding = binding_key(0);
+    let history_probe_a_binding = binding_key(1);
+    let history_probe_b_binding = binding_key(2);
+    let compose_params_binding = binding_key(0);
+
     RenderFlow::new("sdf_render_flow_3d")
         .with_state::<Sdf3dRenderState>()
         .with_surface_color()
@@ -13,16 +22,24 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .double_buffer_storage_array::<SdfHistoryProbe>("sdf.history.probe", 4)
         .expect("render flow authoring should succeed")
         .compute_pass("sdf.prepare")
-        .uniform_from_state(Sdf3dRenderState::prepare_params)
+        .uniform_from_state(prepare_params_binding, Sdf3dRenderState::prepare_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage("sdf.history.probe")
+        .bind_ping_pong_storage(
+            history_probe_a_binding,
+            history_probe_b_binding,
+            "sdf.history.probe",
+        )
         .dispatch([1, 1, 1])
         .finish()
         .fullscreen_pass("sdf.compose")
         .shader_asset("assets/shaders/sdf_render_flow_3d_compose.wgsl")
-        .uniform_from_state_with_surface(Sdf3dRenderState::compose_params)
+        .uniform_from_state_with_surface(compose_params_binding, Sdf3dRenderState::compose_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage("sdf.history.probe")
+        .bind_ping_pong_storage(
+            history_probe_a_binding,
+            history_probe_b_binding,
+            "sdf.history.probe",
+        )
         .write_color_target("sdf.color")
         .finish()
         .copy_pass("sdf.history")
@@ -36,6 +53,10 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .finish()
         .validate()
         .expect("sdf_render_flow_3d should validate")
+}
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("SDF shader binding should fit GpuBindingKey")
 }
 
 #[cfg(test)]

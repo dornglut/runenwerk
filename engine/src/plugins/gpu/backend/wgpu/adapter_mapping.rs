@@ -113,6 +113,18 @@ pub(super) fn normalized_features(
     if features.contains(Features::TIMESTAMP_QUERY) {
         supported.push(GpuCapabilityFeature::TimestampQuery);
     }
+    if features.contains(Features::TEXTURE_BINDING_ARRAY) {
+        supported.push(GpuCapabilityFeature::TextureBindingArray);
+    }
+    if features.contains(Features::BUFFER_BINDING_ARRAY) {
+        supported.push(GpuCapabilityFeature::BufferBindingArray);
+    }
+    if features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY) {
+        supported.push(GpuCapabilityFeature::StorageResourceBindingArray);
+    }
+    // Pinned WGPU 27 documents this feature as supported on no platforms. Do not
+    // advertise a generic capability merely because a synthetic or future native
+    // feature set contains the bit.
     if surface_compatible {
         supported.push(GpuCapabilityFeature::Presentation);
     }
@@ -220,6 +232,10 @@ pub(super) const fn map_software(class: DeviceType) -> GpuSoftwareStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{
+        GpuCapabilityAdmission, GpuCapabilityAdmissionCause, GpuCapabilityAdmissionError,
+        GpuCapabilityRequirement, GpuCapabilityRequirements, GpuLimits,
+    };
 
     #[test]
     fn downlevel_mapping_claims_only_explicitly_proven_operations() {
@@ -253,6 +269,60 @@ mod tests {
         assert!(!unknown.contains(&GpuCapabilityFeature::RenderPipeline));
         assert!(!unknown.contains(&GpuCapabilityFeature::Copy));
         assert!(unknown.contains(&GpuCapabilityFeature::Presentation));
+    }
+
+    #[test]
+    fn native_binding_array_features_normalize_only_the_supported_wgpu_27_bits() {
+        let normalized = normalized_features(
+            Features::TEXTURE_BINDING_ARRAY
+                | Features::BUFFER_BINDING_ARRAY
+                | Features::STORAGE_RESOURCE_BINDING_ARRAY
+                | Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+
+        assert!(normalized.contains(&GpuCapabilityFeature::TextureBindingArray));
+        assert!(normalized.contains(&GpuCapabilityFeature::BufferBindingArray));
+        assert!(normalized.contains(&GpuCapabilityFeature::StorageResourceBindingArray));
+        assert!(
+            !normalized.contains(&GpuCapabilityFeature::UniformBufferBindingArray),
+            "WGPU 27 documents uniform-buffer binding arrays as unsupported on every platform"
+        );
+    }
+
+    #[test]
+    fn pinned_wgpu_27_rejects_uniform_buffer_array_admission() {
+        let capabilities = GpuCapabilities::from_normalized_facts(
+            normalized_features(
+                Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+                DownlevelFlags::empty(),
+                false,
+                false,
+            ),
+            GpuLimits::new(1, 1, 1, 1, 1).unwrap(),
+            [],
+        );
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::UniformBufferBindingArray,
+            ))
+            .unwrap();
+
+        assert!(matches!(
+            GpuCapabilityAdmission::evaluate(
+                "uniform binding array",
+                &requirements,
+                &capabilities,
+                []
+            ),
+            Err(GpuCapabilityAdmissionError::Rejected {
+                cause: GpuCapabilityAdmissionCause::RequiredUnavailable,
+                ..
+            })
+        ));
     }
 
     #[test]

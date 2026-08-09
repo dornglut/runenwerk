@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 
 use drawing::DrawingInkTileProduct;
+use engine::plugins::gpu::GpuBindingKey;
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, RenderCaptureSelector, RenderDebugConfigResource,
     RenderDebugFrameReport, RenderDebugFrameReportState, RenderTextureDiffMetrics,
@@ -62,6 +63,7 @@ pub fn register_drawing_ink_gpu_flow(app: &mut engine::App) -> Result<()> {
 }
 
 fn build_drawing_ink_gpu_flow() -> Result<(RenderFlow, DrawingInkGpuFlowResource)> {
+    let scratch_storage_binding = GpuBindingKey::try_new(0, 0)?;
     let flow = RenderFlow::new(DRAWING_GPU_INK_FLOW_LABEL)
         .with_target_alias(
             DRAWING_GPU_INK_CPU_INPUT_ALIAS,
@@ -80,7 +82,7 @@ fn build_drawing_ink_gpu_flow() -> Result<(RenderFlow, DrawingInkGpuFlowResource
         .finish()
         .compute_pass(DRAWING_GPU_INK_COMPUTE_PASS)
         .offscreen_products_only()
-        .write_texture(DRAWING_GPU_INK_SCRATCH_TARGET)
+        .write_texture(scratch_storage_binding, DRAWING_GPU_INK_SCRATCH_TARGET)
         .dispatch([1, 1, 1])
         .finish()
         .copy_pass(DRAWING_GPU_INK_OUTPUT_COPY_PASS)

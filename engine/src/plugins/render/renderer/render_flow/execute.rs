@@ -288,42 +288,52 @@ impl Renderer {
                                     bind_group_layout_signature_hash: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.bind_group_layout_signature_hash)
+                                        .map(
+                                            FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash,
+                                        )
                                         .unwrap_or_default(),
-                                    material_specialization_fragment_hash: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.material_specialization_fragment_hash)
-                                        .unwrap_or_default(),
-                                    view_signature_hash: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.view_signature_hash)
-                                        .unwrap_or_default(),
-                                    feature_runtime_version: evidence
-                                        .pipeline_key
-                                        .as_ref()
-                                        .map(|key| key.feature_runtime_version)
-                                        .unwrap_or_default(),
+                                    material_specialization_fragment_hash:
+                                        material_specialization_fragment_hash(
+                                            &invocation_packet,
+                                            execution_pass_feature_id(pass),
+                                        ),
+                                    view_signature_hash: hash_view_signature(
+                                        invocation_packet.view_id.as_str(),
+                                        invocation_packet.surface_size,
+                                    ),
+                                    feature_runtime_version: feature_runtime_version(
+                                        &invocation_packet,
+                                        execution_pass_feature_id(pass),
+                                    ),
                                     color_formats: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.color_formats.clone())
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
+                                        .and_then(|state| state.fragment_output())
+                                        .map(|output| {
+                                            output
+                                                .color_targets()
+                                                .map(|target| target.format())
+                                                .collect()
+                                        })
                                         .unwrap_or_default(),
                                     depth_format: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .and_then(|key| key.depth_format),
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
+                                        .and_then(|state| state.depth_stencil())
+                                        .map(|depth| depth.format()),
                                     sample_count: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.sample_count)
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
+                                        .map(|state| state.multisample().sample_count())
                                         .unwrap_or(1),
-                                    primitive_topology_class: evidence
+                                    primitive_topology: evidence
                                         .pipeline_key
                                         .as_ref()
-                                        .map(|key| key.primitive_topology_class)
-                                        .unwrap_or(FlowPrimitiveTopologyClass::None),
+                                        .and_then(FlowPassPipelineKey::render_pipeline_state)
+                                        .map(|state| state.primitive().topology()),
                                     material_binding,
                                     render_targets: pass_resource_truth.render_targets,
                                     sampled_textures: pass_resource_truth.sampled_textures,
@@ -1174,6 +1184,7 @@ fn gpu_timing_diagnostic_evidence_for_pass(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::GpuBindingKey;
     use crate::plugins::render::{
         GpuStorage, GpuUniform, RenderFlow, RenderGpuWorkInstrumentation, compile_flow_plan,
         prepare_render_gpu_work,
@@ -1207,20 +1218,30 @@ mod tests {
             .with_state::<TestState>()
             .storage_array::<TestCell>("cells", 4)
             .expect("render flow authoring should succeed");
+        let uniform_binding =
+            GpuBindingKey::try_new(0, 0).expect("fixed-step test uniform binding should be valid");
+        let storage_binding =
+            GpuBindingKey::try_new(0, 1).expect("fixed-step test storage binding should be valid");
+        let iteration_binding = GpuBindingKey::try_new(0, 2)
+            .expect("fixed-step test iteration-uniform binding should be valid");
         let flow = flow
             .compute_pass("step.a")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(uniform_binding, TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells.clone())
+            .bind_storage(storage_binding, cells.clone())
             .dispatch_from_state(TestState::dispatch)
             .finish()
             .compute_pass("step.b")
-            .uniform_from_state(TestState::params)
+            .uniform_from_state(uniform_binding, TestState::params)
             .expect("render flow authoring should succeed")
-            .bind_storage(cells)
+            .bind_storage(storage_binding, cells)
             .dispatch_from_state(TestState::dispatch)
             .finish()
-            .fixed_step_region("simulation", 4, ["step.a", "step.b"])
+            .fixed_step_region(
+                "simulation",
+                4,
+                [("step.a", iteration_binding), ("step.b", iteration_binding)],
+            )
             .expect("render flow authoring should succeed")
             .validate()
             .expect("fixed-step test flow should validate");

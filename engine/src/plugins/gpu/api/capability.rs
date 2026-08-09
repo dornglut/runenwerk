@@ -11,6 +11,10 @@ pub enum GpuCapabilityFeature {
     Copy,
     IndirectDraw,
     StorageTexture,
+    TextureBindingArray,
+    BufferBindingArray,
+    StorageResourceBindingArray,
+    UniformBufferBindingArray,
     DepthAttachment,
     TimestampQuery,
     Presentation,
@@ -623,6 +627,53 @@ mod tests {
         assert!(matches!(
             requirements.get(GpuCapabilityFeature::Compute),
             Some(GpuCapabilityRequirement::Required(_))
+        ));
+    }
+
+    #[test]
+    fn portable_baseline_profiles_do_not_require_native_binding_arrays() {
+        let binding_array_features = [
+            GpuCapabilityFeature::TextureBindingArray,
+            GpuCapabilityFeature::BufferBindingArray,
+            GpuCapabilityFeature::StorageResourceBindingArray,
+            GpuCapabilityFeature::UniformBufferBindingArray,
+        ];
+
+        for profile in [
+            GpuCapabilityProfile::ComputeBaseline,
+            GpuCapabilityProfile::OffscreenGraphicsBaseline,
+            GpuCapabilityProfile::DesktopPresentationBaseline,
+        ] {
+            let requirements = profile.requirements();
+            for feature in binding_array_features {
+                assert!(
+                    requirements.get(feature).is_none(),
+                    "{profile:?} must not require native binding-array feature {feature:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn array_features_remain_unavailable_without_context_enablement() {
+        let capabilities = GpuCapabilities::from_normalized_facts(
+            [GpuCapabilityFeature::TextureBindingArray],
+            GpuLimits::new(1, 1, 1, 1, 1).unwrap(),
+            [],
+        );
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TextureBindingArray,
+            ))
+            .unwrap();
+
+        assert!(matches!(
+            GpuCapabilityAdmission::evaluate("array program", &requirements, &capabilities, []),
+            Err(GpuCapabilityAdmissionError::Rejected {
+                cause: GpuCapabilityAdmissionCause::RequiredNotEnabled,
+                ..
+            })
         ));
     }
 

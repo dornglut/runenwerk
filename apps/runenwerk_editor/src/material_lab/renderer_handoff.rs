@@ -3,12 +3,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use asset::{AssetDiagnosticCode, AssetDiagnosticRecord};
 use editor_scene::{SceneMaterialAssignmentState, SceneMaterialSlot, SceneMaterialSlotId};
 use engine::plugins::render::{
-    FeatureContributionStatus, FeatureFallbackPolicy, PreparedMaterialBindingSlot,
-    PreparedMaterialBindingTable, PreparedMaterialFeatureContribution,
-    PreparedMaterialFeatureResource, PreparedMaterialInstanceInput, PreparedMaterialOutputTarget,
-    PreparedMaterialParameterInput, PreparedMaterialParameterKind,
-    PreparedMaterialParameterPayloadV1, PreparedMaterialParameterProfile,
-    PreparedMaterialTextureBinding, PreparedMaterialTextureKind, PreparedSceneMaterialBundle,
+    CompiledMaterialResourceBinding, CompiledMaterialTextureDimension, FeatureContributionStatus,
+    FeatureFallbackPolicy, PreparedMaterialBindingSlot, PreparedMaterialBindingTable,
+    PreparedMaterialFeatureContribution, PreparedMaterialFeatureResource,
+    PreparedMaterialInstanceInput, PreparedMaterialOutputTarget, PreparedMaterialParameterInput,
+    PreparedMaterialParameterKind, PreparedMaterialParameterPayloadV1,
+    PreparedMaterialParameterProfile, PreparedMaterialTextureBinding,
+    PreparedMaterialTextureBindingLocation, PreparedMaterialTextureKind,
+    PreparedSceneMaterialBundle,
 };
 use material_graph::{MaterialOutputTarget, MaterialParameterKind};
 
@@ -104,20 +106,21 @@ pub fn build_preview_scene_product_for_scene_material_table(
 
 pub fn prepared_material_contribution_for_preview(
     preview: &EditorMaterialPreviewProduct,
-) -> PreparedMaterialFeatureContribution {
+) -> Result<PreparedMaterialFeatureContribution, AssetDiagnosticRecord> {
     prepared_material_contribution_for_preview_with_scene_materials(preview, None)
 }
 
 pub fn prepared_material_contribution_for_preview_with_scene_materials(
     preview: &EditorMaterialPreviewProduct,
     scene_material_assignments: Option<&SceneMaterialAssignmentState>,
-) -> PreparedMaterialFeatureContribution {
-    PreparedMaterialFeatureContribution {
+) -> Result<PreparedMaterialFeatureContribution, AssetDiagnosticRecord> {
+    let texture_bindings = prepared_texture_bindings(preview)?;
+    Ok(PreparedMaterialFeatureContribution {
         instances: vec![PreparedMaterialInstanceInput {
             material_instance_id: format!("material.product.{}", preview.product.product_id.raw()),
             specialization_key_fragment: preview.product.specialization_fragment.0.clone(),
             parameter_payload: material_parameter_payload(preview),
-            texture_bindings: prepared_texture_bindings(preview),
+            texture_bindings,
         }],
         binding_table: scene_material_binding_table(preview, scene_material_assignments),
         scene_bundle: Some(PreparedSceneMaterialBundle::new(
@@ -128,7 +131,7 @@ pub fn prepared_material_contribution_for_preview_with_scene_materials(
             scene_material_table_identity(preview, scene_material_assignments),
         )),
         model_mesh_material_selections: Vec::new(),
-    }
+    })
 }
 
 pub fn prepared_material_resource_for_preview_with_resolved_scene_materials(
@@ -221,9 +224,7 @@ pub fn prepared_material_contribution_for_preview_scene_product(
         if expected.product_identity != product.product_identity {
             return Err(stale_preview_scene_product_asset_diagnostic());
         }
-        return Ok(
-            prepared_material_contribution_from_single_preview_scene_product(product, preview),
-        );
+        return prepared_material_contribution_from_single_preview_scene_product(product, preview);
     }
 
     let slots = resolved_scene_material_slots(preview, scene_material_assignments, slot_products)?;
@@ -246,12 +247,21 @@ pub fn prepared_material_contribution_for_preview_scene_product(
         return Err(stale_preview_scene_product_asset_diagnostic());
     }
 
-    Ok(
-        prepared_material_contribution_from_resolved_preview_scene_product(
-            product,
-            &slots,
-            &resource_layout,
-        ),
+    let bindings_by_instance = prepared_scene_material_bindings(
+        &slots,
+        &resource_layout,
+        scene_table_bundle.ok_or_else(|| {
+            AssetDiagnosticRecord::error(
+                AssetDiagnosticCode::RatificationRejected,
+                "scene material table compiler binding evidence is missing",
+            )
+        })?,
+    )?;
+
+    prepared_material_contribution_from_resolved_preview_scene_product(
+        product,
+        &slots,
+        &bindings_by_instance,
     )
 }
 
@@ -277,9 +287,7 @@ pub fn prepared_material_contribution_for_preview_with_resolved_scene_materials_
     if scene_material_assignments.is_none() {
         let product = single_material_preview_scene_product(preview)
             .map_err(asset_diagnostic_from_preview_scene_product_diagnostic)?;
-        return Ok(
-            prepared_material_contribution_from_single_preview_scene_product(&product, preview),
-        );
+        return prepared_material_contribution_from_single_preview_scene_product(&product, preview);
     }
     let slots = resolved_scene_material_slots(preview, scene_material_assignments, slot_products)?;
     let resource_layout = resolved_scene_material_table_resource_layout(&slots);
@@ -298,25 +306,34 @@ pub fn prepared_material_contribution_for_preview_with_resolved_scene_materials_
     )
     .map_err(asset_diagnostic_from_preview_scene_product_diagnostic)?;
 
-    Ok(
-        prepared_material_contribution_from_resolved_preview_scene_product(
-            &product,
-            &slots,
-            &resource_layout,
-        ),
+    let bindings_by_instance = prepared_scene_material_bindings(
+        &slots,
+        &resource_layout,
+        scene_table_bundle.ok_or_else(|| {
+            AssetDiagnosticRecord::error(
+                AssetDiagnosticCode::RatificationRejected,
+                "scene material table compiler binding evidence is missing",
+            )
+        })?,
+    )?;
+
+    prepared_material_contribution_from_resolved_preview_scene_product(
+        &product,
+        &slots,
+        &bindings_by_instance,
     )
 }
 
 fn prepared_material_contribution_from_single_preview_scene_product(
     product: &PreviewSceneProduct,
     preview: &EditorMaterialPreviewProduct,
-) -> PreparedMaterialFeatureContribution {
-    PreparedMaterialFeatureContribution {
+) -> Result<PreparedMaterialFeatureContribution, AssetDiagnosticRecord> {
+    Ok(PreparedMaterialFeatureContribution {
         instances: vec![PreparedMaterialInstanceInput {
             material_instance_id: format!("material.product.{}", preview.product.product_id.raw()),
             specialization_key_fragment: preview.product.specialization_fragment.0.clone(),
             parameter_payload: material_parameter_payload(preview),
-            texture_bindings: prepared_texture_bindings(preview),
+            texture_bindings: prepared_texture_bindings(preview)?,
         }],
         binding_table: PreparedMaterialBindingTable::fixed_capacity([
             preview_material_binding_slot(preview, 0),
@@ -324,14 +341,14 @@ fn prepared_material_contribution_from_single_preview_scene_product(
         .expect("single material preview uses one portable material binding slot"),
         scene_bundle: Some(scene_material_bundle_for_preview_scene_product(product)),
         model_mesh_material_selections: Vec::new(),
-    }
+    })
 }
 
 fn prepared_material_contribution_from_resolved_preview_scene_product(
     product: &PreviewSceneProduct,
     slots: &[ResolvedSceneMaterialSlot<'_>],
-    resource_layout: &ResolvedSceneMaterialTableResourceLayout,
-) -> PreparedMaterialFeatureContribution {
+    bindings_by_instance: &BTreeMap<String, Vec<PreparedMaterialTextureBinding>>,
+) -> Result<PreparedMaterialFeatureContribution, AssetDiagnosticRecord> {
     let mut instances = Vec::new();
     let mut seen_instances = BTreeSet::new();
     for resolved in slots {
@@ -346,9 +363,10 @@ fn prepared_material_contribution_from_resolved_preview_scene_product(
                     .0
                     .clone(),
                 parameter_payload: material_parameter_payload(resolved.preview),
-                texture_bindings: resource_layout
-                    .bindings_for_instance(&material_instance_id)
-                    .to_vec(),
+                texture_bindings: bindings_by_instance
+                    .get(&material_instance_id)
+                    .cloned()
+                    .unwrap_or_default(),
             });
         }
     }
@@ -362,13 +380,13 @@ fn prepared_material_contribution_from_resolved_preview_scene_product(
             )
         })
         .collect::<Vec<_>>();
-    PreparedMaterialFeatureContribution {
+    Ok(PreparedMaterialFeatureContribution {
         instances,
         binding_table: PreparedMaterialBindingTable::fixed_capacity(binding_slots)
             .expect("editor_scene palette enforces portable material binding slot limits"),
         scene_bundle: Some(scene_material_bundle_for_preview_scene_product(product)),
         model_mesh_material_selections: Vec::new(),
-    }
+    })
 }
 
 pub fn scene_material_table_shader_build_request_for_preview<'a>(
@@ -434,20 +452,9 @@ struct ResolvedSceneMaterialTableResourceLayout {
     identity: String,
     resources: Vec<PreviewSceneResourceSlot>,
     mappings_by_material_table_slot: BTreeMap<u32, Vec<PreviewSceneResourceSlotMapping>>,
-    bindings_by_instance: BTreeMap<String, Vec<PreparedMaterialTextureBinding>>,
 }
 
 impl ResolvedSceneMaterialTableResourceLayout {
-    fn bindings_for_instance(
-        &self,
-        material_instance_id: &str,
-    ) -> &[PreparedMaterialTextureBinding] {
-        self.bindings_by_instance
-            .get(material_instance_id)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
-    }
-
     fn resource_mappings_for_material_slot(
         &self,
         material_table_index: u32,
@@ -545,7 +552,6 @@ fn resolved_scene_material_table_resource_layout(
     let mut slot_mappings = Vec::<String>::new();
     let mut mappings_by_material_table_slot =
         BTreeMap::<u32, Vec<PreviewSceneResourceSlotMapping>>::new();
-    let mut bindings_by_instance = BTreeMap::<String, Vec<PreparedMaterialTextureBinding>>::new();
     for slot in slots {
         let material_instance_id = material_instance_id_for_slot(slot.slot, slot.preview);
         for (local_resource_slot, resource) in slot.preview.resolved_resources.iter().enumerate() {
@@ -563,10 +569,6 @@ fn resolved_scene_material_table_resource_layout(
                         resource,
                         resource_identity.clone(),
                     ));
-                    bindings_by_instance
-                        .entry(material_instance_id.clone())
-                        .or_default()
-                        .push(prepared_texture_binding_for_resource(resource, index));
                     index
                 }
             };
@@ -589,9 +591,6 @@ fn resolved_scene_material_table_resource_layout(
             ));
         }
     }
-    for bindings in bindings_by_instance.values_mut() {
-        bindings.sort_by_key(|binding| binding.resource_slot_index);
-    }
     ResolvedSceneMaterialTableResourceLayout {
         identity: canonical_identity(
             "scene-material-table-resource-layout-v1",
@@ -599,7 +598,6 @@ fn resolved_scene_material_table_resource_layout(
         ),
         resources,
         mappings_by_material_table_slot,
-        bindings_by_instance,
     }
 }
 
@@ -1211,7 +1209,7 @@ pub fn prepared_material_resource_for_preview_with_scene_materials(
             let payload = prepared_material_contribution_for_preview_with_scene_materials(
                 preview,
                 scene_material_assignments,
-            );
+            )?;
             payload.validate_portable_limits().map_err(|error| {
                 AssetDiagnosticRecord::error(
                     AssetDiagnosticCode::RatificationRejected,
@@ -1306,22 +1304,264 @@ fn prepared_parameter_kind(kind: MaterialParameterKind) -> PreparedMaterialParam
 
 fn prepared_texture_bindings(
     preview: &EditorMaterialPreviewProduct,
-) -> Vec<PreparedMaterialTextureBinding> {
-    preview
-        .resolved_resources
+) -> Result<Vec<PreparedMaterialTextureBinding>, AssetDiagnosticRecord> {
+    let mut bindings = Vec::with_capacity(preview.resolved_resources.len());
+    let mut consumed_compiler_bindings = BTreeSet::new();
+    let mut resolved_semantic_resources = BTreeSet::new();
+    for (resource_slot_index, resource) in preview.resolved_resources.iter().enumerate() {
+        let semantic_identity = (resource.node_id.raw(), resource.binding_key.clone());
+        if !resolved_semantic_resources.insert(semantic_identity.clone()) {
+            return Err(material_handoff_rejected(format!(
+                "resolved material resources contain ambiguous duplicate semantic identity node {} binding '{}'",
+                semantic_identity.0, semantic_identity.1
+            )));
+        }
+        let (compiler_index, compiler_binding) = compiler_binding_for_resolved_resource(
+            &preview.compiler_resource_bindings,
+            None,
+            resource,
+        )?;
+        if !consumed_compiler_bindings.insert(compiler_index) {
+            return Err(material_handoff_rejected(format!(
+                "compiler material binding record for node {} binding '{}' matched more than one resolved resource",
+                resource.node_id.raw(),
+                resource.binding_key
+            )));
+        }
+        validate_compiler_binding_for_resource(compiler_binding, resource)?;
+        bindings.push(prepared_texture_binding_for_resource(
+            resource,
+            resource_slot_index as u32,
+            compiler_binding,
+        ));
+    }
+    reject_unmatched_compiler_resource_bindings(
+        &preview.compiler_resource_bindings,
+        &consumed_compiler_bindings,
+        "single-material preview",
+    )?;
+    Ok(bindings)
+}
+
+fn prepared_scene_material_bindings(
+    slots: &[ResolvedSceneMaterialSlot<'_>],
+    resource_layout: &ResolvedSceneMaterialTableResourceLayout,
+    bundle: &EditorSceneMaterialTableShaderBundle,
+) -> Result<BTreeMap<String, Vec<PreparedMaterialTextureBinding>>, AssetDiagnosticRecord> {
+    if bundle.compiler_resource_layout_identity.trim().is_empty() {
+        return Err(material_handoff_rejected(
+            "scene material table shader bundle lacks the compiler resource-layout identity paired with its generated WGSL",
+        ));
+    }
+
+    let mut bindings_by_instance = BTreeMap::<String, Vec<PreparedMaterialTextureBinding>>::new();
+    let mut consumed_compiler_bindings = BTreeSet::new();
+    let mut compiler_slots = BTreeMap::new();
+    let mut coordinates_by_resource_identity = BTreeMap::new();
+    let mut bindings_by_resource_slot = BTreeMap::new();
+
+    for slot in slots {
+        let material_instance_id = material_instance_id_for_slot(slot.slot, slot.preview);
+        let resource_mappings =
+            resource_layout.resource_mappings_for_material_slot(slot.material_table_index);
+        for (local_resource_slot, resource) in slot.preview.resolved_resources.iter().enumerate() {
+            let Some(resource_mapping) = resource_mappings
+                .iter()
+                .find(|mapping| mapping.local_resource_slot == local_resource_slot as u32)
+            else {
+                return Err(material_handoff_rejected(format!(
+                    "scene material table slot {} has no resolved resource-table mapping for local resource slot {}",
+                    slot.material_table_index, local_resource_slot
+                )));
+            };
+            let (compiler_index, compiler_binding) = compiler_binding_for_resolved_resource(
+                &bundle.compiler_resource_bindings,
+                Some(slot.material_table_index),
+                resource,
+            )?;
+            if !consumed_compiler_bindings.insert(compiler_index) {
+                return Err(material_handoff_rejected(format!(
+                    "scene material table compiler binding record for slot {} node {} binding '{}' matched more than one resolved resource",
+                    slot.material_table_index,
+                    resource.node_id.raw(),
+                    resource.binding_key
+                )));
+            }
+            validate_compiler_binding_for_resource(compiler_binding, resource)?;
+
+            let coordinates = compiler_binding_coordinates(compiler_binding);
+            let resource_identity = strict_resolved_resource_identity(resource);
+            if let Some((existing_identity, existing_coordinates)) = compiler_slots.insert(
+                compiler_binding.resource_slot_index,
+                (resource_identity.clone(), coordinates),
+            ) && (existing_identity != resource_identity || existing_coordinates != coordinates)
+            {
+                return Err(material_handoff_rejected(format!(
+                    "scene material table compiler resource slot {} maps to inconsistent resolved resources or shader coordinates",
+                    compiler_binding.resource_slot_index
+                )));
+            }
+            if let Some(existing_coordinates) =
+                coordinates_by_resource_identity.insert(resource_identity.clone(), coordinates)
+                && existing_coordinates != coordinates
+            {
+                return Err(material_handoff_rejected(format!(
+                    "shared scene material resource '{}' has conflicting compiler-published shader coordinates",
+                    resource_identity
+                )));
+            }
+
+            match bindings_by_resource_slot.get(&resource_mapping.table_resource_slot) {
+                Some((existing_identity, existing_coordinates))
+                    if existing_identity != &resource_identity
+                        || existing_coordinates != &coordinates =>
+                {
+                    return Err(material_handoff_rejected(format!(
+                        "scene material resource-table slot {} conflicts with compiler-published resource identity or shader coordinates",
+                        resource_mapping.table_resource_slot
+                    )));
+                }
+                Some(_) => {}
+                None => {
+                    bindings_by_resource_slot.insert(
+                        resource_mapping.table_resource_slot,
+                        (resource_identity, coordinates),
+                    );
+                    bindings_by_instance
+                        .entry(material_instance_id.clone())
+                        .or_default()
+                        .push(prepared_texture_binding_for_resource(
+                            resource,
+                            resource_mapping.table_resource_slot,
+                            compiler_binding,
+                        ));
+                }
+            }
+        }
+    }
+
+    reject_unmatched_compiler_resource_bindings(
+        &bundle.compiler_resource_bindings,
+        &consumed_compiler_bindings,
+        "scene-material-table shader bundle",
+    )?;
+    for bindings in bindings_by_instance.values_mut() {
+        bindings.sort_by_key(|binding| binding.resource_slot_index);
+    }
+    Ok(bindings_by_instance)
+}
+
+fn compiler_binding_for_resolved_resource<'a>(
+    compiler_bindings: &'a [CompiledMaterialResourceBinding],
+    material_table_slot: Option<u32>,
+    resource: &crate::material_lab::ResolvedMaterialResource,
+) -> Result<(usize, &'a CompiledMaterialResourceBinding), AssetDiagnosticRecord> {
+    let matches = compiler_bindings
         .iter()
         .enumerate()
-        .map(|(index, resource)| prepared_texture_binding_for_resource(resource, index as u32))
-        .collect()
+        .filter(|(_, binding)| {
+            binding.material_table_slot == material_table_slot
+                && binding.node_id == resource.node_id.raw()
+                && binding.binding_key == resource.binding_key
+        })
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [] => Err(material_handoff_rejected(format!(
+            "resolved material resource node {} binding '{}' has no compiler-published shader binding record{}",
+            resource.node_id.raw(),
+            resource.binding_key,
+            material_table_slot
+                .map(|slot| format!(" for scene material table slot {slot}"))
+                .unwrap_or_default(),
+        ))),
+        [(index, binding)] => Ok((*index, *binding)),
+        _ => Err(material_handoff_rejected(format!(
+            "resolved material resource node {} binding '{}' has ambiguous compiler-published shader binding records{}",
+            resource.node_id.raw(),
+            resource.binding_key,
+            material_table_slot
+                .map(|slot| format!(" for scene material table slot {slot}"))
+                .unwrap_or_default(),
+        ))),
+    }
+}
+
+fn reject_unmatched_compiler_resource_bindings(
+    compiler_bindings: &[CompiledMaterialResourceBinding],
+    consumed: &BTreeSet<usize>,
+    owner: &str,
+) -> Result<(), AssetDiagnosticRecord> {
+    if let Some((_, binding)) = compiler_bindings
+        .iter()
+        .enumerate()
+        .find(|(index, _)| !consumed.contains(index))
+    {
+        return Err(material_handoff_rejected(format!(
+            "{owner} compiler binding record for node {} binding '{}' references no resolved material resource",
+            binding.node_id, binding.binding_key
+        )));
+    }
+    Ok(())
+}
+
+fn validate_compiler_binding_for_resource(
+    binding: &CompiledMaterialResourceBinding,
+    resource: &crate::material_lab::ResolvedMaterialResource,
+) -> Result<(), AssetDiagnosticRecord> {
+    if binding.bind_group != 1 {
+        return Err(material_handoff_rejected(format!(
+            "compiler material binding record for node {} binding '{}' names invalid material bind group {}",
+            binding.node_id, binding.binding_key, binding.bind_group
+        )));
+    }
+    if binding.texture_binding == binding.sampler_binding {
+        return Err(material_handoff_rejected(format!(
+            "compiler material binding record for node {} binding '{}' uses shader binding {} for both texture and sampler",
+            binding.node_id, binding.binding_key, binding.texture_binding
+        )));
+    }
+    let expected_dimension = match resource.kind {
+        asset::AssetKind::Texture3DVolume => CompiledMaterialTextureDimension::D3,
+        _ => CompiledMaterialTextureDimension::D2,
+    };
+    if binding.texture_dimension != expected_dimension {
+        return Err(material_handoff_rejected(format!(
+            "compiler material binding record for node {} binding '{}' declares {:?}, incompatible with resolved {:?} texture",
+            binding.node_id, binding.binding_key, binding.texture_dimension, resource.kind
+        )));
+    }
+    Ok(())
+}
+
+fn compiler_binding_coordinates(
+    binding: &CompiledMaterialResourceBinding,
+) -> (u32, u32, u32, CompiledMaterialTextureDimension) {
+    (
+        binding.bind_group,
+        binding.texture_binding,
+        binding.sampler_binding,
+        binding.texture_dimension,
+    )
+}
+
+fn material_handoff_rejected(message: impl Into<String>) -> AssetDiagnosticRecord {
+    AssetDiagnosticRecord::error(AssetDiagnosticCode::RatificationRejected, message)
 }
 
 fn prepared_texture_binding_for_resource(
     resource: &crate::material_lab::ResolvedMaterialResource,
     resource_slot_index: u32,
+    compiler_binding: &CompiledMaterialResourceBinding,
 ) -> PreparedMaterialTextureBinding {
     let mut binding = PreparedMaterialTextureBinding::new(
         resource.node_id.raw(),
         resource.binding_key.clone(),
+        PreparedMaterialTextureBindingLocation::new(
+            resource_slot_index,
+            compiler_binding.bind_group,
+            compiler_binding.texture_binding,
+            compiler_binding.sampler_binding,
+        ),
         resource.artifact_id.raw().to_string(),
         resource.artifact_path.clone(),
         match resource.kind {
@@ -1330,7 +1570,6 @@ fn prepared_texture_binding_for_resource(
         },
         resource.cache_key.as_str().to_string(),
     )
-    .with_resource_slot_index(resource_slot_index)
     .with_texture_dimension(resource.dimension.clone())
     .with_extent(
         resource.descriptor.extent.width,
@@ -1473,6 +1712,8 @@ mod tests {
                 .map(test_resolved_texture_resource)
                 .collect::<Vec<_>>(),
         );
+        preview.compiler_resource_bindings =
+            test_single_material_compiler_bindings(&preview.resolved_resources);
 
         let diagnostic = prepared_material_resource_for_preview(Some(&preview))
             .expect_err("portable texture binding limit must be a visible diagnostic");
@@ -1484,6 +1725,7 @@ mod tests {
         );
 
         preview.resolved_resources.truncate(128);
+        preview.compiler_resource_bindings.truncate(128);
         assert!(prepared_material_resource_for_preview(Some(&preview)).is_ok());
     }
 
@@ -1524,6 +1766,7 @@ mod tests {
             &preview,
             Some(&assignments),
         )
+        .expect("scene material contribution should prepare")
         .scene_bundle
         .expect("scene bundle")
         .material_table_identity;
@@ -1540,6 +1783,7 @@ mod tests {
             &preview,
             Some(&assignments),
         )
+        .expect("scene material contribution should prepare")
         .scene_bundle
         .expect("scene bundle")
         .material_table_identity;
@@ -1588,7 +1832,8 @@ mod tests {
         let contribution = prepared_material_contribution_for_preview_with_scene_materials(
             &preview,
             Some(&assignments),
-        );
+        )
+        .expect("scene material contribution should prepare");
 
         assert_eq!(contribution.binding_table.slots.len(), 2);
         assert_eq!(contribution.binding_table.slots[0].slot_index, 0);
@@ -1671,7 +1916,7 @@ mod tests {
     #[test]
     fn single_material_preview_scene_product_builds_from_active_preview() {
         let mut preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
-        preview.resolved_resources = vec![test_resolved_texture_resource(0)];
+        set_test_resolved_resources(&mut preview, vec![test_resolved_texture_resource(0)]);
 
         let outcome = build_preview_scene_product_for_single_material(&preview);
 
@@ -1867,10 +2112,16 @@ mod tests {
     #[test]
     fn preview_scene_product_builder_preserves_table_wide_resource_slots() {
         let mut default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
-        default_preview.resolved_resources = vec![test_resolved_texture_resource(0)];
+        set_test_resolved_resources(
+            &mut default_preview,
+            vec![test_resolved_texture_resource(0)],
+        );
         let mut assigned_preview =
             test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
-        assigned_preview.resolved_resources = vec![test_resolved_texture_resource(1)];
+        set_test_resolved_resources(
+            &mut assigned_preview,
+            vec![test_resolved_texture_resource(1)],
+        );
         let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
             .with_material_asset(asset_id(8));
         let assignments = SceneMaterialAssignmentState::new(
@@ -1912,10 +2163,16 @@ mod tests {
     #[test]
     fn preview_scene_product_builder_records_slot_to_table_resource_mappings() {
         let mut default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
-        default_preview.resolved_resources = vec![test_resolved_texture_resource(0)];
+        set_test_resolved_resources(
+            &mut default_preview,
+            vec![test_resolved_texture_resource(0)],
+        );
         let mut assigned_preview =
             test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
-        assigned_preview.resolved_resources = vec![test_resolved_texture_resource(1)];
+        set_test_resolved_resources(
+            &mut assigned_preview,
+            vec![test_resolved_texture_resource(1)],
+        );
         let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
             .with_material_asset(asset_id(8));
         let assignments = SceneMaterialAssignmentState::new(
@@ -1980,9 +2237,10 @@ mod tests {
     #[test]
     fn renderer_handoff_uses_preview_scene_product_without_behavior_change() {
         let mut preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
-        preview.resolved_resources = vec![test_resolved_texture_resource(0)];
+        set_test_resolved_resources(&mut preview, vec![test_resolved_texture_resource(0)]);
 
-        let legacy = prepared_material_contribution_for_preview(&preview);
+        let legacy = prepared_material_contribution_for_preview(&preview)
+            .expect("single preview handoff should prepare");
         let refactored =
             prepared_material_contribution_for_preview_with_resolved_scene_materials_and_bundle(
                 &preview,
@@ -2007,6 +2265,182 @@ mod tests {
         }
         assert_eq!(refactored.binding_table, legacy.binding_table);
         assert_eq!(refactored.scene_bundle, legacy.scene_bundle);
+    }
+
+    #[test]
+    fn single_material_handoff_preserves_compiler_coordinates_when_resource_slots_change() {
+        let mut preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let albedo = test_resolved_texture_resource(0);
+        let moss = test_resolved_texture_resource(1);
+        let mut albedo_binding =
+            test_single_material_compiler_bindings(std::slice::from_ref(&albedo))
+                .pop()
+                .expect("test compiler record");
+        albedo_binding.resource_slot_index = 41;
+        albedo_binding.texture_binding = 31;
+        albedo_binding.sampler_binding = 47;
+        let mut moss_binding = test_single_material_compiler_bindings(std::slice::from_ref(&moss))
+            .pop()
+            .expect("test compiler record");
+        moss_binding.resource_slot_index = 73;
+        moss_binding.texture_binding = 13;
+        moss_binding.sampler_binding = 19;
+
+        preview.resolved_resources = vec![albedo.clone()];
+        preview.compiler_resource_bindings = vec![albedo_binding.clone()];
+        let initial = prepared_material_resource_for_preview(Some(&preview))
+            .expect("single material should prepare")
+            .payload;
+        let initial_albedo = &initial.instances[0].texture_bindings[0];
+        assert_eq!(initial_albedo.resource_slot_index, 0);
+        assert_eq!(initial_albedo.bind_group, 1);
+        assert_eq!(initial_albedo.texture_binding, 31);
+        assert_eq!(initial_albedo.sampler_binding, 47);
+
+        preview.resolved_resources = vec![moss, albedo];
+        preview.compiler_resource_bindings = vec![albedo_binding, moss_binding];
+        let shifted = prepared_material_resource_for_preview(Some(&preview))
+            .expect("reordered resources should prepare")
+            .payload;
+        let shifted_albedo = shifted.instances[0]
+            .texture_bindings
+            .iter()
+            .find(|binding| binding.binding_key == "albedo_0")
+            .expect("albedo binding should remain present");
+        assert_eq!(shifted_albedo.resource_slot_index, 1);
+        assert_eq!(shifted_albedo.bind_group, 1);
+        assert_eq!(shifted_albedo.texture_binding, 31);
+        assert_eq!(shifted_albedo.sampler_binding, 47);
+    }
+
+    #[test]
+    fn material_handoff_rejects_missing_ambiguous_or_incompatible_compiler_evidence() {
+        let mut preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let resource = test_resolved_texture_resource(0);
+        let compiler_binding =
+            test_single_material_compiler_bindings(std::slice::from_ref(&resource))
+                .pop()
+                .expect("test compiler record");
+        preview.resolved_resources = vec![resource.clone()];
+
+        let missing = prepared_material_resource_for_preview(Some(&preview))
+            .expect_err("resolved material resources require compiler evidence");
+        assert!(missing.message.contains("no compiler-published"));
+
+        preview.compiler_resource_bindings =
+            vec![compiler_binding.clone(), compiler_binding.clone()];
+        let ambiguous = prepared_material_resource_for_preview(Some(&preview))
+            .expect_err("duplicate compiler records must be ambiguous");
+        assert!(ambiguous.message.contains("ambiguous"));
+
+        let mut orphan = compiler_binding.clone();
+        orphan.node_id = 99;
+        orphan.binding_key = "orphan".to_string();
+        preview.compiler_resource_bindings = vec![compiler_binding.clone(), orphan];
+        let unmatched = prepared_material_resource_for_preview(Some(&preview))
+            .expect_err("compiler records without resolved resources must reject");
+        assert!(unmatched.message.contains("references no resolved"));
+
+        let mut incompatible_dimension = compiler_binding.clone();
+        incompatible_dimension.texture_dimension = CompiledMaterialTextureDimension::D3;
+        preview.compiler_resource_bindings = vec![incompatible_dimension];
+        let incompatible = prepared_material_resource_for_preview(Some(&preview))
+            .expect_err("compiler and resolved texture dimensions must agree");
+        assert!(incompatible.message.contains("incompatible"));
+
+        let mut invalid_group = compiler_binding.clone();
+        invalid_group.bind_group = 2;
+        preview.compiler_resource_bindings = vec![invalid_group];
+        let invalid = prepared_material_resource_for_preview(Some(&preview))
+            .expect_err("invalid compiler material group must reject");
+        assert!(invalid.message.contains("invalid material bind group"));
+
+        let mut equal_texture_and_sampler = compiler_binding;
+        equal_texture_and_sampler.sampler_binding = equal_texture_and_sampler.texture_binding;
+        preview.compiler_resource_bindings = vec![equal_texture_and_sampler];
+        let equal = prepared_material_resource_for_preview(Some(&preview))
+            .expect_err("one key cannot name both material texture and sampler");
+        assert!(equal.message.contains("both texture and sampler"));
+    }
+
+    #[test]
+    fn scene_material_table_rejects_shared_resource_coordinate_disagreement() {
+        let mut default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let shared = test_resolved_texture_resource(7);
+        set_test_resolved_resources(&mut default_preview, vec![shared.clone()]);
+        let mut assigned_preview =
+            test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
+        let mut assigned_resource = shared;
+        assigned_resource.node_id = graph::NodeId::new(99);
+        set_test_resolved_resources(&mut assigned_preview, vec![assigned_resource]);
+        let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
+            .with_material_asset(asset_id(8));
+        let assignments = SceneMaterialAssignmentState::new(
+            SceneMaterialPalette::new([SceneMaterialSlot::default_generated(), assigned_slot])
+                .expect("valid palette"),
+            [],
+        )
+        .expect("valid assignments");
+        let slot_products = [SceneMaterialSlotProduct {
+            slot_id: SceneMaterialSlotId::new(2),
+            preview: &assigned_preview,
+        }];
+        let mut bundle = test_scene_table_bundle(&default_preview, &assignments, &slot_products);
+        let shared_binding = bundle
+            .compiler_resource_bindings
+            .iter_mut()
+            .find(|binding| binding.material_table_slot == Some(1))
+            .expect("assigned shared record");
+        shared_binding.texture_binding = 83;
+        shared_binding.sampler_binding = 89;
+
+        let diagnostic =
+            prepared_material_contribution_for_preview_with_resolved_scene_materials_and_bundle(
+                &default_preview,
+                Some(&assignments),
+                &slot_products,
+                Some(&bundle),
+            )
+            .expect_err("shared resource coordinate disagreement must fail closed");
+        assert!(
+            diagnostic
+                .message
+                .contains("inconsistent resolved resources or shader coordinates")
+        );
+    }
+
+    #[test]
+    fn scene_material_table_rejects_missing_compiler_resource_layout_identity() {
+        let default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
+        let assigned_preview = test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
+        let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
+            .with_material_asset(asset_id(8));
+        let assignments = SceneMaterialAssignmentState::new(
+            SceneMaterialPalette::new([SceneMaterialSlot::default_generated(), assigned_slot])
+                .expect("valid palette"),
+            [],
+        )
+        .expect("valid assignments");
+        let slot_products = [SceneMaterialSlotProduct {
+            slot_id: SceneMaterialSlotId::new(2),
+            preview: &assigned_preview,
+        }];
+        let mut bundle = test_scene_table_bundle(&default_preview, &assignments, &slot_products);
+        bundle.compiler_resource_layout_identity.clear();
+
+        let diagnostic =
+            prepared_material_contribution_for_preview_with_resolved_scene_materials_and_bundle(
+                &default_preview,
+                Some(&assignments),
+                &slot_products,
+                Some(&bundle),
+            )
+            .expect_err("stale compiler resource-layout evidence must fail closed");
+        assert!(
+            diagnostic
+                .message
+                .contains("compiler resource-layout identity")
+        );
     }
 
     #[test]
@@ -2170,10 +2604,16 @@ mod tests {
     #[test]
     fn scene_material_table_handoff_remaps_duplicate_local_texture_slots() {
         let mut default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
-        default_preview.resolved_resources = vec![test_resolved_texture_resource(0)];
+        set_test_resolved_resources(
+            &mut default_preview,
+            vec![test_resolved_texture_resource(0)],
+        );
         let mut assigned_preview =
             test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
-        assigned_preview.resolved_resources = vec![test_resolved_texture_resource(1)];
+        set_test_resolved_resources(
+            &mut assigned_preview,
+            vec![test_resolved_texture_resource(1)],
+        );
         let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
             .with_material_asset(asset_id(8));
         let assignments = SceneMaterialAssignmentState::new(
@@ -2218,12 +2658,12 @@ mod tests {
     fn scene_material_table_handoff_deduplicates_strictly_identical_resources() {
         let mut default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
         let shared = test_resolved_texture_resource(7);
-        default_preview.resolved_resources = vec![shared.clone()];
+        set_test_resolved_resources(&mut default_preview, vec![shared.clone()]);
         let mut assigned_preview =
             test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
         let mut assigned_resource = shared;
         assigned_resource.node_id = graph::NodeId::new(99);
-        assigned_preview.resolved_resources = vec![assigned_resource];
+        set_test_resolved_resources(&mut assigned_preview, vec![assigned_resource]);
         let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
             .with_material_asset(asset_id(8));
         let assignments = SceneMaterialAssignmentState::new(
@@ -2260,17 +2700,20 @@ mod tests {
     fn scene_material_table_handoff_treats_sampler_contract_as_resource_identity() {
         let mut default_preview = test_preview_product_with_ids(asset_id(1), 3, 4, 5, 6, "default");
         let shared = test_resolved_texture_resource(9);
-        default_preview.resolved_resources = vec![shared.clone()];
+        set_test_resolved_resources(&mut default_preview, vec![shared.clone()]);
         let mut identical_assigned_preview =
             test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
         let mut identical_assigned_resource = shared.clone();
         identical_assigned_resource.node_id = graph::NodeId::new(99);
-        identical_assigned_preview.resolved_resources = vec![identical_assigned_resource];
+        set_test_resolved_resources(
+            &mut identical_assigned_preview,
+            vec![identical_assigned_resource],
+        );
         let mut assigned_preview =
             test_preview_product_with_ids(asset_id(8), 9, 10, 11, 12, "rock");
         let mut assigned_resource = shared;
         assigned_resource.sampler_policy = "nearest_clamp".to_string();
-        assigned_preview.resolved_resources = vec![assigned_resource];
+        set_test_resolved_resources(&mut assigned_preview, vec![assigned_resource]);
         let assigned_slot = SceneMaterialSlot::new(SceneMaterialSlotId::new(2), "Assigned")
             .with_material_asset(asset_id(8));
         let assignments = SceneMaterialAssignmentState::new(
@@ -2443,6 +2886,74 @@ mod tests {
         }
     }
 
+    fn set_test_resolved_resources(
+        preview: &mut EditorMaterialPreviewProduct,
+        resources: Vec<crate::material_lab::ResolvedMaterialResource>,
+    ) {
+        preview.compiler_resource_bindings = test_single_material_compiler_bindings(&resources);
+        preview.resolved_resources = resources;
+    }
+
+    fn test_single_material_compiler_bindings(
+        resources: &[crate::material_lab::ResolvedMaterialResource],
+    ) -> Vec<CompiledMaterialResourceBinding> {
+        resources
+            .iter()
+            .enumerate()
+            .map(|(index, resource)| CompiledMaterialResourceBinding {
+                node_id: resource.node_id.raw(),
+                binding_key: resource.binding_key.clone(),
+                resource_slot_index: index as u32,
+                material_table_slot: None,
+                bind_group: 1,
+                texture_binding: 17 + index as u32 * 7,
+                sampler_binding: 19 + index as u32 * 7,
+                texture_dimension: test_compiled_texture_dimension(resource),
+            })
+            .collect()
+    }
+
+    fn test_scene_material_table_compiler_bindings(
+        default_preview: &EditorMaterialPreviewProduct,
+        assignments: &SceneMaterialAssignmentState,
+        slot_products: &[SceneMaterialSlotProduct<'_>],
+    ) -> Vec<CompiledMaterialResourceBinding> {
+        let slots =
+            resolved_scene_material_slots(default_preview, Some(assignments), slot_products)
+                .expect("test scene material slots should resolve");
+        let mut compiler_resource_slots = BTreeMap::new();
+        let mut bindings = Vec::new();
+        for slot in slots {
+            for resource in &slot.preview.resolved_resources {
+                let resource_identity = strict_resolved_resource_identity(resource);
+                let next_resource_slot = compiler_resource_slots.len() as u32;
+                let resource_slot_index = *compiler_resource_slots
+                    .entry(resource_identity)
+                    .or_insert(next_resource_slot);
+                bindings.push(CompiledMaterialResourceBinding {
+                    node_id: resource.node_id.raw(),
+                    binding_key: resource.binding_key.clone(),
+                    resource_slot_index,
+                    material_table_slot: Some(slot.material_table_index),
+                    bind_group: 1,
+                    texture_binding: 17 + resource_slot_index * 7,
+                    sampler_binding: 19 + resource_slot_index * 7,
+                    texture_dimension: test_compiled_texture_dimension(resource),
+                });
+            }
+        }
+        bindings
+    }
+
+    fn test_compiled_texture_dimension(
+        resource: &crate::material_lab::ResolvedMaterialResource,
+    ) -> CompiledMaterialTextureDimension {
+        match resource.kind {
+            AssetKind::Texture3DVolume => CompiledMaterialTextureDimension::D3,
+            _ => CompiledMaterialTextureDimension::D2,
+        }
+    }
+
     fn test_scene_table_bundle(
         default_preview: &EditorMaterialPreviewProduct,
         assignments: &SceneMaterialAssignmentState,
@@ -2462,6 +2973,14 @@ mod tests {
             "scene-table-shader-identity",
             expectation.material_table_identity,
             expectation.resource_layout_identity,
+        )
+        .with_compiler_resource_interface(
+            "test-compiler-resource-layout",
+            test_scene_material_table_compiler_bindings(
+                default_preview,
+                assignments,
+                slot_products,
+            ),
         )
     }
 

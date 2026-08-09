@@ -698,7 +698,8 @@ fn source_backed_texture_material_preview_product(
         scene_shader_path,
         after_compiled.scene_identity.clone(),
         resolved_resources,
-    );
+    )
+    .with_compiler_resource_bindings(after_compiled.resource_bindings.clone());
     let before_preview = EditorMaterialPreviewProduct::new(
         asset_id(product_id + 201),
         asset_source_id(product_id + 202),
@@ -726,10 +727,12 @@ fn source_backed_texture_material_preview_product(
     );
     let material_table_identity_before =
         prepared_material_contribution_for_preview(&before_preview)
+            .expect("before source material contribution should prepare")
             .scene_bundle
             .expect("before source material contribution should include scene bundle")
             .material_table_identity;
     let material_table_identity_after = prepared_material_contribution_for_preview(&preview)
+        .expect("after source material contribution should prepare")
         .scene_bundle
         .expect("after source material contribution should include scene bundle")
         .material_table_identity;

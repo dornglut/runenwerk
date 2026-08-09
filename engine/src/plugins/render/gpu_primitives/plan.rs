@@ -3,7 +3,7 @@ use super::{
     IndirectDrawArgsGenerationDescriptor, PrefixScanMode, U32PrefixScanDescriptor,
     U32ScatterDescriptor,
 };
-use crate::plugins::gpu::GpuBufferHandle;
+use crate::plugins::gpu::{GpuBindingKey, GpuBufferHandle, GpuStorageBufferAccess};
 use crate::plugins::render::RenderShaderConstant;
 
 pub const GPU_PRIMITIVE_WORKGROUP_SIZE: u32 = 64;
@@ -28,12 +28,34 @@ pub enum GpuPrimitiveDispatchStageKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GpuPrimitiveShaderBinding {
+    key: GpuBindingKey,
+    buffer: GpuBufferHandle,
+    access: GpuStorageBufferAccess,
+}
+
+impl GpuPrimitiveShaderBinding {
+    pub(crate) fn key(&self) -> GpuBindingKey {
+        self.key
+    }
+
+    pub(crate) fn buffer(&self) -> &GpuBufferHandle {
+        &self.buffer
+    }
+
+    pub(crate) fn access(&self) -> GpuStorageBufferAccess {
+        self.access
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuPrimitiveDispatchStage {
     pub label: String,
     pub kind: GpuPrimitiveDispatchStageKind,
     pub shader_asset: &'static str,
     pub reads: Vec<GpuBufferHandle>,
     pub writes: Vec<GpuBufferHandle>,
+    pub(crate) shader_bindings: Vec<GpuPrimitiveShaderBinding>,
     pub dispatch: [u32; 3],
     pub constants: Vec<RenderShaderConstant>,
 }
@@ -214,6 +236,11 @@ impl GpuPrimitiveDispatchPlanBuilder {
             shader_asset: GPU_PRIMITIVE_COUNTER_RESET_SHADER,
             reads: Vec::new(),
             writes: vec![step.counters.clone()],
+            shader_bindings: vec![primitive_storage_binding(
+                0,
+                step.counters.clone(),
+                GpuStorageBufferAccess::ReadWrite,
+            )],
             dispatch: dispatch_for_count(step.counter_count),
             constants: vec![
                 RenderShaderConstant::u32("ELEMENT_COUNT", step.counter_count),
@@ -262,6 +289,15 @@ impl GpuPrimitiveDispatchPlanBuilder {
                 shader_asset: GPU_PRIMITIVE_PREFIX_SCAN_SHADER,
                 reads: vec![input.clone()],
                 writes: vec![output.clone(), block_sums.clone()],
+                shader_bindings: vec![
+                    primitive_storage_binding(0, input.clone(), GpuStorageBufferAccess::ReadOnly),
+                    primitive_storage_binding(1, output.clone(), GpuStorageBufferAccess::ReadWrite),
+                    primitive_storage_binding(
+                        2,
+                        block_sums.clone(),
+                        GpuStorageBufferAccess::ReadWrite,
+                    ),
+                ],
                 dispatch: [block_count, 1, 1],
                 constants: vec![
                     RenderShaderConstant::u32("ELEMENT_COUNT", element_count),
@@ -312,8 +348,12 @@ impl GpuPrimitiveDispatchPlanBuilder {
                 ),
                 kind: GpuPrimitiveDispatchStageKind::U32PrefixScanApplyBlockOffsets,
                 shader_asset: GPU_PRIMITIVE_PREFIX_SCAN_APPLY_OFFSETS_SHADER,
-                reads: vec![output.clone(), offsets],
-                writes: vec![output],
+                reads: vec![output.clone(), offsets.clone()],
+                writes: vec![output.clone()],
+                shader_bindings: vec![
+                    primitive_storage_binding(0, output, GpuStorageBufferAccess::ReadWrite),
+                    primitive_storage_binding(1, offsets, GpuStorageBufferAccess::ReadOnly),
+                ],
                 dispatch: dispatch_for_count(levels[level_index].element_count),
                 constants: vec![RenderShaderConstant::u32(
                     "ELEMENT_COUNT",
@@ -331,6 +371,23 @@ impl GpuPrimitiveDispatchPlanBuilder {
             shader_asset: GPU_PRIMITIVE_U32_SCATTER_SHADER,
             reads: vec![step.source_indices.clone(), step.prefix_offsets.clone()],
             writes: vec![step.output_indices.clone()],
+            shader_bindings: vec![
+                primitive_storage_binding(
+                    0,
+                    step.source_indices.clone(),
+                    GpuStorageBufferAccess::ReadOnly,
+                ),
+                primitive_storage_binding(
+                    1,
+                    step.prefix_offsets.clone(),
+                    GpuStorageBufferAccess::ReadOnly,
+                ),
+                primitive_storage_binding(
+                    2,
+                    step.output_indices.clone(),
+                    GpuStorageBufferAccess::ReadWrite,
+                ),
+            ],
             dispatch: dispatch_for_count(step.element_count),
             constants: vec![
                 RenderShaderConstant::u32("ELEMENT_COUNT", step.element_count),
@@ -373,6 +430,11 @@ impl GpuPrimitiveDispatchPlanBuilder {
             shader_asset,
             reads: Vec::new(),
             writes: vec![step.output.clone()],
+            shader_bindings: vec![primitive_storage_binding(
+                0,
+                step.output.clone(),
+                GpuStorageBufferAccess::ReadWrite,
+            )],
             dispatch: [1, 1, 1],
             constants,
         });
@@ -438,6 +500,19 @@ impl GpuPrimitiveDispatchPlanBuilder {
     }
 }
 
+fn primitive_storage_binding(
+    binding: u64,
+    buffer: GpuBufferHandle,
+    access: GpuStorageBufferAccess,
+) -> GpuPrimitiveShaderBinding {
+    GpuPrimitiveShaderBinding {
+        key: GpuBindingKey::try_new(0, binding)
+            .expect("built-in primitive WGSL group-0 binding is statically valid"),
+        buffer,
+        access,
+    }
+}
+
 fn block_count_for(element_count: u32) -> u32 {
     element_count.div_ceil(GPU_PRIMITIVE_WORKGROUP_SIZE).max(1)
 }
@@ -449,7 +524,9 @@ fn dispatch_for_count(element_count: u32) -> [u32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::gpu::{GpuCapabilityProfile, GpuContext, GpuContextDescriptor};
+    use crate::plugins::gpu::{
+        GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuSpecializationValue,
+    };
     use crate::plugins::render::{
         CompiledDrawSource, CompiledPassExecutionPlan, CounterResetDescriptor, DrawIndirectArgs,
         IndirectDrawArgsGenerationDescriptor, PrefixScanMode, RenderFlow, RenderShaderReference,
@@ -673,6 +750,14 @@ mod tests {
                 .chain(&stage.writes)
                 .all(|resource| resource.descriptor().size_bytes() > 0)
         }));
+        assert!(dispatch_plan.stages.iter().all(|stage| {
+            let keys = stage
+                .shader_bindings
+                .iter()
+                .map(GpuPrimitiveShaderBinding::key)
+                .collect::<BTreeSet<_>>();
+            keys.len() == stage.shader_bindings.len() && keys.iter().all(|key| key.group() == 0)
+        }));
     }
 
     #[test]
@@ -764,10 +849,10 @@ mod tests {
                 pass.shader.as_ref(),
                 Some(RenderShaderReference::AssetPath(path))
                     if path == GPU_PRIMITIVE_INDIRECT_DRAW_ARGS_SHADER
-            ) && pass
-                .shader_constants
-                .iter()
-                .any(|constant| constant.name == "INSTANCE_COUNT" && constant.value == 130)
+            ) && pass.shader_constants.iter().any(|constant| {
+                constant.name == "INSTANCE_COUNT"
+                    && constant.value == GpuSpecializationValue::U32(130)
+            })
         }));
 
         let draw = compiled
@@ -1018,36 +1103,33 @@ mod tests {
             label: Some("gpu_primitive_runtime_test_shader"),
             source: wgpu::ShaderSource::Wgsl(source.into()),
         });
-        let binding_resources = stage_binding_resources(stage);
-        let layout_entries = binding_resources
+        let layout_entries = stage
+            .shader_bindings
             .iter()
-            .enumerate()
-            .map(
-                |(index, (_resource, writable))| wgpu::BindGroupLayoutEntry {
-                    binding: index as u32,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage {
-                            read_only: !*writable,
-                        },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+            .map(|binding| wgpu::BindGroupLayoutEntry {
+                binding: binding.key().binding(),
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage {
+                        read_only: matches!(binding.access(), GpuStorageBufferAccess::ReadOnly),
                     },
-                    count: None,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
                 },
-            )
+                count: None,
+            })
             .collect::<Vec<_>>();
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("gpu_primitive_runtime_test_bind_group_layout"),
             entries: layout_entries.as_slice(),
         });
-        let bind_group_entries = binding_resources
+        let bind_group_entries = stage
+            .shader_bindings
             .iter()
-            .enumerate()
-            .map(|(index, (resource, _writable))| wgpu::BindGroupEntry {
-                binding: index as u32,
+            .map(|binding| wgpu::BindGroupEntry {
+                binding: binding.key().binding(),
                 resource: buffers
-                    .get(resource)
+                    .get(binding.buffer())
                     .expect("primitive runtime buffer should exist")
                     .as_entire_binding(),
             })
@@ -1065,7 +1147,21 @@ mod tests {
         let constants = stage
             .constants
             .iter()
-            .map(|constant| (constant.name.as_str(), constant.value as f64))
+            .map(|constant| {
+                let value = match constant.value {
+                    GpuSpecializationValue::Bool(value) => {
+                        if value {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                    GpuSpecializationValue::U32(value) => f64::from(value),
+                    GpuSpecializationValue::I32(value) => f64::from(value),
+                    GpuSpecializationValue::F32(value) => f64::from(value.get()),
+                };
+                (constant.name.as_str(), value)
+            })
             .collect::<Vec<_>>();
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("gpu_primitive_runtime_test_pipeline"),
@@ -1085,18 +1181,6 @@ mod tests {
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(stage.dispatch[0], stage.dispatch[1], stage.dispatch[2]);
-    }
-
-    fn stage_binding_resources(stage: &GpuPrimitiveDispatchStage) -> Vec<(GpuBufferHandle, bool)> {
-        let writable = stage.writes.iter().cloned().collect::<BTreeSet<_>>();
-        let mut seen = BTreeSet::<GpuBufferHandle>::new();
-        let mut resources = Vec::<(GpuBufferHandle, bool)>::new();
-        for resource in stage.reads.iter().chain(stage.writes.iter()) {
-            if seen.insert(resource.clone()) {
-                resources.push((resource.clone(), writable.contains(resource)));
-            }
-        }
-        resources
     }
 
     fn copy_storage_buffer_to_readback(

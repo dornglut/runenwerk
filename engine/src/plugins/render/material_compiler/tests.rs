@@ -494,6 +494,10 @@ fn scene_material_table_slot_evaluators_use_table_wide_resource_bindings() {
     .expect("texture-bearing scene material table should compile");
 
     assert_eq!(shader.resource_bindings.len(), 2);
+    assert_eq!(shader.resource_bindings[0].resource_slot_index, 0);
+    assert_eq!(shader.resource_bindings[1].resource_slot_index, 1);
+    assert_eq!(shader.resource_bindings[0].material_table_slot, Some(0));
+    assert_eq!(shader.resource_bindings[1].material_table_slot, Some(1));
     assert_eq!(shader.resource_bindings[0].texture_binding, 0);
     assert_eq!(shader.resource_bindings[1].texture_binding, 2);
     assert!(
@@ -538,7 +542,45 @@ fn scene_material_table_deduplicates_identical_resource_refs() {
             .iter()
             .all(|binding| binding.texture_binding == 0)
     );
+    assert!(
+        shader
+            .resource_bindings
+            .iter()
+            .all(|binding| binding.resource_slot_index == 0)
+    );
+    assert_eq!(
+        shader
+            .resource_bindings
+            .iter()
+            .map(|binding| binding.material_table_slot)
+            .collect::<Vec<_>>(),
+        vec![Some(0), Some(1)]
+    );
     assert_eq!(shader.wgsl.matches("@group(1) @binding(0)").count(), 1);
+}
+
+#[test]
+fn compiler_publishes_single_material_records_matching_generated_wgsl() {
+    let ir = texture_base_color_ir(26, "texture.albedo");
+    let shader = compile_material_shader(MaterialShaderCompileRequest {
+        ir: &ir,
+        fixture: MaterialPreviewFixture::Sphere,
+    })
+    .expect("texture-bearing material should compile");
+
+    assert_eq!(shader.resource_bindings.len(), 1);
+    let binding = &shader.resource_bindings[0];
+    assert_eq!(binding.resource_slot_index, 0);
+    assert_eq!(binding.material_table_slot, None);
+    assert_eq!(binding.bind_group, 1);
+    assert_eq!(binding.texture_binding, 0);
+    assert_eq!(binding.sampler_binding, 1);
+    for source in [&shader.wgsl, &shader.scene_wgsl] {
+        assert!(source.contains("@group(1) @binding(0)"));
+        assert!(source.contains("@group(1) @binding(1)"));
+        assert!(source.contains("rw_material_texture_0"));
+        assert!(source.contains("rw_material_sampler_1"));
+    }
 }
 
 #[test]

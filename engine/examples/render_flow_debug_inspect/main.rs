@@ -1,4 +1,5 @@
 use anyhow::Result;
+use engine::plugins::gpu::GpuBindingKey;
 use engine::plugins::render::RenderFlow;
 use engine::plugins::render::inspect::{
     PassTimingSample, dump_flow_graph, inspect_resources, inspect_texture_resources,
@@ -13,6 +14,11 @@ struct InspectCell {
 }
 
 fn main() -> Result<()> {
+    // This inspection flow retains its established two-slot ping-pong storage
+    // contract without deriving shader slots from access-vector order.
+    let cells_a_binding = binding_key(0);
+    let cells_b_binding = binding_key(1);
+
     let flow = RenderFlow::new(FLOW_ID)
         .with_surface_color()
         .expect("render flow authoring should succeed")
@@ -21,12 +27,12 @@ fn main() -> Result<()> {
         .expect("render flow authoring should succeed")
         .compute_pass("inspect.sim")
         .shader_asset("assets/shaders/world_compute_basic.wgsl")
-        .bind_ping_pong_storage("inspect.cells")
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "inspect.cells")
         .dispatch([1, 1, 1])
         .finish()
         .fullscreen_pass("inspect.compose")
         .shader_asset("assets/shaders/tonemap.wgsl")
-        .bind_ping_pong_storage("inspect.cells")
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "inspect.cells")
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .finish()
@@ -68,4 +74,8 @@ fn main() -> Result<()> {
     );
 
     Ok(())
+}
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("inspection flow binding should fit GpuBindingKey")
 }

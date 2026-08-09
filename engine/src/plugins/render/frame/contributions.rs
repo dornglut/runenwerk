@@ -597,6 +597,7 @@ impl PreparedMaterialFeatureContribution {
             )));
         }
         let mut seen = std::collections::BTreeSet::new();
+        let mut shader_declarations = std::collections::BTreeMap::new();
         for instance in &self.instances {
             for binding in &instance.texture_bindings {
                 if binding.resource_slot_index as usize
@@ -613,6 +614,45 @@ impl PreparedMaterialFeatureContribution {
                         "duplicate material texture resource slot {}",
                         binding.resource_slot_index
                     )));
+                }
+                if binding.bind_group != 1 {
+                    return Err(PreparedMaterialBindingTableError::new(format!(
+                        "material texture resource slot {} names shader bind group {}; material resources belong to group 1",
+                        binding.resource_slot_index, binding.bind_group
+                    )));
+                }
+                if binding.texture_binding == binding.sampler_binding {
+                    return Err(PreparedMaterialBindingTableError::new(format!(
+                        "material texture resource slot {} uses the same shader binding {} for texture and sampler",
+                        binding.resource_slot_index, binding.texture_binding
+                    )));
+                }
+                for (key, declaration) in [
+                    (
+                        (binding.bind_group, binding.texture_binding),
+                        PreparedMaterialShaderDeclarationKind::Texture(binding.texture_kind),
+                    ),
+                    (
+                        (binding.bind_group, binding.sampler_binding),
+                        PreparedMaterialShaderDeclarationKind::Sampler,
+                    ),
+                ] {
+                    if let Some((existing, existing_resource_slot)) =
+                        shader_declarations.insert(key, (declaration, binding.resource_slot_index))
+                    {
+                        let message = if existing == declaration {
+                            format!(
+                                "duplicate material shader binding key ({}, {}) for resource slots {} and {}",
+                                key.0, key.1, existing_resource_slot, binding.resource_slot_index
+                            )
+                        } else {
+                            format!(
+                                "conflicting material shader declarations for binding key ({}, {}) from resource slots {} and {}",
+                                key.0, key.1, existing_resource_slot, binding.resource_slot_index
+                            )
+                        };
+                        return Err(PreparedMaterialBindingTableError::new(message));
+                    }
                 }
             }
         }
@@ -1156,11 +1196,42 @@ pub struct PreparedMaterialInstanceInput {
     pub texture_bindings: Vec<PreparedMaterialTextureBinding>,
 }
 
+/// App-owned resource-table mapping paired with the exact shader ABI
+/// coordinates published by the material compiler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PreparedMaterialTextureBindingLocation {
+    pub resource_slot_index: u32,
+    pub bind_group: u32,
+    pub texture_binding: u32,
+    pub sampler_binding: u32,
+}
+
+impl PreparedMaterialTextureBindingLocation {
+    pub const fn new(
+        resource_slot_index: u32,
+        bind_group: u32,
+        texture_binding: u32,
+        sampler_binding: u32,
+    ) -> Self {
+        Self {
+            resource_slot_index,
+            bind_group,
+            texture_binding,
+            sampler_binding,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedMaterialTextureBinding {
     pub node_id: u64,
     pub binding_key: String,
     pub resource_slot_index: u32,
+    /// Exact compiler-published shader ABI coordinates. Resource-slot identity
+    /// is intentionally separate from these values.
+    pub bind_group: u32,
+    pub texture_binding: u32,
+    pub sampler_binding: u32,
     pub artifact_id: String,
     pub artifact_path: String,
     pub texture_kind: PreparedMaterialTextureKind,
@@ -1182,6 +1253,7 @@ impl PreparedMaterialTextureBinding {
     pub fn new(
         node_id: u64,
         binding_key: impl Into<String>,
+        location: PreparedMaterialTextureBindingLocation,
         artifact_id: impl Into<String>,
         artifact_path: impl Into<String>,
         texture_kind: PreparedMaterialTextureKind,
@@ -1190,7 +1262,10 @@ impl PreparedMaterialTextureBinding {
         Self {
             node_id,
             binding_key: binding_key.into(),
-            resource_slot_index: 0,
+            resource_slot_index: location.resource_slot_index,
+            bind_group: location.bind_group,
+            texture_binding: location.texture_binding,
+            sampler_binding: location.sampler_binding,
             artifact_id: artifact_id.into(),
             artifact_path: artifact_path.into(),
             texture_kind,
@@ -1210,11 +1285,6 @@ impl PreparedMaterialTextureBinding {
             supercompression: "none".to_string(),
             container_byte_length: None,
         }
-    }
-
-    pub fn with_resource_slot_index(mut self, resource_slot_index: u32) -> Self {
-        self.resource_slot_index = resource_slot_index;
-        self
     }
 
     pub fn with_texture_dimension(mut self, texture_dimension: impl Into<String>) -> Self {
@@ -1261,6 +1331,12 @@ impl PreparedMaterialTextureBinding {
 pub enum PreparedMaterialTextureKind {
     Texture2D,
     Texture3D,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PreparedMaterialShaderDeclarationKind {
+    Texture(PreparedMaterialTextureKind),
+    Sampler,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1366,6 +1442,7 @@ mod tests {
         let duplicate = PreparedMaterialTextureBinding::new(
             1,
             "texture_ref",
+            PreparedMaterialTextureBindingLocation::new(0, 1, 0, 1),
             "artifact.1",
             ".runenwerk/artifacts/texture.ktx2",
             PreparedMaterialTextureKind::Texture2D,
@@ -1392,6 +1469,109 @@ mod tests {
                 .to_string()
                 .contains("duplicate material texture resource slot")
         );
+    }
+
+    #[test]
+    fn material_feature_rejects_duplicate_or_conflicting_shader_binding_keys() {
+        let texture = |resource_slot_index, texture_binding, sampler_binding| {
+            PreparedMaterialTextureBinding::new(
+                resource_slot_index as u64 + 1,
+                format!("texture_{resource_slot_index}"),
+                PreparedMaterialTextureBindingLocation::new(
+                    resource_slot_index,
+                    1,
+                    texture_binding,
+                    sampler_binding,
+                ),
+                format!("artifact.{resource_slot_index}"),
+                ".runenwerk/artifacts/texture.ktx2",
+                PreparedMaterialTextureKind::Texture2D,
+                "texture-cache",
+            )
+        };
+        let contribution = |texture_bindings| PreparedMaterialFeatureContribution {
+            instances: vec![PreparedMaterialInstanceInput {
+                material_instance_id: "material.product.1".to_string(),
+                specialization_key_fragment: "material.first_slice".to_string(),
+                parameter_payload: PreparedMaterialParameterPayloadV1::default(),
+                texture_bindings,
+            }],
+            binding_table: PreparedMaterialBindingTable::default(),
+            scene_bundle: None,
+            model_mesh_material_selections: Vec::new(),
+        };
+
+        let duplicate = contribution(vec![texture(0, 31, 37), texture(1, 31, 37)])
+            .validate_portable_limits()
+            .expect_err("distinct resource slots must not share a final shader key");
+        assert!(
+            duplicate
+                .to_string()
+                .contains("duplicate material shader binding key")
+        );
+
+        let conflict = contribution(vec![texture(0, 31, 37), texture(1, 37, 41)])
+            .validate_portable_limits()
+            .expect_err("texture and sampler declarations must not conflict on one key");
+        assert!(
+            conflict
+                .to_string()
+                .contains("conflicting material shader declarations")
+        );
+    }
+
+    #[test]
+    fn material_feature_rejects_invalid_material_shader_coordinates() {
+        let invalid_group = PreparedMaterialTextureBinding::new(
+            1,
+            "texture_ref",
+            PreparedMaterialTextureBindingLocation::new(0, 2, 31, 37),
+            "artifact.1",
+            ".runenwerk/artifacts/texture.ktx2",
+            PreparedMaterialTextureKind::Texture2D,
+            "texture-cache",
+        );
+        let contribution = PreparedMaterialFeatureContribution {
+            instances: vec![PreparedMaterialInstanceInput {
+                material_instance_id: "material.product.1".to_string(),
+                specialization_key_fragment: "material.first_slice".to_string(),
+                parameter_payload: PreparedMaterialParameterPayloadV1::default(),
+                texture_bindings: vec![invalid_group],
+            }],
+            binding_table: PreparedMaterialBindingTable::default(),
+            scene_bundle: None,
+            model_mesh_material_selections: Vec::new(),
+        };
+
+        let error = contribution
+            .validate_portable_limits()
+            .expect_err("invalid material group must reject");
+        assert!(error.to_string().contains("bind group 2"));
+
+        let equal_texture_and_sampler = PreparedMaterialTextureBinding::new(
+            1,
+            "texture_ref",
+            PreparedMaterialTextureBindingLocation::new(0, 1, 31, 31),
+            "artifact.1",
+            ".runenwerk/artifacts/texture.ktx2",
+            PreparedMaterialTextureKind::Texture2D,
+            "texture-cache",
+        );
+        let contribution = PreparedMaterialFeatureContribution {
+            instances: vec![PreparedMaterialInstanceInput {
+                material_instance_id: "material.product.1".to_string(),
+                specialization_key_fragment: "material.first_slice".to_string(),
+                parameter_payload: PreparedMaterialParameterPayloadV1::default(),
+                texture_bindings: vec![equal_texture_and_sampler],
+            }],
+            binding_table: PreparedMaterialBindingTable::default(),
+            scene_bundle: None,
+            model_mesh_material_selections: Vec::new(),
+        };
+        let error = contribution
+            .validate_portable_limits()
+            .expect_err("one material key cannot name both texture and sampler");
+        assert!(error.to_string().contains("same shader binding"));
     }
 
     #[test]

@@ -48,7 +48,7 @@ pub fn collect_pass_resource_truth(
         CompiledPassExecutionPlan::Compute(plan) => {
             for entry in &plan.bindings.bind_group.entries {
                 match entry {
-                    CompiledBindingEntry::SampledTexture { resource } => {
+                    CompiledBindingEntry::SampledTexture { resource, .. } => {
                         push_resolved_resource_id(
                             pass_id,
                             resource,
@@ -95,7 +95,7 @@ pub fn collect_pass_resource_truth(
             }
             for entry in &plan.bindings.bind_group.entries {
                 match entry {
-                    CompiledBindingEntry::SampledTexture { resource } => {
+                    CompiledBindingEntry::SampledTexture { resource, .. } => {
                         push_resolved_resource_id(
                             pass_id,
                             resource,
@@ -304,8 +304,8 @@ pub fn execution_pass_id(pass: &CompiledPassExecutionPlan) -> RenderPassId {
 pub fn execution_pass_feature_id(pass: &CompiledPassExecutionPlan) -> Option<RenderFeatureId> {
     match pass {
         CompiledPassExecutionPlan::Compute(value) => value.feature_id,
-        CompiledPassExecutionPlan::Fullscreen(value) => value.feature_id,
-        CompiledPassExecutionPlan::Graphics(value) => value.feature_id,
+        CompiledPassExecutionPlan::Fullscreen(value)
+        | CompiledPassExecutionPlan::Graphics(value) => value.feature_id,
         CompiledPassExecutionPlan::Copy(value) => value.feature_id,
         CompiledPassExecutionPlan::Present(value) => value.feature_id,
         CompiledPassExecutionPlan::BuiltinUiComposite(value) => Some(value.feature_id),
@@ -438,16 +438,6 @@ pub fn resolve_shader_material_for_packet<'a>(
     }
 }
 
-pub fn hash_bind_group_layout_entries(entries: &[BindGroupLayoutEntry]) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    for entry in entries {
-        entry.binding.hash(&mut hasher);
-        entry.visibility.bits().hash(&mut hasher);
-        format!("{:?}", entry.ty).hash(&mut hasher);
-    }
-    hasher.finish()
-}
-
 pub fn hash_view_signature(view_id: &str, surface_size: (u32, u32)) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     view_id.hash(&mut hasher);
@@ -489,16 +479,6 @@ pub fn feature_runtime_version(
         .unwrap_or_default()
         .hash(&mut hasher);
     hasher.finish()
-}
-
-pub fn compiled_storage_access_to_storage_texture_access(
-    access: CompiledStorageAccess,
-) -> StorageTextureAccess {
-    match access {
-        CompiledStorageAccess::ReadOnly => StorageTextureAccess::ReadOnly,
-        CompiledStorageAccess::WriteOnly => StorageTextureAccess::WriteOnly,
-        CompiledStorageAccess::ReadWrite => StorageTextureAccess::ReadWrite,
-    }
 }
 
 pub fn pass_consumes_material_resources(

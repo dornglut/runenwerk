@@ -1,4 +1,4 @@
-use engine::plugins::gpu::GpuWorkResourceId;
+use engine::plugins::gpu::{GpuBindingKey, GpuWorkResourceId};
 use engine::plugins::render::{
     PreparedFlowInputs, PreparedFlowInvocation, PreparedFlowInvocationId,
     PreparedFlowInvocationRequest, PreparedFrameContext, PreparedFrameContributions,
@@ -61,6 +61,11 @@ fn producer(raw: u64) -> RenderFrameProducerId {
 
 fn alias_key(value: &str) -> RenderTargetAliasKey {
     RenderTargetAliasKey::new(value).expect("test alias key should be valid")
+}
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding)
+        .expect("dynamic-target test binding should fit GpuBindingKey")
 }
 
 fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
@@ -427,6 +432,8 @@ fn render_dynamic_targets_preflight_reports_missing_target_alias_binding() {
 
 #[test]
 fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_sampled() {
+    let scene_texture_binding = binding_key(0);
+    let scene_sampler_binding = binding_key(1);
     let flow = RenderFlow::new("preflight.dynamic.sampled")
         .with_surface_color()
         .expect("render flow authoring should succeed")
@@ -438,7 +445,7 @@ fn render_dynamic_targets_preflight_rejects_non_sampleable_dynamic_target_when_s
         .finish()
         .fullscreen_pass("sample_scene")
         .offscreen_products_only()
-        .sample_texture("scene_color")
+        .sample_texture(scene_texture_binding, scene_sampler_binding, "scene_color")
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .finish()

@@ -1,4 +1,4 @@
-use engine::plugins::gpu::{GpuCapabilities, GpuCapabilityFeature};
+use engine::plugins::gpu::{GpuBindingKey, GpuCapabilities, GpuCapabilityFeature};
 use engine::plugins::render::inspect::{
     inspect_fragment_pass_provenance, inspect_render_fragment_merge_report,
 };
@@ -8,6 +8,10 @@ use engine::plugins::render::{
     RenderFragmentPassDescriptor, RenderFragmentResourceDescriptor, RenderTextureTargetFormat,
     current_runtime_gpu_capabilities, merge_fragment_package_into_flow, validate_fragment_package,
 };
+
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("fragment test binding should fit GpuBindingKey")
+}
 
 fn compositor_package(revision: u64) -> RenderFragmentPackageDescriptor {
     RenderFragmentPackageDescriptor::new(
@@ -61,8 +65,8 @@ fn compute_fragment_package_with_sampled_texture() -> RenderFragmentPackageDescr
             .with_pass(
                 RenderFragmentPassDescriptor::compute("simulate")
                     .shader_asset("assets/shaders/simulate.wgsl")
-                    .sample_local_texture("input")
-                    .write_local_texture("state")
+                    .sample_local_texture(binding_key(0), binding_key(1), "input")
+                    .write_local_texture(binding_key(2), "state")
                     .dispatch([1, 1, 1]),
             ),
     )
@@ -81,7 +85,7 @@ fn valid_compute_fragment_package() -> RenderFragmentPackageDescriptor {
             .with_pass(
                 RenderFragmentPassDescriptor::compute("simulate")
                     .shader_asset("assets/shaders/simulate.wgsl")
-                    .write_local_texture("state")
+                    .write_local_texture(binding_key(0), "state")
                     .dispatch([1, 1, 1]),
             ),
     )
@@ -104,7 +108,7 @@ fn fullscreen_fragment_package_with_sampled_texture() -> RenderFragmentPackageDe
             .with_pass(
                 RenderFragmentPassDescriptor::fullscreen("compose")
                     .shader_asset("assets/shaders/fullscreen_composite.wgsl")
-                    .sample_local_texture("input")
+                    .sample_local_texture(binding_key(0), binding_key(1), "input")
                     .write_local_color_target("scene"),
             ),
     )
@@ -127,7 +131,7 @@ fn graphics_fragment_package_with_sampled_texture() -> RenderFragmentPackageDesc
             .with_pass(
                 RenderFragmentPassDescriptor::graphics("draw")
                     .shader_asset("assets/shaders/mesh.wgsl")
-                    .sample_local_texture("input")
+                    .sample_local_texture(binding_key(0), binding_key(1), "input")
                     .write_local_color_target("scene")
                     .draw(3, 1),
             ),
@@ -230,7 +234,7 @@ fn fragment_merge_reports_backend_capability_failures_as_typed_diagnostics() {
             .with_pass(
                 RenderFragmentPassDescriptor::compute("simulate")
                     .shader_asset("assets/shaders/simulate.wgsl")
-                    .write_local_texture("state")
+                    .write_local_texture(binding_key(0), "state")
                     .dispatch([1, 1, 1]),
             ),
     );

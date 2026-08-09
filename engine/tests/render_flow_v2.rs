@@ -1,6 +1,6 @@
 use engine::plugins::gpu::{
-    GpuBufferAccessKind, GpuCapabilities, GpuCapabilityFeature, GpuInitialCoverageKind,
-    GpuResourceAccess,
+    GpuBindingKey, GpuBufferAccessKind, GpuCapabilities, GpuCapabilityFeature,
+    GpuInitialCoverageKind, GpuResourceAccess,
 };
 use engine::plugins::render::{
     DrawIndirectArgs, GpuStorage, GpuUniform, PreparedFlowInputs, PreparedFlowInvocation,
@@ -76,7 +76,18 @@ impl FlowState {
     }
 }
 
+fn binding_key(binding: u64) -> GpuBindingKey {
+    GpuBindingKey::try_new(0, binding).expect("test shader binding should fit GpuBindingKey")
+}
+
 fn build_flow() -> RenderFlow {
+    // The game-of-life shaders declare params at binding 0 and their
+    // ping-pong cell buffers at bindings 1 and 2.
+    let compute_params_binding = binding_key(0);
+    let cells_a_binding = binding_key(1);
+    let cells_b_binding = binding_key(2);
+    let compose_params_binding = binding_key(0);
+
     RenderFlow::new("v2.flow")
         .with_state::<FlowState>()
         .with_surface_color()
@@ -86,16 +97,16 @@ fn build_flow() -> RenderFlow {
         .expect("render flow authoring should succeed")
         .compute_pass("simulate")
         .shader_asset("assets/shaders/game_of_life_compute.wgsl")
-        .uniform_from_state(FlowState::compute_params)
+        .uniform_from_state(compute_params_binding, FlowState::compute_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage("cells")
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "cells")
         .dispatch_from_state(FlowState::dispatch)
         .finish()
         .fullscreen_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
-        .uniform_from_state_with_surface(FlowState::compose_params)
+        .uniform_from_state_with_surface(compose_params_binding, FlowState::compose_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage("cells")
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "cells")
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .finish()
@@ -150,7 +161,7 @@ fn instanced_fullscreen_style_flow(instance_count: u32) -> RenderFlow {
         .expect("render flow authoring should succeed");
     flow.graphics_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
-        .bind_storage(cells)
+        .bind_storage(binding_key(1), cells)
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .draw(3, instance_count)
@@ -223,7 +234,7 @@ fn render_flow_compiler_reports_typed_static_resource_diagnostics() {
         .expect("render flow authoring should succeed");
     let flow = flow
         .fullscreen_pass("compose")
-        .sample_texture("cells")
+        .sample_texture(binding_key(0), binding_key(1), "cells")
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .finish();
@@ -320,7 +331,7 @@ fn render_flow_compiler_accepts_bounded_instanced_fullscreen_intent() {
     let flow = flow
         .graphics_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
-        .bind_storage(cells)
+        .bind_storage(binding_key(1), cells)
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .draw(3, 512)
@@ -357,7 +368,7 @@ fn render_flow_compiler_rejects_instanced_fullscreen_intent_over_limit() {
     let flow = flow
         .graphics_pass("compose")
         .shader_asset("assets/shaders/game_of_life_compose.wgsl")
-        .bind_storage(cells)
+        .bind_storage(binding_key(1), cells)
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .draw(3, 2048)
@@ -553,6 +564,11 @@ fn v2_exact_color_target_rejects_depth_format() {
 
 #[test]
 fn v2_uniform_projection_infers_types_from_method_items() {
+    let compute_params_binding = binding_key(0);
+    let cells_a_binding = binding_key(1);
+    let cells_b_binding = binding_key(2);
+    let compose_params_binding = binding_key(0);
+
     let flow = RenderFlow::new("v2.inference")
         .with_state::<FlowState>()
         .with_surface_color()
@@ -560,15 +576,15 @@ fn v2_uniform_projection_infers_types_from_method_items() {
         .double_buffer_storage_array::<Cell>("cells", 16 * 9)
         .expect("render flow authoring should succeed")
         .compute_pass("simulate")
-        .uniform_from_state(FlowState::compute_params)
+        .uniform_from_state(compute_params_binding, FlowState::compute_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage("cells")
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "cells")
         .dispatch_from_state(FlowState::dispatch)
         .finish()
         .fullscreen_pass("compose")
-        .uniform_from_state_with_surface(FlowState::compose_params)
+        .uniform_from_state_with_surface(compose_params_binding, FlowState::compose_params)
         .expect("render flow authoring should succeed")
-        .bind_ping_pong_storage("cells")
+        .bind_ping_pong_storage(cells_a_binding, cells_b_binding, "cells")
         .write_surface_color()
         .expect("render flow authoring should succeed")
         .finish()

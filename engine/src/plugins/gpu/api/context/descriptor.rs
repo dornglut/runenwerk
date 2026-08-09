@@ -506,6 +506,10 @@ pub(crate) const fn preferred_degradation_is_valid(
         | GpuCapabilityFeature::Copy
         | GpuCapabilityFeature::IndirectDraw
         | GpuCapabilityFeature::StorageTexture
+        | GpuCapabilityFeature::TextureBindingArray
+        | GpuCapabilityFeature::BufferBindingArray
+        | GpuCapabilityFeature::StorageResourceBindingArray
+        | GpuCapabilityFeature::UniformBufferBindingArray
         | GpuCapabilityFeature::DepthAttachment => {
             matches!(fallback, GpuPreferredFallback::SelectAlternativeWork)
         }
@@ -532,12 +536,16 @@ pub(crate) fn alignment_value(facts: GpuAlignmentFacts, kind: GpuAlignmentKind) 
 mod tests {
     use super::*;
 
-    const FEATURES: [GpuCapabilityFeature; 8] = [
+    const FEATURES: [GpuCapabilityFeature; 12] = [
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
         GpuCapabilityFeature::IndirectDraw,
         GpuCapabilityFeature::StorageTexture,
+        GpuCapabilityFeature::TextureBindingArray,
+        GpuCapabilityFeature::BufferBindingArray,
+        GpuCapabilityFeature::StorageResourceBindingArray,
+        GpuCapabilityFeature::UniformBufferBindingArray,
         GpuCapabilityFeature::DepthAttachment,
         GpuCapabilityFeature::TimestampQuery,
         GpuCapabilityFeature::Presentation,

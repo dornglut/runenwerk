@@ -325,7 +325,8 @@ pub fn rebuild_material_preview_for_asset(
         canonical_shader_registry_path(session.project_root(), &scene_shader_relative_path),
         compiled_shader.scene_identity,
         resolved_resources,
-    );
+    )
+    .with_compiler_resource_bindings(compiled_shader.resource_bindings);
     let publication = ProductPublicationOutcome::ready(
         product_job,
         [product.product_core.clone()],
@@ -350,8 +351,11 @@ pub(crate) fn write_scene_material_table_shader_bundle(
     compiled_shader: &CompiledSceneMaterialTableShader,
 ) -> Result<EditorSceneMaterialTableShaderBundle> {
     let shader_cache_key = ArtifactCacheKey::new(format!(
-        "material-scene-table-shader-v1:table={}:resources={}:shader={}",
-        material_table_identity, resource_layout_identity, compiled_shader.identity
+        "material-scene-table-shader-v1:table={}:resources={}:compiler_resources={}:shader={}",
+        material_table_identity,
+        resource_layout_identity,
+        compiled_shader.resource_layout_identity,
+        compiled_shader.identity
     ));
     let shader_relative_path =
         content_addressed_artifact_path("material-scene-table-shader", &shader_cache_key, "wgsl");
@@ -368,6 +372,10 @@ pub(crate) fn write_scene_material_table_shader_bundle(
         compiled_shader.identity.clone(),
         material_table_identity.to_string(),
         resource_layout_identity.to_string(),
+    )
+    .with_compiler_resource_interface(
+        compiled_shader.resource_layout_identity.clone(),
+        compiled_shader.resource_bindings.clone(),
     ))
 }
 
