@@ -5,7 +5,7 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-08-09
+last_reviewed: 2026-08-10
 related_docs:
   - ./runengpu-architecture-design.md
   - ./runengpu-g3-access-work-graph-design.md
@@ -668,8 +668,10 @@ ABI requirements are proven.
 Required structured categories include invalid source key/revision, source revision
 conflict, unsupported source kind, WGSL parse/validation failure, missing or wrong-stage
 entry point, duplicate/invalid binding, interface mismatch, runtime binding mismatch,
-specialization mismatch, invalid pipeline descriptor, and backend realization failure.
-Backend compiler strings are bounded detail, not public categories.
+specialization mismatch, invalid pipeline descriptor, and, after complete RunenGPU
+admission, unexpected backend validation rejection (a backend-contract/invariant
+violation), backend capacity/resource-exhaustion, or context/device unavailable/lost
+outcome. Backend compiler strings are bounded detail, not public categories.
 
 Required compile-pass proof:
 
@@ -735,13 +737,24 @@ Every request validates in this order:
 6. full cache-key lookup and equality;
 7. WGPU creation when no compatible hit exists.
 
-Structured failures distinguish foreign context, stale generation, unknown logical
+Structured outcomes distinguish foreign context, stale generation, unknown logical
 resource, descriptor change for identity, resource-kind mismatch, interface mismatch,
 binding mismatch, unadmitted requirement, format/alignment incompatibility, cache
-rejection, and backend realization failure.
+rejection, and deterministic incompatibility before backend creation. They separately
+classify unexpected backend validation rejection after complete admission
+(backend-contract/invariant violation), resource allocation exhaustion/OOM (structured
+backend capacity/resource-exhaustion), and unavailable or lost device/context
+(structured context/device outcome). Backend error text is bounded diagnostic evidence
+only; it does not collapse those categories. G4C1 does not replace or recover a device:
+G7 later owns replacement/reconstruction facts and Runenwerk owns product recovery.
 
-Foreign or stale values are rejected before WGPU access. Runtime use-after-retirement
-and delayed destruction remain G5-owned.
+Foreign or stale values are rejected before WGPU access. Registry reclamation is not GPU
+completion and not physical backend retirement: G4C1 may remove or deactivate an
+unretained record from future authoritative lookup according to logical liveness, but
+that never proves prior encoded/submitted use complete or invalidates a live realized
+handle, active bridge borrow, or current execution reference. G4C1 preserves current
+backend/execution retention mechanics and owns no fence or submission-completion
+retirement authority; G5 alone owns completion-based delayed retirement/destruction.
 
 ## Realization registries
 
@@ -812,11 +825,13 @@ Hit                 reuse
 Miss                ordinary realization
 Rejected            structured incompatibility, then ordinary realization
 RejectedCorrupt     structured corruption, then ordinary realization
-RealizationFailed   no entry published
+RealizationFailed   no entry published; telemetry aggregate only
 ```
 
 A cache hit changes cost, never semantics. Full equality follows hashing. Stats
-separate hits, misses, rejections, corruption, and creation failures.
+separate hits, misses, rejections, corruption, and creation failures. A returned failure
+retains its deterministic, backend-contract/invariant, resource-exhaustion, or
+context/device classification rather than inheriting the `RealizationFailed` aggregate.
 
 ## Private WGPU ownership, object-reference bridges, and operation loan
 

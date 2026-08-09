@@ -5,7 +5,7 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-08-09
+last_reviewed: 2026-08-10
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -416,12 +416,33 @@ Later phase concepts include execution epoch, submission, surface, and readback
 identities. Raw diagnostic values never imply persistence, replay, cache, network,
 wire, or external-format stability.
 
-RunenGPU owns opaque owner-scope allocation feeding `GpuWorkResourceIdAllocator` and
-the typed G2 handles. The temporary crate-private bridge that seeds a work-resource
-owner from `RenderFlowId` is accepted G3 migration evidence and G4C1 deletes it.
-Renderer invocation/history keys may map renderer policy to distinct retained typed G2
-handles, but renderer IDs, labels, paths, hashes, and backend addresses do not enter
-generic RunenGPU resource identity or registry keys.
+RunenGPU owns this owner-scope sequence:
+
+```text
+private RunenGPU process-local monotonic owner-scope authority
+    ↓
+fresh opaque nonzero owner scope
+    ↓
+GpuWorkResourceIdAllocator
+    ↓
+typed G2 logical handles
+```
+
+The authority is independent of `GpuContext`, `GpuDeviceGeneration`, backend/WGPU,
+`RenderFlowId`, and renderer invocation/history identity. Zero is invalid; a production
+scope never wraps or reuses, and exhaustion is a structured allocation outcome. Isolated
+test allocators never mutate or reset the production authority. Raw scope components are
+diagnostic-only, and production callers cannot choose, reconstruct, or inject them.
+Owner-scope acquisition occurs in the already-fallible logical-resource allocation path
+(lazily on its first successful allocation or equivalently), so `RenderFlow::new` need
+not become fallible merely to acquire a scope. No public scalar owner-scope type is
+introduced.
+
+The temporary crate-private bridge that seeds a work-resource owner from `RenderFlowId`
+is accepted G3 migration evidence and G4C1 deletes it. Renderer invocation/history keys
+may map renderer policy to distinct retained typed G2 handles, but renderer IDs, labels,
+paths, hashes, and backend addresses do not enter generic RunenGPU resource identity or
+registry keys.
 
 ## Capability and portability model
 
@@ -615,6 +636,17 @@ resources.
 Every request rejects foreign context and stale generation before backend work. Full
 descriptor compatibility is checked before reuse. Registry publication is transactional.
 
+Deterministic descriptor, capability, affinity, and import-source incompatibility is a
+structured G4C1 rejection before backend creation. After complete RunenGPU admission, an
+unexpected backend validation rejection is a backend-contract/invariant violation;
+resource allocation exhaustion or OOM is instead a structured backend
+capacity/resource-exhaustion failure; and unavailable or lost device/context is a
+structured context/device outcome. G4C1 neither replaces nor recovers a device/context:
+G7 later owns replacement/reconstruction facts and Runenwerk owns product recovery.
+Backend error text is bounded diagnostic evidence only. These classes do not publish a
+realization record, and `RealizationFailed` may be a telemetry aggregate but not their
+semantic classification.
+
 An authoritative registry maps one typed logical identity to its realization record and
 is scoped to one context/device generation. The same identity plus the same complete
 semantic descriptor reuses that record; a changed descriptor rejects; distinct logical
@@ -632,9 +664,14 @@ RealizationFailed   no entry published
 ```
 
 A cache hit changes cost, never semantics. No stable persisted cache format is
-authorized by G4. G4C1 owns logical-record liveness, bounded registry reclamation, and
-unretained derived-state removal; G5 owns in-flight retention, completion, cancellation,
-delayed backend retirement/destruction, and shutdown.
+authorized by G4. Registry reclamation is not GPU completion and not physical backend
+retirement. G4C1 may remove or deactivate an unretained record from future authoritative
+lookup only according to logical liveness; that removal neither proves prior
+encoded/submitted use is complete nor invalidates a live realized handle, active bridge
+borrow, or current execution reference. G4C1 owns no fence or submission-completion
+retirement authority and preserves current backend/execution retention mechanics until
+G5 replaces them. G5 alone owns in-flight retention, completion, cancellation, delayed
+backend retirement/destruction, and shutdown.
 
 Backend resource-object creation is G4C1 work. `GpuBufferInitialization` and
 `GpuTextureInitialization` remain checked logical intent, while uploads, updates,

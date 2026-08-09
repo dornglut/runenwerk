@@ -75,7 +75,7 @@ PhaseImplementationSpec(
         "Run the complete WGSL evidence pipeline before publishing the private WGPU shader module realization.",
         "Normalize and retain observed vertex entry-point input locations/classes and fragment entry-point output locations/classes for later G4C3 pipeline compatibility.",
         "Naga IR, module-info, and backend-native outputs remain private ephemeral implementation facts and never become public identity, cache, persistence, replay, or wire formats.",
-        "Any parser, validator, agreement, or backend module creation failure publishes no authoritative realization or cache entry.",
+        "Deterministic parser, validator, or agreement incompatibility rejects before backend creation. Unexpected backend validation after complete admission, resource allocation exhaustion/OOM, and unavailable/lost context/device remain distinct structured outcomes; none publishes an authoritative realization or cache entry, and backend text is diagnostic only.",
     ],
 
     mandatory_reflection_agreement: [
@@ -150,7 +150,7 @@ PhaseImplementationSpec(
         "Absent entry creates ordinarily and emits Miss.",
         "Incompatible derived entry emits Rejected and follows ordinary realization after discard or quarantine.",
         "Resource-interface or Naga/WGPU validation-path disagreement is a semantic rejection, not a cache miss or fallback.",
-        "Backend creation failure emits RealizationFailed and publishes no authoritative entry.",
+        "Unexpected backend validation, backend resource exhaustion/OOM, and unavailable/lost context/device emit distinct structured outcomes and publish no authoritative entry; RealizationFailed may aggregate telemetry but is not their semantic classification.",
         "No persisted module, layout, bind-group, Naga IR, module-info, observed signature, backend output, or cross-process handle format is authorized.",
     ],
 
@@ -210,7 +210,9 @@ PhaseImplementationSpec(
         "BindingValueMismatch",
         "RegistryCapacityExceeded",
         "CacheRejected",
-        "BackendProgramOrBindingRealizationFailure",
+        "UnexpectedBackendProgramOrBindingValidationRejection",
+        "BackendResourceExhaustion",
+        "ContextOrDeviceUnavailableOrLost",
         "CurrentRenderPipelineBridgeViolation",
     ],
 
@@ -223,6 +225,7 @@ PhaseImplementationSpec(
         "Evidence cannot add, remove, renumber, or mutate authoritative declarations or pipeline state.",
         "Complete module/layout/bind-group keys are insertion-order-independent and include every correctness field, including evidence compatibility revision and observed stage IO.",
         "Equal duplicate realization reuses one record; changed descriptor rejects transactionally.",
+        "Unexpected backend validation, resource exhaustion/OOM, and unavailable/lost context/device remain distinct from deterministic incompatibility and never publish an authoritative record.",
         "Typed binding values reject wrong kind, range, size, alignment, format, sample class, access, array cardinality, foreign context, and stale generation.",
         "CurrentRenderResourceBridge has zero remaining source references at G4C2 acceptance.",
         "CurrentRenderPipelineBridge rejects foreign, stale, wrong-kind, escape, storage, caching, return, identity, and bridge-owned pipeline/encoding/upload/submission attempts and has only audited purpose-typed current terminals.",
