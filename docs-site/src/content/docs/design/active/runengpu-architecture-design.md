@@ -5,7 +5,7 @@ status: active
 owner: gpu
 layer: framework/gpu
 canonical: true
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-10
 related_docs:
   - ../../architecture/repository-family-architecture.md
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
@@ -47,8 +47,11 @@ G3 decision phase                    complete at 5c82cc54d5ac51aeb2fd8e3da916ed8
 operational hardening                complete at 90d24abb93bff4b1d3f5b4743056bc00ff80d4b6
 G3 Rust implementation               accepted at 39d6fe65a334502bdfba0b1a2ce3b365099fcf28
 verified-head maintenance            accepted at 6bbd341691a34763ef54c8ca059940cac8981265
-G4 decision phase                    issue #182 / PR #185
-G4A-G8                               implementation remains separately authorized
+G4 decision phase                    accepted at 62c3949d31a7c03f1f554f8108120d9767139123
+G4A context admission                accepted at 501b9fd58e56d33708573e47faf0e5026b5a1ff2
+G4B program/interface contracts      accepted at 2095afd624979a9f386254d44e082b7eeb0a18a1
+G4C1 final contract correction       issue #224 only; source implementation blocked
+G4C2/G4C3/G5-G8                      separately blocked or unauthorized
 GX external extraction               blocked on accepted G2-G8 evidence
 ```
 
@@ -69,7 +72,8 @@ G4A context and adapter/device admission
 ```
 
 The three slices must not be collapsed into one implementation issue or pull request.
-After accepted G4 planning, only G4A may become active.
+G4C remains the ordered `G4C1 -> G4C2 -> G4C3 -> G5` continuation; no child starts
+before its predecessor is accepted and accepted-main verified.
 
 ## Mission
 
@@ -110,6 +114,14 @@ baker or offline job ----------+
 
 RunenGPU complements WGPU. It does not reimplement Vulkan, Metal, D3D12, WebGPU,
 shader compilers, or operating-system window systems.
+
+WGPU is the first backend, not RunenGPU's permanent public capability ceiling. A future
+native or backend-specific interoperability path requires separate evidence and a
+bounded capability, ownership, lifetime, and synchronization contract; it can never be
+a broad `raw_device()`-style escape hatch. Vendor reconstruction/upscaling or
+frame-generation systems such as FSR, MetalFX, DLSS, and XeSS belong to RunenRender
+reconstruction/presentation implementations and product policy, not RunenGPU core
+semantics.
 
 ## Repository and package
 
@@ -404,8 +416,33 @@ Later phase concepts include execution epoch, submission, surface, and readback
 identities. Raw diagnostic values never imply persistence, replay, cache, network,
 wire, or external-format stability.
 
-The temporary crate-private bridge that seeds a work-resource owner from
-`RenderFlowId` exists only as accepted G3 migration evidence. G4C deletes it.
+RunenGPU owns this owner-scope sequence:
+
+```text
+private RunenGPU process-local monotonic owner-scope authority
+    ↓
+fresh opaque nonzero owner scope
+    ↓
+GpuWorkResourceIdAllocator
+    ↓
+typed G2 logical handles
+```
+
+The authority is independent of `GpuContext`, `GpuDeviceGeneration`, backend/WGPU,
+`RenderFlowId`, and renderer invocation/history identity. Zero is invalid; a production
+scope never wraps or reuses, and exhaustion is a structured allocation outcome. Isolated
+test allocators never mutate or reset the production authority. Raw scope components are
+diagnostic-only, and production callers cannot choose, reconstruct, or inject them.
+Owner-scope acquisition occurs in the already-fallible logical-resource allocation path
+(lazily on its first successful allocation or equivalently), so `RenderFlow::new` need
+not become fallible merely to acquire a scope. No public scalar owner-scope type is
+introduced.
+
+The temporary crate-private bridge that seeds a work-resource owner from `RenderFlowId`
+is accepted G3 migration evidence and G4C1 deletes it. Renderer invocation/history keys
+may map renderer policy to distinct retained typed G2 handles, but renderer IDs, labels,
+paths, hashes, and backend addresses do not enter generic RunenGPU resource identity or
+registry keys.
 
 ## Capability and portability model
 
@@ -481,6 +518,12 @@ Imported, exported, readback, and surface-owned are not lifetime classes. Resour
 descriptors include kind-specific shape and format, permitted uses, initialization,
 independent lifetime/ownership/memory/reconstruction facts, validated label, and
 provenance/source-generation facts where applicable.
+
+Ownership/provenance alone is not a concrete backend import source. G4C1 may create an
+owned resource; an imported buffer or texture needs an explicit accepted concrete
+import-source contract or yields `ImportSourceUnavailable`/unresolved import.
+`SurfaceAcquired` remains G7-only. No renderer semantic ID, public raw WGPU object,
+native handle, or generic unsafe import escape hatch fills that gap.
 
 Labels and provenance are diagnostics and reconstruction evidence, never identity,
 lookup, binding, dependency, persistence, wire, or cache authority.
@@ -583,21 +626,34 @@ No stable source format, universal shader IR, or macro package is accepted by G4
 G4C owns opaque context/device-generation-bound realizations for resources, programs,
 layouts, bind groups, and compute/render pipelines. Raw WGPU objects remain private.
 
-Realization is explicit or bounded-lazy by kind. Persistent/imported resources and
-query sets are explicit; transient graph resources use a bounded realization pass;
+Realization is explicit or bounded-lazy by kind. Owned persistent resources and query
+sets are explicit; an imported resource is eligible only through an explicit accepted
+concrete import-source contract; transient graph resources use a bounded realization pass;
 texture views are lazy only within a realized parent; layouts and pipelines may be
 cache-backed lazy before execution. G5 encoding cannot silently create undeclared
 resources.
 
 Every request rejects foreign context and stale generation before backend work. Full
-descriptor compatibility is checked before cache reuse. Registry publication is
-transactional.
+descriptor compatibility is checked before reuse. Registry publication is transactional.
 
-Initial caches are in-memory, derived, discardable, and scoped to one context and
-device generation. A cache key includes every correctness fact: normalized descriptors,
-source key/revision/content, interfaces, specialization, enabled features and limits,
-formats and alignments, backend/WGPU compatibility, context, and generation. Full
-equality follows hashing.
+Deterministic descriptor, capability, affinity, and import-source incompatibility is a
+structured G4C1 rejection before backend creation. After complete RunenGPU admission, an
+unexpected backend validation rejection is a backend-contract/invariant violation;
+resource allocation exhaustion or OOM is instead a structured backend
+capacity/resource-exhaustion failure; and unavailable or lost device/context is a
+structured context/device outcome. G4C1 neither replaces nor recovers a device/context:
+G7 later owns replacement/reconstruction facts and Runenwerk owns product recovery.
+Backend error text is bounded diagnostic evidence only. These classes do not publish a
+realization record, and `RealizationFailed` may be a telemetry aggregate but not their
+semantic classification.
+
+An authoritative registry maps one typed logical identity to its realization record and
+is scoped to one context/device generation. The same identity plus the same complete
+semantic descriptor reuses that record; a changed descriptor rejects; distinct logical
+identities never alias merely because descriptors match. A derived cache is optional,
+in-memory, discardable, and non-authoritative. It may select a candidate, but full typed
+equality follows hashing and authorizes correctness. Admission checks context/device
+facts before lookup rather than copying a huge fact set into every map key.
 
 ```text
 Hit                 reuse
@@ -608,15 +664,46 @@ RealizationFailed   no entry published
 ```
 
 A cache hit changes cost, never semantics. No stable persisted cache format is
-authorized by G4.
+authorized by G4. Registry reclamation is not GPU completion and not physical backend
+retirement. G4C1 may remove or deactivate an unretained record from future authoritative
+lookup only according to logical liveness; that removal neither proves prior
+encoded/submitted use is complete nor invalidates a live realized handle, active bridge
+borrow, or current execution reference. G4C1 owns no fence or submission-completion
+retirement authority and preserves current backend/execution retention mechanics until
+G5 replaces them. G5 alone owns in-flight retention, completion, cancellation, delayed
+backend retirement/destruction, and shutdown.
 
-G4C performs a clean cutover and deletes:
+Backend resource-object creation is G4C1 work. `GpuBufferInitialization` and
+`GpuTextureInitialization` remain checked logical intent, while uploads, updates,
+copies, staging, query resolution, map/poll, and readback remain G5 work.
+`create_buffer_init`, `queue.write_buffer`, and `queue.write_texture` cannot establish
+a second G4C1 transfer authority.
+
+## G4C seam distinction
+
+Exactly one object-reference migration bridge may remain at each accepted G4C boundary:
+`CurrentRenderResourceBridge` after G4C1, `CurrentRenderPipelineBridge` after G4C2,
+and `CurrentRenderExecutionBridge` after G4C3, with each successor deleting and fully
+superseding its predecessor. Carried-forward predecessor terminals monotonically shrink;
+a successor may add only newly realized terminal classes owned by that phase that
+exact-current-main uncut consumers still require.
+
+`CurrentRenderDeviceQueue` is separate: it is a crate-private backend-operation loan,
+not an object-reference bridge or a second bridge for uniqueness accounting. G4C1
+removes generic buffer/texture/view/sampler/query-set creation through it; G4C2 also
+removes shader-module/layout/bind-group creation; G4C3 also removes pipeline creation;
+G5 migrates encoding/upload/submission/copy/map/readback users and deletes it. Its
+source-guarded operation classes and exact call sites only shrink. The loan is
+non-public, non-authoritative, purpose-bound, inaccessible through `Deref`/`AsRef`, and
+not a generic callback or future native-interop API.
+
+The ordered G4C children perform a clean cutover and delete, at their owning boundary:
 
 - renderer-owned reusable WGPU resource/program/layout/bind-group/pipeline registries
   and caches;
 - string/path/pass/feature/hash GPU correctness keys;
 - synthetic G2 handle construction outside RunenGPU;
-- the `RenderFlowId`-derived temporary resource-owner bridge;
+- the `RenderFlowId`-derived temporary resource-owner bridge in G4C1;
 - public raw `Device` and `Queue` reach-through;
 - G4-owned program/interface/pipeline/cache/realization truth in the G3 sidecar.
 
@@ -650,8 +737,10 @@ surface, or raw enum becomes stable RunenGPU authority.
 
 The current Winit-coupled `WgpuCtx` and renderer-owned WGPU caches are migration
 evidence. G4A detaches headless context admission while retaining at most one temporary
-host-compatible selection seam. G4C removes reusable renderer-owned realization.
-G7 removes the remaining surface compatibility seam.
+host-compatible selection seam. Ordered G4C removes reusable renderer-owned
+realization; its separate `CurrentRenderDeviceQueue` operation loan remains only until
+G5 removes the final operation users. G7 removes the remaining surface compatibility
+seam.
 
 ## Surface boundary
 

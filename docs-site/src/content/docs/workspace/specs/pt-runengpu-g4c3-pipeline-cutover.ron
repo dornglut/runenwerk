@@ -26,11 +26,12 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c2-program-binding-realization.ron",
     ],
 
-    goal: "Create one private context/device-generation-bound WGPU compute/render pipeline realization authority with mandatory shader-stage-IO agreement, correctness-complete cache keys, complete current-consumer migration, deletion of renderer-owned realization/cache authority and G4-owned sidecar truth, supersession and deletion of the G4C2 pipeline bridge, and one named scoped G5 execution bridge carrying only accepted resource/bind-group/pipeline terminals without implementing G5 execution or G7 surfaces.",
+    goal: "Create one private context/device-generation-bound WGPU compute/render pipeline realization authority with mandatory shader-stage-IO agreement, correctness-complete cache keys, complete current-consumer migration, deletion of renderer-owned realization/cache authority and G4-owned sidecar truth, supersession and deletion of the G4C2 object-reference pipeline bridge, one named scoped G5 execution bridge carrying only accepted resource/bind-group/pipeline terminals, and removal of pipeline creation from the separate operation loan without implementing G5 execution or G7 surfaces.",
 
     dependency_direction: [
         "Accepted G4B compute/render pipeline descriptors and accepted G4C2 program records, observed stage-IO signatures, layouts, and bind groups -> G4C3 private WGPU pipelines.",
         "G4C3 deletes CurrentRenderPipelineBridge and migrates the terminals it owns, then carries only proven residual resource/bind-group/pipeline terminals into CurrentRenderExecutionBridge.",
+        "CurrentRenderDeviceQueue remains a separately classified crate-private backend-operation loan, not an object-reference bridge. G4C3 removes compute/render pipeline creation from it; only audited G5 operation classes remain until G5 deletes the loan.",
         "RunenRender and non-render consumers retain semantic lowering and receive opaque pipeline handles only.",
         "Accepted G4C1 resource, G4C2 bind-group, and G4C3 pipeline opaque handles -> unchanged G5 execution through CurrentRenderExecutionBridge; program/layout terminals do not propagate beyond G4C3.",
     ],
@@ -97,7 +98,7 @@ PhaseImplementationSpec(
         "Absent entry creates ordinarily and emits Miss.",
         "Incompatible derived entry emits Rejected and follows ordinary realization after discard or quarantine.",
         "Stage-IO incompatibility is a semantic rejection, not a cache miss or backend fallback.",
-        "Backend creation failure emits RealizationFailed and publishes no authoritative entry.",
+        "Unexpected backend validation after complete admission, backend resource exhaustion/OOM, and unavailable/lost context/device emit distinct structured outcomes and publish no authoritative entry; RealizationFailed may aggregate telemetry but is not their semantic classification.",
         "A cache hit changes cost only and never changes semantics.",
         "No persisted pipeline cache blob or cross-process pipeline handle is authorized.",
     ],
@@ -107,7 +108,7 @@ PhaseImplementationSpec(
         "Migrate compute/render pipeline creation and lookup through G4C3 opaque handles.",
         "Migrate CurrentRenderPipelineBridge terminals that G4C3 owns to G4C3 pipeline realization, delete that predecessor bridge, and record the only residual terminals that its execution successor may retain.",
         "Migrate current resource/program/layout/bind-group consumers to the accepted G4C1/G4C2 owners where any residual path remains, retaining only accepted resource/bind-group/pipeline terminals for the unchanged G5 encoder.",
-        "Replace broad reusable Device/Queue/backend-object reach-through with exactly one named crate-private scoped CurrentRenderExecutionBridge; no terminal transfers G5 operation ownership.",
+        "Replace broad reusable object-reference reach-through with exactly one named crate-private scoped CurrentRenderExecutionBridge; no terminal transfers G5 operation ownership. CurrentRenderDeviceQueue remains separately bounded only for its audited G5 operation classes and is not folded into that bridge.",
         "Move no image-formation, material, view, lighting, visibility, target, overlay, reconstruction, or product policy into RunenGPU.",
         "Preserve current surface creation/configuration/acquisition/presentation only as G7-owned migration evidence.",
     ],
@@ -120,8 +121,14 @@ PhaseImplementationSpec(
         "The bridge may lend borrowed resource, bind-group, and pipeline references only for lexical use by that unchanged encoder; borrowed values cannot escape, be stored, cloned into ownership, cached, returned, persisted, exposed publicly, or used as lookup or descriptor authority.",
         "The bridge lends validated access only and never performs or owns command/pass encoding, uploads, submission, or operation/access/hazard/initialization/requirement/source/interface/stage-IO/layout/pipeline-descriptor/cache/progress/completion/lifecycle truth.",
         "Bridge lookup repeats exact context/device-generation, resource kind, program/interface/layout, and pipeline validation and invokes no external callback under registry locks.",
-        "Source and reach-through guards permit exactly this named bridge and its one audited execution terminal/call path and reject the deleted resource/pipeline bridges, a second execution bridge, or broad Device/Queue access.",
+        "Source and reach-through guards permit exactly this named object-reference bridge and its one audited execution terminal/call path and reject the deleted resource/pipeline bridges, a second execution bridge, or broad Device/Queue access outside the separately source-guarded CurrentRenderDeviceQueue operation loan.",
         "G5 must migrate the execution call path and delete CurrentRenderExecutionBridge in the same accepted G5 cutover.",
+    ],
+
+    current_render_device_queue_cutover: [
+        "CurrentRenderDeviceQueue is separate from CurrentRenderExecutionBridge and from the serialized object-reference bridge ladder. It is crate-private, non-public, non-authoritative, source-guarded, purpose-bound, inaccessible through Deref/AsRef, and never a generic callback or native-interop API.",
+        "At G4C3 acceptance, its exact guarded call sites contain no generic resource creation, ShaderModule/BindGroupLayout/PipelineLayout/BindGroup creation, or compute/render pipeline creation.",
+        "Only explicitly audited G5 encoding/upload/submission/copy/map/readback operation users may remain. Their operation classes and exact call sites monotonically shrink, and G5 deletes CurrentRenderDeviceQueue with those users.",
     ],
 
     delete_after_migration: [
@@ -132,7 +139,7 @@ PhaseImplementationSpec(
         "Backend aliases or compatibility facades forwarding renderer realization/cache authority.",
         "Synthetic G2 handle construction outside RunenGPU and the RenderFlowId-derived GpuWorkResourceId owner bridge.",
         "Program, resource-interface, observed-stage-IO, layout, binding, pipeline, cache, generation, and realization truth in the temporary G3 execution sidecar.",
-        "Public or broad WgpuCtx Device/Queue/backend-object reach-through outside the one accepted CurrentRenderExecutionBridge at the G4C3 boundary.",
+        "Public or broad WgpuCtx Device/Queue/backend-object reach-through outside the one accepted CurrentRenderExecutionBridge object-reference bridge and the separately bounded CurrentRenderDeviceQueue G5 operation loan at the G4C3 boundary.",
         "Parallel old/new realization paths and forwarding modules.",
     ],
 
@@ -141,6 +148,7 @@ PhaseImplementationSpec(
         "Residual operation-specific execution payload keyed by prepared-node identity only.",
         "Command and pass encoding, uploads, updates, staging, query-resolution execution, queue submission, polling, progress, completion, cancellation, mapping/readback, retirement, delayed destruction, and shutdown.",
         "CurrentRenderExecutionBridge, deleted by G5.",
+        "CurrentRenderDeviceQueue operation loan, deleted by G5 after its audited operation users migrate.",
     ],
 
     retain_for_g7: [
@@ -161,7 +169,9 @@ PhaseImplementationSpec(
         "FormatOrAlignmentNotAdmitted",
         "RegistryCapacityExceeded",
         "CacheRejected",
-        "BackendPipelineRealizationFailure",
+        "UnexpectedBackendPipelineValidationRejection",
+        "BackendResourceExhaustion",
+        "ContextOrDeviceUnavailableOrLost",
         "CurrentRenderExecutionBridgeViolation",
     ],
 
@@ -175,9 +185,9 @@ PhaseImplementationSpec(
         "Vertex-only pipelines reject contradictory fragment/color-target state.",
         "CurrentRenderPipelineBridge has zero remaining source references at G4C3 acceptance.",
         "Labels, provenance, source maps, paths, and renderer IDs do not split equal realizations.",
-        "Cache hit, miss, incompatible rejection, and backend creation failure are distinct.",
+        "Cache hit, miss, deterministic incompatibility, unexpected backend validation, resource exhaustion/OOM, and unavailable/lost context/device are distinct.",
         "CurrentRenderExecutionBridge rejects foreign, stale, wrong-kind, escape, storage, caching, return, identity, bridge-owned encoding/upload/submission, and non-audited terminal attempts and has one audited execution terminal/call path.",
-        "Source/dependency/reach-through guards reject renderer-owned realization authority, synthetic handles, broad Device/Queue access, deleted predecessor bridges, second execution bridges, and G4-owned sidecar truth.",
+        "Source/dependency/reach-through guards reject renderer-owned realization authority, synthetic handles, broad Device/Queue access outside the separately bounded operation loan, deleted predecessor bridges, second object-reference bridges, G4C3 pipeline creation through CurrentRenderDeviceQueue, and G4-owned sidecar truth.",
         "Complete current-consumer and deletion inventories are enforced.",
     ],
 
@@ -193,14 +203,14 @@ PhaseImplementationSpec(
 
     exclusions: [
         "No G5 command-encoding ownership, submission, progress, pressure, completion, mapping, readback, cancellation, retirement, delayed destruction, or shutdown redesign beyond an unchanged G5 operation lexically using CurrentRenderExecutionBridge references.",
-        "No raw-WGPU bridge other than CurrentRenderExecutionBridge after CurrentRenderPipelineBridge deletion and no generic callback escape hatch.",
+        "No object-reference raw-WGPU bridge other than CurrentRenderExecutionBridge after CurrentRenderPipelineBridge deletion. CurrentRenderDeviceQueue remains a separately bounded G5 operation loan with no G4C-owned creation classes and no generic callback escape hatch.",
         "No G7 public surface, presentation, device replacement, loss, or reconstruction implementation.",
         "No RunenRender semantics, render-tree wholesale move or rename, package extraction, new dependency, stable format, compatibility facade, generated workflow state, second bridge, or public raw-WGPU escape hatch.",
     ],
 
     validation: [
         "Focused deterministic and environment-dependent pipeline/stage-IO/cutover proof.",
-        "Complete current-consumer, predecessor-bridge deletion, execution-bridge call-site, raw-WGPU reach-through, sidecar, migration, and authority-deletion census.",
+        "Complete current-consumer, predecessor-bridge deletion, execution-bridge call-site, CurrentRenderDeviceQueue operation-class/call-site, raw-WGPU reach-through, sidecar, migration, and authority-deletion census.",
         "cargo validate",
         "git diff --check",
         "CI=true pnpm --dir docs-site build",
@@ -214,8 +224,8 @@ PhaseImplementationSpec(
         "Every render pipeline has deterministic stage-IO agreement against the selected G4C2 program entry points before backend publication.",
         "Pipeline cache keys and outcomes are correctness-complete and structured.",
         "Every current consumer uses accepted G4C1/G4C2/G4C3 opaque realization authority.",
-        "CurrentRenderPipelineBridge and every replaced renderer-owned realization/cache authority, synthetic handle path, broad raw-WGPU accessor, and G4-owned sidecar field are deleted without aliases or a parallel path; each still-required access is an exact CurrentRenderExecutionBridge terminal or G4C3-owned realization path.",
-        "Exactly one CurrentRenderExecutionBridge remains for G5 deletion, carrying only accepted resource/bind-group/pipeline terminals for the unchanged G5 encoder; no broader raw-WGPU reach-through remains.",
+        "CurrentRenderPipelineBridge and every replaced renderer-owned realization/cache authority, synthetic handle path, broad object-reference raw-WGPU accessor, and G4-owned sidecar field are deleted without aliases or a parallel path; each still-required object-reference access is an exact CurrentRenderExecutionBridge terminal or G4C3-owned realization path.",
+        "Exactly one CurrentRenderExecutionBridge remains for G5 deletion, carrying only accepted resource/bind-group/pipeline terminals for the unchanged G5 encoder. CurrentRenderDeviceQueue remains separately classified only for audited G5 operation users, has no G4C-owned creation classes, and is deleted by G5 rather than counted as a second object-reference bridge.",
         "G5, G7, RunenRender semantics, and extraction remain separately unauthorized.",
         "Exact-head validation and independent review pass; issue #188 may close only after accepted-main validation.",
     ],
