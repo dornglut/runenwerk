@@ -56,13 +56,21 @@ Documentation Build `31320663084`.
 
 ## Only authorized RunenGPU continuation
 
-Issue `#212` owns G4C1 private resource realization.
+Issue `#222` is the only authorized RunenGPU documentation correction: it corrects the
+pre-G5 G4C bridge ladder without authorizing source implementation.
 
-Its current state is an **active start gate**, not source implementation. Before creating
-an implementation branch or modifying Rust, repeat the exact-current-main ownership and
-consumer census required by #212 and record the result on the issue.
+Current status is deliberately narrow:
 
-G4C1 owns private context/device-generation-bound realization of:
+- `#222` — only authorized RunenGPU documentation correction.
+- `#212` — census complete; implementation blocked by `#222`.
+- `#213` — blocked.
+- `#214` — blocked.
+
+Do not create a G4C1 implementation branch or modify Rust until #222 is accepted and the
+separately authorized implementation start condition is re-established.
+
+When later authorized, G4C1 will own private context/device-generation-bound realization
+of:
 
 - buffers;
 - textures;
@@ -72,8 +80,11 @@ G4C1 owns private context/device-generation-bound realization of:
 - transactional resource registries and discardable in-memory compatibility caches;
 - migration and deletion of renderer-owned resource realization that the slice replaces.
 
-It may retain exactly one narrow crate-private `CurrentRenderResourceBridge` for audited
-current consumers until G4C2. It does not parse WGSL, create layouts/bind groups or
+It may retain exactly one narrow crate-private `CurrentRenderResourceBridge` for exact
+audited current G4C2/G4C3/G5 consumers. That bridge lends purpose-typed,
+affinity-validated resource references only; the consumer's semantic operation remains
+in its existing phase. G4C2 must replace and delete it with a successor carrying only
+proven residual terminals. It does not parse WGSL, create layouts/bind groups or
 pipelines, implement G5 execution, own G7 surfaces, or absorb RunenRender semantics.
 
 The start census must explicitly revisit current texture-preview/resource-preparation
@@ -92,9 +103,9 @@ Issue `#188` remains a non-implementable umbrella.
             -> separately planned G5 execution and lifecycle
 ```
 
-Each child requires its own current-main census, one implementation branch and PR,
-exact-head validation, independent complete-diff review, accepted merge, and accepted-main
-verification. No child consumes an unmerged predecessor branch.
+Each later implementation child requires its own current-main census, one implementation
+branch and PR, exact-head validation, independent complete-diff review, accepted merge,
+and accepted-main verification. No child consumes an unmerged predecessor branch.
 
 Branch discipline for active RunenGPU implementation is one remote implementation branch
 per active PR. Corrections stay on that branch; experiments remain local. Temporary
@@ -103,17 +114,21 @@ transfer or rejection.
 
 ### G4C2 — blocked by accepted G4C1
 
-G4C2 owns canonical WGSL module creation, direct pinned Naga evidence, agreement with G4B
-resource declarations, bind-group layouts, pipeline layouts, typed bind groups, and their
-private registries/caches. It deletes `CurrentRenderResourceBridge` and may retain only
-the narrow `CurrentRenderPipelineBridge` required for G4C3.
+G4C2 will own canonical WGSL module creation, direct pinned Naga evidence, agreement with
+G4B resource declarations, bind-group layouts, pipeline layouts, typed bind groups, and
+their private registries/caches. It replaces and deletes `CurrentRenderResourceBridge`
+with `CurrentRenderPipelineBridge`, which carries only proven residual G4C1 resource
+terminals plus G4C2 program/layout/bind-group terminals for current pipeline creation and
+unchanged encoding. It does not acquire G5 execution ownership.
 
 ### G4C3 — blocked by accepted G4C2
 
-G4C3 owns compute/render pipeline realization, complete compatibility keys, final
+G4C3 will own compute/render pipeline realization, complete compatibility keys, final
 stage-IO agreement, migration of remaining realization consumers, and deletion of
-renderer-owned G4 realization/cache authority. It may retain only one narrow
-`CurrentRenderExecutionBridge` for G5.
+renderer-owned G4 realization/cache authority. It replaces and deletes
+`CurrentRenderPipelineBridge` with one narrow `CurrentRenderExecutionBridge` carrying
+only accepted resource/bind-group/pipeline terminals for the unchanged G5 encoder; G5
+deletes that bridge.
 
 ## Later RunenGPU program
 
