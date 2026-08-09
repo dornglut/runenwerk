@@ -79,7 +79,7 @@ PhaseImplementationSpec(
 
     mandatory_reflection_agreement: [
         "Normalize observed entry-point names and stages, group/binding identities, stage visibility, resource classes, access, dimensions, sample/storage format facts, array cardinality, applicable host-layout facts, vertex-input locations/classes, and fragment-output locations/classes into G4B-owned vocabulary.",
-        "Use the single G4B resource-interface comparison algorithm to prove observed resource facts equal the explicit authoritative declarations.",
+        "Use the single G4B resource-interface comparison algorithm to prove observed resource facts agree with the explicit authoritative declarations; observed statically-used stages must be a subset of declared visibility, while declared visibility may be a strict accessibility superset.",
         "Reject missing, additional, renumbered, stage-mismatched, type-mismatched, visibility-mismatched, shape-mismatched, or layout-incompatible resource facts as ProgramInterfaceMismatch.",
         "Retain normalized stage-IO signatures with the program record; do not compare them to vertex buffers or color targets until G4C3 receives a complete render pipeline descriptor.",
         "Evidence may improve source-span diagnostics but may not mutate, infer, renumber, add, or remove authoritative declarations or pipeline state.",
@@ -100,6 +100,7 @@ PhaseImplementationSpec(
         "Realize pipeline layouts only from accepted ordered unique group-layout descriptors.",
         "Do not use WGPU automatic layout inference or shader evidence as layout authority.",
         "Validate relevant admitted features, limits, dynamic-offset constraints, array cardinality, storage texture formats, and sampler/texture compatibility before backend creation.",
+        "When a group contains any binding array, enforce pinned WGPU group restrictions: no buffer in that group may use a dynamic offset and no buffer in that group may be uniform.",
         "Equal complete descriptors may reuse one cache-backed layout realization within one context/generation.",
     ],
 

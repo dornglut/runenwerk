@@ -355,6 +355,27 @@ mod tests {
     }
 
     #[test]
+    fn dead_revisions_can_exceed_historical_capacity_over_time() {
+        let mut registry = GpuProgramSourceRegistry::new(2, 4096).unwrap();
+        let owner = GpuProgramSourceOwnerId::allocate().unwrap();
+
+        for revision in 1..=6 {
+            let source = registry
+                .admit_wgsl(
+                    identity(owner, "compute.hot-reload", revision),
+                    format!("@compute @workgroup_size({revision}) fn main() {{}}"),
+                    provenance(None),
+                )
+                .unwrap();
+            drop(source);
+        }
+
+        assert!(registry.stats().retained_records() <= 2);
+        assert_eq!(registry.collect_unretained(), 2);
+        assert_eq!(registry.stats().retained_records(), 0);
+    }
+
+    #[test]
     fn failed_capacity_admission_does_not_collect_existing_lookup_state() {
         let source = "@compute @workgroup_size(1) fn main() {}";
         let mut registry = GpuProgramSourceRegistry::new(2, source.len()).unwrap();

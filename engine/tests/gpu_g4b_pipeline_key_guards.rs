@@ -10,6 +10,10 @@ const RENDER_FLOW_MOD: &str = "src/plugins/render/renderer/render_flow/mod.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
 const MATERIAL_COMPILER_BINDINGS: &str = "src/plugins/render/material_compiler/bindings.rs";
+const MATERIAL_COMPILER_TYPES: &str = "src/plugins/render/material_compiler/types.rs";
+const MATERIAL_WGSL_PROGRAM: &str = "src/plugins/render/material_compiler/wgsl/program.rs";
+const MATERIAL_WGSL_PREVIEW: &str = "src/plugins/render/material_compiler/wgsl/preview.rs";
+const MATERIAL_WGSL_SCENE: &str = "src/plugins/render/material_compiler/wgsl/scene.rs";
 const MATERIAL_WGPU_PREPARE: &str = "src/plugins/render/renderer/prepare.rs";
 const MATERIAL_HANDOFF: &str = "../apps/runenwerk_editor/src/material_lab/renderer_handoff.rs";
 
@@ -318,6 +322,10 @@ fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
 fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let compiler = read(&manifest_dir, MATERIAL_COMPILER_BINDINGS);
+    let compiler_types = read(&manifest_dir, MATERIAL_COMPILER_TYPES);
+    let wgsl_program = read(&manifest_dir, MATERIAL_WGSL_PROGRAM);
+    let wgsl_preview = read(&manifest_dir, MATERIAL_WGSL_PREVIEW);
+    let wgsl_scene = read(&manifest_dir, MATERIAL_WGSL_SCENE);
     let handoff = read(&manifest_dir, MATERIAL_HANDOFF);
     let g4b = read(&manifest_dir, BINDINGS);
     let wgpu_realization = read(&manifest_dir, MATERIAL_WGPU_PREPARE);
@@ -328,13 +336,51 @@ fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
             .filter(|character| !character.is_whitespace())
             .collect::<String>()
     };
-    let handoff_compact = compact(&handoff);
-    let g4b_compact = compact(&g4b);
-    let wgpu_compact = compact(&wgpu_realization);
+    let handoff_production = handoff
+        .split_once("#[cfg(test)]\nmod tests {")
+        .map(|(production, _)| production)
+        .expect("Material Lab handoff must keep its test module separate from production code");
+    let handoff_compact = compact(handoff_production);
+    let g4b_lowerer = section(
+        &g4b,
+        "fn gpu_material_binding_declarations(",
+        "fn gpu_render_pipeline_state_for_pass(",
+        BINDINGS,
+    );
+    let g4b_compact = compact(g4b_lowerer);
+    let wgpu_material_realization = section(
+        &wgpu_realization,
+        "fn prepare_material_gpu_resources(",
+        "fn resolve_ui_prepared_with_gate(",
+        MATERIAL_WGPU_PREPARE,
+    );
+    let wgpu_compact = compact(wgpu_material_realization);
 
+    for required in [
+        "pub bind_group: u32",
+        "pub texture_binding: u32",
+        "pub sampler_binding: u32",
+    ] {
+        assert!(
+            compiler_types.contains(required),
+            "compiler output must publish exact material shader coordinates: {required}"
+        );
+    }
     assert!(
-        compiler.contains("resource_slot_index.saturating_mul(2)"),
-        "compiler-owned material WGSL allocation remains the sole allowed resource-slot arithmetic"
+        compiler.contains("binding.bind_group")
+            && compiler.contains("binding.texture_binding")
+            && compiler.contains("binding.sampler_binding"),
+        "compiler WGSL declarations must consume published material binding coordinates"
+    );
+    assert!(
+        wgsl_program.contains("texture_binding_variable(binding)")
+            && wgsl_program.contains("sampler_binding_variable(binding)"),
+        "material WGSL expressions must consume the compiler-published binding record"
+    );
+    assert!(
+        wgsl_preview.contains("material_resource_declarations(&program.resource_bindings)")
+            && wgsl_scene.contains("material_resource_declarations(&program.resource_bindings)"),
+        "preview and scene WGSL generation must consume compiler-published resource bindings"
     );
     assert!(
         handoff.contains("compiler_resource_bindings")
@@ -360,16 +406,7 @@ fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
         (BINDINGS, g4b_compact.as_str()),
         (MATERIAL_WGPU_PREPARE, wgpu_compact.as_str()),
     ] {
-        for forbidden in [
-            "resource_slot_index.saturating_mul(2)",
-            "resource_slot_index*2",
-            "resource_slot_index*2+1",
-        ] {
-            assert!(
-                !source.contains(forbidden),
-                "downstream material shader binding identity must not be reconstructed from resource slots in {path}: {forbidden}"
-            );
-        }
+        assert_no_resource_slot_coordinate_arithmetic(path, source);
     }
 }
 
@@ -574,9 +611,32 @@ fn renderer_source_authority_normalizes_identity_only_during_admission() {
         PIPELINE_CACHE,
     );
     assert_eq!(
-        cache_gateway.matches(".admit_and_retain_wgsl(").count(),
+        cache_gateway.matches(".admit_wgsl(").count(),
         1,
-        "the cache admission gateway must delegate to the one retaining source authority"
+        "the cache admission gateway must delegate to the one source authority"
+    );
+    for forbidden in [
+        "admit_and_retain_wgsl",
+        "retained_sources",
+        "program_source_retentions",
+    ] {
+        assert!(
+            !cache.contains(forbidden) && !authority.contains(forbidden),
+            "renderer-lifetime source retention must not return: {forbidden}"
+        );
+    }
+    let retirement = section(
+        &cache,
+        "pub fn retain_flows(",
+        "fn admit_builtin_program_source(",
+        PIPELINE_CACHE,
+    );
+    assert_eq!(
+        retirement
+            .matches("self.program_sources.collect_unretained()")
+            .count(),
+        1,
+        "flow retirement must collect lookup-only source records after cache-key removal"
     );
 
     assert_eq!(
@@ -600,7 +660,7 @@ fn renderer_source_authority_normalizes_identity_only_during_admission() {
     let admission = section(
         &authority,
         "pub(crate) fn admit_wgsl(",
-        "pub(crate) fn admit_and_retain_wgsl(",
+        "pub(crate) fn collect_unretained(",
         PROGRAM_SOURCES,
     );
     assert_eq!(
@@ -626,4 +686,31 @@ fn section<'a>(source: &'a str, start: &str, end: &str, path: &str) -> &'a str {
         .find(end)
         .unwrap_or_else(|| panic!("{path} no longer contains end marker {end:?} after {start:?}"));
     &tail[..end_index]
+}
+
+fn assert_no_resource_slot_coordinate_arithmetic(path: &str, source: &str) {
+    for operand in [
+        "resource_slot_index",
+        "binding.resource_slot_index",
+        "compiler_binding.resource_slot_index",
+    ] {
+        for operator in ["*", "+", "-", "/", "%"] {
+            for forbidden in [
+                format!("{operand}{operator}"),
+                format!("{operator}{operand}"),
+            ] {
+                assert!(
+                    !source.contains(&forbidden),
+                    "downstream material shader binding identity must not be reconstructed from resource slots in {path}: {forbidden}"
+                );
+            }
+        }
+        for method_prefix in ["saturating_", "checked_", "wrapping_", "overflowing_"] {
+            let forbidden = format!("{operand}.{method_prefix}");
+            assert!(
+                !source.contains(&forbidden),
+                "downstream material shader binding identity must not be reconstructed from resource slots in {path}: {forbidden}"
+            );
+        }
+    }
 }

@@ -289,10 +289,22 @@ fn map_power_preference(
 fn requested_features(candidate: &crate::plugins::gpu::GpuCandidateAdmissionReport) -> Features {
     candidate
         .enabled_features()
-        .fold(Features::empty(), |features, feature| match feature {
-            GpuCapabilityFeature::TimestampQuery => features | Features::TIMESTAMP_QUERY,
-            _ => features,
+        .fold(Features::empty(), |features, feature| {
+            features | wgpu_features_for(feature)
         })
+}
+
+fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
+    match feature {
+        GpuCapabilityFeature::TimestampQuery => Features::TIMESTAMP_QUERY,
+        GpuCapabilityFeature::TextureBindingArray => Features::TEXTURE_BINDING_ARRAY,
+        GpuCapabilityFeature::BufferBindingArray => Features::BUFFER_BINDING_ARRAY,
+        GpuCapabilityFeature::StorageResourceBindingArray => {
+            Features::STORAGE_RESOURCE_BINDING_ARRAY
+        }
+        GpuCapabilityFeature::UniformBufferBindingArray => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+        _ => Features::empty(),
+    }
 }
 
 fn verify_requested_features(
@@ -390,18 +402,25 @@ mod tests {
     use super::*;
     use crate::plugins::gpu::{
         GpuAdapterClass, GpuAdapterLimits, GpuBackendFamily, GpuCapabilities,
-        GpuCapabilityRequirements, GpuContextDescriptor, GpuFallbackStatus, GpuSoftwareStatus,
-        select_candidate_with_host_evidence,
+        GpuCapabilityRequirement, GpuCapabilityRequirements, GpuContextDescriptor,
+        GpuFallbackStatus, GpuSoftwareStatus, select_candidate_with_host_evidence,
     };
 
     fn candidate() -> crate::plugins::gpu::GpuCandidateAdmissionReport {
+        candidate_with_enabled_features([])
+    }
+
+    fn candidate_with_enabled_features(
+        enabled_features: impl IntoIterator<Item = GpuCapabilityFeature>,
+    ) -> crate::plugins::gpu::GpuCandidateAdmissionReport {
+        let enabled_features = enabled_features.into_iter().collect::<Vec<_>>();
         let facts = GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
             GpuFallbackStatus::ConfirmedNotFallback,
             GpuCapabilities::from_normalized_facts(
-                [],
+                enabled_features.iter().copied(),
                 GpuLimits::new(256 * 1024, 512 * 1024 * 1024, 8, 16, 128).unwrap(),
                 [],
             ),
@@ -416,8 +435,14 @@ mod tests {
                 query_resolve_destination: Some(256),
             },
         );
+        let mut requirements = GpuCapabilityRequirements::new();
+        for feature in enabled_features {
+            requirements
+                .insert(GpuCapabilityRequirement::Required(feature))
+                .expect("test feature requirements should not conflict");
+        }
         select_candidate_with_host_evidence(
-            &GpuContextDescriptor::new(GpuCapabilityRequirements::new()),
+            &GpuContextDescriptor::new(requirements),
             [(facts, GpuCandidateEnvironmentEvidence::headless())],
         )
         .unwrap()
@@ -467,6 +492,26 @@ mod tests {
         assert!(verify_requested_features(Features::TIMESTAMP_QUERY, Features::empty()).is_err());
         assert!(
             verify_requested_features(Features::TIMESTAMP_QUERY, Features::TIMESTAMP_QUERY).is_ok()
+        );
+    }
+
+    #[test]
+    fn binding_array_capabilities_request_their_exact_wgpu_27_feature_bits() {
+        let candidate = candidate_with_enabled_features([
+            GpuCapabilityFeature::TextureBindingArray,
+            GpuCapabilityFeature::BufferBindingArray,
+            GpuCapabilityFeature::StorageResourceBindingArray,
+        ]);
+
+        assert_eq!(
+            requested_features(&candidate),
+            Features::TEXTURE_BINDING_ARRAY
+                | Features::BUFFER_BINDING_ARRAY
+                | Features::STORAGE_RESOURCE_BINDING_ARRAY
+        );
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::UniformBufferBindingArray),
+            Features::UNIFORM_BUFFER_BINDING_ARRAYS
         );
     }
 

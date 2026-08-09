@@ -105,7 +105,9 @@ fn runtime_bindings_reject_missing_values() {
 }
 
 #[test]
-fn runtime_bindings_reject_wrong_fixed_array_cardinality() {
+fn runtime_bindings_reject_wrong_fixed_array_cardinality_before_backend_realization() {
+    // This proves only G4B's logical resource-count compatibility. Native array
+    // feature admission and backend group restrictions belong to G4C2.
     let layout =
         GpuBindGroupLayoutDescriptor::new(0, [declaration(Some(NonZeroU32::new(2).unwrap()))])
             .unwrap();

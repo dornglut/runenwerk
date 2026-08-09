@@ -25,7 +25,6 @@ pub struct RendererPipelineCacheStats {
     pub program_source_bytes: usize,
     pub program_source_max_records: usize,
     pub program_source_max_bytes: usize,
-    pub program_source_retentions: usize,
 }
 
 #[derive(Debug)]
@@ -75,7 +74,6 @@ impl FlowPipelineArtifactCache {
             program_source_bytes: source_stats.retained_source_bytes(),
             program_source_max_records: source_stats.max_records(),
             program_source_max_bytes: source_stats.max_retained_source_bytes(),
-            program_source_retentions: self.program_sources.retained_source_count(),
             ..self.stats
         }
     }
@@ -87,12 +85,8 @@ impl FlowPipelineArtifactCache {
         canonical_wgsl: impl Into<String>,
         provenance: GpuProgramSourceProvenance,
     ) -> Result<GpuAdmittedProgramSource, GpuProgramSourceError> {
-        self.program_sources.admit_and_retain_wgsl(
-            key,
-            renderer_revision,
-            canonical_wgsl,
-            provenance,
-        )
+        self.program_sources
+            .admit_wgsl(key, renderer_revision, canonical_wgsl, provenance)
     }
 
     pub fn get_or_create_shader_module<F>(
@@ -228,6 +222,7 @@ impl FlowPipelineArtifactCache {
             .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.bind_groups
             .retain(|key, _| active_flow_ids.contains(&key.pipeline.flow_id));
+        self.program_sources.collect_unretained();
     }
 }
 
@@ -246,15 +241,36 @@ fn admit_builtin_program_source(cache: &mut FlowPipelineArtifactCache, key: &str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{
+        GpuBindingDeclaration, GpuEntryPointDescriptor, GpuEntryPointName, GpuProgramDescriptor,
+        GpuProgramInterfaceDescriptor, GpuShaderStage,
+    };
+
+    fn compute_program(source: GpuAdmittedProgramSource) -> GpuProgramDescriptor {
+        let interface =
+            GpuProgramInterfaceDescriptor::new(std::iter::empty::<GpuBindingDeclaration>())
+                .expect("empty test program interface should construct");
+        let entry_point = GpuEntryPointName::new("cs_main")
+            .expect("test compute entry-point name should be valid");
+        GpuProgramDescriptor::new(
+            source,
+            interface.clone(),
+            [GpuEntryPointDescriptor::new(
+                entry_point,
+                GpuShaderStage::Compute,
+                interface,
+            )],
+        )
+        .expect("test program descriptor should retain its admitted source")
+    }
 
     #[test]
-    fn renderer_cache_admits_and_retains_all_builtin_program_sources() {
-        let cache = FlowPipelineArtifactCache::default();
+    fn renderer_cache_admits_builtin_program_sources_as_reclaimable_lookup_records() {
+        let mut cache = FlowPipelineArtifactCache::default();
         let stats = cache.stats();
 
         assert_ne!(stats.program_source_owner, 0);
         assert_eq!(stats.program_source_records, 3);
-        assert_eq!(stats.program_source_retentions, 3);
         assert_eq!(
             stats.program_source_bytes,
             DEFAULT_COMPUTE_SHADER.len()
@@ -269,10 +285,13 @@ mod tests {
             stats.program_source_max_bytes,
             RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES
         );
+
+        cache.retain_flows(&[]);
+        assert_eq!(cache.stats().program_source_records, 0);
     }
 
     #[test]
-    fn cache_source_admission_is_idempotent_retained_and_conflict_checked() {
+    fn cache_source_admission_is_idempotent_and_conflict_checked() {
         let mut cache = FlowPipelineArtifactCache::default();
         let key = || {
             GpuProgramSourceKey::new("asset:test-resolved-program")
@@ -300,7 +319,6 @@ mod tests {
         assert_eq!(first.identity().revision().get(), 5);
         assert!(first.is_same_record(&repeated));
         assert_eq!(cache.stats().program_source_records, 4);
-        assert_eq!(cache.stats().program_source_retentions, 4);
 
         let error = cache
             .admit_program_source(
@@ -315,7 +333,6 @@ mod tests {
             crate::plugins::gpu::GpuProgramSourceCause::SourceRevisionConflict
         );
         assert_eq!(cache.stats().program_source_records, 4);
-        assert_eq!(cache.stats().program_source_retentions, 4);
     }
 
     #[test]
@@ -327,11 +344,11 @@ mod tests {
     }
 
     #[test]
-    fn flow_retirement_does_not_drop_renderer_program_sources() {
+    fn flow_retirement_respects_then_reclaims_descriptor_held_source_lifetime() {
         let mut cache = FlowPipelineArtifactCache::default();
-        cache
+        let source = cache
             .admit_program_source(
-                GpuProgramSourceKey::new("asset:retained-across-flow-retirement")
+                GpuProgramSourceKey::new("asset:descriptor-held-across-flow-retirement")
                     .expect("test source key should be valid"),
                 1,
                 "@compute @workgroup_size(1) fn cs_main() {}",
@@ -342,9 +359,12 @@ mod tests {
                 .expect("test provenance should be valid"),
             )
             .expect("resolved source should admit");
+        let program = compute_program(source);
         cache.retain_flows(&[]);
 
-        assert_eq!(cache.stats().program_source_records, 4);
-        assert_eq!(cache.stats().program_source_retentions, 4);
+        assert_eq!(cache.stats().program_source_records, 1);
+        drop(program);
+        cache.retain_flows(&[]);
+        assert_eq!(cache.stats().program_source_records, 0);
     }
 }

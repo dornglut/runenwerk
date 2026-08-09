@@ -94,18 +94,16 @@ impl GpuProgramDescriptor {
         let mut requirements = GpuCapabilityRequirements::new();
         for binding in interface.bindings() {
             if binding.kind().class() == GpuBindingClass::StorageTexture {
-                requirements
-                    .insert(GpuCapabilityRequirement::Required(
-                        GpuCapabilityFeature::StorageTexture,
-                    ))
-                    .map_err(|error| {
-                        GpuProgramContractError::invalid(
-                            "construct admitted GPU program",
-                            format!("{}: {error}", source.identity().diagnostic_label()),
-                            GpuProgramContractCause::ProgramInterfaceMismatch,
-                            "remove conflicting capability requirements implied by the program interface",
-                        )
-                    })?;
+                insert_interface_requirement(
+                    &mut requirements,
+                    &source,
+                    GpuCapabilityFeature::StorageTexture,
+                )?;
+            }
+            if binding.array_count().is_some() {
+                for feature in fixed_array_capabilities(binding.kind().class()) {
+                    insert_interface_requirement(&mut requirements, &source, *feature)?;
+                }
             }
         }
 
@@ -153,6 +151,43 @@ impl GpuProgramDescriptor {
     pub fn is_same_record(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
+}
+
+fn fixed_array_capabilities(class: GpuBindingClass) -> &'static [GpuCapabilityFeature] {
+    match class {
+        GpuBindingClass::UniformBuffer => &[
+            GpuCapabilityFeature::BufferBindingArray,
+            GpuCapabilityFeature::UniformBufferBindingArray,
+        ],
+        GpuBindingClass::StorageBuffer => &[
+            GpuCapabilityFeature::BufferBindingArray,
+            GpuCapabilityFeature::StorageResourceBindingArray,
+        ],
+        GpuBindingClass::SampledTexture | GpuBindingClass::Sampler => {
+            &[GpuCapabilityFeature::TextureBindingArray]
+        }
+        GpuBindingClass::StorageTexture => &[
+            GpuCapabilityFeature::TextureBindingArray,
+            GpuCapabilityFeature::StorageResourceBindingArray,
+        ],
+    }
+}
+
+fn insert_interface_requirement(
+    requirements: &mut GpuCapabilityRequirements,
+    source: &GpuAdmittedProgramSource,
+    feature: GpuCapabilityFeature,
+) -> Result<(), GpuProgramContractError> {
+    requirements
+        .insert(GpuCapabilityRequirement::Required(feature))
+        .map_err(|error| {
+            GpuProgramContractError::invalid(
+                "construct admitted GPU program",
+                format!("{}: {error}", source.identity().diagnostic_label()),
+                GpuProgramContractCause::ProgramInterfaceMismatch,
+                "remove conflicting capability requirements implied by the program interface",
+            )
+        })
 }
 
 impl PartialEq for GpuProgramDescriptor {

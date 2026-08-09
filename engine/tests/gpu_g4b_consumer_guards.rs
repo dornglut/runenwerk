@@ -8,6 +8,7 @@ const RUNTIME_BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings
 const PRIMITIVE_PLAN: &str = "src/plugins/render/gpu_primitives/plan.rs";
 const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
+const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
 const FRAGMENTS: &str = "src/plugins/render/composition/fragments.rs";
 const FRAGMENT_VALIDATION: &str = "src/plugins/render/composition/fragment_validation.rs";
 const FRAGMENT_MERGE: &str = "src/plugins/render/graph/merge.rs";
@@ -342,10 +343,11 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
 }
 
 #[test]
-fn renderer_program_source_admission_has_one_retaining_gateway() {
+fn renderer_program_source_admission_has_one_cache_gateway_without_renderer_lifetime_pins() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let execution = read(&manifest_dir, EXECUTE_PASSES);
     let cache = read(&manifest_dir, PIPELINE_CACHE);
+    let authority = read(&manifest_dir, PROGRAM_SOURCES);
 
     let execution_gateway = section(
         &execution,
@@ -355,7 +357,7 @@ fn renderer_program_source_admission_has_one_retaining_gateway() {
     );
     assert!(
         execution_gateway.contains(") -> Result<GpuAdmittedProgramSource>"),
-        "resolved renderer source admission must return the retained admitted record"
+        "resolved renderer source admission must return the admitted record retained by live descriptors"
     );
     assert_eq!(
         execution_gateway
@@ -370,7 +372,7 @@ fn renderer_program_source_admission_has_one_retaining_gateway() {
     );
     assert!(
         !execution.contains(".admit_wgsl("),
-        "render execution must not bypass the retaining cache gateway"
+        "render execution must not bypass the cache source-admission gateway"
     );
 
     assert_eq!(
@@ -385,9 +387,9 @@ fn renderer_program_source_admission_has_one_retaining_gateway() {
         PIPELINE_CACHE,
     );
     assert_eq!(
-        cache_gateway.matches(".admit_and_retain_wgsl(").count(),
+        cache_gateway.matches(".admit_wgsl(").count(),
         1,
-        "the renderer cache gateway must admit and retain through the one renderer authority"
+        "the renderer cache gateway must delegate exactly once to the one source authority"
     );
     assert_eq!(
         cache
@@ -396,14 +398,33 @@ fn renderer_program_source_admission_has_one_retaining_gateway() {
         1,
         "the renderer cache must construct exactly one source authority"
     );
-    assert!(
-        !cache.contains(".admit_wgsl("),
-        "the renderer cache must not bypass renderer-lifetime source retention"
+    for forbidden in [
+        "admit_and_retain_wgsl",
+        "retained_sources",
+        "program_source_retentions",
+    ] {
+        assert!(
+            !cache.contains(forbidden) && !authority.contains(forbidden),
+            "renderer-lifetime source retention must not return: {forbidden}"
+        );
+    }
+    let retirement = section(
+        &cache,
+        "pub fn retain_flows(",
+        "fn admit_builtin_program_source(",
+        PIPELINE_CACHE,
+    );
+    assert_eq!(
+        retirement
+            .matches("self.program_sources.collect_unretained()")
+            .count(),
+        1,
+        "flow retirement must reclaim lookup-only source records after dropping cache keys"
     );
 }
 
 #[test]
-fn builtin_program_sources_use_the_same_retaining_gateway() {
+fn builtin_program_sources_use_the_same_cache_gateway() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let cache = read(&manifest_dir, PIPELINE_CACHE);
     let default_impl = section(
@@ -429,7 +450,7 @@ fn builtin_program_sources_use_the_same_retaining_gateway() {
     assert_eq!(
         builtin_gateway.matches(".admit_program_source(").count(),
         1,
-        "builtin sources must use the same retaining cache gateway as resolved sources"
+        "builtin sources must use the same cache gateway as resolved sources"
     );
 }
 

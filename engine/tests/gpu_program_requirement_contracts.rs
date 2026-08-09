@@ -1,3 +1,4 @@
+use core::num::NonZeroU32;
 use engine::plugins::gpu::{
     GpuAdmittedProgramSource, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
     GpuBindingProvenance, GpuBlendMode, GpuCapabilityFeature, GpuCapabilityRequirement,
@@ -8,9 +9,9 @@ use engine::plugins::gpu::{
     GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
     GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
     GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
-    GpuShaderStage, GpuShaderStages, GpuSpecializationSchema, GpuSpecializationValueSet,
-    GpuStorageTextureAccess, GpuTextureFormat, GpuTextureViewDimension,
-    GpuVertexInputStateDescriptor,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuSpecializationSchema,
+    GpuSpecializationValueSet, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat,
+    GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexInputStateDescriptor,
 };
 
 fn admitted_source(key: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
@@ -32,22 +33,67 @@ fn admitted_source(key: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSo
     (registry, source)
 }
 
-fn storage_texture_interface(stages: GpuShaderStages) -> GpuProgramInterfaceDescriptor {
-    let declaration = GpuBindingDeclaration::new(
-        GpuBindingKey::try_new(0, 0).unwrap(),
+fn fixed_array_declaration(
+    binding: u64,
+    stages: GpuShaderStages,
+    kind: GpuBindingKind,
+    label: &str,
+) -> GpuBindingDeclaration {
+    GpuBindingDeclaration::new(
+        GpuBindingKey::try_new(0, binding).unwrap(),
         stages,
-        GpuBindingKind::storage_texture(
-            GpuStorageTextureAccess::WriteOnly,
-            GpuTextureFormat::Rgba8Unorm,
-            GpuTextureViewDimension::D2,
-        )
-        .unwrap(),
-        None,
-        "storage-output",
+        kind,
+        NonZeroU32::new(2),
+        label,
         GpuBindingProvenance::new("gpu-program-requirement-test", None).unwrap(),
     )
-    .unwrap();
-    GpuProgramInterfaceDescriptor::new([declaration]).unwrap()
+    .unwrap()
+}
+
+fn fixed_array_interface(stages: GpuShaderStages) -> GpuProgramInterfaceDescriptor {
+    GpuProgramInterfaceDescriptor::new([
+        fixed_array_declaration(
+            0,
+            stages,
+            GpuBindingKind::uniform_buffer(false, None),
+            "uniform-array",
+        ),
+        fixed_array_declaration(
+            1,
+            stages,
+            GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadOnly, false, None),
+            "storage-buffer-array",
+        ),
+        fixed_array_declaration(
+            2,
+            stages,
+            GpuBindingKind::sampled_texture(
+                GpuTextureSampleClass::FloatFilterable,
+                GpuTextureViewDimension::D2,
+                false,
+            )
+            .unwrap(),
+            "sampled-texture-array",
+        ),
+        fixed_array_declaration(
+            3,
+            stages,
+            GpuBindingKind::storage_texture(
+                GpuStorageTextureAccess::WriteOnly,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureViewDimension::D2,
+            )
+            .unwrap(),
+            "storage-texture-array",
+        ),
+        fixed_array_declaration(
+            4,
+            stages,
+            GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+            "sampler-array",
+        ),
+    ])
+    .unwrap()
 }
 
 fn entry_point(name: &str) -> GpuEntryPointName {
@@ -66,19 +112,29 @@ fn specialization() -> GpuSpecializationValueSet {
     GpuSpecializationValueSet::new(GpuSpecializationSchema::new([]).unwrap(), []).unwrap()
 }
 
-fn assert_storage_texture_required(requirements: &GpuCapabilityRequirements) {
-    assert!(matches!(
-        requirements.get(GpuCapabilityFeature::StorageTexture),
-        Some(GpuCapabilityRequirement::Required(
-            GpuCapabilityFeature::StorageTexture
-        ))
-    ));
+fn assert_required(requirements: &GpuCapabilityRequirements, feature: GpuCapabilityFeature) {
+    assert_eq!(
+        requirements.get(feature),
+        Some(GpuCapabilityRequirement::Required(feature))
+    );
+}
+
+fn assert_fixed_array_requirements(requirements: &GpuCapabilityRequirements) {
+    for feature in [
+        GpuCapabilityFeature::StorageTexture,
+        GpuCapabilityFeature::TextureBindingArray,
+        GpuCapabilityFeature::BufferBindingArray,
+        GpuCapabilityFeature::StorageResourceBindingArray,
+        GpuCapabilityFeature::UniformBufferBindingArray,
+    ] {
+        assert_required(requirements, feature);
+    }
 }
 
 #[test]
 fn compute_pipeline_inherits_program_interface_requirements() {
     let (_registry, source) = admitted_source("compute.program-requirements");
-    let interface = storage_texture_interface(GpuShaderStages::one(GpuShaderStage::Compute));
+    let interface = fixed_array_interface(GpuShaderStages::one(GpuShaderStage::Compute));
     let program = GpuProgramDescriptor::new(
         source,
         interface.clone(),
@@ -89,7 +145,7 @@ fn compute_pipeline_inherits_program_interface_requirements() {
         )],
     )
     .unwrap();
-    assert_storage_texture_required(program.requirements());
+    assert_fixed_array_requirements(program.requirements());
 
     let pipeline = GpuComputePipelineDescriptor::new(
         program,
@@ -99,13 +155,13 @@ fn compute_pipeline_inherits_program_interface_requirements() {
         GpuCapabilityRequirements::new(),
     )
     .unwrap();
-    assert_storage_texture_required(pipeline.requirements());
+    assert_fixed_array_requirements(pipeline.requirements());
 }
 
 #[test]
 fn render_pipeline_inherits_program_interface_requirements() {
     let (_registry, source) = admitted_source("render.program-requirements");
-    let interface = storage_texture_interface(GpuShaderStages::one(GpuShaderStage::Fragment));
+    let interface = fixed_array_interface(GpuShaderStages::one(GpuShaderStage::Fragment));
     let program = GpuProgramDescriptor::new(
         source,
         interface.clone(),
@@ -115,7 +171,7 @@ fn render_pipeline_inherits_program_interface_requirements() {
         ],
     )
     .unwrap();
-    assert_storage_texture_required(program.requirements());
+    assert_fixed_array_requirements(program.requirements());
 
     let color_target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
@@ -143,5 +199,5 @@ fn render_pipeline_inherits_program_interface_requirements() {
         GpuCapabilityRequirements::new(),
     )
     .unwrap();
-    assert_storage_texture_required(pipeline.requirements());
+    assert_fixed_array_requirements(pipeline.requirements());
 }
