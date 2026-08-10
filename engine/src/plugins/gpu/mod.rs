@@ -224,6 +224,83 @@ mod tests {
     }
 
     #[test]
+    fn g4c1_realization_core_has_one_context_owner_and_no_transfer_or_public_raw_authority() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let gpu_root = manifest.join("src/plugins/gpu");
+        let realization_root = gpu_root.join("backend/wgpu/resource_realization");
+        let context_state = fs::read_to_string(gpu_root.join("backend/wgpu/state.rs"))
+            .expect("private context state should be readable");
+        let context_descriptor = fs::read_to_string(gpu_root.join("api/context/descriptor.rs"))
+            .expect("context descriptor should be readable");
+        let public_realization = fs::read_to_string(gpu_root.join("api/realization.rs"))
+            .expect("public realization contract should be readable");
+        let mut realization_paths = Vec::new();
+        rust_sources_below(&realization_root, &mut realization_paths);
+        realization_paths.sort();
+        let realization_source = realization_paths
+            .iter()
+            .map(|path| fs::read_to_string(path).expect("realization source should be readable"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(context_state.contains("resource_realization: ResourceRealizationState"));
+        assert_eq!(
+            context_state
+                .matches("resource_realization: ResourceRealizationState")
+                .count(),
+            1,
+            "the existing private context must own exactly one resource-realization state"
+        );
+        assert!(
+            !context_descriptor.contains("GpuResourceRealizationPolicy"),
+            "operational record policy must not enter adapter selection or retry identity"
+        );
+        assert!(public_realization.contains("max_records: NonZeroUsize"));
+        assert!(!public_realization.contains(&["wgpu", "::"].concat()));
+        assert!(!realization_source.contains("async fn"));
+        assert!(!realization_source.contains("GpuLogicalLease"));
+        assert!(!realization_source.contains("Weak<"));
+        for forbidden_per_kind_quota in [
+            "max_buffers",
+            "max_textures",
+            "max_texture_views",
+            "max_samplers",
+            "max_query_sets",
+        ] {
+            assert!(!public_realization.contains(forbidden_per_kind_quota));
+            assert!(!realization_source.contains(forbidden_per_kind_quota));
+        }
+
+        for forbidden_transfer in [
+            ["create_buffer", "_init"].concat(),
+            ["queue", ".write_buffer"].concat(),
+            ["queue", ".write_texture"].concat(),
+            ["copy_buffer", "_to"].concat(),
+            ["copy_texture", "_to"].concat(),
+            ["map", "_async"].concat(),
+            ["device", ".poll"].concat(),
+        ] {
+            assert!(
+                !realization_source.contains(&forbidden_transfer),
+                "G4C1 object creation must not absorb G5 transfer/lifecycle authority: {forbidden_transfer}"
+            );
+        }
+        for creation in [
+            ["device", ".create_buffer(&BufferDescriptor"].concat(),
+            ["device", ".create_texture(&TextureDescriptor"].concat(),
+            ".create_view(&TextureViewDescriptor".to_string(),
+            ["device", ".create_sampler(&SamplerDescriptor"].concat(),
+            ["device", ".create_query_set(&QuerySetDescriptor"].concat(),
+        ] {
+            assert_eq!(
+                realization_source.matches(&creation).count(),
+                1,
+                "each accepted resource family must have one private creation terminal: {creation}"
+            );
+        }
+    }
+
+    #[test]
     fn gpu_g2_g3_retired_authority_and_forwarding_paths_are_absent() {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let source_root = manifest.join("src/plugins");

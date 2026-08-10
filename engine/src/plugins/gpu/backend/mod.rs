@@ -1,3 +1,6 @@
 mod wgpu;
 
-pub(crate) use wgpu::{WgpuContextState, request_headless};
+pub(crate) use wgpu::{
+    BufferRealizationRecord, QuerySetRealizationRecord, SamplerRealizationRecord,
+    TextureRealizationRecord, TextureViewRealizationRecord, WgpuContextState, request_headless,
+};

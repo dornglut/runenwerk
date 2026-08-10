@@ -1,3 +1,4 @@
+use super::ResourceRealizationState;
 use std::sync::Arc;
 use wgpu::{Adapter, Device, Instance, Queue};
 
@@ -8,6 +9,7 @@ pub(crate) struct WgpuContextState {
     pub(super) adapter: Adapter,
     pub(super) device: Arc<Device>,
     pub(super) queue: Arc<Queue>,
+    pub(super) resource_realization: ResourceRealizationState,
 }
 
 /// The sole temporary G4C loan to current renderer encoding. G4C deletes it.

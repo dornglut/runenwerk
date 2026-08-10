@@ -3,6 +3,8 @@
 //! This module is the public namespace only.  Each admission concern has one
 //! implementation owner below it; it is not a compatibility layer.
 
+use super::GpuResourceRealizationPolicy;
+
 mod admission;
 mod descriptor;
 mod diagnostics;
@@ -58,7 +60,22 @@ pub struct GpuContext {
 impl GpuContext {
     /// Requests an asynchronous, headless-first context admission.
     pub async fn request(descriptor: GpuContextDescriptor) -> Result<Self, GpuContextRequestError> {
-        crate::plugins::gpu::backend::request_headless(descriptor).await
+        Self::request_with_resource_realization_policy(
+            descriptor,
+            GpuResourceRealizationPolicy::default(),
+        )
+        .await
+    }
+
+    /// Requests a context with an explicit operational resource-record bound.
+    ///
+    /// The policy does not alter adapter selection, device admission, or retry identity.
+    pub async fn request_with_resource_realization_policy(
+        descriptor: GpuContextDescriptor,
+        resource_realization_policy: GpuResourceRealizationPolicy,
+    ) -> Result<Self, GpuContextRequestError> {
+        crate::plugins::gpu::backend::request_headless(descriptor, resource_realization_policy)
+            .await
     }
 
     pub const fn id(&self) -> GpuContextId {

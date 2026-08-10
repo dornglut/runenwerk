@@ -61,6 +61,10 @@ macro_rules! typed_handle {
                 &self.descriptor
             }
 
+            pub(crate) fn retained_descriptor(&self) -> Arc<$descriptor> {
+                Arc::clone(&self.descriptor)
+            }
+
             fn kind(&self) -> GpuResourceKind {
                 self.lease.kind
             }
