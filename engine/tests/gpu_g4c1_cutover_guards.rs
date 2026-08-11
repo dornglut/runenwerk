@@ -93,9 +93,7 @@ fn terminal_impl_blocks(source: &str) -> Vec<String> {
     blocks
 }
 
-fn expected_inventory(
-    entries: &[(&str, &str, usize)],
-) -> BTreeMap<(String, String), usize> {
+fn expected_inventory(entries: &[(&str, &str, usize)]) -> BTreeMap<(String, String), usize> {
     entries
         .iter()
         .map(|(path, token, count)| ((path.to_string(), token.to_string()), *count))
@@ -290,16 +288,56 @@ fn g4c1_resource_bridge_terminal_implementation_inventory_is_exact_and_nonretain
     actual.remove(&(bridge.to_string(), "implCurrentSurface".to_string()));
 
     let expected = expected_inventory(&[
-        ("src/plugins/render/gpu_primitives/plan.rs", "implCurrentRender", 4),
-        ("src/plugins/render/renderer/dynamic_targets.rs", "implCurrentRender", 1),
-        ("src/plugins/render/renderer/prepare.rs", "implCurrentRender", 3),
-        ("src/plugins/render/renderer/render_flow/bindings.rs", "implCurrentRender", 1),
-        ("src/plugins/render/renderer/render_flow/capture.rs", "implCurrentRender", 2),
-        ("src/plugins/render/renderer/render_flow/capture.rs", "implCurrentSurface", 1),
-        ("src/plugins/render/renderer/render_flow/execute.rs", "implCurrentRender", 1),
-        ("src/plugins/render/renderer/render_flow/execute_passes.rs", "implCurrentRender", 10),
-        ("src/plugins/render/renderer/render_flow/execute_passes.rs", "implCurrentSurface", 1),
-        ("src/plugins/render/renderer/render_flow/gpu_timing.rs", "implCurrentRender", 3),
+        (
+            "src/plugins/render/gpu_primitives/plan.rs",
+            "implCurrentRender",
+            4,
+        ),
+        (
+            "src/plugins/render/renderer/dynamic_targets.rs",
+            "implCurrentRender",
+            1,
+        ),
+        (
+            "src/plugins/render/renderer/prepare.rs",
+            "implCurrentRender",
+            3,
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/bindings.rs",
+            "implCurrentRender",
+            1,
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/capture.rs",
+            "implCurrentRender",
+            2,
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/capture.rs",
+            "implCurrentSurface",
+            1,
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/execute.rs",
+            "implCurrentRender",
+            1,
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/execute_passes.rs",
+            "implCurrentRender",
+            10,
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/execute_passes.rs",
+            "implCurrentSurface",
+            1,
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/gpu_timing.rs",
+            "implCurrentRender",
+            3,
+        ),
         ("src/plugins/render/renderer/mod.rs", "implCurrentRender", 5),
     ]);
     assert_eq!(
@@ -385,9 +423,10 @@ fn g4c1_current_render_storage_texture_contract_is_write_only() {
         .nth(1)
         .and_then(|tail| tail.split("pubfndetect_duplicate_resource_ids").next())
         .expect("normalized texture usage function should remain inspectable");
-    assert!(normalized.contains(
-        "iftexture.usage.storage{usages.insert(GpuTextureUsage::StorageWrite);}"
-    ));
+    assert!(
+        normalized
+            .contains("iftexture.usage.storage{usages.insert(GpuTextureUsage::StorageWrite);}")
+    );
     assert!(!normalized.contains("GpuTextureUsage::StorageRead"));
 
     let dynamic = compact_executable_source(
@@ -423,9 +462,7 @@ fn g4c1_r8_color_target_contract_uses_one_float_component() {
         )
         .expect("render target contract should be readable"),
     );
-    assert!(target.contains(
-        "GpuTextureFormat::R8Unorm=>(GpuShaderIoScalarClass::Float,1)"
-    ));
+    assert!(target.contains("GpuTextureFormat::R8Unorm=>(GpuShaderIoScalarClass::Float,1)"));
 }
 
 #[test]
