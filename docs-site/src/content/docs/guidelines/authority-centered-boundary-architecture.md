@@ -5,9 +5,10 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-19
+last_reviewed: 2026-08-11
 related_docs:
   - ../design/active/runenwerk-capability-workbench-target-architecture.md
+  - ../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
 ---
 
 # Authority-Centered Boundary Architecture
@@ -17,6 +18,11 @@ related_docs:
 This is a general software architecture doctrine for the repository. It is not
 an ADR and does not by itself mark any Runenwerk-specific target architecture as
 accepted or implemented.
+
+ADR 0017 is the accepted Runenwerk-family specialization for cross-authority
+consistency, graph semantics, capability vocabulary, shared extraction, and
+progressive disclosure. Where generic examples here conflict with an accepted
+repository or framework ADR, the accepted ADR owns the concrete decision.
 
 Runenwerk applies this doctrine in the active future target design:
 [`../design/active/runenwerk-capability-workbench-target-architecture.md`](../design/active/runenwerk-capability-workbench-target-architecture.md).
@@ -87,6 +93,16 @@ deployment boundary
 
 Then choose the lightest pattern that protects those boundaries.
 
+For cross-domain ownership, prefer the stronger rule:
+
+```text
+One semantic invariant set has one authority.
+```
+
+Different layered representations may coexist when they own different invariants.
+Correspondence between them is explicit rather than inferred from one universal
+identity.
+
 ## 3. Core Concepts
 
 ### 3.1 Authority
@@ -134,7 +150,7 @@ Good examples:
 ```text
 InventoryAuthority owns item movement and duplication rules.
 MaterialGraphAuthority owns valid graph edits.
-RenderAuthority owns GPU execution and render resource lifetime.
+RunenRender owns semantic image formation; RunenGPU owns generic GPU execution and GPU resource lifetime.
 WorkspaceAuthority owns workspace layout mutations.
 ```
 
@@ -204,6 +220,11 @@ Module A sends a command/query/DTO.
 Module B returns a result/event/product/projection.
 ```
 
+For a foreign authority, the same rule applies to reads: consume an explicit owner
+contract rather than reaching through private mutable state. The owner contract may
+be a query result, immutable snapshot, product, prepared input, stream, or another
+owner-defined value.
+
 ### 3.4 Flow
 
 Flow describes how information and change move through the system.
@@ -214,11 +235,15 @@ Common flow types:
 Command      -> request to change state
 Query        -> request to read state
 Event        -> accepted fact that happened
-Product      -> derived artifact or deployable output
+Product      -> formed or derived owner-defined output
 Projection   -> derived read/view/subscription model
 Status       -> current observed state/condition
 Diagnostic   -> explanation of failure or warning
 ```
+
+`Observation` may also describe the conceptual relationship in which one authority
+reads an explicit contract from another. It is not a mandatory wrapper and does not
+replace Query, Product, Projection, Snapshot, Status, or Diagnostic.
 
 A typical command flow:
 
@@ -268,6 +293,10 @@ Rule:
 Policy decides allowed.
 Domain/authority decides valid.
 ```
+
+A support or capability fact is also not permission. A requirement states what a
+consumer needs; policy states what is allowed; authority states who may control or
+mutate the governed value.
 
 ### 3.6 Time
 
@@ -349,6 +378,29 @@ Combat:
 ```
 
 The wrong consistency model can break the system even if the module structure looks clean.
+
+Cross-authority composition adds a separate question: what makes the specific set of
+owner contracts compatible for this consumer? Do not assume one global transaction or
+revision.
+
+A combining boundary may need facts such as:
+
+```text
+owner-local revision or generation
+time/tick/interval
+scope/coverage
+completeness
+freshness/staleness
+availability/residency
+provenance/source lineage
+identity/correspondence mapping
+legal fallback
+```
+
+The boundary admits only the facts it actually requires. Incompatible inputs must
+wait within a bound, request/rebuild fresher data, retry, full-resynchronize, use an
+explicitly legal fallback, or reject. Silent latest-of-every-source is not a
+consistency model.
 
 ### 3.8 Storage
 
@@ -450,7 +502,7 @@ Failure policy is part of the contract.
 
 Every serious system needs observability.
 
-Observation includes:
+Observation in this section means operational observability:
 
 ```text
 status
@@ -463,6 +515,9 @@ health
 events
 debug projections
 ```
+
+This is distinct from ADR 0017's conceptual cross-authority observation
+relationship. Observability does not require one universal `ObservationFrame` type.
 
 Rule:
 
@@ -544,6 +599,7 @@ For every serious subsystem, ask:
 
 8. Consistency
    Strong, eventual, single-writer, optimistic, transactional, CRDT?
+   If several authorities are combined, what input set is compatible?
 
 9. Storage
    Where is state stored, and is storage separate from authority?
@@ -555,7 +611,8 @@ For every serious subsystem, ask:
    Fail closed, retry, rollback, compensate, degrade, preserve last-good?
 
 12. Observation
-   What logs, metrics, traces, diagnostics, audit, status exist?
+   What owner contract is visible across the boundary, and what logs, metrics,
+   traces, diagnostics, audit, or status make failures observable?
 
 13. Evolution
    How does this change, version, migrate, split, merge, or disappear?
@@ -850,6 +907,10 @@ AI command proposal gates
 external component permissions
 ```
 
+Keep support/capability facts, consumer requirements, policy permission, and
+mutation authority distinct. A visible or supported operation is not automatically
+permitted.
+
 ## 7. Examples
 
 ### 7.1 ECS / Simulation
@@ -882,26 +943,26 @@ ECS is execution inside an authority, not the authority by itself.
 ### 7.2 Engine / Render
 
 ```text
-Authority:
-  RenderAuthority for GPU execution and render resource lifetime
+Authorities:
+  RunenRender for semantic image formation
+  RunenGPU for generic GPU execution and GPU resource lifetime
 
 Contracts:
-  RenderMaterialProduct
-  TextureProduct
-  MeshProduct
-  SdfFieldProduct
+  renderer-owned prepared scene/request/input values
+  RunenRender RenderPlan / AdmittedRenderPlan
+  RunenGPU typed resources and generic work
 
 Execution:
-  render graph
-  GPU upload
-  draw dispatch
+  RunenRender plans and lowers semantic image work
+  RunenGPU validates, realizes, executes, and retires generic GPU work/resources
 
 Observation:
-  frame diagnostics
-  GPU resource diagnostics
+  renderer diagnostics and provenance
+  GPU execution/resource diagnostics
 ```
 
-Render consumes formed products. It should not own authoring semantics.
+Rendering consumes explicit owner contracts. It should not own source authoring
+semantics, and RunenRender must not absorb RunenGPU execution/resource authority.
 
 ### 7.3 Domain / Material Graph
 
@@ -1042,6 +1103,8 @@ events are emitted before acceptance
 unknown inputs silently remap
 plugins get privileged side APIs
 hot loop checks heavyweight policy every frame
+silent latest-of-every-source composition
+support/capability facts treated as permission
 ```
 
 ## 9. Best Short Doctrine
