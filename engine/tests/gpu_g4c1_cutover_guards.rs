@@ -52,6 +52,47 @@ fn source_inventory(manifest: &Path, tokens: &[&str]) -> BTreeMap<(String, Strin
     inventory
 }
 
+fn terminal_impl_blocks(source: &str) -> Vec<String> {
+    let compact = compact_executable_source(source);
+    let mut blocks = Vec::new();
+    let mut offset = 0;
+    while offset < compact.len() {
+        let tail = &compact[offset..];
+        let render = tail.find("implCurrentRender");
+        let surface = tail.find("implCurrentSurface");
+        let relative = match (render, surface) {
+            (Some(render), Some(surface)) => render.min(surface),
+            (Some(render), None) => render,
+            (None, Some(surface)) => surface,
+            (None, None) => break,
+        };
+        let start = offset + relative;
+        let open = compact[start..]
+            .find('{')
+            .map(|index| start + index)
+            .expect("terminal implementation must have a body");
+        let mut depth = 0_u32;
+        let mut end = None;
+        for (index, character) in compact[open..].char_indices() {
+            match character {
+                '{' => depth = depth.saturating_add(1),
+                '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        end = Some(open + index);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let end = end.expect("terminal implementation body must close");
+        blocks.push(compact[start..=end].to_string());
+        offset = end.saturating_add(1);
+    }
+    blocks
+}
+
 #[test]
 fn g4c1_generic_resource_creation_has_one_private_owner_and_two_surface_view_exemptions() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -228,6 +269,134 @@ fn g4c1_resource_bridge_is_single_crate_private_and_exactly_purpose_typed() {
             );
         }
     }
+}
+
+#[test]
+fn g4c1_resource_bridge_terminal_implementation_inventory_is_exact_and_nonretaining() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let bridge = "src/plugins/gpu/backend/wgpu/resource_realization/current_render_resource_bridge.rs";
+    let mut actual = source_inventory(&manifest, &["implCurrentRender", "implCurrentSurface"]);
+    actual.remove(&(bridge.to_string(), "implCurrentRender".to_string()));
+    actual.remove(&(bridge.to_string(), "implCurrentSurface".to_string()));
+    let expected = BTreeMap::from([
+        (("src/plugins/render/gpu_primitives/plan.rs".to_string(), "implCurrentRender".to_string()), 4),
+        (("src/plugins/render/renderer/dynamic_targets.rs".to_string(), "implCurrentRender".to_string()), 1),
+        (("src/plugins/render/renderer/prepare.rs".to_string(), "implCurrentRender".to_string()), 3),
+        (("src/plugins/render/renderer/render_flow/bindings.rs".to_string(), "implCurrentRender".to_string()), 1),
+        (("src/plugins/render/renderer/render_flow/capture.rs".to_string(), "implCurrentRender".to_string()), 2),
+        (("src/plugins/render/renderer/render_flow/capture.rs".to_string(), "implCurrentSurface".to_string()), 1),
+        (("src/plugins/render/renderer/render_flow/execute.rs".to_string(), "implCurrentRender".to_string()), 1),
+        (("src/plugins/render/renderer/render_flow/execute_passes.rs".to_string(), "implCurrentRender".to_string()), 10),
+        (("src/plugins/render/renderer/render_flow/execute_passes.rs".to_string(), "implCurrentSurface".to_string()), 1),
+        (("src/plugins/render/renderer/render_flow/gpu_timing.rs".to_string(), "implCurrentRender".to_string()), 3),
+        (("src/plugins/render/renderer/mod.rs".to_string(), "implCurrentRender".to_string()), 5),
+    ]);
+    assert_eq!(actual, expected, "G4C1 bridge terminal implementation inventory changed");
+
+    for ((relative, token), _) in &expected {
+        if token == "implCurrentSurface" && relative == "src/plugins/render/renderer/render_flow/capture.rs" {
+            // The same file is scanned by the CurrentRender entry below.
+            continue;
+        }
+        let source = fs::read_to_string(manifest.join(relative))
+            .unwrap_or_else(|error| panic!("cannot read audited terminal source {relative}: {error}"));
+        for block in terminal_impl_blocks(&source) {
+            for forbidden in [
+                "buffer.clone()",
+                "texture.clone()",
+                "view.clone()",
+                "sampler.clone()",
+                "query_set.clone()",
+                "source.clone()",
+                "destination.clone()",
+                "buffers[0].clone()",
+                "views[0].clone()",
+                "samplers[0].clone()",
+                "Clone::clone(",
+                "ToOwned::to_owned(",
+            ] {
+                assert!(
+                    !block.contains(forbidden),
+                    "temporary bridge terminal retained raw WGPU ownership via {forbidden} in {relative}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn g4c1_backend_fault_observation_has_no_thread_local_constructor_attribution() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source = compact_executable_source(
+        &fs::read_to_string(
+            manifest.join("src/plugins/gpu/backend/wgpu/resource_realization/mod.rs"),
+        )
+        .expect("resource realization source should be readable"),
+    );
+    for retired in [
+        "thread_local!",
+        "ACTIVE_BACKEND_ERROR_SLOT",
+        "BackendErrorCapture",
+        "catch_unwind",
+        "AssertUnwindSafe",
+    ] {
+        assert!(
+            !source.contains(retired),
+            "G4C1 must not fabricate synchronous WGPU error attribution through {retired}"
+        );
+    }
+    assert!(source.contains("device.on_uncaptured_error"));
+    assert!(source.contains("uncaptured_health.mark_uncaptured(error)"));
+    assert!(source.contains("self.ensure_available(resource)?;letcreated=create();self.ensure_available(resource)?;"));
+}
+
+#[test]
+fn g4c1_current_render_storage_texture_contract_is_write_only() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let passes = compact_executable_source(
+        &fs::read_to_string(manifest.join("src/plugins/render/api/passes.rs"))
+            .expect("render pass source should be readable"),
+    );
+    assert!(passes.contains("access:GpuStorageTextureAccess::WriteOnly"));
+
+    let resources = compact_executable_source(
+        &fs::read_to_string(manifest.join("src/plugins/render/adapters/gpu_resources.rs"))
+            .expect("render GPU resource adapter should be readable"),
+    );
+    let normalized = resources
+        .split("fnnormalized_texture_usages")
+        .nth(1)
+        .and_then(|tail| tail.split("pubfndetect_duplicate_resource_ids").next())
+        .expect("normalized texture usage function should remain inspectable");
+    assert!(normalized.contains(
+        "iftexture.usage.storage{usages.insert(GpuTextureUsage::StorageWrite); }"
+            .replace(' ', "")
+            .as_str()
+    ));
+    assert!(!normalized.contains("GpuTextureUsage::StorageRead"));
+
+    let dynamic = compact_executable_source(
+        &fs::read_to_string(manifest.join("src/plugins/render/renderer/dynamic_targets.rs"))
+            .expect("dynamic target source should be readable"),
+    );
+    let dynamic_usage = dynamic
+        .split("fndynamic_usage_to_gpu")
+        .nth(1)
+        .expect("dynamic target normalized usage mapping should remain inspectable");
+    assert!(dynamic_usage.contains("out.push(GpuTextureUsage::StorageWrite)"));
+    assert!(!dynamic_usage.contains("GpuTextureUsage::StorageRead"));
+
+    let capabilities = compact_executable_source(
+        &fs::read_to_string(manifest.join("src/plugins/render/adapters/gpu_capabilities.rs"))
+            .expect("current renderer capability adapter should be readable"),
+    );
+    assert!(!capabilities.contains("storage_read:true"));
+
+    let host = compact_executable_source(
+        &fs::read_to_string(manifest.join("src/plugins/render/backend/wgpu_ctx.rs"))
+            .expect("current host context source should be readable"),
+    );
+    assert!(!host.contains("GpuFormatRole::StorageRead"));
 }
 
 #[test]
