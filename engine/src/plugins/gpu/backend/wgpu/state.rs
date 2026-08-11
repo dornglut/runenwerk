@@ -12,7 +12,11 @@ pub(crate) struct WgpuContextState {
     pub(super) resource_realization: ResourceRealizationState,
 }
 
-/// The sole temporary G4C loan to current renderer encoding. G4C deletes it.
+/// Separate temporary backend-operation loan for current renderer execution.
+///
+/// G4C1 removes generic resource creation, G4C2 removes program/layout/bind-group creation,
+/// G4C3 removes pipeline creation, and G5 migrates the remaining execution operations and deletes
+/// this loan. It is not the G4C realization-object bridge.
 #[derive(Debug)]
 pub(crate) struct CurrentRenderDeviceQueue<'a> {
     pub(crate) device: &'a Device,
