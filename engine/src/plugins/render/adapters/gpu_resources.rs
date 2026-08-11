@@ -836,7 +836,6 @@ fn normalized_texture_usages(texture: RenderTextureDescriptor) -> BTreeSet<GpuTe
         usages.insert(GpuTextureUsage::Sampled);
     }
     if texture.usage.storage {
-        usages.insert(GpuTextureUsage::StorageRead);
         usages.insert(GpuTextureUsage::StorageWrite);
     }
     if texture.usage.color_attachment {
