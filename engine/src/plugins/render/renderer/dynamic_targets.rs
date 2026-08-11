@@ -366,7 +366,6 @@ fn dynamic_usage_to_gpu(usage: RenderTextureTargetUsage) -> Vec<GpuTextureUsage>
         out.push(GpuTextureUsage::Sampled);
     }
     if usage.storage {
-        out.push(GpuTextureUsage::StorageRead);
         out.push(GpuTextureUsage::StorageWrite);
     }
     if usage.color_attachment {
