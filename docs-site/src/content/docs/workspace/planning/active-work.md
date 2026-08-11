@@ -96,24 +96,35 @@ Current status:
 
 The correction does not widen G4C2. It makes four implementation semantics explicit:
 
-1. **Backend completion is asynchronous.** WGPU 27.0.1 validation/OOM/internal error
-   scopes must resolve before a shader module, bind-group layout, pipeline layout, or bind
-   group is published. RunenGPU owns no executor and hides no `block_on`; any synchronous
-   driving policy belongs at a Runenwerk product/integration boundary.
+1. **Backend completion and attribution are explicit.** WGPU 27.0.1
+   validation/OOM/internal scopes resolve before module/layout/bind-group publication.
+   One `WgpuContextState`-owned device-health authority and one error-attribution gate
+   cover G4C1, G4C2, and the current raw operation loan; simultaneous scoped failures use
+   deterministic internal/device-loss, then OOM, then validation precedence. RunenGPU
+   owns no executor or hidden `block_on`. Current integration completes G4C1/G4C2
+   realization before acquiring the non-reentrant raw device/queue loan.
 2. **The direct Naga profile is exact.** For Naga 27.0.3 the accepted evidence path uses
    `ValidationFlags::all()` plus `Capabilities::default()`. No broader Naga capability is
    inferred from current coarse RunenGPU feature vocabulary; an extension requires an
-   explicit accepted mapping first.
+   explicit accepted mapping first. Initial Naga-profile and WGPU-realization
+   compatibility revisions are both exactly `1`.
 3. **Request identity precedes realized evidence.** Complete typed pre-realization request
-   keys locate accepted program/layout/bind-group records. A live exact hit returns the
-   accepted record without rerunning Naga or WGPU creation. Observed interface/stage-IO
-   and WGPU acceptance facts remain in the realized record, not the lookup key.
+   keys locate accepted program/layout/bind-group records. A live exact hit in a healthy
+   context returns the accepted record without rerunning Naga or WGPU creation. Equal
+   concurrent misses are single-flight with cancellation-safe reservation cleanup.
+   Observed interface/stage-IO and WGPU acceptance facts remain in the realized record,
+   not the lookup key.
 4. **G4C2 authoritative growth is bounded explicitly.** One
-   `GpuProgramBindingRealizationPolicy` shares a default 16,384-record bound across
-   program/module, bind-group-layout, pipeline-layout, and bind-group authority. A unified
-   `GpuRealizationPolicies` context override composes it with the G4C1 resource policy;
-   only registry-only records may be reclaimed, live authority is never silently evicted,
-   and reclamation does not acquire G5 completion/retirement semantics.
+   `GpuProgramBindingRealizationPolicy` shares a default 16,384 ready-plus-in-flight
+   record bound across program/module, bind-group-layout, pipeline-layout, and bind-group
+   authority. A unified `GpuRealizationPolicies` context override composes it with the
+   G4C1 resource policy; only registry-only ready records may be reclaimed, live or
+   in-flight authority is never silently evicted, and reclamation does not acquire G5
+   completion/retirement semantics.
+
+Accepted G4B runtime binding values carry logical buffer, texture-view, and sampler
+handles. G4C2 resolves those through G4C1 realization before bind-group creation; in
+particular, there is no inline G4C2 sampler-creation exception.
 
 The already accepted presentation-surface correction remains unchanged: before G7,
 `SurfaceColor` may remain a presentation/render attachment and retain separately owned
@@ -136,7 +147,8 @@ G4C2 bridge gains a raw presentation-surface shader-binding terminal.
 `CurrentRenderDeviceQueue` remains separately a crate-private backend-operation loan,
 not a second object-reference bridge. G4C1 removed generic
 buffer/texture/view/sampler/query-set creation through it; G4C2 removes
-module/layout/bind-group creation; G4C3 removes pipeline creation; G5 migrates remaining
+module/layout/bind-group creation and requires all G4C1/G4C2 realization to finish before
+the raw loan begins; G4C3 removes pipeline creation; G5 migrates remaining
 encoding/upload/submission/copy/map/readback operation users and deletes the loan.
 
 ## Ordered G4C continuation
@@ -161,17 +173,20 @@ census, and create one implementation branch/PR only from that base.
 
 G4C2 will own canonical WGSL module creation, direct pinned Naga evidence, agreement with
 G4B resource declarations, bind-group layouts, pipeline layouts, typed bind groups, and
-their private bounded registries plus optional derived caches. Typed texture bindings
-consume accepted G4C1 resource handles; acquired presentation-surface views are not a
-pre-G7 shader-resource exception.
+their private bounded registries plus optional derived caches. Typed buffer,
+texture-view, and sampler bindings consume accepted G4C1 resource handles; acquired
+presentation-surface views are not a pre-G7 shader-resource exception.
 
 The implementation must use the exact accepted Naga profile, asynchronous scoped WGPU
-acceptance before publication, pre-realization request keys for authoritative reuse, and
-one explicit bounded program/binding realization policy. It must structurally reject
-sampled/storage `SurfaceColor` bindings before bind-group realization, replace and delete
-`CurrentRenderResourceBridge` with `CurrentRenderPipelineBridge`, migrate G4C2-owned
-realization, and leave G7 surface capability/affinity/generation work untouched. It does
-not acquire G5 execution ownership or hide executor/blocking policy in RunenGPU.
+acceptance before publication, the one shared backend-health/error-attribution authority,
+pre-realization request keys and single-flight coordination for authoritative reuse, and
+one explicit bounded program/binding realization policy. It must finish G4C1/G4C2
+realization before acquiring the current raw device/queue operation loan, structurally
+reject sampled/storage `SurfaceColor` bindings before bind-group realization, replace and
+delete `CurrentRenderResourceBridge` with `CurrentRenderPipelineBridge`, migrate
+G4C2-owned realization, and leave G7 surface capability/affinity/generation work
+untouched. It does not acquire G5 execution ownership or hide executor/blocking policy in
+RunenGPU.
 
 ### G4C3 — blocked by accepted G4C2
 
