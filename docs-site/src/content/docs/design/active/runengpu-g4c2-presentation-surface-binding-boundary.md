@@ -65,7 +65,7 @@ Before accepted G7:
 ```text
 presentation SurfaceColor
     may remain a presentation/render attachment
-    may retain separately accepted copy behavior
+    existing copy behavior remains outside this correction
     is not a G4C1 logical resource
     is not a G4C2 sampled bind-group resource
     is not a G4C2 storage bind-group resource
