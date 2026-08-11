@@ -336,9 +336,9 @@ fn g4c1_resource_bridge_terminal_implementation_inventory_is_exact_and_nonretain
         (
             "src/plugins/render/renderer/render_flow/gpu_timing.rs",
             "implCurrentRender",
-            3,
+            4,
         ),
-        ("src/plugins/render/renderer/mod.rs", "implCurrentRender", 5),
+        ("src/plugins/render/renderer/setup.rs", "implCurrentRender", 5),
     ]);
     assert_eq!(
         actual, expected,
