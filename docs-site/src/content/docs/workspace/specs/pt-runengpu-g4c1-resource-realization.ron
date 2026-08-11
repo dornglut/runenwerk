@@ -60,7 +60,7 @@ PhaseImplementationSpec(
         "For an imported resource, validate an admitted concrete import source; current renderer semantic/provenance facts alone yield ImportSourceUnavailable or an unresolved-import outcome, and SurfaceAcquired is rejected as G7-only.",
         "Look up the authoritative typed logical-identity registry record and compare the retained complete semantic descriptor with full typed equality; any derived cache may only select a candidate.",
         "Create the private WGPU object only after deterministic validation succeeds.",
-        "Publish the registry entry transactionally only after backend creation succeeds.",
+        "If WGPU reports a backend fault synchronously before publication, reject the candidate and publish no entry. Pinned WGPU may deliver an uncaptured backend fault later; that delayed fault marks the context unavailable for subsequent realization and bridge access instead of being falsely attributed to a later constructor call.",
     ],
 
     owner_scope_identity: [
@@ -85,7 +85,8 @@ PhaseImplementationSpec(
         "Unexpected backend validation rejection after complete RunenGPU admission is a backend-contract/implementation-invariant violation, not ordinary cache/compatibility control flow.",
         "Resource allocation exhaustion or OOM is a distinct structured backend capacity/resource-exhaustion failure; it is not an implementation defect merely because admission passed, and G5 later owns pressure policy and bounded execution behavior.",
         "Unavailable or lost device/context is a structured context/device outcome. G4C1 owns neither device replacement nor recovery; G7 later owns replacement/reconstruction facts and Runenwerk owns product recovery.",
-        "Backend error strings are bounded diagnostic evidence only. Failed backend creation publishes no realization record. Do not make ordinary public realization asynchronous solely to manufacture ordinary constructor Result semantics without exact pinned-WGPU evidence.",
+        "Backend error strings are bounded diagnostic evidence only. Pinned WGPU constructor return is not proof that every backend error has already been delivered: synchronous observed backend faults reject before publication, while a later uncaptured validation, OOM, internal, or device-loss fault makes the context unavailable and is never reassigned to whichever resource realization happens to run later.",
+        "Do not use thread-local constructor attribution, panic interception, or fabricated synchronous Result semantics for asynchronously delivered WGPU faults. Do not make ordinary public realization asynchronous solely to manufacture ordinary constructor Result semantics without a separately accepted cross-platform API decision.",
     ],
 
     registry_invariants: [
@@ -96,7 +97,7 @@ PhaseImplementationSpec(
         "One logical identity with a different descriptor returns DescriptorChangedForIdentity rather than replacing the record.",
         "Different logical identities with identical descriptors remain different logical resources and must never alias merely because a descriptor matches; cross-logical deduplication is not required.",
         "Hash collisions cannot authorize reuse because full typed equality follows hashing.",
-        "Failures publish no partial entry and no consumer callback runs under registry locks.",
+        "Deterministic validation failure and synchronously observed backend failure publish no partial entry and no consumer callback runs under registry locks. A later asynchronous device/backend fault invalidates future use of the context rather than retroactively pretending it was synchronously attributable to one registry insertion.",
         "Capacity pressure is bounded and structured; no live realization is silently evicted.",
     ],
 
@@ -114,7 +115,7 @@ PhaseImplementationSpec(
         "The authoritative registry, not a cache, decides whether one logical identity reuses its realization record.",
         "Any initial cache is in-memory, derived, discardable, reconstructable, scoped to one context/device generation, and may only select a candidate for full equality validation.",
         "A derived cache hit changes cost only and never semantics; an absent, incompatible, or corrupt derived entry cannot create aliases and follows ordinary registry realization after discard or quarantine.",
-        "Unexpected backend validation, backend resource exhaustion/OOM, and unavailable/lost context/device emit distinct structured outcomes and publish no authoritative entry; RealizationFailed may aggregate telemetry but is not their semantic classification.",
+        "Unexpected backend validation, backend resource exhaustion/OOM, and unavailable/lost context/device remain distinct structured outcomes. If observed before publication they publish no authoritative entry; if delivered later by WGPU they fault the context and block subsequent realization/bridge use rather than changing registry identity or being misattributed.",
         "No stable persisted WGPU cache blob or cross-process resource handle is authorized.",
     ],
 
@@ -130,11 +131,11 @@ PhaseImplementationSpec(
         "Permit exactly one crate-private module named CurrentRenderResourceBridge after G4C1 acceptance.",
         "The bridge exists only because audited current G4C2, G4C3, and G5 operations still require borrowed private resource objects until G4C2 supersedes the bridge.",
         "The bridge accepts validated opaque G4C1 handles and exposes only narrowly typed owner-local terminals for exact audited current consumers whose operation remains in G4C2, G4C3, or G5; it exposes no public accessor, Deref, AsRef, reusable raw handle, generic raw-WGPU callback, or arbitrary consumer closure.",
-        "The bridge may lend borrowed buffer, texture, texture-view, sampler, or query-set references only for lexical use through those purpose-typed terminals; borrowed values cannot escape, be stored, cloned into ownership, cached, returned, persisted, or treated as descriptor/lookup authority.",
+        "The bridge may lend borrowed buffer, texture, texture-view, sampler, or query-set references only for lexical use through those purpose-typed terminals. The anonymous borrow and unit result prevent returning the borrow itself; because WGPU handles are cloneable, the additional no-store/no-clone/no-cache/no-return/no-persist rule is enforced by an exact source inventory of every terminal implementation plus source guards and independent review, not falsely attributed to the Rust borrow alone.",
         "A terminal may support an unchanged later-phase operation using its lexical borrow, but the bridge never performs or owns binding, pipeline creation, command encoding, uploads, submission, or any other operation.",
         "The bridge owns validated access only and no logical resource descriptor, interface, binding, layout, pipeline, access, hazard, cache, execution, or lifecycle truth.",
         "Bridge lookup repeats exact context/device-generation and resource-kind validation and invokes no external callback under registry locks.",
-        "Source guards permit exactly this named object-reference bridge and its audited current call sites and reject any second resource bridge or broad raw resource reach-through. CurrentRenderDeviceQueue is separately guarded as an operation loan and is not folded into this bridge.",
+        "Source guards permit exactly this named object-reference bridge, inventory every CurrentRender/CurrentSurface terminal implementation, reject raw-resource ownership cloning in those terminals, and reject any second resource bridge or broad raw resource reach-through. CurrentRenderDeviceQueue is separately guarded as an operation loan and is not folded into this bridge.",
         "G4C2 must delete CurrentRenderResourceBridge in the same accepted G4C2 slice, migrating terminals it now owns and carrying only proven residual resource terminals into its single successor bridge.",
     ],
 
@@ -148,6 +149,7 @@ PhaseImplementationSpec(
         "Repeat the exact-current-main census for every direct and transitive buffer, texture, texture-view, sampler, and query-set allocator, registry, cache, synthetic handle, import, dynamic target, material resource, UI resource, example, bench, and test consumer.",
         "Migrate resource creation, ownership, identity, and lookup through the G4C1 owner while preserving renderer/domain semantics outside RunenGPU.",
         "Convert every unavoidable audited current resource consumer to the single CurrentRenderResourceBridge terminal for its G4C2, G4C3, or G5-owned operation rather than leaving renderer-owned resource creation, a parallel registry, or broad raw reach-through.",
+        "Current render storage-texture authoring exposes write-only storage access; its legacy storage boolean therefore normalizes to StorageWrite only. G4C1 must not fabricate StorageRead/read-write capability or admission merely because WGPU uses one STORAGE_BINDING resource-usage bit.",
         "Remove generic resource creation from CurrentRenderDeviceQueue while retaining only its separately enumerated G5 or later-G4C operation users; do not misclassify that loan as an object-reference bridge.",
         "Classify program/layout/bind-group/pipeline consumers explicitly for G4C2 or G4C3, and record which resource terminals remain proven necessary at each successor boundary, without changing their semantic contracts here.",
         "Retain current command encoding, uploads, staging, submission, readback, surface, and presentation as G5/G7-owned operations; a G5 operation may lexically consume a bridge borrow without moving execution ownership into G4C1.",
@@ -187,10 +189,10 @@ PhaseImplementationSpec(
         "Concurrent invocation/history resources retain distinct typed logical handles before G4C1; renderer invocation, view, flow, labels, paths, hashes, and WGPU addresses never enter generic registry identity.",
         "Owned versus imported source admission distinguishes concrete accepted sources from renderer semantic/provenance facts and yields ImportSourceUnavailable for an unadmitted import.",
         "Texture views cannot cross or outlive parent affinity in registry logic.",
-        "Derived-cache hit, miss, incompatible rejection, unexpected backend validation, resource exhaustion/OOM, and unavailable/lost context/device are distinct; failed backend construction publishes no registry record.",
+        "Derived-cache hit, miss, incompatible rejection, unexpected backend validation, resource exhaustion/OOM, and unavailable/lost context/device are distinct; synchronously observed backend failure publishes no registry record, while delayed uncaptured backend faults invalidate subsequent context use without false constructor attribution.",
         "G4C1 lookup reclamation cannot prove GPU completion, invalidate a live handle/bridge borrow/execution reference, retain in-flight submissions, or perform delayed backend destruction; checked initialization cannot introduce create_buffer_init, queue.write_buffer, queue.write_texture, staging, copy, map, or readback authority.",
         "Labels and diagnostic provenance do not split equal realizations.",
-        "CurrentRenderResourceBridge rejects foreign, stale, wrong-kind, escape, storage, caching, return, identity, and bridge-owned encoding/upload/submission attempts, and has only audited purpose-typed current terminals.",
+        "CurrentRenderResourceBridge rejects foreign, stale, and wrong-kind handles at runtime; exact terminal inventories and source guards reject raw-resource cloning/retention, broader escape paths, and bridge-owned encoding/upload/submission authority.",
         "Source and dependency guards reject renderer/ECS/application/product ownership and public raw WGPU.",
         "Consumer and deletion guards reject synthetic handles, replaced resource registries, broad raw access, a second object-reference bridge, and every generic resource-creation class through CurrentRenderDeviceQueue after G4C1.",
     ],
@@ -213,7 +215,7 @@ PhaseImplementationSpec(
 
     validation: [
         "Focused deterministic and environment-dependent resource realization proof.",
-        "Complete current-consumer, bridge-call-site, and deletion census.",
+        "Complete current-consumer, bridge-call-site, terminal-implementation, and deletion census.",
         "cargo validate",
         "git diff --check",
         "CI=true pnpm --dir docs-site build",
@@ -226,10 +228,10 @@ PhaseImplementationSpec(
         "One private context/generation-bound resource realization owner exists.",
         "All accepted G2 resource families have opaque realized handles and transactional registries.",
         "Each authoritative registry preserves one logical identity -> realization record, rejects DescriptorChangedForIdentity, and never aliases distinct logical identities merely because descriptors match; any cache is derived and non-authoritative.",
-        "Owned resources are created only after deterministic admission, imports without an accepted concrete source return structured truth, unexpected backend validation/resource exhaustion/context-device outcomes remain distinct and publish nothing, and SurfaceAcquired remains G7-only.",
+        "Owned resources are created only after deterministic admission; imports without an accepted concrete source return structured truth; unexpected backend validation/resource exhaustion/context-device outcomes remain distinct; synchronously observed backend failure publishes nothing; delayed uncaptured backend/device faults make the context unavailable without false attribution; and SurfaceAcquired remains G7-only.",
         "G4C1 has removed generic resource creation from CurrentRenderDeviceQueue while keeping that separately classified operation loan only for its monotonically shrinking later-phase users.",
         "Every replaced renderer-owned resource authority is migrated and deleted without aliases or a parallel path.",
-        "Exactly one CurrentRenderResourceBridge remains for G4C2 replacement and deletion, serving every exact audited current G4C2/G4C3/G5 resource terminal; no broader raw resource reach-through remains.",
+        "Exactly one CurrentRenderResourceBridge remains for G4C2 replacement and deletion, serving every exact audited current G4C2/G4C3/G5 resource terminal; no broader raw resource reach-through remains and terminal no-retention is enforced by exact source inventory rather than an invalid borrow-only claim.",
         "Programs, layouts, bind groups, and pipelines remain blocked for G4C2/G4C3.",
         "Exact-head validation and independent review pass, then G4C2 may be activated from accepted main.",
     ],
