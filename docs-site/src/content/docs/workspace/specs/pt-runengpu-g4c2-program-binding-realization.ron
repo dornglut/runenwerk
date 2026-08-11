@@ -97,6 +97,17 @@ PhaseImplementationSpec(
         "Bind-group handles retain exact layout identity and ordered realized binding values.",
     ],
 
+    public_realization_api: [
+        "Expose one G4C2 realization error family: GpuProgramBindingRealizationError plus GpuProgramBindingRealizationErrorCategory carrying the structured failure classes in this spec and bounded diagnostics; do not expose backend/Naga errors directly.",
+        "GpuContext::realize_program(&GpuProgramDescriptor) is async and returns GpuRealizedProgram. The program descriptor already retains its admitted G4B source/interface/entry-point contract; callers do not pass a second source record, parser config, or backend module descriptor.",
+        "GpuContext::realize_bind_group_layout(&GpuBindGroupLayoutDescriptor) is async and returns GpuRealizedBindGroupLayout.",
+        "GpuContext::realize_pipeline_layout(&GpuPipelineLayoutDescriptor) is async and returns GpuRealizedPipelineLayout. It internally realizes/reuses the descriptor's ordered constituent GpuBindGroupLayoutDescriptor values through the same G4C2 authority and retains those exact realized dependencies; callers do not supply a parallel list of raw or realized layouts.",
+        "GpuContext::realize_bind_group(&GpuRealizedBindGroupLayout, values) is async and returns GpuRealizedBindGroup, where values are GpuRuntimeBindingValue items in accepted G4B vocabulary.",
+        "realize_bind_group derives admitted GpuRuntimeBindingDeviceFacts from the context and invokes GpuValidatedBindGroupBindings::new as the single G4B runtime compatibility algorithm before affinity/authoritative G4C1 realization checks and WGPU creation. Ordinary callers do not invoke a separate validation step and G4C2 does not duplicate G4B compatibility logic.",
+        "All four realization terminals perform their own affinity/health/registry/single-flight flow and return an accepted handle or one structured G4C2 failure. There is no public realize_shader_module, raw-layout, backend-callback, error-scope, registry, cache, or validation-only realization API.",
+        "Expose GpuProgramBindingRealizationPolicy and GpuProgramBindingRealizationStats for the G4C2 record authority, and expose GpuRealizationPolicies as the one context-construction policy composition with GpuResourceRealizationPolicy. Stats are observations, not quotas, GPU-memory accounting, or lifecycle evidence.",
+    ],
+
     wgsl_realization_contract: [
         "Consume only canonical WGSL admitted through the accepted G4B source registry.",
         "Reject unknown, evicted-without-live-reference, foreign-owner, or source-revision-conflicting records before parser or backend creation.",
@@ -154,8 +165,8 @@ PhaseImplementationSpec(
         "On a program reservation, submit the byte-identical canonical WGSL to WGPU through the shared attribution gate and scoped async backend capture and require all scopes to resolve successfully.",
         "On layout and bind-group reservations, validate complete descriptors and typed runtime values against admitted device facts and accepted interfaces. Resolve every referenced G4B logical resource handle through G4C1 before entering the G4C2 scoped backend-creation interval.",
         "Re-check WgpuDeviceHealth after scoped backend completion and immediately before publication so a concurrent device-loss fact cannot publish a newly unusable record.",
-        "Publish the authoritative ready record transactionally, resolve all equal in-flight joiners to that exact Arc record, and only then release the reservation's capacity state.",
-        "On terminal failure publish no authoritative record, resolve current equal in-flight joiners to the same bounded structured failure for that attempt, remove the reservation, and permit a later independent request to retry ordinarily.",
+        "On success, atomically replace the counted in-flight reservation with the one ready authoritative record so the total ready-plus-in-flight capacity count remains exactly one for that request, then resolve every current equal joiner to that exact Arc record.",
+        "On terminal failure publish no authoritative record, resolve current equal in-flight joiners to the same bounded structured failure for that attempt, remove the reservation and its counted capacity slot, and permit a later independent request to retry ordinarily.",
     ],
 
     concurrent_realization_contract: [
@@ -317,6 +328,7 @@ PhaseImplementationSpec(
         "Labels, provenance, source maps, authoring paths, raw Naga handles, and backend diagnostic text do not split equal request identities.",
         "Source-string guards are limited to topology/deletion/containment invariants such as forbidden raw creation sites, bridge uniqueness, one health/gate owner, realization-before-raw-loan ordering, and deleted symbols; behavioral correctness is proven by typed and behavior tests.",
         "Source and dependency guards reject public Naga/WGPU authority, a second evidence path, renderer/ECS/application/product ownership, broad access, a second object-reference bridge, hidden RunenGPU blocking/executor ownership, a second device-health/error-attribution owner, inline G4C2 sampler creation, and every G4C2-owned creation class through CurrentRenderDeviceQueue.",
+        "The four public G4C2 realization terminals are the only ordinary realization surface; pipeline-layout realization internally resolves its descriptor-owned group layouts and bind-group realization invokes GpuValidatedBindGroupBindings::new rather than requiring manual validation or duplicating compatibility logic.",
     ],
 
     environment_tests: [
@@ -326,6 +338,7 @@ PhaseImplementationSpec(
         "Retain real normalized vertex-input and fragment-output signatures for the representative render program.",
         "Reject one direct-Naga parse/validation failure, one resource-interface mismatch, and one bounded Naga/WGPU validation-path disagreement fixture where the pinned APIs permit deterministic construction.",
         "Realize representative bind-group and pipeline layouts and one typed bind group using accepted G4C1 buffer/texture-view/sampler resources with scoped backend completion before publication.",
+        "Prove the public realize_pipeline_layout path reuses its constituent realized bind-group layouts without requiring a caller-supplied parallel dependency list, and realize_bind_group applies the existing G4B validator internally.",
         "Prove an exact second healthy-context program request returns the same accepted record without a second Naga parse or WGPU module creation.",
         "Exercise concurrent equal realization single-flight and concurrent distinct realization scope-attribution isolation.",
         "Exercise explicit small program/binding registry capacity, ready-record reclamation, live-handle/in-flight retention, abandoned-owner cleanup, and RegistryCapacityExceeded.",
@@ -360,7 +373,7 @@ PhaseImplementationSpec(
 
     validation: [
         "Focused deterministic and environment-dependent program/layout/binding/evidence/concurrency proof.",
-        "Complete current-consumer, direct-dependency, validation-path, device-health/observer, WGPU error-attribution, predecessor-bridge deletion, successor-bridge call-site, CurrentRenderDeviceQueue operation-class/call-site and lifetime-ordering, async-driving boundary, sampler-realization, realization-policy, in-flight reservation, and authority-deletion census.",
+        "Complete current-consumer, direct-dependency, validation-path, device-health/observer, WGPU error-attribution, predecessor-bridge deletion, successor-bridge call-site, CurrentRenderDeviceQueue operation-class/call-site and lifetime-ordering, async-driving boundary, public-realization API, sampler-realization, realization-policy, in-flight reservation, and authority-deletion census.",
         "cargo tree -p engine --locked evidence for wgpu and every naga version",
         "cargo validate",
         "git diff --check",
@@ -372,6 +385,7 @@ PhaseImplementationSpec(
 
     acceptance: [
         "One private context/generation-bound async WGSL module, layout, and bind-group realization owner exists.",
+        "The public realization surface is exactly GpuContext::realize_program, realize_bind_group_layout, realize_pipeline_layout, and realize_bind_group plus typed opaque handles/policy/stats/error vocabulary; it exposes no backend/Naga objects, manual validation ceremony, raw dependency lists, or alternate realization path.",
         "WgpuContextState owns one shared WgpuDeviceHealth and one WgpuErrorAttributionGate; G4C1 resource realization and current raw operation loans use the same authorities, with no duplicate observer or task-local error-scope assumption.",
         "The exact current dependency graph proves one compatible direct Naga evidence path for the pinned WGPU baseline or records a separately accepted dependency correction.",
         "The exact Naga validation profile is ValidationFlags::all() plus Capabilities::default(), with G4C2_NAGA_VALIDATION_PROFILE_REVISION = 1 and no guessed extension capability mapping.",
@@ -379,7 +393,7 @@ PhaseImplementationSpec(
         "Every newly published program has direct Naga parse/validation evidence, explicit G4B resource agreement, retained stage-IO signatures, scoped WGPU acceptance of the same canonical WGSL text, deterministic multi-error precedence, and a final shared healthy-device check before publication.",
         "Every exact live program request hit in a healthy context returns its accepted record without rerunning Naga or WGPU creation; request identity contains only complete pre-realization facts, includes full canonical WGSL byte equality, and full typed equality follows hashing.",
         "Concurrent equal requests are single-flight and converge on one terminal attempt/record without duplicate Naga/WGPU work or capacity consumption; abandoned owners cannot strand reservations.",
-        "Typed layouts and bind groups use accepted G4C1 resource handles, including GpuSamplerHandle for samplers, complete compatibility validation, scoped async backend acceptance, shared device-health checks, and the same single-flight/capacity discipline before publication; G4C2 creates no resource object.",
+        "Typed layouts and bind groups use accepted G4C1 resource handles, including GpuSamplerHandle for samplers, complete compatibility validation through the accepted G4B algorithm, scoped async backend acceptance, shared device-health checks, and the same single-flight/capacity discipline before publication; G4C2 creates no resource object.",
         "GpuRealizationPolicies supplies one explicit context-construction override path for both G4C1 resource and G4C2 program/binding record policies; the superseded resource-only request path is deleted after migration.",
         "The G4C2 authoritative record default is one shared nonzero 16384-record ready-plus-in-flight bound with deterministic registry-only ready-record reclamation, no live/in-flight authority eviction, and no G5 completion/retirement semantics.",
         "Optional caches are derived and non-authoritative; authoritative registry/request keys and outcomes are correctness-complete and structured.",
