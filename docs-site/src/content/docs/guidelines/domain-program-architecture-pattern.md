@@ -5,30 +5,39 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-06-14
+last_reviewed: 2026-08-11
 related:
   - ./runenwerk-architecture.md
   - ./architecture.md
   - ../design/active/runenwerk-domain-workbench-north-star.md
   - ../design/active/ui-program-architecture.md
   - ../design/active/ui-program-architecture-owner-map.md
+  - ../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
 ---
 
 # Domain Program Architecture Pattern
 
 ## Purpose
 
-This document extracts the reusable architecture pattern behind `UiProgram`
-without extracting a generic framework or new foundation crate.
+This document records a reusable architecture pattern for domains that need a
+durable, versioned, inspectable program contract. Historical Runenwerk-local
+`UiProgram` work contributed evidence for the pattern, but it is not by itself a
+current cross-domain proving implementation and does not authorize shared platform
+extraction.
 
 The pattern applies when a domain needs a durable, versioned, inspectable
 program contract that connects authoring, validation, compilation, evaluation,
 runtime artifacts, hosts, diagnostics, source maps, fixtures, and migration.
 
 This is a guideline for future domain-program tracks such as `MaterialProgram`,
-`RenderPlan`, `WorldProgram`, `SimulationProgram`, `ToolProgram`,
+`RenderProgram`, `WorldProgram`, `SimulationProgram`, `ToolProgram`,
 `AssetImportProgram`, `AnimationProgram`, `BehaviorProgram`, or
 `GameplayProgram`.
+
+Canonical RunenRender owns the distinct term `RenderPlan` for a per-request,
+device-independent plan produced by `RenderMethod` before `AdmittedRenderPlan`.
+Generic domain-program guidance must not assign `RenderPlan` a competing durable
+program meaning.
 
 It does not authorize product implementation, crate creation, shared
 `foundation/meta` extraction, or a generic graph runtime.
@@ -37,18 +46,18 @@ It does not authorize product implementation, crate creation, shared
 
 ```text
 Domains own meaning.
-The platform owns structure.
+The platform owns structure only after repeated neutral structure is proven.
 ```
 
-The platform may standardize structural concepts:
+A platform boundary may standardize repeated structural concepts after the
+shared-extraction gate is satisfied, for example:
 
 ```text
-program identity
 program versions
 source maps
 typed graph shape
 schema references
-capability references
+capability requirements
 package references
 compiler/evaluator contracts
 runtime artifact manifests
@@ -58,6 +67,10 @@ migrations
 host contracts
 proof evidence
 ```
+
+This list is not a pre-approved shared type, registry, identity, crate, or runtime
+inventory. Each shared primitive still requires concrete repeated pressure and a
+separate accepted extraction decision.
 
 The platform must not own domain meaning:
 
@@ -144,7 +157,8 @@ domain program builder.
 
 A domain program is the durable executable contract for one domain.
 
-It should contain:
+It should contain the domain-owned subset that its real consumers require, which
+may include:
 
 - program id and version;
 - source references and source maps;
@@ -159,8 +173,9 @@ It should contain:
 - fixture references;
 - runtime artifact description.
 
-The program is domain-owned. A `UiProgram` should not become a
-`MaterialProgram`, and a `MaterialProgram` should not reuse UI semantics.
+This is a design checklist, not a mandatory universal record layout. The program
+is domain-owned. A UI program should not become a `MaterialProgram`, and a
+`MaterialProgram` should not reuse UI semantics.
 
 ### Typed Graphs
 
@@ -178,18 +193,22 @@ Rejected direction:
 UniversalNodeGraph
 ```
 
-The platform may eventually share graph identity, node identity, edge identity,
-source-map attachment, traversal, serialization, and diagnostic hook vocabulary.
-It must not own the meaning of domain nodes, edges, ports, kernels, or passes.
+Shared graph structure may be extracted only after structurally different domains
+prove the same neutral invariant/operation shape. Structural similarity does not
+make semantic dependency, execution ordering, resource hazard, invalidation
+dependency, or containment the same graph meaning.
+
+The platform must not own the meaning of domain nodes, edges, ports, kernels, or
+passes. ADR 0017 owns the family-wide graph taxonomy and feedback law.
 
 ### Compiler
 
 A compiler transforms a domain program into optimized runtime artifacts.
 
-It should own:
+It may own domain-specific responsibilities such as:
 
 - package resolution;
-- capability checks;
+- capability requirement checks;
 - cache keys;
 - artifact construction;
 - source-map preservation;
@@ -197,11 +216,14 @@ It should own:
 
 Hot paths should consume artifacts, not generic authoring graphs.
 
+A compiler contract is not automatically a candidate for a generic compiler
+framework. Shared extraction requires independent repeated proof.
+
 ### Evaluator
 
 An evaluator deterministically executes or analyzes a program or artifact.
 
-It should produce facts:
+It should produce owner-defined facts such as:
 
 - output packets;
 - event packets;
@@ -213,6 +235,9 @@ It should produce facts:
 
 Evaluators should not hide side effects. Host effects belong at host
 boundaries.
+
+An evaluator contract is domain-owned unless a later extraction decision proves a
+repeated neutral primitive.
 
 ### Runtime Artifacts
 
@@ -229,8 +254,9 @@ They may contain:
 - target-profile metadata;
 - invalidation metadata.
 
-Artifacts must not become source truth. They are reproducible products of
-programs and declared inputs.
+Artifacts must not become source truth merely because they are executable or
+cached. Their exact semantic role, validity, lineage, and lifetime remain owned by
+the producing domain.
 
 ### Hosts
 
@@ -251,9 +277,11 @@ unless explicitly owned by that domain.
 
 ## Foundation Boundary
 
-Foundation crates may define shared vocabulary only.
+Shared foundation/platform vocabulary is not presumed. A current low-level crate
+may own a narrow reusable contract, but its existence does not authorize a future
+family-wide meta layer.
 
-Current vocabulary direction:
+Examples of current or historical low-level vocabulary include:
 
 ```text
 foundation/id
@@ -264,6 +292,11 @@ foundation/schema
 foundation/commands
 foundation/resource_ref
 ```
+
+Each such boundary is judged by its actual owner and consumers. ADR 0014 and ADR
+0017 reject a universal identity repository, diagnostics repository,
+`foundation/meta`, or another shared substrate created merely for architectural
+uniformity.
 
 Foundation must not own:
 
@@ -282,25 +315,33 @@ Foundation must not own:
 Use this sequence:
 
 ```text
-design the pattern
+design locally
 -> prove one domain
--> prove a second domain
--> extract only repeated domain-neutral primitives
+-> prove a structurally different second domain
+-> characterize repeated burden and cost
+-> extract only the repeated domain-neutral primitive through a separate decision
 ```
 
 Do not create a shared foundation or platform crate from a single proving
 domain.
 
-A primitive may move into shared foundation or platform ownership only when:
+Before a primitive moves into shared foundation or platform ownership, require all
+of the following:
 
-- at least two domains need it;
-- its contract is domain-agnostic;
-- it does not weaken domain meaning;
-- it improves inspection, validation, migration, testing, or runtime artifacts;
-- versioning implications are documented;
-- runtime overhead is explicit and acceptable;
-- docs and tests exist;
-- an accepted extraction design authorizes the exact scope.
+1. at least two structurally different domains prove the same invariant or
+   operation shape;
+2. repeated implementation or maintenance burden is concrete;
+3. the proposed contract contains no proving-domain semantic branches, enum cases,
+   or vocabulary;
+4. it remains meaningful if either proving domain disappears;
+5. dependency direction remains valid and independent peer frameworks are not
+   forced onto Runenwerk-owned meta-infrastructure;
+6. ordinary owner APIs remain understandable without first learning the shared
+   substrate;
+7. runtime, serialization, versioning, memory, and cognitive cost are
+   characterized where relevant;
+8. a separate accepted extraction design authorizes exactly the repeated
+   primitive.
 
 ## Explicit Non-Goals
 
@@ -317,39 +358,45 @@ This pattern does not authorize:
 - renderer-owned product truth;
 - ECS-owned domain semantics.
 
-These may only be revisited after two or more proving domains expose the same
-domain-neutral primitive and an accepted extraction design approves the exact
-boundary.
+These may only be revisited after structurally different proving domains expose
+the same domain-neutral primitive and an accepted extraction design approves the
+exact boundary.
 
-## Current Proving Domains
+## Current Proving Evidence
 
-`UiProgram` is the first concrete proving-domain implementation.
+Historical Runenwerk-local `UiProgram` designs remain useful evidence for source
+normalization, inspectability, diagnostics, and program/artifact separation, but
+they are not current family-wide implementation authority. Standalone
+`dornglut/runen-ui` owns current RunenUI architecture and does not currently expose
+or depend on a Runenwerk-owned `UiProgram` substrate.
 
-Its current owner map and proof surface live under `domain/ui/` and are governed
-by:
+Therefore no current UI claim is sufficient to authorize shared Domain Program
+infrastructure. A future extraction decision must identify at least two current,
+structurally different owner domains that independently prove the exact repeated
+primitive.
 
-- [`ui-program-architecture.md`](../design/active/ui-program-architecture.md)
-- [`ui-program-architecture-owner-map.md`](../design/active/ui-program-architecture-owner-map.md)
-
-The next useful proving domain should be `MaterialProgram`, `RenderPlan`, or
-another non-UI domain that can reuse the same architecture spine without sharing
-UI meaning.
+Issue #205 owns the broader disposition of historical Runenwerk-local UI design
+material. This guideline does not pre-decide whether those documents are retained
+as history, merged, superseded, or deleted.
 
 ## Domain Program Checklist
 
 Before creating or completing a domain-program track, verify:
 
 - the domain owns its meaning explicitly;
-- authoring, program, artifact, evaluator, and host boundaries are separate;
+- authoring, program, artifact, evaluator, and host boundaries are separate where
+  the domain needs those stages;
 - graph families are typed and domain-specific;
-- source maps and diagnostics are first-class;
+- source maps and diagnostics are first-class where user repair requires them;
 - compiler and evaluator timing is explicit;
 - runtime artifacts are optimized and inspectable;
-- fixture and headless proof paths exist;
-- migration and compatibility rules exist;
+- fixture and headless proof paths exist where needed;
+- migration and compatibility rules exist for durable contracts;
 - host effects are explicit;
-- renderer, ECS, apps, and adapters do not own domain truth;
-- future shared extraction is blocked unless independently authorized.
+- renderer, ECS, apps, and adapters do not own domain truth by convenience;
+- future shared extraction is blocked unless independently authorized;
+- ordinary APIs remain understandable without mandatory knowledge of internal
+  graphs, plans, or common substrate.
 
 ## Usage For Future Tracks
 
@@ -357,14 +404,14 @@ For a new domain-program track, start with:
 
 ```text
 1. Define the domain-owned program contract.
-2. Define typed graph families.
-3. Define compiler/evaluator responsibilities.
+2. Define only the graph families the domain actually needs.
+3. Define compiler/evaluator responsibilities where formation requires them.
 4. Define runtime artifact families.
 5. Define host contracts.
-6. Define diagnostics, source maps, fixtures, and migration.
+6. Define diagnostics, source maps, fixtures, and migration where required.
 7. Define conformance evidence.
 8. Prove the domain without extracting shared foundation code.
 ```
 
-Only after a second domain proves the same shape should shared abstractions be
-considered.
+Only after a structurally different second domain proves the same neutral
+primitive should shared extraction be considered.
