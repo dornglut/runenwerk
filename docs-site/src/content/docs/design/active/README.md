@@ -123,6 +123,7 @@ architecture.
 - [RunenGPU G4 Context, Program, and WGPU Realization Design](runengpu-g4-context-program-realization-design.md)
 - [RunenGPU Shader Authoring and Canonical WGSL Artifact Boundary](runengpu-shader-authoring-artifact-boundary.md)
 - [RunenGPU G4B Contracts and G4C Delivery Design](runengpu-g4b-contracts-g4c-delivery-design.md)
+- [RunenGPU G4C2 Presentation-Surface Binding Boundary](runengpu-g4c2-presentation-surface-binding-boundary.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 - [Runen Family Operational Hardening Design](runen-family-operational-hardening-design.md)
