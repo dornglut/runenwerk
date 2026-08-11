@@ -50,11 +50,7 @@ impl DeviceHealth {
         }
     }
 
-    fn mark_fault(
-        &self,
-        category: GpuResourceRealizationErrorCategory,
-        detail: impl Into<String>,
-    ) {
+    fn mark_fault(&self, category: GpuResourceRealizationErrorCategory, detail: impl Into<String>) {
         let detail = detail.into().chars().take(256).collect::<String>();
         let mut retained = self
             .fault
@@ -560,9 +556,7 @@ mod tests {
             let error = health.ensure_available(resource).unwrap_err();
             assert_eq!(error.category(), expected);
             assert!(
-                error
-                    .detail()
-                    .is_some_and(|detail| detail.len() <= 256),
+                error.detail().is_some_and(|detail| detail.len() <= 256),
                 "backend evidence must remain bounded"
             );
         }
