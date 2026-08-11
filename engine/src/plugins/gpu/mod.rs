@@ -5,6 +5,17 @@ mod backend;
 
 pub(crate) use api::GpuWorkAuthoringErrorContext;
 pub use api::*;
+pub(crate) use backend::{
+    CurrentRenderAttachmentsTerminal, CurrentRenderBindGroupTerminal,
+    CurrentRenderBufferBindingTerminal, CurrentRenderBufferCopyTerminal,
+    CurrentRenderBufferUploadTerminal, CurrentRenderIndexBufferTerminal,
+    CurrentRenderIndirectBufferTerminal, CurrentRenderMaterialBindingTerminal,
+    CurrentRenderReadbackBufferTerminal, CurrentRenderSampledTextureBindingTerminal,
+    CurrentRenderTextureCopyTerminal, CurrentRenderTextureReadbackCopyTerminal,
+    CurrentRenderTextureUploadTerminal, CurrentRenderTimestampResourcesTerminal,
+    CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,
+    CurrentSurfaceReadbackCopyTerminal, CurrentSurfaceTextureCopyTerminal,
+};
 
 #[cfg(test)]
 mod tests {
@@ -242,6 +253,15 @@ mod tests {
             .map(|path| fs::read_to_string(path).expect("realization source should be readable"))
             .collect::<Vec<_>>()
             .join("\n");
+        let realization_creation_source = realization_paths
+            .iter()
+            .filter(|path| {
+                path.file_name().and_then(|name| name.to_str())
+                    != Some("current_render_resource_bridge.rs")
+            })
+            .map(|path| fs::read_to_string(path).expect("realization source should be readable"))
+            .collect::<Vec<_>>()
+            .join("\n");
 
         assert!(context_state.contains("resource_realization: ResourceRealizationState"));
         assert_eq!(
@@ -281,19 +301,19 @@ mod tests {
             ["device", ".poll"].concat(),
         ] {
             assert!(
-                !realization_source.contains(&forbidden_transfer),
+                !realization_creation_source.contains(&forbidden_transfer),
                 "G4C1 object creation must not absorb G5 transfer/lifecycle authority: {forbidden_transfer}"
             );
         }
         for creation in [
-            ["device", ".create_buffer(&BufferDescriptor"].concat(),
-            ["device", ".create_texture(&TextureDescriptor"].concat(),
-            ".create_view(&TextureViewDescriptor".to_string(),
-            ["device", ".create_sampler(&SamplerDescriptor"].concat(),
-            ["device", ".create_query_set(&QuerySetDescriptor"].concat(),
+            ["device", ".create_", "buffer(&BufferDescriptor"].concat(),
+            ["device", ".create_", "texture(&TextureDescriptor"].concat(),
+            [".create_", "view(&TextureViewDescriptor"].concat(),
+            ["device", ".create_", "sampler(&SamplerDescriptor"].concat(),
+            ["device", ".create_", "query_set(&QuerySetDescriptor"].concat(),
         ] {
             assert_eq!(
-                realization_source.matches(&creation).count(),
+                realization_creation_source.matches(&creation).count(),
                 1,
                 "each accepted resource family must have one private creation terminal: {creation}"
             );

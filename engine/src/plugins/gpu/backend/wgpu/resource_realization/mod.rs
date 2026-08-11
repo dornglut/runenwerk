@@ -1,9 +1,11 @@
 //! Context/device-generation-bound private WGPU resource realization.
 
+mod current_render_resource_bridge;
 mod lowering;
 mod records;
 mod registry;
 
+pub(crate) use current_render_resource_bridge::*;
 pub(crate) use records::{
     BufferRealizationRecord, QuerySetRealizationRecord, SamplerRealizationRecord,
     TextureRealizationRecord, TextureViewRealizationRecord,
@@ -515,7 +517,7 @@ impl GpuContext {
     }
 }
 
-fn validate_realized_input_affinity(
+pub(super) fn validate_realized_input_affinity(
     expected: GpuContextAffinity,
     resource: GpuWorkResourceId,
     observed: GpuContextAffinity,

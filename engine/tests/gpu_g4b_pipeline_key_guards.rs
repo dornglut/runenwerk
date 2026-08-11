@@ -104,7 +104,7 @@ fn binding_resolution_constructs_complete_descriptor_from_admitted_source() {
     let bindings = read(&manifest_dir, BINDINGS);
     let resolver = section(
         &bindings,
-        "pub(super) fn resolve_compiled_bind_group<'a>(",
+        "pub(super) fn resolve_compiled_bind_group(",
         ") -> Result<(",
         BINDINGS,
     );

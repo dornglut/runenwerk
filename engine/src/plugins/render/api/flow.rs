@@ -459,12 +459,12 @@ impl RenderFlow {
         loop {
             let label = format!("{pass_label}.uniform.{index}");
             if !self.resource_ids_by_label.contains_key(label.as_str()) {
-                let id = self.allocate_resource_id()?;
-                self.upsert_labeled_resource(
+                let declaration = RenderResourceDeclaration::declare_uniform::<U>(
+                    &mut self.next_resource_id,
                     label.clone(),
-                    id,
-                    RenderResourceDeclaration::declare_uniform::<U>(id, label)?,
-                );
+                )?;
+                let id = *declaration.id();
+                self.upsert_labeled_resource(label, id, declaration);
                 return self.buffer_handle(id);
             }
             index = index.saturating_add(1);
@@ -632,12 +632,12 @@ impl RenderFlow {
             return Ok(id);
         }
 
-        let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(
+        let declaration = RenderResourceDeclaration::declare_uniform::<U>(
+            &mut self.next_resource_id,
             label.clone(),
-            id,
-            RenderResourceDeclaration::declare_uniform::<U>(id, label)?,
-        );
+        )?;
+        let id = *declaration.id();
+        self.upsert_labeled_resource(label, id, declaration);
         Ok(id)
     }
 
@@ -695,14 +695,14 @@ impl RenderFlow {
             return Ok(id);
         }
 
-        let id = self.allocate_resource_id()?;
-        self.upsert_labeled_resource(
+        let declaration = RenderResourceDeclaration::declare_storage_array_with_lifetime::<T>(
+            &mut self.next_resource_id,
             label.clone(),
-            id,
-            RenderResourceDeclaration::declare_storage_array_with_lifetime::<T>(
-                id, label, len, lifetime,
-            )?,
-        );
+            len,
+            lifetime,
+        )?;
+        let id = *declaration.id();
+        self.upsert_labeled_resource(label, id, declaration);
         Ok(id)
     }
 
@@ -718,27 +718,23 @@ impl RenderFlow {
             return Ok((existing.a_id, existing.b_id));
         }
 
-        let a_id = self.allocate_resource_id()?;
-        let b_id = self.allocate_resource_id()?;
+        let a_label = format!("{base_label}.a");
+        let a = RenderResourceDeclaration::declare_storage_array::<T>(
+            &mut self.next_resource_id,
+            a_label.clone(),
+            len,
+        )?;
+        let a_id = *a.id();
 
-        self.upsert_labeled_resource(
-            format!("{base_label}.a"),
-            a_id,
-            RenderResourceDeclaration::declare_storage_array::<T>(
-                a_id,
-                format!("{base_label}.a"),
-                len,
-            )?,
-        );
-        self.upsert_labeled_resource(
-            format!("{base_label}.b"),
-            b_id,
-            RenderResourceDeclaration::declare_storage_array::<T>(
-                b_id,
-                format!("{base_label}.b"),
-                len,
-            )?,
-        );
+        let b_label = format!("{base_label}.b");
+        let b = RenderResourceDeclaration::declare_storage_array::<T>(
+            &mut self.next_resource_id,
+            b_label.clone(),
+            len,
+        )?;
+        let b_id = *b.id();
+        self.upsert_labeled_resource(a_label, a_id, a);
+        self.upsert_labeled_resource(b_label, b_id, b);
 
         self.ping_pong_storage.insert(
             base_label.clone(),

@@ -525,7 +525,13 @@ fn dispatch_for_count(element_count: u32) -> [u32; 3] {
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuCapabilityProfile, GpuContext, GpuContextDescriptor, GpuSpecializationValue,
+        CurrentRenderBindGroupTerminal, CurrentRenderBufferCopyTerminal,
+        CurrentRenderBufferUploadTerminal, CurrentRenderReadbackBufferTerminal,
+        GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
+        GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuContext,
+        GpuContextDescriptor, GpuMemoryIntent, GpuRealizedBuffer, GpuReconstruction,
+        GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
+        GpuSpecializationValue, GpuWorkResourceIdAllocator,
     };
     use crate::plugins::render::{
         CompiledDrawSource, CompiledPassExecutionPlan, CounterResetDescriptor, DrawIndirectArgs,
@@ -534,7 +540,6 @@ mod tests {
         compile_flow_plan,
     };
     use std::collections::{BTreeMap, BTreeSet};
-    use wgpu::util::DeviceExt;
 
     fn dispatch_plan_for_test(plan: &GpuPrimitiveExecutionPlan) -> GpuPrimitiveDispatchPlan {
         let mut owner = Some(RenderFlow::new(format!("{}.test_temporaries", plan.label)));
@@ -894,8 +899,14 @@ mod tests {
 
     #[test]
     fn gpu_primitives_runtime_dispatch_writes_scan_scatter_and_draw_args_when_adapter_available() {
+        let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::IndirectDraw,
+            ))
+            .expect("primitive runtime requirements should remain coherent");
         let context = match pollster::block_on(GpuContext::request(GpuContextDescriptor::new(
-            GpuCapabilityProfile::ComputeBaseline.requirements(),
+            requirements,
         ))) {
             Ok(context) => context,
             Err(error) => {
@@ -907,7 +918,10 @@ mod tests {
         let (device, queue) = (loan.device, loan.queue);
         if !context
             .device_facts()
-            .is_enabled(crate::plugins::gpu::GpuCapabilityFeature::Compute)
+            .is_enabled(GpuCapabilityFeature::Compute)
+            || !context
+                .device_facts()
+                .is_enabled(GpuCapabilityFeature::IndirectDraw)
         {
             return;
         }
@@ -963,21 +977,24 @@ mod tests {
         .expect("runtime primitive plan should be valid");
         let dispatch_plan = dispatch_plan_for_test(&primitive_plan);
 
-        let mut buffers = BTreeMap::<GpuBufferHandle, wgpu::Buffer>::new();
+        let mut buffers = BTreeMap::<GpuBufferHandle, GpuRealizedBuffer>::new();
         insert_storage_buffer(
-            device,
+            &context,
+            queue,
             &mut buffers,
             scan_input.clone(),
             &vec![1_u32; element_count as usize],
         );
         insert_storage_buffer(
-            device,
+            &context,
+            queue,
             &mut buffers,
             scan_output.clone(),
             &vec![0_u32; element_count as usize],
         );
         insert_storage_buffer(
-            device,
+            &context,
+            queue,
             &mut buffers,
             source_indices.clone(),
             &(0..element_count)
@@ -985,15 +1002,23 @@ mod tests {
                 .collect::<Vec<_>>(),
         );
         insert_storage_buffer(
-            device,
+            &context,
+            queue,
             &mut buffers,
             sorted_indices.clone(),
             &vec![0_u32; element_count as usize],
         );
-        insert_storage_buffer(device, &mut buffers, draw_args.clone(), &[0_u32; 4]);
+        insert_storage_buffer(
+            &context,
+            queue,
+            &mut buffers,
+            draw_args.clone(),
+            &[0_u32; 4],
+        );
         for temporary in &dispatch_plan.temporary_storage {
             insert_storage_buffer(
-                device,
+                &context,
+                queue,
                 &mut buffers,
                 temporary.clone(),
                 &vec![0_u32; (temporary.descriptor().size_bytes() / 4) as usize],
@@ -1007,10 +1032,19 @@ mod tests {
             label: Some("gpu_primitive_runtime_test_encoder"),
         });
         for stage in &dispatch_plan.stages {
-            encode_runtime_primitive_stage(device, &mut encoder, workspace_root, &buffers, stage);
+            encode_runtime_primitive_stage(
+                &context,
+                device,
+                &mut encoder,
+                workspace_root,
+                &buffers,
+                stage,
+            );
         }
+        let mut readback_ids = GpuWorkResourceIdAllocator::new();
         let scan_readback = copy_storage_buffer_to_readback(
-            device,
+            &context,
+            &mut readback_ids,
             &mut encoder,
             buffers
                 .get(&scan_output)
@@ -1018,7 +1052,8 @@ mod tests {
             u64::from(element_count) * 4,
         );
         let scatter_readback = copy_storage_buffer_to_readback(
-            device,
+            &context,
+            &mut readback_ids,
             &mut encoder,
             buffers
                 .get(&sorted_indices)
@@ -1026,7 +1061,8 @@ mod tests {
             u64::from(element_count) * 4,
         );
         let args_readback = copy_storage_buffer_to_readback(
-            device,
+            &context,
+            &mut readback_ids,
             &mut encoder,
             buffers
                 .get(&draw_args)
@@ -1035,9 +1071,9 @@ mod tests {
         );
         queue.submit(std::iter::once(encoder.finish()));
 
-        let scan_values = read_u32_buffer(device, &scan_readback);
-        let scatter_values = read_u32_buffer(device, &scatter_readback);
-        let args_values = read_u32_buffer(device, &args_readback);
+        let scan_values = read_u32_buffer(&context, device, &scan_readback);
+        let scatter_values = read_u32_buffer(&context, device, &scatter_readback);
+        let args_values = read_u32_buffer(&context, device, &args_readback);
 
         assert_eq!(
             scan_values,
@@ -1075,147 +1111,289 @@ mod tests {
     }
 
     fn insert_storage_buffer(
-        device: &wgpu::Device,
-        buffers: &mut BTreeMap<GpuBufferHandle, wgpu::Buffer>,
+        context: &GpuContext,
+        queue: &wgpu::Queue,
+        buffers: &mut BTreeMap<GpuBufferHandle, GpuRealizedBuffer>,
         resource: GpuBufferHandle,
         values: &[u32],
     ) {
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("gpu_primitive_runtime_test_storage"),
-            contents: crate::plugins::render::bytemuck::cast_slice(values),
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-        });
+        let buffer = context
+            .realize_buffer(&resource)
+            .expect("primitive storage buffer should realize");
+        context
+            .current_render_resource_bridge()
+            .for_buffer_upload(
+                &buffer,
+                UploadPrimitiveStorage {
+                    queue,
+                    contents: crate::plugins::render::bytemuck::cast_slice(values),
+                },
+            )
+            .expect("primitive storage upload should bridge");
         buffers.insert(resource, buffer);
     }
 
     fn encode_runtime_primitive_stage(
+        context: &GpuContext,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         workspace_root: &std::path::Path,
-        buffers: &BTreeMap<GpuBufferHandle, wgpu::Buffer>,
+        buffers: &BTreeMap<GpuBufferHandle, GpuRealizedBuffer>,
         stage: &GpuPrimitiveDispatchStage,
     ) {
         let source = std::fs::read_to_string(workspace_root.join(stage.shader_asset))
             .unwrap_or_else(|err| panic!("failed to read shader '{}': {err}", stage.shader_asset));
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("gpu_primitive_runtime_test_shader"),
-            source: wgpu::ShaderSource::Wgsl(source.into()),
-        });
-        let layout_entries = stage
+        let resources = stage
             .shader_bindings
             .iter()
-            .map(|binding| wgpu::BindGroupLayoutEntry {
-                binding: binding.key().binding(),
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage {
-                        read_only: matches!(binding.access(), GpuStorageBufferAccess::ReadOnly),
-                    },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            })
-            .collect::<Vec<_>>();
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("gpu_primitive_runtime_test_bind_group_layout"),
-            entries: layout_entries.as_slice(),
-        });
-        let bind_group_entries = stage
-            .shader_bindings
-            .iter()
-            .map(|binding| wgpu::BindGroupEntry {
-                binding: binding.key().binding(),
-                resource: buffers
+            .map(|binding| {
+                buffers
                     .get(binding.buffer())
                     .expect("primitive runtime buffer should exist")
-                    .as_entire_binding(),
             })
             .collect::<Vec<_>>();
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_primitive_runtime_test_bind_group"),
-            layout: &bind_group_layout,
-            entries: bind_group_entries.as_slice(),
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("gpu_primitive_runtime_test_pipeline_layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-        let constants = stage
-            .constants
-            .iter()
-            .map(|constant| {
-                let value = match constant.value {
-                    GpuSpecializationValue::Bool(value) => {
-                        if value {
-                            1.0
-                        } else {
-                            0.0
-                        }
-                    }
-                    GpuSpecializationValue::U32(value) => f64::from(value),
-                    GpuSpecializationValue::I32(value) => f64::from(value),
-                    GpuSpecializationValue::F32(value) => f64::from(value.get()),
-                };
-                (constant.name.as_str(), value)
-            })
-            .collect::<Vec<_>>();
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("gpu_primitive_runtime_test_pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: Some("cs_main"),
-            compilation_options: wgpu::PipelineCompilationOptions {
-                constants: constants.as_slice(),
-                ..wgpu::PipelineCompilationOptions::default()
-            },
-            cache: None,
-        });
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("gpu_primitive_runtime_test_pass"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(stage.dispatch[0], stage.dispatch[1], stage.dispatch[2]);
+        context
+            .current_render_resource_bridge()
+            .for_bind_group(
+                &resources,
+                &[],
+                &[],
+                EncodePrimitiveStage {
+                    device,
+                    encoder,
+                    stage,
+                    source: &source,
+                },
+            )
+            .expect("primitive stage resources should bridge");
+    }
+
+    #[derive(Debug)]
+    struct TestReadbackBuffer {
+        _handle: GpuBufferHandle,
+        realized: GpuRealizedBuffer,
     }
 
     fn copy_storage_buffer_to_readback(
-        device: &wgpu::Device,
+        context: &GpuContext,
+        allocator: &mut GpuWorkResourceIdAllocator,
         encoder: &mut wgpu::CommandEncoder,
-        source: &wgpu::Buffer,
+        source: &GpuRealizedBuffer,
         size: u64,
-    ) -> wgpu::Buffer {
-        let readback = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gpu_primitive_runtime_test_readback"),
-            size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        encoder.copy_buffer_to_buffer(source, 0, &readback, 0, size);
-        readback
+    ) -> TestReadbackBuffer {
+        let handle = allocator
+            .allocate_buffer_handle(primitive_readback_descriptor(size))
+            .expect("primitive readback handle");
+        let realized = context
+            .realize_buffer(&handle)
+            .expect("primitive readback buffer should realize");
+        context
+            .current_render_resource_bridge()
+            .for_buffer_copy(source, &realized, CopyPrimitiveReadback { encoder, size })
+            .expect("primitive readback copy should bridge");
+        TestReadbackBuffer {
+            _handle: handle,
+            realized,
+        }
     }
 
-    fn read_u32_buffer(device: &wgpu::Device, buffer: &wgpu::Buffer) -> Vec<u32> {
-        let slice = buffer.slice(..);
-        let (sender, receiver) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |result| {
-            let _ = sender.send(result);
-        });
-        device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .expect("device polling should complete primitive readback");
-        receiver
-            .recv()
-            .expect("primitive readback channel should receive")
-            .expect("primitive readback mapping should succeed");
-        let data = slice.get_mapped_range();
-        let values = crate::plugins::render::bytemuck::cast_slice::<u8, u32>(&data).to_vec();
-        drop(data);
-        buffer.unmap();
-        values
+    fn primitive_readback_descriptor(size: u64) -> GpuBufferDescriptor {
+        let label = GpuResourceLabel::new("gpu_primitive_runtime_test_readback")
+            .expect("primitive readback label");
+        let common = GpuResourceCommon::owned(
+            label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Readback,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(label.clone(), None, None),
+        )
+        .expect("primitive readback common descriptor");
+        let usages = GpuBufferUsages::new(&label, [GpuBufferUsage::CopyDestination])
+            .expect("primitive readback usages");
+        GpuBufferDescriptor::new(common, size, usages, GpuBufferInitialization::Uninitialized)
+            .expect("primitive readback descriptor")
+    }
+
+    fn read_u32_buffer(
+        context: &GpuContext,
+        device: &wgpu::Device,
+        buffer: &TestReadbackBuffer,
+    ) -> Vec<u32> {
+        let mut output = None;
+        context
+            .current_render_resource_bridge()
+            .for_buffer_readback(
+                &buffer.realized,
+                ReadPrimitiveBuffer {
+                    device,
+                    output: &mut output,
+                },
+            )
+            .expect("primitive readback should bridge");
+        output.expect("primitive readback should produce values")
+    }
+
+    struct UploadPrimitiveStorage<'a> {
+        queue: &'a wgpu::Queue,
+        contents: &'a [u8],
+    }
+
+    impl CurrentRenderBufferUploadTerminal for UploadPrimitiveStorage<'_> {
+        fn upload_buffer(self, buffer: &wgpu::Buffer) {
+            self.queue.write_buffer(buffer, 0, self.contents);
+        }
+    }
+
+    struct EncodePrimitiveStage<'a> {
+        device: &'a wgpu::Device,
+        encoder: &'a mut wgpu::CommandEncoder,
+        stage: &'a GpuPrimitiveDispatchStage,
+        source: &'a str,
+    }
+
+    impl CurrentRenderBindGroupTerminal for EncodePrimitiveStage<'_> {
+        fn bind_resources(
+            self,
+            buffers: &[&wgpu::Buffer],
+            _views: &[&wgpu::TextureView],
+            _samplers: &[&wgpu::Sampler],
+        ) {
+            let shader = self
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("gpu_primitive_runtime_test_shader"),
+                    source: wgpu::ShaderSource::Wgsl(self.source.into()),
+                });
+            let layout_entries = self
+                .stage
+                .shader_bindings
+                .iter()
+                .map(|binding| wgpu::BindGroupLayoutEntry {
+                    binding: binding.key().binding(),
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage {
+                            read_only: matches!(binding.access(), GpuStorageBufferAccess::ReadOnly),
+                        },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                })
+                .collect::<Vec<_>>();
+            let bind_group_layout =
+                self.device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: Some("gpu_primitive_runtime_test_bind_group_layout"),
+                        entries: layout_entries.as_slice(),
+                    });
+            let bind_group_entries = self
+                .stage
+                .shader_bindings
+                .iter()
+                .enumerate()
+                .map(|(index, binding)| wgpu::BindGroupEntry {
+                    binding: binding.key().binding(),
+                    resource: buffers[index].as_entire_binding(),
+                })
+                .collect::<Vec<_>>();
+            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("gpu_primitive_runtime_test_bind_group"),
+                layout: &bind_group_layout,
+                entries: bind_group_entries.as_slice(),
+            });
+            let pipeline_layout =
+                self.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("gpu_primitive_runtime_test_pipeline_layout"),
+                        bind_group_layouts: &[&bind_group_layout],
+                        push_constant_ranges: &[],
+                    });
+            let constants = self
+                .stage
+                .constants
+                .iter()
+                .map(|constant| {
+                    let value = match constant.value {
+                        GpuSpecializationValue::Bool(value) => {
+                            if value {
+                                1.0
+                            } else {
+                                0.0
+                            }
+                        }
+                        GpuSpecializationValue::U32(value) => f64::from(value),
+                        GpuSpecializationValue::I32(value) => f64::from(value),
+                        GpuSpecializationValue::F32(value) => f64::from(value.get()),
+                    };
+                    (constant.name.as_str(), value)
+                })
+                .collect::<Vec<_>>();
+            let pipeline = self
+                .device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("gpu_primitive_runtime_test_pipeline"),
+                    layout: Some(&pipeline_layout),
+                    module: &shader,
+                    entry_point: Some("cs_main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: constants.as_slice(),
+                        ..wgpu::PipelineCompilationOptions::default()
+                    },
+                    cache: None,
+                });
+            let mut pass = self
+                .encoder
+                .begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("gpu_primitive_runtime_test_pass"),
+                    timestamp_writes: None,
+                });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(
+                self.stage.dispatch[0],
+                self.stage.dispatch[1],
+                self.stage.dispatch[2],
+            );
+        }
+    }
+
+    struct CopyPrimitiveReadback<'a> {
+        encoder: &'a mut wgpu::CommandEncoder,
+        size: u64,
+    }
+
+    impl CurrentRenderBufferCopyTerminal for CopyPrimitiveReadback<'_> {
+        fn copy_buffers(self, source: &wgpu::Buffer, destination: &wgpu::Buffer) {
+            self.encoder
+                .copy_buffer_to_buffer(source, 0, destination, 0, self.size);
+        }
+    }
+
+    struct ReadPrimitiveBuffer<'a> {
+        device: &'a wgpu::Device,
+        output: &'a mut Option<Vec<u32>>,
+    }
+
+    impl CurrentRenderReadbackBufferTerminal for ReadPrimitiveBuffer<'_> {
+        fn read_buffer(self, buffer: &wgpu::Buffer) {
+            let slice = buffer.slice(..);
+            let (sender, receiver) = std::sync::mpsc::channel();
+            slice.map_async(wgpu::MapMode::Read, move |result| {
+                let _ = sender.send(result);
+            });
+            self.device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .expect("device polling should complete primitive readback");
+            receiver
+                .recv()
+                .expect("primitive readback channel should receive")
+                .expect("primitive readback mapping should succeed");
+            let data = slice.get_mapped_range();
+            let values = crate::plugins::render::bytemuck::cast_slice::<u8, u32>(&data).to_vec();
+            drop(data);
+            buffer.unmap();
+            *self.output = Some(values);
+        }
     }
 }

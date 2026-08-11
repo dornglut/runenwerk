@@ -198,7 +198,7 @@ impl FlowRuntimeResources {
 
         if output_key == RuntimeResourceKey::SurfaceColor {
             return Ok(ResolvedColorTargetView {
-                view: RuntimeTextureView::Borrowed(frame_view),
+                view: RuntimeTextureView::Surface(frame_view),
                 format: frame_format,
             });
         }
@@ -235,11 +235,7 @@ impl FlowRuntimeResources {
         }
 
         Ok(ResolvedColorTargetView {
-            view: RuntimeTextureView::Owned(
-                texture
-                    .texture
-                    .create_view(&TextureViewDescriptor::default()),
-            ),
+            view: RuntimeTextureView::Realized(texture.realized_view.clone()),
             format: texture.format,
         })
     }
@@ -292,9 +288,7 @@ impl FlowRuntimeResources {
         }
 
         Ok(Some(ResolvedDepthTargetView {
-            view: texture
-                .texture
-                .create_view(&TextureViewDescriptor::default()),
+            view: texture.realized_view.clone(),
             format: texture.format,
         }))
     }
@@ -364,7 +358,8 @@ impl FlowRuntimeResources {
         if resource_key == RuntimeResourceKey::SurfaceColor {
             return Ok(ResolvedTextureRef {
                 id: resource_key,
-                texture: frame_texture,
+                texture: RuntimeTextureRef::Surface(frame_texture),
+                realized_view: None,
                 format: frame_format,
                 size: frame_size,
                 is_depth: false,
@@ -405,7 +400,8 @@ impl FlowRuntimeResources {
 
         Ok(ResolvedTextureRef {
             id: resource_key,
-            texture: &texture.texture,
+            texture: RuntimeTextureRef::Realized(&texture.realized),
+            realized_view: Some(&texture.realized_view),
             format: texture.format,
             size: texture.size,
             is_depth: texture.is_depth,
@@ -467,7 +463,7 @@ impl FlowRuntimeResources {
 
         Ok(ResolvedBufferRef {
             id: resource_key,
-            buffer: &buffer.buffer,
+            buffer: &buffer.realized,
             size: buffer.size,
             kind: buffer.kind,
             generation: Some(buffer.generation),
@@ -496,7 +492,7 @@ impl FlowRuntimeResources {
                     invocation_id: scope.clone(),
                     resource_id,
                 },
-                buffer: &buffer.buffer,
+                buffer: &buffer.realized,
                 size: buffer.size,
                 kind: buffer.kind,
                 generation: Some(buffer.generation),

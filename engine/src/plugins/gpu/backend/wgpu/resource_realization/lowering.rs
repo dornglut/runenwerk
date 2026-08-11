@@ -306,6 +306,7 @@ pub(super) fn validate_query_set(
 
 pub(super) const fn map_texture_format(format: GpuTextureFormat) -> TextureFormat {
     match format {
+        GpuTextureFormat::R8Unorm => TextureFormat::R8Unorm,
         GpuTextureFormat::Rgba8Unorm => TextureFormat::Rgba8Unorm,
         GpuTextureFormat::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
         GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,
@@ -534,7 +535,7 @@ const fn paired_view_format(format: TextureFormat) -> Option<TextureFormat> {
         TextureFormat::Rgba8UnormSrgb => Some(TextureFormat::Rgba8Unorm),
         TextureFormat::Bgra8Unorm => Some(TextureFormat::Bgra8UnormSrgb),
         TextureFormat::Bgra8UnormSrgb => Some(TextureFormat::Bgra8Unorm),
-        TextureFormat::R32Uint | TextureFormat::Depth32Float => None,
+        TextureFormat::R8Unorm | TextureFormat::R32Uint | TextureFormat::Depth32Float => None,
         _ => None,
     }
 }

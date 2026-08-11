@@ -40,8 +40,8 @@ mod provenance;
 mod runtime_resources;
 
 pub(super) use capture::{
-    FrameCaptureRuntime, PendingCaptureReadback, enqueue_texture_capture_copy, read_capture_back,
-    texture_readback_format,
+    CaptureTextureSource, FrameCaptureRuntime, PendingCaptureReadback,
+    enqueue_texture_capture_copy, read_capture_back, texture_readback_format,
 };
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;
@@ -61,5 +61,6 @@ pub(super) use provenance::{
 };
 pub(crate) use runtime_resources::{
     FlowRuntimeResources, ResolvedBufferRef, ResolvedColorTargetView, ResolvedDepthTargetView,
-    ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind, RuntimeTextureView,
+    ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind, RuntimeTextureRef,
+    RuntimeTextureView,
 };

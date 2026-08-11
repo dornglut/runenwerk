@@ -210,6 +210,7 @@ impl GpuCapabilityProfile {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuTextureFormat {
+    R8Unorm,
     Rgba8Unorm,
     Rgba8UnormSrgb,
     Bgra8Unorm,
@@ -220,7 +221,15 @@ pub enum GpuTextureFormat {
 
 impl GpuTextureFormat {
     pub const fn bytes_per_texel(self) -> u32 {
-        4
+        match self {
+            Self::R8Unorm => 1,
+            Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb
+            | Self::R32Uint
+            | Self::Depth32Float => 4,
+        }
     }
 
     pub const fn is_depth(self) -> bool {

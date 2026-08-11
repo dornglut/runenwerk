@@ -1,15 +1,15 @@
 use super::render_flow::RendererProgramSourceAuthority;
 use super::{DEFAULT_COMPUTE_SHADER, DEFAULT_FULLSCREEN_SHADER, DEFAULT_GRAPHICS_SHADER};
 use crate::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuProgramSourceError, GpuProgramSourceKey,
-    GpuProgramSourceProvenance,
+    GpuAdmittedProgramSource, GpuContext, GpuProgramSourceError, GpuProgramSourceKey,
+    GpuProgramSourceProvenance, GpuRealizedSampler, GpuSamplerDescriptor, GpuSamplerHandle,
+    GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::pipelines::{FlowPassBindGroupKey, FlowPassPipelineKey};
 use std::collections::HashMap;
 use wgpu::{
-    BindGroup, BindGroupLayout, ComputePipeline, PipelineLayout, RenderPipeline, Sampler,
-    ShaderModule,
+    BindGroup, BindGroupLayout, ComputePipeline, PipelineLayout, RenderPipeline, ShaderModule,
 };
 
 const RENDERER_PROGRAM_SOURCE_MAX_RECORDS: usize = 1024;
@@ -34,10 +34,17 @@ pub struct FlowPipelineArtifactCache {
     pub pipeline_layouts: HashMap<FlowPassPipelineKey, PipelineLayout>,
     pub compute_pipelines: HashMap<FlowPassPipelineKey, ComputePipeline>,
     pub render_pipelines: HashMap<FlowPassPipelineKey, RenderPipeline>,
-    pub samplers: HashMap<FlowPassPipelineKey, Sampler>,
+    samplers: HashMap<FlowPassPipelineKey, RendererRealizedSampler>,
     pub bind_groups: HashMap<FlowPassBindGroupKey, BindGroup>,
     pub stats: RendererPipelineCacheStats,
     program_sources: RendererProgramSourceAuthority,
+    resource_ids: GpuWorkResourceIdAllocator,
+}
+
+#[derive(Debug)]
+struct RendererRealizedSampler {
+    _handle: GpuSamplerHandle,
+    realized: GpuRealizedSampler,
 }
 
 impl Default for FlowPipelineArtifactCache {
@@ -57,6 +64,7 @@ impl Default for FlowPipelineArtifactCache {
             bind_groups: HashMap::new(),
             stats: RendererPipelineCacheStats::default(),
             program_sources,
+            resource_ids: GpuWorkResourceIdAllocator::new(),
         };
         admit_builtin_program_source(&mut cache, "builtin:compute", DEFAULT_COMPUTE_SHADER);
         admit_builtin_program_source(&mut cache, "builtin:fullscreen", DEFAULT_FULLSCREEN_SHADER);
@@ -179,18 +187,32 @@ impl FlowPipelineArtifactCache {
         value
     }
 
-    pub fn get_or_create_sampler<F>(&mut self, key: FlowPassPipelineKey, create: F) -> Sampler
-    where
-        F: FnOnce() -> Sampler,
-    {
+    pub fn get_or_realize_sampler(
+        &mut self,
+        context: &GpuContext,
+        key: FlowPassPipelineKey,
+        descriptor: GpuSamplerDescriptor,
+    ) -> anyhow::Result<GpuRealizedSampler> {
         if let Some(value) = self.samplers.get(&key) {
+            if value.realized.descriptor() != &descriptor {
+                anyhow::bail!(
+                    "renderer sampler cache key reused with changed normalized descriptor"
+                );
+            }
             self.stats.hits = self.stats.hits.saturating_add(1);
-            return value.clone();
+            return Ok(value.realized.clone());
         }
         self.stats.misses = self.stats.misses.saturating_add(1);
-        let value = create();
-        self.samplers.insert(key, value.clone());
-        value
+        let handle = self.resource_ids.allocate_sampler_handle(descriptor)?;
+        let realized = context.realize_sampler(&handle)?;
+        self.samplers.insert(
+            key,
+            RendererRealizedSampler {
+                _handle: handle,
+                realized: realized.clone(),
+            },
+        );
+        Ok(realized)
     }
 
     pub fn get_or_create_bind_group<F>(&mut self, key: FlowPassBindGroupKey, create: F) -> BindGroup

@@ -313,9 +313,9 @@ fn lower_render_work(
     }
 
     let graph_inputs = resources
-        .values()
-        .filter(|resource| resource_is_graph_entry(resource, plan))
-        .map(|resource| {
+        .iter()
+        .filter(|(semantic_id, _)| resource_is_graph_entry(**semantic_id, plan))
+        .map(|(_, resource)| {
             Ok(GpuWorkResourceInput::new(
                 resource.clone(),
                 graph_entry_coverage(resource)?,
@@ -898,6 +898,7 @@ fn lower_resources(
     surface_size: (u32, u32),
 ) -> Result<BTreeMap<GpuWorkResourceId, GpuResourceRef>, RenderGpuWorkAdapterError> {
     let mut resources = BTreeMap::new();
+    let mut allocator = GpuWorkResourceIdAllocator::new();
     for declaration in &plan.resources.resources {
         let id = *declaration.id();
         let resource = match declaration {
@@ -916,11 +917,11 @@ fn lower_resources(
                     .lower_gpu_resource(surface_size, super::legacy_surface_validation_format())?
                 {
                     super::RenderGpuResourceLowering::Normalized(descriptor) => match *descriptor {
-                        GpuResourceDescriptor::Texture(descriptor) => GpuResourceRef::Texture(
-                            GpuTextureHandle::from_descriptor(id, descriptor),
-                        ),
+                        GpuResourceDescriptor::Texture(descriptor) => {
+                            GpuResourceRef::Texture(allocator.allocate_texture_handle(descriptor)?)
+                        }
                         GpuResourceDescriptor::Buffer(descriptor) => {
-                            GpuResourceRef::Buffer(GpuBufferHandle::from_descriptor(id, descriptor))
+                            GpuResourceRef::Buffer(allocator.allocate_buffer_handle(descriptor)?)
                         }
                         _ => {
                             return Err(RenderGpuWorkAdapterError::MissingResource {
@@ -935,8 +936,8 @@ fn lower_resources(
             }
             RenderResourceDeclaration::ImportedTexture(value) => {
                 let depth = value.semantic == RenderImportedTextureSemantic::SurfaceDepth;
-                GpuResourceRef::Texture(synthetic_texture(
-                    id,
+                GpuResourceRef::Texture(prepared_texture_handle(
+                    &mut allocator,
                     value.label.as_str(),
                     surface_size,
                     depth,
@@ -945,25 +946,25 @@ fn lower_resources(
             }
             RenderResourceDeclaration::TargetAlias(value) => {
                 let depth = value.kind() == RenderTargetAliasKind::Depth;
-                GpuResourceRef::Texture(synthetic_texture(
-                    id,
+                GpuResourceRef::Texture(prepared_texture_handle(
+                    &mut allocator,
                     value.binding_key().as_str(),
                     surface_size,
                     depth,
                     true,
                 )?)
             }
-            RenderResourceDeclaration::ImportedBuffer(value) => {
-                GpuResourceRef::Buffer(synthetic_buffer(id, value.label.as_str(), 4, true)?)
-            }
+            RenderResourceDeclaration::ImportedBuffer(value) => GpuResourceRef::Buffer(
+                prepared_buffer_handle(&mut allocator, value.label.as_str(), 4, true)?,
+            ),
         };
         resources.insert(id, resource);
     }
     Ok(resources)
 }
 
-fn synthetic_texture(
-    id: GpuWorkResourceId,
+fn prepared_texture_handle(
+    allocator: &mut GpuWorkResourceIdAllocator,
     label: &str,
     surface_size: (u32, u32),
     depth: bool,
@@ -1021,11 +1022,11 @@ fn synthetic_texture(
         GpuTextureUsages::new(&label, usages)?,
         GpuTextureInitialization::Uninitialized,
     )?;
-    Ok(GpuTextureHandle::from_descriptor(id, descriptor))
+    Ok(allocator.allocate_texture_handle(descriptor)?)
 }
 
-fn synthetic_buffer(
-    id: GpuWorkResourceId,
+fn prepared_buffer_handle(
+    allocator: &mut GpuWorkResourceIdAllocator,
     label: &str,
     size: u64,
     imported: bool,
@@ -1061,7 +1062,7 @@ fn synthetic_buffer(
         usages,
         GpuBufferInitialization::Uninitialized,
     )?;
-    Ok(GpuBufferHandle::from_descriptor(id, descriptor))
+    Ok(allocator.allocate_buffer_handle(descriptor)?)
 }
 
 fn lower_timing_resources(
@@ -1155,13 +1156,13 @@ fn lower_timing_work(
     })
 }
 
-fn resource_is_graph_entry(resource: &GpuResourceRef, plan: &CompiledRenderFlowPlan) -> bool {
-    let id = resource.diagnostic_identity();
-    plan.resource_descriptor(id).is_some_and(|declaration| {
-        declaration.is_imported()
-            || matches!(declaration, RenderResourceDeclaration::TargetAlias(_))
-            || declaration.lifetime().is_retained()
-    })
+fn resource_is_graph_entry(semantic_id: GpuWorkResourceId, plan: &CompiledRenderFlowPlan) -> bool {
+    plan.resource_descriptor(semantic_id)
+        .is_some_and(|declaration| {
+            declaration.is_imported()
+                || matches!(declaration, RenderResourceDeclaration::TargetAlias(_))
+                || declaration.lifetime().is_retained()
+        })
 }
 
 fn graph_entry_coverage(

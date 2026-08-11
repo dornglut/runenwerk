@@ -1,7 +1,8 @@
 use super::{build_surface_config, preferred_surface_format};
 use crate::plugins::gpu::{
     GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuContext,
-    GpuContextDescriptor, GpuPowerPreference, GpuPreferredFallback,
+    GpuContextDescriptor, GpuFormatRole, GpuPowerPreference, GpuPreferredFallback,
+    GpuTextureFormat,
 };
 use anyhow::Result;
 use pollster::block_on;
@@ -31,10 +32,94 @@ impl<'window> WgpuCtx<'window> {
             feature: GpuCapabilityFeature::TimestampQuery,
             fallback: GpuPreferredFallback::DisableInstrumentation,
         })?;
-        let descriptor = GpuContextDescriptor::new(requirements)
+        for feature in [
+            GpuCapabilityFeature::Compute,
+            GpuCapabilityFeature::IndirectDraw,
+            GpuCapabilityFeature::StorageTexture,
+            GpuCapabilityFeature::DepthAttachment,
+        ] {
+            requirements.insert(GpuCapabilityRequirement::Required(feature))?;
+        }
+        let mut descriptor = GpuContextDescriptor::new(requirements)
             .with_label("Runenwerk current host")
             .with_provenance("temporary G7 host compatibility")
             .with_power_preference(GpuPowerPreference::HighPerformance);
+        for (format, roles) in [
+            (
+                GpuTextureFormat::R8Unorm,
+                &[
+                    GpuFormatRole::Sampled,
+                    GpuFormatRole::Filterable,
+                    GpuFormatRole::CopyDestination,
+                ][..],
+            ),
+            (
+                GpuTextureFormat::Rgba8Unorm,
+                &[
+                    GpuFormatRole::Sampled,
+                    GpuFormatRole::Filterable,
+                    GpuFormatRole::StorageRead,
+                    GpuFormatRole::StorageWrite,
+                    GpuFormatRole::ColorAttachment,
+                    GpuFormatRole::CopySource,
+                    GpuFormatRole::CopyDestination,
+                ][..],
+            ),
+            (
+                GpuTextureFormat::Rgba8UnormSrgb,
+                &[
+                    GpuFormatRole::Sampled,
+                    GpuFormatRole::Filterable,
+                    GpuFormatRole::ColorAttachment,
+                    GpuFormatRole::CopySource,
+                    GpuFormatRole::CopyDestination,
+                ][..],
+            ),
+            (
+                GpuTextureFormat::Bgra8Unorm,
+                &[
+                    GpuFormatRole::Sampled,
+                    GpuFormatRole::Filterable,
+                    GpuFormatRole::ColorAttachment,
+                    GpuFormatRole::CopySource,
+                    GpuFormatRole::CopyDestination,
+                ][..],
+            ),
+            (
+                GpuTextureFormat::Bgra8UnormSrgb,
+                &[
+                    GpuFormatRole::Sampled,
+                    GpuFormatRole::Filterable,
+                    GpuFormatRole::ColorAttachment,
+                    GpuFormatRole::CopySource,
+                    GpuFormatRole::CopyDestination,
+                ][..],
+            ),
+            (
+                GpuTextureFormat::R32Uint,
+                &[
+                    GpuFormatRole::Sampled,
+                    GpuFormatRole::StorageRead,
+                    GpuFormatRole::StorageWrite,
+                    GpuFormatRole::ColorAttachment,
+                    GpuFormatRole::CopySource,
+                    GpuFormatRole::CopyDestination,
+                ][..],
+            ),
+            (
+                GpuTextureFormat::Depth32Float,
+                &[
+                    GpuFormatRole::Sampled,
+                    GpuFormatRole::DepthStencil,
+                    GpuFormatRole::CopySource,
+                    GpuFormatRole::CopyDestination,
+                ][..],
+            ),
+        ] {
+            for &role in roles {
+                descriptor = descriptor.require_format_role(format, role);
+            }
+        }
         let (context, surface) =
             GpuContext::request_for_current_host(descriptor, Arc::clone(&window)).await?;
 

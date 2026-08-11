@@ -1,4 +1,6 @@
-use engine::plugins::gpu::{GpuResourceDescriptor, GpuTextureFormat, GpuWorkResourceId};
+use engine::plugins::gpu::{
+    GpuResourceDescriptor, GpuTextureFormat, GpuWorkResourceId, GpuWorkResourceIdAllocator,
+};
 use engine::plugins::render::api::RenderPassId;
 use engine::plugins::render::{
     CompiledPassExecutionPlan, CompiledResourceRef, GpuParams, GpuUniform, RenderFlow,
@@ -35,10 +37,13 @@ fn test_resource_ids(count: usize) -> Vec<GpuWorkResourceId> {
 
 #[test]
 fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
-    let id = test_resource_ids(1)[0];
-    let descriptor =
-        RenderResourceDeclaration::declare_uniform::<ResourceTestParams>(id, "test uniform")
-            .expect("uniform declaration should be valid");
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let descriptor = RenderResourceDeclaration::declare_uniform::<ResourceTestParams>(
+        &mut allocator,
+        "test uniform",
+    )
+    .expect("uniform declaration should be valid");
+    let id = *descriptor.id();
 
     match descriptor {
         RenderResourceDeclaration::Uniform(value) => {
@@ -89,10 +94,12 @@ fn duplicate_resource_detection_finds_collisions() {
 
 #[test]
 fn owned_buffer_lowering_returns_normalized_buffer() {
-    let id = test_resource_ids(1)[0];
-    let declaration =
-        RenderResourceDeclaration::declare_uniform::<ResourceTestParams>(id, "owned buffer")
-            .unwrap();
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let declaration = RenderResourceDeclaration::declare_uniform::<ResourceTestParams>(
+        &mut allocator,
+        "owned buffer",
+    )
+    .unwrap();
 
     let lowering = declaration
         .lower_gpu_resource((64, 64), GpuTextureFormat::Rgba8Unorm)

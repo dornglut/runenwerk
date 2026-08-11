@@ -8,7 +8,7 @@ use crate::plugins::gpu::{
     GpuResourceDescriptor, GpuResourceDescriptorError, GpuResourceLabel, GpuResourceLifetime,
     GpuResourceProvenance, GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent,
     GpuTextureFormat, GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages,
-    GpuWorkResourceId,
+    GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::{
     GpuParams, RenderTextureSampleMode, RenderTextureTargetFormat, RenderTextureTargetUsage,
@@ -23,6 +23,8 @@ pub enum RenderGpuResourceAdapterError {
     Data(#[from] GpuDataPreparationError),
     #[error(transparent)]
     Descriptor(#[from] GpuResourceDescriptorError),
+    #[error(transparent)]
+    Identity(#[from] GpuWorkResourceIdAllocationError),
     #[error(
         "cannot declare render target alias binding key {value:?}: the key is empty after trimming; correction: {correction}"
     )]
@@ -381,14 +383,18 @@ pub enum RenderResourceDeclaration {
 
 impl RenderResourceDeclaration {
     pub fn declare_uniform<Params: GpuParams + 'static>(
-        id: GpuWorkResourceId,
+        allocator: &mut GpuWorkResourceIdAllocator,
         label: impl Into<String>,
     ) -> Result<Self, RenderGpuResourceAdapterError> {
-        Self::declare_uniform_with_lifetime::<Params>(id, label, GpuResourceLifetime::Retained)
+        Self::declare_uniform_with_lifetime::<Params>(
+            allocator,
+            label,
+            GpuResourceLifetime::Retained,
+        )
     }
 
     pub fn declare_uniform_with_lifetime<Params: GpuParams + 'static>(
-        id: GpuWorkResourceId,
+        allocator: &mut GpuWorkResourceIdAllocator,
         label: impl Into<String>,
         lifetime: GpuResourceLifetime,
     ) -> Result<Self, RenderGpuResourceAdapterError> {
@@ -409,26 +415,24 @@ impl RenderResourceDeclaration {
             usages,
             GpuBufferInitialization::Uninitialized,
         )?;
-        Ok(Self::Uniform(RenderUniformDeclaration {
-            handle: GpuBufferHandle::from_descriptor(id, descriptor),
-            layout,
-        }))
+        let handle = allocator.allocate_buffer_handle(descriptor)?;
+        Ok(Self::Uniform(RenderUniformDeclaration { handle, layout }))
     }
 
     pub fn declare_storage<Params: GpuParams + 'static>(
-        id: GpuWorkResourceId,
+        allocator: &mut GpuWorkResourceIdAllocator,
         label: impl Into<String>,
     ) -> Result<Self, RenderGpuResourceAdapterError> {
-        Self::declare_storage_array::<Params>(id, label, 1)
+        Self::declare_storage_array::<Params>(allocator, label, 1)
     }
 
     pub fn declare_storage_array<Params: GpuParams + 'static>(
-        id: GpuWorkResourceId,
+        allocator: &mut GpuWorkResourceIdAllocator,
         label: impl Into<String>,
         element_count: u64,
     ) -> Result<Self, RenderGpuResourceAdapterError> {
         Self::declare_storage_array_with_lifetime::<Params>(
-            id,
+            allocator,
             label,
             element_count,
             GpuResourceLifetime::Retained,
@@ -436,7 +440,7 @@ impl RenderResourceDeclaration {
     }
 
     pub fn declare_storage_array_with_lifetime<Params: GpuParams + 'static>(
-        id: GpuWorkResourceId,
+        allocator: &mut GpuWorkResourceIdAllocator,
         label: impl Into<String>,
         element_count: u64,
         lifetime: GpuResourceLifetime,
@@ -461,10 +465,8 @@ impl RenderResourceDeclaration {
             usages,
             GpuBufferInitialization::Uninitialized,
         )?;
-        Ok(Self::Storage(RenderStorageDeclaration {
-            handle: GpuBufferHandle::from_descriptor(id, descriptor),
-            layout,
-        }))
+        let handle = allocator.allocate_buffer_handle(descriptor)?;
+        Ok(Self::Storage(RenderStorageDeclaration { handle, layout }))
     }
 
     pub fn declare_sampled_texture(id: GpuWorkResourceId, label: impl Into<String>) -> Self {

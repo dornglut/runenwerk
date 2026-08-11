@@ -1,5 +1,6 @@
 use engine::plugins::gpu::{
     GpuCapabilityFeature, GpuPrimitiveTopology, GpuTextureFormat, GpuWorkResourceId,
+    GpuWorkResourceIdAllocator,
 };
 use engine::plugins::render::inspect::{
     CaptureStage, CaptureTextureClass, PassTimingSample, PreparedRenderFrameInspection,
@@ -592,8 +593,9 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
 
 #[test]
 fn render_runtime_inspect_resource_kind_label_matches_descriptor_kind() {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
     let descriptor = RenderResourceDeclaration::declare_storage::<InspectStorage>(
-        test_resource_ids(1)[0],
+        &mut allocator,
         "inspect storage",
     )
     .expect("storage declaration should be valid");

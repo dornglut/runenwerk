@@ -118,7 +118,8 @@ impl GpuColorTargetStateDescriptor {
 
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
         let (class, width) = match self.format {
-            GpuTextureFormat::Rgba8Unorm
+            GpuTextureFormat::R8Unorm
+            | GpuTextureFormat::Rgba8Unorm
             | GpuTextureFormat::Rgba8UnormSrgb
             | GpuTextureFormat::Bgra8Unorm
             | GpuTextureFormat::Bgra8UnormSrgb => (GpuShaderIoScalarClass::Float, 4),
