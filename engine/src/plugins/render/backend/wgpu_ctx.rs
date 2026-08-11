@@ -58,7 +58,6 @@ impl<'window> WgpuCtx<'window> {
                 &[
                     GpuFormatRole::Sampled,
                     GpuFormatRole::Filterable,
-                    GpuFormatRole::StorageRead,
                     GpuFormatRole::StorageWrite,
                     GpuFormatRole::ColorAttachment,
                     GpuFormatRole::CopySource,
@@ -99,7 +98,6 @@ impl<'window> WgpuCtx<'window> {
                 GpuTextureFormat::R32Uint,
                 &[
                     GpuFormatRole::Sampled,
-                    GpuFormatRole::StorageRead,
                     GpuFormatRole::StorageWrite,
                     GpuFormatRole::ColorAttachment,
                     GpuFormatRole::CopySource,
