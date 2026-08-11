@@ -54,7 +54,7 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
             GpuTextureFormatCapabilities {
                 sampled: true,
                 filterable: true,
-                storage_read: true,
+                storage_read: false,
                 storage_write: true,
                 color_attachment: true,
                 depth_stencil: false,
@@ -114,7 +114,7 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
             GpuTextureFormatCapabilities {
                 sampled: true,
                 filterable: false,
-                storage_read: true,
+                storage_read: false,
                 storage_write: true,
                 color_attachment: true,
                 depth_stencil: false,
@@ -402,7 +402,7 @@ fn validate_texture_format_capability(
         .format(normalized)
         .is_some_and(|facts| match required {
             TextureCapability::Sampled => facts.sampled,
-            TextureCapability::Storage => facts.storage_read && facts.storage_write,
+            TextureCapability::Storage => facts.storage_write,
             TextureCapability::ColorAttachment => facts.color_attachment,
             TextureCapability::DepthAttachment => facts.depth_stencil,
         });
