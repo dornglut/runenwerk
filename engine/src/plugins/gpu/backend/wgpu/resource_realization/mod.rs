@@ -128,7 +128,8 @@ impl ResourceRealizationState {
 
     pub(crate) fn install_device_observers(&self, device: &Device) {
         let lost_health = Arc::clone(&self.health);
-        device.set_device_lost_callback(move |reason, detail| lost_health.mark_lost(reason, detail));
+        device
+            .set_device_lost_callback(move |reason, detail| lost_health.mark_lost(reason, detail));
         let uncaptured_health = Arc::clone(&self.health);
         device.on_uncaptured_error(Arc::new(move |error| {
             uncaptured_health.mark_uncaptured(error)
