@@ -44,6 +44,7 @@ G4A context admission                accepted at 501b9fd58e56d33708573e47faf0e50
 shader authoring boundary            accepted at 23bc982703f93d15ac39dd71d61bae9e23854141
 G4B program/interface contracts      accepted at 2095afd624979a9f386254d44e082b7eeb0a18a1
 G4C1 private resource realization    accepted at 4dbc6edc46c3a4bf82c91c77e79eff67da44edc9
+G4C2 surface-binding correction      accepted at daff5372d4b517ae54f3f20e2ee329738da071bc
 ```
 
 G4B owns the backend-neutral logical program layer: bounded WGSL admission, typed entry
@@ -67,30 +68,68 @@ CI push/main             31498863341 / #513  success
 Documentation push/main  31498862417 / #301  success
 ```
 
-Issue `#212` is closed completed.
+The presentation-surface correction is accepted at exact squash
+`daff5372d4b517ae54f3f20e2ee329738da071bc`, with accepted-main proof:
+
+```text
+CI push/main             31529433596 / #520  success
+Documentation push/main  31529432560 / #308  success
+```
+
+Issues `#212` and `#230` are closed completed.
 
 ## Only authorized RunenGPU continuation
 
-The mandatory pre-G4C2 readiness review discovered one bounded presentation-surface
-contract defect. Issue `#230` is the only active RunenGPU architecture/delivery gate.
-G4C2 implementation remains blocked until that correction is accepted and accepted-main
-verified.
+A final implementation-readiness review of active G4C2 found four remaining contract
+choices that would otherwise force an implementation agent to invent architecture.
+Issue `#233` is therefore the only active RunenGPU architecture/delivery gate. G4C2
+implementation issue `#213` is temporarily blocked until this correction is accepted and
+accepted-main verified.
 
 Current status:
 
-- `#230` — active G4C2 presentation-surface binding boundary correction;
-- branch — `docs/g4c2-surface-binding-boundary`;
-- `#213` — blocked pending accepted `#230` and exact-current-main base resolution;
+- `#233` — active G4C2 realization decision closure;
+- branch — `docs/g4c2-decision-closure` from exact accepted main `daff5372d4b517ae54f3f20e2ee329738da071bc`;
+- `#213` — blocked pending accepted `#233`, accepted-main proof, and a fresh exact-current-main activation census;
 - `#214` — blocked behind accepted `#213`;
 - G5 — unauthorized pending accepted G4C3 and separate design.
 
-The correction preserves the accepted G4C ownership model. Before accepted G7,
+The correction does not widen G4C2. It makes four implementation semantics explicit:
+
+1. **Backend completion and attribution are explicit.** WGPU 27.0.1
+   validation/OOM/internal scopes resolve before module/layout/bind-group publication.
+   One `WgpuContextState`-owned device-health authority and one error-attribution gate
+   cover G4C1, G4C2, and the current raw operation loan; simultaneous scoped failures use
+   deterministic internal/device-loss, then OOM, then validation precedence. RunenGPU
+   owns no executor or hidden `block_on`. Current integration completes G4C1/G4C2
+   realization before acquiring the non-reentrant raw device/queue loan.
+2. **The direct Naga profile is exact.** For Naga 27.0.3 the accepted evidence path uses
+   `ValidationFlags::all()` plus `Capabilities::default()`. No broader Naga capability is
+   inferred from current coarse RunenGPU feature vocabulary; an extension requires an
+   explicit accepted mapping first. Initial Naga-profile and WGPU-realization
+   compatibility revisions are both exactly `1`.
+3. **Request identity precedes realized evidence.** Complete typed pre-realization request
+   keys locate accepted program/layout/bind-group records. A live exact hit in a healthy
+   context returns the accepted record without rerunning Naga or WGPU creation. Equal
+   concurrent misses are single-flight with cancellation-safe reservation cleanup.
+   Observed interface/stage-IO and WGPU acceptance facts remain in the realized record,
+   not the lookup key.
+4. **G4C2 authoritative growth is bounded explicitly.** One
+   `GpuProgramBindingRealizationPolicy` shares a default 16,384 ready-plus-in-flight
+   record bound across program/module, bind-group-layout, pipeline-layout, and bind-group
+   authority. A unified `GpuRealizationPolicies` context override composes it with the
+   G4C1 resource policy; only registry-only ready records may be reclaimed, live or
+   in-flight authority is never silently evicted, and reclamation does not acquire G5
+   completion/retirement semantics.
+
+Accepted G4B runtime binding values carry logical buffer, texture-view, and sampler
+handles. G4C2 resolves those through G4C1 realization before bind-group creation; in
+particular, there is no inline G4C2 sampler-creation exception.
+
+The already accepted presentation-surface correction remains unchanged: before G7,
 `SurfaceColor` may remain a presentation/render attachment and retain separately owned
 copy behavior, but it is not a G4C1 logical resource and cannot enter a G4C2 sampled or
-storage bind group. Current preparation admits a sampled `SurfaceColor` path while
-current surface configuration does not request texture-binding usage, and current
-binding code carries a raw acquired `TextureView` beside accepted G4C1 realized texture
-views. G4C2 must retire that exception rather than acquire G7 surface ownership.
+storage bind group.
 
 The bridge ladder remains unchanged:
 
@@ -108,7 +147,8 @@ G4C2 bridge gains a raw presentation-surface shader-binding terminal.
 `CurrentRenderDeviceQueue` remains separately a crate-private backend-operation loan,
 not a second object-reference bridge. G4C1 removed generic
 buffer/texture/view/sampler/query-set creation through it; G4C2 removes
-module/layout/bind-group creation; G4C3 removes pipeline creation; G5 migrates remaining
+module/layout/bind-group creation and requires all G4C1/G4C2 realization to finish before
+the raw loan begins; G4C3 removes pipeline creation; G5 migrates remaining
 encoding/upload/submission/copy/map/readback operation users and deletes the loan.
 
 ## Ordered G4C continuation
@@ -116,30 +156,37 @@ encoding/upload/submission/copy/map/readback operation users and deletes the loa
 Issue `#188` remains a non-implementable umbrella.
 
 ```text
-#212 G4C1 private resource realization                  accepted
-    -> #230 G4C2 presentation-surface boundary correction   active
-        -> #213 G4C2 private program/layout/bind-group realization   blocked
-            -> #214 G4C3 private pipeline realization and final cutover   blocked
-                -> separately planned G5 execution and lifecycle
+#212 G4C1 private resource realization                        accepted
+    -> #230 G4C2 presentation-surface boundary correction     accepted
+        -> #233 G4C2 realization decision closure             active
+            -> #213 G4C2 private program/layout/bind-group realization   blocked
+                -> #214 G4C3 private pipeline realization and final cutover   blocked
+                    -> separately planned G5 execution and lifecycle
 ```
 
 No implementation child consumes an unmerged predecessor or correction branch. After
-`#230` is accepted, `#213` must re-resolve its implementation base from then-current
-accepted `main`, repeat its exact-current-main dependency/source census, and create one
-implementation branch/PR only from that base.
+`#233` is accepted and accepted-main verified, `#213` must re-resolve its implementation
+base from then-current accepted `main`, repeat its exact-current-main dependency/source
+census, and create one implementation branch/PR only from that base.
 
-### G4C2 — blocked by #230 correction
+### G4C2 — blocked by #233 decision closure
 
 G4C2 will own canonical WGSL module creation, direct pinned Naga evidence, agreement with
 G4B resource declarations, bind-group layouts, pipeline layouts, typed bind groups, and
-their private registries/caches. Typed texture bindings consume accepted G4C1 resource
-handles; acquired presentation-surface views are not a pre-G7 shader-resource exception.
+their private bounded registries plus optional derived caches. Typed buffer,
+texture-view, and sampler bindings consume accepted G4C1 resource handles; acquired
+presentation-surface views are not a pre-G7 shader-resource exception.
 
-The first substantive G4C2 diff must structurally reject sampled/storage `SurfaceColor`
-bindings before bind-group realization, replace and delete `CurrentRenderResourceBridge`
-with `CurrentRenderPipelineBridge`, migrate G4C2-owned realization, and leave G7 surface
-capability/affinity/generation work untouched. It does not acquire G5 execution
-ownership.
+The implementation must use the exact accepted Naga profile, asynchronous scoped WGPU
+acceptance before publication, the one shared backend-health/error-attribution authority,
+pre-realization request keys and single-flight coordination for authoritative reuse, and
+one explicit bounded program/binding realization policy. It must finish G4C1/G4C2
+realization before acquiring the current raw device/queue operation loan, structurally
+reject sampled/storage `SurfaceColor` bindings before bind-group realization, replace and
+delete `CurrentRenderResourceBridge` with `CurrentRenderPipelineBridge`, migrate
+G4C2-owned realization, and leave G7 surface capability/affinity/generation work
+untouched. It does not acquire G5 execution ownership or hide executor/blocking policy in
+RunenGPU.
 
 ### G4C3 — blocked by accepted G4C2
 
