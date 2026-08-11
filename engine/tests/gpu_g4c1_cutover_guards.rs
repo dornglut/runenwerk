@@ -338,7 +338,11 @@ fn g4c1_resource_bridge_terminal_implementation_inventory_is_exact_and_nonretain
             "implCurrentRender",
             4,
         ),
-        ("src/plugins/render/renderer/setup.rs", "implCurrentRender", 5),
+        (
+            "src/plugins/render/renderer/setup.rs",
+            "implCurrentRender",
+            5,
+        ),
     ]);
     assert_eq!(
         actual, expected,
