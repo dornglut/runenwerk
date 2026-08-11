@@ -1,8 +1,9 @@
 //! Temporary, purpose-typed lexical resource access for current uncut renderer operations.
 //!
 //! G4C2 replaces and deletes this bridge. Each consumer trait has a fixed `()` result and receives
-//! backend references with an anonymous call-only lifetime. That keeps the semantic operation in
-//! its current owner while safe consumers cannot return or retain the borrowed backend object.
+//! backend references with an anonymous call-only lifetime, which prevents returning the borrow
+//! itself. WGPU resource handles are cloneable, so the temporary no-retention rule is additionally
+//! enforced by exact repository source inventories of all terminal implementations and by review.
 
 use super::ResourceRealizationState;
 use crate::plugins::gpu::{
