@@ -20,23 +20,52 @@ use crate::plugins::gpu::{
     GpuTextureViewHandle, GpuWorkResourceId,
 };
 use registry::{ResourceKind, ResourceRegistries};
-use std::cell::RefCell;
-use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use wgpu::{
     BufferDescriptor, Device, QuerySetDescriptor, SamplerDescriptor, TextureDescriptor,
     TextureViewDescriptor,
 };
 
-#[derive(Debug)]
-struct CapturedBackendError {
+#[derive(Debug, Clone)]
+struct DeviceFault {
     category: GpuResourceRealizationErrorCategory,
     detail: String,
 }
 
-impl CapturedBackendError {
-    fn from_wgpu(error: wgpu::Error) -> Self {
+/// Device-wide WGPU fault observation shared by all current G4C1 realization operations.
+///
+/// WGPU may report validation and allocation failures after the constructor call returns. Those
+/// faults therefore cannot be truthfully attributed to a thread-local synchronous constructor
+/// slot. The first observed device fault instead makes this context unavailable; subsequent
+/// realization and bridge access returns the retained structured category and bounded evidence.
+#[derive(Debug)]
+struct DeviceHealth {
+    fault: Mutex<Option<DeviceFault>>,
+}
+
+impl DeviceHealth {
+    fn new() -> Self {
+        Self {
+            fault: Mutex::new(None),
+        }
+    }
+
+    fn mark_fault(
+        &self,
+        category: GpuResourceRealizationErrorCategory,
+        detail: impl Into<String>,
+    ) {
+        let detail = detail.into().chars().take(256).collect::<String>();
+        let mut retained = self
+            .fault
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if retained.is_none() {
+            *retained = Some(DeviceFault { category, detail });
+        }
+    }
+
+    fn mark_uncaptured(&self, error: wgpu::Error) {
         let category = match error {
             wgpu::Error::OutOfMemory { .. } => {
                 GpuResourceRealizationErrorCategory::BackendResourceExhaustion
@@ -48,124 +77,37 @@ impl CapturedBackendError {
                 GpuResourceRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
             }
         };
-        Self {
-            category,
-            detail: error.to_string(),
-        }
-    }
-}
-
-type BackendErrorSlot = Arc<Mutex<Option<CapturedBackendError>>>;
-
-thread_local! {
-    /// WGPU constructors do not return ordinary `Result` values. The private device error handler
-    /// attributes errors delivered synchronously on the creating thread without making the public
-    /// API asynchronous solely to manufacture constructor semantics. Errors delivered outside an
-    /// active realization retain WGPU's default fail-fast behavior.
-    static ACTIVE_BACKEND_ERROR_SLOT: RefCell<Option<BackendErrorSlot>> = const { RefCell::new(None) };
-}
-
-struct BackendErrorCapture {
-    slot: BackendErrorSlot,
-}
-
-impl BackendErrorCapture {
-    fn begin(resource: GpuWorkResourceId) -> Result<Self, GpuResourceRealizationError> {
-        let slot = Arc::new(Mutex::new(None));
-        ACTIVE_BACKEND_ERROR_SLOT.with(|active| {
-            let mut active = active.borrow_mut();
-            if active.is_some() {
-                return Err(GpuResourceRealizationError::new(
-                    GpuResourceRealizationErrorCategory::UnexpectedBackendValidationRejection,
-                    Some(resource),
-                    "nested backend resource creation is not an accepted realization path",
-                ));
-            }
-            *active = Some(Arc::clone(&slot));
-            Ok(Self { slot })
-        })
-    }
-
-    fn take(&self) -> Option<CapturedBackendError> {
-        self.slot
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
-    }
-}
-
-impl Drop for BackendErrorCapture {
-    fn drop(&mut self) {
-        ACTIVE_BACKEND_ERROR_SLOT.with(|active| {
-            let mut active = active.borrow_mut();
-            if active
-                .as_ref()
-                .is_some_and(|slot| Arc::ptr_eq(slot, &self.slot))
-            {
-                *active = None;
-            }
-        });
-    }
-}
-
-fn handle_uncaptured_backend_error(error: wgpu::Error) {
-    let slot = ACTIVE_BACKEND_ERROR_SLOT.with(|active| active.borrow().clone());
-    let Some(slot) = slot else {
-        panic!("uncaptured WGPU device error: {error}");
-    };
-    let mut captured = slot
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if captured.is_none() {
-        *captured = Some(CapturedBackendError::from_wgpu(error));
-    }
-}
-
-struct DeviceHealth {
-    available: AtomicBool,
-    loss_detail: Mutex<Option<String>>,
-}
-
-impl DeviceHealth {
-    fn new() -> Self {
-        Self {
-            available: AtomicBool::new(true),
-            loss_detail: Mutex::new(None),
-        }
+        self.mark_fault(category, format!("uncaptured WGPU backend error: {error}"));
     }
 
     fn mark_lost(&self, reason: wgpu::DeviceLostReason, detail: String) {
-        // Publish unavailability before retaining diagnostics so a concurrent realization cannot
-        // begin backend work after the loss callback has started.
-        self.available.store(false, Ordering::Release);
         let bounded = detail.chars().take(256).collect::<String>();
         let diagnostic = if bounded.trim().is_empty() {
             format!("device became unavailable ({reason:?})")
         } else {
             format!("device became unavailable ({reason:?}): {bounded}")
         };
-        if let Ok(mut retained) = self.loss_detail.lock() {
-            *retained = Some(diagnostic);
-        }
+        self.mark_fault(
+            GpuResourceRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
+            diagnostic,
+        );
     }
 
     fn ensure_available(
         &self,
         resource: GpuWorkResourceId,
     ) -> Result<(), GpuResourceRealizationError> {
-        if self.available.load(Ordering::Acquire) {
-            return Ok(());
-        }
-        let detail = self
-            .loss_detail
+        let retained = self
+            .fault
             .lock()
-            .ok()
-            .and_then(|detail| detail.clone())
-            .unwrap_or_else(|| "the context device is unavailable".to_string());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(fault) = retained.as_ref() else {
+            return Ok(());
+        };
         Err(GpuResourceRealizationError::new(
-            GpuResourceRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
+            fault.category,
             Some(resource),
-            detail,
+            fault.detail.clone(),
         ))
     }
 }
@@ -189,9 +131,12 @@ impl ResourceRealizationState {
     }
 
     pub(crate) fn install_device_observers(&self, device: &Device) {
-        let health = Arc::clone(&self.health);
-        device.set_device_lost_callback(move |reason, detail| health.mark_lost(reason, detail));
-        device.on_uncaptured_error(Arc::new(handle_uncaptured_backend_error));
+        let lost_health = Arc::clone(&self.health);
+        device.set_device_lost_callback(move |reason, detail| lost_health.mark_lost(reason, detail));
+        let uncaptured_health = Arc::clone(&self.health);
+        device.on_uncaptured_error(Arc::new(move |error| {
+            uncaptured_health.mark_uncaptured(error)
+        }));
     }
 
     pub(crate) const fn policy(&self) -> GpuResourceRealizationPolicy {
@@ -230,25 +175,14 @@ impl ResourceRealizationState {
         resource: GpuWorkResourceId,
         create: impl FnOnce() -> Object,
     ) -> Result<Object, GpuResourceRealizationError> {
-        let capture = BackendErrorCapture::begin(resource)?;
-        let created = catch_unwind(AssertUnwindSafe(create));
-        let backend_error = capture.take();
-        drop(capture);
-
-        if let Some(error) = backend_error {
-            return Err(GpuResourceRealizationError::new(
-                error.category,
-                Some(resource),
-                error.detail,
-            ));
-        }
-        created.map_err(|_| {
-            GpuResourceRealizationError::new(
-                GpuResourceRealizationErrorCategory::UnexpectedBackendValidationRejection,
-                Some(resource),
-                "backend creation aborted before returning a resource object",
-            )
-        })
+        self.ensure_available(resource)?;
+        let created = create();
+        // A synchronously delivered WGPU callback is observed before publication. WGPU may also
+        // deliver a backend fault later; in that case the context becomes unavailable and every
+        // later realization/bridge access rejects it rather than attributing the fault to another
+        // constructor call.
+        self.ensure_available(resource)?;
+        Ok(created)
     }
 }
 
@@ -557,16 +491,18 @@ mod tests {
         Box::new(std::io::Error::other("synthetic backend evidence"))
     }
 
+    fn test_resource() -> GpuWorkResourceId {
+        let mut allocator = crate::plugins::gpu::GpuWorkResourceIdAllocator::new();
+        allocator.allocate().unwrap()
+    }
+
     #[test]
     fn affinity_failure_order_distinguishes_foreign_context_and_stale_generation() {
         let context_one = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
         let context_two = GpuContextId::test_value(NonZeroU64::new(2).unwrap());
         let generation_one = GpuDeviceGeneration::first();
         let generation_two = GpuDeviceGeneration::test_value(NonZeroU64::new(2).unwrap());
-        let resource = {
-            let mut allocator = crate::plugins::gpu::GpuWorkResourceIdAllocator::new();
-            allocator.allocate().unwrap()
-        };
+        let resource = test_resource();
         let expected = GpuContextAffinity::test_value(context_one, generation_one);
 
         let foreign = validate_realized_input_affinity(
@@ -593,16 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn synchronous_backend_errors_keep_validation_oom_and_device_outcomes_distinct() {
-        let context = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
-        let affinity = GpuContextAffinity::test_value(context, GpuDeviceGeneration::first());
-        let state =
-            ResourceRealizationState::new(affinity, GpuResourceRealizationPolicy::default());
-        let resource = {
-            let mut allocator = crate::plugins::gpu::GpuWorkResourceIdAllocator::new();
-            allocator.allocate().unwrap()
-        };
-
+    fn device_health_keeps_uncaptured_validation_oom_and_internal_outcomes_distinct() {
         let cases = [
             (
                 wgpu::Error::Validation {
@@ -620,20 +547,47 @@ mod tests {
             (
                 wgpu::Error::Internal {
                     source: backend_source(),
-                    description: "device unavailable".to_string(),
+                    description: "backend internal failure".to_string(),
                 },
                 GpuResourceRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
             ),
         ];
 
         for (backend_error, expected) in cases {
-            let error = state
-                .create_backend_object(resource, || {
-                    handle_uncaptured_backend_error(backend_error);
-                    7_u32
-                })
-                .unwrap_err();
+            let health = DeviceHealth::new();
+            let resource = test_resource();
+            health.mark_uncaptured(backend_error);
+            let error = health.ensure_available(resource).unwrap_err();
             assert_eq!(error.category(), expected);
+            assert!(
+                error
+                    .detail()
+                    .is_some_and(|detail| detail.len() <= 256),
+                "backend evidence must remain bounded"
+            );
         }
+    }
+
+    #[test]
+    fn synchronous_observed_backend_fault_rejects_constructor_candidate() {
+        let context = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
+        let affinity = GpuContextAffinity::test_value(context, GpuDeviceGeneration::first());
+        let state =
+            ResourceRealizationState::new(affinity, GpuResourceRealizationPolicy::default());
+        let resource = test_resource();
+
+        let error = state
+            .create_backend_object(resource, || {
+                state.health.mark_uncaptured(wgpu::Error::Validation {
+                    source: backend_source(),
+                    description: "synchronous validation".to_string(),
+                });
+                7_u32
+            })
+            .unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuResourceRealizationErrorCategory::UnexpectedBackendValidationRejection
+        );
     }
 }
