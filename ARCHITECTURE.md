@@ -75,4 +75,5 @@ current-source inventory
 - [Repository-family architecture](docs-site/src/content/docs/architecture/repository-family-architecture.md)
 - [Repository extraction ADR](docs-site/src/content/docs/adr/accepted/0014-repository-family-extraction-boundaries.md)
 - [GPU/render ownership ADR](docs-site/src/content/docs/adr/accepted/0015-separate-gpu-execution-from-rendering.md)
+- [Cross-authority consistency and graph-semantics ADR](docs-site/src/content/docs/adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md)
 - [Dependency rules](docs-site/src/content/docs/guidelines/dependency-rules.md)
