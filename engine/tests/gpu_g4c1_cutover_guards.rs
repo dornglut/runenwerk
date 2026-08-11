@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -91,6 +91,15 @@ fn terminal_impl_blocks(source: &str) -> Vec<String> {
         offset = end.saturating_add(1);
     }
     blocks
+}
+
+fn expected_inventory(
+    entries: &[(&str, &str, usize)],
+) -> BTreeMap<(String, String), usize> {
+    entries
+        .iter()
+        .map(|(path, token, count)| ((path.to_string(), token.to_string()), *count))
+        .collect()
 }
 
 #[test]
@@ -274,32 +283,38 @@ fn g4c1_resource_bridge_is_single_crate_private_and_exactly_purpose_typed() {
 #[test]
 fn g4c1_resource_bridge_terminal_implementation_inventory_is_exact_and_nonretaining() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bridge = "src/plugins/gpu/backend/wgpu/resource_realization/current_render_resource_bridge.rs";
+    let bridge =
+        "src/plugins/gpu/backend/wgpu/resource_realization/current_render_resource_bridge.rs";
     let mut actual = source_inventory(&manifest, &["implCurrentRender", "implCurrentSurface"]);
     actual.remove(&(bridge.to_string(), "implCurrentRender".to_string()));
     actual.remove(&(bridge.to_string(), "implCurrentSurface".to_string()));
-    let expected = BTreeMap::from([
-        (("src/plugins/render/gpu_primitives/plan.rs".to_string(), "implCurrentRender".to_string()), 4),
-        (("src/plugins/render/renderer/dynamic_targets.rs".to_string(), "implCurrentRender".to_string()), 1),
-        (("src/plugins/render/renderer/prepare.rs".to_string(), "implCurrentRender".to_string()), 3),
-        (("src/plugins/render/renderer/render_flow/bindings.rs".to_string(), "implCurrentRender".to_string()), 1),
-        (("src/plugins/render/renderer/render_flow/capture.rs".to_string(), "implCurrentRender".to_string()), 2),
-        (("src/plugins/render/renderer/render_flow/capture.rs".to_string(), "implCurrentSurface".to_string()), 1),
-        (("src/plugins/render/renderer/render_flow/execute.rs".to_string(), "implCurrentRender".to_string()), 1),
-        (("src/plugins/render/renderer/render_flow/execute_passes.rs".to_string(), "implCurrentRender".to_string()), 10),
-        (("src/plugins/render/renderer/render_flow/execute_passes.rs".to_string(), "implCurrentSurface".to_string()), 1),
-        (("src/plugins/render/renderer/render_flow/gpu_timing.rs".to_string(), "implCurrentRender".to_string()), 3),
-        (("src/plugins/render/renderer/mod.rs".to_string(), "implCurrentRender".to_string()), 5),
-    ]);
-    assert_eq!(actual, expected, "G4C1 bridge terminal implementation inventory changed");
 
-    for ((relative, token), _) in &expected {
-        if token == "implCurrentSurface" && relative == "src/plugins/render/renderer/render_flow/capture.rs" {
-            // The same file is scanned by the CurrentRender entry below.
-            continue;
-        }
-        let source = fs::read_to_string(manifest.join(relative))
-            .unwrap_or_else(|error| panic!("cannot read audited terminal source {relative}: {error}"));
+    let expected = expected_inventory(&[
+        ("src/plugins/render/gpu_primitives/plan.rs", "implCurrentRender", 4),
+        ("src/plugins/render/renderer/dynamic_targets.rs", "implCurrentRender", 1),
+        ("src/plugins/render/renderer/prepare.rs", "implCurrentRender", 3),
+        ("src/plugins/render/renderer/render_flow/bindings.rs", "implCurrentRender", 1),
+        ("src/plugins/render/renderer/render_flow/capture.rs", "implCurrentRender", 2),
+        ("src/plugins/render/renderer/render_flow/capture.rs", "implCurrentSurface", 1),
+        ("src/plugins/render/renderer/render_flow/execute.rs", "implCurrentRender", 1),
+        ("src/plugins/render/renderer/render_flow/execute_passes.rs", "implCurrentRender", 10),
+        ("src/plugins/render/renderer/render_flow/execute_passes.rs", "implCurrentSurface", 1),
+        ("src/plugins/render/renderer/render_flow/gpu_timing.rs", "implCurrentRender", 3),
+        ("src/plugins/render/renderer/mod.rs", "implCurrentRender", 5),
+    ]);
+    assert_eq!(
+        actual, expected,
+        "G4C1 bridge terminal implementation inventory changed"
+    );
+
+    let audited_paths = expected
+        .keys()
+        .map(|(relative, _)| relative.as_str())
+        .collect::<BTreeSet<_>>();
+    for relative in audited_paths {
+        let source = fs::read_to_string(manifest.join(relative)).unwrap_or_else(|error| {
+            panic!("cannot read audited terminal source {relative}: {error}")
+        });
         for block in terminal_impl_blocks(&source) {
             for forbidden in [
                 "buffer.clone()",
@@ -347,7 +362,9 @@ fn g4c1_backend_fault_observation_has_no_thread_local_constructor_attribution() 
     }
     assert!(source.contains("device.on_uncaptured_error"));
     assert!(source.contains("uncaptured_health.mark_uncaptured(error)"));
-    assert!(source.contains("self.ensure_available(resource)?;letcreated=create();self.ensure_available(resource)?;"));
+    assert!(source.contains(
+        "self.ensure_available(resource)?;letcreated=create();self.ensure_available(resource)?;"
+    ));
 }
 
 #[test]
@@ -369,9 +386,7 @@ fn g4c1_current_render_storage_texture_contract_is_write_only() {
         .and_then(|tail| tail.split("pubfndetect_duplicate_resource_ids").next())
         .expect("normalized texture usage function should remain inspectable");
     assert!(normalized.contains(
-        "iftexture.usage.storage{usages.insert(GpuTextureUsage::StorageWrite); }"
-            .replace(' ', "")
-            .as_str()
+        "iftexture.usage.storage{usages.insert(GpuTextureUsage::StorageWrite);}"
     ));
     assert!(!normalized.contains("GpuTextureUsage::StorageRead"));
 
@@ -397,6 +412,20 @@ fn g4c1_current_render_storage_texture_contract_is_write_only() {
             .expect("current host context source should be readable"),
     );
     assert!(!host.contains("GpuFormatRole::StorageRead"));
+}
+
+#[test]
+fn g4c1_r8_color_target_contract_uses_one_float_component() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let target = compact_executable_source(
+        &fs::read_to_string(
+            manifest.join("src/plugins/gpu/api/program/pipeline/render_state/target.rs"),
+        )
+        .expect("render target contract should be readable"),
+    );
+    assert!(target.contains(
+        "GpuTextureFormat::R8Unorm=>(GpuShaderIoScalarClass::Float,1)"
+    ));
 }
 
 #[test]
