@@ -1,36 +1,38 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration,
-    GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode as GpuPipelineBlendMode,
-    GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-    GpuCompareFunction, GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
-    GpuDepthStencilStateDescriptor, GpuEntryPointDescriptor, GpuEntryPointName,
-    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
-    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    CurrentRenderBindGroupTerminal, GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor,
+    GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
+    GpuBlendMode as GpuPipelineBlendMode, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
+    GpuColorWriteMask, GpuCompareFunction, GpuComputePipelineDescriptor,
+    GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor, GpuEntryPointDescriptor,
+    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat,
+    GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
     GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
-    GpuProgramInterfaceDescriptor, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
-    GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
-    GpuSpecializationValueSet, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat,
-    GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexAttribute,
+    GpuProgramInterfaceDescriptor, GpuRealizedBuffer, GpuRealizedTextureView, GpuRenderEntryPoints,
+    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage,
+    GpuShaderStages, GpuSpecializationValueSet, GpuStorageBufferAccess, GpuStorageTextureAccess,
+    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexAttribute,
     GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
     GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineDescriptor;
+use crate::plugins::render::renderer::resource_descriptors::linear_sampler_descriptor;
 use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderFeatureId, RenderPassId,
     RenderPrimitiveTopology, RenderRasterState, RenderVertexFormat, RenderVertexStepMode,
 };
 
-enum RuntimeBindingResource<'a> {
-    TextureView(TextureView),
+enum RuntimeBindingResource {
+    TextureView(GpuRealizedTextureView),
+    SurfaceTextureView(TextureView),
     SamplerPlaceholder,
-    Buffer(&'a Buffer),
+    Buffer(GpuRealizedBuffer),
 }
 
-struct RuntimeBindingResolved<'a> {
+struct RuntimeBindingResolved {
     key: GpuBindingKey,
     kind: GpuBindingKind,
-    resource: RuntimeBindingResource<'a>,
+    resource: RuntimeBindingResource,
     resource_identity: Option<RuntimeResourceKey>,
     generation_token: Option<u64>,
     cacheable: bool,
@@ -38,10 +40,11 @@ struct RuntimeBindingResolved<'a> {
 
 impl Renderer {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn resolve_compiled_bind_group<'a>(
+    pub(super) fn resolve_compiled_bind_group(
         &mut self,
+        context: &GpuContext,
         device: &Device,
-        frame_texture: &'a Texture,
+        frame_texture: &Texture,
         packet: &RendererPreparedPacket,
         flow: &CompiledRenderFlowPlan,
         pass_id: RenderPassId,
@@ -54,13 +57,13 @@ impl Renderer {
         allow_depth_sampling: bool,
         color_formats: Vec<TextureFormat>,
         depth_format: Option<TextureFormat>,
-        runtime_resources: &'a FlowRuntimeResources,
+        runtime_resources: &FlowRuntimeResources,
     ) -> Result<(
         FlowPassPipelineKey,
         Option<BindGroupLayout>,
         Option<BindGroup>,
     )> {
-        let mut resolved_entries = Vec::<RuntimeBindingResolved<'a>>::new();
+        let mut resolved_entries = Vec::<RuntimeBindingResolved>::new();
         for entry in &bindings.bind_group.entries {
             match entry {
                 CompiledBindingEntry::SampledTexture { key, resource } => {
@@ -100,11 +103,7 @@ impl Renderer {
                             GpuTextureViewDimension::D2,
                             false,
                         )?,
-                        resource: RuntimeBindingResource::TextureView(
-                            texture
-                                .texture
-                                .create_view(&TextureViewDescriptor::default()),
-                        ),
+                        resource: resolved_binding_texture_view(&texture)?,
                         resource_identity: Some(texture.id),
                         generation_token: texture.generation,
                         cacheable: texture.generation.is_some(),
@@ -156,11 +155,7 @@ impl Renderer {
                             gpu_texture_format_from_wgpu(texture.format)?,
                             GpuTextureViewDimension::D2,
                         )?,
-                        resource: RuntimeBindingResource::TextureView(
-                            texture
-                                .texture
-                                .create_view(&TextureViewDescriptor::default()),
-                        ),
+                        resource: resolved_binding_texture_view(&texture)?,
                         resource_identity: Some(texture.id),
                         generation_token: texture.generation,
                         cacheable: texture.generation.is_some(),
@@ -172,7 +167,7 @@ impl Renderer {
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
                         kind: GpuBindingKind::uniform_buffer(false, None),
-                        resource: RuntimeBindingResource::Buffer(buffer.buffer),
+                        resource: RuntimeBindingResource::Buffer(buffer.buffer.clone()),
                         resource_identity: Some(buffer.id),
                         generation_token: buffer.generation,
                         cacheable: buffer.generation.is_some(),
@@ -191,7 +186,7 @@ impl Renderer {
                             false,
                             None,
                         ),
-                        resource: RuntimeBindingResource::Buffer(buffer.buffer),
+                        resource: RuntimeBindingResource::Buffer(buffer.buffer.clone()),
                         resource_identity: Some(buffer.id),
                         generation_token: buffer.generation,
                         cacheable: buffer.generation.is_some(),
@@ -250,12 +245,14 @@ impl Renderer {
             .iter()
             .any(|entry| matches!(entry.resource, RuntimeBindingResource::SamplerPlaceholder))
         {
-            Some(
-                self.flow_pipeline_cache
-                    .get_or_create_sampler(pipeline_key.clone(), || {
-                        device.create_sampler(&SamplerDescriptor::default())
-                    }),
-            )
+            Some(self.flow_pipeline_cache.get_or_realize_sampler(
+                context,
+                pipeline_key.clone(),
+                linear_sampler_descriptor(
+                    "engine_compiled_flow_sampler",
+                    crate::plugins::gpu::GpuResourceLifetime::Retained,
+                )?,
+            )?)
         } else {
             None
         };
@@ -269,7 +266,6 @@ impl Renderer {
                     })
                 });
 
-        let mut bind_group_entries = Vec::<BindGroupEntry<'_>>::new();
         let mut can_cache_bind_group = true;
         let mut signature_hasher = std::collections::hash_map::DefaultHasher::new();
         for value in &resolved_entries {
@@ -280,47 +276,123 @@ impl Renderer {
             } else {
                 can_cache_bind_group = false;
             }
+        }
+        let buffers = resolved_entries
+            .iter()
+            .filter_map(|entry| match &entry.resource {
+                RuntimeBindingResource::Buffer(buffer) => Some(buffer),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let views = resolved_entries
+            .iter()
+            .filter_map(|entry| match &entry.resource {
+                RuntimeBindingResource::TextureView(view) => Some(view),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let samplers = shared_sampler.iter().collect::<Vec<_>>();
+        let mut bind_group = None;
+        context.current_render_resource_bridge().for_bind_group(
+            &buffers,
+            &views,
+            &samplers,
+            CreateCompiledBindGroup {
+                device,
+                layout: &bind_group_layout,
+                resolved_entries: &resolved_entries,
+                can_cache: can_cache_bind_group,
+                signature_hash: signature_hasher.finish(),
+                pipeline_key: &pipeline_key,
+                cache: &mut self.flow_pipeline_cache,
+                output: &mut bind_group,
+            },
+        )?;
+        let bind_group = bind_group.ok_or_else(|| {
+            anyhow::anyhow!(
+                "current render resource bridge did not create pass '{pass_id}' bindings"
+            )
+        })?;
+
+        Ok((pipeline_key, Some(bind_group_layout), Some(bind_group)))
+    }
+}
+
+fn resolved_binding_texture_view(
+    texture: &ResolvedTextureRef<'_>,
+) -> Result<RuntimeBindingResource> {
+    match texture.texture {
+        RuntimeTextureRef::Surface(texture) => Ok(RuntimeBindingResource::SurfaceTextureView(
+            texture.create_view(&TextureViewDescriptor::default()),
+        )),
+        RuntimeTextureRef::Realized(_) => texture
+            .realized_view
+            .cloned()
+            .map(RuntimeBindingResource::TextureView)
+            .ok_or_else(|| {
+                anyhow::anyhow!("realized texture '{}' has no realized view", texture.id)
+            }),
+    }
+}
+
+struct CreateCompiledBindGroup<'a> {
+    device: &'a Device,
+    layout: &'a BindGroupLayout,
+    resolved_entries: &'a [RuntimeBindingResolved],
+    can_cache: bool,
+    signature_hash: u64,
+    pipeline_key: &'a FlowPassPipelineKey,
+    cache: &'a mut FlowPipelineArtifactCache,
+    output: &'a mut Option<BindGroup>,
+}
+
+impl CurrentRenderBindGroupTerminal for CreateCompiledBindGroup<'_> {
+    fn bind_resources(self, buffers: &[&Buffer], views: &[&TextureView], samplers: &[&Sampler]) {
+        let mut buffer_index = 0;
+        let mut view_index = 0;
+        let mut entries = Vec::with_capacity(self.resolved_entries.len());
+        for value in self.resolved_entries {
             let resource = match &value.resource {
-                RuntimeBindingResource::TextureView(view) => BindingResource::TextureView(view),
-                RuntimeBindingResource::SamplerPlaceholder => {
-                    let sampler = shared_sampler.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "pass '{}' resolved sampler placeholder but no sampler instance was available",
-                            pass_id
-                        )
-                    })?;
-                    BindingResource::Sampler(sampler)
+                RuntimeBindingResource::TextureView(_) => {
+                    let view = views[view_index];
+                    view_index += 1;
+                    BindingResource::TextureView(view)
                 }
-                RuntimeBindingResource::Buffer(buffer) => buffer.as_entire_binding(),
+                RuntimeBindingResource::SurfaceTextureView(view) => {
+                    BindingResource::TextureView(view)
+                }
+                RuntimeBindingResource::SamplerPlaceholder => BindingResource::Sampler(samplers[0]),
+                RuntimeBindingResource::Buffer(_) => {
+                    let buffer = buffers[buffer_index];
+                    buffer_index += 1;
+                    buffer.as_entire_binding()
+                }
             };
-            bind_group_entries.push(BindGroupEntry {
+            entries.push(BindGroupEntry {
                 binding: value.key.binding(),
                 resource,
             });
         }
-
-        let bind_group = if can_cache_bind_group {
-            let bind_group_key = FlowPassBindGroupKey {
-                pipeline: pipeline_key.clone(),
-                resource_generation_signature_hash: signature_hasher.finish(),
+        let bind_group = if self.can_cache {
+            let key = FlowPassBindGroupKey {
+                pipeline: self.pipeline_key.clone(),
+                resource_generation_signature_hash: self.signature_hash,
             };
-            self.flow_pipeline_cache
-                .get_or_create_bind_group(bind_group_key, || {
-                    device.create_bind_group(&BindGroupDescriptor {
-                        label: Some("engine_compiled_flow_bind_group"),
-                        layout: &bind_group_layout,
-                        entries: &bind_group_entries,
-                    })
+            self.cache.get_or_create_bind_group(key, || {
+                self.device.create_bind_group(&BindGroupDescriptor {
+                    label: Some("engine_compiled_flow_bind_group"),
+                    layout: self.layout,
+                    entries: &entries,
                 })
+            })
         } else {
-            device.create_bind_group(&BindGroupDescriptor {
+            self.device.create_bind_group(&BindGroupDescriptor {
                 label: Some("engine_compiled_flow_bind_group_noncached"),
-                layout: &bind_group_layout,
-                entries: &bind_group_entries,
+                layout: self.layout,
+                entries: &entries,
             })
         };
-
-        Ok((pipeline_key, Some(bind_group_layout), Some(bind_group)))
+        *self.output = Some(bind_group);
     }
 }
 
@@ -845,6 +917,7 @@ fn gpu_storage_texture_access(access: CompiledStorageAccess) -> GpuStorageTextur
 
 fn gpu_texture_format_from_wgpu(format: TextureFormat) -> Result<GpuTextureFormat> {
     match format {
+        TextureFormat::R8Unorm => Ok(GpuTextureFormat::R8Unorm),
         TextureFormat::Rgba8Unorm => Ok(GpuTextureFormat::Rgba8Unorm),
         TextureFormat::Rgba8UnormSrgb => Ok(GpuTextureFormat::Rgba8UnormSrgb),
         TextureFormat::Bgra8Unorm => Ok(GpuTextureFormat::Bgra8Unorm),
@@ -859,6 +932,7 @@ fn gpu_texture_format_from_wgpu(format: TextureFormat) -> Result<GpuTextureForma
 
 fn wgpu_texture_format(format: GpuTextureFormat) -> TextureFormat {
     match format {
+        GpuTextureFormat::R8Unorm => TextureFormat::R8Unorm,
         GpuTextureFormat::Rgba8Unorm => TextureFormat::Rgba8Unorm,
         GpuTextureFormat::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
         GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,

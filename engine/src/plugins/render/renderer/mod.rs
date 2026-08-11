@@ -1,3 +1,8 @@
+use crate::plugins::gpu::{
+    GpuBufferHandle, GpuContext, GpuRealizedBuffer, GpuRealizedSampler, GpuRealizedTexture,
+    GpuRealizedTextureView, GpuSamplerHandle, GpuTextureHandle, GpuTextureViewHandle,
+    GpuWorkResourceIdAllocator,
+};
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::backend::WgpuCtx;
 use crate::plugins::render::features::{
@@ -24,7 +29,6 @@ use ui_render_data::{
     ProductSurfaceTextureBindingSource, ViewportSurfaceBindingRegistry,
     ViewportSurfaceBindingSource, ViewportSurfaceEmbedSlotId,
 };
-use wgpu::util::DeviceExt;
 use wgpu::*;
 use winit::window::Window;
 
@@ -579,42 +583,66 @@ struct ScreenUniformRaw {
 #[derive(Debug)]
 struct RectPass {
     pipeline: RenderPipeline,
-    screen_buffer: Buffer,
+    screen_buffer: RendererBufferResource,
     screen_bind_group: BindGroup,
 }
 
 #[derive(Debug)]
 struct StrokePass {
     pipeline: RenderPipeline,
-    screen_buffer: Buffer,
+    screen_buffer: RendererBufferResource,
     screen_bind_group: BindGroup,
 }
 
 #[derive(Debug)]
 struct GlyphPass {
     pipeline: RenderPipeline,
-    screen_buffer: Buffer,
+    screen_buffer: RendererBufferResource,
     screen_bind_group: BindGroup,
     texture_bind_group_layout: BindGroupLayout,
-    texture_sampler: Sampler,
+    texture_sampler: RendererSamplerResource,
 }
 
 #[derive(Debug)]
 struct ViewportEmbedPass {
     pipeline: RenderPipeline,
-    screen_buffer: Buffer,
+    screen_buffer: RendererBufferResource,
     screen_bind_group: BindGroup,
     texture_bind_group_layout: BindGroupLayout,
-    texture_sampler: Sampler,
+    texture_sampler: RendererSamplerResource,
 }
 
 #[derive(Debug)]
 struct ProductSurfacePass {
     pipeline: RenderPipeline,
-    screen_buffer: Buffer,
+    screen_buffer: RendererBufferResource,
     screen_bind_group: BindGroup,
     texture_bind_group_layout: BindGroupLayout,
-    texture_sampler: Sampler,
+    texture_sampler: RendererSamplerResource,
+}
+
+#[derive(Debug, Clone)]
+struct RendererBufferResource {
+    _handle: GpuBufferHandle,
+    realized: GpuRealizedBuffer,
+}
+
+#[derive(Debug, Clone)]
+struct RendererTextureResource {
+    _handle: GpuTextureHandle,
+    realized: GpuRealizedTexture,
+}
+
+#[derive(Debug, Clone)]
+struct RendererTextureViewResource {
+    _handle: GpuTextureViewHandle,
+    realized: GpuRealizedTextureView,
+}
+
+#[derive(Debug, Clone)]
+struct RendererSamplerResource {
+    _handle: GpuSamplerHandle,
+    realized: GpuRealizedSampler,
 }
 
 #[derive(Debug, Clone)]
@@ -626,7 +654,7 @@ struct UiRectBatch {
     last_primitive_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
-    instance_buffer: Buffer,
+    instance_buffer: RendererBufferResource,
 }
 
 #[derive(Debug, Clone)]
@@ -638,7 +666,7 @@ struct UiStrokeBatch {
     last_primitive_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
-    instance_buffer: Buffer,
+    instance_buffer: RendererBufferResource,
 }
 
 #[derive(Debug, Clone)]
@@ -650,7 +678,7 @@ struct UiGlyphBatch {
     last_primitive_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
-    instance_buffer: Buffer,
+    instance_buffer: RendererBufferResource,
     texture_id: u64,
 }
 
@@ -663,7 +691,7 @@ struct UiViewportEmbedBatch {
     last_primitive_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
-    instance_buffer: Buffer,
+    instance_buffer: RendererBufferResource,
     viewport_id: u64,
     slot: ViewportSurfaceEmbedSlotId,
 }
@@ -677,14 +705,14 @@ struct UiProductSurfaceBatch {
     last_primitive_order: u32,
     scissor: (u32, u32, u32, u32),
     instance_count: u32,
-    instance_buffer: Buffer,
+    instance_buffer: RendererBufferResource,
     source: ProductSurfaceTextureBindingSource,
 }
 
 #[derive(Debug)]
 struct UiGlyphAtlasGpu {
-    _texture: Texture,
-    _view: TextureView,
+    _texture: RendererTextureResource,
+    _view: RendererTextureViewResource,
     bind_group: BindGroup,
 }
 
@@ -726,9 +754,9 @@ impl Default for FeatureExecutionGate {
 pub(crate) struct PreparedMaterialGpuResources {
     layout: BindGroupLayout,
     bind_group: BindGroup,
-    _textures: Vec<Texture>,
-    _texture_views: Vec<TextureView>,
-    _samplers: Vec<Sampler>,
+    _textures: Vec<RendererTextureResource>,
+    _texture_views: Vec<RendererTextureViewResource>,
+    _samplers: Vec<RendererSamplerResource>,
 }
 
 impl PreparedMaterialGpuResources {
@@ -757,6 +785,7 @@ pub(crate) struct RendererPreparedPacket {
 
 #[derive(Debug)]
 pub struct Renderer {
+    resource_ids: GpuWorkResourceIdAllocator,
     rect_pass: Option<RectPass>,
     rect_pass_format: Option<TextureFormat>,
     rect_pass_shader_revision: u64,
@@ -878,8 +907,10 @@ impl Gfx {
         } else {
             RenderGpuTimingCapability::Unsupported
         };
-        let loan = self.ctx.context().current_render_device_queue();
+        let context = self.ctx.context();
+        let loan = context.current_render_device_queue();
         timings.renderer = self.renderer.render(
+            context,
             loan.device,
             loan.queue,
             &frame.texture,
@@ -912,6 +943,7 @@ mod extract;
 mod pipeline_cache;
 mod prepare;
 mod render_flow;
+mod resource_descriptors;
 mod setup;
 
 pub mod frame_bindings;

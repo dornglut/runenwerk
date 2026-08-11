@@ -1,6 +1,12 @@
 use super::render_flow::{
     ResolvedColorTargetView, ResolvedDepthTargetView, ResolvedTextureRef, RuntimeResourceKey,
-    RuntimeTextureView,
+    RuntimeTextureRef, RuntimeTextureView,
+};
+use super::resource_descriptors::{texture_descriptor, whole_texture_view_descriptor};
+use crate::plugins::gpu::{
+    CurrentRenderTextureUploadTerminal, GpuContext, GpuRealizedTexture, GpuRealizedTextureView,
+    GpuResourceLifetime, GpuTextureFormat, GpuTextureHandle, GpuTextureUsage, GpuTextureViewHandle,
+    GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::{
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
@@ -14,7 +20,10 @@ use wgpu::*;
 
 #[derive(Debug)]
 pub struct RendererDynamicTextureTarget {
-    pub texture: Texture,
+    pub _handle: GpuTextureHandle,
+    pub _view_handle: GpuTextureViewHandle,
+    pub realized: GpuRealizedTexture,
+    pub realized_view: GpuRealizedTextureView,
     pub format: TextureFormat,
     pub size: (u32, u32),
     pub descriptor: RenderDynamicTextureTargetDescriptor,
@@ -29,13 +38,14 @@ pub struct RendererDynamicTextureTarget {
 
 #[derive(Debug, Default)]
 pub struct RendererDynamicTextureTargetCache {
+    resource_ids: GpuWorkResourceIdAllocator,
     targets: BTreeMap<RenderDynamicTextureTargetKey, RendererDynamicTextureTarget>,
 }
 
 impl RendererDynamicTextureTargetCache {
     pub fn realize_for_frame(
         &mut self,
-        device: &Device,
+        context: &GpuContext,
         requests: &[RenderDynamicTextureTargetDescriptor],
         history_signatures: &BTreeMap<RenderDynamicTextureTargetKey, String>,
     ) -> Result<()> {
@@ -69,24 +79,27 @@ impl RendererDynamicTextureTargetCache {
                 .unwrap_or(true);
             if should_recreate {
                 let label = format!("dynamic_render_target_{}", descriptor.key);
-                let texture = device.create_texture(&TextureDescriptor {
-                    label: Some(label.as_str()),
-                    size: Extent3d {
-                        width: descriptor.width.max(1),
-                        height: descriptor.height.max(1),
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: TextureDimension::D2,
-                    format: dynamic_format_to_wgpu(descriptor.format),
-                    usage: dynamic_usage_to_wgpu(descriptor.usage),
-                    view_formats: &[],
-                });
+                let handle = self
+                    .resource_ids
+                    .allocate_texture_handle(texture_descriptor(
+                        label.clone(),
+                        (descriptor.width.max(1), descriptor.height.max(1)),
+                        dynamic_format_to_gpu(descriptor.format),
+                        dynamic_usage_to_gpu(descriptor.usage),
+                        GpuResourceLifetime::Retained,
+                    )?)?;
+                let realized = context.realize_texture(&handle)?;
+                let view_handle = self.resource_ids.allocate_texture_view_handle(
+                    whole_texture_view_descriptor(format!("{label}_view"), &handle)?,
+                )?;
+                let realized_view = context.realize_texture_view(&view_handle, &realized)?;
                 self.targets.insert(
                     descriptor.key.clone(),
                     RendererDynamicTextureTarget {
-                        texture,
+                        _handle: handle,
+                        _view_handle: view_handle,
+                        realized,
+                        realized_view,
                         format: dynamic_format_to_wgpu(descriptor.format),
                         size: (descriptor.width.max(1), descriptor.height.max(1)),
                         descriptor: descriptor.clone(),
@@ -129,12 +142,13 @@ impl RendererDynamicTextureTargetCache {
 
     pub fn apply_uploads(
         &mut self,
+        context: &GpuContext,
         queue: &Queue,
         uploads: &[RenderDynamicTextureUploadDescriptor],
     ) -> RendererDynamicTextureUploadReport {
         let mut report = RendererDynamicTextureUploadReport::default();
         for upload in uploads {
-            match self.apply_upload(queue, upload) {
+            match self.apply_upload(context, queue, upload) {
                 Ok(()) => report.applied_count = report.applied_count.saturating_add(1),
                 Err(message) => {
                     report.rejected_count = report.rejected_count.saturating_add(1);
@@ -152,6 +166,7 @@ impl RendererDynamicTextureTargetCache {
 
     fn apply_upload(
         &mut self,
+        context: &GpuContext,
         queue: &Queue,
         upload: &RenderDynamicTextureUploadDescriptor,
     ) -> std::result::Result<(), String> {
@@ -195,29 +210,17 @@ impl RendererDynamicTextureTargetCache {
             ));
         }
         let bytes = upload_bytes_for_gpu(upload);
-        queue.write_texture(
-            TexelCopyTextureInfo {
-                texture: &target.texture,
-                mip_level: 0,
-                origin: Origin3d {
-                    x: upload.origin_x,
-                    y: upload.origin_y,
-                    z: 0,
+        context
+            .current_render_resource_bridge()
+            .for_texture_upload(
+                &target.realized,
+                UploadDynamicTexture {
+                    queue,
+                    upload,
+                    bytes: &bytes,
                 },
-                aspect: TextureAspect::All,
-            },
-            &bytes,
-            TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(upload.width.saturating_mul(4).max(4)),
-                rows_per_image: Some(upload.height.max(1)),
-            },
-            Extent3d {
-                width: upload.width,
-                height: upload.height,
-                depth_or_array_layers: 1,
-            },
-        );
+            )
+            .map_err(|error| error.to_string())?;
         target.uploaded_product_generation = Some(upload.product_generation);
         Ok(())
     }
@@ -236,7 +239,8 @@ impl RendererDynamicTextureTargetCache {
         })?;
         Ok(ResolvedTextureRef {
             id: RuntimeResourceKey::DynamicTexture(key.clone()),
-            texture: &target.texture,
+            texture: RuntimeTextureRef::Realized(&target.realized),
+            realized_view: Some(&target.realized_view),
             format: target.format,
             size: target.size,
             is_depth: target.descriptor.format.is_depth(),
@@ -244,11 +248,11 @@ impl RendererDynamicTextureTargetCache {
         })
     }
 
-    pub fn color_target_view(
+    pub fn color_target_view<'a>(
         &self,
         pass_id: RenderPassId,
         key: &RenderDynamicTextureTargetKey,
-    ) -> Result<ResolvedColorTargetView<'static>> {
+    ) -> Result<ResolvedColorTargetView<'a>> {
         let target = self.targets.get(key).ok_or_else(|| {
             anyhow::anyhow!(
                 "pass '{}' writes missing dynamic color target '{}'",
@@ -264,11 +268,7 @@ impl RendererDynamicTextureTargetCache {
             );
         }
         Ok(ResolvedColorTargetView {
-            view: RuntimeTextureView::Owned(
-                target
-                    .texture
-                    .create_view(&TextureViewDescriptor::default()),
-            ),
+            view: RuntimeTextureView::Realized(target.realized_view.clone()),
             format: target.format,
         })
     }
@@ -293,14 +293,15 @@ impl RendererDynamicTextureTargetCache {
             );
         }
         Ok(ResolvedDepthTargetView {
-            view: target
-                .texture
-                .create_view(&TextureViewDescriptor::default()),
+            view: target.realized_view.clone(),
             format: target.format,
         })
     }
 
-    pub fn ui_texture_view(&self, key: &RenderDynamicTextureTargetKey) -> Result<TextureView> {
+    pub fn ui_texture_view(
+        &self,
+        key: &RenderDynamicTextureTargetKey,
+    ) -> Result<GpuRealizedTextureView> {
         let target = self.targets.get(key).ok_or_else(|| {
             anyhow::anyhow!("ui viewport embed references missing dynamic texture '{key}'")
         })?;
@@ -312,10 +313,74 @@ impl RendererDynamicTextureTargetCache {
         if !target.descriptor.format.is_displayable() {
             bail!("ui viewport embed cannot sample non-displayable dynamic texture '{key}'");
         }
-        Ok(target
-            .texture
-            .create_view(&TextureViewDescriptor::default()))
+        Ok(target.realized_view.clone())
     }
+}
+
+struct UploadDynamicTexture<'a> {
+    queue: &'a Queue,
+    upload: &'a RenderDynamicTextureUploadDescriptor,
+    bytes: &'a [u8],
+}
+
+impl CurrentRenderTextureUploadTerminal for UploadDynamicTexture<'_> {
+    fn upload_texture(self, texture: &Texture) {
+        self.queue.write_texture(
+            TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: Origin3d {
+                    x: self.upload.origin_x,
+                    y: self.upload.origin_y,
+                    z: 0,
+                },
+                aspect: TextureAspect::All,
+            },
+            self.bytes,
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(self.upload.width.saturating_mul(4).max(4)),
+                rows_per_image: Some(self.upload.height.max(1)),
+            },
+            Extent3d {
+                width: self.upload.width,
+                height: self.upload.height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+}
+
+fn dynamic_format_to_gpu(format: RenderTextureTargetFormat) -> GpuTextureFormat {
+    match format {
+        RenderTextureTargetFormat::Rgba8Unorm => GpuTextureFormat::Rgba8Unorm,
+        RenderTextureTargetFormat::Rgba8UnormSrgb => GpuTextureFormat::Rgba8UnormSrgb,
+        RenderTextureTargetFormat::R32Uint => GpuTextureFormat::R32Uint,
+        RenderTextureTargetFormat::Depth32Float => GpuTextureFormat::Depth32Float,
+    }
+}
+
+fn dynamic_usage_to_gpu(usage: RenderTextureTargetUsage) -> Vec<GpuTextureUsage> {
+    let mut out = Vec::new();
+    if usage.sampled {
+        out.push(GpuTextureUsage::Sampled);
+    }
+    if usage.storage {
+        out.push(GpuTextureUsage::StorageWrite);
+    }
+    if usage.color_attachment {
+        out.push(GpuTextureUsage::ColorAttachment);
+    }
+    if usage.depth_attachment {
+        out.push(GpuTextureUsage::DepthStencilAttachment);
+    }
+    if usage.copy_src {
+        out.push(GpuTextureUsage::CopySource);
+    }
+    if usage.copy_dst {
+        out.push(GpuTextureUsage::CopyDestination);
+    }
+    out
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -363,24 +428,4 @@ pub fn dynamic_format_to_wgpu(format: RenderTextureTargetFormat) -> TextureForma
         RenderTextureTargetFormat::R32Uint => TextureFormat::R32Uint,
         RenderTextureTargetFormat::Depth32Float => TextureFormat::Depth32Float,
     }
-}
-
-pub fn dynamic_usage_to_wgpu(usage: RenderTextureTargetUsage) -> TextureUsages {
-    let mut out = TextureUsages::empty();
-    if usage.color_attachment || usage.depth_attachment {
-        out |= TextureUsages::RENDER_ATTACHMENT;
-    }
-    if usage.sampled {
-        out |= TextureUsages::TEXTURE_BINDING;
-    }
-    if usage.storage {
-        out |= TextureUsages::STORAGE_BINDING;
-    }
-    if usage.copy_src {
-        out |= TextureUsages::COPY_SRC;
-    }
-    if usage.copy_dst {
-        out |= TextureUsages::COPY_DST;
-    }
-    out
 }

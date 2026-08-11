@@ -1,5 +1,6 @@
 use core::fmt;
 use core::num::NonZeroU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct GpuWorkResourceOwnerScope(NonZeroU64);
@@ -59,19 +60,60 @@ impl fmt::Display for GpuWorkResourceIdAllocationError {
 
 impl std::error::Error for GpuWorkResourceIdAllocationError {}
 
-/// Owner-controlled allocator for logical GPU-work resources.
+/// Private process-local authority for logical GPU-work owner scopes.
 ///
-/// Downstream crates cannot construct an allocator or choose an owner scope.
+/// A zero value is a terminal exhaustion sentinel only. It is never returned as
+/// an owner scope.
+#[derive(Debug)]
+struct GpuWorkResourceOwnerScopeAllocator {
+    next: AtomicU64,
+}
+
+impl GpuWorkResourceOwnerScopeAllocator {
+    const fn new(next: NonZeroU64) -> Self {
+        Self {
+            next: AtomicU64::new(next.get()),
+        }
+    }
+
+    fn allocate(&self) -> Result<GpuWorkResourceOwnerScope, GpuWorkResourceIdAllocationError> {
+        let value = self
+            .next
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                (current != 0).then_some(if current == u64::MAX { 0 } else { current + 1 })
+            })
+            .map_err(|_| GpuWorkResourceIdAllocationError::Exhausted)?;
+        Ok(GpuWorkResourceOwnerScope(
+            NonZeroU64::new(value).expect("owner-scope allocator never returns zero"),
+        ))
+    }
+}
+
+static PRODUCTION_OWNER_SCOPES: GpuWorkResourceOwnerScopeAllocator =
+    GpuWorkResourceOwnerScopeAllocator::new(NonZeroU64::MIN);
+
+/// Allocates logical GPU-work resource identities.
+///
+/// Production allocators acquire one opaque RunenGPU-owned owner scope lazily on
+/// their first successful allocation. Callers cannot choose or inject that scope.
 #[derive(Debug)]
 pub struct GpuWorkResourceIdAllocator {
-    owner_scope: GpuWorkResourceOwnerScope,
+    owner_scope: Option<GpuWorkResourceOwnerScope>,
     next_local: Option<NonZeroU64>,
 }
 
 impl GpuWorkResourceIdAllocator {
-    pub(crate) const fn for_owner_scope(owner_scope: NonZeroU64) -> Self {
+    /// Creates a scope-free logical resource allocator.
+    ///
+    /// ```compile_fail
+    /// use engine::plugins::gpu::GpuWorkResourceIdAllocator;
+    /// use std::num::NonZeroU64;
+    ///
+    /// let _ = GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::MIN);
+    /// ```
+    pub const fn new() -> Self {
         Self {
-            owner_scope: GpuWorkResourceOwnerScope(owner_scope),
+            owner_scope: None,
             next_local: NonZeroU64::new(1),
         }
     }
@@ -80,8 +122,22 @@ impl GpuWorkResourceIdAllocator {
         let local = self
             .next_local
             .ok_or(GpuWorkResourceIdAllocationError::Exhausted)?;
+        let owner_scope = match self.owner_scope {
+            Some(owner_scope) => owner_scope,
+            None => PRODUCTION_OWNER_SCOPES.allocate()?,
+        };
+
+        self.owner_scope = Some(owner_scope);
         self.next_local = local.get().checked_add(1).and_then(NonZeroU64::new);
-        Ok(GpuWorkResourceId::from_parts(self.owner_scope, local))
+        Ok(GpuWorkResourceId::from_parts(owner_scope, local))
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn for_owner_scope(owner_scope: NonZeroU64) -> Self {
+        Self {
+            owner_scope: Some(GpuWorkResourceOwnerScope(owner_scope)),
+            next_local: NonZeroU64::new(1),
+        }
     }
 
     #[cfg(test)]
@@ -90,9 +146,15 @@ impl GpuWorkResourceIdAllocator {
         next_local: NonZeroU64,
     ) -> Self {
         Self {
-            owner_scope: GpuWorkResourceOwnerScope(owner_scope),
+            owner_scope: Some(GpuWorkResourceOwnerScope(owner_scope)),
             next_local: Some(next_local),
         }
+    }
+}
+
+impl Default for GpuWorkResourceIdAllocator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -106,13 +168,73 @@ mod tests {
     }
 
     #[test]
+    fn production_allocators_receive_distinct_retained_owner_scopes() {
+        let mut first_allocator = GpuWorkResourceIdAllocator::new();
+        let mut second_allocator = GpuWorkResourceIdAllocator::new();
+        let first = first_allocator
+            .allocate()
+            .expect("first owner allocation should succeed");
+        let second = second_allocator
+            .allocate()
+            .expect("second owner allocation should succeed");
+        let next_first = first_allocator
+            .allocate()
+            .expect("second local allocation should succeed");
+
+        assert_ne!(first.diagnostic_parts().0, 0);
+        assert_ne!(second.diagnostic_parts().0, 0);
+        assert_ne!(first.diagnostic_parts().0, second.diagnostic_parts().0);
+        assert_eq!(first.diagnostic_parts().1, 1);
+        assert_eq!(second.diagnostic_parts().1, 1);
+        assert_eq!(first.diagnostic_parts().0, next_first.diagnostic_parts().0);
+        assert_eq!(next_first.diagnostic_parts().1, 2);
+    }
+
+    #[test]
+    fn isolated_owner_scope_allocator_is_monotonic_and_exhausts_without_reuse() {
+        let allocator = GpuWorkResourceOwnerScopeAllocator::new(nonzero(u64::MAX));
+        let terminal = allocator
+            .allocate()
+            .expect("maximum owner scope should allocate once");
+
+        assert_eq!(terminal.0.get(), u64::MAX);
+        assert_eq!(
+            allocator.allocate(),
+            Err(GpuWorkResourceIdAllocationError::Exhausted)
+        );
+        assert_eq!(
+            allocator.allocate(),
+            Err(GpuWorkResourceIdAllocationError::Exhausted)
+        );
+    }
+
+    #[test]
+    fn isolated_owner_scope_allocators_do_not_mutate_production_authority() {
+        let mut first_production = GpuWorkResourceIdAllocator::new();
+        let first = first_production
+            .allocate()
+            .expect("first production owner allocation should succeed");
+
+        let isolated = GpuWorkResourceOwnerScopeAllocator::new(nonzero(1));
+        assert_eq!(isolated.allocate().unwrap().0.get(), 1);
+
+        let mut second_production = GpuWorkResourceIdAllocator::new();
+        let second = second_production
+            .allocate()
+            .expect("second production owner allocation should succeed");
+
+        assert_ne!(first.diagnostic_parts().0, second.diagnostic_parts().0);
+    }
+
+    #[test]
     fn gpu_work_resource_id_first_allocation_is_nonzero() {
-        let mut allocator = GpuWorkResourceIdAllocator::for_owner_scope(nonzero(7));
+        let mut allocator = GpuWorkResourceIdAllocator::new();
         let id = allocator
             .allocate()
             .expect("first allocation should succeed");
 
-        assert_eq!(id.diagnostic_parts(), (7, 1));
+        assert_ne!(id.diagnostic_parts().0, 0);
+        assert_eq!(id.diagnostic_parts().1, 1);
     }
 
     #[test]

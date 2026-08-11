@@ -61,6 +61,10 @@ macro_rules! typed_handle {
                 &self.descriptor
             }
 
+            pub(crate) fn retained_descriptor(&self) -> Arc<$descriptor> {
+                Arc::clone(&self.descriptor)
+            }
+
             fn kind(&self) -> GpuResourceKind {
                 self.lease.kind
             }
@@ -338,6 +342,18 @@ mod tests {
         let usages = GpuBufferUsages::new(&label, [GpuBufferUsage::Storage]).unwrap();
         GpuBufferDescriptor::new(common, 16, usages, GpuBufferInitialization::Uninitialized)
             .unwrap()
+    }
+
+    #[test]
+    fn scope_free_allocator_constructs_typed_handles() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let handle = allocator
+            .allocate_buffer_handle(buffer_descriptor("scope-free buffer"))
+            .expect("scope-free allocator should allocate a typed buffer handle");
+
+        let (owner_scope, local) = handle.diagnostic_identity().diagnostic_parts();
+        assert_ne!(owner_scope, 0);
+        assert_eq!(local, 1);
     }
 
     #[test]

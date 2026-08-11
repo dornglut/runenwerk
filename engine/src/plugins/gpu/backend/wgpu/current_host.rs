@@ -2,6 +2,7 @@ use super::device_request::request_with_instance;
 use super::{CurrentRenderDeviceQueue, WgpuContextState};
 use crate::plugins::gpu::{
     GpuContext, GpuContextDescriptor, GpuContextRequestError, GpuContextRequestErrorCategory,
+    GpuResourceRealizationPolicy,
 };
 use wgpu::{
     Instance, InstanceDescriptor, Surface, SurfaceCapabilities, SurfaceConfiguration, SurfaceTarget,
@@ -43,7 +44,13 @@ impl GpuContext {
                 error.to_string(),
             )
         })?;
-        let context = request_with_instance(instance, descriptor, Some(&surface)).await?;
+        let context = request_with_instance(
+            instance,
+            descriptor,
+            Some(&surface),
+            GpuResourceRealizationPolicy::default(),
+        )
+        .await?;
         Ok((context, surface))
     }
 

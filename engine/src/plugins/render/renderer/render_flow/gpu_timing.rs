@@ -1,4 +1,8 @@
 use super::*;
+use crate::plugins::gpu::{
+    CurrentRenderReadbackBufferTerminal, CurrentRenderTimestampResourcesTerminal, GpuBufferHandle,
+    GpuContext, GpuQuerySetHandle, GpuRealizedBuffer, GpuRealizedQuerySet,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::plugins::render::renderer) struct GpuPassTimestampIndices {
@@ -6,9 +10,9 @@ pub(in crate::plugins::render::renderer) struct GpuPassTimestampIndices {
     pub end: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(in crate::plugins::render::renderer) struct GpuPassTimestampWrites<'a> {
-    pub query_set: &'a QuerySet,
+#[derive(Debug, Clone)]
+pub(in crate::plugins::render::renderer) struct GpuPassTimestampWrites {
+    pub query_set: GpuRealizedQuerySet,
     pub indices: GpuPassTimestampIndices,
 }
 
@@ -24,9 +28,12 @@ struct GpuPassTimingEntry {
 
 #[derive(Debug)]
 pub(in crate::plugins::render::renderer) struct GpuPassTimingFrame {
-    query_set: QuerySet,
-    resolve_buffer: Buffer,
-    readback_buffer: Buffer,
+    _query_set_handle: GpuQuerySetHandle,
+    query_set: GpuRealizedQuerySet,
+    _resolve_buffer_handle: GpuBufferHandle,
+    resolve_buffer: GpuRealizedBuffer,
+    readback_buffer_handle: GpuBufferHandle,
+    readback_buffer: GpuRealizedBuffer,
     query_capacity: u32,
     query_count: u32,
     readback_size: BufferAddress,
@@ -36,35 +43,39 @@ pub(in crate::plugins::render::renderer) struct GpuPassTimingFrame {
 }
 
 impl GpuPassTimingFrame {
-    pub fn new(device: &Device, queue: &Queue, query_capacity: u32) -> Option<Self> {
+    pub fn new(
+        context: &GpuContext,
+        queue: &Queue,
+        query_set_handle: &GpuQuerySetHandle,
+        resolve_buffer_handle: &GpuBufferHandle,
+        readback_buffer_handle: &GpuBufferHandle,
+        query_capacity: u32,
+    ) -> Result<Option<Self>> {
         if query_capacity == 0 {
-            return None;
+            return Ok(None);
         }
         let timestamp_period_ns = queue.get_timestamp_period();
         if timestamp_period_ns <= 0.0 {
-            return None;
+            return Ok(None);
         }
         let readback_size = u64::from(query_capacity) * u64::from(QUERY_SIZE);
-        let query_set = device.create_query_set(&QuerySetDescriptor {
-            label: Some("engine_render_gpu_pass_timestamps"),
-            ty: QueryType::Timestamp,
-            count: query_capacity,
-        });
-        let resolve_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("engine_render_gpu_pass_timestamp_resolve"),
-            size: readback_size,
-            usage: BufferUsages::QUERY_RESOLVE | BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let readback_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("engine_render_gpu_pass_timestamp_readback"),
-            size: readback_size,
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        Some(Self {
+        if query_set_handle.descriptor().count() != query_capacity
+            || resolve_buffer_handle.descriptor().size_bytes() < readback_size
+            || readback_buffer_handle.descriptor().size_bytes() < readback_size
+        {
+            anyhow::bail!(
+                "prepared timing handles do not cover the declared query capacity {query_capacity}"
+            );
+        }
+        let query_set = context.realize_query_set(query_set_handle)?;
+        let resolve_buffer = context.realize_buffer(resolve_buffer_handle)?;
+        let readback_buffer = context.realize_buffer(readback_buffer_handle)?;
+        Ok(Some(Self {
+            _query_set_handle: query_set_handle.clone(),
             query_set,
+            _resolve_buffer_handle: resolve_buffer_handle.clone(),
             resolve_buffer,
+            readback_buffer_handle: readback_buffer_handle.clone(),
             readback_buffer,
             query_capacity,
             query_count: 0,
@@ -72,7 +83,7 @@ impl GpuPassTimingFrame {
             timestamp_period_ns,
             entries: Vec::new(),
             resolve_encoded: false,
-        })
+        }))
     }
 
     pub fn register_pass(
@@ -102,70 +113,192 @@ impl GpuPassTimingFrame {
         Some(indices)
     }
 
-    pub fn timestamp_writes(&self, indices: GpuPassTimestampIndices) -> GpuPassTimestampWrites<'_> {
+    pub fn timestamp_writes(&self, indices: GpuPassTimestampIndices) -> GpuPassTimestampWrites {
         GpuPassTimestampWrites {
-            query_set: &self.query_set,
+            query_set: self.query_set.clone(),
             indices,
         }
     }
 
-    pub fn encode_resolve(&mut self, encoder: &mut CommandEncoder) -> bool {
+    pub fn encode_resolve(
+        &mut self,
+        context: &GpuContext,
+        encoder: &mut CommandEncoder,
+    ) -> Result<bool> {
         if self.query_count == 0 {
-            return false;
+            return Ok(false);
         }
-        encoder.resolve_query_set(
-            &self.query_set,
-            0..self.query_count,
-            &self.resolve_buffer,
-            0,
-        );
+        context
+            .current_render_resource_bridge()
+            .for_timestamp_resources(
+                &self.query_set,
+                &self.resolve_buffer,
+                &self.readback_buffer,
+                ResolveTimingQueries {
+                    encoder,
+                    query_count: self.query_count,
+                },
+            )?;
         self.resolve_encoded = true;
-        true
+        Ok(true)
     }
 
     pub fn encode_readback_copy(
         mut self,
+        context: &GpuContext,
         encoder: &mut CommandEncoder,
-    ) -> Option<PendingGpuPassTimingReadback> {
+    ) -> Result<Option<PendingGpuPassTimingReadback>> {
         if !self.resolve_encoded || self.query_count == 0 {
-            return None;
+            return Ok(None);
         }
         let readback_size = u64::from(self.query_count) * u64::from(QUERY_SIZE);
-        encoder.copy_buffer_to_buffer(
-            &self.resolve_buffer,
-            0,
-            &self.readback_buffer,
-            0,
-            readback_size,
-        );
+        context
+            .current_render_resource_bridge()
+            .for_timestamp_resources(
+                &self.query_set,
+                &self.resolve_buffer,
+                &self.readback_buffer,
+                CopyTimingReadback {
+                    encoder,
+                    readback_size,
+                },
+            )?;
         self.readback_size = readback_size;
-        Some(PendingGpuPassTimingReadback {
+        Ok(Some(PendingGpuPassTimingReadback {
+            _readback_buffer_handle: self.readback_buffer_handle,
             readback_buffer: self.readback_buffer,
             readback_size,
             timestamp_period_ns: self.timestamp_period_ns,
             entries: self.entries,
-        })
+        }))
+    }
+}
+
+struct ResolveTimingQueries<'a> {
+    encoder: &'a mut CommandEncoder,
+    query_count: u32,
+}
+
+impl CurrentRenderTimestampResourcesTerminal for ResolveTimingQueries<'_> {
+    fn use_timestamp_resources(
+        self,
+        query_set: &QuerySet,
+        resolve_buffer: &Buffer,
+        _readback_buffer: &Buffer,
+    ) {
+        self.encoder
+            .resolve_query_set(query_set, 0..self.query_count, resolve_buffer, 0);
+    }
+}
+
+struct CopyTimingReadback<'a> {
+    encoder: &'a mut CommandEncoder,
+    readback_size: BufferAddress,
+}
+
+impl CurrentRenderTimestampResourcesTerminal for CopyTimingReadback<'_> {
+    fn use_timestamp_resources(
+        self,
+        _query_set: &QuerySet,
+        resolve_buffer: &Buffer,
+        readback_buffer: &Buffer,
+    ) {
+        self.encoder.copy_buffer_to_buffer(
+            resolve_buffer,
+            0,
+            readback_buffer,
+            0,
+            self.readback_size,
+        );
     }
 }
 
 #[derive(Debug)]
 pub(in crate::plugins::render::renderer) struct PendingGpuPassTimingReadback {
-    readback_buffer: Buffer,
+    _readback_buffer_handle: GpuBufferHandle,
+    readback_buffer: GpuRealizedBuffer,
     readback_size: BufferAddress,
     timestamp_period_ns: f32,
     entries: Vec<GpuPassTimingEntry>,
 }
 
+struct ReadGpuTimingBuffer<'a> {
+    device: &'a Device,
+    readback_size: BufferAddress,
+    timestamp_period_ns: f32,
+    entries: Vec<GpuPassTimingEntry>,
+    output: &'a mut Option<Vec<RenderPassTimingEvidence>>,
+}
+
+impl CurrentRenderReadbackBufferTerminal for ReadGpuTimingBuffer<'_> {
+    fn read_buffer(self, buffer: &Buffer) {
+        *self.output = Some(read_gpu_timing_buffer(
+            self.device,
+            buffer,
+            self.readback_size,
+            self.timestamp_period_ns,
+            self.entries,
+        ));
+    }
+}
+
 pub(in crate::plugins::render::renderer) fn read_gpu_pass_timing_evidence(
+    context: &GpuContext,
     device: &Device,
     pending: PendingGpuPassTimingReadback,
 ) -> Vec<RenderPassTimingEvidence> {
     let PendingGpuPassTimingReadback {
+        _readback_buffer_handle: _,
         readback_buffer,
         readback_size,
         timestamp_period_ns,
         entries,
     } = pending;
+    let fallback_entries = entries.clone();
+    let mut output = None;
+    if let Err(error) = context
+        .current_render_resource_bridge()
+        .for_buffer_readback(
+            &readback_buffer,
+            ReadGpuTimingBuffer {
+                device,
+                readback_size,
+                timestamp_period_ns,
+                entries,
+                output: &mut output,
+            },
+        )
+    {
+        return fallback_entries
+            .into_iter()
+            .map(|entry| {
+                gpu_timing_unavailable_evidence(
+                    entry,
+                    format!("GPU timestamp resource bridge rejected readback: {error}"),
+                )
+            })
+            .collect();
+    }
+    output.unwrap_or_else(|| {
+        fallback_entries
+            .into_iter()
+            .map(|entry| {
+                gpu_timing_unavailable_evidence(
+                    entry,
+                    "GPU timestamp resource bridge produced no readback evidence",
+                )
+            })
+            .collect()
+    })
+}
+
+fn read_gpu_timing_buffer(
+    device: &Device,
+    readback_buffer: &Buffer,
+    readback_size: BufferAddress,
+    timestamp_period_ns: f32,
+    entries: Vec<GpuPassTimingEntry>,
+) -> Vec<RenderPassTimingEvidence> {
     let slice = readback_buffer.slice(0..readback_size);
     let (sender, receiver) = channel();
     slice.map_async(MapMode::Read, move |result| {
@@ -275,10 +408,13 @@ fn gpu_timing_unavailable_evidence(
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement, GpuContext,
-        GpuContextDescriptor, GpuPreferredFallback,
+        CurrentRenderTimestampWritesTerminal, GpuBufferUsage, GpuCapabilityFeature,
+        GpuCapabilityProfile, GpuCapabilityRequirement, GpuContext, GpuContextDescriptor,
+        GpuMemoryIntent, GpuPreferredFallback, GpuQueryKind, GpuQuerySetDescriptor,
+        GpuResourceLifetime, GpuWorkResourceIdAllocator,
     };
     use crate::plugins::render::inspect::RenderTimingSource;
+    use crate::plugins::render::renderer::resource_descriptors::{buffer_descriptor, owned_common};
     use pollster::block_on;
 
     #[test]
@@ -308,8 +444,56 @@ mod tests {
         let loan = context.current_render_device_queue();
         let (device, queue) = (loan.device, loan.queue);
 
-        let mut frame =
-            GpuPassTimingFrame::new(device, queue, 2).expect("timestamp frame should allocate");
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let query_set = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(
+                    owned_common(
+                        "engine_test_gpu_timestamps",
+                        GpuResourceLifetime::Transient,
+                        GpuMemoryIntent::Device,
+                    )
+                    .expect("query common descriptor"),
+                    GpuQueryKind::Timestamp,
+                    2,
+                )
+                .expect("query descriptor"),
+            )
+            .expect("query handle");
+        let resolve_buffer = allocator
+            .allocate_buffer_handle(
+                buffer_descriptor(
+                    "engine_test_gpu_timestamp_resolve",
+                    16,
+                    [GpuBufferUsage::QueryResolve, GpuBufferUsage::CopySource],
+                    GpuResourceLifetime::Transient,
+                    GpuMemoryIntent::Device,
+                )
+                .expect("resolve descriptor"),
+            )
+            .expect("resolve handle");
+        let readback_buffer = allocator
+            .allocate_buffer_handle(
+                buffer_descriptor(
+                    "engine_test_gpu_timestamp_readback",
+                    16,
+                    [GpuBufferUsage::CopyDestination],
+                    GpuResourceLifetime::Transient,
+                    GpuMemoryIntent::Readback,
+                )
+                .expect("readback descriptor"),
+            )
+            .expect("readback handle");
+        let mut frame = GpuPassTimingFrame::new(
+            &context,
+            queue,
+            &query_set,
+            &resolve_buffer,
+            &readback_buffer,
+            2,
+        )
+        .expect("timestamp resources should realize")
+        .expect("timestamp frame should allocate");
         let indices = frame
             .register_pass(
                 GpuPassTimestampIndices { begin: 0, end: 1 },
@@ -324,23 +508,28 @@ mod tests {
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("engine_test_gpu_timestamp_encoder"),
         });
-        {
-            let _pass = encoder.begin_compute_pass(&ComputePassDescriptor {
-                label: Some("engine_test_gpu_timestamp_compute_pass"),
-                timestamp_writes: Some(ComputePassTimestampWrites {
-                    query_set: writes.query_set,
-                    beginning_of_pass_write_index: Some(writes.indices.begin),
-                    end_of_pass_write_index: Some(writes.indices.end),
-                }),
-            });
-        }
-        assert!(frame.encode_resolve(&mut encoder));
+        context
+            .current_render_resource_bridge()
+            .for_timestamp_writes(
+                &writes.query_set,
+                EncodeTestTimestampPass {
+                    encoder: &mut encoder,
+                    indices: writes.indices,
+                },
+            )
+            .expect("timestamp query should bridge");
+        assert!(
+            frame
+                .encode_resolve(&context, &mut encoder)
+                .expect("timestamp resolve should encode")
+        );
         let pending = frame
-            .encode_readback_copy(&mut encoder)
+            .encode_readback_copy(&context, &mut encoder)
+            .expect("timestamp readback copy should encode")
             .expect("timestamp queries should resolve");
         queue.submit(std::iter::once(encoder.finish()));
 
-        let evidence = read_gpu_pass_timing_evidence(device, pending);
+        let evidence = read_gpu_pass_timing_evidence(&context, device, pending);
         println!("runtime GPU timing evidence: {evidence:?}");
         assert_eq!(evidence.len(), 1);
         assert_eq!(evidence[0].source, RenderTimingSource::GpuTimestampQuery);
@@ -349,5 +538,23 @@ mod tests {
             RenderGpuTimingCapability::Supported
         );
         assert!(evidence[0].millis.is_some());
+    }
+
+    struct EncodeTestTimestampPass<'a> {
+        encoder: &'a mut CommandEncoder,
+        indices: GpuPassTimestampIndices,
+    }
+
+    impl CurrentRenderTimestampWritesTerminal for EncodeTestTimestampPass<'_> {
+        fn write_timestamps(self, query_set: &QuerySet) {
+            let _pass = self.encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("engine_test_gpu_timestamp_compute_pass"),
+                timestamp_writes: Some(ComputePassTimestampWrites {
+                    query_set,
+                    beginning_of_pass_write_index: Some(self.indices.begin),
+                    end_of_pass_write_index: Some(self.indices.end),
+                }),
+            });
+        }
     }
 }

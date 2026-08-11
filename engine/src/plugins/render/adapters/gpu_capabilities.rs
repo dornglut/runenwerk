@@ -35,11 +35,26 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
 {
     [
         (
+            GpuTextureFormat::R8Unorm,
+            GpuTextureFormatCapabilities {
+                sampled: true,
+                filterable: true,
+                storage_read: false,
+                storage_write: false,
+                color_attachment: true,
+                depth_stencil: false,
+                copy_source: true,
+                copy_destination: true,
+                block_dimensions: Some((1, 1)),
+                block_copy_size: Some(1),
+            },
+        ),
+        (
             GpuTextureFormat::Rgba8Unorm,
             GpuTextureFormatCapabilities {
                 sampled: true,
                 filterable: true,
-                storage_read: true,
+                storage_read: false,
                 storage_write: true,
                 color_attachment: true,
                 depth_stencil: false,
@@ -99,7 +114,7 @@ fn current_format_facts() -> impl Iterator<Item = (GpuTextureFormat, GpuTextureF
             GpuTextureFormatCapabilities {
                 sampled: true,
                 filterable: false,
-                storage_read: true,
+                storage_read: false,
                 storage_write: true,
                 color_attachment: true,
                 depth_stencil: false,
@@ -387,7 +402,7 @@ fn validate_texture_format_capability(
         .format(normalized)
         .is_some_and(|facts| match required {
             TextureCapability::Sampled => facts.sampled,
-            TextureCapability::Storage => facts.storage_read && facts.storage_write,
+            TextureCapability::Storage => facts.storage_write,
             TextureCapability::ColorAttachment => facts.color_attachment,
             TextureCapability::DepthAttachment => facts.depth_stencil,
         });

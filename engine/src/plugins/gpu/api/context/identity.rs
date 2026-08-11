@@ -10,6 +10,11 @@ impl GpuContextId {
     pub const fn is_nonzero(self) -> bool {
         self.0.get() != 0
     }
+
+    #[cfg(test)]
+    pub(crate) const fn test_value(value: NonZeroU64) -> Self {
+        Self(value)
+    }
 }
 
 /// Opaque device generation. G4A creates generation one and never replaces it.
@@ -22,7 +27,7 @@ impl GpuDeviceGeneration {
     }
 
     #[cfg(test)]
-    pub(super) const fn test_value(value: NonZeroU64) -> Self {
+    pub(crate) const fn test_value(value: NonZeroU64) -> Self {
         Self(value)
     }
 }
@@ -34,12 +39,27 @@ pub struct GpuContextAffinity {
 }
 
 impl GpuContextAffinity {
+    pub(crate) const fn from_context_generation(
+        context: GpuContextId,
+        generation: GpuDeviceGeneration,
+    ) -> Self {
+        Self {
+            context,
+            generation,
+        }
+    }
+
     pub const fn context(&self) -> GpuContextId {
         self.context
     }
 
     pub const fn generation(&self) -> GpuDeviceGeneration {
         self.generation
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn test_value(context: GpuContextId, generation: GpuDeviceGeneration) -> Self {
+        Self::from_context_generation(context, generation)
     }
 }
 

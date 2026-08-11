@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-09
+last_reviewed: 2026-08-10
 related_docs:
   - ../engineering-workflow.md
   - ./roadmap.md
@@ -56,34 +56,36 @@ Documentation Build `31320663084`.
 
 ## Only authorized RunenGPU continuation
 
-Issue `#224` is the only authorized RunenGPU documentation correction: it finalizes
-G4C1 realization and migration semantics without authorizing source implementation.
+Issue `#224` was accepted through PR `#225`. Accepted `main` is
+`302ac87a7c68f80bf2d6bf77c81f615f11c01b88`.
 
 Current status is deliberately narrow:
 
-- `#224` — only authorized RunenGPU documentation correction.
-- `#212` — census retained; the existing implementation branch is retained but untouched
-  and implementation is blocked by `#224`.
+- `#212` — the sole active RunenGPU implementation slice.
+- branch — `codex/runengpu-g4c1-resource-realization`.
+- draft PR — `#226`.
+- current internal unit — complete G4C1 resource-realization and consumer-cutover candidate.
 - `#213` — blocked.
 - `#214` — blocked.
 
-The retained implementation branch is
-`codex/runengpu-g4c1-resource-realization`. It remains zero commits and zero changed
-files from accepted main `810f3e31174a84dd494c11eea1616092142e11bc`; do not modify or
-replace it. Only after #224 is accepted and its squash commit has accepted-main CI and
-Documentation Build proof may that still-empty branch move to the new accepted main and
-re-establish #212 as the sole active implementation slice.
-
-When later authorized, G4C1 will own private context/device-generation-bound realization
-of:
+The branch checkpoint at `4ac9cb39f49ce29553ffdad4d98bfbd062a572ab` established
+private process-local logical resource owner scopes plus private, context/device-
+generation-bound realization registries for:
 
 - buffers;
 - textures;
 - texture views;
 - samplers;
 - query sets;
-- transactional resource registries and discardable in-memory compatibility caches;
-- migration and deletion of renderer-owned resource realization that the slice replaces.
+- transactional bounded realization records and discardable lookup state.
+
+The current candidate migrates flow/invocation resources, dynamic targets, material
+texture residency, persistent UI/glyph resources, capture readback, timestamp resources,
+and remaining renderer resource consumers to retained typed logical handles and opaque
+RunenGPU realizations. It deletes the replaced reusable renderer-owned generic resource
+creation paths. The candidate remains unaccepted until complete local validation,
+repository-owned exact-head CI and Documentation Build, independent complete-diff review,
+merge, and accepted-main verification all succeed.
 
 It may retain exactly one narrow crate-private `CurrentRenderResourceBridge` for exact
 audited current G4C2/G4C3/G5 consumers. That bridge lends purpose-typed,
@@ -99,10 +101,9 @@ removes module/layout/bind-group creation; G4C3 removes pipeline creation; G5 mi
 the remaining operation users and deletes it. Its source-guarded operation classes and
 exact call sites only shrink.
 
-The start census must explicitly revisit current texture-preview/resource-preparation
-shape where material-prepared data carries shader-binding coordinates that are irrelevant
-to generic texture residency. Any cleanup must remain resource-owned G4C1 work and must
-not pull G4C2 shader-interface realization forward.
+Material-prepared shader-binding coordinates remain renderer-owned compatibility facts;
+they do not enter generic texture identity or residency keys. Typed bind-group realization
+and any cleanup of that transported interface shape remain G4C2 work.
 
 ## Ordered G4C continuation
 

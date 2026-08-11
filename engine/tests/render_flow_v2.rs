@@ -453,15 +453,11 @@ fn render_flow_compiler_exposes_prepared_resource_initialization() {
         RenderGpuWorkInstrumentation::Disabled,
     )
     .expect("flow should lower to prepared G3 work");
-    let color_id = *compiled
-        .resource_ids_by_label
-        .get("color")
-        .expect("color resource should compile");
     let color_initialization = work
         .graph()
         .initialization()
         .iter()
-        .find(|entry| entry.resource().diagnostic_identity() == color_id)
+        .find(|entry| entry.resource().common().label().as_str() == "color")
         .expect("color target initialization should be inspectable");
 
     assert_eq!(

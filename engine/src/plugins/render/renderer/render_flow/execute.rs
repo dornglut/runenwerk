@@ -1,7 +1,8 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuBufferHandle, GpuBufferRange, GpuCopyOperation, GpuPreparedWorkNodeId, GpuQueryAccessKind,
-    GpuResourceAccess, GpuWorkOperation, GpuWorkResourceId,
+    CurrentRenderBufferUploadTerminal, GpuBufferHandle, GpuBufferRange, GpuCopyOperation,
+    GpuPreparedWorkNodeId, GpuQueryAccessKind, GpuQuerySetHandle, GpuResourceAccess,
+    GpuWorkOperation,
 };
 use crate::plugins::render::{PreparedRenderWorkPlan, RenderGpuWorkPayload, RenderPassId};
 
@@ -15,6 +16,7 @@ impl Renderer {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn render_packet(
         &mut self,
+        context: &GpuContext,
         device: &Device,
         queue: &Queue,
         frame_texture: &Texture,
@@ -54,13 +56,15 @@ impl Renderer {
         let dynamic_target_history_signatures =
             prepared_frame.dynamic_target_history_signatures()?;
         self.dynamic_texture_targets.realize_for_frame(
-            device,
+            context,
             &prepared_frame.dynamic_texture_targets,
             &dynamic_target_history_signatures,
         )?;
-        let upload_report = self
-            .dynamic_texture_targets
-            .apply_uploads(queue, &prepared_frame.dynamic_texture_uploads);
+        let upload_report = self.dynamic_texture_targets.apply_uploads(
+            context,
+            queue,
+            &prepared_frame.dynamic_texture_uploads,
+        );
         for diagnostic in &upload_report.diagnostics {
             tracing::warn!(
                 target = "renderer.dynamic_texture_upload",
@@ -83,7 +87,7 @@ impl Renderer {
             for flow in compiled_flows {
                 let runtime_resources = flow_runtime_cache.entry(flow.flow_id).or_default();
                 runtime_resources.realize_for_frame(
-                    device,
+                    context,
                     flow,
                     packet.surface_size,
                     packet.surface_format,
@@ -114,14 +118,14 @@ impl Renderer {
                         .or(view.history_signature.as_deref());
                     let invocation_result = (|| -> Result<()> {
                         runtime_resources.realize_invocation_history_textures(
-                            device,
+                            context,
                             invocation.invocation_id.0.as_str(),
                             invocation_packet.surface_size,
                             invocation_packet.surface_format,
                             effective_history_signature,
                         )?;
                         self.upload_projected_uniform_buffers(
-                            device,
+                            context,
                             queue,
                             invocation.invocation_id.0.as_str(),
                             &invocation.inputs,
@@ -139,15 +143,23 @@ impl Renderer {
                             } else {
                                 None
                             };
-                        let mut gpu_pass_timing_frame = prepared_timing.and_then(|timing| {
-                            GpuPassTimingFrame::new(device, queue, timing.query_capacity)
-                        });
+                        let mut gpu_pass_timing_frame = match prepared_timing {
+                            Some(timing) => GpuPassTimingFrame::new(
+                                context,
+                                queue,
+                                &timing.query_set,
+                                &timing.resolve_buffer,
+                                &timing.readback_buffer,
+                                timing.query_capacity,
+                            )?,
+                            None => None,
+                        };
                         let scheduled_passes =
                             schedule_invocation_passes(flow, &invocation.inputs, prepared_work)?;
                         for scheduled_pass in scheduled_passes {
                             if let Some(iteration) = scheduled_pass.fixed_step_iteration {
                                 self.upload_fixed_step_iteration_uniform(
-                                    device,
+                                    context,
                                     queue,
                                     invocation.invocation_id.0.as_str(),
                                     runtime_resources,
@@ -180,7 +192,7 @@ impl Renderer {
                             ensure_compiled_pass_is_supported(pass)?;
                             if capture_runtime.should_attempt_stage(CaptureStage::Before) {
                                 self.queue_pass_texture_captures(
-                                    device,
+                                    context,
                                     &mut encoder,
                                     frame_texture,
                                     &invocation_packet,
@@ -212,7 +224,9 @@ impl Renderer {
                                     .as_ref()
                                     .map(|frame| frame.timestamp_writes(indices))
                             });
+                            let has_gpu_timestamp_writes = gpu_timestamp_writes.is_some();
                             let evidence = self.encode_compiled_pass(
+                                context,
                                 device,
                                 &mut encoder,
                                 frame_texture,
@@ -227,7 +241,7 @@ impl Renderer {
                             )?;
                             if capture_runtime.should_attempt_stage(CaptureStage::After) {
                                 self.queue_pass_texture_captures(
-                                    device,
+                                    context,
                                     &mut encoder,
                                     frame_texture,
                                     &invocation_packet,
@@ -246,7 +260,7 @@ impl Renderer {
                                 millis: pass_encode_start.elapsed().as_secs_f32() * 1000.0,
                                 dispatch_workgroups: evidence.dispatch_workgroups,
                             });
-                            if gpu_timestamp_writes.is_none() {
+                            if !has_gpu_timestamp_writes {
                                 self.last_gpu_pass_timing_evidence.push(
                                     gpu_timing_diagnostic_evidence_for_pass(
                                         gpu_timing_capability,
@@ -345,7 +359,8 @@ impl Renderer {
                             }
                         }
                         if let Some(frame) = gpu_pass_timing_frame.take()
-                            && let Some(pending) = encode_prepared_timing_tail(frame, &mut encoder)
+                            && let Some(pending) =
+                                encode_prepared_timing_tail(frame, context, &mut encoder)?
                         {
                             pending_gpu_pass_timing_readbacks.push(pending);
                         }
@@ -359,7 +374,7 @@ impl Renderer {
             }
             if capture_runtime.should_attempt_stage(CaptureStage::Final) {
                 self.queue_final_surface_capture(
-                    device,
+                    context,
                     &mut encoder,
                     frame_texture,
                     &packet,
@@ -382,12 +397,12 @@ impl Renderer {
             self.last_gpu_pass_timing_evidence.clear();
             for pending in pending_gpu_pass_timing_readbacks {
                 self.last_gpu_pass_timing_evidence
-                    .extend(read_gpu_pass_timing_evidence(device, pending));
+                    .extend(read_gpu_pass_timing_evidence(context, device, pending));
             }
         }
         if !pending_capture_readbacks.is_empty() {
             for pending in pending_capture_readbacks.drain(..) {
-                let (selector_index, capture) = read_capture_back(device, pending);
+                let (selector_index, capture) = read_capture_back(context, device, pending);
                 capture_runtime.set_terminal(selector_index, capture.terminal.clone());
                 self.last_captured_textures.push(capture);
             }
@@ -402,6 +417,7 @@ impl Renderer {
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,
+        context: &GpuContext,
         device: &Device,
         queue: &Queue,
         frame_texture: &Texture,
@@ -419,6 +435,7 @@ impl Renderer {
         gpu_timing_capability: RenderGpuTimingCapability,
     ) -> Result<RendererFrameTimings> {
         let packet = self.prepare_packet(
+            context,
             device,
             queue,
             prepared_frame,
@@ -427,8 +444,9 @@ impl Renderer {
             ui_font_atlas,
             viewport_surface_bindings,
             surface_format,
-        );
+        )?;
         self.render_packet(
+            context,
             device,
             queue,
             frame_texture,
@@ -446,7 +464,7 @@ impl Renderer {
 
     fn upload_projected_uniform_buffers(
         &self,
-        device: &Device,
+        context: &GpuContext,
         queue: &Queue,
         invocation_id: &str,
         flow_inputs: &PreparedFlowInputs,
@@ -455,7 +473,7 @@ impl Renderer {
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
             let prepared = runtime_resources.prepare_uniform_upload(*buffer_id, bytes)?;
             let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
-                device,
+                context,
                 invocation_id,
                 *buffer_id,
                 prepared.layout().byte_len(),
@@ -469,7 +487,13 @@ impl Renderer {
                     runtime_buffer.size
                 );
             }
-            queue.write_buffer(&runtime_buffer.buffer, 0, prepared.as_bytes());
+            context.current_render_resource_bridge().for_buffer_upload(
+                &runtime_buffer.realized,
+                WriteRuntimeBuffer {
+                    queue,
+                    bytes: prepared.as_bytes(),
+                },
+            )?;
         }
 
         Ok(())
@@ -477,7 +501,7 @@ impl Renderer {
 
     fn upload_fixed_step_iteration_uniform(
         &self,
-        device: &Device,
+        context: &GpuContext,
         queue: &Queue,
         invocation_id: &str,
         runtime_resources: &mut FlowRuntimeResources,
@@ -488,7 +512,7 @@ impl Renderer {
         let prepared =
             runtime_resources.prepare_uniform_upload(region.iteration_uniform, &bytes)?;
         let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
-            device,
+            context,
             invocation_id,
             region.iteration_uniform,
             prepared.layout().byte_len(),
@@ -502,7 +526,13 @@ impl Renderer {
                 runtime_buffer.size
             );
         }
-        queue.write_buffer(&runtime_buffer.buffer, 0, prepared.as_bytes());
+        context.current_render_resource_bridge().for_buffer_upload(
+            &runtime_buffer.realized,
+            WriteRuntimeBuffer {
+                queue,
+                bytes: prepared.as_bytes(),
+            },
+        )?;
         Ok(())
     }
 
@@ -571,7 +601,7 @@ impl Renderer {
     #[allow(clippy::too_many_arguments)]
     fn queue_pass_texture_captures(
         &mut self,
-        device: &Device,
+        context: &GpuContext,
         encoder: &mut CommandEncoder,
         frame_texture: &Texture,
         packet: &RendererPreparedPacket,
@@ -707,11 +737,14 @@ impl Renderer {
             };
 
             match enqueue_texture_capture_copy(
-                device,
+                context,
                 encoder,
                 selector_index,
                 identity,
-                resolved_texture.texture,
+                match resolved_texture.texture {
+                    RuntimeTextureRef::Surface(texture) => CaptureTextureSource::Surface(texture),
+                    RuntimeTextureRef::Realized(texture) => CaptureTextureSource::Realized(texture),
+                },
                 resolved_texture.size,
                 resolved_texture.format,
                 readback_format,
@@ -751,7 +784,7 @@ impl Renderer {
 
     fn queue_final_surface_capture(
         &mut self,
-        device: &Device,
+        context: &GpuContext,
         encoder: &mut CommandEncoder,
         frame_texture: &Texture,
         packet: &RendererPreparedPacket,
@@ -837,11 +870,11 @@ impl Renderer {
             };
 
             match enqueue_texture_capture_copy(
-                device,
+                context,
                 encoder,
                 selector_index,
                 identity,
-                frame_texture,
+                CaptureTextureSource::Surface(frame_texture),
                 packet.surface_size,
                 packet.surface_format,
                 readback_format,
@@ -876,6 +909,17 @@ impl Renderer {
             }
         }
         Ok(())
+    }
+}
+
+struct WriteRuntimeBuffer<'a> {
+    queue: &'a Queue,
+    bytes: &'a [u8],
+}
+
+impl CurrentRenderBufferUploadTerminal for WriteRuntimeBuffer<'_> {
+    fn upload_buffer(self, buffer: &Buffer) {
+        self.queue.write_buffer(buffer, 0, self.bytes);
     }
 }
 
@@ -940,14 +984,18 @@ fn prepared_timestamp_indices(
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PreparedTimingIntent {
+    query_set: GpuQuerySetHandle,
+    resolve_buffer: GpuBufferHandle,
+    readback_buffer: GpuBufferHandle,
     query_capacity: u32,
 }
 
 fn prepared_timing_intent(work: &PreparedRenderWorkPlan) -> Result<Option<PreparedTimingIntent>> {
     let mut timing_sequence = Vec::<&'static str>::new();
-    let mut resolve_intent = None::<(GpuWorkResourceId, GpuBufferHandle, GpuBufferRange, u32)>;
+    let mut resolve_intent = None::<(GpuQuerySetHandle, GpuBufferHandle, GpuBufferRange, u32)>;
+    let mut readback_buffer = None::<GpuBufferHandle>;
     for (node_id, payload) in work.ordered_payloads()? {
         let prepared = work
             .graph()
@@ -972,7 +1020,7 @@ fn prepared_timing_intent(work: &PreparedRenderWorkPlan) -> Result<Option<Prepar
                     );
                 }
                 resolve_intent = Some((
-                    operation.source().diagnostic_identity(),
+                    operation.source().clone(),
                     operation.destination().clone(),
                     operation.destination_range(),
                     operation.source_range().count(),
@@ -1003,6 +1051,7 @@ fn prepared_timing_intent(work: &PreparedRenderWorkPlan) -> Result<Option<Prepar
                         node_id
                     );
                 }
+                readback_buffer = Some(destination.buffer().clone());
             }
         }
     }
@@ -1014,8 +1063,11 @@ fn prepared_timing_intent(work: &PreparedRenderWorkPlan) -> Result<Option<Prepar
             timing_sequence
         ),
     }
-    let Some((query_set, _, _, query_capacity)) = resolve_intent else {
+    let Some((query_set, resolve_buffer, _, query_capacity)) = resolve_intent else {
         anyhow::bail!("prepared timestamp work has no typed query resolve intent");
+    };
+    let Some(readback_buffer) = readback_buffer else {
+        anyhow::bail!("prepared timestamp work has no typed readback destination");
     };
     for prepared in work.graph().nodes() {
         for access in prepared.node().accesses() {
@@ -1023,8 +1075,7 @@ fn prepared_timing_intent(work: &PreparedRenderWorkPlan) -> Result<Option<Prepar
                 continue;
             };
             if access.kind() == GpuQueryAccessKind::WriteTimestamp
-                && (access.query_set().diagnostic_identity() != query_set
-                    || access.range().end() > query_capacity)
+                && (access.query_set() != &query_set || access.range().end() > query_capacity)
             {
                 anyhow::bail!(
                     "prepared timestamp write in node '{}' falls outside typed resolve intent",
@@ -1033,17 +1084,23 @@ fn prepared_timing_intent(work: &PreparedRenderWorkPlan) -> Result<Option<Prepar
             }
         }
     }
-    Ok(Some(PreparedTimingIntent { query_capacity }))
+    Ok(Some(PreparedTimingIntent {
+        query_set,
+        resolve_buffer,
+        readback_buffer,
+        query_capacity,
+    }))
 }
 
 fn encode_prepared_timing_tail(
     mut frame: GpuPassTimingFrame,
+    context: &GpuContext,
     encoder: &mut CommandEncoder,
-) -> Option<PendingGpuPassTimingReadback> {
-    if !frame.encode_resolve(encoder) {
-        return None;
+) -> Result<Option<PendingGpuPassTimingReadback>> {
+    if !frame.encode_resolve(context, encoder)? {
+        return Ok(None);
     }
-    frame.encode_readback_copy(encoder)
+    frame.encode_readback_copy(context, encoder)
 }
 
 fn schedule_invocation_passes<'a>(

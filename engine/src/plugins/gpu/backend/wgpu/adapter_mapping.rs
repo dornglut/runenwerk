@@ -146,8 +146,9 @@ pub(super) fn select_device_request_profile(
     }
 }
 
-pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 6] {
+pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 7] {
     [
+        (GpuTextureFormat::R8Unorm, TextureFormat::R8Unorm),
         (GpuTextureFormat::Rgba8Unorm, TextureFormat::Rgba8Unorm),
         (
             GpuTextureFormat::Rgba8UnormSrgb,

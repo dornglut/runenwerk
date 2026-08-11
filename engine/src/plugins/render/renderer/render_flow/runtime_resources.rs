@@ -1,5 +1,10 @@
 use super::*;
-use crate::plugins::gpu::{GpuTextureDimension, GpuWorkResourceId, PreparedGpuData, UniformData};
+use crate::plugins::gpu::{
+    GpuBufferDescriptor, GpuBufferHandle, GpuRealizedBuffer, GpuRealizedTexture,
+    GpuRealizedTextureView, GpuTextureDescriptor, GpuTextureDimension, GpuTextureHandle,
+    GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator, PreparedGpuData,
+    UniformData,
+};
 use crate::plugins::render::{
     PreparedTargetBinding, RenderDynamicTextureTargetKey, RenderFlowId,
     RenderGpuResourceAdapterError, RenderImportedBufferIntent, RenderImportedTextureIntent,
@@ -22,7 +27,10 @@ pub enum RuntimeBufferKind {
 
 #[derive(Debug)]
 pub struct RuntimeTextureResource {
-    pub texture: Texture,
+    pub handle: GpuTextureHandle,
+    pub _view_handle: GpuTextureViewHandle,
+    pub realized: GpuRealizedTexture,
+    pub realized_view: GpuRealizedTextureView,
     pub format: TextureFormat,
     pub size: (u32, u32),
     pub usage: TextureUsages,
@@ -34,23 +42,26 @@ pub struct RuntimeTextureResource {
 
 #[derive(Debug)]
 pub struct RuntimeBufferResource {
-    pub buffer: Buffer,
+    pub handle: GpuBufferHandle,
+    pub realized: GpuRealizedBuffer,
     pub size: u64,
     pub kind: RuntimeBufferKind,
     pub generation: u64,
     pub reused_last_frame: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextureAllocationSpec {
+    pub descriptor: GpuTextureDescriptor,
     pub size: (u32, u32),
     pub format: TextureFormat,
     pub usage: TextureUsages,
     pub is_depth: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BufferAllocationSpec {
+    pub descriptor: GpuBufferDescriptor,
     pub size: u64,
     pub usage: BufferUsages,
     pub kind: RuntimeBufferKind,
@@ -92,6 +103,10 @@ enum CurrentRuntimeResourceRealizationError {
         resource_id: GpuWorkResourceId,
         normalized_kind: &'static str,
     },
+    #[error(
+        "current render surface format {surface_format:?} has no admitted normalized RunenGPU format"
+    )]
+    UnsupportedSurfaceFormat { surface_format: TextureFormat },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -131,6 +146,7 @@ impl fmt::Display for RuntimeResourceKey {
 
 #[derive(Debug, Default)]
 pub struct FlowRuntimeResources {
+    resource_ids: GpuWorkResourceIdAllocator,
     pub textures: BTreeMap<GpuWorkResourceId, RuntimeTextureResource>,
     pub buffers: BTreeMap<GpuWorkResourceId, RuntimeBufferResource>,
     pub invocation_uniform_buffers: BTreeMap<(String, GpuWorkResourceId), RuntimeBufferResource>,
@@ -173,17 +189,24 @@ impl FlowRuntimeResources {
 #[derive(Debug)]
 pub struct ResolvedTextureRef<'a> {
     pub id: RuntimeResourceKey,
-    pub texture: &'a Texture,
+    pub texture: RuntimeTextureRef<'a>,
+    pub realized_view: Option<&'a GpuRealizedTextureView>,
     pub format: TextureFormat,
     pub size: (u32, u32),
     pub is_depth: bool,
     pub generation: Option<u64>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum RuntimeTextureRef<'a> {
+    Surface(&'a Texture),
+    Realized(&'a GpuRealizedTexture),
+}
+
 #[derive(Debug)]
 pub struct ResolvedBufferRef<'a> {
     pub id: RuntimeResourceKey,
-    pub buffer: &'a Buffer,
+    pub buffer: &'a GpuRealizedBuffer,
     pub size: u64,
     pub kind: RuntimeBufferKind,
     pub generation: Option<u64>,
@@ -191,17 +214,8 @@ pub struct ResolvedBufferRef<'a> {
 
 #[derive(Debug)]
 pub enum RuntimeTextureView<'a> {
-    Borrowed(&'a TextureView),
-    Owned(TextureView),
-}
-
-impl<'a> RuntimeTextureView<'a> {
-    pub fn as_ref(&self) -> &TextureView {
-        match self {
-            Self::Borrowed(value) => value,
-            Self::Owned(value) => value,
-        }
-    }
+    Surface(&'a TextureView),
+    Realized(GpuRealizedTextureView),
 }
 
 #[derive(Debug)]
@@ -212,7 +226,7 @@ pub struct ResolvedColorTargetView<'a> {
 
 #[derive(Debug)]
 pub struct ResolvedDepthTargetView {
-    pub view: TextureView,
+    pub view: GpuRealizedTextureView,
     pub format: TextureFormat,
 }
 
@@ -224,7 +238,8 @@ mod resolve;
 mod tests {
     use super::*;
     use crate::plugins::gpu::{
-        GpuAddressMode, GpuBufferUsage, GpuFilterMode, GpuMemoryIntent, GpuQueryKind,
+        GpuAddressMode, GpuBufferUsage, GpuCapabilityProfile, GpuContext, GpuContextDescriptor,
+        GpuContextRequestErrorCategory, GpuFilterMode, GpuMemoryIntent, GpuQueryKind,
         GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceDescriptor,
         GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor,
         GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent, GpuTextureFormat,
@@ -476,8 +491,9 @@ mod tests {
 
     #[test]
     fn normalized_buffer_produces_current_buffer_allocation_facts() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
         let descriptor = RenderResourceDeclaration::declare_uniform::<RuntimeTestUniform>(
-            resource(14),
+            &mut allocator,
             "runtime uniform",
         )
         .unwrap();
@@ -634,5 +650,62 @@ mod tests {
             ));
             assert!(error.to_string().contains("current render runtime"));
         }
+    }
+
+    #[test]
+    fn concurrently_live_invocation_uniforms_have_distinct_runengpu_handles() {
+        let context = match pollster::block_on(GpuContext::request(GpuContextDescriptor::new(
+            GpuCapabilityProfile::ComputeBaseline.requirements(),
+        ))) {
+            Ok(context) => context,
+            Err(error)
+                if matches!(
+                    error.category(),
+                    GpuContextRequestErrorCategory::NoAdapterAvailable
+                        | GpuContextRequestErrorCategory::NoAdmissibleCandidate
+                        | GpuContextRequestErrorCategory::MandatoryFeatureMissing
+                ) =>
+            {
+                eprintln!("G4C1 invocation-resource environment unavailable: {error}");
+                return;
+            }
+            Err(error) => panic!("unexpected G4C1 context admission failure: {error}"),
+        };
+
+        let mut declaration_ids = GpuWorkResourceIdAllocator::new();
+        let declaration = RenderResourceDeclaration::declare_uniform::<RuntimeTestUniform>(
+            &mut declaration_ids,
+            "invocation uniform",
+        )
+        .expect("test invocation uniform should be valid");
+        let resource_id = *declaration.id();
+        let mut resources = FlowRuntimeResources::default();
+        resources.descriptors.insert(resource_id, declaration);
+
+        let first = resources
+            .realize_invocation_uniform_buffer(&context, "viewport.a", resource_id, 4)
+            .expect("first invocation uniform should realize");
+        let first_handle_identity = first.handle.diagnostic_identity();
+        let first_realization = first.realized.clone();
+
+        let second = resources
+            .realize_invocation_uniform_buffer(&context, "viewport.b", resource_id, 4)
+            .expect("second invocation uniform should realize");
+        let second_handle_identity = second.handle.diagnostic_identity();
+        let second_realization = second.realized.clone();
+
+        assert_ne!(first_handle_identity, second_handle_identity);
+        assert!(!first_realization.is_same_record(&second_realization));
+        assert_eq!(resources.invocation_uniform_buffers.len(), 2);
+        assert!(
+            resources
+                .invocation_uniform_buffers
+                .contains_key(&("viewport.a".to_string(), resource_id))
+        );
+        assert!(
+            resources
+                .invocation_uniform_buffers
+                .contains_key(&("viewport.b".to_string(), resource_id))
+        );
     }
 }

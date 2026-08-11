@@ -1,12 +1,13 @@
-use super::WgpuContextState;
 use super::adapter_mapping::adapter_facts;
+use super::{ResourceRealizationState, WgpuContextState};
 use crate::plugins::gpu::{
     GpuAdapterFacts, GpuAlignmentFacts, GpuCandidateEnvironmentEvidence, GpuCandidateId,
     GpuCandidateInput, GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature,
     GpuContext, GpuContextAdmissionReport, GpuContextDescriptor, GpuContextRequestError,
     GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuDeviceLimits, GpuDeviceRequestProfile,
-    GpuFallbackStatus, GpuLimits, GpuSoftwareFallbackPolicy, admitted_device_facts,
-    allocate_context_id, canonical_candidate_input_key, select_candidate_inputs,
+    GpuFallbackStatus, GpuLimits, GpuResourceRealizationPolicy, GpuSoftwareFallbackPolicy,
+    admitted_device_facts, allocate_context_id, canonical_candidate_input_key,
+    select_candidate_inputs,
 };
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
@@ -26,11 +27,13 @@ struct NativeAdapterCandidate<T> {
 
 pub(crate) async fn request_headless(
     descriptor: GpuContextDescriptor,
+    resource_realization_policy: GpuResourceRealizationPolicy,
 ) -> Result<GpuContext, GpuContextRequestError> {
     request_with_instance(
         Instance::new(&InstanceDescriptor::default().with_env()),
         descriptor,
         None,
+        resource_realization_policy,
     )
     .await
 }
@@ -39,6 +42,7 @@ pub(super) async fn request_with_instance(
     instance: Instance,
     descriptor: GpuContextDescriptor,
     compatible_surface: Option<&Surface<'_>>,
+    resource_realization_policy: GpuResourceRealizationPolicy,
 ) -> Result<GpuContext, GpuContextRequestError> {
     crate::plugins::gpu::validate_descriptor(&descriptor)?;
     let (adapter, selection, selection_kind) =
@@ -82,10 +86,14 @@ pub(super) async fn request_with_instance(
         selection.dispositions.clone(),
     )?;
     let id = allocate_context_id()?;
+    let generation = GpuDeviceGeneration::first();
+    let affinity = crate::plugins::gpu::GpuContextAffinity::from_context_generation(id, generation);
+    let resource_realization = ResourceRealizationState::new(affinity, resource_realization_policy);
+    resource_realization.install_device_observers(&device);
     let adapter_facts = candidate.adapter().clone();
     Ok(GpuContext {
         id,
-        generation: GpuDeviceGeneration::first(),
+        generation,
         adapter: adapter_facts,
         device: device_facts,
         report: GpuContextAdmissionReport {
@@ -99,6 +107,7 @@ pub(super) async fn request_with_instance(
             adapter,
             device: Arc::new(device),
             queue: Arc::new(queue),
+            resource_realization,
         },
     })
 }
