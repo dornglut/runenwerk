@@ -1,11 +1,11 @@
 ---
 title: Workspace Specs
-description: Machine-oriented handoff contracts derived from accepted Markdown authority.
+description: Bounded implementation handoff contracts derived from accepted Markdown and owning GitHub issues.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-04
+last_reviewed: 2026-08-12
 related_docs:
   - ../authority-model.md
   - ../engineering-workflow.md
@@ -16,59 +16,74 @@ related_docs:
 
 # Workspace Specs
 
-Workspace specs are compact handoff contracts derived from accepted Markdown authority.
-
-They exist to help humans and agents carry exact phase constraints into implementation
-without turning a prompt into a full design document.
+Workspace specs are compact handoff contracts derived from accepted Markdown and the
+owning GitHub issue. They exist when a bounded implementation slice benefits from a
+machine-readable, decision-complete constraint set without turning a prompt or issue
+body into a second design document.
 
 ## Authority rule
 
-Markdown remains the primary design, process, and planning authority unless an accepted
-design explicitly grants a spec contract status for a specific scope.
+A workspace spec is **subordinate handoff detail**, not a live work tracker.
 
-A spec must not become parallel authority. If a spec and accepted Markdown disagree,
-update the owning Markdown authority or decision record first, then align the spec.
-
-## Active spec docs
-
-- [Phase Implementation Spec](phase-implementation-spec.md)
-
-## RunenGPU implementation specs
-
-- [PT-RUNENGPU-G4A Context Admission](pt-runengpu-g4a-context-admission.ron)
-- [PT-RUNENGPU-G4B Program, Resource Interface, and Layout](pt-runengpu-g4b-program-interface-layout.ron)
-- [PT-RUNENGPU-G4C Realization Program Umbrella](pt-runengpu-g4c-wgpu-realization-cutover.ron)
-- [PT-RUNENGPU-G4C1 Resource Realization](pt-runengpu-g4c1-resource-realization.ron)
-- [PT-RUNENGPU-G4C2 Program and Binding Realization](pt-runengpu-g4c2-program-binding-realization.ron)
-- [PT-RUNENGPU-G4C3 Pipeline Realization and Cutover](pt-runengpu-g4c3-pipeline-cutover.ron)
-
-The accepted and planned order is:
+Current authority is:
 
 ```text
-G4A accepted
-    -> G4B blocked until accepted issue #209 and activated issue #187
-        -> G4C1 blocked until accepted G4B
-            -> G4C2 blocked until accepted G4C1
-                -> G4C3 blocked until accepted G4C2
+accepted ADR / design / architecture
+    -> durable technical decision
+
+maintained roadmap
+    -> durable sequence where sequence matters
+
+owning GitHub issue
+    -> active work, activation, current base and current state
+
+pull request
+    -> delivery, reviewed head, validation and acceptance evidence
+
+workspace spec
+    -> bounded implementation constraints derived from those owners
 ```
 
-The G4C umbrella specification is not directly implementable. Each G4C child requires
-its own issue, branch, pull request, exact-head validation, complete-diff review, and
-accepted predecessor merge.
+If a spec and accepted Markdown disagree, fix the owning durable authority first. If a
+spec's lifecycle, base, issue, branch, CI or delivery field disagrees with current
+GitHub state, **GitHub state wins**. Historical lifecycle fields in retained RON files
+are snapshots of the handoff when it was authored; they are not maintained as a
+parallel project database.
+
+A spec must never grant implementation permission by itself, activate a phase, replace
+an owning issue, certify a merge, or require consumers to infer current status from an
+old lifecycle string.
+
+## Current use
+
+RON phase specs are retained where they contain useful bounded implementation detail,
+including the RunenGPU G4 family. The current RunenGPU implementation slice and exact
+accepted base are determined from the owning issue and current roadmap, not from stale
+RON lifecycle fields.
+
+Older RunenECS, RunenSDF and UI RON files may remain as historical handoff snapshots
+until their owning documentation cleanup decides whether the detail is still useful.
+Their presence does not make their recorded `lifecycle_state` current authority.
+
+The generic [Phase Implementation Spec](phase-implementation-spec.md) is superseded as
+a repository-wide lifecycle template. Its historical rules do not reactivate a phase
+manager or machine-owned execution lifecycle.
 
 ## Format rule
 
-Use RON for phase implementation specs because Runenwerk is Rust-native and a phase
-spec is one structured contract document.
+RON is appropriate for one Rust-native structured handoff contract. It is not a
+repository task database or append-only execution ledger.
 
-Do not use JSONL as the primary phase spec format.
-
-Use JSONL for append-only streams such as runtime traces, agent output, validation or
-proof logs, and any future track-manager execution ledger.
+Do not add a universal phase schema, generated run ledger, execution lock, truth
+certificate, or track manager merely because several historical specs share fields.
 
 ## Tooling rule
 
-No dedicated spec validator is required yet.
+No dedicated spec lifecycle validator is required. A future validator may check local
+schema or deterministic constraints, but it must remain subordinate to accepted
+Markdown, the owning GitHub issue, and the repository validation commands defined by
+[Engineering Workflow](../engineering-workflow.md).
 
-Any future validator must remain subordinate to accepted Markdown authority and the
-repository validation commands defined by [Engineering Workflow](../engineering-workflow.md).
+In particular, tooling must not update RON lifecycle fields to mirror GitHub state or
+reject a current issue because an older retained spec records an earlier planning
+snapshot.
