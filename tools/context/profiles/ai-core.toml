@@ -14,7 +14,6 @@ include = [
   "docs-site/src/content/docs/guidelines/programming-principles.md",
   "docs-site/src/content/docs/workspace/planning/active-work.md",
   "docs-site/src/content/docs/workspace/planning/roadmap.md",
-  "docs-site/src/content/docs/workspace/planning/production-tracks.md",
 ]
 
 exclude = [
