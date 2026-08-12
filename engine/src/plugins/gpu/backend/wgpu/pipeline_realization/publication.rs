@@ -41,12 +41,9 @@ pub(super) async fn scoped_create<T>(
     let internal_detail = internal.map(|error| format!("Internal scope: {error}"));
     let health_fault = realization.health.terminal_fault();
 
-    if let Some(fault) = health_fault
-        .as_ref()
-        .filter(|fault| {
-            fault.class == super::super::health::WgpuDeviceFaultClass::InternalOrDeviceLost
-        })
-    {
+    if let Some(fault) = health_fault.as_ref().filter(|fault| {
+        fault.class == super::super::health::WgpuDeviceFaultClass::InternalOrDeviceLost
+    }) {
         return Err(scoped_failure(
             GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
             request,

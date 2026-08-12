@@ -14,9 +14,7 @@ mod state;
 
 pub(crate) use device_request::request_headless;
 pub(crate) use health::{WgpuDeviceHealth, WgpuErrorAttributionGate};
-pub(crate) use pipeline_realization::{
-    ComputePipelineRealizationRecord, PipelineRealizationState,
-};
+pub(crate) use pipeline_realization::{ComputePipelineRealizationRecord, PipelineRealizationState};
 pub(crate) use program_binding_realization::{
     BindGroupLayoutRealizationRecord, BindGroupRealizationRecord, CurrentRenderAttachmentsTerminal,
     CurrentRenderBufferCopyTerminal, CurrentRenderBufferUploadTerminal,

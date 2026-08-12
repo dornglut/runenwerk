@@ -137,8 +137,7 @@ impl GpuPipelineRealizationError {
     }
 
     pub(crate) fn with_secondary_detail(mut self, detail: impl Into<String>) -> Self {
-        self.secondary_detail =
-            sanitized_diagnostic(detail.into()).map(String::into_boxed_str);
+        self.secondary_detail = sanitized_diagnostic(detail.into()).map(String::into_boxed_str);
         self
     }
 

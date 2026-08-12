@@ -1,14 +1,14 @@
+use super::G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION;
 use super::publication::{ensure_available, scoped_create};
 use super::records::ComputePipelineRealizationRecord;
 use super::registry::{self, InFlightOutcome, Reservation};
-use super::G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION;
 use crate::plugins::gpu::{
     GpuAlignmentFacts, GpuAlignmentKind, GpuCapabilityAdmission, GpuCapabilityFeature,
     GpuComputePipelineDescriptor, GpuContext, GpuContextAffinity, GpuLimits,
-    GpuPipelineLayoutDescriptor, GpuPipelineRealizationError,
-    GpuPipelineRealizationErrorCategory, GpuProgramBindingRealizationError,
-    GpuProgramBindingRealizationErrorCategory, GpuRealizedComputePipeline,
-    GpuRealizedPipelineLayout, GpuRealizedProgram, GpuShaderStage, GpuSpecializationValue,
+    GpuPipelineLayoutDescriptor, GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory,
+    GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory,
+    GpuRealizedComputePipeline, GpuRealizedPipelineLayout, GpuRealizedProgram, GpuShaderStage,
+    GpuSpecializationValue,
 };
 use std::sync::Arc;
 use wgpu::{ComputePipelineDescriptor, PipelineCompilationOptions};
@@ -193,16 +193,16 @@ fn validate_compute_descriptor(
             "the compute entry point is absent from the descriptor-owned program",
         ));
     }
-    let expected_layout =
-        GpuPipelineLayoutDescriptor::from_interface(descriptor.program().interface()).map_err(
-            |error| {
-                GpuPipelineRealizationError::new(
-                    GpuPipelineRealizationErrorCategory::PipelineDescriptorInvalid,
-                    request.clone(),
-                    error.to_string(),
-                )
-            },
-        )?;
+    let expected_layout = GpuPipelineLayoutDescriptor::from_interface(
+        descriptor.program().interface(),
+    )
+    .map_err(|error| {
+        GpuPipelineRealizationError::new(
+            GpuPipelineRealizationErrorCategory::PipelineDescriptorInvalid,
+            request.clone(),
+            error.to_string(),
+        )
+    })?;
     if descriptor.layout() != &expected_layout {
         return Err(GpuPipelineRealizationError::new(
             GpuPipelineRealizationErrorCategory::ProgramInterfaceMismatch,
@@ -272,9 +272,7 @@ fn compute_request_name(descriptor: &GpuComputePipelineDescriptor) -> String {
     format!("compute pipeline entry={}", descriptor.entry_point())
 }
 
-fn wgpu_specialization_constants(
-    descriptor: &GpuComputePipelineDescriptor,
-) -> Vec<(&str, f64)> {
+fn wgpu_specialization_constants(descriptor: &GpuComputePipelineDescriptor) -> Vec<(&str, f64)> {
     descriptor
         .specialization()
         .entries()
