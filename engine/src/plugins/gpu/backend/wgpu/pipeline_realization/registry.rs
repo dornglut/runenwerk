@@ -164,10 +164,7 @@ where
     let mut rejected = false;
     if let Some(record) = locked.ready.get(&key).cloned() {
         if ready_matches(&key, &record) {
-            return Ok((
-                Reservation::Ready(record),
-                PipelineCacheObservation::Hit,
-            ));
+            return Ok((Reservation::Ready(record), PipelineCacheObservation::Hit));
         }
         // A mismatched ready record is removed only from future lookup. Any live opaque handle
         // keeps its Arc and remains valid; ordinary realization below reconstructs this key.
@@ -175,10 +172,7 @@ where
         rejected = true;
     }
     if let Some(attempt) = locked.in_flight.get(&key).cloned() {
-        return Ok((
-            Reservation::Waiter(attempt),
-            PipelineCacheObservation::Hit,
-        ));
+        return Ok((Reservation::Waiter(attempt), PipelineCacheObservation::Hit));
     }
     if locked.total_len() >= max_records.get() {
         locked.collect_lookup_only();
@@ -239,8 +233,7 @@ mod tests {
             Reservation::Owner(owner) => owner,
             Reservation::Ready(_) | Reservation::Waiter(_) => panic!("first caller owns"),
         };
-        let (attempt, observation) =
-            reserve(&registry, max, 7, "compute 7", |_, _| true).unwrap();
+        let (attempt, observation) = reserve(&registry, max, 7, "compute 7", |_, _| true).unwrap();
         assert_eq!(observation, PipelineCacheObservation::Hit);
         let attempt = match attempt {
             Reservation::Waiter(attempt) => attempt,
@@ -279,11 +272,7 @@ mod tests {
         let registry = Arc::new(Mutex::new(SingleFlightRegistry::<u32, u32>::default()));
         let max = NonZeroUsize::new(2).unwrap();
         let stale = Arc::new(8_u32);
-        registry
-            .lock()
-            .unwrap()
-            .ready
-            .insert(7, Arc::clone(&stale));
+        registry.lock().unwrap().ready.insert(7, Arc::clone(&stale));
 
         let (reservation, observation) =
             reserve(&registry, max, 7, "compute 7", |key, record| key == record).unwrap();

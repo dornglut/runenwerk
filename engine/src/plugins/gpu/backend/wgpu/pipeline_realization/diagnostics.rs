@@ -25,9 +25,7 @@ impl PipelineCacheDiagnosticRecord {
         match observation {
             PipelineCacheObservation::Hit => self.hits = self.hits.saturating_add(1),
             PipelineCacheObservation::Miss => self.misses = self.misses.saturating_add(1),
-            PipelineCacheObservation::Rejected => {
-                self.rejected = self.rejected.saturating_add(1)
-            }
+            PipelineCacheObservation::Rejected => self.rejected = self.rejected.saturating_add(1),
         }
     }
 }
