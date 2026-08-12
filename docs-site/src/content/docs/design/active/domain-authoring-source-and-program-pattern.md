@@ -1,289 +1,53 @@
 ---
-title: Domain Authoring Source And Program Pattern
-description: Cross-domain authoring pattern for source, normalized models, domain programs, runtime artifacts, hosts, diagnostics, fixtures, migrations, and proof reports without creating a universal AST or shared meta-framework.
-status: active
+title: Superseded Domain Authoring Source And Program Pattern
+description: Supersession marker for the former cross-domain universal source/program lifecycle proposal.
+status: superseded
 owner: workspace
-layer: design
+layer: history
 canonical: false
-last_reviewed: 2026-07-08
-related:
-  - ./runenwerk-domain-workbench-north-star.md
+last_reviewed: 2026-08-12
+replacement_docs:
+  - ../../architecture/runenwerk-platform-architecture.md
   - ../../guidelines/domain-program-architecture-pattern.md
-  - ./ui-program-architecture.md
-  - ./runenwerk-typed-app-composition-plugin-framework-design.md
-  - ./ui-framework-runtime-requirements-design.md
-  - ./ui-reactive-runtime-and-invalidation-design.md
+  - ../../adr/accepted/0018-semantic-federation-and-physical-realization.md
 ---
 
-# Domain Authoring Source And Program Pattern
+# Superseded Domain Authoring Source And Program Pattern
 
-## Status
+This cross-domain proposal no longer defines a lifecycle that every Runenwerk domain
+must follow.
 
-Active architecture direction for how Runenwerk domains should be authored and
-lowered. This document defines vocabulary and boundaries only. It does not
-authorize implementation, crate creation, `foundation/meta`, a generic graph
-runtime, a universal AST, a generic compiler/evaluator framework, or shared
-platform extraction.
+Use:
 
-This document is a companion to the existing canonical Domain Program
-Architecture Pattern. It is not a replacement for that guideline until a later
-accepted architecture update explicitly promotes it.
+- [Runenwerk Platform Architecture](../../architecture/runenwerk-platform-architecture.md)
+  for the current family-wide architecture;
+- [Domain Program Architecture Pattern](../../guidelines/domain-program-architecture-pattern.md)
+  when an owning domain genuinely needs a durable source/program/compiler/evaluator
+  lifecycle;
+- [ADR 0018](../../adr/accepted/0018-semantic-federation-and-physical-realization.md)
+  for semantic federation and shared-extraction constraints.
 
-## Decision
-
-Runenwerk domains use a source/program lifecycle:
-
-```text
-Authoring Source
--> Source Model
--> Normalized Domain Model
--> Domain Program
--> Compiler / Evaluator
--> Runtime Artifact / Output Facts
--> Host Integration
--> Proof / Diagnostics / Migration Reports
-```
-
-The exact compiler/evaluator ordering may vary by domain:
+The following former assumptions are not current platform authority:
 
 ```text
-compile-first:
-  Domain Program -> Compiler -> Runtime Artifact -> Evaluator -> Output Facts
-
-evaluate-direct:
-  Domain Program -> Evaluator -> Output Facts
-
-hybrid:
-  Domain Program -> Compiler -> Runtime Artifact
-  Domain Program + Runtime Artifact -> Evaluator -> Output Facts
+all Runenwerk domains use one Source -> Domain Program lifecycle
+stable IDs / versions / source-map / diagnostic envelopes are automatically shared
+TypedGraph<DomainGraphKind> is a pre-authorized platform substrate
+UI + one non-UI proof automatically establishes those shared shapes
+RenderPlan is a generic Domain Program example
 ```
 
-The lifecycle is common. Domain meaning is not common.
+Domain-owned source/program/compiler/evaluator structures remain valid where their
+actual semantics and lifecycle require them. Shared extraction remains blocked until
+structurally different real domains prove the same neutral primitive and a separate
+accepted extraction decision authorizes it.
 
-Correct principle:
+## Why this marker remains temporarily
 
-```text
-Domains own meaning.
-The platform owns structure.
-```
+Current active design material still contains links to this historical proposal and
+repository code search is unavailable during #251. The path remains only as a
+non-authoritative supersession marker to avoid an unverified broken-link migration.
 
-The platform may standardize stable structure such as IDs, versions, package
-manifests, source-map envelopes, diagnostic envelopes, capability references,
-artifact manifests, host profiles, compatibility reports, proof report envelopes,
-and eventually carefully bounded typed graph substrate primitives.
-
-The platform must not own the meaning of controls, material nodes, procgen rules,
-render passes, animation states, behavior nodes, gameplay effects, editor tools,
-asset import rules, or domain compiler/evaluator behavior.
-
-## Vocabulary
-
-### Authoring Source
-
-Durable user-facing or tool-facing source. Authoring source may be textual,
-visual, graph-based, Rust-authored, data-driven, generated, imported, or hybrid.
-It is not the hot-path runtime format.
-
-Use `Source`, not `SourceAst`, as the public architecture term. ASTs are one
-possible representation of source, not the source stage itself.
-
-### Source Model
-
-The in-memory representation of authoring source after parse, import, build,
-projection, or visual-editor export. A source model may be tree-shaped,
-graph-shaped, document-shaped, template-shaped, or package-backed.
-
-Concrete source body names are domain-specific:
-
-```text
-UiSource
-MaterialSourceGraph
-ProcgenSourceGraph
-RenderPlanSource
-ToolSource
-AssetImportSource
-BehaviorSourceGraph
-```
-
-### AST
-
-A concrete syntax-tree representation for textual or tree-shaped source bodies.
-`Ast` is not the generic platform stage and must not replace `Source` in public
-architecture vocabulary.
-
-### Source Graph
-
-A concrete source-body representation for graph-shaped authoring. Graphs are
-common, but source graph meaning stays domain-owned.
-
-### Normalized Domain Model
-
-Canonical validated source after migration, reference resolution, package
-resolution, schema checks, and deterministic normalization. It should preserve
-source-map provenance and attach diagnostics.
-
-### Domain Program
-
-A durable, versioned, inspectable executable contract for one domain. Examples:
-
-```text
-UiProgram
-MaterialProgram
-ProcgenProgram
-RenderPlan
-AnimationProgram
-BehaviorProgram
-GameplayProgram
-AssetImportProgram
-ToolProgram
-```
-
-A domain program contains domain-owned typed graphs, required packages,
-capabilities, schemas, source maps, diagnostics, fixture references, migration
-metadata, compiler/evaluator contracts, and runtime artifact declarations.
-
-### Runtime Artifact
-
-An optimized derived product created from a domain program. Runtime artifacts may
-be cached, hashed, diffed, inspected, invalidated, and reproduced. They must not
-become source truth.
-
-### Output Facts
-
-Evaluator/compiler facts intended for host consumption. Examples include UI
-output, event packets, render plans, preview facts, proof facts, diagnostics, or
-artifact manifests. Output facts are not host side effects.
-
-### Host
-
-A concrete environment that consumes evaluated facts or runtime artifacts and
-performs side effects. Examples include editor, game runtime, world-space,
-headless test, CLI, preview, remote-devtools, build, and CI hosts.
-
-## Generalization Matrix
-
-| Structure | Generalize? | Rule |
-|---|---:|---|
-| Stable IDs | Yes | Domain-neutral. |
-| Versions | Yes | Needed for source, program, artifact, migration, and proof. |
-| Source-map envelope | Yes | Domain-neutral provenance. |
-| Diagnostic envelope | Yes | Envelope can be shared; diagnostic meaning stays domain-owned. |
-| Capability references | Yes | Needed for validation, host compatibility, and trust policy. |
-| Dependency/invalidation envelope | Later | Strong candidate after UI plus one non-UI proof. |
-| Incremental update report envelope | Later | Useful if at least two domains prove dirty-scope reporting. |
-| Package manifests | Later | Extract only after UI plus one non-UI proof. |
-| Extension-point manifests | Later | Likely shared, but must remain typed and bounded. |
-| Typed graph substrate | Later | Share structure only, not node/edge/port meaning. |
-| Artifact manifest envelope | Later | Strong candidate after two domain proofs. |
-| Host compatibility matrix | Later | Strong candidate after UI plus one non-UI host proof. |
-| Proof report envelope | Later | Strong candidate after proof surfaces repeat. |
-| Compiler/evaluator traits | Not yet | Easy to over-generalize before second proof. |
-| Universal AST | Never | Too narrow and semantically misleading. |
-| Universal node graph | Never | Becomes untyped node soup. |
-| ECS app model | Never | ECS is runtime fabric, not domain source truth. |
-
-## Domain Instantiations
-
-| Domain | Source | Program | Artifact / output | Host examples |
-|---|---|---|---|---|
-| UI | `UiSource` | `UiProgram` | UI runtime artifacts, UI output, frames, event packets | editor, game HUD, world-space, headless, preview |
-| Materials | `MaterialSourceGraph` | `MaterialProgram` | shader modules, material pipeline artifacts, preview facts | renderer, material lab, game, preview |
-| Procgen | `ProcgenSourceGraph` | `ProcgenProgram` | chunk recipes, spawn tables, field caches | editor, game, headless bake, preview |
-| Render | `RenderPlanSource` | `RenderPlan` | render graph artifacts, GPU resource plans | renderer, editor preview, game |
-| Animation | `AnimationSourceGraph` | `AnimationProgram` | runtime animation graph, baked tables | game, editor preview, tests |
-| Behavior | `BehaviorSourceGraph` | `BehaviorProgram` | runtime behavior plan | game, simulation, headless |
-| Asset import | `AssetImportSource` | `AssetImportProgram` | import recipes, cache products | editor, CLI, build host |
-| Tools | `ToolSource` | `ToolProgram` | command tables, input plans, preview plans | editor, remote tools, headless |
-
-## Relationship To ECS And Graphs
-
-Most domains contain graphs, but not every source should be forced into one graph
-shape. The correct platform direction is:
-
-```text
-TypedGraph<DomainGraphKind>
-```
-
-not:
-
-```text
-UniversalNodeGraph
-```
-
-ECS belongs to the runtime fabric. ECS may execute optimized artifacts, hold live
-host/runtime state, schedule systems, and bridge concrete runtime behavior. ECS
-must not own source truth, package catalogs, domain program semantics, material
-node meaning, UI control meaning, procgen rule meaning, or app model truth.
-
-## Reactive And Incremental Structure
-
-Reactive/incremental update concepts are structural candidates, not domain
-meaning. They should be considered for later shared extraction only after UI and
-one non-UI domain prove repeated needs.
-
-Potential shared envelopes:
-
-```text
-DependencyGraphRef
-InvalidationCause
-InvalidationScope
-DirtySetSummary
-IncrementalUpdateReport
-StateRetentionDecision
-ArtifactInvalidationReport
-```
-
-The meaning of a dirty UI node, dirty material shader node, dirty procgen region,
-or dirty render pass remains domain-owned.
-
-## Required Reports
-
-Any serious domain-authoring track should define report surfaces for:
-
-```text
-source validation
-normalization
-program formation
-package resolution
-capability checks
-compiler/evaluator output
-artifact construction
-artifact invalidation
-incremental update where applicable
-host compatibility
-proof execution
-migration
-assembly where applicable
-```
-
-## Rejected Vocabulary
-
-Do not introduce these as durable public architecture names:
-
-```text
-UniversalAst
-UniversalNodeGraph
-GlobalStore
-EcsAppModel
-RendererSourceTruth
-FoundationMeta
-GenericCompilerFramework
-GenericEvaluatorFramework
-GenericFeature
-```
-
-## Extraction Rule
-
-Use this sequence:
-
-```text
-design the pattern
--> prove UI
--> prove one non-UI domain
--> extract only repeated domain-neutral primitives
-```
-
-A shared primitive may be extracted only when at least two domains need it, it is
-truly domain-agnostic, it does not weaken domain ownership, versioning and
-runtime overhead are documented, tests and docs exist, and an accepted extraction
-design authorizes the exact scope.
+Removal condition: a later #205 reference/lifecycle cleanup may delete this marker after
+all inbound links have been command-verified and migrated. It must not return to the
+active-design index or be cited as the platform-wide authoring model.
