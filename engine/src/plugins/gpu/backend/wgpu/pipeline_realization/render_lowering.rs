@@ -7,7 +7,8 @@ use crate::plugins::gpu::{
 use wgpu::{
     BlendState, ColorTargetState, DepthBiasState, DepthStencilState, DownlevelFlags, Features,
     MultisampleState, PolygonMode, PrimitiveState, StencilState, TextureFormat,
-    TextureFormatFeatures, TextureUsages, VertexAttribute, VertexBufferLayout, VertexStepMode,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureUsages, VertexAttribute,
+    VertexBufferLayout, VertexStepMode,
 };
 
 use super::super::WgpuContextState;
@@ -53,7 +54,19 @@ pub(super) fn lower_render_pipeline(
             output
                 .color_targets()
                 .map(|target| {
-                    validate_attachment_support(context, target.format(), sample_count, request)?;
+                    let features = validate_attachment_support(
+                        context,
+                        target.format(),
+                        sample_count,
+                        request,
+                    )?;
+                    validate_color_blend_support(
+                        target.blend(),
+                        features
+                            .flags
+                            .contains(TextureFormatFeatureFlags::BLENDABLE),
+                        request,
+                    )?;
                     Ok(Some(lower_color_target(target)))
                 })
                 .collect::<Result<Vec<_>, GpuPipelineRealizationError>>()
@@ -218,7 +231,7 @@ fn validate_attachment_support(
     format: GpuTextureFormat,
     sample_count: u32,
     request: &str,
-) -> Result<(), GpuPipelineRealizationError> {
+) -> Result<TextureFormatFeatures, GpuPipelineRealizationError> {
     let native_format = render_mapping::texture_format(format);
     let features = device_format_features(&context.backend, native_format);
     if !features
@@ -234,6 +247,20 @@ fn validate_attachment_support(
         return Err(incompatible(
             request,
             "the selected attachment format does not support the requested sample count",
+        ));
+    }
+    Ok(features)
+}
+
+fn validate_color_blend_support(
+    blend: GpuBlendMode,
+    blendable: bool,
+    request: &str,
+) -> Result<(), GpuPipelineRealizationError> {
+    if matches!(blend, GpuBlendMode::Alpha) && !blendable {
+        return Err(incompatible(
+            request,
+            "the selected color attachment format does not support blending required by the pipeline state",
         ));
     }
     Ok(())
@@ -299,4 +326,27 @@ fn incompatible(request: &str, detail: &'static str) -> GpuPipelineRealizationEr
         request,
         detail,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alpha_blending_requires_a_blendable_color_format() {
+        assert!(validate_color_blend_support(GpuBlendMode::Replace, false, "test").is_ok());
+        assert!(validate_color_blend_support(GpuBlendMode::Alpha, true, "test").is_ok());
+
+        let error = validate_color_blend_support(GpuBlendMode::Alpha, false, "test")
+            .expect_err("alpha blending must reject a non-blendable color format");
+        assert_eq!(
+            error.category(),
+            GpuPipelineRealizationErrorCategory::FormatOrAlignmentNotAdmitted
+        );
+        assert!(
+            error
+                .detail()
+                .is_some_and(|detail| detail.contains("does not support blending"))
+        );
+    }
 }
