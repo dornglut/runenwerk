@@ -7,17 +7,19 @@ use std::num::NonZeroUsize;
 pub enum GpuPipelineRealizationErrorCategory {
     ForeignContext,
     StaleDeviceGeneration,
-    UnknownRealizedProgram,
-    UnknownRealizedPipelineLayout,
-    PipelineLayoutMismatch,
+    UnknownProgramOrLayoutRealization,
+    PipelineDescriptorInvalid,
+    EntryPointStageMismatch,
+    ProgramInterfaceMismatch,
     PipelineStageIoMismatch,
-    PipelineRequirementNotAdmitted,
-    PipelineStateNotAdmitted,
+    RequirementNotAdmitted,
+    FormatOrAlignmentNotAdmitted,
     RegistryCapacityExceeded,
     CacheRejected,
     UnexpectedBackendPipelineValidationRejection,
     BackendResourceExhaustion,
     ContextOrDeviceUnavailableOrLost,
+    CurrentRenderExecutionBridgeViolation,
 }
 
 impl GpuPipelineRealizationErrorCategory {
@@ -27,23 +29,26 @@ impl GpuPipelineRealizationErrorCategory {
             Self::StaleDeviceGeneration => {
                 "realize the pipeline again against the current GPU device generation"
             }
-            Self::UnknownRealizedProgram => {
-                "realize the descriptor-owned program through this context before pipeline publication"
+            Self::UnknownProgramOrLayoutRealization => {
+                "use program and pipeline-layout realizations retained by this GPU context"
             }
-            Self::UnknownRealizedPipelineLayout => {
-                "realize the descriptor-owned pipeline layout through this context before pipeline publication"
+            Self::PipelineDescriptorInvalid => {
+                "use one complete accepted G4B compute or render pipeline descriptor"
             }
-            Self::PipelineLayoutMismatch => {
-                "use the exact descriptor-owned layout realized for this pipeline request"
+            Self::EntryPointStageMismatch => {
+                "select entry points declared for the pipeline's required shader stages"
+            }
+            Self::ProgramInterfaceMismatch => {
+                "make the descriptor program and pipeline layout agree with the accepted G4C2 realizations"
             }
             Self::PipelineStageIoMismatch => {
                 "make explicit vertex/color pipeline state agree with the selected program entry-point signatures"
             }
-            Self::PipelineRequirementNotAdmitted => {
+            Self::RequirementNotAdmitted => {
                 "admit every required pipeline capability when requesting the GPU context"
             }
-            Self::PipelineStateNotAdmitted => {
-                "use pipeline state within the admitted format and device-limit facts"
+            Self::FormatOrAlignmentNotAdmitted => {
+                "use pipeline state within the admitted format, alignment, and device-limit facts"
             }
             Self::RegistryCapacityExceeded => {
                 "release unused realized pipeline handles before creating more authoritative records"
@@ -59,6 +64,9 @@ impl GpuPipelineRealizationErrorCategory {
             }
             Self::ContextOrDeviceUnavailableOrLost => {
                 "stop using this context and let the owning product choose recovery"
+            }
+            Self::CurrentRenderExecutionBridgeViolation => {
+                "use only the audited lexical current-render execution terminal"
             }
         }
     }
@@ -147,17 +155,19 @@ mod tests {
         let categories = [
             GpuPipelineRealizationErrorCategory::ForeignContext,
             GpuPipelineRealizationErrorCategory::StaleDeviceGeneration,
-            GpuPipelineRealizationErrorCategory::UnknownRealizedProgram,
-            GpuPipelineRealizationErrorCategory::UnknownRealizedPipelineLayout,
-            GpuPipelineRealizationErrorCategory::PipelineLayoutMismatch,
+            GpuPipelineRealizationErrorCategory::UnknownProgramOrLayoutRealization,
+            GpuPipelineRealizationErrorCategory::PipelineDescriptorInvalid,
+            GpuPipelineRealizationErrorCategory::EntryPointStageMismatch,
+            GpuPipelineRealizationErrorCategory::ProgramInterfaceMismatch,
             GpuPipelineRealizationErrorCategory::PipelineStageIoMismatch,
-            GpuPipelineRealizationErrorCategory::PipelineRequirementNotAdmitted,
-            GpuPipelineRealizationErrorCategory::PipelineStateNotAdmitted,
+            GpuPipelineRealizationErrorCategory::RequirementNotAdmitted,
+            GpuPipelineRealizationErrorCategory::FormatOrAlignmentNotAdmitted,
             GpuPipelineRealizationErrorCategory::RegistryCapacityExceeded,
             GpuPipelineRealizationErrorCategory::CacheRejected,
             GpuPipelineRealizationErrorCategory::UnexpectedBackendPipelineValidationRejection,
             GpuPipelineRealizationErrorCategory::BackendResourceExhaustion,
             GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
+            GpuPipelineRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
         ];
         for category in categories {
             assert!(!category.correction().trim().is_empty(), "{category:?}");
