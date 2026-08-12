@@ -28,7 +28,7 @@ pub enum RuntimeBufferKind {
 #[derive(Debug)]
 pub struct RuntimeTextureResource {
     pub handle: GpuTextureHandle,
-    pub _view_handle: GpuTextureViewHandle,
+    pub view_handle: GpuTextureViewHandle,
     pub realized: GpuRealizedTexture,
     pub realized_view: GpuRealizedTextureView,
     pub format: TextureFormat,
@@ -190,11 +190,10 @@ impl FlowRuntimeResources {
 pub struct ResolvedTextureRef<'a> {
     pub id: RuntimeResourceKey,
     pub texture: RuntimeTextureRef<'a>,
-    pub realized_view: Option<&'a GpuRealizedTextureView>,
+    pub view_handle: Option<&'a GpuTextureViewHandle>,
     pub format: TextureFormat,
     pub size: (u32, u32),
     pub is_depth: bool,
-    pub generation: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -206,10 +205,10 @@ pub enum RuntimeTextureRef<'a> {
 #[derive(Debug)]
 pub struct ResolvedBufferRef<'a> {
     pub id: RuntimeResourceKey,
+    pub handle: &'a GpuBufferHandle,
     pub buffer: &'a GpuRealizedBuffer,
     pub size: u64,
     pub kind: RuntimeBufferKind,
-    pub generation: Option<u64>,
 }
 
 #[derive(Debug)]

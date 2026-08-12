@@ -1,19 +1,21 @@
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderBindGroupTerminal, GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor,
-    GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
-    GpuBlendMode as GpuPipelineBlendMode, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
-    GpuColorWriteMask, GpuCompareFunction, GpuComputePipelineDescriptor,
-    GpuCullMode as GpuPipelineCullMode, GpuDepthStencilStateDescriptor, GpuEntryPointDescriptor,
-    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat,
-    GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    GpuAdmittedProgramSource, GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration,
+    GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode as GpuPipelineBlendMode,
+    GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
+    GpuCompareFunction, GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
+    GpuDepthStencilStateDescriptor, GpuEntryPointDescriptor, GpuEntryPointName,
+    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
+    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
     GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
-    GpuProgramInterfaceDescriptor, GpuRealizedBuffer, GpuRealizedTextureView, GpuRenderEntryPoints,
-    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuSamplerClass, GpuShaderStage,
-    GpuShaderStages, GpuSpecializationValueSet, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension, GpuVertexAttribute,
-    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
-    GpuVertexStepMode,
+    GpuProgramInterfaceDescriptor, GpuRealizedBindGroup, GpuRealizedPipelineLayout,
+    GpuRealizedProgram, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
+    GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
+    GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle,
+    GpuShaderStage, GpuShaderStages, GpuSpecializationValueSet, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension,
+    GpuTextureViewHandle, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
+    GpuVertexInputStateDescriptor, GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineDescriptor;
 use crate::plugins::render::renderer::resource_descriptors::linear_sampler_descriptor;
@@ -21,21 +23,29 @@ use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderFeatureId, RenderPassId,
     RenderPrimitiveTopology, RenderRasterState, RenderVertexFormat, RenderVertexStepMode,
 };
+use std::num::NonZeroU64;
 
 enum RuntimeBindingResource {
-    TextureView(GpuRealizedTextureView),
-    SurfaceTextureView(TextureView),
-    SamplerPlaceholder,
-    Buffer(GpuRealizedBuffer),
+    TextureView(GpuTextureViewHandle),
+    Buffer {
+        handle: crate::plugins::gpu::GpuBufferHandle,
+        size: u64,
+    },
 }
 
 struct RuntimeBindingResolved {
     key: GpuBindingKey,
     kind: GpuBindingKind,
-    resource: RuntimeBindingResource,
-    resource_identity: Option<RuntimeResourceKey>,
-    generation_token: Option<u64>,
-    cacheable: bool,
+    resource: Option<RuntimeBindingResource>,
+}
+
+/// G4C2-owned program/layout/bind-group realization prepared before the temporary raw pipeline
+/// interval. The remaining render/compute pipeline object is deliberately G4C3-owned.
+pub(in crate::plugins::render::renderer) struct RealizedFlowProgramBindings {
+    pub(super) pipeline_key: FlowPassPipelineKey,
+    pub(super) program: GpuRealizedProgram,
+    pub(super) pipeline_layout: GpuRealizedPipelineLayout,
+    pub(super) bind_group: Option<GpuRealizedBindGroup>,
 }
 
 impl Renderer {
@@ -43,7 +53,6 @@ impl Renderer {
     pub(super) fn resolve_compiled_bind_group(
         &mut self,
         context: &GpuContext,
-        device: &Device,
         frame_texture: &Texture,
         packet: &RendererPreparedPacket,
         flow: &CompiledRenderFlowPlan,
@@ -58,11 +67,7 @@ impl Renderer {
         color_formats: Vec<TextureFormat>,
         depth_format: Option<TextureFormat>,
         runtime_resources: &FlowRuntimeResources,
-    ) -> Result<(
-        FlowPassPipelineKey,
-        Option<BindGroupLayout>,
-        Option<BindGroup>,
-    )> {
+    ) -> Result<RealizedFlowProgramBindings> {
         let mut resolved_entries = Vec::<RuntimeBindingResolved>::new();
         for entry in &bindings.bind_group.entries {
             match entry {
@@ -103,20 +108,17 @@ impl Renderer {
                             GpuTextureViewDimension::D2,
                             false,
                         )?,
-                        resource: resolved_binding_texture_view(&texture)?,
-                        resource_identity: Some(texture.id),
-                        generation_token: texture.generation,
-                        cacheable: texture.generation.is_some(),
+                        resource: Some(resolved_binding_texture_view(
+                            &texture.id,
+                            texture.view_handle,
+                        )?),
                     });
                 }
                 CompiledBindingEntry::Sampler { key } => {
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
                         kind: GpuBindingKind::sampler(GpuSamplerClass::Filtering),
-                        resource: RuntimeBindingResource::SamplerPlaceholder,
-                        resource_identity: None,
-                        generation_token: Some(0),
-                        cacheable: true,
+                        resource: None,
                     });
                 }
                 CompiledBindingEntry::StorageTexture {
@@ -155,10 +157,10 @@ impl Renderer {
                             gpu_texture_format_from_wgpu(texture.format)?,
                             GpuTextureViewDimension::D2,
                         )?,
-                        resource: resolved_binding_texture_view(&texture)?,
-                        resource_identity: Some(texture.id),
-                        generation_token: texture.generation,
-                        cacheable: texture.generation.is_some(),
+                        resource: Some(resolved_binding_texture_view(
+                            &texture.id,
+                            texture.view_handle,
+                        )?),
                     });
                 }
                 CompiledBindingEntry::UniformBuffer { key, resource } => {
@@ -167,10 +169,10 @@ impl Renderer {
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
                         kind: GpuBindingKind::uniform_buffer(false, None),
-                        resource: RuntimeBindingResource::Buffer(buffer.buffer.clone()),
-                        resource_identity: Some(buffer.id),
-                        generation_token: buffer.generation,
-                        cacheable: buffer.generation.is_some(),
+                        resource: Some(RuntimeBindingResource::Buffer {
+                            handle: buffer.handle.clone(),
+                            size: buffer.size,
+                        }),
                     });
                 }
                 CompiledBindingEntry::StorageBuffer {
@@ -186,10 +188,10 @@ impl Renderer {
                             false,
                             None,
                         ),
-                        resource: RuntimeBindingResource::Buffer(buffer.buffer.clone()),
-                        resource_identity: Some(buffer.id),
-                        generation_token: buffer.generation,
-                        cacheable: buffer.generation.is_some(),
+                        resource: Some(RuntimeBindingResource::Buffer {
+                            handle: buffer.handle.clone(),
+                            size: buffer.size,
+                        }),
                     });
                 }
             }
@@ -213,12 +215,9 @@ impl Renderer {
             })
             .collect::<Result<Vec<_>>>()?;
         let primary_bind_group_layout = GpuBindGroupLayoutDescriptor::new(0, binding_declarations)?;
-        let bind_group_layout_entries = primary_bind_group_layout
-            .bindings()
-            .map(wgpu_bind_group_layout_entry)
-            .collect::<Result<Vec<_>>>()?;
         let pipeline_layout =
             gpu_pipeline_layout_for_pass(packet, flow, pass_id, &primary_bind_group_layout)?;
+        let has_primary_bind_group = pipeline_layout.group(0).is_some();
         let render_pipeline_state =
             gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?;
         let pipeline_descriptor = gpu_pipeline_descriptor_for_pass(
@@ -237,163 +236,112 @@ impl Renderer {
             pipeline_descriptor,
         };
 
-        if bind_group_layout_entries.is_empty() {
-            return Ok((pipeline_key, None, None));
-        }
-
-        let shared_sampler = if resolved_entries
+        let sampler = if resolved_entries
             .iter()
-            .any(|entry| matches!(entry.resource, RuntimeBindingResource::SamplerPlaceholder))
+            .any(|entry| entry.kind.class() == GpuBindingClass::Sampler)
         {
-            Some(self.flow_pipeline_cache.get_or_realize_sampler(
-                context,
-                pipeline_key.clone(),
-                linear_sampler_descriptor(
-                    "engine_compiled_flow_sampler",
-                    crate::plugins::gpu::GpuResourceLifetime::Retained,
-                )?,
-            )?)
+            Some(
+                self.flow_pipeline_cache
+                    .get_or_realize_sampler(
+                        context,
+                        pipeline_key.clone(),
+                        linear_sampler_descriptor(
+                            "engine_compiled_flow_sampler",
+                            crate::plugins::gpu::GpuResourceLifetime::Retained,
+                        )?,
+                    )?
+                    .handle()
+                    .clone(),
+            )
         } else {
             None
         };
 
-        let bind_group_layout =
-            self.flow_pipeline_cache
-                .get_or_create_bind_group_layout(pipeline_key.clone(), || {
-                    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                        label: Some("engine_compiled_flow_bind_group_layout"),
-                        entries: &bind_group_layout_entries,
-                    })
-                });
-
-        let mut can_cache_bind_group = true;
-        let mut signature_hasher = std::collections::hash_map::DefaultHasher::new();
-        for value in &resolved_entries {
-            value.key.hash(&mut signature_hasher);
-            if value.cacheable {
-                value.resource_identity.hash(&mut signature_hasher);
-                value.generation_token.hash(&mut signature_hasher);
-            } else {
-                can_cache_bind_group = false;
-            }
-        }
-        let buffers = resolved_entries
-            .iter()
-            .filter_map(|entry| match &entry.resource {
-                RuntimeBindingResource::Buffer(buffer) => Some(buffer),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let views = resolved_entries
-            .iter()
-            .filter_map(|entry| match &entry.resource {
-                RuntimeBindingResource::TextureView(view) => Some(view),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let samplers = shared_sampler.iter().collect::<Vec<_>>();
-        let mut bind_group = None;
-        context.current_render_resource_bridge().for_bind_group(
-            &buffers,
-            &views,
-            &samplers,
-            CreateCompiledBindGroup {
-                device,
-                layout: &bind_group_layout,
-                resolved_entries: &resolved_entries,
-                can_cache: can_cache_bind_group,
-                signature_hash: signature_hasher.finish(),
-                pipeline_key: &pipeline_key,
-                cache: &mut self.flow_pipeline_cache,
-                output: &mut bind_group,
-            },
+        let program = pollster::block_on(
+            context.realize_program(pipeline_key.pipeline_descriptor.program()),
         )?;
-        let bind_group = bind_group.ok_or_else(|| {
-            anyhow::anyhow!(
-                "current render resource bridge did not create pass '{pass_id}' bindings"
-            )
-        })?;
+        let realized_pipeline_layout = pollster::block_on(
+            context.realize_pipeline_layout(pipeline_key.pipeline_descriptor.layout()),
+        )?;
+        let bind_group = if !has_primary_bind_group {
+            None
+        } else {
+            let layout =
+                pollster::block_on(context.realize_bind_group_layout(&primary_bind_group_layout))?;
+            let values = resolved_entries
+                .iter()
+                .map(|value| runtime_binding_value(value, sampler.as_ref()))
+                .collect::<Result<Vec<_>>>()?;
+            Some(pollster::block_on(
+                context.realize_bind_group(&layout, values),
+            )?)
+        };
 
-        Ok((pipeline_key, Some(bind_group_layout), Some(bind_group)))
+        Ok(RealizedFlowProgramBindings {
+            pipeline_key,
+            program,
+            pipeline_layout: realized_pipeline_layout,
+            bind_group,
+        })
     }
 }
 
 fn resolved_binding_texture_view(
-    texture: &ResolvedTextureRef<'_>,
+    id: &RuntimeResourceKey,
+    view_handle: Option<&GpuTextureViewHandle>,
 ) -> Result<RuntimeBindingResource> {
-    match texture.texture {
-        RuntimeTextureRef::Surface(texture) => Ok(RuntimeBindingResource::SurfaceTextureView(
-            texture.create_view(&TextureViewDescriptor::default()),
-        )),
-        RuntimeTextureRef::Realized(_) => texture
-            .realized_view
-            .cloned()
-            .map(RuntimeBindingResource::TextureView)
-            .ok_or_else(|| {
-                anyhow::anyhow!("realized texture '{}' has no realized view", texture.id)
-            }),
-    }
+    let Some(view_handle) = view_handle else {
+        bail!(
+            "pass resource '{}' is an acquired surface texture; SurfaceColor is not a G4C2 sampled or storage shader resource before G7",
+            id
+        );
+    };
+    Ok(RuntimeBindingResource::TextureView(view_handle.clone()))
 }
 
-struct CreateCompiledBindGroup<'a> {
-    device: &'a Device,
-    layout: &'a BindGroupLayout,
-    resolved_entries: &'a [RuntimeBindingResolved],
-    can_cache: bool,
-    signature_hash: u64,
-    pipeline_key: &'a FlowPassPipelineKey,
-    cache: &'a mut FlowPipelineArtifactCache,
-    output: &'a mut Option<BindGroup>,
-}
-
-impl CurrentRenderBindGroupTerminal for CreateCompiledBindGroup<'_> {
-    fn bind_resources(self, buffers: &[&Buffer], views: &[&TextureView], samplers: &[&Sampler]) {
-        let mut buffer_index = 0;
-        let mut view_index = 0;
-        let mut entries = Vec::with_capacity(self.resolved_entries.len());
-        for value in self.resolved_entries {
-            let resource = match &value.resource {
-                RuntimeBindingResource::TextureView(_) => {
-                    let view = views[view_index];
-                    view_index += 1;
-                    BindingResource::TextureView(view)
-                }
-                RuntimeBindingResource::SurfaceTextureView(view) => {
-                    BindingResource::TextureView(view)
-                }
-                RuntimeBindingResource::SamplerPlaceholder => BindingResource::Sampler(samplers[0]),
-                RuntimeBindingResource::Buffer(_) => {
-                    let buffer = buffers[buffer_index];
-                    buffer_index += 1;
-                    buffer.as_entire_binding()
-                }
-            };
-            entries.push(BindGroupEntry {
-                binding: value.key.binding(),
-                resource,
-            });
+fn runtime_binding_value(
+    value: &RuntimeBindingResolved,
+    sampler: Option<&GpuSamplerHandle>,
+) -> Result<GpuRuntimeBindingValue> {
+    let resource = match value.resource.as_ref() {
+        Some(RuntimeBindingResource::TextureView(handle)) => {
+            GpuRuntimeBindingResource::TextureView(GpuRuntimeTextureViewBinding::new(
+                handle.clone(),
+                GpuTextureViewDimension::D2,
+            ))
         }
-        let bind_group = if self.can_cache {
-            let key = FlowPassBindGroupKey {
-                pipeline: self.pipeline_key.clone(),
-                resource_generation_signature_hash: self.signature_hash,
-            };
-            self.cache.get_or_create_bind_group(key, || {
-                self.device.create_bind_group(&BindGroupDescriptor {
-                    label: Some("engine_compiled_flow_bind_group"),
-                    layout: self.layout,
-                    entries: &entries,
-                })
-            })
-        } else {
-            self.device.create_bind_group(&BindGroupDescriptor {
-                label: Some("engine_compiled_flow_bind_group_noncached"),
-                layout: self.layout,
-                entries: &entries,
-            })
-        };
-        *self.output = Some(bind_group);
-    }
+        Some(RuntimeBindingResource::Buffer { handle, size }) => {
+            let size = NonZeroU64::new(*size).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "runtime binding '{}' resolved a zero-sized buffer, which cannot form a G4C2 binding range",
+                    value.key
+                )
+            })?;
+            GpuRuntimeBindingResource::Buffer(GpuRuntimeBufferBinding::new(
+                handle.clone(),
+                0,
+                size,
+                None,
+            ))
+        }
+        None if value.kind.class() == GpuBindingClass::Sampler => {
+            GpuRuntimeBindingResource::Sampler(
+                sampler
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "render-flow sampler binding '{}' lacks its G4C1 sampler handle",
+                            value.key
+                        )
+                    })?
+                    .clone(),
+            )
+        }
+        None => bail!(
+            "render-flow binding '{}' lacks a typed runtime resource before G4C2 realization",
+            value.key
+        ),
+    };
+    Ok(GpuRuntimeBindingValue::new(value.key, [resource])?)
 }
 
 fn gpu_pipeline_layout_for_pass(
@@ -411,11 +359,12 @@ fn gpu_pipeline_layout_for_pass(
             anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan")
         })?;
 
+    let material_group = gpu_material_bind_group_layout_for_pass(packet, pass)?;
     let mut groups = Vec::new();
     if primary_bind_group_layout.bindings().len() != 0 {
         groups.push(primary_bind_group_layout.clone());
     }
-    if let Some(material_group) = gpu_material_bind_group_layout_for_pass(packet, pass)? {
+    if let Some(material_group) = material_group {
         groups.push(material_group);
     }
     Ok(GpuPipelineLayoutDescriptor::new(groups)?)
@@ -803,101 +752,6 @@ fn gpu_shader_stages_from_wgpu(visibility: ShaderStages) -> Result<GpuShaderStag
     )?)
 }
 
-fn wgpu_shader_stages(visibility: GpuShaderStages) -> ShaderStages {
-    visibility
-        .iter()
-        .fold(ShaderStages::empty(), |stages, stage| {
-            stages
-                | match stage {
-                    GpuShaderStage::Compute => ShaderStages::COMPUTE,
-                    GpuShaderStage::Vertex => ShaderStages::VERTEX,
-                    GpuShaderStage::Fragment => ShaderStages::FRAGMENT,
-                }
-        })
-}
-
-fn wgpu_bind_group_layout_entry(
-    declaration: &GpuBindingDeclaration,
-) -> Result<BindGroupLayoutEntry> {
-    Ok(BindGroupLayoutEntry {
-        binding: declaration.key().binding(),
-        visibility: wgpu_shader_stages(declaration.visibility()),
-        ty: wgpu_binding_type(*declaration.kind())?,
-        count: declaration.array_count(),
-    })
-}
-
-fn wgpu_binding_type(kind: GpuBindingKind) -> Result<BindingType> {
-    Ok(match kind.class() {
-        GpuBindingClass::UniformBuffer => BindingType::Buffer {
-            ty: BufferBindingType::Uniform,
-            has_dynamic_offset: kind.uses_dynamic_offset(),
-            min_binding_size: kind.minimum_buffer_size(),
-        },
-        GpuBindingClass::StorageBuffer => BindingType::Buffer {
-            ty: BufferBindingType::Storage {
-                read_only: matches!(
-                    kind.storage_buffer_access(),
-                    Some(GpuStorageBufferAccess::ReadOnly)
-                ),
-            },
-            has_dynamic_offset: kind.uses_dynamic_offset(),
-            min_binding_size: kind.minimum_buffer_size(),
-        },
-        GpuBindingClass::SampledTexture => BindingType::Texture {
-            sample_type: match kind.texture_sample_class().ok_or_else(|| {
-                anyhow::anyhow!("sampled-texture binding is missing its normalized sample class")
-            })? {
-                GpuTextureSampleClass::FloatFilterable => {
-                    TextureSampleType::Float { filterable: true }
-                }
-                GpuTextureSampleClass::FloatUnfilterable => {
-                    TextureSampleType::Float { filterable: false }
-                }
-                GpuTextureSampleClass::Depth => TextureSampleType::Depth,
-                GpuTextureSampleClass::Sint => TextureSampleType::Sint,
-                GpuTextureSampleClass::Uint => TextureSampleType::Uint,
-            },
-            view_dimension: wgpu_texture_view_dimension(kind.texture_view_dimension().ok_or_else(
-                || {
-                    anyhow::anyhow!(
-                        "sampled-texture binding is missing its normalized view dimension"
-                    )
-                },
-            )?),
-            multisampled: kind.is_multisampled_texture(),
-        },
-        GpuBindingClass::StorageTexture => BindingType::StorageTexture {
-            access: match kind.storage_texture_access().ok_or_else(|| {
-                anyhow::anyhow!("storage-texture binding is missing normalized access")
-            })? {
-                GpuStorageTextureAccess::ReadOnly => StorageTextureAccess::ReadOnly,
-                GpuStorageTextureAccess::WriteOnly => StorageTextureAccess::WriteOnly,
-                GpuStorageTextureAccess::ReadWrite => StorageTextureAccess::ReadWrite,
-            },
-            format: wgpu_texture_format(kind.storage_texture_format().ok_or_else(|| {
-                anyhow::anyhow!("storage-texture binding is missing its normalized format")
-            })?),
-            view_dimension: wgpu_texture_view_dimension(kind.texture_view_dimension().ok_or_else(
-                || {
-                    anyhow::anyhow!(
-                        "storage-texture binding is missing its normalized view dimension"
-                    )
-                },
-            )?),
-        },
-        GpuBindingClass::Sampler => BindingType::Sampler(
-            match kind.sampler_class().ok_or_else(|| {
-                anyhow::anyhow!("sampler binding is missing its normalized sampler class")
-            })? {
-                GpuSamplerClass::Filtering => SamplerBindingType::Filtering,
-                GpuSamplerClass::NonFiltering => SamplerBindingType::NonFiltering,
-                GpuSamplerClass::Comparison => SamplerBindingType::Comparison,
-            },
-        ),
-    })
-}
-
 fn gpu_storage_buffer_access(access: CompiledStorageAccess) -> GpuStorageBufferAccess {
     match access {
         CompiledStorageAccess::ReadOnly => GpuStorageBufferAccess::ReadOnly,
@@ -930,29 +784,6 @@ fn gpu_texture_format_from_wgpu(format: TextureFormat) -> Result<GpuTextureForma
     }
 }
 
-fn wgpu_texture_format(format: GpuTextureFormat) -> TextureFormat {
-    match format {
-        GpuTextureFormat::R8Unorm => TextureFormat::R8Unorm,
-        GpuTextureFormat::Rgba8Unorm => TextureFormat::Rgba8Unorm,
-        GpuTextureFormat::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
-        GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,
-        GpuTextureFormat::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
-        GpuTextureFormat::R32Uint => TextureFormat::R32Uint,
-        GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,
-    }
-}
-
-fn wgpu_texture_view_dimension(dimension: GpuTextureViewDimension) -> TextureViewDimension {
-    match dimension {
-        GpuTextureViewDimension::D1 => TextureViewDimension::D1,
-        GpuTextureViewDimension::D2 => TextureViewDimension::D2,
-        GpuTextureViewDimension::D2Array => TextureViewDimension::D2Array,
-        GpuTextureViewDimension::Cube => TextureViewDimension::Cube,
-        GpuTextureViewDimension::CubeArray => TextureViewDimension::CubeArray,
-        GpuTextureViewDimension::D3 => TextureViewDimension::D3,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -962,6 +793,23 @@ mod tests {
         PreparedMaterialTextureBinding, PreparedMaterialTextureBindingLocation,
         PreparedMaterialTextureKind,
     };
+
+    #[test]
+    fn surface_color_rejects_before_sampled_or_storage_bind_group_realization() {
+        for role in ["sampled", "storage"] {
+            let error = match resolved_binding_texture_view(&RuntimeResourceKey::SurfaceColor, None)
+            {
+                Err(error) => error,
+                Ok(_) => panic!("SurfaceColor must reject before {role} bind-group realization"),
+            };
+            assert!(
+                error
+                    .to_string()
+                    .contains("not a G4C2 sampled or storage shader resource before G7"),
+                "unexpected SurfaceColor {role} rejection: {error}"
+            );
+        }
+    }
 
     fn material_with_bindings(
         texture_bindings: Vec<PreparedMaterialTextureBinding>,

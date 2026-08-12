@@ -1,7 +1,8 @@
 use crate::plugins::gpu::{
-    GpuBufferHandle, GpuContext, GpuRealizedBuffer, GpuRealizedSampler, GpuRealizedTexture,
-    GpuRealizedTextureView, GpuSamplerHandle, GpuTextureHandle, GpuTextureViewHandle,
-    GpuWorkResourceIdAllocator,
+    GpuBufferHandle, GpuContext, GpuRealizedBindGroup, GpuRealizedBindGroupLayout,
+    GpuRealizedBuffer, GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRealizedSampler,
+    GpuRealizedTexture, GpuRealizedTextureView, GpuSamplerHandle, GpuTextureHandle,
+    GpuTextureViewHandle, GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::backend::WgpuCtx;
@@ -582,42 +583,47 @@ struct ScreenUniformRaw {
 
 #[derive(Debug)]
 struct RectPass {
-    pipeline: RenderPipeline,
+    pipeline: Option<RenderPipeline>,
+    pipeline_artifacts: UiPipelineArtifacts,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: BindGroup,
+    screen_bind_group: GpuRealizedBindGroup,
 }
 
 #[derive(Debug)]
 struct StrokePass {
-    pipeline: RenderPipeline,
+    pipeline: Option<RenderPipeline>,
+    pipeline_artifacts: UiPipelineArtifacts,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: BindGroup,
+    screen_bind_group: GpuRealizedBindGroup,
 }
 
 #[derive(Debug)]
 struct GlyphPass {
-    pipeline: RenderPipeline,
+    pipeline: Option<RenderPipeline>,
+    pipeline_artifacts: UiPipelineArtifacts,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: BindGroup,
-    texture_bind_group_layout: BindGroupLayout,
+    screen_bind_group: GpuRealizedBindGroup,
+    texture_bind_group_layout: GpuRealizedBindGroupLayout,
     texture_sampler: RendererSamplerResource,
 }
 
 #[derive(Debug)]
 struct ViewportEmbedPass {
-    pipeline: RenderPipeline,
+    pipeline: Option<RenderPipeline>,
+    pipeline_artifacts: UiPipelineArtifacts,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: BindGroup,
-    texture_bind_group_layout: BindGroupLayout,
+    screen_bind_group: GpuRealizedBindGroup,
+    texture_bind_group_layout: GpuRealizedBindGroupLayout,
     texture_sampler: RendererSamplerResource,
 }
 
 #[derive(Debug)]
 struct ProductSurfacePass {
-    pipeline: RenderPipeline,
+    pipeline: Option<RenderPipeline>,
+    pipeline_artifacts: UiPipelineArtifacts,
     screen_buffer: RendererBufferResource,
-    screen_bind_group: BindGroup,
-    texture_bind_group_layout: BindGroupLayout,
+    screen_bind_group: GpuRealizedBindGroup,
+    texture_bind_group_layout: GpuRealizedBindGroupLayout,
     texture_sampler: RendererSamplerResource,
 }
 
@@ -636,13 +642,78 @@ struct RendererTextureResource {
 #[derive(Debug, Clone)]
 struct RendererTextureViewResource {
     _handle: GpuTextureViewHandle,
-    realized: GpuRealizedTextureView,
+    _realized: GpuRealizedTextureView,
 }
 
 #[derive(Debug, Clone)]
 struct RendererSamplerResource {
     _handle: GpuSamplerHandle,
-    realized: GpuRealizedSampler,
+    _realized: GpuRealizedSampler,
+}
+
+/// G4C2's accepted UI program/layout realization is retained separately from the temporary
+/// G4C3 pipeline object. The latter is deliberately created only after the render batch enters
+/// its one raw device/queue operation interval.
+#[derive(Debug)]
+struct UiPipelineArtifacts {
+    kind: UiPipelineKind,
+    format: TextureFormat,
+    program: GpuRealizedProgram,
+    pipeline_layout: GpuRealizedPipelineLayout,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum UiPipelineKind {
+    Rect,
+    Stroke,
+    Glyph,
+    ViewportEmbed,
+    ProductSurface,
+}
+
+impl UiPipelineKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Rect => "engine_ui_rect_pipeline",
+            Self::Stroke => "engine_ui_stroke_pipeline",
+            Self::Glyph => "engine_ui_glyph_pipeline",
+            Self::ViewportEmbed => "engine_ui_viewport_embed_pipeline",
+            Self::ProductSurface => "engine_ui_product_surface_pipeline",
+        }
+    }
+}
+
+type UiViewportBindGroups = BTreeMap<ViewportSurfaceBindingSource, GpuRealizedBindGroup>;
+type UiProductSurfaceBindGroups =
+    BTreeMap<ProductSurfaceTextureBindingSource, GpuRealizedBindGroup>;
+
+#[derive(Debug, Clone, Default)]
+struct UiDynamicBindGroups {
+    viewport: UiViewportBindGroups,
+    product_surface: UiProductSurfaceBindGroups,
+}
+
+/// Data uploads are intentionally staged while G4C1/G4C2 resources are realized. Their queue
+/// operations execute only after the batch has acquired its raw G4C3/G5 loan.
+#[derive(Debug, Clone, Default)]
+struct RendererPendingOperations {
+    buffer_uploads: Vec<RendererPendingBufferUpload>,
+    texture_uploads: Vec<RendererPendingTextureUpload>,
+}
+
+#[derive(Debug, Clone)]
+struct RendererPendingBufferUpload {
+    buffer: GpuRealizedBuffer,
+    bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct RendererPendingTextureUpload {
+    texture: GpuRealizedTexture,
+    bytes: Vec<u8>,
+    bytes_per_row: u32,
+    rows_per_image: u32,
+    size: Extent3d,
 }
 
 #[derive(Debug, Clone)]
@@ -713,7 +784,7 @@ struct UiProductSurfaceBatch {
 struct UiGlyphAtlasGpu {
     _texture: RendererTextureResource,
     _view: RendererTextureViewResource,
-    bind_group: BindGroup,
+    bind_group: GpuRealizedBindGroup,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -752,19 +823,14 @@ impl Default for FeatureExecutionGate {
 
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedMaterialGpuResources {
-    layout: BindGroupLayout,
-    bind_group: BindGroup,
+    bind_group: GpuRealizedBindGroup,
     _textures: Vec<RendererTextureResource>,
     _texture_views: Vec<RendererTextureViewResource>,
     _samplers: Vec<RendererSamplerResource>,
 }
 
 impl PreparedMaterialGpuResources {
-    pub(crate) fn layout(&self) -> &BindGroupLayout {
-        &self.layout
-    }
-
-    pub(crate) fn bind_group(&self) -> &BindGroup {
+    pub(crate) fn bind_group(&self) -> &GpuRealizedBindGroup {
         &self.bind_group
     }
 }
@@ -779,6 +845,8 @@ pub(crate) struct RendererPreparedPacket {
     prepared_material: Option<crate::plugins::render::PreparedMaterialFeatureContribution>,
     prepared_material_gpu_resources: Option<PreparedMaterialGpuResources>,
     prepared_ui: UiPreparedDraws,
+    ui_dynamic_bind_groups: UiDynamicBindGroups,
+    pending_operations: RendererPendingOperations,
     viewport_surface_bindings: ViewportSurfaceBindingRegistry,
     prepare_timings: RendererFrameTimings,
 }
@@ -908,11 +976,8 @@ impl Gfx {
             RenderGpuTimingCapability::Unsupported
         };
         let context = self.ctx.context();
-        let loan = context.current_render_device_queue();
         timings.renderer = self.renderer.render(
             context,
-            loan.device,
-            loan.queue,
             &frame.texture,
             &view,
             prepared_frame,

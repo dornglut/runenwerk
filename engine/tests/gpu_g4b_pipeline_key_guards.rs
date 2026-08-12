@@ -105,7 +105,7 @@ fn binding_resolution_constructs_complete_descriptor_from_admitted_source() {
     let resolver = section(
         &bindings,
         "pub(super) fn resolve_compiled_bind_group(",
-        ") -> Result<(",
+        ") -> Result<RealizedFlowProgramBindings>",
         BINDINGS,
     );
 
@@ -274,8 +274,8 @@ fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
         );
     }
     assert!(
-        bindings.contains(".map(wgpu_bind_group_layout_entry)"),
-        "current group-0 WGPU layout realization must consume typed G4B declarations"
+        bindings.contains("context.realize_bind_group_layout(&primary_bind_group_layout)"),
+        "current group-0 layout realization must delegate typed G4B declarations to G4C2"
     );
     for forbidden in [
         "layout_ty: BindingType",
@@ -523,55 +523,119 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
 fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let execute_passes = read(&manifest_dir, EXECUTE_PASSES);
-    let compute = section(
+    let bindings = read(&manifest_dir, BINDINGS);
+    let realization = section(
         &execute_passes,
-        "fn encode_compute_pass(",
-        "fn encode_fullscreen_pass(",
+        "pub(super) fn realize_compiled_pass(",
+        "pub(super) fn encode_compiled_pass(",
         EXECUTE_PASSES,
     );
-    let fullscreen = section(
-        &execute_passes,
-        "fn encode_fullscreen_pass(",
-        "fn encode_graphics_pass(",
-        EXECUTE_PASSES,
-    );
-    let graphics = section(
-        &execute_passes,
-        "fn encode_graphics_pass(",
-        "fn encode_texture_copy(",
-        EXECUTE_PASSES,
-    );
-
-    for (label, source) in [
-        ("compute", compute),
-        ("fullscreen", fullscreen),
-        ("graphics", graphics),
-    ] {
+    let paths = [
+        (
+            "compute",
+            "CompiledPassExecutionPlan::Compute(value) => {",
+            "CompiledPassExecutionPlan::Fullscreen(value) => {",
+            "fn encode_compute_pass(",
+            "fn encode_fullscreen_pass(",
+        ),
+        (
+            "fullscreen",
+            "CompiledPassExecutionPlan::Fullscreen(value) => {",
+            "CompiledPassExecutionPlan::Graphics(value) => {",
+            "fn encode_fullscreen_pass(",
+            "fn encode_graphics_pass(",
+        ),
+        (
+            "graphics",
+            "CompiledPassExecutionPlan::Graphics(value) => {",
+            "CompiledPassExecutionPlan::Copy(_)",
+            "fn encode_graphics_pass(",
+            "fn encode_copy_pass(",
+        ),
+    ];
+    for (label, realization_start, realization_end, raw_start, raw_end) in paths {
+        let realized = section(
+            realization,
+            realization_start,
+            realization_end,
+            EXECUTE_PASSES,
+        );
         assert!(
-            source.contains(".canonical_wgsl()"),
-            "{label} WGPU shader-module realization must consume admitted source from the complete descriptor"
+            realized.contains(".resolve_compiled_bind_group("),
+            "{label} must resolve its complete descriptor through G4C2 before any pipeline creation"
+        );
+        assert!(
+            !realized.contains(".for_pipeline_creation("),
+            "{label} must complete G4C2 realization before the raw G4C3 phase"
+        );
+        let raw = section(&execute_passes, raw_start, raw_end, EXECUTE_PASSES);
+        assert!(
+            raw.contains(".for_pipeline_creation("),
+            "{label} must use the bounded temporary G4C3 pipeline creation terminal"
+        );
+        assert!(
+            !raw.contains(".resolve_compiled_bind_group(") && !raw.contains("context.realize_"),
+            "{label} raw G4C3 phase must consume completed G4C2 artifacts rather than re-enter realization"
+        );
+        assert!(
+            raw.contains("prepared.bindings.program")
+                && raw.contains("prepared.bindings.pipeline_layout"),
+            "{label} raw G4C3 creation must borrow the G4C2 program and layout artifacts"
         );
     }
-    assert!(
-        compute.contains("compute_descriptor.entry_point().as_str()"),
-        "compute WGPU realization must consume its typed descriptor entry point"
+    for required in [
+        "context.realize_program(pipeline_key.pipeline_descriptor.program())",
+        "context.realize_pipeline_layout(",
+        "context.realize_bind_group_layout(&primary_bind_group_layout)",
+        "context.realize_bind_group(&layout, values)",
+    ] {
+        assert!(
+            bindings.contains(required),
+            "G4C2 binding resolution must own {required:?}"
+        );
+    }
+    let compute_terminal = section(
+        &execute_passes,
+        "impl CurrentRenderPipelineCreationTerminal for CreateFlowComputePipeline",
+        "/// G4C3's temporary fullscreen render-pipeline creation terminal.",
+        EXECUTE_PASSES,
     );
     assert!(
-        compute.contains("wgpu_specialization_constants(compute_descriptor.specialization())"),
-        "compute WGPU realization must consume typed descriptor specialization"
+        compute_terminal.contains("self.descriptor.entry_point().as_str()"),
+        "temporary G4C3 compute-pipeline creation must consume its typed descriptor entry point"
     );
-    for (label, source) in [("fullscreen", fullscreen), ("graphics", graphics)] {
+    assert!(
+        compute_terminal
+            .contains("wgpu_specialization_constants(self.descriptor.specialization())"),
+        "temporary G4C3 compute-pipeline creation must consume typed descriptor specialization"
+    );
+    let fullscreen_terminal = section(
+        &execute_passes,
+        "impl CurrentRenderPipelineCreationTerminal for CreateFlowFullscreenPipeline",
+        "/// G4C3's temporary graphics render-pipeline creation terminal.",
+        EXECUTE_PASSES,
+    );
+    let graphics_terminal = section(
+        &execute_passes,
+        "impl CurrentRenderPipelineCreationTerminal for CreateFlowGraphicsPipeline",
+        "struct EncodeComputePass<'a>",
+        EXECUTE_PASSES,
+    );
+    for (label, source) in [
+        ("fullscreen", fullscreen_terminal),
+        ("graphics", graphics_terminal),
+    ] {
         assert!(
-            source.contains("render_descriptor.entry_points().vertex().as_str()"),
-            "{label} WGPU realization must consume its typed vertex entry point"
+            source.contains("self.descriptor.entry_points().vertex().as_str()"),
+            "temporary G4C3 {label} pipeline creation must consume its typed vertex entry point"
         );
         assert!(
-            source.contains("fragment_entry_point.as_str()"),
-            "{label} WGPU realization must consume its typed fragment entry point"
+            source.contains("entry_points()\n            .fragment()"),
+            "temporary G4C3 {label} pipeline creation must consume its typed fragment entry point"
         );
         assert!(
-            source.contains("wgpu_specialization_constants(render_descriptor.specialization())"),
-            "{label} WGPU realization must consume typed descriptor specialization"
+            source.contains("wgpu_specialization_constants(self.descriptor.specialization())"),
+            "temporary G4C3 {label} pipeline creation must consume typed descriptor specialization"
         );
     }
     for forbidden in [
@@ -607,7 +671,7 @@ fn renderer_source_authority_normalizes_identity_only_during_admission() {
     let cache_gateway = section(
         &cache,
         "pub(crate) fn admit_program_source(",
-        "pub fn get_or_create_shader_module<",
+        "pub fn compute_pipeline(",
         PIPELINE_CACHE,
     );
     assert_eq!(

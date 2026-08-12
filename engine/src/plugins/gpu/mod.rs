@@ -6,11 +6,10 @@ mod backend;
 pub(crate) use api::GpuWorkAuthoringErrorContext;
 pub use api::*;
 pub(crate) use backend::{
-    CurrentRenderAttachmentsTerminal, CurrentRenderBindGroupTerminal,
-    CurrentRenderBufferBindingTerminal, CurrentRenderBufferCopyTerminal,
+    CurrentRenderAttachmentsTerminal, CurrentRenderBufferCopyTerminal,
     CurrentRenderBufferUploadTerminal, CurrentRenderIndexBufferTerminal,
-    CurrentRenderIndirectBufferTerminal, CurrentRenderMaterialBindingTerminal,
-    CurrentRenderReadbackBufferTerminal, CurrentRenderSampledTextureBindingTerminal,
+    CurrentRenderIndirectBufferTerminal, CurrentRenderPipelineBindGroupsTerminal,
+    CurrentRenderPipelineCreationTerminal, CurrentRenderReadbackBufferTerminal,
     CurrentRenderTextureCopyTerminal, CurrentRenderTextureReadbackCopyTerminal,
     CurrentRenderTextureUploadTerminal, CurrentRenderTimestampResourcesTerminal,
     CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,

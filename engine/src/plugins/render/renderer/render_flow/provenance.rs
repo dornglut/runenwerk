@@ -525,6 +525,8 @@ mod tests {
             prepared_material: None,
             prepared_material_gpu_resources: None,
             prepared_ui: UiPreparedDraws::default(),
+            ui_dynamic_bind_groups: UiDynamicBindGroups::default(),
+            pending_operations: RendererPendingOperations::default(),
             viewport_surface_bindings: Default::default(),
             prepare_timings: RendererFrameTimings::default(),
         }

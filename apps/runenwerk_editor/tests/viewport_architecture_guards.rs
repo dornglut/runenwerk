@@ -1381,10 +1381,11 @@ fn wr021_material_product_spine_runtime_boundaries_are_consumed() {
         read_workspace_source("engine/src/plugins/render/renderer/render_flow/execute_passes.rs");
     assert!(
         execute.contains("resolve_shader_material_for_packet")
-            && execute.contains("pass.set_bind_group(1, resources.bind_group(), &[])")
+            && execute.contains("for_pipeline_bind_groups(")
+            && execute.contains("&[resources.bind_group()]")
             && execute.contains("pass_consumes_material_resources")
             && execute.contains("builtin or scene-bundle fallback is forbidden"),
-        "material feature passes must bind prepared group-1 resources and fail closed instead of falling back to old scene shaders",
+        "material feature passes must lend prepared group-1 resources through the bounded pipeline bridge and fail closed instead of falling back to old scene shaders",
     );
 
     let material_runtime_state =
@@ -1608,6 +1609,11 @@ fn renderer_uniform_uploads_are_invocation_scoped() {
     );
     let bindings =
         read_workspace_source("engine/src/plugins/render/renderer/render_flow/bindings.rs");
+    let g4c2_registry = read_workspace_source(
+        "engine/src/plugins/gpu/backend/wgpu/program_binding_realization/registry.rs",
+    );
+    let runtime_binding_values =
+        read_workspace_source("engine/src/plugins/gpu/api/program/runtime_binding/value.rs");
 
     assert!(
         execute.contains("set_active_invocation_uniform_scope")
@@ -1623,9 +1629,13 @@ fn renderer_uniform_uploads_are_invocation_scoped() {
     );
     assert!(
         resolve.contains("RuntimeResourceKey::InvocationUniform")
-            && bindings.contains("resource_identity")
-            && bindings.contains("value.resource_identity.hash"),
-        "bind group caching must include resolved resource identity so invocation-local uniforms cannot reuse another invocation's bind group",
+            && bindings.contains("GpuRuntimeBindingValue")
+            && bindings.contains("context.realize_bind_group(&layout, values)")
+            && g4c2_registry.contains("struct BindGroupRequestKey")
+            && g4c2_registry.contains("values: Vec<GpuRuntimeBindingValue>")
+            && runtime_binding_values.contains("handle: GpuBufferHandle")
+            && runtime_binding_values.contains("Hash"),
+        "G4C2 bind-group realization must key typed runtime resource handles so invocation-local uniforms cannot reuse another invocation's bind group",
     );
 }
 

@@ -2,7 +2,7 @@ use super::device_request::request_with_instance;
 use super::{CurrentRenderDeviceQueue, WgpuContextState};
 use crate::plugins::gpu::{
     GpuContext, GpuContextDescriptor, GpuContextRequestError, GpuContextRequestErrorCategory,
-    GpuResourceRealizationPolicy,
+    GpuRealizationPolicies,
 };
 use wgpu::{
     Instance, InstanceDescriptor, Surface, SurfaceCapabilities, SurfaceConfiguration, SurfaceTarget,
@@ -27,6 +27,9 @@ impl<'a> CurrentHostSurfaceBridge<'a> {
     }
 
     pub(crate) fn configure(&self, surface: &Surface<'_>, config: &SurfaceConfiguration) {
+        // Surface configuration still dispatches on the current device. Keep it out of any
+        // G4C2 scoped-error interval just like the temporary render operation loan.
+        let _error_attribution_gate = self.state.error_attribution_gate.acquire();
         surface.configure(&self.state.device, config);
     }
 }
@@ -48,7 +51,7 @@ impl GpuContext {
             instance,
             descriptor,
             Some(&surface),
-            GpuResourceRealizationPolicy::default(),
+            GpuRealizationPolicies::default(),
         )
         .await?;
         Ok((context, surface))
@@ -66,6 +69,7 @@ impl GpuContext {
         CurrentRenderDeviceQueue {
             device: &self.backend.device,
             queue: &self.backend.queue,
+            _error_attribution_gate: self.backend.error_attribution_gate.acquire(),
         }
     }
 }
