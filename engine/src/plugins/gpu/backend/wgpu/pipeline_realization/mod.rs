@@ -16,15 +16,15 @@ use std::sync::{Arc, Mutex};
 
 const DEFAULT_MAX_PIPELINE_REALIZATION_RECORDS: NonZeroUsize =
     NonZeroUsize::new(16_384).expect("the default pipeline realization-record bound is nonzero");
-pub(super) const G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION: u32 = 1;
+const G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION: u32 = 1;
 
 /// The sole private G4C3 owner for one admitted WGPU device generation.
 pub(crate) struct PipelineRealizationState {
-    pub(super) affinity: GpuContextAffinity,
-    pub(super) max_records: NonZeroUsize,
-    pub(super) compute: Arc<Mutex<SingleFlightRegistry<ComputePipelineRequestKey, ComputeRecord>>>,
-    pub(super) health: Arc<WgpuDeviceHealth>,
-    pub(super) error_attribution_gate: Arc<WgpuErrorAttributionGate>,
+    affinity: GpuContextAffinity,
+    max_records: NonZeroUsize,
+    compute: Arc<Mutex<SingleFlightRegistry<ComputePipelineRequestKey, ComputeRecord>>>,
+    health: Arc<WgpuDeviceHealth>,
+    error_attribution_gate: Arc<WgpuErrorAttributionGate>,
 }
 
 impl PipelineRealizationState {
