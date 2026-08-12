@@ -5,10 +5,12 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-11
+last_reviewed: 2026-08-12
 related_docs:
-  - ../design/active/runenwerk-capability-workbench-target-architecture.md
+  - ../architecture/runenwerk-platform-architecture.md
   - ../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
+  - ../adr/accepted/0018-semantic-federation-and-physical-realization.md
+  - ../adr/accepted/0019-batteries-included-application-composition.md
 ---
 
 # Authority-Centered Boundary Architecture
@@ -24,8 +26,10 @@ consistency, graph semantics, capability vocabulary, shared extraction, and
 progressive disclosure. Where generic examples here conflict with an accepted
 repository or framework ADR, the accepted ADR owns the concrete decision.
 
-Runenwerk applies this doctrine in the active future target design:
-[`../design/active/runenwerk-capability-workbench-target-architecture.md`](../design/active/runenwerk-capability-workbench-target-architecture.md).
+Runenwerk applies this doctrine through the current
+[Runenwerk Platform Architecture](../architecture/runenwerk-platform-architecture.md),
+with ADR 0018 defining semantic federation/physical realization and ADR 0019 defining
+the product-facing application-composition doctrine.
 
 ## 1. Purpose
 

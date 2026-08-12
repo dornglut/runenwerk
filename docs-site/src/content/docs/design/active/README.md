@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-12
 ---
 
 # Active Designs
@@ -18,13 +18,22 @@ current planning, implementation, or validation work.
 
 ## Architecture spine
 
+For Runenwerk-wide architecture, start with:
+
+- [Runenwerk Platform Architecture](../../architecture/runenwerk-platform-architecture.md)
+
 For the whole UI framework architecture, start with:
 
 - [Runenwerk UI Framework Architecture](../../architecture/ui-framework-architecture.md)
 
 Active design docs below are slice-level authorities, proposals, implementation
-designs, or product references. They should not each restate the entire framework
-architecture.
+designs, or product references. They should not each restate the entire framework or
+platform architecture. Accepted ADRs and canonical architecture spines win when an
+active design contains older conflicting target language.
+
+### Temporary compatibility pointer
+
+- [Runenwerk Domain Workbench North Star Compatibility Pointer](runenwerk-domain-workbench-north-star.md) — noncanonical path-stable pointer used only by two legacy UI design consumers pending the separate RunenUI legacy/adoption cleanup under #205. Do not add new references.
 
 ## Current Designs
 
@@ -130,7 +139,6 @@ architecture.
 
 ### Domain Authoring And Standalone UI Framework
 
-- [Domain Authoring Source And Program Pattern](domain-authoring-source-and-program-pattern.md)
 - [Typed App Program Counter Proof Design](typed-app-program-counter-proof-design.md)
 - [UI Framework Runtime Requirements](ui-framework-runtime-requirements-design.md)
 - [UI Source Projection And Program Lowering](ui-source-projection-and-program-lowering-design.md)
@@ -155,8 +163,6 @@ architecture.
 - [Field Visualizer Product Workflow Design](field-visualizer-product-workflow-design.md)
 - [Material Lab And Material Preview Design](material-lab-and-material-preview-design.md)
 - [Native Tablet Input and Latency Contract](native-tablet-input-and-latency-contract.md)
-- [Runenwerk Capability Workbench Target Architecture](runenwerk-capability-workbench-target-architecture.md)
-- [Runenwerk Domain Workbench North Star](runenwerk-domain-workbench-north-star.md)
 - [Typed App Program And UI Proof Design](typed-app-program-and-ui-proof-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Design](runenwerk-typed-app-composition-plugin-framework-design.md)
 - [Runenwerk Typed App Composition Plugin Framework Roadmap](runenwerk-typed-app-composition-plugin-framework-implementation-roadmap.md)
