@@ -31,6 +31,10 @@ designs, or product references. They should not each restate the entire framewor
 platform architecture. Accepted ADRs and canonical architecture spines win when an
 active design contains older conflicting target language.
 
+### Temporary compatibility pointer
+
+- [Runenwerk Domain Workbench North Star Compatibility Pointer](runenwerk-domain-workbench-north-star.md) — noncanonical path-stable pointer used only by two legacy UI design consumers pending the separate RunenUI legacy/adoption cleanup under #205. Do not add new references.
+
 ## Current Designs
 
 ### Foundation
