@@ -1,6 +1,7 @@
-use super::GpuContextAffinity;
+use super::{GpuComputePipelineDescriptor, GpuContextAffinity, sanitized_diagnostic};
 use core::fmt;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 /// Stable semantic classes for G4C3 compute/render pipeline realization rejection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -87,6 +88,60 @@ pub struct GpuPipelineRealizationError {
 }
 
 impl GpuPipelineRealizationError {
+    pub(crate) fn new(
+        category: GpuPipelineRealizationErrorCategory,
+        request: impl Into<String>,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            category,
+            request: sanitized_diagnostic(request.into()).map(String::into_boxed_str),
+            detail: sanitized_diagnostic(detail.into()).map(String::into_boxed_str),
+            secondary_detail: None,
+            expected_affinity: None,
+            observed_affinity: None,
+            retained_records: None,
+            max_records: None,
+        }
+    }
+
+    pub(crate) fn affinity(
+        category: GpuPipelineRealizationErrorCategory,
+        request: impl Into<String>,
+        expected: GpuContextAffinity,
+        observed: GpuContextAffinity,
+    ) -> Self {
+        let mut error = Self::new(
+            category,
+            request,
+            "realized pipeline dependency affinity does not match",
+        );
+        error.expected_affinity = Some(expected);
+        error.observed_affinity = Some(observed);
+        error
+    }
+
+    pub(crate) fn capacity(
+        request: impl Into<String>,
+        retained_records: usize,
+        max_records: NonZeroUsize,
+    ) -> Self {
+        let mut error = Self::new(
+            GpuPipelineRealizationErrorCategory::RegistryCapacityExceeded,
+            request,
+            "the pipeline realization registry is occupied by live ready or in-flight records",
+        );
+        error.retained_records = Some(retained_records);
+        error.max_records = Some(max_records);
+        error
+    }
+
+    pub(crate) fn with_secondary_detail(mut self, detail: impl Into<String>) -> Self {
+        self.secondary_detail =
+            sanitized_diagnostic(detail.into()).map(String::into_boxed_str);
+        self
+    }
+
     pub const fn category(&self) -> GpuPipelineRealizationErrorCategory {
         self.category
     }
@@ -146,6 +201,42 @@ impl fmt::Display for GpuPipelineRealizationError {
 
 impl std::error::Error for GpuPipelineRealizationError {}
 
+/// Opaque context/device-generation-bound realization of one complete compute pipeline.
+#[derive(Clone)]
+pub struct GpuRealizedComputePipeline {
+    pub(crate) record: Arc<crate::plugins::gpu::backend::ComputePipelineRealizationRecord>,
+}
+
+impl GpuRealizedComputePipeline {
+    pub(crate) fn from_record(
+        record: Arc<crate::plugins::gpu::backend::ComputePipelineRealizationRecord>,
+    ) -> Self {
+        Self { record }
+    }
+
+    pub fn affinity(&self) -> GpuContextAffinity {
+        self.record.affinity()
+    }
+
+    pub fn descriptor(&self) -> &GpuComputePipelineDescriptor {
+        self.record.descriptor()
+    }
+
+    pub fn is_same_record(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.record, &other.record)
+    }
+}
+
+impl fmt::Debug for GpuRealizedComputePipeline {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GpuRealizedComputePipeline")
+            .field("affinity", &self.affinity())
+            .field("entry_point", self.descriptor().entry_point())
+            .finish_non_exhaustive()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,16 +267,11 @@ mod tests {
 
     #[test]
     fn pipeline_error_keeps_capacity_pressure_structured() {
-        let error = GpuPipelineRealizationError {
-            category: GpuPipelineRealizationErrorCategory::RegistryCapacityExceeded,
-            request: Some("representative pipeline".into()),
-            detail: None,
-            secondary_detail: None,
-            expected_affinity: None,
-            observed_affinity: None,
-            retained_records: Some(7),
-            max_records: NonZeroUsize::new(7),
-        };
+        let error = GpuPipelineRealizationError::capacity(
+            "representative pipeline",
+            7,
+            NonZeroUsize::new(7).unwrap(),
+        );
         assert_eq!(
             error.category(),
             GpuPipelineRealizationErrorCategory::RegistryCapacityExceeded
