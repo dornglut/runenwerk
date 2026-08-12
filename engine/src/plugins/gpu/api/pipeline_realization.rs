@@ -51,7 +51,9 @@ impl GpuPipelineRealizationErrorCategory {
             Self::RegistryCapacityExceeded => {
                 "release unused realized pipeline handles before creating more authoritative records"
             }
-            Self::CacheRejected => "discard the derived candidate and realize the pipeline ordinarily",
+            Self::CacheRejected => {
+                "discard the derived candidate and realize the pipeline ordinarily"
+            }
             Self::UnexpectedBackendPipelineValidationRejection => {
                 "inspect the bounded backend evidence and RunenGPU pipeline-realization invariant"
             }
@@ -103,7 +105,11 @@ impl GpuPipelineRealizationError {
         expected: GpuContextAffinity,
         observed: GpuContextAffinity,
     ) -> Self {
-        let mut error = Self::new(category, request, "realized pipeline dependency affinity does not match");
+        let mut error = Self::new(
+            category,
+            request,
+            "realized pipeline dependency affinity does not match",
+        );
         error.expected_affinity = Some(expected);
         error.observed_affinity = Some(observed);
         error
