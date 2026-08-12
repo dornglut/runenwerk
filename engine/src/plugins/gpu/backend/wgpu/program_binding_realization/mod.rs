@@ -820,8 +820,42 @@ fn resolve_binding_resources(
 fn resource_failure(
     error: crate::plugins::gpu::GpuResourceRealizationError,
 ) -> GpuProgramBindingRealizationError {
+    use crate::plugins::gpu::GpuResourceRealizationErrorCategory as ResourceCategory;
+
+    let category = match error.category() {
+        ResourceCategory::ForeignContext => GpuProgramBindingRealizationErrorCategory::ForeignContext,
+        ResourceCategory::StaleDeviceGeneration => {
+            GpuProgramBindingRealizationErrorCategory::StaleDeviceGeneration
+        }
+        ResourceCategory::UnknownLogicalResource
+        | ResourceCategory::DescriptorChangedForIdentity
+        | ResourceCategory::ResourceKindMismatch
+        | ResourceCategory::RequirementNotAdmitted
+        | ResourceCategory::FormatOrAlignmentNotAdmitted
+        | ResourceCategory::ImportGenerationMismatch
+        | ResourceCategory::ImportSourceUnavailable => {
+            GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible
+        }
+        ResourceCategory::RegistryCapacityExceeded => {
+            GpuProgramBindingRealizationErrorCategory::RegistryCapacityExceeded
+        }
+        ResourceCategory::CacheRejected => GpuProgramBindingRealizationErrorCategory::CacheRejected,
+        ResourceCategory::UnexpectedBackendValidationRejection => {
+            GpuProgramBindingRealizationErrorCategory::UnexpectedBackendProgramOrBindingValidationRejection
+        }
+        ResourceCategory::BackendResourceExhaustion => {
+            GpuProgramBindingRealizationErrorCategory::BackendResourceExhaustion
+        }
+        ResourceCategory::ContextOrDeviceUnavailableOrLost => {
+            GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
+        }
+        ResourceCategory::CurrentRenderPipelineBridgeViolation => {
+            GpuProgramBindingRealizationErrorCategory::CurrentRenderPipelineBridgeViolation
+        }
+    };
+
     GpuProgramBindingRealizationError::new(
-        GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+        category,
         "realize G4C1 runtime binding resource",
         error.to_string(),
     )
@@ -838,6 +872,9 @@ fn layout_request_name(descriptor: &GpuBindGroupLayoutDescriptor) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{
+        GpuResourceRealizationError, GpuResourceRealizationErrorCategory as ResourceCategory,
+    };
 
     fn empty_layout(group: u32) -> GpuBindGroupLayoutDescriptor {
         GpuBindGroupLayoutDescriptor::new(group, std::iter::empty::<GpuBindingDeclaration>())
@@ -871,5 +908,92 @@ mod tests {
             error.category(),
             GpuProgramBindingRealizationErrorCategory::LayoutDescriptorInvalid
         );
+    }
+
+    #[test]
+    fn g4c1_resource_failures_translate_without_losing_actionable_failure_class() {
+        let cases = [
+            (
+                ResourceCategory::ForeignContext,
+                GpuProgramBindingRealizationErrorCategory::ForeignContext,
+            ),
+            (
+                ResourceCategory::StaleDeviceGeneration,
+                GpuProgramBindingRealizationErrorCategory::StaleDeviceGeneration,
+            ),
+            (
+                ResourceCategory::UnknownLogicalResource,
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+            ),
+            (
+                ResourceCategory::DescriptorChangedForIdentity,
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+            ),
+            (
+                ResourceCategory::ResourceKindMismatch,
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+            ),
+            (
+                ResourceCategory::RequirementNotAdmitted,
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+            ),
+            (
+                ResourceCategory::FormatOrAlignmentNotAdmitted,
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+            ),
+            (
+                ResourceCategory::ImportGenerationMismatch,
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+            ),
+            (
+                ResourceCategory::ImportSourceUnavailable,
+                GpuProgramBindingRealizationErrorCategory::RuntimeBindingIncompatible,
+            ),
+            (
+                ResourceCategory::RegistryCapacityExceeded,
+                GpuProgramBindingRealizationErrorCategory::RegistryCapacityExceeded,
+            ),
+            (
+                ResourceCategory::CacheRejected,
+                GpuProgramBindingRealizationErrorCategory::CacheRejected,
+            ),
+            (
+                ResourceCategory::UnexpectedBackendValidationRejection,
+                GpuProgramBindingRealizationErrorCategory::UnexpectedBackendProgramOrBindingValidationRejection,
+            ),
+            (
+                ResourceCategory::BackendResourceExhaustion,
+                GpuProgramBindingRealizationErrorCategory::BackendResourceExhaustion,
+            ),
+            (
+                ResourceCategory::ContextOrDeviceUnavailableOrLost,
+                GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
+            ),
+            (
+                ResourceCategory::CurrentRenderPipelineBridgeViolation,
+                GpuProgramBindingRealizationErrorCategory::CurrentRenderPipelineBridgeViolation,
+            ),
+        ];
+
+        for (resource_category, expected) in cases {
+            let source = GpuResourceRealizationError::new(
+                resource_category,
+                None,
+                "representative G4C1 failure evidence",
+            );
+            let translated = resource_failure(source);
+
+            assert_eq!(translated.category(), expected);
+            assert_eq!(
+                translated.request(),
+                Some("realize G4C1 runtime binding resource")
+            );
+            assert!(
+                translated
+                    .detail()
+                    .is_some_and(|detail| detail.contains("representative G4C1 failure evidence")),
+                "translated G4C2 failure must retain bounded G4C1 evidence"
+            );
+        }
     }
 }
