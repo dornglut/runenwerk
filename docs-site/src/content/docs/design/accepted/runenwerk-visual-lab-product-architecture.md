@@ -2,7 +2,7 @@
 title: Runenwerk Visual Lab Product Architecture
 description: Accepted product architecture for a host-neutral creative workbench that composes native visual studies and domain-owned capabilities without creating parallel semantic authority.
 status: accepted
-owner: apps/visual-lab
+owner: workspace
 layer: application / cross-domain product
 canonical: true
 last_reviewed: 2026-08-12
