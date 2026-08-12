@@ -37,7 +37,7 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0017: Cross-Authority Consistency and Graph Semantics](accepted/0017-cross-authority-consistency-and-graph-semantics.md)
 - [0018: Semantic Federation and Physical Realization](accepted/0018-semantic-federation-and-physical-realization.md)
 
-ADR numbers intentionally preserve historical gaps when an identifier was retired or never accepted; indexes list only files that exist in the corresponding lifecycle folder.
+Accepted ADR identifiers are not required to be contiguous; this index lists the files that currently exist in the accepted lifecycle folder.
 
 ## Superseded ADRs
 
