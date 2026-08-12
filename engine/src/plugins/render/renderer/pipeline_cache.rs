@@ -6,11 +6,9 @@ use crate::plugins::gpu::{
     GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::RenderFlowId;
-use crate::plugins::render::pipelines::{FlowPassBindGroupKey, FlowPassPipelineKey};
+use crate::plugins::render::pipelines::FlowPassPipelineKey;
 use std::collections::HashMap;
-use wgpu::{
-    BindGroup, BindGroupLayout, ComputePipeline, PipelineLayout, RenderPipeline, ShaderModule,
-};
+use wgpu::{ComputePipeline, RenderPipeline};
 
 const RENDERER_PROGRAM_SOURCE_MAX_RECORDS: usize = 1024;
 const RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES: usize = 64 * 1024 * 1024;
@@ -29,22 +27,24 @@ pub struct RendererPipelineCacheStats {
 
 #[derive(Debug)]
 pub struct FlowPipelineArtifactCache {
-    pub shader_modules: HashMap<FlowPassPipelineKey, ShaderModule>,
-    pub bind_group_layouts: HashMap<FlowPassPipelineKey, BindGroupLayout>,
-    pub pipeline_layouts: HashMap<FlowPassPipelineKey, PipelineLayout>,
     pub compute_pipelines: HashMap<FlowPassPipelineKey, ComputePipeline>,
     pub render_pipelines: HashMap<FlowPassPipelineKey, RenderPipeline>,
     samplers: HashMap<FlowPassPipelineKey, RendererRealizedSampler>,
-    pub bind_groups: HashMap<FlowPassBindGroupKey, BindGroup>,
     pub stats: RendererPipelineCacheStats,
     program_sources: RendererProgramSourceAuthority,
     resource_ids: GpuWorkResourceIdAllocator,
 }
 
-#[derive(Debug)]
-struct RendererRealizedSampler {
-    _handle: GpuSamplerHandle,
-    realized: GpuRealizedSampler,
+#[derive(Debug, Clone)]
+pub(super) struct RendererRealizedSampler {
+    handle: GpuSamplerHandle,
+    _realized: GpuRealizedSampler,
+}
+
+impl RendererRealizedSampler {
+    pub(super) fn handle(&self) -> &GpuSamplerHandle {
+        &self.handle
+    }
 }
 
 impl Default for FlowPipelineArtifactCache {
@@ -55,13 +55,9 @@ impl Default for FlowPipelineArtifactCache {
         )
         .expect("renderer program-source authority policy is nonzero and process-local");
         let mut cache = Self {
-            shader_modules: HashMap::new(),
-            bind_group_layouts: HashMap::new(),
-            pipeline_layouts: HashMap::new(),
             compute_pipelines: HashMap::new(),
             render_pipelines: HashMap::new(),
             samplers: HashMap::new(),
-            bind_groups: HashMap::new(),
             stats: RendererPipelineCacheStats::default(),
             program_sources,
             resource_ids: GpuWorkResourceIdAllocator::new(),
@@ -97,94 +93,40 @@ impl FlowPipelineArtifactCache {
             .admit_wgsl(key, renderer_revision, canonical_wgsl, provenance)
     }
 
-    pub fn get_or_create_shader_module<F>(
-        &mut self,
-        key: FlowPassPipelineKey,
-        create: F,
-    ) -> ShaderModule
-    where
-        F: FnOnce() -> ShaderModule,
-    {
-        if let Some(value) = self.shader_modules.get(&key) {
+    pub fn compute_pipeline(&mut self, key: &FlowPassPipelineKey) -> Option<ComputePipeline> {
+        if let Some(value) = self.compute_pipelines.get(key) {
             self.stats.hits = self.stats.hits.saturating_add(1);
-            return value.clone();
+            return Some(value.clone());
         }
         self.stats.misses = self.stats.misses.saturating_add(1);
-        let value = create();
-        self.shader_modules.insert(key, value.clone());
-        value
+        None
     }
 
-    pub fn get_or_create_bind_group_layout<F>(
+    pub fn insert_compute_pipeline(
         &mut self,
         key: FlowPassPipelineKey,
-        create: F,
-    ) -> BindGroupLayout
-    where
-        F: FnOnce() -> BindGroupLayout,
-    {
-        if let Some(value) = self.bind_group_layouts.get(&key) {
-            self.stats.hits = self.stats.hits.saturating_add(1);
-            return value.clone();
-        }
-        self.stats.misses = self.stats.misses.saturating_add(1);
-        let value = create();
-        self.bind_group_layouts.insert(key, value.clone());
-        value
+        pipeline: ComputePipeline,
+    ) -> ComputePipeline {
+        self.compute_pipelines.insert(key, pipeline.clone());
+        pipeline
     }
 
-    pub fn get_or_create_pipeline_layout<F>(
-        &mut self,
-        key: FlowPassPipelineKey,
-        create: F,
-    ) -> PipelineLayout
-    where
-        F: FnOnce() -> PipelineLayout,
-    {
-        if let Some(value) = self.pipeline_layouts.get(&key) {
+    pub fn render_pipeline(&mut self, key: &FlowPassPipelineKey) -> Option<RenderPipeline> {
+        if let Some(value) = self.render_pipelines.get(key) {
             self.stats.hits = self.stats.hits.saturating_add(1);
-            return value.clone();
+            return Some(value.clone());
         }
         self.stats.misses = self.stats.misses.saturating_add(1);
-        let value = create();
-        self.pipeline_layouts.insert(key, value.clone());
-        value
+        None
     }
 
-    pub fn get_or_create_compute_pipeline<F>(
+    pub fn insert_render_pipeline(
         &mut self,
         key: FlowPassPipelineKey,
-        create: F,
-    ) -> ComputePipeline
-    where
-        F: FnOnce() -> ComputePipeline,
-    {
-        if let Some(value) = self.compute_pipelines.get(&key) {
-            self.stats.hits = self.stats.hits.saturating_add(1);
-            return value.clone();
-        }
-        self.stats.misses = self.stats.misses.saturating_add(1);
-        let value = create();
-        self.compute_pipelines.insert(key, value.clone());
-        value
-    }
-
-    pub fn get_or_create_render_pipeline<F>(
-        &mut self,
-        key: FlowPassPipelineKey,
-        create: F,
-    ) -> RenderPipeline
-    where
-        F: FnOnce() -> RenderPipeline,
-    {
-        if let Some(value) = self.render_pipelines.get(&key) {
-            self.stats.hits = self.stats.hits.saturating_add(1);
-            return value.clone();
-        }
-        self.stats.misses = self.stats.misses.saturating_add(1);
-        let value = create();
-        self.render_pipelines.insert(key, value.clone());
-        value
+        pipeline: RenderPipeline,
+    ) -> RenderPipeline {
+        self.render_pipelines.insert(key, pipeline.clone());
+        pipeline
     }
 
     pub fn get_or_realize_sampler(
@@ -192,58 +134,40 @@ impl FlowPipelineArtifactCache {
         context: &GpuContext,
         key: FlowPassPipelineKey,
         descriptor: GpuSamplerDescriptor,
-    ) -> anyhow::Result<GpuRealizedSampler> {
+    ) -> anyhow::Result<RendererRealizedSampler> {
         if let Some(value) = self.samplers.get(&key) {
-            if value.realized.descriptor() != &descriptor {
+            if value._realized.descriptor() != &descriptor {
                 anyhow::bail!(
                     "renderer sampler cache key reused with changed normalized descriptor"
                 );
             }
             self.stats.hits = self.stats.hits.saturating_add(1);
-            return Ok(value.realized.clone());
+            return Ok(value.clone());
         }
         self.stats.misses = self.stats.misses.saturating_add(1);
         let handle = self.resource_ids.allocate_sampler_handle(descriptor)?;
         let realized = context.realize_sampler(&handle)?;
         self.samplers.insert(
-            key,
+            key.clone(),
             RendererRealizedSampler {
-                _handle: handle,
-                realized: realized.clone(),
+                handle,
+                _realized: realized,
             },
         );
-        Ok(realized)
-    }
-
-    pub fn get_or_create_bind_group<F>(&mut self, key: FlowPassBindGroupKey, create: F) -> BindGroup
-    where
-        F: FnOnce() -> BindGroup,
-    {
-        if let Some(value) = self.bind_groups.get(&key) {
-            self.stats.hits = self.stats.hits.saturating_add(1);
-            return value.clone();
-        }
-        self.stats.misses = self.stats.misses.saturating_add(1);
-        let value = create();
-        self.bind_groups.insert(key, value.clone());
-        value
+        Ok(self
+            .samplers
+            .get(&key)
+            .expect("inserted renderer sampler must be immediately available")
+            .clone())
     }
 
     pub fn retain_flows(&mut self, active_flow_ids: &[RenderFlowId]) {
-        self.shader_modules
-            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
-        self.bind_group_layouts
-            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
-        self.pipeline_layouts
-            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.compute_pipelines
             .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.render_pipelines
             .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.samplers
             .retain(|key, _| active_flow_ids.contains(&key.flow_id));
-        self.bind_groups
-            .retain(|key, _| active_flow_ids.contains(&key.pipeline.flow_id));
         self.program_sources.collect_unretained();
     }
 }

@@ -359,11 +359,10 @@ impl FlowRuntimeResources {
             return Ok(ResolvedTextureRef {
                 id: resource_key,
                 texture: RuntimeTextureRef::Surface(frame_texture),
-                realized_view: None,
+                view_handle: None,
                 format: frame_format,
                 size: frame_size,
                 is_depth: false,
-                generation: None,
             });
         }
         if matches!(resource_key, RuntimeResourceKey::DynamicTexture(_)) {
@@ -401,11 +400,10 @@ impl FlowRuntimeResources {
         Ok(ResolvedTextureRef {
             id: resource_key,
             texture: RuntimeTextureRef::Realized(&texture.realized),
-            realized_view: Some(&texture.realized_view),
+            view_handle: Some(&texture.view_handle),
             format: texture.format,
             size: texture.size,
             is_depth: texture.is_depth,
-            generation: Some(texture.generation),
         })
     }
 
@@ -463,10 +461,10 @@ impl FlowRuntimeResources {
 
         Ok(ResolvedBufferRef {
             id: resource_key,
+            handle: &buffer.handle,
             buffer: &buffer.realized,
             size: buffer.size,
             kind: buffer.kind,
-            generation: Some(buffer.generation),
         })
     }
 
@@ -492,10 +490,10 @@ impl FlowRuntimeResources {
                     invocation_id: scope.clone(),
                     resource_id,
                 },
+                handle: &buffer.handle,
                 buffer: &buffer.realized,
                 size: buffer.size,
                 kind: buffer.kind,
-                generation: Some(buffer.generation),
             });
         }
 

@@ -184,8 +184,9 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         "renderer runtime should not iterate raw pass_order for encoding"
     );
     assert!(
-        render_flow.contains("get_or_create_render_pipeline"),
-        "renderer runtime should use renderer-owned artifact cache for render pipelines"
+        render_flow.contains("flow_pipeline_cache.render_pipeline")
+            && render_flow.contains("insert_render_pipeline"),
+        "renderer runtime should retain renderer-owned artifact-cache lookup and publication for render pipelines"
     );
     assert!(
         render_flow.contains("execution_pass_feature_id(pass)"),

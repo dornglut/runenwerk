@@ -123,7 +123,7 @@ impl FlowRuntimeResources {
                 id,
                 RuntimeTextureResource {
                     handle,
-                    _view_handle: view_handle,
+                    view_handle,
                     realized,
                     realized_view,
                     format: spec.format,
@@ -287,7 +287,7 @@ impl FlowRuntimeResources {
                     key,
                     RuntimeTextureResource {
                         handle,
-                        _view_handle: view_handle,
+                        view_handle,
                         realized,
                         realized_view,
                         format: texture_spec.format,

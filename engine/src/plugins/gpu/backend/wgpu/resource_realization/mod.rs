@@ -1,17 +1,15 @@
 //! Context/device-generation-bound private WGPU resource realization.
 
-mod current_render_resource_bridge;
 mod lowering;
 mod records;
 mod registry;
 
-pub(crate) use current_render_resource_bridge::*;
 pub(crate) use records::{
     BufferRealizationRecord, QuerySetRealizationRecord, SamplerRealizationRecord,
     TextureRealizationRecord, TextureViewRealizationRecord,
 };
 
-use super::WgpuContextState;
+use super::{WgpuContextState, WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuContext, GpuContextAffinity, GpuContextAffinityError, GpuQuerySetHandle,
     GpuRealizedBuffer, GpuRealizedQuerySet, GpuRealizedSampler, GpuRealizedTexture,
@@ -22,118 +20,33 @@ use crate::plugins::gpu::{
 use registry::{ResourceKind, ResourceRegistries};
 use std::sync::{Arc, Mutex, MutexGuard};
 use wgpu::{
-    BufferDescriptor, Device, QuerySetDescriptor, SamplerDescriptor, TextureDescriptor,
+    BufferDescriptor, QuerySetDescriptor, SamplerDescriptor, TextureDescriptor,
     TextureViewDescriptor,
 };
-
-#[derive(Debug, Clone)]
-struct DeviceFault {
-    category: GpuResourceRealizationErrorCategory,
-    detail: String,
-}
-
-/// Device-wide WGPU fault observation shared by all current G4C1 realization operations.
-///
-/// WGPU may report validation and allocation failures after the constructor call returns. Those
-/// faults therefore cannot be truthfully attributed to a thread-local synchronous constructor
-/// slot. The first observed device fault instead makes this context unavailable; subsequent
-/// realization and bridge access returns the retained structured category and bounded evidence.
-#[derive(Debug)]
-struct DeviceHealth {
-    fault: Mutex<Option<DeviceFault>>,
-}
-
-impl DeviceHealth {
-    fn new() -> Self {
-        Self {
-            fault: Mutex::new(None),
-        }
-    }
-
-    fn mark_fault(&self, category: GpuResourceRealizationErrorCategory, detail: impl Into<String>) {
-        let detail = detail.into().chars().take(256).collect::<String>();
-        let mut retained = self
-            .fault
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if retained.is_none() {
-            *retained = Some(DeviceFault { category, detail });
-        }
-    }
-
-    fn mark_uncaptured(&self, error: wgpu::Error) {
-        let category = match error {
-            wgpu::Error::OutOfMemory { .. } => {
-                GpuResourceRealizationErrorCategory::BackendResourceExhaustion
-            }
-            wgpu::Error::Validation { .. } => {
-                GpuResourceRealizationErrorCategory::UnexpectedBackendValidationRejection
-            }
-            wgpu::Error::Internal { .. } => {
-                GpuResourceRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
-            }
-        };
-        self.mark_fault(category, format!("uncaptured WGPU backend error: {error}"));
-    }
-
-    fn mark_lost(&self, reason: wgpu::DeviceLostReason, detail: String) {
-        let bounded = detail.chars().take(256).collect::<String>();
-        let diagnostic = if bounded.trim().is_empty() {
-            format!("device became unavailable ({reason:?})")
-        } else {
-            format!("device became unavailable ({reason:?}): {bounded}")
-        };
-        self.mark_fault(
-            GpuResourceRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
-            diagnostic,
-        );
-    }
-
-    fn ensure_available(
-        &self,
-        resource: GpuWorkResourceId,
-    ) -> Result<(), GpuResourceRealizationError> {
-        let retained = self
-            .fault
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(fault) = retained.as_ref() else {
-            return Ok(());
-        };
-        Err(GpuResourceRealizationError::new(
-            fault.category,
-            Some(resource),
-            fault.detail.clone(),
-        ))
-    }
-}
 
 /// The sole authoritative owner of G4C1 lookup state for one context/device generation.
 pub(crate) struct ResourceRealizationState {
     affinity: GpuContextAffinity,
     policy: GpuResourceRealizationPolicy,
     registries: Mutex<ResourceRegistries>,
-    health: Arc<DeviceHealth>,
+    health: Arc<WgpuDeviceHealth>,
+    error_attribution_gate: Arc<WgpuErrorAttributionGate>,
 }
 
 impl ResourceRealizationState {
-    pub(crate) fn new(affinity: GpuContextAffinity, policy: GpuResourceRealizationPolicy) -> Self {
+    pub(crate) fn new(
+        affinity: GpuContextAffinity,
+        policy: GpuResourceRealizationPolicy,
+        health: Arc<WgpuDeviceHealth>,
+        error_attribution_gate: Arc<WgpuErrorAttributionGate>,
+    ) -> Self {
         Self {
             affinity,
             policy,
             registries: Mutex::new(ResourceRegistries::default()),
-            health: Arc::new(DeviceHealth::new()),
+            health,
+            error_attribution_gate,
         }
-    }
-
-    pub(crate) fn install_device_observers(&self, device: &Device) {
-        let lost_health = Arc::clone(&self.health);
-        device
-            .set_device_lost_callback(move |reason, detail| lost_health.mark_lost(reason, detail));
-        let uncaptured_health = Arc::clone(&self.health);
-        device.on_uncaptured_error(Arc::new(move |error| {
-            uncaptured_health.mark_uncaptured(error)
-        }));
     }
 
     pub(crate) const fn policy(&self) -> GpuResourceRealizationPolicy {
@@ -151,7 +64,7 @@ impl ResourceRealizationState {
         &self,
         resource: GpuWorkResourceId,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.health.ensure_available(resource)
+        self.health.ensure_resource(resource)
     }
 
     fn registries(
@@ -167,19 +80,131 @@ impl ResourceRealizationState {
         })
     }
 
+    /// Acquires the shared WGPU attribution gate before this G4C1 owner takes its registry
+    /// mutex. The bridge takes those locks in the same order while a raw operation loan is live,
+    /// so reversing them would permit a cross-thread gate/registry deadlock.
+    fn attributed_registries(
+        &self,
+        resource: GpuWorkResourceId,
+    ) -> Result<(MutexGuard<'_, ()>, MutexGuard<'_, ResourceRegistries>), GpuResourceRealizationError>
+    {
+        self.ensure_available(resource)?;
+        let gate = self.error_attribution_gate.acquire();
+        let registries = self.registries(resource)?;
+        self.ensure_available(resource)?;
+        Ok((gate, registries))
+    }
+
     fn create_backend_object<Object>(
         &self,
         resource: GpuWorkResourceId,
+        _attribution_gate: &MutexGuard<'_, ()>,
         create: impl FnOnce() -> Object,
     ) -> Result<Object, GpuResourceRealizationError> {
         self.ensure_available(resource)?;
+        // A G4C1 creation can synchronously trigger an uncaptured WGPU callback. The caller
+        // retains the one shared gate from creation through authoritative publication.
         let created = create();
+        self.ensure_available(resource)?;
         // A synchronously delivered WGPU callback is observed before publication. WGPU may also
         // deliver a backend fault later; in that case the context becomes unavailable and every
         // later realization/bridge access rejects it rather than attributing the fault to another
         // constructor call.
         self.ensure_available(resource)?;
         Ok(created)
+    }
+
+    pub(crate) fn validate_pipeline_bridge_buffer(
+        &self,
+        resource: &GpuRealizedBuffer,
+    ) -> Result<(), GpuResourceRealizationError> {
+        self.validate_pipeline_bridge_record(
+            resource.logical_identity(),
+            resource.affinity(),
+            |registries| {
+                registries
+                    .buffers
+                    .lookup(resource.logical_identity(), resource.descriptor())
+            },
+            &resource.record,
+        )
+    }
+
+    pub(crate) fn validate_pipeline_bridge_texture(
+        &self,
+        resource: &GpuRealizedTexture,
+    ) -> Result<(), GpuResourceRealizationError> {
+        self.validate_pipeline_bridge_record(
+            resource.logical_identity(),
+            resource.affinity(),
+            |registries| {
+                registries
+                    .textures
+                    .lookup(resource.logical_identity(), resource.descriptor())
+            },
+            &resource.record,
+        )
+    }
+
+    pub(crate) fn validate_pipeline_bridge_texture_view(
+        &self,
+        resource: &GpuRealizedTextureView,
+    ) -> Result<(), GpuResourceRealizationError> {
+        self.validate_pipeline_bridge_record(
+            resource.logical_identity(),
+            resource.affinity(),
+            |registries| {
+                registries
+                    .texture_views
+                    .lookup(resource.logical_identity(), resource.descriptor())
+            },
+            &resource.record,
+        )
+    }
+
+    pub(crate) fn validate_pipeline_bridge_query_set(
+        &self,
+        resource: &GpuRealizedQuerySet,
+    ) -> Result<(), GpuResourceRealizationError> {
+        self.validate_pipeline_bridge_record(
+            resource.logical_identity(),
+            resource.affinity(),
+            |registries| {
+                registries
+                    .query_sets
+                    .lookup(resource.logical_identity(), resource.descriptor())
+            },
+            &resource.record,
+        )
+    }
+
+    fn validate_pipeline_bridge_record<Record>(
+        &self,
+        identity: GpuWorkResourceId,
+        observed_affinity: GpuContextAffinity,
+        lookup: impl FnOnce(
+            &ResourceRegistries,
+        ) -> Result<Option<Arc<Record>>, GpuResourceRealizationError>,
+        observed_record: &Arc<Record>,
+    ) -> Result<(), GpuResourceRealizationError> {
+        validate_realized_input_affinity(self.affinity, identity, observed_affinity)?;
+        self.ensure_available(identity)?;
+        let registries = self.registries(identity)?;
+        let authoritative = lookup(&registries)?.ok_or_else(|| {
+            GpuResourceRealizationError::new(
+                GpuResourceRealizationErrorCategory::CurrentRenderPipelineBridgeViolation,
+                Some(identity),
+                "the bridge input is absent from authoritative resource realization",
+            )
+        })?;
+        if !Arc::ptr_eq(&authoritative, observed_record) {
+            return Err(GpuResourceRealizationError::new(
+                GpuResourceRealizationErrorCategory::CurrentRenderPipelineBridgeViolation,
+                Some(identity),
+                "the bridge input is not the authoritative realization record",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -215,24 +240,35 @@ impl GpuContext {
             .ensure_available(identity)?;
         let native_usage = lowering::lower_buffer(self, identity, handle.descriptor())?;
         let descriptor = handle.retained_descriptor();
-        let mut registries = self.backend.resource_realization.registries(identity)?;
+        {
+            let registries = self.backend.resource_realization.registries(identity)?;
+            if let Some(record) = registries.buffers.lookup(identity, &descriptor)? {
+                return Ok(GpuRealizedBuffer::from_record(record));
+            }
+            registries.reject_other_kind(ResourceKind::Buffer, identity)?;
+        }
+        let (attribution_gate, mut registries) = self
+            .backend
+            .resource_realization
+            .attributed_registries(identity)?;
         if let Some(record) = registries.buffers.lookup(identity, &descriptor)? {
             return Ok(GpuRealizedBuffer::from_record(record));
         }
         registries.reject_other_kind(ResourceKind::Buffer, identity)?;
         registries.ensure_capacity(identity, self.backend.resource_realization.policy)?;
 
-        let object = self
-            .backend
-            .resource_realization
-            .create_backend_object(identity, || {
+        let object = self.backend.resource_realization.create_backend_object(
+            identity,
+            &attribution_gate,
+            || {
                 self.backend.device.create_buffer(&BufferDescriptor {
                     label: Some(descriptor.common().label().as_str()),
                     size: descriptor.size_bytes(),
                     usage: native_usage,
                     mapped_at_creation: false,
                 })
-            })?;
+            },
+        )?;
         let record = Arc::new(BufferRealizationRecord {
             affinity: self.affinity(),
             logical_identity: identity,
@@ -254,7 +290,17 @@ impl GpuContext {
             .ensure_available(identity)?;
         let lowered = lowering::lower_texture(self, identity, handle.descriptor())?;
         let descriptor = handle.retained_descriptor();
-        let mut registries = self.backend.resource_realization.registries(identity)?;
+        {
+            let registries = self.backend.resource_realization.registries(identity)?;
+            if let Some(record) = registries.textures.lookup(identity, &descriptor)? {
+                return Ok(GpuRealizedTexture::from_record(record));
+            }
+            registries.reject_other_kind(ResourceKind::Texture, identity)?;
+        }
+        let (attribution_gate, mut registries) = self
+            .backend
+            .resource_realization
+            .attributed_registries(identity)?;
         if let Some(record) = registries.textures.lookup(identity, &descriptor)? {
             return Ok(GpuRealizedTexture::from_record(record));
         }
@@ -262,10 +308,10 @@ impl GpuContext {
         registries.ensure_capacity(identity, self.backend.resource_realization.policy)?;
 
         let paired = lowered.paired_view_format.into_iter().collect::<Vec<_>>();
-        let object = self
-            .backend
-            .resource_realization
-            .create_backend_object(identity, || {
+        let object = self.backend.resource_realization.create_backend_object(
+            identity,
+            &attribution_gate,
+            || {
                 self.backend.device.create_texture(&TextureDescriptor {
                     label: Some(descriptor.common().label().as_str()),
                     size: lowered.size,
@@ -276,7 +322,8 @@ impl GpuContext {
                     usage: lowered.usage,
                     view_formats: &paired,
                 })
-            })?;
+            },
+        )?;
         let record = Arc::new(TextureRealizationRecord {
             affinity: self.affinity(),
             logical_identity: identity,
@@ -302,7 +349,34 @@ impl GpuContext {
             .ensure_available(identity)?;
         lowering::validate_texture_view(self, identity, handle.descriptor(), &parent.record)?;
         let descriptor = handle.retained_descriptor();
-        let mut registries = self.backend.resource_realization.registries(identity)?;
+        {
+            let registries = self.backend.resource_realization.registries(identity)?;
+            let authoritative_parent = registries
+                .textures
+                .lookup(parent.logical_identity(), parent.descriptor())?
+                .ok_or_else(|| {
+                    GpuResourceRealizationError::new(
+                        GpuResourceRealizationErrorCategory::UnknownLogicalResource,
+                        Some(parent.logical_identity()),
+                        "the parent texture is absent from this context's authoritative registry",
+                    )
+                })?;
+            if !Arc::ptr_eq(&authoritative_parent, &parent.record) {
+                return Err(GpuResourceRealizationError::new(
+                    GpuResourceRealizationErrorCategory::UnknownLogicalResource,
+                    Some(parent.logical_identity()),
+                    "the supplied parent is not the authoritative texture realization record",
+                ));
+            }
+            if let Some(record) = registries.texture_views.lookup(identity, &descriptor)? {
+                return Ok(GpuRealizedTextureView::from_record(record));
+            }
+            registries.reject_other_kind(ResourceKind::TextureView, identity)?;
+        }
+        let (attribution_gate, mut registries) = self
+            .backend
+            .resource_realization
+            .attributed_registries(identity)?;
 
         let authoritative_parent = registries
             .textures
@@ -328,10 +402,10 @@ impl GpuContext {
         registries.ensure_capacity(identity, self.backend.resource_realization.policy)?;
 
         let subresources = descriptor.subresources();
-        let object = self
-            .backend
-            .resource_realization
-            .create_backend_object(identity, || {
+        let object = self.backend.resource_realization.create_backend_object(
+            identity,
+            &attribution_gate,
+            || {
                 authoritative_parent
                     .object
                     .create_view(&TextureViewDescriptor {
@@ -345,7 +419,8 @@ impl GpuContext {
                         base_array_layer: subresources.base_array_layer(),
                         array_layer_count: Some(subresources.array_layer_count()),
                     })
-            })?;
+            },
+        )?;
         let record = Arc::new(TextureViewRealizationRecord {
             affinity: self.affinity(),
             logical_identity: identity,
@@ -370,7 +445,17 @@ impl GpuContext {
             .ensure_available(identity)?;
         lowering::validate_sampler(identity, handle.descriptor())?;
         let descriptor = handle.retained_descriptor();
-        let mut registries = self.backend.resource_realization.registries(identity)?;
+        {
+            let registries = self.backend.resource_realization.registries(identity)?;
+            if let Some(record) = registries.samplers.lookup(identity, &descriptor)? {
+                return Ok(GpuRealizedSampler::from_record(record));
+            }
+            registries.reject_other_kind(ResourceKind::Sampler, identity)?;
+        }
+        let (attribution_gate, mut registries) = self
+            .backend
+            .resource_realization
+            .attributed_registries(identity)?;
         if let Some(record) = registries.samplers.lookup(identity, &descriptor)? {
             return Ok(GpuRealizedSampler::from_record(record));
         }
@@ -380,10 +465,10 @@ impl GpuContext {
         let (address_u, address_v, address_w) = descriptor.address_modes();
         let (mag_filter, min_filter, mipmap_filter) = descriptor.filters();
         let (lod_min_clamp, lod_max_clamp) = descriptor.lod_range();
-        let object = self
-            .backend
-            .resource_realization
-            .create_backend_object(identity, || {
+        let object = self.backend.resource_realization.create_backend_object(
+            identity,
+            &attribution_gate,
+            || {
                 self.backend.device.create_sampler(&SamplerDescriptor {
                     label: Some(descriptor.common().label().as_str()),
                     address_mode_u: lowering::map_address_mode(address_u),
@@ -398,7 +483,8 @@ impl GpuContext {
                     anisotropy_clamp: 1,
                     border_color: None,
                 })
-            })?;
+            },
+        )?;
         let record = Arc::new(SamplerRealizationRecord {
             affinity: self.affinity(),
             logical_identity: identity,
@@ -420,23 +506,34 @@ impl GpuContext {
             .ensure_available(identity)?;
         lowering::validate_query_set(self, identity, handle.descriptor())?;
         let descriptor = handle.retained_descriptor();
-        let mut registries = self.backend.resource_realization.registries(identity)?;
+        {
+            let registries = self.backend.resource_realization.registries(identity)?;
+            if let Some(record) = registries.query_sets.lookup(identity, &descriptor)? {
+                return Ok(GpuRealizedQuerySet::from_record(record));
+            }
+            registries.reject_other_kind(ResourceKind::QuerySet, identity)?;
+        }
+        let (attribution_gate, mut registries) = self
+            .backend
+            .resource_realization
+            .attributed_registries(identity)?;
         if let Some(record) = registries.query_sets.lookup(identity, &descriptor)? {
             return Ok(GpuRealizedQuerySet::from_record(record));
         }
         registries.reject_other_kind(ResourceKind::QuerySet, identity)?;
         registries.ensure_capacity(identity, self.backend.resource_realization.policy)?;
 
-        let object = self
-            .backend
-            .resource_realization
-            .create_backend_object(identity, || {
+        let object = self.backend.resource_realization.create_backend_object(
+            identity,
+            &attribution_gate,
+            || {
                 self.backend.device.create_query_set(&QuerySetDescriptor {
                     label: Some(descriptor.common().label().as_str()),
                     ty: lowering::map_query_kind(descriptor.kind()),
                     count: descriptor.count(),
                 })
-            })?;
+            },
+        )?;
         let record = Arc::new(QuerySetRealizationRecord {
             affinity: self.affinity(),
             logical_identity: identity,
@@ -551,10 +648,10 @@ mod tests {
         ];
 
         for (backend_error, expected) in cases {
-            let health = DeviceHealth::new();
+            let health = WgpuDeviceHealth::new();
             let resource = test_resource();
             health.mark_uncaptured(backend_error);
-            let error = health.ensure_available(resource).unwrap_err();
+            let error = health.ensure_resource(resource).unwrap_err();
             assert_eq!(error.category(), expected);
             assert!(
                 error.detail().is_some_and(|detail| detail.len() <= 256),
@@ -567,13 +664,19 @@ mod tests {
     fn synchronous_observed_backend_fault_rejects_constructor_candidate() {
         let context = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
         let affinity = GpuContextAffinity::test_value(context, GpuDeviceGeneration::first());
-        let state =
-            ResourceRealizationState::new(affinity, GpuResourceRealizationPolicy::default());
+        let health = Arc::new(WgpuDeviceHealth::new());
+        let state = ResourceRealizationState::new(
+            affinity,
+            GpuResourceRealizationPolicy::default(),
+            Arc::clone(&health),
+            Arc::new(WgpuErrorAttributionGate::default()),
+        );
         let resource = test_resource();
+        let attribution_gate = state.error_attribution_gate.acquire();
 
         let error = state
-            .create_backend_object(resource, || {
-                state.health.mark_uncaptured(wgpu::Error::Validation {
+            .create_backend_object(resource, &attribution_gate, || {
+                health.mark_uncaptured(wgpu::Error::Validation {
                     source: backend_source(),
                     description: "synchronous validation".to_string(),
                 });

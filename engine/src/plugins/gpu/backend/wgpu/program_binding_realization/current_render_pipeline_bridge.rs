@@ -1,18 +1,18 @@
-//! Temporary, purpose-typed lexical resource access for current uncut renderer operations.
+//! Temporary, purpose-typed lexical G4C1/G4C2 access for current uncut renderer operations.
 //!
-//! G4C2 replaces and deletes this bridge. Each consumer trait has a fixed `()` result and receives
+//! G4C3 replaces and deletes this bridge. Each consumer trait has a fixed `()` result and receives
 //! backend references with an anonymous call-only lifetime, which prevents returning the borrow
 //! itself. WGPU resource handles are cloneable, so the temporary no-retention rule is additionally
 //! enforced by exact repository source inventories of all terminal implementations and by review.
 
-use super::ResourceRealizationState;
+use super::super::resource_realization::ResourceRealizationState;
+use super::ProgramBindingRealizationState;
 use crate::plugins::gpu::{
-    GpuContext, GpuRealizedBuffer, GpuRealizedQuerySet, GpuRealizedSampler, GpuRealizedTexture,
-    GpuRealizedTextureView, GpuResourceRealizationError, GpuResourceRealizationErrorCategory,
-    GpuWorkResourceId,
+    GpuContext, GpuProgramBindingRealizationError, GpuRealizedBindGroup, GpuRealizedBuffer,
+    GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRealizedQuerySet, GpuRealizedTexture,
+    GpuRealizedTextureView, GpuResourceRealizationError,
 };
-use std::sync::Arc;
-use wgpu::{Buffer, QuerySet, Sampler, Texture, TextureView};
+use wgpu::{BindGroup, Buffer, PipelineLayout, QuerySet, ShaderModule, Texture, TextureView};
 
 macro_rules! purpose_terminal {
     ($trait_name:ident, $method_name:ident, $object:ty) => {
@@ -22,7 +22,6 @@ macro_rules! purpose_terminal {
     };
 }
 
-purpose_terminal!(CurrentRenderBufferBindingTerminal, bind_buffer, Buffer);
 purpose_terminal!(CurrentRenderBufferUploadTerminal, upload_buffer, Buffer);
 purpose_terminal!(CurrentRenderVertexBufferTerminal, use_vertex_buffer, Buffer);
 purpose_terminal!(CurrentRenderIndexBufferTerminal, use_index_buffer, Buffer);
@@ -59,10 +58,6 @@ pub(crate) trait CurrentSurfaceReadbackCopyTerminal {
     fn copy_surface_to_readback(self, buffer: &Buffer);
 }
 
-pub(crate) trait CurrentRenderSampledTextureBindingTerminal {
-    fn bind_sampled_texture(self, view: &TextureView, sampler: &Sampler);
-}
-
 pub(crate) trait CurrentRenderTimestampResourcesTerminal {
     fn use_timestamp_resources(
         self,
@@ -72,40 +67,67 @@ pub(crate) trait CurrentRenderTimestampResourcesTerminal {
     );
 }
 
-pub(crate) trait CurrentRenderMaterialBindingTerminal {
-    fn bind_material_resources(self, views: &[&TextureView], samplers: &[&Sampler]);
-}
-
-pub(crate) trait CurrentRenderBindGroupTerminal {
-    fn bind_resources(self, buffers: &[&Buffer], views: &[&TextureView], samplers: &[&Sampler]);
-}
-
 pub(crate) trait CurrentRenderAttachmentsTerminal {
     fn encode_with_attachments(self, views: &[&TextureView]);
 }
 
-/// The only G4C1 object-reference bridge. G4C2 owns its immediate deletion.
+/// G4C3-owned temporary pipeline creation terminal. It can borrow a G4C2 program and pipeline
+/// layout only for the lexical WGPU pipeline call and cannot return or retain either reference.
+pub(crate) trait CurrentRenderPipelineCreationTerminal {
+    fn create_pipeline(self, program: &ShaderModule, layout: &PipelineLayout);
+}
+
+/// G5-owned temporary bind-group encoding terminal. G4C2 supplies validated bind groups but does
+/// not take command-encoding ownership.
+pub(crate) trait CurrentRenderPipelineBindGroupsTerminal {
+    fn bind_groups(self, groups: &[&BindGroup]);
+}
+
+/// The only G4C2 object-reference bridge. G4C3 owns its immediate deletion.
 #[derive(Debug)]
-pub(crate) struct CurrentRenderResourceBridge<'a> {
-    state: &'a ResourceRealizationState,
+pub(crate) struct CurrentRenderPipelineBridge<'a> {
+    resource_state: &'a ResourceRealizationState,
+    program_binding_state: &'a ProgramBindingRealizationState,
 }
 
 impl GpuContext {
-    pub(crate) fn current_render_resource_bridge(&self) -> CurrentRenderResourceBridge<'_> {
-        CurrentRenderResourceBridge {
-            state: &self.backend.resource_realization,
+    pub(crate) fn current_render_pipeline_bridge(&self) -> CurrentRenderPipelineBridge<'_> {
+        CurrentRenderPipelineBridge {
+            resource_state: &self.backend.resource_realization,
+            program_binding_state: &self.backend.program_binding_realization,
         }
     }
 }
 
-impl CurrentRenderResourceBridge<'_> {
-    pub(crate) fn for_buffer_binding(
+impl CurrentRenderPipelineBridge<'_> {
+    pub(crate) fn for_pipeline_creation(
         self,
-        resource: &GpuRealizedBuffer,
-        terminal: impl CurrentRenderBufferBindingTerminal,
-    ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_buffer(resource)?;
-        terminal.bind_buffer(&resource.record.object);
+        program: &GpuRealizedProgram,
+        layout: &GpuRealizedPipelineLayout,
+        terminal: impl CurrentRenderPipelineCreationTerminal,
+    ) -> Result<(), GpuProgramBindingRealizationError> {
+        self.program_binding_state
+            .validate_pipeline_bridge_program(&program.record)?;
+        self.program_binding_state
+            .validate_pipeline_bridge_pipeline_layout(&layout.record)?;
+        terminal.create_pipeline(&program.record.object, &layout.record.object);
+        Ok(())
+    }
+
+    pub(crate) fn for_pipeline_bind_groups(
+        self,
+        groups: &[&GpuRealizedBindGroup],
+        terminal: impl CurrentRenderPipelineBindGroupsTerminal,
+    ) -> Result<(), GpuProgramBindingRealizationError> {
+        for group in groups {
+            self.program_binding_state
+                .validate_pipeline_bridge_bind_group(&group.record)?;
+        }
+        let groups = groups
+            .iter()
+            .map(|group| &group.record.object)
+            .collect::<Vec<_>>();
+        terminal.bind_groups(&groups);
         Ok(())
     }
 
@@ -225,74 +247,6 @@ impl CurrentRenderResourceBridge<'_> {
         Ok(())
     }
 
-    pub(crate) fn for_sampled_texture_binding(
-        self,
-        view: &GpuRealizedTextureView,
-        sampler: &GpuRealizedSampler,
-        terminal: impl CurrentRenderSampledTextureBindingTerminal,
-    ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_texture_view(view)?;
-        self.validate_sampler(sampler)?;
-        terminal.bind_sampled_texture(&view.record.object, &sampler.record.object);
-        Ok(())
-    }
-
-    pub(crate) fn for_material_binding(
-        self,
-        views: &[GpuRealizedTextureView],
-        samplers: &[GpuRealizedSampler],
-        terminal: impl CurrentRenderMaterialBindingTerminal,
-    ) -> Result<(), GpuResourceRealizationError> {
-        for view in views {
-            self.validate_texture_view(view)?;
-        }
-        for sampler in samplers {
-            self.validate_sampler(sampler)?;
-        }
-        let views = views
-            .iter()
-            .map(|view| &view.record.object)
-            .collect::<Vec<_>>();
-        let samplers = samplers
-            .iter()
-            .map(|sampler| &sampler.record.object)
-            .collect::<Vec<_>>();
-        terminal.bind_material_resources(&views, &samplers);
-        Ok(())
-    }
-
-    pub(crate) fn for_bind_group(
-        self,
-        buffers: &[&GpuRealizedBuffer],
-        views: &[&GpuRealizedTextureView],
-        samplers: &[&GpuRealizedSampler],
-        terminal: impl CurrentRenderBindGroupTerminal,
-    ) -> Result<(), GpuResourceRealizationError> {
-        for buffer in buffers {
-            self.validate_buffer(buffer)?;
-        }
-        for view in views {
-            self.validate_texture_view(view)?;
-        }
-        for sampler in samplers {
-            self.validate_sampler(sampler)?;
-        }
-        let buffers = buffers
-            .iter()
-            .map(|buffer| &buffer.record.object)
-            .collect::<Vec<_>>();
-        let views = views
-            .iter()
-            .map(|view| &view.record.object)
-            .collect::<Vec<_>>();
-        let samplers = samplers
-            .iter()
-            .map(|sampler| &sampler.record.object)
-            .collect::<Vec<_>>();
-        terminal.bind_resources(&buffers, &views, &samplers);
-        Ok(())
-    }
-
     pub(crate) fn for_pass_attachments(
         self,
         views: &[&GpuRealizedTextureView],
@@ -341,109 +295,31 @@ impl CurrentRenderResourceBridge<'_> {
         &self,
         resource: &GpuRealizedBuffer,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_record(
-            resource.logical_identity(),
-            resource.affinity(),
-            |registries| {
-                registries
-                    .buffers
-                    .lookup(resource.logical_identity(), resource.descriptor())
-            },
-            &resource.record,
-        )
+        self.resource_state
+            .validate_pipeline_bridge_buffer(resource)
     }
 
     fn validate_texture(
         &self,
         resource: &GpuRealizedTexture,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_record(
-            resource.logical_identity(),
-            resource.affinity(),
-            |registries| {
-                registries
-                    .textures
-                    .lookup(resource.logical_identity(), resource.descriptor())
-            },
-            &resource.record,
-        )
+        self.resource_state
+            .validate_pipeline_bridge_texture(resource)
     }
 
     fn validate_texture_view(
         &self,
         resource: &GpuRealizedTextureView,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_record(
-            resource.logical_identity(),
-            resource.affinity(),
-            |registries| {
-                registries
-                    .texture_views
-                    .lookup(resource.logical_identity(), resource.descriptor())
-            },
-            &resource.record,
-        )
-    }
-
-    fn validate_sampler(
-        &self,
-        resource: &GpuRealizedSampler,
-    ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_record(
-            resource.logical_identity(),
-            resource.affinity(),
-            |registries| {
-                registries
-                    .samplers
-                    .lookup(resource.logical_identity(), resource.descriptor())
-            },
-            &resource.record,
-        )
+        self.resource_state
+            .validate_pipeline_bridge_texture_view(resource)
     }
 
     fn validate_query_set(
         &self,
         resource: &GpuRealizedQuerySet,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_record(
-            resource.logical_identity(),
-            resource.affinity(),
-            |registries| {
-                registries
-                    .query_sets
-                    .lookup(resource.logical_identity(), resource.descriptor())
-            },
-            &resource.record,
-        )
-    }
-
-    fn validate_record<Record>(
-        &self,
-        identity: GpuWorkResourceId,
-        observed_affinity: crate::plugins::gpu::GpuContextAffinity,
-        lookup: impl FnOnce(
-            &super::ResourceRegistries,
-        ) -> Result<Option<Arc<Record>>, GpuResourceRealizationError>,
-        observed_record: &Arc<Record>,
-    ) -> Result<(), GpuResourceRealizationError> {
-        super::validate_realized_input_affinity(self.state.affinity, identity, observed_affinity)?;
-        self.state.ensure_available(identity)?;
-        let registries = self.state.registries(identity)?;
-        let authoritative = lookup(&registries)?.ok_or_else(|| {
-            GpuResourceRealizationError::new(
-                GpuResourceRealizationErrorCategory::CurrentRenderResourceBridgeViolation,
-                Some(identity),
-                "the bridge input is absent from authoritative resource realization",
-            )
-        })?;
-        if !Arc::ptr_eq(&authoritative, observed_record) {
-            return Err(GpuResourceRealizationError::new(
-                GpuResourceRealizationErrorCategory::CurrentRenderResourceBridgeViolation,
-                Some(identity),
-                "the bridge input is not the authoritative realization record",
-            ));
-        }
-        drop(registries);
-        Ok(())
+        self.resource_state
+            .validate_pipeline_bridge_query_set(resource)
     }
 }

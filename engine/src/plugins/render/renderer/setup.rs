@@ -3,11 +3,18 @@ use super::resource_descriptors::{
 };
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderBufferBindingTerminal, CurrentRenderSampledTextureBindingTerminal,
-    CurrentRenderTextureUploadTerminal, CurrentRenderTimestampWritesTerminal,
-    CurrentRenderVertexBufferTerminal, GpuBufferUsage, GpuMemoryIntent, GpuResourceLifetime,
-    GpuTextureFormat, GpuTextureUsage,
+    CurrentRenderPipelineBindGroupsTerminal, CurrentRenderPipelineCreationTerminal,
+    CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,
+    GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
+    GpuBindingProvenance, GpuBufferUsage, GpuEntryPointDescriptor, GpuEntryPointName,
+    GpuMemoryIntent, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
+    GpuProgramInterfaceDescriptor, GpuProgramSourceKey, GpuProgramSourceProvenance,
+    GpuRealizedBindGroup, GpuRealizedBindGroupLayout, GpuResourceLifetime,
+    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
+    GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
+    GpuTextureFormat, GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDimension,
 };
+use std::num::NonZeroU64;
 
 impl Default for Renderer {
     fn default() -> Self {
@@ -51,7 +58,7 @@ impl Renderer {
         let realized = context.realize_sampler(&handle)?;
         Ok(RendererSamplerResource {
             _handle: handle,
-            realized,
+            _realized: realized,
         })
     }
 
@@ -146,10 +153,111 @@ impl Renderer {
         self.flow_pipeline_cache.stats()
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn realize_ui_program_binding_artifacts(
+        &mut self,
+        context: &GpuContext,
+        kind: UiPipelineKind,
+        format: TextureFormat,
+        canonical_wgsl: &str,
+        source_key: &'static str,
+        source_revision: u64,
+        screen_label: &'static str,
+        texture_sampler_label: Option<&'static str>,
+    ) -> Result<UiProgramBindingArtifacts> {
+        // This is the renderer's narrow integration boundary for driving the asynchronous G4C2
+        // publication operations. Callers prepare these artifacts before entering G5 encoding.
+        let screen_buffer = self.realize_buffer_resource(
+            context,
+            screen_label,
+            std::mem::size_of::<ScreenUniformRaw>() as u64,
+            [GpuBufferUsage::Uniform, GpuBufferUsage::CopyDestination],
+            GpuResourceLifetime::Retained,
+            GpuMemoryIntent::Device,
+        )?;
+        let texture_sampler = texture_sampler_label
+            .map(|label| {
+                self.realize_linear_sampler_resource(context, label, GpuResourceLifetime::Retained)
+            })
+            .transpose()?;
+
+        let screen_layout_descriptor = ui_screen_bind_group_layout()?;
+        let texture_layout_descriptor = texture_sampler_label
+            .map(|_| ui_texture_bind_group_layout())
+            .transpose()?;
+        let pipeline_layout_descriptor = GpuPipelineLayoutDescriptor::new(
+            std::iter::once(screen_layout_descriptor.clone())
+                .chain(texture_layout_descriptor.iter().cloned()),
+        )?;
+        let interface = GpuProgramInterfaceDescriptor::new(
+            pipeline_layout_descriptor
+                .groups()
+                .flat_map(|group| group.bindings().cloned()),
+        )?;
+        let admitted_source = self.flow_pipeline_cache.admit_program_source(
+            GpuProgramSourceKey::new(source_key)?,
+            source_revision,
+            canonical_wgsl,
+            GpuProgramSourceProvenance::new("renderer-ui-pipeline", Some(source_key.to_owned()))?,
+        )?;
+        let vertex_entry = GpuEntryPointName::new("vs_main")?;
+        let fragment_entry = GpuEntryPointName::new("fs_main")?;
+        let program_descriptor = GpuProgramDescriptor::new(
+            admitted_source,
+            interface.clone(),
+            [
+                GpuEntryPointDescriptor::new(
+                    vertex_entry,
+                    GpuShaderStage::Vertex,
+                    interface.clone(),
+                ),
+                GpuEntryPointDescriptor::new(fragment_entry, GpuShaderStage::Fragment, interface),
+            ],
+        )?;
+
+        let program = pollster::block_on(context.realize_program(&program_descriptor))?;
+        let screen_layout =
+            pollster::block_on(context.realize_bind_group_layout(&screen_layout_descriptor))?;
+        let texture_layout = texture_layout_descriptor
+            .as_ref()
+            .map(|layout| pollster::block_on(context.realize_bind_group_layout(layout)))
+            .transpose()?;
+        let pipeline_layout =
+            pollster::block_on(context.realize_pipeline_layout(&pipeline_layout_descriptor))?;
+        let screen_size = NonZeroU64::new(screen_buffer._handle.descriptor().size_bytes())
+            .expect("screen uniform buffers are nonempty");
+        let screen_bind_group = pollster::block_on(context.realize_bind_group(
+            &screen_layout,
+            [GpuRuntimeBindingValue::new(
+                GpuBindingKey::try_new(0, 0)?,
+                [GpuRuntimeBindingResource::Buffer(
+                    GpuRuntimeBufferBinding::new(
+                        screen_buffer._handle.clone(),
+                        0,
+                        screen_size,
+                        None,
+                    ),
+                )],
+            )?],
+        ))?;
+
+        Ok(UiProgramBindingArtifacts {
+            pipeline_artifacts: UiPipelineArtifacts {
+                kind,
+                format,
+                program,
+                pipeline_layout,
+            },
+            screen_buffer,
+            screen_bind_group,
+            texture_bind_group_layout: texture_layout,
+            texture_sampler,
+        })
+    }
+
     pub(super) fn ensure_rect_pass(
         &mut self,
         context: &GpuContext,
-        device: &Device,
         format: TextureFormat,
         shader_source: &str,
         shader_revision: u64,
@@ -160,112 +268,22 @@ impl Renderer {
         {
             return Ok(());
         }
-
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("engine_ui_rect_shader"),
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
-
-        let screen_buffer = self.realize_buffer_resource(
+        let artifacts = self.realize_ui_program_binding_artifacts(
             context,
+            UiPipelineKind::Rect,
+            format,
+            shader_source,
+            "ui:rect",
+            shader_revision,
             "engine_ui_screen_uniform",
-            std::mem::size_of::<ScreenUniformRaw>() as u64,
-            [GpuBufferUsage::Uniform, GpuBufferUsage::CopyDestination],
-            GpuResourceLifetime::Retained,
-            GpuMemoryIntent::Device,
+            None,
         )?;
-
-        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("engine_ui_rect_bind_group_layout"),
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let screen_bind_group = create_single_buffer_bind_group(
-            context,
-            device,
-            "engine_ui_rect_bind_group",
-            &bind_group_layout,
-            &screen_buffer.realized,
-        )?;
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("engine_ui_rect_pipeline_layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("engine_ui_rect_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[VertexBufferLayout {
-                    array_stride: std::mem::size_of::<RectInstanceRaw>() as u64,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 16,
-                            shader_location: 1,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32,
-                            offset: 32,
-                            shader_location: 2,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32,
-                            offset: 36,
-                            shader_location: 3,
-                        },
-                    ],
-                }],
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(ColorTargetState {
-                    format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState {
-                topology: PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: FrontFace::Ccw,
-                cull_mode: None,
-                polygon_mode: PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
 
         self.rect_pass = Some(RectPass {
-            pipeline,
-            screen_buffer,
-            screen_bind_group,
+            pipeline: None,
+            pipeline_artifacts: artifacts.pipeline_artifacts,
+            screen_buffer: artifacts.screen_buffer,
+            screen_bind_group: artifacts.screen_bind_group,
         });
         self.rect_pass_format = Some(format);
         self.rect_pass_shader_revision = shader_revision;
@@ -275,118 +293,27 @@ impl Renderer {
     pub(super) fn ensure_stroke_pass(
         &mut self,
         context: &GpuContext,
-        device: &Device,
         format: TextureFormat,
     ) -> Result<()> {
         if self.stroke_pass.is_some() && self.stroke_pass_format == Some(format) {
             return Ok(());
         }
-
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("engine_ui_stroke_shader"),
-            source: ShaderSource::Wgsl(DEFAULT_UI_STROKE_SHADER.into()),
-        });
-
-        let screen_buffer = self.realize_buffer_resource(
+        let artifacts = self.realize_ui_program_binding_artifacts(
             context,
+            UiPipelineKind::Stroke,
+            format,
+            DEFAULT_UI_STROKE_SHADER,
+            "ui:stroke",
+            0,
             "engine_ui_stroke_screen_uniform",
-            std::mem::size_of::<ScreenUniformRaw>() as u64,
-            [GpuBufferUsage::Uniform, GpuBufferUsage::CopyDestination],
-            GpuResourceLifetime::Retained,
-            GpuMemoryIntent::Device,
+            None,
         )?;
-
-        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("engine_ui_stroke_bind_group_layout"),
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let screen_bind_group = create_single_buffer_bind_group(
-            context,
-            device,
-            "engine_ui_stroke_bind_group",
-            &bind_group_layout,
-            &screen_buffer.realized,
-        )?;
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("engine_ui_stroke_pipeline_layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("engine_ui_stroke_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[VertexBufferLayout {
-                    array_stride: std::mem::size_of::<StrokeSegmentInstanceRaw>() as u64,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x2,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x2,
-                            offset: 8,
-                            shader_location: 1,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 16,
-                            shader_location: 2,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32,
-                            offset: 32,
-                            shader_location: 3,
-                        },
-                    ],
-                }],
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(ColorTargetState {
-                    format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState {
-                topology: PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: FrontFace::Ccw,
-                cull_mode: None,
-                polygon_mode: PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
 
         self.stroke_pass = Some(StrokePass {
-            pipeline,
-            screen_buffer,
-            screen_bind_group,
+            pipeline: None,
+            pipeline_artifacts: artifacts.pipeline_artifacts,
+            screen_buffer: artifacts.screen_buffer,
+            screen_bind_group: artifacts.screen_bind_group,
         });
         self.stroke_pass_format = Some(format);
         Ok(())
@@ -395,137 +322,33 @@ impl Renderer {
     pub(super) fn ensure_glyph_pass(
         &mut self,
         context: &GpuContext,
-        device: &Device,
         format: TextureFormat,
     ) -> Result<()> {
         if self.glyph_pass.is_some() && self.glyph_pass_format == Some(format) {
             return Ok(());
         }
-
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("engine_ui_glyph_shader"),
-            source: ShaderSource::Wgsl(DEFAULT_UI_GLYPH_SHADER.into()),
-        });
-
-        let screen_buffer = self.realize_buffer_resource(
+        let artifacts = self.realize_ui_program_binding_artifacts(
             context,
+            UiPipelineKind::Glyph,
+            format,
+            DEFAULT_UI_GLYPH_SHADER,
+            "ui:glyph",
+            0,
             "engine_ui_glyph_screen_uniform",
-            std::mem::size_of::<ScreenUniformRaw>() as u64,
-            [GpuBufferUsage::Uniform, GpuBufferUsage::CopyDestination],
-            GpuResourceLifetime::Retained,
-            GpuMemoryIntent::Device,
+            Some("engine_ui_glyph_sampler"),
         )?;
-
-        let screen_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_ui_glyph_screen_bind_group_layout"),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let screen_bind_group = create_single_buffer_bind_group(
-            context,
-            device,
-            "engine_ui_glyph_screen_bind_group",
-            &screen_bind_group_layout,
-            &screen_buffer.realized,
-        )?;
-
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_ui_glyph_texture_bind_group_layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
-        let texture_sampler = self.realize_linear_sampler_resource(
-            context,
-            "engine_ui_glyph_sampler",
-            GpuResourceLifetime::Retained,
-        )?;
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("engine_ui_glyph_pipeline_layout"),
-            bind_group_layouts: &[&screen_bind_group_layout, &texture_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("engine_ui_glyph_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[VertexBufferLayout {
-                    array_stride: std::mem::size_of::<GlyphInstanceRaw>() as u64,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 16,
-                            shader_location: 1,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 32,
-                            shader_location: 2,
-                        },
-                    ],
-                }],
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(ColorTargetState {
-                    format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
 
         self.glyph_pass = Some(GlyphPass {
-            pipeline,
-            screen_buffer,
-            screen_bind_group,
-            texture_bind_group_layout,
-            texture_sampler,
+            pipeline: None,
+            pipeline_artifacts: artifacts.pipeline_artifacts,
+            screen_buffer: artifacts.screen_buffer,
+            screen_bind_group: artifacts.screen_bind_group,
+            texture_bind_group_layout: artifacts
+                .texture_bind_group_layout
+                .expect("glyph pipeline should realize a texture bind-group layout"),
+            texture_sampler: artifacts
+                .texture_sampler
+                .expect("glyph pipeline should realize a texture sampler"),
         });
         self.glyph_pass_format = Some(format);
         self.glyph_atlas_gpu.clear();
@@ -535,137 +358,33 @@ impl Renderer {
     pub(super) fn ensure_viewport_embed_pass(
         &mut self,
         context: &GpuContext,
-        device: &Device,
         format: TextureFormat,
     ) -> Result<()> {
         if self.viewport_embed_pass.is_some() && self.viewport_embed_pass_format == Some(format) {
             return Ok(());
         }
-
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("engine_ui_viewport_embed_shader"),
-            source: ShaderSource::Wgsl(DEFAULT_UI_VIEWPORT_EMBED_SHADER.into()),
-        });
-
-        let screen_buffer = self.realize_buffer_resource(
+        let artifacts = self.realize_ui_program_binding_artifacts(
             context,
+            UiPipelineKind::ViewportEmbed,
+            format,
+            DEFAULT_UI_VIEWPORT_EMBED_SHADER,
+            "ui:viewport-embed",
+            0,
             "engine_ui_viewport_embed_screen_uniform",
-            std::mem::size_of::<ScreenUniformRaw>() as u64,
-            [GpuBufferUsage::Uniform, GpuBufferUsage::CopyDestination],
-            GpuResourceLifetime::Retained,
-            GpuMemoryIntent::Device,
+            Some("engine_ui_viewport_embed_sampler"),
         )?;
-
-        let screen_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_ui_viewport_embed_screen_bind_group_layout"),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let screen_bind_group = create_single_buffer_bind_group(
-            context,
-            device,
-            "engine_ui_viewport_embed_screen_bind_group",
-            &screen_bind_group_layout,
-            &screen_buffer.realized,
-        )?;
-
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_ui_viewport_embed_texture_bind_group_layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
-        let texture_sampler = self.realize_linear_sampler_resource(
-            context,
-            "engine_ui_viewport_embed_sampler",
-            GpuResourceLifetime::Retained,
-        )?;
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("engine_ui_viewport_embed_pipeline_layout"),
-            bind_group_layouts: &[&screen_bind_group_layout, &texture_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("engine_ui_viewport_embed_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[VertexBufferLayout {
-                    array_stride: std::mem::size_of::<ViewportEmbedInstanceRaw>() as u64,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 16,
-                            shader_location: 1,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 32,
-                            shader_location: 2,
-                        },
-                    ],
-                }],
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(ColorTargetState {
-                    format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
 
         self.viewport_embed_pass = Some(ViewportEmbedPass {
-            pipeline,
-            screen_buffer,
-            screen_bind_group,
-            texture_bind_group_layout,
-            texture_sampler,
+            pipeline: None,
+            pipeline_artifacts: artifacts.pipeline_artifacts,
+            screen_buffer: artifacts.screen_buffer,
+            screen_bind_group: artifacts.screen_bind_group,
+            texture_bind_group_layout: artifacts
+                .texture_bind_group_layout
+                .expect("viewport pipeline should realize a texture bind-group layout"),
+            texture_sampler: artifacts
+                .texture_sampler
+                .expect("viewport pipeline should realize a texture sampler"),
         });
         self.viewport_embed_pass_format = Some(format);
         Ok(())
@@ -674,149 +393,126 @@ impl Renderer {
     pub(super) fn ensure_product_surface_pass(
         &mut self,
         context: &GpuContext,
-        device: &Device,
         format: TextureFormat,
     ) -> Result<()> {
         if self.product_surface_pass.is_some() && self.product_surface_pass_format == Some(format) {
             return Ok(());
         }
-
-        let shader = device.create_shader_module(ShaderModuleDescriptor {
-            label: Some("engine_ui_product_surface_shader"),
-            source: ShaderSource::Wgsl(DEFAULT_UI_PRODUCT_SURFACE_SHADER.into()),
-        });
-
-        let screen_buffer = self.realize_buffer_resource(
+        let artifacts = self.realize_ui_program_binding_artifacts(
             context,
+            UiPipelineKind::ProductSurface,
+            format,
+            DEFAULT_UI_PRODUCT_SURFACE_SHADER,
+            "ui:product-surface",
+            0,
             "engine_ui_product_surface_screen_uniform",
-            std::mem::size_of::<ScreenUniformRaw>() as u64,
-            [GpuBufferUsage::Uniform, GpuBufferUsage::CopyDestination],
-            GpuResourceLifetime::Retained,
-            GpuMemoryIntent::Device,
+            Some("engine_ui_product_surface_sampler"),
         )?;
-
-        let screen_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_ui_product_surface_screen_bind_group_layout"),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let screen_bind_group = create_single_buffer_bind_group(
-            context,
-            device,
-            "engine_ui_product_surface_screen_bind_group",
-            &screen_bind_group_layout,
-            &screen_buffer.realized,
-        )?;
-
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_ui_product_surface_texture_bind_group_layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
-        let texture_sampler = self.realize_linear_sampler_resource(
-            context,
-            "engine_ui_product_surface_sampler",
-            GpuResourceLifetime::Retained,
-        )?;
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("engine_ui_product_surface_pipeline_layout"),
-            bind_group_layouts: &[&screen_bind_group_layout, &texture_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("engine_ui_product_surface_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[VertexBufferLayout {
-                    array_stride: std::mem::size_of::<ViewportEmbedInstanceRaw>() as u64,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 16,
-                            shader_location: 1,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x4,
-                            offset: 32,
-                            shader_location: 2,
-                        },
-                    ],
-                }],
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(ColorTargetState {
-                    format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
 
         self.product_surface_pass = Some(ProductSurfacePass {
-            pipeline,
-            screen_buffer,
-            screen_bind_group,
-            texture_bind_group_layout,
-            texture_sampler,
+            pipeline: None,
+            pipeline_artifacts: artifacts.pipeline_artifacts,
+            screen_buffer: artifacts.screen_buffer,
+            screen_bind_group: artifacts.screen_bind_group,
+            texture_bind_group_layout: artifacts
+                .texture_bind_group_layout
+                .expect("product-surface pipeline should realize a texture bind-group layout"),
+            texture_sampler: artifacts
+                .texture_sampler
+                .expect("product-surface pipeline should realize a texture sampler"),
         });
         self.product_surface_pass_format = Some(format);
+        Ok(())
+    }
+
+    /// G4C3 retains temporary pipeline construction. This runs only after every G4C1/G4C2
+    /// artifact for the frame has been realized and the renderer has entered its one raw
+    /// device/queue operation interval.
+    pub(super) fn create_ui_pipelines_for_raw_phase(
+        &mut self,
+        context: &GpuContext,
+        device: &Device,
+    ) -> Result<()> {
+        if let Some(pass) = self.rect_pass.as_mut() {
+            Self::create_ui_pipeline_for_raw_phase(
+                context,
+                device,
+                &mut pass.pipeline,
+                &pass.pipeline_artifacts,
+            )?;
+        }
+        if let Some(pass) = self.stroke_pass.as_mut() {
+            Self::create_ui_pipeline_for_raw_phase(
+                context,
+                device,
+                &mut pass.pipeline,
+                &pass.pipeline_artifacts,
+            )?;
+        }
+        if let Some(pass) = self.glyph_pass.as_mut() {
+            Self::create_ui_pipeline_for_raw_phase(
+                context,
+                device,
+                &mut pass.pipeline,
+                &pass.pipeline_artifacts,
+            )?;
+        }
+        if let Some(pass) = self.viewport_embed_pass.as_mut() {
+            Self::create_ui_pipeline_for_raw_phase(
+                context,
+                device,
+                &mut pass.pipeline,
+                &pass.pipeline_artifacts,
+            )?;
+        }
+        if let Some(pass) = self.product_surface_pass.as_mut() {
+            Self::create_ui_pipeline_for_raw_phase(
+                context,
+                device,
+                &mut pass.pipeline,
+                &pass.pipeline_artifacts,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn create_ui_pipeline_for_raw_phase(
+        context: &GpuContext,
+        device: &Device,
+        pipeline: &mut Option<RenderPipeline>,
+        artifacts: &UiPipelineArtifacts,
+    ) -> Result<()> {
+        if pipeline.is_some() {
+            return Ok(());
+        }
+        let mut created = None;
+        context
+            .current_render_pipeline_bridge()
+            .for_pipeline_creation(
+                &artifacts.program,
+                &artifacts.pipeline_layout,
+                CreateUiRenderPipeline {
+                    device,
+                    kind: artifacts.kind,
+                    format: artifacts.format,
+                    output: &mut created,
+                },
+            )?;
+        *pipeline = Some(created.ok_or_else(|| {
+            anyhow::anyhow!(
+                "current render pipeline bridge did not create '{} pipeline'",
+                artifacts.kind.label()
+            )
+        })?);
         Ok(())
     }
 
     pub(super) fn ensure_glyph_atlas_gpu(
         &mut self,
         context: &GpuContext,
-        device: &Device,
-        queue: &Queue,
         atlas: &crate::plugins::render::features::UiFontAtlasResource,
         texture_id: u64,
+        pending_operations: &mut RendererPendingOperations,
     ) -> Result<bool> {
         if self.glyph_atlas_gpu.contains_key(&texture_id) {
             return Ok(true);
@@ -843,12 +539,6 @@ impl Renderer {
             realized: context.realize_texture(&texture_handle)?,
             _handle: texture_handle,
         };
-        context
-            .current_render_resource_bridge()
-            .for_texture_upload(
-                &texture.realized,
-                UploadGlyphAtlasTexture { queue, atlas_image },
-            )?;
 
         let view_handle =
             self.resource_ids
@@ -857,17 +547,45 @@ impl Renderer {
                     &texture._handle,
                 )?)?;
         let view = RendererTextureViewResource {
-            realized: context.realize_texture_view(&view_handle, &texture.realized)?,
+            _realized: context.realize_texture_view(&view_handle, &texture.realized)?,
             _handle: view_handle,
         };
-        let bind_group = create_sampled_texture_bind_group(
-            context,
-            device,
-            "engine_ui_glyph_atlas_bind_group",
+        let bind_group = pollster::block_on(context.realize_bind_group(
             &texture_bind_group_layout,
-            &view.realized,
-            &texture_sampler.realized,
-        )?;
+            [
+                GpuRuntimeBindingValue::new(
+                    GpuBindingKey::try_new(1, 0)?,
+                    [GpuRuntimeBindingResource::TextureView(
+                        GpuRuntimeTextureViewBinding::new(
+                            view._handle.clone(),
+                            GpuTextureViewDimension::D2,
+                        ),
+                    )],
+                )?,
+                GpuRuntimeBindingValue::new(
+                    GpuBindingKey::try_new(1, 1)?,
+                    [GpuRuntimeBindingResource::Sampler(
+                        texture_sampler._handle.clone(),
+                    )],
+                )?,
+            ],
+        ))?;
+
+        // The glyph texture/view/sampler resources and G4C2 bind group are authoritative before
+        // the batch crosses into G4C3/G5. Retain only the eventual queue write for that phase.
+        pending_operations
+            .texture_uploads
+            .push(RendererPendingTextureUpload {
+                texture: texture.realized.clone(),
+                bytes: atlas_image.pixels.clone(),
+                bytes_per_row: atlas_image.width.max(1),
+                rows_per_image: atlas_image.height.max(1),
+                size: Extent3d {
+                    width: atlas_image.width.max(1),
+                    height: atlas_image.height.max(1),
+                    depth_or_array_layers: 1,
+                },
+            });
 
         self.glyph_atlas_gpu.insert(
             texture_id,
@@ -908,27 +626,31 @@ impl Renderer {
     pub(super) fn encode_ui_pass(
         &self,
         context: &GpuContext,
-        device: &Device,
         encoder: &mut CommandEncoder,
         frame_view: &TextureView,
         prepared: &UiPreparedDraws,
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
+        viewport_bind_groups: &UiViewportBindGroups,
+        product_surface_bind_groups: &UiProductSurfaceBindGroups,
         gpu_timestamp_writes: Option<super::render_flow::GpuPassTimestampWrites>,
     ) -> Result<()> {
+        // These bind groups were realized in the batch's first phase. In particular, a timestamp
+        // terminal must not call back into realization after it has borrowed the query set.
         if let Some(writes) = gpu_timestamp_writes {
             let mut output = Ok(());
             context
-                .current_render_resource_bridge()
+                .current_render_pipeline_bridge()
                 .for_timestamp_writes(
                     &writes.query_set,
                     EncodeTimestampedUiPass {
                         renderer: self,
                         context,
-                        device,
                         encoder,
                         frame_view,
                         prepared,
                         viewport_surface_bindings,
+                        viewport_bind_groups,
+                        product_surface_bind_groups,
                         indices: writes.indices,
                         output: &mut output,
                     },
@@ -937,11 +659,12 @@ impl Renderer {
         } else {
             self.encode_ui_pass_current(
                 context,
-                device,
                 encoder,
                 frame_view,
                 prepared,
                 viewport_surface_bindings,
+                viewport_bind_groups,
+                product_surface_bind_groups,
                 None,
             )
         }
@@ -951,11 +674,12 @@ impl Renderer {
     fn encode_ui_pass_current(
         &self,
         context: &GpuContext,
-        device: &Device,
         encoder: &mut CommandEncoder,
         frame_view: &TextureView,
         prepared: &UiPreparedDraws,
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
+        viewport_bind_groups: &UiViewportBindGroups,
+        product_surface_bind_groups: &UiProductSurfaceBindGroups,
         timestamp: Option<(&QuerySet, super::render_flow::GpuPassTimestampIndices)>,
     ) -> Result<()> {
         let Some(rect_pass) = self.rect_pass.as_ref() else {
@@ -983,25 +707,23 @@ impl Renderer {
             occlusion_query_set: None,
         });
 
-        let mut viewport_bind_groups =
-            std::collections::BTreeMap::<ViewportSurfaceBindingSource, BindGroup>::new();
-        let mut product_surface_bind_groups =
-            std::collections::BTreeMap::<ProductSurfaceTextureBindingSource, BindGroup>::new();
         for command in &prepared.draw_plan {
             match *command {
                 UiPreparedDrawCommand::Rect(index) => {
                     let Some(batch) = prepared.rect_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(&rect_pass.pipeline);
-                    pass.set_bind_group(0, &rect_pass.screen_bind_group, &[]);
+                    pass.set_pipeline(rect_pass.pipeline.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("rect UI pipeline was not created in the raw phase")
+                    })?);
+                    set_ui_bind_group(context, &mut pass, 0, &rect_pass.screen_bind_group)?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_resource_bridge().for_vertex_buffer(
+                    context.current_render_pipeline_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -1016,15 +738,17 @@ impl Renderer {
                     let Some(batch) = prepared.stroke_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(&stroke_pass.pipeline);
-                    pass.set_bind_group(0, &stroke_pass.screen_bind_group, &[]);
+                    pass.set_pipeline(stroke_pass.pipeline.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("stroke UI pipeline was not created in the raw phase")
+                    })?);
+                    set_ui_bind_group(context, &mut pass, 0, &stroke_pass.screen_bind_group)?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_resource_bridge().for_vertex_buffer(
+                    context.current_render_pipeline_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -1039,52 +763,34 @@ impl Renderer {
                     let Some(batch) = prepared.viewport_embed_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(&viewport_embed_pass.pipeline);
-                    pass.set_bind_group(0, &viewport_embed_pass.screen_bind_group, &[]);
+                    pass.set_pipeline(viewport_embed_pass.pipeline.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "viewport-embed UI pipeline was not created in the raw phase"
+                        )
+                    })?);
+                    set_ui_bind_group(
+                        context,
+                        &mut pass,
+                        0,
+                        &viewport_embed_pass.screen_bind_group,
+                    )?;
                     let Some(binding) =
                         viewport_surface_bindings.get(batch.viewport_id, batch.slot)
                     else {
                         continue;
                     };
 
-                    if !viewport_bind_groups.contains_key(&binding.source) {
-                        let ViewportSurfaceBindingSource::DynamicTexture {
-                            namespace,
-                            target_id,
-                        } = &binding.source;
-                        let key = crate::plugins::render::RenderDynamicTextureTargetKey::new(
-                            namespace.clone(),
-                            target_id.clone(),
-                        );
-                        let Ok(view) = self.dynamic_texture_targets.ui_texture_view(&key) else {
-                            continue;
-                        };
-                        context
-                            .current_render_resource_bridge()
-                            .for_sampled_texture_binding(
-                                &view,
-                                &viewport_embed_pass.texture_sampler.realized,
-                                CreateUiTextureBindGroup {
-                                    device,
-                                    label: "engine_ui_viewport_embed_bind_group",
-                                    layout: &viewport_embed_pass.texture_bind_group_layout,
-                                    key: binding.source.clone(),
-                                    destination: &mut viewport_bind_groups,
-                                },
-                            )?;
-                    }
-
                     let Some(bind_group) = viewport_bind_groups.get(&binding.source) else {
                         continue;
                     };
-                    pass.set_bind_group(1, bind_group, &[]);
+                    set_ui_bind_group(context, &mut pass, 1, bind_group)?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_resource_bridge().for_vertex_buffer(
+                    context.current_render_pipeline_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -1099,47 +805,29 @@ impl Renderer {
                     let Some(batch) = prepared.product_surface_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(&product_surface_pass.pipeline);
-                    pass.set_bind_group(0, &product_surface_pass.screen_bind_group, &[]);
-
-                    if !product_surface_bind_groups.contains_key(&batch.source) {
-                        let ProductSurfaceTextureBindingSource::DynamicTexture {
-                            namespace,
-                            target_id,
-                        } = &batch.source;
-                        let key = crate::plugins::render::RenderDynamicTextureTargetKey::new(
-                            namespace.clone(),
-                            target_id.clone(),
-                        );
-                        let Ok(view) = self.dynamic_texture_targets.ui_texture_view(&key) else {
-                            continue;
-                        };
-                        context
-                            .current_render_resource_bridge()
-                            .for_sampled_texture_binding(
-                                &view,
-                                &product_surface_pass.texture_sampler.realized,
-                                CreateUiTextureBindGroup {
-                                    device,
-                                    label: "engine_ui_product_surface_bind_group",
-                                    layout: &product_surface_pass.texture_bind_group_layout,
-                                    key: batch.source.clone(),
-                                    destination: &mut product_surface_bind_groups,
-                                },
-                            )?;
-                    }
+                    pass.set_pipeline(product_surface_pass.pipeline.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "product-surface UI pipeline was not created in the raw phase"
+                        )
+                    })?);
+                    set_ui_bind_group(
+                        context,
+                        &mut pass,
+                        0,
+                        &product_surface_pass.screen_bind_group,
+                    )?;
 
                     let Some(bind_group) = product_surface_bind_groups.get(&batch.source) else {
                         continue;
                     };
-                    pass.set_bind_group(1, bind_group, &[]);
+                    set_ui_bind_group(context, &mut pass, 1, bind_group)?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_resource_bridge().for_vertex_buffer(
+                    context.current_render_pipeline_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -1154,19 +842,21 @@ impl Renderer {
                     let Some(batch) = prepared.glyph_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(&glyph_pass.pipeline);
-                    pass.set_bind_group(0, &glyph_pass.screen_bind_group, &[]);
+                    pass.set_pipeline(glyph_pass.pipeline.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("glyph UI pipeline was not created in the raw phase")
+                    })?);
+                    set_ui_bind_group(context, &mut pass, 0, &glyph_pass.screen_bind_group)?;
                     let Some(atlas_gpu) = self.glyph_atlas_gpu.get(&batch.texture_id) else {
                         continue;
                     };
-                    pass.set_bind_group(1, &atlas_gpu.bind_group, &[]);
+                    set_ui_bind_group(context, &mut pass, 1, &atlas_gpu.bind_group)?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_resource_bridge().for_vertex_buffer(
+                    context.current_render_pipeline_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -1178,29 +868,335 @@ impl Renderer {
         }
         Ok(())
     }
+
+    pub(super) fn realize_ui_dynamic_bind_groups(
+        &self,
+        context: &GpuContext,
+        prepared: &UiPreparedDraws,
+        viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
+    ) -> Result<(UiViewportBindGroups, UiProductSurfaceBindGroups)> {
+        let mut viewport_bind_groups = UiViewportBindGroups::new();
+        let mut product_surface_bind_groups = UiProductSurfaceBindGroups::new();
+
+        for command in &prepared.draw_plan {
+            match *command {
+                UiPreparedDrawCommand::ViewportEmbed(index) => {
+                    let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() else {
+                        continue;
+                    };
+                    let Some(batch) = prepared.viewport_embed_batches.get(index) else {
+                        continue;
+                    };
+                    let Some(binding) =
+                        viewport_surface_bindings.get(batch.viewport_id, batch.slot)
+                    else {
+                        continue;
+                    };
+                    if viewport_bind_groups.contains_key(&binding.source) {
+                        continue;
+                    }
+                    let ViewportSurfaceBindingSource::DynamicTexture {
+                        namespace,
+                        target_id,
+                    } = &binding.source;
+                    let key = crate::plugins::render::RenderDynamicTextureTargetKey::new(
+                        namespace.clone(),
+                        target_id.clone(),
+                    );
+                    let Ok(view_handle) = self.dynamic_texture_targets.ui_texture_view_handle(&key)
+                    else {
+                        continue;
+                    };
+                    let bind_group = pollster::block_on(context.realize_bind_group(
+                        &viewport_embed_pass.texture_bind_group_layout,
+                        ui_texture_bind_group_values(
+                            view_handle,
+                            viewport_embed_pass.texture_sampler._handle.clone(),
+                        )?,
+                    ))?;
+                    viewport_bind_groups.insert(binding.source.clone(), bind_group);
+                }
+                UiPreparedDrawCommand::ProductSurface(index) => {
+                    let Some(product_surface_pass) = self.product_surface_pass.as_ref() else {
+                        continue;
+                    };
+                    let Some(batch) = prepared.product_surface_batches.get(index) else {
+                        continue;
+                    };
+                    if product_surface_bind_groups.contains_key(&batch.source) {
+                        continue;
+                    }
+                    let ProductSurfaceTextureBindingSource::DynamicTexture {
+                        namespace,
+                        target_id,
+                    } = &batch.source;
+                    let key = crate::plugins::render::RenderDynamicTextureTargetKey::new(
+                        namespace.clone(),
+                        target_id.clone(),
+                    );
+                    let Ok(view_handle) = self.dynamic_texture_targets.ui_texture_view_handle(&key)
+                    else {
+                        continue;
+                    };
+                    let bind_group = pollster::block_on(context.realize_bind_group(
+                        &product_surface_pass.texture_bind_group_layout,
+                        ui_texture_bind_group_values(
+                            view_handle,
+                            product_surface_pass.texture_sampler._handle.clone(),
+                        )?,
+                    ))?;
+                    product_surface_bind_groups.insert(batch.source.clone(), bind_group);
+                }
+                UiPreparedDrawCommand::Rect(_)
+                | UiPreparedDrawCommand::Stroke(_)
+                | UiPreparedDrawCommand::Glyph(_) => {}
+            }
+        }
+
+        Ok((viewport_bind_groups, product_surface_bind_groups))
+    }
 }
 
-struct EncodeTimestampedUiPass<'a> {
+#[derive(Debug)]
+struct UiProgramBindingArtifacts {
+    pipeline_artifacts: UiPipelineArtifacts,
+    screen_buffer: RendererBufferResource,
+    screen_bind_group: GpuRealizedBindGroup,
+    texture_bind_group_layout: Option<GpuRealizedBindGroupLayout>,
+    texture_sampler: Option<RendererSamplerResource>,
+}
+
+fn ui_screen_bind_group_layout() -> Result<GpuBindGroupLayoutDescriptor> {
+    Ok(GpuBindGroupLayoutDescriptor::new(
+        0,
+        [GpuBindingDeclaration::new(
+            GpuBindingKey::try_new(0, 0)?,
+            GpuShaderStages::one(GpuShaderStage::Vertex),
+            GpuBindingKind::uniform_buffer(false, None),
+            None,
+            "ui-screen-uniform",
+            GpuBindingProvenance::new("renderer-ui-pipeline", Some("screen".to_owned()))?,
+        )?],
+    )?)
+}
+
+fn ui_texture_bind_group_layout() -> Result<GpuBindGroupLayoutDescriptor> {
+    Ok(GpuBindGroupLayoutDescriptor::new(
+        1,
+        [
+            GpuBindingDeclaration::new(
+                GpuBindingKey::try_new(1, 0)?,
+                GpuShaderStages::one(GpuShaderStage::Fragment),
+                GpuBindingKind::sampled_texture(
+                    GpuTextureSampleClass::FloatFilterable,
+                    GpuTextureViewDimension::D2,
+                    false,
+                )?,
+                None,
+                "ui-sampled-texture",
+                GpuBindingProvenance::new(
+                    "renderer-ui-pipeline",
+                    Some("sampled texture".to_owned()),
+                )?,
+            )?,
+            GpuBindingDeclaration::new(
+                GpuBindingKey::try_new(1, 1)?,
+                GpuShaderStages::one(GpuShaderStage::Fragment),
+                GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+                None,
+                "ui-texture-sampler",
+                GpuBindingProvenance::new(
+                    "renderer-ui-pipeline",
+                    Some("texture sampler".to_owned()),
+                )?,
+            )?,
+        ],
+    )?)
+}
+
+struct CreateUiRenderPipeline<'a> {
+    device: &'a Device,
+    kind: UiPipelineKind,
+    format: TextureFormat,
+    output: &'a mut Option<RenderPipeline>,
+}
+
+impl CurrentRenderPipelineCreationTerminal for CreateUiRenderPipeline<'_> {
+    fn create_pipeline(self, program: &ShaderModule, layout: &PipelineLayout) {
+        *self.output = Some(create_ui_render_pipeline(
+            self.device,
+            self.kind,
+            self.format,
+            program,
+            layout,
+        ));
+    }
+}
+
+fn create_ui_render_pipeline(
+    device: &Device,
+    kind: UiPipelineKind,
+    format: TextureFormat,
+    program: &ShaderModule,
+    layout: &PipelineLayout,
+) -> RenderPipeline {
+    let targets = [Some(ColorTargetState {
+        format,
+        blend: Some(BlendState::ALPHA_BLENDING),
+        write_mask: ColorWrites::ALL,
+    })];
+    macro_rules! pipeline {
+        ($stride:expr, $attributes:expr) => {{
+            device.create_render_pipeline(&RenderPipelineDescriptor {
+                label: Some(kind.label()),
+                layout: Some(layout),
+                vertex: VertexState {
+                    module: program,
+                    entry_point: Some("vs_main"),
+                    compilation_options: PipelineCompilationOptions::default(),
+                    buffers: &[VertexBufferLayout {
+                        array_stride: $stride,
+                        step_mode: VertexStepMode::Instance,
+                        attributes: &$attributes,
+                    }],
+                },
+                fragment: Some(FragmentState {
+                    module: program,
+                    entry_point: Some("fs_main"),
+                    compilation_options: PipelineCompilationOptions::default(),
+                    targets: &targets,
+                }),
+                primitive: PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            })
+        }};
+    }
+    match kind {
+        UiPipelineKind::Rect => {
+            let attributes = [
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 0,
+                    shader_location: 0,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 16,
+                    shader_location: 1,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32,
+                    offset: 32,
+                    shader_location: 2,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32,
+                    offset: 36,
+                    shader_location: 3,
+                },
+            ];
+            pipeline!(std::mem::size_of::<RectInstanceRaw>() as u64, attributes)
+        }
+        UiPipelineKind::Stroke => {
+            let attributes = [
+                VertexAttribute {
+                    format: VertexFormat::Float32x2,
+                    offset: 0,
+                    shader_location: 0,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x2,
+                    offset: 8,
+                    shader_location: 1,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 16,
+                    shader_location: 2,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32,
+                    offset: 32,
+                    shader_location: 3,
+                },
+            ];
+            pipeline!(
+                std::mem::size_of::<StrokeSegmentInstanceRaw>() as u64,
+                attributes
+            )
+        }
+        UiPipelineKind::Glyph => {
+            let attributes = [
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 0,
+                    shader_location: 0,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 16,
+                    shader_location: 1,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 32,
+                    shader_location: 2,
+                },
+            ];
+            pipeline!(std::mem::size_of::<GlyphInstanceRaw>() as u64, attributes)
+        }
+        UiPipelineKind::ViewportEmbed | UiPipelineKind::ProductSurface => {
+            let attributes = [
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 0,
+                    shader_location: 0,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 16,
+                    shader_location: 1,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 32,
+                    shader_location: 2,
+                },
+            ];
+            pipeline!(
+                std::mem::size_of::<ViewportEmbedInstanceRaw>() as u64,
+                attributes
+            )
+        }
+    }
+}
+
+struct EncodeTimestampedUiPass<'a, 'bindings> {
     renderer: &'a Renderer,
     context: &'a GpuContext,
-    device: &'a Device,
     encoder: &'a mut CommandEncoder,
     frame_view: &'a TextureView,
     prepared: &'a UiPreparedDraws,
     viewport_surface_bindings: &'a ViewportSurfaceBindingRegistry,
+    viewport_bind_groups: &'bindings UiViewportBindGroups,
+    product_surface_bind_groups: &'bindings UiProductSurfaceBindGroups,
     indices: super::render_flow::GpuPassTimestampIndices,
     output: &'a mut Result<()>,
 }
 
-impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedUiPass<'_> {
+impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedUiPass<'_, '_> {
     fn write_timestamps(self, query_set: &QuerySet) {
         *self.output = self.renderer.encode_ui_pass_current(
             self.context,
-            self.device,
             self.encoder,
             self.frame_view,
             self.prepared,
             self.viewport_surface_bindings,
+            self.viewport_bind_groups,
+            self.product_surface_bind_groups,
             Some((query_set, self.indices)),
         );
     }
@@ -1218,151 +1214,46 @@ impl CurrentRenderVertexBufferTerminal for DrawUiInstances<'_, '_> {
     }
 }
 
-fn create_single_buffer_bind_group(
+fn ui_texture_bind_group_values(
+    view: GpuTextureViewHandle,
+    sampler: GpuSamplerHandle,
+) -> Result<[GpuRuntimeBindingValue; 2]> {
+    Ok([
+        GpuRuntimeBindingValue::new(
+            GpuBindingKey::try_new(1, 0)?,
+            [GpuRuntimeBindingResource::TextureView(
+                GpuRuntimeTextureViewBinding::new(view, GpuTextureViewDimension::D2),
+            )],
+        )?,
+        GpuRuntimeBindingValue::new(
+            GpuBindingKey::try_new(1, 1)?,
+            [GpuRuntimeBindingResource::Sampler(sampler)],
+        )?,
+    ])
+}
+
+fn set_ui_bind_group(
     context: &GpuContext,
-    device: &Device,
-    label: &'static str,
-    layout: &BindGroupLayout,
-    buffer: &GpuRealizedBuffer,
-) -> Result<BindGroup> {
-    let mut output = None;
+    pass: &mut RenderPass<'_>,
+    index: u32,
+    bind_group: &GpuRealizedBindGroup,
+) -> Result<()> {
     context
-        .current_render_resource_bridge()
-        .for_buffer_binding(
-            buffer,
-            CreateSingleBufferBindGroup {
-                device,
-                label,
-                layout,
-                output: &mut output,
-            },
-        )?;
-    output.ok_or_else(|| anyhow::anyhow!("current render resource bridge did not create '{label}'"))
+        .current_render_pipeline_bridge()
+        .for_pipeline_bind_groups(&[bind_group], SetUiBindGroup { pass, index })?;
+    Ok(())
 }
 
-struct CreateSingleBufferBindGroup<'a> {
-    device: &'a Device,
-    label: &'static str,
-    layout: &'a BindGroupLayout,
-    output: &'a mut Option<BindGroup>,
+struct SetUiBindGroup<'a, 'pass> {
+    pass: &'a mut RenderPass<'pass>,
+    index: u32,
 }
 
-impl CurrentRenderBufferBindingTerminal for CreateSingleBufferBindGroup<'_> {
-    fn bind_buffer(self, buffer: &Buffer) {
-        *self.output = Some(self.device.create_bind_group(&BindGroupDescriptor {
-            label: Some(self.label),
-            layout: self.layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-        }));
-    }
-}
-
-fn create_sampled_texture_bind_group(
-    context: &GpuContext,
-    device: &Device,
-    label: &'static str,
-    layout: &BindGroupLayout,
-    view: &GpuRealizedTextureView,
-    sampler: &GpuRealizedSampler,
-) -> Result<BindGroup> {
-    let mut output = None;
-    context
-        .current_render_resource_bridge()
-        .for_sampled_texture_binding(
-            view,
-            sampler,
-            CreateSampledTextureBindGroup {
-                device,
-                label,
-                layout,
-                output: &mut output,
-            },
-        )?;
-    output.ok_or_else(|| anyhow::anyhow!("current render resource bridge did not create '{label}'"))
-}
-
-struct CreateSampledTextureBindGroup<'a> {
-    device: &'a Device,
-    label: &'static str,
-    layout: &'a BindGroupLayout,
-    output: &'a mut Option<BindGroup>,
-}
-
-impl CurrentRenderSampledTextureBindingTerminal for CreateSampledTextureBindGroup<'_> {
-    fn bind_sampled_texture(self, view: &TextureView, sampler: &Sampler) {
-        *self.output = Some(self.device.create_bind_group(&BindGroupDescriptor {
-            label: Some(self.label),
-            layout: self.layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(sampler),
-                },
-            ],
-        }));
-    }
-}
-
-struct UploadGlyphAtlasTexture<'a> {
-    queue: &'a Queue,
-    atlas_image: &'a crate::plugins::render::features::UiFontAtlasImage,
-}
-
-impl CurrentRenderTextureUploadTerminal for UploadGlyphAtlasTexture<'_> {
-    fn upload_texture(self, texture: &Texture) {
-        self.queue.write_texture(
-            TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            &self.atlas_image.pixels,
-            TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(self.atlas_image.width.max(1)),
-                rows_per_image: Some(self.atlas_image.height.max(1)),
-            },
-            Extent3d {
-                width: self.atlas_image.width.max(1),
-                height: self.atlas_image.height.max(1),
-                depth_or_array_layers: 1,
-            },
-        );
-    }
-}
-
-struct CreateUiTextureBindGroup<'a, K> {
-    device: &'a Device,
-    label: &'static str,
-    layout: &'a BindGroupLayout,
-    key: K,
-    destination: &'a mut std::collections::BTreeMap<K, BindGroup>,
-}
-
-impl<K: Ord> CurrentRenderSampledTextureBindingTerminal for CreateUiTextureBindGroup<'_, K> {
-    fn bind_sampled_texture(self, view: &TextureView, sampler: &Sampler) {
-        let bind_group = self.device.create_bind_group(&BindGroupDescriptor {
-            label: Some(self.label),
-            layout: self.layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(sampler),
-                },
-            ],
-        });
-        self.destination.insert(self.key, bind_group);
+impl CurrentRenderPipelineBindGroupsTerminal for SetUiBindGroup<'_, '_> {
+    fn bind_groups(self, groups: &[&BindGroup]) {
+        let bind_group = groups
+            .first()
+            .expect("G4C2 UI bind-group bridge should receive one bind group");
+        self.pass.set_bind_group(self.index, *bind_group, &[]);
     }
 }

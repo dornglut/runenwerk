@@ -1,15 +1,16 @@
 mod wgpu;
 
 pub(crate) use wgpu::{
-    BufferRealizationRecord, CurrentRenderAttachmentsTerminal, CurrentRenderBindGroupTerminal,
-    CurrentRenderBufferBindingTerminal, CurrentRenderBufferCopyTerminal,
+    BindGroupLayoutRealizationRecord, BindGroupRealizationRecord, BufferRealizationRecord,
+    CurrentRenderAttachmentsTerminal, CurrentRenderBufferCopyTerminal,
     CurrentRenderBufferUploadTerminal, CurrentRenderIndexBufferTerminal,
-    CurrentRenderIndirectBufferTerminal, CurrentRenderMaterialBindingTerminal,
-    CurrentRenderReadbackBufferTerminal, CurrentRenderSampledTextureBindingTerminal,
+    CurrentRenderIndirectBufferTerminal, CurrentRenderPipelineBindGroupsTerminal,
+    CurrentRenderPipelineCreationTerminal, CurrentRenderReadbackBufferTerminal,
     CurrentRenderTextureCopyTerminal, CurrentRenderTextureReadbackCopyTerminal,
     CurrentRenderTextureUploadTerminal, CurrentRenderTimestampResourcesTerminal,
     CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,
     CurrentSurfaceReadbackCopyTerminal, CurrentSurfaceTextureCopyTerminal,
-    QuerySetRealizationRecord, SamplerRealizationRecord, TextureRealizationRecord,
-    TextureViewRealizationRecord, WgpuContextState, request_headless,
+    PipelineLayoutRealizationRecord, ProgramRealizationRecord, QuerySetRealizationRecord,
+    SamplerRealizationRecord, TextureRealizationRecord, TextureViewRealizationRecord,
+    WgpuContextState, request_headless,
 };

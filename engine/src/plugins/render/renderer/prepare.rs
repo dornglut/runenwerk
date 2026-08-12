@@ -4,14 +4,17 @@ use super::resource_descriptors::{
 };
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderBufferUploadTerminal, CurrentRenderMaterialBindingTerminal,
-    CurrentRenderTextureUploadTerminal, GpuBufferUsage, GpuMemoryIntent, GpuResourceLifetime,
-    GpuTextureDimension, GpuTextureUsage,
+    CurrentRenderBufferUploadTerminal, CurrentRenderTextureUploadTerminal,
+    GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
+    GpuBindingProvenance, GpuBufferUsage, GpuMemoryIntent, GpuResourceLifetime,
+    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuTextureDimension, GpuTextureSampleClass,
+    GpuTextureUsage, GpuTextureViewDimension,
 };
 use crate::plugins::render::features::{
     MATERIAL_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, UiFontAtlasResource,
 };
-use crate::plugins::render::texture_upload::{MaterialKtx2Upload, load_material_ktx2_upload};
+use crate::plugins::render::texture_upload::load_material_ktx2_upload;
 use crate::plugins::{PreparedUiFrameContribution, RenderFeatureId};
 use std::hash::{Hash, Hasher};
 
@@ -94,9 +97,9 @@ impl Renderer {
     fn realize_uploaded_ui_buffer(
         &mut self,
         context: &GpuContext,
-        queue: &Queue,
         label: &str,
         contents: &[u8],
+        pending_operations: &mut RendererPendingOperations,
     ) -> Result<RendererBufferResource> {
         let buffer = self.realize_buffer_resource(
             context,
@@ -106,7 +109,7 @@ impl Renderer {
             GpuResourceLifetime::Transient,
             GpuMemoryIntent::Device,
         )?;
-        write_renderer_buffer(context, queue, &buffer.realized, contents)?;
+        pending_operations.queue_buffer(&buffer.realized, contents);
         Ok(buffer)
     }
 
@@ -114,12 +117,11 @@ impl Renderer {
     pub(super) fn prepare_ui_draws(
         &mut self,
         context: &GpuContext,
-        device: &Device,
-        queue: &Queue,
         contribution: &PreparedUiFrameContribution,
         atlas_resource: &UiFontAtlasResource,
         surface_width: f32,
         surface_height: f32,
+        pending_operations: &mut RendererPendingOperations,
     ) -> Result<UiPreparedDraws> {
         let surface_width_u32 = surface_width.max(1.0).round() as u32;
         let surface_height_u32 = surface_height.max(1.0).round() as u32;
@@ -180,9 +182,9 @@ impl Renderer {
             }
             let instance_buffer = self.realize_uploaded_ui_buffer(
                 context,
-                queue,
                 "engine_ui_rect_batch_instances",
                 bytemuck::cast_slice(&batch.instances),
+                pending_operations,
             )?;
             Ok(Some(UiRectBatch {
                 submission_order: batch.order.submission_order,
@@ -212,9 +214,9 @@ impl Renderer {
             }
             let instance_buffer = self.realize_uploaded_ui_buffer(
                 context,
-                queue,
                 "engine_ui_stroke_batch_instances",
                 bytemuck::cast_slice(&batch.instances),
+                pending_operations,
             )?;
             Ok(Some(UiStrokeBatch {
                 submission_order: batch.order.submission_order,
@@ -243,10 +245,9 @@ impl Renderer {
             };
             if !self.ensure_glyph_atlas_gpu(
                 context,
-                device,
-                queue,
                 atlas_resource,
                 instance.texture_id,
+                pending_operations,
             )? {
                 continue;
             }
@@ -286,9 +287,9 @@ impl Renderer {
                 }
                 let instance_buffer = self.realize_uploaded_ui_buffer(
                     context,
-                    queue,
                     "engine_ui_glyph_batch_instances",
                     bytemuck::cast_slice(&batch.instances),
+                    pending_operations,
                 )?;
                 Ok(Some(UiGlyphBatch {
                     submission_order: batch.order.submission_order,
@@ -318,9 +319,9 @@ impl Renderer {
             }
             let instance_buffer = self.realize_uploaded_ui_buffer(
                 context,
-                queue,
                 "engine_ui_viewport_embed_batch_instances",
                 bytemuck::cast_slice(&batch.instances),
+                pending_operations,
             )?;
             Ok(Some(UiViewportEmbedBatch {
                 submission_order: batch.order.submission_order,
@@ -351,9 +352,9 @@ impl Renderer {
             }
             let instance_buffer = self.realize_uploaded_ui_buffer(
                 context,
-                queue,
                 "engine_ui_product_surface_batch_instances",
                 bytemuck::cast_slice(&batch.instances),
+                pending_operations,
             )?;
             Ok(Some(UiProductSurfaceBatch {
                 submission_order: batch.order.submission_order,
@@ -377,60 +378,50 @@ impl Renderer {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            write_renderer_buffer(
-                context,
-                queue,
+            pending_operations.queue_buffer(
                 &rect_pass.screen_buffer.realized,
                 bytemuck::bytes_of(&screen),
-            )?;
+            );
         }
         if let Some(stroke_pass) = self.stroke_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            write_renderer_buffer(
-                context,
-                queue,
+            pending_operations.queue_buffer(
                 &stroke_pass.screen_buffer.realized,
                 bytemuck::bytes_of(&screen),
-            )?;
+            );
         }
         if let Some(glyph_pass) = self.glyph_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            write_renderer_buffer(
-                context,
-                queue,
+            pending_operations.queue_buffer(
                 &glyph_pass.screen_buffer.realized,
                 bytemuck::bytes_of(&screen),
-            )?;
+            );
         }
         if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            write_renderer_buffer(
-                context,
-                queue,
+            pending_operations.queue_buffer(
                 &viewport_embed_pass.screen_buffer.realized,
                 bytemuck::bytes_of(&screen),
-            )?;
+            );
         }
         if let Some(product_surface_pass) = self.product_surface_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            write_renderer_buffer(
-                context,
-                queue,
+            pending_operations.queue_buffer(
                 &product_surface_pass.screen_buffer.realized,
                 bytemuck::bytes_of(&screen),
-            )?;
+            );
         }
 
         let draw_plan = build_ui_draw_plan(
@@ -455,8 +446,6 @@ impl Renderer {
     pub(crate) fn prepare_packet(
         &mut self,
         context: &GpuContext,
-        device: &Device,
-        queue: &Queue,
         prepared_frame: &PreparedRenderFrame,
         shader_registry: &mut ShaderRegistryResource,
         ui_rect_shader_handle: Option<ShaderHandle>,
@@ -503,11 +492,11 @@ impl Renderer {
                 }
                 _ => None,
             });
+        let mut pending_operations = RendererPendingOperations::default();
         let prepared_material_gpu_resources = self.prepare_material_gpu_resources(
             context,
-            device,
-            queue,
             prepared_material.as_ref(),
+            &mut pending_operations,
         )?;
 
         let mut prepare_timings = RendererFrameTimings::default();
@@ -519,29 +508,22 @@ impl Renderer {
             .map(|handle| shader_registry.revision_for_handle(handle))
             .unwrap_or(0);
 
-        self.ensure_rect_pass(
-            context,
-            device,
-            surface_format,
-            &ui_rect_shader,
-            ui_rect_revision,
-        )?;
-        self.ensure_stroke_pass(context, device, surface_format)?;
-        self.ensure_glyph_pass(context, device, surface_format)?;
-        self.ensure_viewport_embed_pass(context, device, surface_format)?;
-        self.ensure_product_surface_pass(context, device, surface_format)?;
+        self.ensure_rect_pass(context, surface_format, &ui_rect_shader, ui_rect_revision)?;
+        self.ensure_stroke_pass(context, surface_format)?;
+        self.ensure_glyph_pass(context, surface_format)?;
+        self.ensure_viewport_embed_pass(context, surface_format)?;
+        self.ensure_product_surface_pass(context, surface_format)?;
         let surface_size = (surface_width_u32.max(1), surface_height_u32.max(1));
         let prepare_ui_start = Instant::now();
         let prepared_ui_current = {
             let _span = tracing::info_span!("renderer.prepare_ui_draws").entered();
             self.prepare_ui_draws(
                 context,
-                device,
-                queue,
                 ui,
                 ui_font_atlas,
                 surface_width,
                 surface_height,
+                &mut pending_operations,
             )?
         };
         let prepared_ui = self.resolve_ui_prepared_with_gate(prepared_ui_current, ui_gate);
@@ -558,6 +540,8 @@ impl Renderer {
             prepared_material,
             prepared_material_gpu_resources,
             prepared_ui,
+            ui_dynamic_bind_groups: UiDynamicBindGroups::default(),
+            pending_operations,
             viewport_surface_bindings: viewport_surface_bindings.clone(),
             prepare_timings,
         })
@@ -566,9 +550,8 @@ impl Renderer {
     fn prepare_material_gpu_resources(
         &mut self,
         context: &GpuContext,
-        device: &Device,
-        queue: &Queue,
         material: Option<&crate::plugins::render::PreparedMaterialFeatureContribution>,
+        pending_operations: &mut RendererPendingOperations,
     ) -> Result<Option<PreparedMaterialGpuResources>> {
         let Some(material) = material else {
             return Ok(None);
@@ -593,43 +576,64 @@ impl Renderer {
             )
         });
 
-        let mut layout_entries = Vec::with_capacity(bindings.len() * 2);
+        let material_group = bindings[0].bind_group;
+        if material_group != 1
+            || bindings
+                .iter()
+                .any(|binding| binding.bind_group != material_group)
+        {
+            tracing::warn!(
+                material_group,
+                "material texture bindings must occupy the one current material group"
+            );
+            return Ok(None);
+        }
+        let mut layout_declarations = Vec::with_capacity(bindings.len() * 2);
         for binding in &bindings {
             let (texture_binding, sampler_binding) = Self::material_wgpu_binding_indices(binding);
-            layout_entries.push(BindGroupLayoutEntry {
-                binding: texture_binding,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: true },
-                    view_dimension: match binding.texture_kind {
-                        crate::plugins::render::PreparedMaterialTextureKind::Texture2D => {
-                            TextureViewDimension::D2
-                        }
-                        crate::plugins::render::PreparedMaterialTextureKind::Texture3D => {
-                            TextureViewDimension::D3
-                        }
-                    },
-                    multisampled: false,
-                },
-                count: None,
-            });
-            layout_entries.push(BindGroupLayoutEntry {
-                binding: sampler_binding,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                count: None,
-            });
+            let view_dimension = match binding.texture_kind {
+                crate::plugins::render::PreparedMaterialTextureKind::Texture2D => {
+                    GpuTextureViewDimension::D2
+                }
+                crate::plugins::render::PreparedMaterialTextureKind::Texture3D => {
+                    GpuTextureViewDimension::D3
+                }
+            };
+            layout_declarations.push(GpuBindingDeclaration::new(
+                GpuBindingKey::try_new(u64::from(material_group), u64::from(texture_binding))?,
+                GpuShaderStages::one(GpuShaderStage::Fragment),
+                GpuBindingKind::sampled_texture(
+                    GpuTextureSampleClass::FloatFilterable,
+                    view_dimension,
+                    false,
+                )?,
+                None,
+                format!("material-texture-slot-{}", binding.resource_slot_index),
+                GpuBindingProvenance::new(
+                    "renderer-material-binding",
+                    Some(binding.binding_key.clone()),
+                )?,
+            )?);
+            layout_declarations.push(GpuBindingDeclaration::new(
+                GpuBindingKey::try_new(u64::from(material_group), u64::from(sampler_binding))?,
+                GpuShaderStages::one(GpuShaderStage::Fragment),
+                GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+                None,
+                format!("material-sampler-slot-{}", binding.resource_slot_index),
+                GpuBindingProvenance::new(
+                    "renderer-material-binding",
+                    Some(binding.binding_key.clone()),
+                )?,
+            )?);
         }
-
-        let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("engine_material_resource_bind_group_layout"),
-            entries: &layout_entries,
-        });
+        let layout_descriptor =
+            GpuBindGroupLayoutDescriptor::new(material_group, layout_declarations)?;
 
         let mut textures = Vec::with_capacity(bindings.len());
         let mut texture_views = Vec::with_capacity(bindings.len());
         let mut samplers = Vec::with_capacity(bindings.len());
         let mut bind_group_bindings = Vec::with_capacity(bindings.len());
+        let mut texture_uploads = Vec::with_capacity(bindings.len());
 
         for binding in bindings {
             let upload = match load_material_ktx2_upload(binding) {
@@ -667,15 +671,6 @@ impl Renderer {
                 realized: context.realize_texture(&texture_handle)?,
                 _handle: texture_handle,
             };
-            context
-                .current_render_resource_bridge()
-                .for_texture_upload(
-                    &texture.realized,
-                    UploadMaterialTexture {
-                        queue,
-                        upload: &upload,
-                    },
-                )?;
 
             let view_handle =
                 self.resource_ids
@@ -684,7 +679,7 @@ impl Renderer {
                         &texture._handle,
                     )?)?;
             let view = RendererTextureViewResource {
-                realized: context.realize_texture_view(&view_handle, &texture.realized)?,
+                _realized: context.realize_texture_view(&view_handle, &texture.realized)?,
                 _handle: view_handle,
             };
             let sampler_handle =
@@ -694,43 +689,73 @@ impl Renderer {
                         GpuResourceLifetime::Transient,
                     )?)?;
             let sampler = RendererSamplerResource {
-                realized: context.realize_sampler(&sampler_handle)?,
+                _realized: context.realize_sampler(&sampler_handle)?,
                 _handle: sampler_handle,
             };
             let binding_indices = Self::material_wgpu_binding_indices(binding);
             texture_views.push(view);
             samplers.push(sampler);
             bind_group_bindings.push(binding_indices);
+            texture_uploads.push(upload);
             textures.push(texture);
         }
 
-        let realized_views = texture_views
+        let layout = pollster::block_on(context.realize_bind_group_layout(&layout_descriptor))?;
+        let values = texture_views
             .iter()
-            .map(|view| view.realized.clone())
+            .zip(&samplers)
+            .zip(&bind_group_bindings)
+            .flat_map(|((view, sampler), (texture_binding, sampler_binding))| {
+                [
+                    GpuRuntimeBindingValue::new(
+                        GpuBindingKey::try_new(
+                            u64::from(material_group),
+                            u64::from(*texture_binding),
+                        )
+                        .expect("material texture binding indices are representable"),
+                        [GpuRuntimeBindingResource::TextureView(
+                            GpuRuntimeTextureViewBinding::new(
+                                view._handle.clone(),
+                                match view._handle.descriptor().dimension() {
+                                    GpuTextureDimension::D2 => GpuTextureViewDimension::D2,
+                                    GpuTextureDimension::D3 => GpuTextureViewDimension::D3,
+                                    dimension => unreachable!(
+                                        "material texture views use only D2/D3, got {dimension:?}"
+                                    ),
+                                },
+                            ),
+                        )],
+                    )
+                    .expect("material texture runtime binding should construct"),
+                    GpuRuntimeBindingValue::new(
+                        GpuBindingKey::try_new(
+                            u64::from(material_group),
+                            u64::from(*sampler_binding),
+                        )
+                        .expect("material sampler binding indices are representable"),
+                        [GpuRuntimeBindingResource::Sampler(sampler._handle.clone())],
+                    )
+                    .expect("material sampler runtime binding should construct"),
+                ]
+            })
             .collect::<Vec<_>>();
-        let realized_samplers = samplers
-            .iter()
-            .map(|sampler| sampler.realized.clone())
-            .collect::<Vec<_>>();
-        let mut bind_group = None;
-        context
-            .current_render_resource_bridge()
-            .for_material_binding(
-                &realized_views,
-                &realized_samplers,
-                CreateMaterialBindGroup {
-                    device,
-                    layout: &layout,
-                    bindings: &bind_group_bindings,
-                    output: &mut bind_group,
-                },
-            )?;
-        let bind_group = bind_group.ok_or_else(|| {
-            anyhow::anyhow!("current render resource bridge did not create material bindings")
-        })?;
+        let bind_group = pollster::block_on(context.realize_bind_group(&layout, values))?;
+
+        // All G4C1 texture/view/sampler records and the G4C2 material layout/bind group are
+        // complete before the raw interval. Preserve only the later G5 queue writes.
+        for (texture, upload) in textures.iter().zip(texture_uploads) {
+            pending_operations
+                .texture_uploads
+                .push(RendererPendingTextureUpload {
+                    texture: texture.realized.clone(),
+                    bytes: upload.bytes,
+                    bytes_per_row: upload.bytes_per_row,
+                    rows_per_image: upload.rows_per_image,
+                    size: upload.size,
+                });
+        }
 
         Ok(Some(PreparedMaterialGpuResources {
-            layout,
             bind_group,
             _textures: textures,
             _texture_views: texture_views,
@@ -781,16 +806,49 @@ impl Renderer {
     }
 }
 
-fn write_renderer_buffer(
-    context: &GpuContext,
-    queue: &Queue,
-    buffer: &GpuRealizedBuffer,
-    contents: &[u8],
-) -> Result<()> {
-    context
-        .current_render_resource_bridge()
-        .for_buffer_upload(buffer, WriteRendererBuffer { queue, contents })?;
-    Ok(())
+impl RendererPendingOperations {
+    fn queue_buffer(&mut self, buffer: &GpuRealizedBuffer, contents: &[u8]) {
+        self.buffer_uploads.push(RendererPendingBufferUpload {
+            buffer: buffer.clone(),
+            bytes: contents.to_vec(),
+        });
+    }
+
+    pub(super) fn apply(self, context: &GpuContext, queue: &Queue) -> Result<()> {
+        for upload in self.buffer_uploads {
+            Self::apply_buffer_upload(context, queue, &upload)?;
+        }
+        for upload in self.texture_uploads {
+            context
+                .current_render_pipeline_bridge()
+                .for_texture_upload(
+                    &upload.texture,
+                    UploadRendererTexture {
+                        queue,
+                        bytes: &upload.bytes,
+                        bytes_per_row: upload.bytes_per_row,
+                        rows_per_image: upload.rows_per_image,
+                        size: upload.size,
+                    },
+                )?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn apply_buffer_upload(
+        context: &GpuContext,
+        queue: &Queue,
+        upload: &RendererPendingBufferUpload,
+    ) -> Result<()> {
+        context.current_render_pipeline_bridge().for_buffer_upload(
+            &upload.buffer,
+            WriteRendererBuffer {
+                queue,
+                contents: &upload.bytes,
+            },
+        )?;
+        Ok(())
+    }
 }
 
 struct WriteRendererBuffer<'a> {
@@ -804,12 +862,15 @@ impl CurrentRenderBufferUploadTerminal for WriteRendererBuffer<'_> {
     }
 }
 
-struct UploadMaterialTexture<'a> {
+struct UploadRendererTexture<'a> {
     queue: &'a Queue,
-    upload: &'a MaterialKtx2Upload,
+    bytes: &'a [u8],
+    bytes_per_row: u32,
+    rows_per_image: u32,
+    size: Extent3d,
 }
 
-impl CurrentRenderTextureUploadTerminal for UploadMaterialTexture<'_> {
+impl CurrentRenderTextureUploadTerminal for UploadRendererTexture<'_> {
     fn upload_texture(self, texture: &Texture) {
         self.queue.write_texture(
             TexelCopyTextureInfo {
@@ -818,43 +879,14 @@ impl CurrentRenderTextureUploadTerminal for UploadMaterialTexture<'_> {
                 origin: Origin3d::ZERO,
                 aspect: TextureAspect::All,
             },
-            &self.upload.bytes,
+            self.bytes,
             TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(self.upload.bytes_per_row),
-                rows_per_image: Some(self.upload.rows_per_image),
+                bytes_per_row: Some(self.bytes_per_row),
+                rows_per_image: Some(self.rows_per_image),
             },
-            self.upload.size,
+            self.size,
         );
-    }
-}
-
-struct CreateMaterialBindGroup<'a> {
-    device: &'a Device,
-    layout: &'a BindGroupLayout,
-    bindings: &'a [(u32, u32)],
-    output: &'a mut Option<BindGroup>,
-}
-
-impl CurrentRenderMaterialBindingTerminal for CreateMaterialBindGroup<'_> {
-    fn bind_material_resources(self, views: &[&TextureView], samplers: &[&Sampler]) {
-        let mut entries = Vec::with_capacity(self.bindings.len() * 2);
-        for (index, (texture_binding, sampler_binding)) in self.bindings.iter().copied().enumerate()
-        {
-            entries.push(BindGroupEntry {
-                binding: texture_binding,
-                resource: BindingResource::TextureView(views[index]),
-            });
-            entries.push(BindGroupEntry {
-                binding: sampler_binding,
-                resource: BindingResource::Sampler(samplers[index]),
-            });
-        }
-        *self.output = Some(self.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("engine_material_resource_bind_group"),
-            layout: self.layout,
-            entries: &entries,
-        }));
     }
 }
 
