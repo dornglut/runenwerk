@@ -1,259 +1,52 @@
 ---
-title: Domain Authoring Platform Overview
-description: Architecture overview for Runenwerk domain authoring, linking the shared source/program pattern, typed counter app-program proof, complete UI framework runtime docs, UI source lowering, and deferred non-UI proof candidates.
-status: active
+title: Superseded Domain Authoring Platform Overview
+description: Supersession marker for the former Runenwerk-wide universal Domain Program lifecycle overview.
+status: superseded
 owner: workspace
-layer: architecture
+layer: history
 canonical: false
-last_reviewed: 2026-07-08
-related:
-  - ../design/active/domain-authoring-source-and-program-pattern.md
-  - ../design/active/typed-app-program-counter-proof-design.md
-  - ../design/active/ui-framework-runtime-requirements-design.md
-  - ../design/active/ui-component-composition-slots-and-authoring-design.md
-  - ../design/active/ui-data-binding-forms-and-effects-design.md
-  - ../design/active/ui-reactive-runtime-and-invalidation-design.md
-  - ../design/active/ui-live-editing-and-preview-design.md
-  - ../design/active/ui-game-and-worldspace-host-requirements-design.md
-  - ../design/active/ui-accessibility-internationalization-and-text-conformance-design.md
-  - ../design/active/ui-layout-style-theme-and-motion-design.md
-  - ../design/active/ui-performance-virtualization-assets-and-profiling-design.md
-  - ../design/active/ui-render-output-and-host-renderer-boundary-design.md
-  - ../design/active/ui-platform-input-windowing-and-os-integration-design.md
-  - ../design/active/ui-devtools-inspection-and-workbench-design.md
-  - ../design/active/ui-testing-conformance-and-proof-matrix-design.md
-  - ../design/active/ui-package-security-versioning-and-migration-design.md
-  - ../design/active/ui-source-projection-and-program-lowering-design.md
-  - ../design/deferred/material-program-authoring-pattern.md
-  - ../design/deferred/procgen-program-authoring-pattern.md
+last_reviewed: 2026-08-12
+replacement_docs:
+  - ./runenwerk-platform-architecture.md
   - ../guidelines/domain-program-architecture-pattern.md
+  - ../adr/accepted/0018-semantic-federation-and-physical-realization.md
 ---
 
-# Domain Authoring Platform Overview
+# Superseded Domain Authoring Platform Overview
 
-## Purpose
+This overview no longer defines a platform-wide Runenwerk authoring lifecycle.
 
-This page is a short architecture index for the domain authoring direction. It is
-not a full design manual and should not duplicate the detailed active/deferred
-design docs.
+Use the [Runenwerk Platform Architecture](./runenwerk-platform-architecture.md) for
+current platform architecture and the
+[Domain Program Architecture Pattern](../guidelines/domain-program-architecture-pattern.md)
+for domains that genuinely need durable authored, versioned, inspectable, migratable,
+compiled, or evaluable semantic intent.
 
-## Direction
-
-Runenwerk domains should be authored through a domain-program lifecycle:
-
-```text
-Authoring Source
--> Source Model
--> Normalized Domain Model
--> Domain Program
--> Compiler / Evaluator
--> Runtime Artifact / Output Facts
--> Host Integration
--> Proof / Diagnostics / Migration Reports
-```
-
-The lifecycle is shared. Domain meaning is not shared.
-
-## Core Rule
+The following former claims are **not** current universal Runenwerk doctrine:
 
 ```text
-Domains own meaning.
-The platform owns structure.
+all domains follow one Source -> Domain Program -> Runtime Artifact lifecycle
+UI is the platform-wide first proving domain
+platform-owned shared IDs/manifests/envelopes/graph substrate are pre-authorized
+Domains own meaning / platform owns structure implies common implementation ownership
 ```
 
-Examples of domain meaning:
+ADR 0018 instead standardizes semantic reasoning questions while leaving domain
+identities, revisions, storage, execution, and physical representation owner-specific.
+Shared implementation still requires the accepted extraction gate.
 
-```text
-UI controls
-material nodes
-procgen rules
-render passes
-animation states
-behavior nodes
-gameplay effects
-asset import rules
-editor tool behavior
-```
+A material, asset, procedural, or other authored domain may still use the Domain Program
+pattern when its actual lifecycle warrants it. GPU resources, mounted UI runtime state,
+render scene snapshots, network streams, spatial availability, scheduler readiness, and
+other non-program contracts do not become Domain Programs merely to participate in the
+platform.
 
-Examples of platform structure:
+## Why this marker remains temporarily
 
-```text
-stable ids
-versions
-package manifests
-source-map envelopes
-diagnostic envelopes
-capability references
-artifact manifests
-host profiles
-compatibility reports
-proof report envelopes
-invalidation report envelopes after proof
-```
+Current supporting documentation still contains historical links to this path and
+repository code search is unavailable during #251. This page remains only as a
+non-authoritative supersession marker until all inbound references can be verified.
 
-## Document Map
-
-| Document | Role |
-|---|---|
-| `domain-authoring-source-and-program-pattern.md` | Shared source/program lifecycle and extraction rules. |
-| `typed-app-program-counter-proof-design.md` | Counter as typed app-program proof with UI projection and win screen at count ten. |
-| `ui-framework-runtime-requirements-design.md` | Full UI framework runtime requirements. |
-| `ui-component-composition-slots-and-authoring-design.md` | Components, slots, templates, reusable composition kits, and authoring frontends. |
-| `ui-data-binding-forms-and-effects-design.md` | Typed bindings, forms, validation, action/effect proposals, async status, and collections. |
-| `ui-reactive-runtime-and-invalidation-design.md` | Reactive update, dependency tracking, retained state, incremental evaluation. |
-| `ui-live-editing-and-preview-design.md` | Live editing, preview, hot-swap, diagnostics, last-known-good policy. |
-| `ui-game-and-worldspace-host-requirements-design.md` | Game HUD/menu, gamepad navigation, world-space UI, split-screen, input glyphs. |
-| `ui-accessibility-internationalization-and-text-conformance-design.md` | Accessibility, localization, text shaping, bidi, semantic trees, conformance proofs. |
-| `ui-layout-style-theme-and-motion-design.md` | Layout families, style cascade, theme tokens, responsive variants, source order, motion. |
-| `ui-performance-virtualization-assets-and-profiling-design.md` | Virtualization, asset loading, cache keys, renderer packets, profiling, budgets. |
-| `ui-render-output-and-host-renderer-boundary-design.md` | Draw-neutral UI output, frame packets, clipping, layering, text/glyph, renderer boundary. |
-| `ui-platform-input-windowing-and-os-integration-design.md` | Windows/surfaces, normalized input, IME, clipboard, drag/drop, cursor, OS accessibility bridge. |
-| `ui-devtools-inspection-and-workbench-design.md` | Source maps, graph inspection, runtime state inspection, profiling, diagnostics, workbench tooling. |
-| `ui-testing-conformance-and-proof-matrix-design.md` | Test layers, replay, assertions, visual/golden proof, host compatibility, maturity matrix. |
-| `ui-package-security-versioning-and-migration-design.md` | Package trust, capabilities, schema versions, migration, sandboxing, provenance. |
-| `ui-source-projection-and-program-lowering-design.md` | UI-specific `UiSource` vocabulary and lowering into `UiProgram`. |
-| `material-program-authoring-pattern.md` | Deferred non-UI material-domain instantiation. |
-| `procgen-program-authoring-pattern.md` | Deferred non-UI procgen-domain instantiation. |
-| `domain-program-architecture-pattern.md` | Existing guideline for domain-program tracks. |
-
-## Relationship To UI
-
-UI is the first proving domain. UI should use:
-
-```text
-UiSource
--> AuthoredUiTemplate
--> NormalizedUiTemplate
--> FormedInteractionModel
--> UiProgram
--> UiRuntimeArtifact
--> UiOutput
-```
-
-A mature standalone UI framework additionally requires:
-
-```text
-component and slot composition
-reactive invalidation
-retained runtime state
-typed binding, forms, and effect proposals
-input/focus/navigation
-accessibility
-localization and bidi text
-layout/style/theme systems
-motion and animation
-renderer-facing draw-neutral output
-platform/window/input/IME/clipboard integration
-devtools and workbench inspection
-surface mounting
-game and world-space hosts
-live editing and preview
-virtualization and asset loading
-profiling and budgets
-package trust, versioning, and migration
-inspection and proof reports
-```
-
-`UiSource` is a UI-domain source stage. It should not become the platform-wide
-source type for material, procgen, render, animation, behavior, tools, or asset
-import.
-
-## Relationship To Counter
-
-Counter is a small app-program proof, not a UI runtime ownership pattern.
-
-Counter owns:
-
-```text
-CounterModel
-CounterAction
-Counter reducer
-Counter action availability
-Counter proof scenarios
-```
-
-UI owns:
-
-```text
-projection into UiSource
-UI package resolution
-interaction formation
-UiProgram lowering
-UI runtime artifacts
-UI output and event packets
-reactive update reports
-```
-
-The active screen is derived from count. When `count >= 10`, projection emits the
-win screen. Reset returns count to zero and projection emits the counting screen.
-
-## Relationship To Materials And Procgen
-
-Material and procgen are deferred non-UI proof candidates. They should reuse the
-source/program/artifact/host/report lifecycle, but not UI vocabulary.
-
-Material direction:
-
-```text
-MaterialSourceGraph
--> NormalizedMaterialGraph
--> MaterialProgram
--> ShaderModuleArtifact / MaterialPipelineArtifact
-```
-
-Procgen direction:
-
-```text
-ProcgenSourceGraph
--> NormalizedProcgenGraph
--> ProcgenProgram
--> WorldChunkRecipe / SpawnTableArtifact / FieldCacheArtifact
-```
-
-Both deferred tracks should help prove which structural ideas can later be safely
-abstracted, such as source-map envelopes, diagnostic envelopes, package manifests,
-typed graph substrate, artifact manifests, host compatibility matrices, proof
-reports, and invalidation reports.
-
-## Relationship To ECS And Graphs
-
-Graphs are common structure. ECS is runtime fabric.
-
-Graphs may represent source relationships, program relationships, dependencies,
-ports, resources, control flow, dataflow, bindings, rules, or validation facts.
-Their structural substrate may eventually share IDs, edges, ports, traversal,
-serialization, source maps, and diagnostic attachment points.
-
-Graph meaning stays domain-owned.
-
-ECS may execute optimized artifacts, hold live runtime state, run schedules, and
-bridge host behavior. ECS must not own domain source truth, package catalogs,
-program semantics, or app model truth.
-
-## Rejected Direction
-
-Do not use this architecture to justify:
-
-```text
-UniversalAst
-UniversalNodeGraph
-generic graph interpretation in hot paths by default
-ECS-owned source truth
-renderer-owned product truth
-hidden global mutable registries
-foundation/meta
-shared extraction before UI plus one non-UI proof
-```
-
-## Report Surface Taxonomy
-
-Report names must remain layer-scoped. New report types should fit one of these buckets before a new naming family is introduced.
-
-| Layer | Report family | Purpose |
-| --- | --- | --- |
-| Source / lowering | Parse, validation, source-map, lowering reports | Explain how authored source becomes a typed program or why it failed. |
-| Runtime / invalidation | Evaluation, dependency, dirty-scope, retained-state, update reports | Explain how a program evaluates, what changed, and what was reused. |
-| Host / renderer | Host capability, renderer packet, frame summary, text/glyph, clipping reports | Explain the boundary between UI output and host/renderer execution. |
-| Live preview / devtools | Edit, hot-swap, last-known-good, inspection, profiling reports | Explain live authoring behavior and diagnostics. |
-| Testing / conformance | Replay, fixture, structural, visual, accessibility, performance reports | Explain proof evidence and conformance results. |
-| Package / migration / security | Provenance, compatibility, migration, trust, capability reports | Explain package lifecycle, security posture, and upgrade behavior. |
+Removal condition: a later #205 reference/lifecycle cleanup may delete this marker after
+command-verified link migration. No new current architecture should cite it as an
+authority.
