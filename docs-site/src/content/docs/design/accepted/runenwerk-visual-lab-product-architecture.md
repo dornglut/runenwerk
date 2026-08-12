@@ -26,8 +26,8 @@ related_designs:
 ## Status and decision
 
 Visual Lab is an accepted Runenwerk product architecture. It is a host-neutral creative
-workbench for procedural visuals, generative systems, fields, SDF studies, simulations,
-materials, and related visual experimentation.
+workbench for procedural visual systems: fields, implicit form, generative processes,
+simulation studies, material/procgen integrations, and their visualization.
 
 This design accepts the product direction and ownership boundary. It does **not**
 authorize implementation, a new production track, a new framework/repository, RunenGPU
@@ -37,23 +37,45 @@ the capability being consumed.
 
 The governing product rule is:
 
-> Visual Lab owns the creative workflow and product-local study meaning. Existing
-> domains and peer frameworks retain the semantic invariants they already own.
+> Visual Lab owns creative workflow, product-local study meaning, and cross-domain
+> composition intent. Existing domains and peer frameworks retain the semantic
+> invariants and execution authority they already own.
+
+The governing ergonomics rule is:
+
+> Internal ownership boundaries stay strict; ordinary creative composition should feel
+> direct. Safe derived use should not expose architecture ceremony. Durable authority
+> transitions must be explicit.
 
 This design applies ADR 0014 and ADR 0017. It does not create a new family-wide law.
 
-## Purpose
+## Purpose and product identity
 
-Visual Lab should make Runenwerk's procedural, GPU, field, simulation, and rendering
-capabilities directly useful for creative exploration. A user should be able to create,
-simulate, inspect, compare, animate, capture, bake, and export visual results without
-turning the product into a universal field system, graph runtime, renderer, UI
-framework, scheduler, or asset database.
+Visual Lab should make Runenwerk's procedural, GPU, field, simulation, and later
+rendering capabilities directly useful for creative exploration. A user should be able
+to create, vary, simulate, inspect, compare, animate, capture, bake, and export visual
+results without understanding internal adapter, product, ratification, graph, or GPU
+boundaries for the common path.
+
+Visual Lab is not a generic home for every artistic feature. Its center is:
+
+```text
+procedural visual systems
+    fields
+    implicit form
+    generative processes
+    temporal/simulated systems
+    visual transformation and inspection
+```
+
+A feature belongs naturally when its primary purpose is to explore, generate,
+transform, combine, or visualize such a procedural system. Material Lab, Procgen, SDF,
+and future simulation domains integrate where useful; Visual Lab does not absorb them.
 
 The same product architecture must survive several host and framework stages:
 
 ```text
-G5 headless/CLI creative compute
+G5 headless / bounded preview creative compute
     -> later offscreen and interactive RunenGPU presentation
         -> later RunenUI product frontend
             -> later RunenRender semantic image formation
@@ -84,6 +106,8 @@ capabilities mature.
           |                             |
           +--------------+--------------+
                          |
+                  composition intent
+                         |
                   explicit products
                          |
                  cross-domain links
@@ -113,28 +137,50 @@ policy according to ADR 0014.
 
 ## Composition model
 
-Visual Lab's composition architecture follows the same bounded principle currently
+Visual Lab's composition architecture follows the bounded principle currently
 represented by the active Tool Suite / Workbench Host design: a host composes typed
-tool/study capabilities without taking over their domain semantics. This accepted design
-fixes only that product-level invariant. It does not accept by reference the active
-Workbench design's exact manifests, API names, current editor-shell ownership, or
-implementation sequence.
+capabilities without taking over their domain semantics. This accepted design fixes
+only that product-level invariant. It does not accept by reference the active Workbench
+design's exact manifests, API names, current editor-shell ownership, or implementation
+sequence.
 
-A Visual Lab host may install product-local native-study suites and existing or future
-domain-backed suites. Suite composition controls product structure, surfaces, provider
-routing, host capabilities, and product workflow. It does not transfer source semantics
-into the workbench shell.
+A Visual Lab host may install product-local native-study capabilities and existing or
+future domain-backed capabilities. Composition controls product structure, available
+surfaces, host capabilities, and product workflow. It does not transfer source
+semantics into the workbench shell.
 
-The durable Visual Lab product model must remain host-neutral. Current editor-shell or
-legacy-UI implementation types are adapters/implementation facts, not permanent Visual
-Lab source ontology. The same study and domain contracts may later be hosted by a CLI,
-a dedicated Visual Lab application, the full editor, or a RunenUI-backed workbench.
+### Visual Study composition intent
+
+Visual Lab needs one durable answer to "what belongs to this creative experiment?"
+without creating a universal semantic or execution graph.
+
+Conceptually, a Visual Study may record:
+
+```text
+VisualStudy
+    product-local study sources
+    references to domain-owned sources/products
+    parameter bindings
+    requested preview adaptations
+    output requests
+    run-profile references
+    provenance
+```
+
+A Visual Study owns **composition intent and references**. It does not execute SDF,
+material, procgen, simulation, render, or GPU semantics itself. Owner-defined adapters
+and execution paths realize those requests.
+
+The initial implementation should keep this structure explicit and narrow. Do not build
+an extensible compiler, universal operator graph, or generalized composition runtime
+until multiple concrete studies prove repeated neutral structure under ADR 0017.
 
 ## Ownership
 
 ### Visual Lab owns
 
 - creative workbench/product composition;
+- Visual Study composition intent and references;
 - product-local native study semantics where no existing owner applies;
 - active study/workspace and product session state;
 - parameter-editing, run/pause/reset/step, compare, inspect, timeline, capture, bake,
@@ -167,6 +213,46 @@ a dedicated Visual Lab application, the full editor, or a RunenUI-backed workben
 
 Visual Lab must not mirror or become writable parallel authority for any of these.
 
+## Creative ergonomics invariant
+
+Architecture boundaries are not automatically user-interface boundaries.
+
+Ordinary creative work should support a short loop:
+
+```text
+change
+    -> run / update
+        -> see
+            -> compare
+                -> save / keep exploring
+```
+
+A safe derived connection such as:
+
+```text
+Reaction Diffusion
+    -> SDF displacement preview
+        -> material preview
+```
+
+may be presented as a direct creative connection. Visual Lab may infer and carry the
+required preview-adaptation contract internally. The user should not need to select
+"Preview Adapt", inspect a product registry, or understand ratification merely to see
+the result.
+
+The boundary becomes explicit when the operation changes durable authority, for example:
+
+```text
+Bake as SDF
+    -> SDF source candidate
+        -> SDF owner validation / ratification
+            -> accepted SDF source
+```
+
+Failures must still remain truthful and diagnosable. Hiding unnecessary ceremony must
+never mean hiding rejection, stale data, unsupported capabilities, or failed authority
+transitions.
+
 ## Workspace classes
 
 ### Native visual studies
@@ -185,6 +271,22 @@ Feedback Pattern
 These may begin as explicit product-owned study definitions such as
 `ReactionDiffusionStudy`. Do not pre-create `GenericSimulationProgram`,
 `UniversalDynamicsGraph`, `VisualLabField<T>`, or `VisualLabRuntime`.
+
+### Native-study promotion gate
+
+A native study must undergo an ownership review when one or more of these becomes true:
+
+- an unrelated product needs the semantics independently of Visual Lab;
+- the study gains a substantial reusable public API;
+- it develops a durable domain source format with nontrivial migration/validation;
+- it becomes authoritative or nonvisual rather than product-local visual computation;
+- it owns persistent runtime state whose lifecycle matters outside the study;
+- multiple independently useful algorithms or consumers establish a coherent domain;
+- an existing domain is now clearly the correct owner.
+
+The review decides whether to keep the study local, move it under an existing owner, or
+propose a separately governed domain/extraction design. Product-local studies must not
+become an ownership loophole for a hidden general simulation or field framework.
 
 A repeated neutral abstraction may be extracted only after ADR 0017's shared-extraction
 gate is satisfied by structurally different proving consumers.
@@ -218,20 +320,21 @@ study/source identity
 source revision
 study-specific parameters
 presets
-references to owner-defined source/products
+references to owner-defined sources/products
 output definitions
 provenance
 ```
 
-Domain-backed sources remain domain documents such as material or procgen documents.
-Visual Lab stores references and product/session state rather than copying their source
-truth.
+A Visual Study may reference those native definitions plus domain-owned sources and
+products. Domain-backed sources remain domain documents such as material or procgen
+documents. Visual Lab stores references and composition/session state rather than
+copying their source truth.
 
 Existing Runenwerk asset/source/artifact/catalog architecture remains authoritative for
 durable project assets and generated artifacts where those contracts apply. Visual Lab
 does not introduce a second asset identity, catalog, cache, or persistence system.
 
-## Separate meaning, execution, and output
+## Separate meaning, execution, output, and session state
 
 Visual Lab explicitly separates:
 
@@ -239,11 +342,17 @@ Visual Lab explicitly separates:
 Study Definition
     what should be computed or evolved
 
+Composition Intent
+    how studies/domain products are related creatively
+
 Run Profile
     how this invocation should be performed
 
 Output Request
     what should be observed or retained
+
+Session State
+    transient host/UI interaction state
 ```
 
 Example:
@@ -272,8 +381,8 @@ execution improvements without changing creative source meaning.
 
 ## Cross-domain composition
 
-Cross-domain creativity uses explicit products and three product-level relationship
-classes rather than one universal semantic graph.
+Cross-domain creativity uses explicit products and three authority relationship classes
+rather than one universal semantic graph.
 
 ### Observe
 
@@ -285,6 +394,10 @@ For example, a simulation result may be inspected by the Field Visualizer.
 A foreign product becomes temporary derived input for another workflow. The adapted
 result remains preview/local derived state and does not mutate target-domain truth.
 For example, a reaction-diffusion field may be previewed as an SDF displacement.
+
+Safe preview adaptation should normally be lightweight in the user experience. The
+relationship class remains explicit in architecture and diagnostics even when the UI
+can infer it from the compatible source and target contracts.
 
 ### Bake / Commit
 
@@ -300,7 +413,11 @@ ReactionDiffusionStudy
                 -> accepted SDF source
 ```
 
-This preserves ADR 0017's cross-authority read and semantic-authority rules.
+Bake/Commit is an explicit user-visible authority transition when durable target-domain
+truth changes.
+
+This preserves ADR 0017's cross-authority read and semantic-authority rules while
+keeping ordinary creative preview composition fluid.
 
 ## Graph policy
 
@@ -318,28 +435,50 @@ future sim graph  owning simulation-domain meaning
 Do not create `VisualLabGraphRuntime` or treat semantic dependency, execution order,
 GPU resource hazards, invalidation dependencies, and UI containment as interchangeable.
 
-Cross-domain links are explicit product/adaptation relationships, not hidden graph
-back-edges.
+A future UI may visually project a Visual Study and its cross-domain relationships as a
+single composition diagram. That projection does not make it a universal executable
+semantic graph.
 
 ## Visualization boundary
 
-Before RunenRender exists, Visual Lab may own narrow artifact/diagnostic visualization
-mappings such as:
+Visual Lab distinguishes **data/artifact visualization** from **semantic image
+formation**.
+
+Direct RunenGPU-backed data/artifact visualization may remain appropriate for:
 
 ```text
-scalar -> color ramp
-vector -> direction/magnitude image
-distance -> contour image
-simulation state -> palette
-trails -> accumulated image
-volume -> selected slice
+field heatmaps
+scalar/vector channel views
+distance contours
+histograms
+raw simulation state
+simple particle/line diagnostics
+compute-generated images
+workload-specific visual artifacts
 ```
 
 Reuse Field Visualizer where it already owns the applicable inspection workflow.
 
-These mappings must not grow into a parallel general renderer. General materials,
-lighting, visibility, shadows, media, transport, reconstruction, scene rendering, and
-stylized/nonphysical image formation remain RunenRender semantics.
+General semantic image formation belongs to RunenRender once that framework is
+available, including:
+
+```text
+materials and surface appearance
+lighting and shadows
+visibility
+media / volumes as rendered scene meaning
+transport / estimator policy
+scene composition
+stylized or nonphysical shading
+history / reconstruction
+```
+
+The rule is:
+
+> "Show me this data or workload result" may remain a direct Visual Lab / RunenGPU
+> visualization. "Form an image of this visual world" belongs to RunenRender.
+
+This prevents an early Visual Lab visualization path from becoming a competing renderer.
 
 ## Execution boundary
 
@@ -362,35 +501,101 @@ Visual Lab is a downstream RunenGPU consumer. Attractive output supplements but 
 replaces RunenGPU's own deterministic conformance, pressure, lifecycle, and recovery
 proofs.
 
-## Host and UI strategy
+## Host strategy
 
-Visual Lab is host-neutral:
+Visual Lab is **source- and semantics-neutral across hosts**, not lowest-common-
+denominator in experience.
 
 ```text
                     Visual Lab Product
                            |
-              host-neutral studies/workflows
+               portable study semantics
                            |
          +-----------------+-----------------+
          |                 |                 |
       CLI Host        Visual Lab App     Full Editor
-        early             later            workspace
+      batch/run        live/interactive   project-aware
+      inspect          compare/timeline   bake/commit
+      export           manipulate         asset workflows
 ```
 
+Hosts may expose different capabilities. A CLI does not need to reproduce direct
+manipulation; a GUI does not need to hide batch controls merely because CLI exists.
+Portable source meaning, references, run-profile meaning, and output intent are the
+stable layer.
+
 Do not build durable product architecture around Runenwerk's legacy internal UI.
-Initial interaction may use CLI/study files, presets, artifact output, and a bounded
-non-authoritative preview harness where justified.
+Initial interaction may use CLI/study files and a bounded preview shell, provided no
+study/domain semantics are embedded in that shell.
 
 Standalone RunenUI remains the reusable future UI authority. A Runenwerk cutover occurs
 only after its separate capability-based adoption gate is satisfied; Visual Lab does
 not create a compatibility UI framework or force premature partial adoption.
+
+## Provenance and inspection
+
+Federated ownership increases causal depth, so Visual Lab must make provenance a
+product feature rather than buried diagnostic metadata.
+
+A visible result should be traceable conceptually through:
+
+```text
+Output
+    -> output request / run profile
+        -> visualization or RunenRender contribution
+            -> preview adaptation / domain product
+                -> source study or domain document
+                    -> source revision / seed / parameters
+```
+
+The exact inspection UI is future work, but the product architecture should preserve
+enough identity, lineage, generation, and diagnostics to answer:
+
+- what produced this result;
+- which source/product generation was used;
+- whether a fallback or stale product contributed;
+- where a failed adaptation or authority transition occurred;
+- how to reproduce a retained result when the owning contracts support it.
+
+This turns a weakness of federation into useful creative/debugging visibility.
+
+## Validation strategy
+
+Avoid a Cartesian test matrix across every study, domain, host, and output mode.
+Validate by authority seam:
+
+```text
+domain/study tests
+    semantic correctness
+
+adapter tests
+    cross-owner translation and failure behavior
+
+host-capability tests
+    supported presentation/execution behavior
+
+vertical golden journeys
+    a small number of end-to-end creative workflows
+```
+
+Directional future vertical journeys:
+
+```text
+Reaction Diffusion -> retained image
+Reaction Diffusion -> SDF preview adaptation -> contour/image
+SDF Study -> later RunenRender image
+same study/source -> CLI and GUI hosts with equivalent output intent
+```
+
+Visual comparisons supplement structured assertions; they do not replace framework
+conformance or semantic tests.
 
 ## RunenGPU and RunenRender progression
 
 ### G5 — creative compute
 
 The first useful Visual Lab slice may consume G5's accepted public execution,
-completion, and readback boundary for headless creative work. Candidate first studies:
+completion, and readback boundary for creative compute. Candidate first studies:
 
 1. Reaction Diffusion;
 2. Procedural Image;
@@ -399,6 +604,11 @@ completion, and readback boundary for headless creative work. Candidate first st
 
 These exercise persistent state, repeated submissions, texture/buffer work, fixed-step
 sequences, readback, and visual artifacts while remaining application consumers.
+
+A G5 implementation should not be considered a useful product merely because it emits
+files. It should provide a bounded short feedback loop appropriate to the available
+host, such as parameter change, run/update, visible result, compare/randomize, and save.
+The first shell may be disposable; the study/source model must not be.
 
 ### G6 — offscreen graphics
 
@@ -448,7 +658,11 @@ SDF Study
   distance/slice/contour visualization
 ```
 
-A headless run may emit image/data sequences and a Runenwerk-owned manifest recording
+VL1 should prefer direct app-local composition over premature generic suite/compiler
+machinery. Generic composition infrastructure may be adopted or extracted only when
+multiple real studies/domain-backed capabilities demonstrate repeated need.
+
+A run may emit image/data sequences and a Runenwerk-owned manifest recording
 study/source revision, parameters, seed, run profile, dimensions, time/step facts,
 output requests, useful environment/capability facts, diagnostics, and artifact
 checksums. Runtime GPU handles and backend-private identities are never persistence
@@ -476,9 +690,13 @@ Do not:
 
 - duplicate Material Lab, Field Visualizer, Procgen, RunenSDF, RunenGPU, RunenRender,
   RunenUI, or existing asset/product authority;
-- bypass domain validation or ratification;
+- expose internal ownership ceremony in the common creative path when a safe derived
+  relationship can be resolved automatically and truthfully;
+- bypass domain validation or ratification for durable authority transitions;
+- let product-local native studies grow into undeclared reusable domains;
 - make graph-canvas state runtime or source authority;
 - make study document order implicit execution authority;
+- force all hosts to implement identical interaction capabilities;
 - expand the legacy UI architecture for Visual Lab;
 - create a temporary renderer that becomes permanent;
 - move Visual Lab semantics into RunenGPU;
@@ -490,16 +708,33 @@ Do not:
 The architecture remains valid when:
 
 - every established semantic invariant remains owned by its existing domain/framework;
+- Visual Lab has a clear center in procedural visual systems rather than becoming the
+  default owner for all creative tooling;
 - a product-local study is understandable without learning a universal creative runtime;
-- study meaning, run policy, output artifacts, and UI/session state remain distinct;
-- cross-domain use is classifiable as Observe, Preview Adapt, or Bake/Commit and does
-  not silently transfer authority;
+- native studies trigger ownership review when they become independently reusable,
+  authoritative, or domain-sized;
+- Visual Study composition owns references and creative intent, not foreign-domain or
+  execution semantics;
+- study meaning, composition intent, run policy, output artifacts, and UI/session state
+  remain distinct;
+- cross-domain use remains classifiable as Observe, Preview Adapt, or Bake/Commit and
+  does not silently transfer durable authority;
+- safe derived composition can be presented with minimal ceremony while failures and
+  durable authority transitions remain explicit;
+- a useful study supports a short creative loop -- change -> run/update -> see ->
+  compare/save -- without requiring the user to understand internal product, adapter,
+  graph, ratification, or GPU boundaries;
 - durable domain sources remain references to owner-defined documents/products;
-- Visual Lab can run headlessly before RunenUI/RunenRender without creating replacement
-  UI or renderer authority;
+- host-specific experiences may differ without changing portable source semantics;
+- output provenance can identify the source/run/product path needed to explain a result;
+- direct RunenGPU visualization remains data/artifact-oriented while semantic image
+  formation moves through RunenRender when available;
+- Visual Lab can run before RunenUI/RunenRender without creating replacement UI or
+  renderer authority;
 - later RunenUI and RunenRender adoption does not require rewriting study/source
   semantics;
 - RunenGPU remains domain-neutral and independently conformant;
+- validation focuses on owner contracts plus a few representative vertical journeys;
 - no shared substrate is extracted without ADR 0017's proof gate.
 
 ## Delivery and continuation
