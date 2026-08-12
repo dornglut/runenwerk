@@ -113,8 +113,12 @@ policy according to ADR 0014.
 
 ## Composition model
 
-Visual Lab should use the existing Tool Suite / Workbench Host direction as its product
-composition model rather than inventing a second application-composition architecture.
+Visual Lab's composition architecture follows the same bounded principle currently
+represented by the active Tool Suite / Workbench Host design: a host composes typed
+tool/study capabilities without taking over their domain semantics. This accepted design
+fixes only that product-level invariant. It does not accept by reference the active
+Workbench design's exact manifests, API names, current editor-shell ownership, or
+implementation sequence.
 
 A Visual Lab host may install product-local native-study suites and existing or future
 domain-backed suites. Suite composition controls product structure, surfaces, provider
