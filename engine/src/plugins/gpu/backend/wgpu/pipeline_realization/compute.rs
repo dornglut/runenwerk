@@ -1,4 +1,5 @@
 use super::G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION;
+use super::diagnostics::PipelineCacheFamily;
 use super::publication::{ensure_available, scoped_create};
 use super::records::ComputePipelineRealizationRecord;
 use super::registry::{self, InFlightOutcome, Reservation};
@@ -40,6 +41,15 @@ impl ComputePipelineRequestKey {
             workload_alignment_maximums: device.workload_budget().alignment_maximums().collect(),
             wgpu_pipeline_compatibility_revision: G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION,
         }
+    }
+
+    fn matches_record(&self, record: &ComputeRecord) -> bool {
+        record.affinity() == self.affinity
+            && record.descriptor() == &self.descriptor
+            && record.program.affinity() == self.affinity
+            && record.program.descriptor() == self.descriptor.program()
+            && record.layout.affinity() == self.affinity
+            && record.layout.descriptor() == self.descriptor.layout()
     }
 }
 
@@ -104,17 +114,22 @@ impl GpuContext {
         })?;
 
         loop {
-            ensure_available(
-                &self.backend.pipeline_realization,
-                compute_request_name(descriptor),
-            )?;
+            let request = compute_request_name(descriptor);
+            ensure_available(&self.backend.pipeline_realization, request.clone())?;
             let key = ComputePipelineRequestKey::new(self, descriptor);
-            match registry::reserve(
+            let (reservation, observation) = registry::reserve(
                 &self.backend.pipeline_realization.compute,
                 self.backend.pipeline_realization.max_records,
                 key,
-                compute_request_name(descriptor),
-            )? {
+                request.clone(),
+                ComputePipelineRequestKey::matches_record,
+            )?;
+            self.backend.pipeline_realization.observe_cache(
+                PipelineCacheFamily::Compute,
+                observation,
+                &request,
+            );
+            match reservation {
                 Reservation::Ready(record) => {
                     return Ok(GpuRealizedComputePipeline::from_record(record));
                 }

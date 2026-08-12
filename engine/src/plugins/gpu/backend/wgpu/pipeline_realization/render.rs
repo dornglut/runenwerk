@@ -1,3 +1,4 @@
+use super::diagnostics::PipelineCacheFamily;
 use super::publication::{ensure_available, scoped_create};
 use super::records::{RenderPipelineRealizationRecord, RenderStageIoEvidence};
 use super::registry::{self, InFlightOutcome, Reservation};
@@ -84,17 +85,22 @@ impl GpuContext {
         let lowered = lower_render_pipeline(self, descriptor, &request)?;
 
         loop {
-            ensure_available(
-                &self.backend.pipeline_realization,
-                render_request_name(descriptor),
-            )?;
+            let request = render_request_name(descriptor);
+            ensure_available(&self.backend.pipeline_realization, request.clone())?;
             let key = RenderPipelineRequestKey::new(self, descriptor, stage_io.clone());
-            match registry::reserve(
+            let (reservation, observation) = registry::reserve(
                 &self.backend.pipeline_realization.render,
                 self.backend.pipeline_realization.max_records,
                 key,
-                render_request_name(descriptor),
-            )? {
+                request.clone(),
+                RenderPipelineRequestKey::matches_record,
+            )?;
+            self.backend.pipeline_realization.observe_cache(
+                PipelineCacheFamily::Render,
+                observation,
+                &request,
+            );
+            match reservation {
                 Reservation::Ready(record) => {
                     return Ok(GpuRealizedRenderPipeline::from_record(record));
                 }

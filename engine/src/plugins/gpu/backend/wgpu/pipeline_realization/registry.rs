@@ -1,3 +1,4 @@
+use super::diagnostics::PipelineCacheObservation;
 use crate::plugins::gpu::GpuPipelineRealizationError;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -150,7 +151,8 @@ pub(super) fn reserve<K, R>(
     max_records: NonZeroUsize,
     key: K,
     request: impl Into<String>,
-) -> Result<Reservation<K, R>, GpuPipelineRealizationError>
+    ready_matches: impl FnOnce(&K, &R) -> bool,
+) -> Result<(Reservation<K, R>, PipelineCacheObservation), GpuPipelineRealizationError>
 where
     K: Clone + Eq + Hash + Send + 'static,
     R: Send + Sync + 'static,
@@ -159,11 +161,24 @@ where
     let mut locked = registry
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut rejected = false;
     if let Some(record) = locked.ready.get(&key).cloned() {
-        return Ok(Reservation::Ready(record));
+        if ready_matches(&key, &record) {
+            return Ok((
+                Reservation::Ready(record),
+                PipelineCacheObservation::Hit,
+            ));
+        }
+        // A mismatched ready record is removed only from future lookup. Any live opaque handle
+        // keeps its Arc and remains valid; ordinary realization below reconstructs this key.
+        locked.ready.remove(&key);
+        rejected = true;
     }
     if let Some(attempt) = locked.in_flight.get(&key).cloned() {
-        return Ok(Reservation::Waiter(attempt));
+        return Ok((
+            Reservation::Waiter(attempt),
+            PipelineCacheObservation::Hit,
+        ));
     }
     if locked.total_len() >= max_records.get() {
         locked.collect_lookup_only();
@@ -178,12 +193,19 @@ where
     let attempt = Arc::new(InFlight::default());
     locked.in_flight.insert(key.clone(), Arc::clone(&attempt));
     drop(locked);
-    Ok(Reservation::Owner(OwnerReservation {
-        registry: Arc::clone(registry),
-        key,
-        attempt,
-        active: true,
-    }))
+    Ok((
+        Reservation::Owner(OwnerReservation {
+            registry: Arc::clone(registry),
+            key,
+            attempt,
+            active: true,
+        }),
+        if rejected {
+            PipelineCacheObservation::Rejected
+        } else {
+            PipelineCacheObservation::Miss
+        },
+    ))
 }
 
 #[cfg(test)]
@@ -211,16 +233,21 @@ mod tests {
     fn equal_requests_single_flight_and_owner_abandonment_releases_capacity() {
         let registry = Arc::new(Mutex::new(SingleFlightRegistry::<u32, ()>::default()));
         let max = NonZeroUsize::new(1).unwrap();
-        let owner = match reserve(&registry, max, 7, "compute 7").unwrap() {
+        let (owner, observation) = reserve(&registry, max, 7, "compute 7", |_, _| true).unwrap();
+        assert_eq!(observation, PipelineCacheObservation::Miss);
+        let owner = match owner {
             Reservation::Owner(owner) => owner,
             Reservation::Ready(_) | Reservation::Waiter(_) => panic!("first caller owns"),
         };
-        let attempt = match reserve(&registry, max, 7, "compute 7").unwrap() {
+        let (attempt, observation) =
+            reserve(&registry, max, 7, "compute 7", |_, _| true).unwrap();
+        assert_eq!(observation, PipelineCacheObservation::Hit);
+        let attempt = match attempt {
             Reservation::Waiter(attempt) => attempt,
             Reservation::Ready(_) | Reservation::Owner(_) => panic!("equal caller waits"),
         };
         assert_eq!(registry.lock().unwrap().total_len(), 1);
-        let capacity_error = match reserve(&registry, max, 8, "compute 8") {
+        let capacity_error = match reserve(&registry, max, 8, "compute 8", |_, _| true) {
             Err(error) => error,
             Ok(_) => panic!("distinct request must observe occupied capacity"),
         };
@@ -241,9 +268,28 @@ mod tests {
             Poll::Ready(InFlightOutcome::Abandoned)
         ));
         assert_eq!(registry.lock().unwrap().total_len(), 0);
-        assert!(matches!(
-            reserve(&registry, max, 8, "compute 8").unwrap(),
-            Reservation::Owner(_)
-        ));
+        let (reservation, observation) =
+            reserve(&registry, max, 8, "compute 8", |_, _| true).unwrap();
+        assert_eq!(observation, PipelineCacheObservation::Miss);
+        assert!(matches!(reservation, Reservation::Owner(_)));
+    }
+
+    #[test]
+    fn incompatible_ready_candidate_is_rejected_then_realized_ordinally() {
+        let registry = Arc::new(Mutex::new(SingleFlightRegistry::<u32, u32>::default()));
+        let max = NonZeroUsize::new(2).unwrap();
+        let stale = Arc::new(8_u32);
+        registry
+            .lock()
+            .unwrap()
+            .ready
+            .insert(7, Arc::clone(&stale));
+
+        let (reservation, observation) =
+            reserve(&registry, max, 7, "compute 7", |key, record| key == record).unwrap();
+        assert_eq!(observation, PipelineCacheObservation::Rejected);
+        assert!(matches!(reservation, Reservation::Owner(_)));
+        assert_eq!(Arc::strong_count(&stale), 1);
+        assert_eq!(registry.lock().unwrap().total_len(), 1);
     }
 }

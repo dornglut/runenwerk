@@ -1,5 +1,5 @@
 use super::G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION;
-use super::records::RenderStageIoEvidence;
+use super::records::{RenderPipelineRealizationRecord, RenderStageIoEvidence};
 use crate::plugins::gpu::{
     GpuAlignmentFacts, GpuAlignmentKind, GpuCapabilityFeature, GpuContext, GpuContextAffinity,
     GpuFormatRole, GpuLimits, GpuPipelineLayoutDescriptor, GpuPipelineRealizationError,
@@ -42,6 +42,16 @@ impl RenderPipelineRequestKey {
             workload_alignment_maximums: device.workload_budget().alignment_maximums().collect(),
             wgpu_pipeline_compatibility_revision: G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION,
         }
+    }
+
+    pub(super) fn matches_record(&self, record: &RenderPipelineRealizationRecord) -> bool {
+        record.affinity() == self.affinity
+            && record.descriptor() == &self.descriptor
+            && record.stage_io == self.stage_io
+            && record.program.affinity() == self.affinity
+            && record.program.descriptor() == self.descriptor.program()
+            && record.layout.affinity() == self.affinity
+            && record.layout.descriptor() == self.descriptor.layout()
     }
 }
 

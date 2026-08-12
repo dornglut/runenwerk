@@ -1,6 +1,7 @@
 //! Context/device-generation-bound G4C3 pipeline realization.
 
 mod compute;
+mod diagnostics;
 mod publication;
 mod records;
 mod registry;
@@ -14,6 +15,7 @@ pub(crate) use records::{ComputePipelineRealizationRecord, RenderPipelineRealiza
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::plugins::gpu::GpuContextAffinity;
 use compute::{ComputePipelineRequestKey, ComputeRecord};
+use diagnostics::PipelineCacheDiagnosticRegistry;
 use registry::SingleFlightRegistry;
 use render::RenderRecord;
 use render_validation::RenderPipelineRequestKey;
@@ -30,6 +32,7 @@ pub(crate) struct PipelineRealizationState {
     max_records: NonZeroUsize,
     compute: Arc<Mutex<SingleFlightRegistry<ComputePipelineRequestKey, ComputeRecord>>>,
     render: Arc<Mutex<SingleFlightRegistry<RenderPipelineRequestKey, RenderRecord>>>,
+    cache_diagnostics: Mutex<PipelineCacheDiagnosticRegistry>,
     health: Arc<WgpuDeviceHealth>,
     error_attribution_gate: Arc<WgpuErrorAttributionGate>,
 }
@@ -45,6 +48,7 @@ impl PipelineRealizationState {
             max_records: DEFAULT_MAX_PIPELINE_REALIZATION_RECORDS,
             compute: Arc::new(Mutex::new(SingleFlightRegistry::default())),
             render: Arc::new(Mutex::new(SingleFlightRegistry::default())),
+            cache_diagnostics: Mutex::new(PipelineCacheDiagnosticRegistry::default()),
             health,
             error_attribution_gate,
         }
@@ -71,6 +75,13 @@ impl core::fmt::Debug for PipelineRealizationState {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .total_len(),
+            )
+            .field(
+                "cache_diagnostics",
+                &*self
+                    .cache_diagnostics
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
             )
             .field("max_records_per_family", &self.max_records)
             .finish_non_exhaustive()
