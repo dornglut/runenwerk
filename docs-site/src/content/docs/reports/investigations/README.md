@@ -3,7 +3,7 @@ title: Investigations
 status: active
 owner: workspace
 layer: reports
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-12
 ---
 
 # Investigations
@@ -21,6 +21,10 @@ Investigation reports should identify:
 - concrete next decision.
 
 Investigations do not authorize implementation by themselves.
+
+## Cross-domain architecture
+
+- [Semantic Federation and Inspection Provenance Investigation](2026-08-12-semantic-federation-and-inspection-provenance.md)
 
 ## Repository family and framework extraction
 
