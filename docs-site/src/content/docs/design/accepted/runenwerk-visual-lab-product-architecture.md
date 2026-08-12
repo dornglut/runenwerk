@@ -105,11 +105,11 @@ renderer, and UI capabilities without rewriting source semantics.
                          |
                   explicit owner contracts
                          |
-          +--------------+--------------+
-          |              |              |
-       Observe       Derive/Adapt    Retain/Apply
-          |              |              |
-          +--------------+--------------+
+      +------------------+------------------+------------------+
+      |                  |                  |                  |
+   Observe          Derive / Adapt    Retain / Materialize   Apply / Commit
+      |                  |                  |                  |
+      +------------------+------------------+------------------+
                          |
                   Runenwerk integration
                          |
@@ -184,7 +184,7 @@ structure under ADR 0017.
   explicit apply workflows;
 - app-local orchestration of owner-specific evaluation requests;
 - output requests and product-level execution preferences;
-- app-level sequencing, naming, capture/export policy, and presentation policy;
+- creative workflow sequencing, naming, capture/export policy, and presentation policy;
 - explicit cross-domain Observe, Derive/Adapt, Retain/Materialize, and Apply/Commit
   orchestration;
 - product-level current-result selection, comparison, and last-good presentation policy.
@@ -211,7 +211,7 @@ structure under ADR 0017.
   outputs, and lowering to RunenGPU;
 - **RunenUI:** reusable renderer-neutral UI semantics and paint/hit products;
 - **Runenwerk:** application lifecycle, host policy, cross-framework adapters, product
-  policy, sequencing, artifact policy, and integration evidence.
+  policy, application/runtime sequencing, artifact policy, and integration evidence.
 
 Visual Lab must not mirror or become writable parallel authority for any of these.
 
