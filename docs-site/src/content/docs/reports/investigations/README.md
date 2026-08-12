@@ -22,9 +22,10 @@ Investigation reports should identify:
 
 Investigations do not authorize implementation by themselves.
 
-## Cross-domain architecture
+## Cross-domain architecture and product composition
 
 - [Semantic Federation and Inspection Provenance Investigation](2026-08-12-semantic-federation-and-inspection-provenance.md)
+- [Application Composition and Networking Ergonomics Investigation](2026-08-12-application-composition-and-networking-ergonomics.md)
 
 ## Repository family and framework extraction
 
