@@ -1,4 +1,7 @@
-use super::{GpuComputePipelineDescriptor, GpuContextAffinity, sanitized_diagnostic};
+use super::{
+    GpuComputePipelineDescriptor, GpuContextAffinity, GpuRenderPipelineDescriptor,
+    sanitized_diagnostic,
+};
 use core::fmt;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -232,6 +235,42 @@ impl fmt::Debug for GpuRealizedComputePipeline {
             .debug_struct("GpuRealizedComputePipeline")
             .field("affinity", &self.affinity())
             .field("entry_point", self.descriptor().entry_point())
+            .finish_non_exhaustive()
+    }
+}
+
+/// Opaque context/device-generation-bound realization of one complete render pipeline.
+#[derive(Clone)]
+pub struct GpuRealizedRenderPipeline {
+    pub(crate) record: Arc<crate::plugins::gpu::backend::RenderPipelineRealizationRecord>,
+}
+
+impl GpuRealizedRenderPipeline {
+    pub(crate) fn from_record(
+        record: Arc<crate::plugins::gpu::backend::RenderPipelineRealizationRecord>,
+    ) -> Self {
+        Self { record }
+    }
+
+    pub fn affinity(&self) -> GpuContextAffinity {
+        self.record.affinity()
+    }
+
+    pub fn descriptor(&self) -> &GpuRenderPipelineDescriptor {
+        self.record.descriptor()
+    }
+
+    pub fn is_same_record(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.record, &other.record)
+    }
+}
+
+impl fmt::Debug for GpuRealizedRenderPipeline {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GpuRealizedRenderPipeline")
+            .field("affinity", &self.affinity())
+            .field("entry_points", self.descriptor().entry_points())
             .finish_non_exhaustive()
     }
 }

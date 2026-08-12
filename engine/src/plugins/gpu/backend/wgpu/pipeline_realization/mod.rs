@@ -4,13 +4,19 @@ mod compute;
 mod publication;
 mod records;
 mod registry;
+mod render;
+mod render_lowering;
+mod render_mapping;
+mod render_validation;
 
-pub(crate) use records::ComputePipelineRealizationRecord;
+pub(crate) use records::{ComputePipelineRealizationRecord, RenderPipelineRealizationRecord};
 
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::plugins::gpu::GpuContextAffinity;
 use compute::{ComputePipelineRequestKey, ComputeRecord};
 use registry::SingleFlightRegistry;
+use render::RenderRecord;
+use render_validation::RenderPipelineRequestKey;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
@@ -23,6 +29,7 @@ pub(crate) struct PipelineRealizationState {
     affinity: GpuContextAffinity,
     max_records: NonZeroUsize,
     compute: Arc<Mutex<SingleFlightRegistry<ComputePipelineRequestKey, ComputeRecord>>>,
+    render: Arc<Mutex<SingleFlightRegistry<RenderPipelineRequestKey, RenderRecord>>>,
     health: Arc<WgpuDeviceHealth>,
     error_attribution_gate: Arc<WgpuErrorAttributionGate>,
 }
@@ -37,6 +44,7 @@ impl PipelineRealizationState {
             affinity,
             max_records: DEFAULT_MAX_PIPELINE_REALIZATION_RECORDS,
             compute: Arc::new(Mutex::new(SingleFlightRegistry::default())),
+            render: Arc::new(Mutex::new(SingleFlightRegistry::default())),
             health,
             error_attribution_gate,
         }
@@ -52,6 +60,14 @@ impl core::fmt::Debug for PipelineRealizationState {
                 "compute_records",
                 &self
                     .compute
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .total_len(),
+            )
+            .field(
+                "render_records",
+                &self
+                    .render
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .total_len(),
