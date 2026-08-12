@@ -221,7 +221,10 @@ fn validate_attachment_support(
 ) -> Result<(), GpuPipelineRealizationError> {
     let native_format = render_mapping::texture_format(format);
     let features = device_format_features(&context.backend, native_format);
-    if !features.allowed_usages.contains(TextureUsages::RENDER_ATTACHMENT) {
+    if !features
+        .allowed_usages
+        .contains(TextureUsages::RENDER_ATTACHMENT)
+    {
         return Err(incompatible(
             request,
             "the created device cannot use the selected format as a render attachment",

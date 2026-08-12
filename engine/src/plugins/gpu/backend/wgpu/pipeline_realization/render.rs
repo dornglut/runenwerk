@@ -1,7 +1,7 @@
 use super::publication::{ensure_available, scoped_create};
 use super::records::{RenderPipelineRealizationRecord, RenderStageIoEvidence};
 use super::registry::{self, InFlightOutcome, Reservation};
-use super::render_lowering::{lower_render_pipeline, LoweredRenderPipeline};
+use super::render_lowering::{LoweredRenderPipeline, lower_render_pipeline};
 use super::render_validation::{
     RenderPipelineRequestKey, map_dependency_error, render_request_name,
     validate_admitted_format_roles, validate_dependency_affinity, validate_render_descriptor,
@@ -13,9 +13,7 @@ use crate::plugins::gpu::{
     GpuRealizedRenderPipeline, GpuRenderPipelineDescriptor,
 };
 use std::sync::Arc;
-use wgpu::{
-    FragmentState, PipelineCompilationOptions, RenderPipelineDescriptor, VertexState,
-};
+use wgpu::{FragmentState, PipelineCompilationOptions, RenderPipelineDescriptor, VertexState};
 
 pub(super) type RenderRecord = RenderPipelineRealizationRecord;
 
@@ -143,17 +141,19 @@ impl GpuContext {
             &self.backend.pipeline_realization,
             request,
             || {
-                let fragment = descriptor.entry_points().fragment().map(|entry_point| {
-                    FragmentState {
-                        module: program.record.wgpu_object(),
-                        entry_point: Some(entry_point.as_str()),
-                        compilation_options: PipelineCompilationOptions {
-                            constants: constants.as_slice(),
-                            ..PipelineCompilationOptions::default()
-                        },
-                        targets: lowered.color_targets.as_slice(),
-                    }
-                });
+                let fragment =
+                    descriptor
+                        .entry_points()
+                        .fragment()
+                        .map(|entry_point| FragmentState {
+                            module: program.record.wgpu_object(),
+                            entry_point: Some(entry_point.as_str()),
+                            compilation_options: PipelineCompilationOptions {
+                                constants: constants.as_slice(),
+                                ..PipelineCompilationOptions::default()
+                            },
+                            targets: lowered.color_targets.as_slice(),
+                        });
                 self.backend
                     .device
                     .create_render_pipeline(&RenderPipelineDescriptor {
