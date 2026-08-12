@@ -20,6 +20,28 @@ pub struct PendingCaptureReadback {
     pub padded_bytes_per_row: u32,
 }
 
+/// A G4C1 readback buffer realized during the batch's first phase. The later G5 operation only
+/// encodes the copy into this already-realized destination.
+#[derive(Debug)]
+pub struct PreparedCaptureReadback {
+    pub selector_index: usize,
+    pub identity: RenderCaptureIdentity,
+    pub _handle: GpuBufferHandle,
+    pub buffer: GpuRealizedBuffer,
+    pub source: PreparedCaptureTextureSource,
+    pub width: u32,
+    pub height: u32,
+    pub source_format: TextureFormat,
+    pub readback_format: TextureReadbackFormat,
+    pub padded_bytes_per_row: u32,
+}
+
+#[derive(Debug, Clone)]
+pub enum PreparedCaptureTextureSource {
+    Surface,
+    Realized(GpuRealizedTexture),
+}
+
 #[derive(Debug, Clone)]
 struct SelectorRuntimeState {
     selector: RenderCaptureSelector,
@@ -276,21 +298,20 @@ pub struct TextureReadbackFormat {
 
 #[derive(Debug, Clone, Copy)]
 pub enum CaptureTextureSource<'a> {
-    Surface(&'a Texture),
+    Surface,
     Realized(&'a GpuRealizedTexture),
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn enqueue_texture_capture_copy(
+pub fn prepare_texture_capture_copy(
     context: &GpuContext,
-    encoder: &mut CommandEncoder,
     selector_index: usize,
     identity: RenderCaptureIdentity,
     texture: CaptureTextureSource<'_>,
     size: (u32, u32),
     source_format: TextureFormat,
     readback_format: TextureReadbackFormat,
-) -> Result<PendingCaptureReadback> {
+) -> Result<PreparedCaptureReadback> {
     let width = size.0.max(1);
     let height = size.1.max(1);
     let unpadded_bytes_per_row = width
@@ -312,29 +333,67 @@ pub fn enqueue_texture_capture_copy(
         GpuMemoryIntent::Readback,
     )?)?;
     let buffer = context.realize_buffer(&handle)?;
+    let source = match texture {
+        CaptureTextureSource::Surface => PreparedCaptureTextureSource::Surface,
+        CaptureTextureSource::Realized(texture) => {
+            PreparedCaptureTextureSource::Realized(texture.clone())
+        }
+    };
+    Ok(PreparedCaptureReadback {
+        selector_index,
+        identity,
+        _handle: handle,
+        buffer,
+        source,
+        width,
+        height,
+        source_format,
+        readback_format,
+        padded_bytes_per_row,
+    })
+}
+
+pub fn encode_prepared_texture_capture_copy(
+    context: &GpuContext,
+    encoder: &mut CommandEncoder,
+    frame_texture: Option<&Texture>,
+    prepared: PreparedCaptureReadback,
+) -> Result<PendingCaptureReadback> {
+    let PreparedCaptureReadback {
+        selector_index,
+        identity,
+        _handle,
+        buffer,
+        source,
+        width,
+        height,
+        source_format,
+        readback_format,
+        padded_bytes_per_row,
+    } = prepared;
     let copy = CaptureCopyToReadback {
         encoder,
-        surface: match texture {
-            CaptureTextureSource::Surface(texture) => Some(texture),
-            CaptureTextureSource::Realized(_) => None,
+        surface: match &source {
+            PreparedCaptureTextureSource::Surface => frame_texture,
+            PreparedCaptureTextureSource::Realized(_) => None,
         },
         padded_bytes_per_row,
         width,
         height,
     };
-    match texture {
-        CaptureTextureSource::Surface(_) => context
-            .current_render_resource_bridge()
+    match source {
+        PreparedCaptureTextureSource::Surface => context
+            .current_render_pipeline_bridge()
             .for_surface_readback_copy(&buffer, copy)?,
-        CaptureTextureSource::Realized(texture) => context
-            .current_render_resource_bridge()
-            .for_texture_readback_copy(texture, &buffer, copy)?,
+        PreparedCaptureTextureSource::Realized(texture) => context
+            .current_render_pipeline_bridge()
+            .for_texture_readback_copy(&texture, &buffer, copy)?,
     }
 
     Ok(PendingCaptureReadback {
         selector_index,
         identity,
-        _handle: handle,
+        _handle,
         buffer,
         width,
         height,
@@ -372,8 +431,8 @@ pub fn read_capture_back(
     };
 
     let mut output = None;
-    if let Err(error) = context
-        .current_render_resource_bridge()
+    let bridge_result = context
+        .current_render_pipeline_bridge()
         .for_buffer_readback(
             &buffer,
             ReadCaptureBuffer {
@@ -383,8 +442,8 @@ pub fn read_capture_back(
                 padded_bytes_per_row,
                 output: &mut output,
             },
-        )
-    {
+        );
+    if let Err(error) = bridge_result {
         let mut capture = RenderCapturedTexture {
             identity: fallback_identity,
             width,

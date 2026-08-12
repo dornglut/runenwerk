@@ -2,11 +2,14 @@ use super::*;
 use crate::plugins::gpu::{
     CurrentRenderAttachmentsTerminal, CurrentRenderBufferCopyTerminal,
     CurrentRenderIndexBufferTerminal, CurrentRenderIndirectBufferTerminal,
+    CurrentRenderPipelineBindGroupsTerminal, CurrentRenderPipelineCreationTerminal,
     CurrentRenderTextureCopyTerminal, CurrentRenderTimestampWritesTerminal,
     CurrentRenderVertexBufferTerminal, CurrentSurfaceTextureCopyTerminal, GpuAdmittedProgramSource,
-    GpuCapabilityRequirements, GpuProgramSourceKey, GpuProgramSourceProvenance, GpuRealizedBuffer,
-    GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
-    GpuSpecializationSchema, GpuSpecializationValue, GpuSpecializationValueSet, GpuWorkResourceId,
+    GpuCapabilityRequirements, GpuComputePipelineDescriptor, GpuProgramSourceKey,
+    GpuProgramSourceProvenance, GpuRealizedBindGroup, GpuRealizedBuffer,
+    GpuRenderPipelineDescriptor, GpuSpecializationDeclaration, GpuSpecializationEntry,
+    GpuSpecializationKey, GpuSpecializationSchema, GpuSpecializationValue,
+    GpuSpecializationValueSet, GpuWorkResourceId,
 };
 use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::{
@@ -20,6 +23,213 @@ use crate::plugins::render::{
 };
 
 impl Renderer {
+    /// First half of the renderer's two-phase integration: realize every G4C2 program, layout,
+    /// bind group (and dependent G4C1 sampler) while no raw device/queue loan is live.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn realize_compiled_pass(
+        &mut self,
+        context: &GpuContext,
+        frame_texture: &Texture,
+        frame_view: &TextureView,
+        packet: &RendererPreparedPacket,
+        flow: &CompiledRenderFlowPlan,
+        flow_inputs: &PreparedFlowInputs,
+        pass: &CompiledPassExecutionPlan,
+        shader_registry: &ShaderRegistryResource,
+        runtime_resources: &FlowRuntimeResources,
+    ) -> Result<Option<PreparedPipelinePass>> {
+        match pass {
+            CompiledPassExecutionPlan::Compute(value) => {
+                let shader = resolve_shader_material(
+                    value.shader.as_ref(),
+                    shader_registry,
+                    DEFAULT_COMPUTE_SHADER,
+                    "builtin:compute",
+                );
+                let specialization =
+                    compute_specialization_from_constants(&value.shader_constants)?;
+                let dispatch = flow_inputs
+                    .projected_dispatch_workgroups
+                    .get(&value.pass_id)
+                    .copied()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "missing prepared dispatch for pass '{}' in flow '{}'",
+                            value.pass_id,
+                            flow.flow_id
+                        )
+                    })?;
+                if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
+                    bail!(
+                        "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
+                        value.pass_id,
+                        dispatch[0],
+                        dispatch[1],
+                        dispatch[2]
+                    );
+                }
+                let admitted_source = admit_resolved_program_source(
+                    &mut self.flow_pipeline_cache,
+                    &shader,
+                    format!("compute pass {}", value.pass_id),
+                )?;
+                let bindings = self.resolve_compiled_bind_group(
+                    context,
+                    frame_texture,
+                    packet,
+                    flow,
+                    value.pass_id,
+                    FlowPassKind::Compute,
+                    value.feature_id,
+                    &admitted_source,
+                    specialization,
+                    &value.bindings,
+                    ShaderStages::COMPUTE,
+                    true,
+                    Vec::new(),
+                    None,
+                    runtime_resources,
+                )?;
+                Ok(Some(PreparedPipelinePass {
+                    bindings,
+                    shader_id: shader.shader_id,
+                    shader_revision: shader.revision,
+                    fallback_used: shader.fallback_used,
+                }))
+            }
+            CompiledPassExecutionPlan::Fullscreen(value) => {
+                if !value.draw_buffers.vertex_buffers.is_empty()
+                    || !value.draw_buffers.index_buffers.is_empty()
+                    || !value.draw_buffers.instance_buffers.is_empty()
+                    || !value.draw_buffers.indirect_buffers.is_empty()
+                {
+                    bail!(
+                        "fullscreen pass '{}' cannot bind graphics vertex/index/instance/indirect buffers",
+                        value.pass_id
+                    );
+                }
+                let color_target = self.resolve_color_target_from_plan(
+                    runtime_resources,
+                    value.pass_id,
+                    &value.targets,
+                    frame_view,
+                    packet.surface_format,
+                )?;
+                let shader = resolve_shader_material_for_packet(
+                    value.shader.as_ref(),
+                    packet,
+                    shader_registry,
+                    DEFAULT_FULLSCREEN_SHADER,
+                    "builtin:fullscreen",
+                );
+                reject_material_shader_fallback(
+                    value.feature_id,
+                    value.shader.as_ref(),
+                    value.pass_id,
+                    &shader,
+                )?;
+                reject_unresident_material_textures(
+                    packet,
+                    value.feature_id,
+                    value.shader.as_ref(),
+                    value.pass_id,
+                )?;
+                let admitted_source = admit_resolved_program_source(
+                    &mut self.flow_pipeline_cache,
+                    &shader,
+                    format!("fullscreen pass {}", value.pass_id),
+                )?;
+                let bindings = self.resolve_compiled_bind_group(
+                    context,
+                    frame_texture,
+                    packet,
+                    flow,
+                    value.pass_id,
+                    FlowPassKind::Fullscreen,
+                    value.feature_id,
+                    &admitted_source,
+                    empty_specialization_value_set()?,
+                    &value.bindings,
+                    ShaderStages::VERTEX_FRAGMENT,
+                    true,
+                    vec![color_target.format],
+                    None,
+                    runtime_resources,
+                )?;
+                Ok(Some(PreparedPipelinePass {
+                    bindings,
+                    shader_id: shader.shader_id,
+                    shader_revision: shader.revision,
+                    fallback_used: shader.fallback_used,
+                }))
+            }
+            CompiledPassExecutionPlan::Graphics(value) => {
+                let color_target = self.resolve_color_target_from_plan(
+                    runtime_resources,
+                    value.pass_id,
+                    &value.targets,
+                    frame_view,
+                    packet.surface_format,
+                )?;
+                let depth_target = self.resolve_depth_target_from_plan(
+                    runtime_resources,
+                    value.pass_id,
+                    &value.targets,
+                )?;
+                let shader = resolve_shader_material_for_packet(
+                    value.shader.as_ref(),
+                    packet,
+                    shader_registry,
+                    DEFAULT_GRAPHICS_SHADER,
+                    "builtin:graphics",
+                );
+                reject_material_shader_fallback(
+                    value.feature_id,
+                    value.shader.as_ref(),
+                    value.pass_id,
+                    &shader,
+                )?;
+                reject_unresident_material_textures(
+                    packet,
+                    value.feature_id,
+                    value.shader.as_ref(),
+                    value.pass_id,
+                )?;
+                let admitted_source = admit_resolved_program_source(
+                    &mut self.flow_pipeline_cache,
+                    &shader,
+                    format!("graphics pass {}", value.pass_id),
+                )?;
+                let bindings = self.resolve_compiled_bind_group(
+                    context,
+                    frame_texture,
+                    packet,
+                    flow,
+                    value.pass_id,
+                    FlowPassKind::Graphics,
+                    value.feature_id,
+                    &admitted_source,
+                    empty_specialization_value_set()?,
+                    &value.bindings,
+                    ShaderStages::VERTEX_FRAGMENT,
+                    true,
+                    vec![color_target.format],
+                    depth_target.as_ref().map(|target| target.format),
+                    runtime_resources,
+                )?;
+                Ok(Some(PreparedPipelinePass {
+                    bindings,
+                    shader_id: shader.shader_id,
+                    shader_revision: shader.revision,
+                    fallback_used: shader.fallback_used,
+                }))
+            }
+            CompiledPassExecutionPlan::Copy(_)
+            | CompiledPassExecutionPlan::Present(_)
+            | CompiledPassExecutionPlan::BuiltinUiComposite(_) => Ok(None),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn encode_compiled_pass(
         &mut self,
@@ -32,8 +242,8 @@ impl Renderer {
         flow: &CompiledRenderFlowPlan,
         flow_inputs: &PreparedFlowInputs,
         pass: &CompiledPassExecutionPlan,
-        shader_registry: &ShaderRegistryResource,
         runtime_resources: &FlowRuntimeResources,
+        prepared_pipeline: Option<&PreparedPipelinePass>,
         gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     ) -> Result<EncodedPassEvidence> {
         match pass {
@@ -48,7 +258,12 @@ impl Renderer {
                     flow_inputs,
                     runtime_resources,
                     value,
-                    shader_registry,
+                    prepared_pipeline.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "compute pass '{}' reached G4C3/G5 without G4C2 realization",
+                            value.pass_id
+                        )
+                    })?,
                     gpu_timestamp_writes,
                 )
                 .map(|value| EncodedPassEvidence {
@@ -69,7 +284,12 @@ impl Renderer {
                     flow,
                     runtime_resources,
                     value,
-                    shader_registry,
+                    prepared_pipeline.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "fullscreen pass '{}' reached G4C3/G5 without G4C2 realization",
+                            value.pass_id
+                        )
+                    })?,
                     gpu_timestamp_writes,
                 )
                 .map(|value| EncodedPassEvidence {
@@ -90,7 +310,12 @@ impl Renderer {
                     flow,
                     runtime_resources,
                     value,
-                    shader_registry,
+                    prepared_pipeline.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "graphics pass '{}' reached G4C3/G5 without G4C2 realization",
+                            value.pass_id
+                        )
+                    })?,
                     gpu_timestamp_writes,
                 )
                 .map(|value| EncodedPassEvidence {
@@ -135,11 +360,12 @@ impl Renderer {
             CompiledPassExecutionPlan::BuiltinUiComposite(_value) => {
                 self.encode_ui_pass(
                     context,
-                    device,
                     encoder,
                     frame_view,
                     &packet.prepared_ui,
                     &packet.viewport_surface_bindings,
+                    &packet.ui_dynamic_bind_groups.viewport,
+                    &packet.ui_dynamic_bind_groups.product_surface,
                     gpu_timestamp_writes,
                 )?;
                 Ok(EncodedPassEvidence {
@@ -159,22 +385,15 @@ impl Renderer {
         context: &GpuContext,
         device: &Device,
         encoder: &mut CommandEncoder,
-        frame_texture: &Texture,
-        packet: &RendererPreparedPacket,
+        _frame_texture: &Texture,
+        _packet: &RendererPreparedPacket,
         flow: &CompiledRenderFlowPlan,
         flow_inputs: &PreparedFlowInputs,
-        runtime_resources: &FlowRuntimeResources,
+        _runtime_resources: &FlowRuntimeResources,
         pass: &CompiledComputeExecutionPlan,
-        shader_registry: &ShaderRegistryResource,
+        prepared: &PreparedPipelinePass,
         gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     ) -> Result<EncodedPipelinePass> {
-        let shader = resolve_shader_material(
-            pass.shader.as_ref(),
-            shader_registry,
-            DEFAULT_COMPUTE_SHADER,
-            "builtin:compute",
-        );
-        let specialization = compute_specialization_from_constants(&pass.shader_constants)?;
         let dispatch = flow_inputs
             .projected_dispatch_workgroups
             .get(&pass.pass_id)
@@ -196,29 +415,7 @@ impl Renderer {
             );
         }
 
-        let admitted_source = admit_resolved_program_source(
-            &mut self.flow_pipeline_cache,
-            &shader,
-            format!("compute pass {}", pass.pass_id),
-        )?;
-        let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
-            context,
-            device,
-            frame_texture,
-            packet,
-            flow,
-            pass.pass_id,
-            FlowPassKind::Compute,
-            pass.feature_id,
-            &admitted_source,
-            specialization,
-            &pass.bindings,
-            ShaderStages::COMPUTE,
-            true,
-            Vec::new(),
-            None,
-            runtime_resources,
-        )?;
+        let pipeline_key = prepared.bindings.pipeline_key.clone();
         let compute_descriptor = match &pipeline_key.pipeline_descriptor {
             FlowPassPipelineDescriptor::Compute(descriptor) => descriptor,
             FlowPassPipelineDescriptor::Render(_) => {
@@ -229,74 +426,60 @@ impl Renderer {
             }
         };
 
-        let shader_module =
-            self.flow_pipeline_cache
-                .get_or_create_shader_module(pipeline_key.clone(), || {
-                    device.create_shader_module(ShaderModuleDescriptor {
-                        label: Some("engine_compiled_compute_shader"),
-                        source: ShaderSource::Wgsl(
-                            compute_descriptor
-                                .program()
-                                .source()
-                                .canonical_wgsl()
-                                .into(),
-                        ),
-                    })
-                });
-
-        let pipeline_layout = bind_group_layout.as_ref().map(|layout| {
-            self.flow_pipeline_cache
-                .get_or_create_pipeline_layout(pipeline_key.clone(), || {
-                    device.create_pipeline_layout(&PipelineLayoutDescriptor {
-                        label: Some("engine_compiled_compute_pipeline_layout"),
-                        bind_group_layouts: &[layout],
-                        push_constant_ranges: &[],
-                    })
-                })
-        });
-
-        let shader_constant_values =
-            wgpu_specialization_constants(compute_descriptor.specialization());
-        let pipeline =
-            self.flow_pipeline_cache
-                .get_or_create_compute_pipeline(pipeline_key.clone(), || {
-                    device.create_compute_pipeline(&ComputePipelineDescriptor {
-                        label: Some("engine_compiled_compute_pipeline"),
-                        layout: pipeline_layout.as_ref(),
-                        module: &shader_module,
-                        entry_point: Some(compute_descriptor.entry_point().as_str()),
-                        compilation_options: PipelineCompilationOptions {
-                            constants: shader_constant_values.as_slice(),
-                            ..PipelineCompilationOptions::default()
+        let pipeline = match self.flow_pipeline_cache.compute_pipeline(&pipeline_key) {
+            Some(pipeline) => pipeline,
+            None => {
+                let mut created = None;
+                context
+                    .current_render_pipeline_bridge()
+                    .for_pipeline_creation(
+                        &prepared.bindings.program,
+                        &prepared.bindings.pipeline_layout,
+                        CreateFlowComputePipeline {
+                            device,
+                            descriptor: compute_descriptor,
+                            output: &mut created,
                         },
-                        cache: None,
-                    })
-                });
+                    )?;
+                let created = created.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "current render pipeline bridge did not create compute pipeline for pass '{}'",
+                        pass.pass_id
+                    )
+                })?;
+                self.flow_pipeline_cache
+                    .insert_compute_pipeline(pipeline_key.clone(), created)
+            }
+        };
 
         let operation = EncodeComputePass {
             encoder,
             pipeline: &pipeline,
-            bind_group: bind_group.as_ref(),
+            bind_group: prepared.bindings.bind_group.as_ref(),
+            context,
             dispatch,
         };
         if let Some(writes) = gpu_timestamp_writes {
+            let mut encode_result = Ok(());
             context
-                .current_render_resource_bridge()
+                .current_render_pipeline_bridge()
                 .for_timestamp_writes(
                     &writes.query_set,
                     EncodeTimestampedComputePass {
                         operation,
                         indices: writes.indices,
+                        result: &mut encode_result,
                     },
                 )?;
+            encode_result?;
         } else {
-            operation.encode(None);
+            operation.encode(None)?;
         }
         Ok(EncodedPipelinePass {
             dispatch_workgroups: Some(dispatch),
-            shader_id: shader.shader_id,
-            shader_revision: shader.revision,
-            fallback_used: shader.fallback_used,
+            shader_id: prepared.shader_id.clone(),
+            shader_revision: prepared.shader_revision,
+            fallback_used: prepared.fallback_used,
             pipeline_key,
         })
     }
@@ -307,26 +490,15 @@ impl Renderer {
         context: &GpuContext,
         device: &Device,
         encoder: &mut CommandEncoder,
-        frame_texture: &Texture,
+        _frame_texture: &Texture,
         frame_view: &TextureView,
         packet: &RendererPreparedPacket,
-        flow: &CompiledRenderFlowPlan,
+        _flow: &CompiledRenderFlowPlan,
         runtime_resources: &FlowRuntimeResources,
         plan: &CompiledRasterExecutionPlan,
-        shader_registry: &ShaderRegistryResource,
+        prepared: &PreparedPipelinePass,
         gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     ) -> Result<EncodedPipelinePass> {
-        if !plan.draw_buffers.vertex_buffers.is_empty()
-            || !plan.draw_buffers.index_buffers.is_empty()
-            || !plan.draw_buffers.instance_buffers.is_empty()
-            || !plan.draw_buffers.indirect_buffers.is_empty()
-        {
-            bail!(
-                "fullscreen pass '{}' cannot bind graphics vertex/index/instance/indirect buffers",
-                plan.pass_id
-            );
-        }
-
         let color_target = self.resolve_color_target_from_plan(
             runtime_resources,
             plan.pass_id,
@@ -335,49 +507,7 @@ impl Renderer {
             packet.surface_format,
         )?;
 
-        let shader = resolve_shader_material_for_packet(
-            plan.shader.as_ref(),
-            packet,
-            shader_registry,
-            DEFAULT_FULLSCREEN_SHADER,
-            "builtin:fullscreen",
-        );
-        reject_material_shader_fallback(
-            plan.feature_id,
-            plan.shader.as_ref(),
-            plan.pass_id,
-            &shader,
-        )?;
-        reject_unresident_material_textures(
-            packet,
-            plan.feature_id,
-            plan.shader.as_ref(),
-            plan.pass_id,
-        )?;
-        let admitted_source = admit_resolved_program_source(
-            &mut self.flow_pipeline_cache,
-            &shader,
-            format!("fullscreen pass {}", plan.pass_id),
-        )?;
-
-        let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
-            context,
-            device,
-            frame_texture,
-            packet,
-            flow,
-            plan.pass_id,
-            FlowPassKind::Fullscreen,
-            plan.feature_id,
-            &admitted_source,
-            empty_specialization_value_set()?,
-            &plan.bindings,
-            ShaderStages::VERTEX_FRAGMENT,
-            true,
-            vec![color_target.format],
-            None,
-            runtime_resources,
-        )?;
+        let pipeline_key = prepared.bindings.pipeline_key.clone();
         let render_descriptor = match &pipeline_key.pipeline_descriptor {
             FlowPassPipelineDescriptor::Render(descriptor) => descriptor,
             FlowPassPipelineDescriptor::Compute(_) => {
@@ -388,98 +518,34 @@ impl Renderer {
             }
         };
 
-        let shader_module =
-            self.flow_pipeline_cache
-                .get_or_create_shader_module(pipeline_key.clone(), || {
-                    device.create_shader_module(ShaderModuleDescriptor {
-                        label: Some("engine_compiled_fullscreen_shader"),
-                        source: ShaderSource::Wgsl(
-                            render_descriptor.program().source().canonical_wgsl().into(),
-                        ),
-                    })
-                });
-
         let material_resources =
             material_resources_for_pass(packet, plan.feature_id, plan.shader.as_ref());
-        let empty_group0 = if material_resources.is_some() && bind_group_layout.is_none() {
-            let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_compiled_fullscreen_empty_group0_layout"),
-                entries: &[],
-            });
-            let bind_group = device.create_bind_group(&BindGroupDescriptor {
-                label: Some("engine_compiled_fullscreen_empty_group0_bind_group"),
-                layout: &layout,
-                entries: &[],
-            });
-            Some((layout, bind_group))
-        } else {
-            None
-        };
-        let mut pipeline_layout_entries = Vec::<&BindGroupLayout>::new();
-        if let Some(layout) = bind_group_layout.as_ref() {
-            pipeline_layout_entries.push(layout);
-        } else if let Some((layout, _)) = empty_group0.as_ref() {
-            pipeline_layout_entries.push(layout);
-        }
-        if let Some(resources) = material_resources {
-            pipeline_layout_entries.push(resources.layout());
-        }
-        let pipeline_layout = if pipeline_layout_entries.is_empty() {
-            None
-        } else {
-            Some(self.flow_pipeline_cache.get_or_create_pipeline_layout(
-                pipeline_key.clone(),
-                || {
-                    device.create_pipeline_layout(&PipelineLayoutDescriptor {
-                        label: Some("engine_compiled_fullscreen_pipeline_layout"),
-                        bind_group_layouts: &pipeline_layout_entries,
-                        push_constant_ranges: &[],
-                    })
-                },
-            ))
-        };
-
-        let shader_constant_values =
-            wgpu_specialization_constants(render_descriptor.specialization());
-        let fragment_entry_point =
-            render_descriptor.entry_points().fragment().ok_or_else(|| {
-                anyhow::anyhow!("fullscreen render descriptor is missing fragment entry point")
-            })?;
-        let pipeline =
-            self.flow_pipeline_cache
-                .get_or_create_render_pipeline(pipeline_key.clone(), || {
-                    device.create_render_pipeline(&RenderPipelineDescriptor {
-                        label: Some("engine_compiled_fullscreen_pipeline"),
-                        layout: pipeline_layout.as_ref(),
-                        vertex: VertexState {
-                            module: &shader_module,
-                            entry_point: Some(render_descriptor.entry_points().vertex().as_str()),
-                            compilation_options: PipelineCompilationOptions {
-                                constants: shader_constant_values.as_slice(),
-                                ..PipelineCompilationOptions::default()
-                            },
-                            buffers: &[],
+        let pipeline = match self.flow_pipeline_cache.render_pipeline(&pipeline_key) {
+            Some(pipeline) => pipeline,
+            None => {
+                let mut created = None;
+                context
+                    .current_render_pipeline_bridge()
+                    .for_pipeline_creation(
+                        &prepared.bindings.program,
+                        &prepared.bindings.pipeline_layout,
+                        CreateFlowFullscreenPipeline {
+                            device,
+                            descriptor: render_descriptor,
+                            color_format: color_target.format,
+                            output: &mut created,
                         },
-                        fragment: Some(FragmentState {
-                            module: &shader_module,
-                            entry_point: Some(fragment_entry_point.as_str()),
-                            compilation_options: PipelineCompilationOptions {
-                                constants: shader_constant_values.as_slice(),
-                                ..PipelineCompilationOptions::default()
-                            },
-                            targets: &[Some(ColorTargetState {
-                                format: color_target.format,
-                                blend: blend_state_for_color_format(color_target.format),
-                                write_mask: ColorWrites::ALL,
-                            })],
-                        }),
-                        primitive: PrimitiveState::default(),
-                        depth_stencil: None,
-                        multisample: MultisampleState::default(),
-                        multiview: None,
-                        cache: None,
-                    })
-                });
+                    )?;
+                let created = created.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "current render pipeline bridge did not create fullscreen pipeline for pass '{}'",
+                        plan.pass_id
+                    )
+                })?;
+                self.flow_pipeline_cache
+                    .insert_render_pipeline(pipeline_key.clone(), created)
+            }
+        };
 
         let load = match plan.clear_color {
             Some(color) => LoadOp::Clear(Color {
@@ -497,7 +563,7 @@ impl Renderer {
         };
         let mut encode_result = Ok(());
         context
-            .current_render_resource_bridge()
+            .current_render_pipeline_bridge()
             .for_pass_attachments(
                 &realized_views,
                 EncodeFullscreenPass {
@@ -505,8 +571,7 @@ impl Renderer {
                     encoder,
                     surface_view,
                     pipeline: &pipeline,
-                    bind_group: bind_group.as_ref(),
-                    empty_bind_group: empty_group0.as_ref().map(|(_, bind_group)| bind_group),
+                    bind_group: prepared.bindings.bind_group.as_ref(),
                     material_resources,
                     load,
                     gpu_timestamp_writes,
@@ -516,9 +581,9 @@ impl Renderer {
         encode_result?;
         Ok(EncodedPipelinePass {
             dispatch_workgroups: None,
-            shader_id: shader.shader_id,
-            shader_revision: shader.revision,
-            fallback_used: shader.fallback_used,
+            shader_id: prepared.shader_id.clone(),
+            shader_revision: prepared.shader_revision,
+            fallback_used: prepared.fallback_used,
             pipeline_key,
         })
     }
@@ -529,13 +594,13 @@ impl Renderer {
         context: &GpuContext,
         device: &Device,
         encoder: &mut CommandEncoder,
-        frame_texture: &Texture,
+        _frame_texture: &Texture,
         frame_view: &TextureView,
         packet: &RendererPreparedPacket,
-        flow: &CompiledRenderFlowPlan,
+        _flow: &CompiledRenderFlowPlan,
         runtime_resources: &FlowRuntimeResources,
         plan: &CompiledRasterExecutionPlan,
-        shader_registry: &ShaderRegistryResource,
+        prepared: &PreparedPipelinePass,
         gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     ) -> Result<EncodedPipelinePass> {
         let color_target = self.resolve_color_target_from_plan(
@@ -548,49 +613,7 @@ impl Renderer {
         let depth_target =
             self.resolve_depth_target_from_plan(runtime_resources, plan.pass_id, &plan.targets)?;
 
-        let shader = resolve_shader_material_for_packet(
-            plan.shader.as_ref(),
-            packet,
-            shader_registry,
-            DEFAULT_GRAPHICS_SHADER,
-            "builtin:graphics",
-        );
-        reject_material_shader_fallback(
-            plan.feature_id,
-            plan.shader.as_ref(),
-            plan.pass_id,
-            &shader,
-        )?;
-        reject_unresident_material_textures(
-            packet,
-            plan.feature_id,
-            plan.shader.as_ref(),
-            plan.pass_id,
-        )?;
-        let admitted_source = admit_resolved_program_source(
-            &mut self.flow_pipeline_cache,
-            &shader,
-            format!("graphics pass {}", plan.pass_id),
-        )?;
-
-        let (pipeline_key, bind_group_layout, bind_group) = self.resolve_compiled_bind_group(
-            context,
-            device,
-            frame_texture,
-            packet,
-            flow,
-            plan.pass_id,
-            FlowPassKind::Graphics,
-            plan.feature_id,
-            &admitted_source,
-            empty_specialization_value_set()?,
-            &plan.bindings,
-            ShaderStages::VERTEX_FRAGMENT,
-            true,
-            vec![color_target.format],
-            depth_target.as_ref().map(|value| value.format),
-            runtime_resources,
-        )?;
+        let pipeline_key = prepared.bindings.pipeline_key.clone();
         let render_descriptor = match &pipeline_key.pipeline_descriptor {
             FlowPassPipelineDescriptor::Render(descriptor) => descriptor,
             FlowPassPipelineDescriptor::Compute(_) => {
@@ -601,108 +624,40 @@ impl Renderer {
             }
         };
 
-        let shader_module =
-            self.flow_pipeline_cache
-                .get_or_create_shader_module(pipeline_key.clone(), || {
-                    device.create_shader_module(ShaderModuleDescriptor {
-                        label: Some("engine_compiled_graphics_shader"),
-                        source: ShaderSource::Wgsl(
-                            render_descriptor.program().source().canonical_wgsl().into(),
-                        ),
-                    })
-                });
-
         let material_resources =
             material_resources_for_pass(packet, plan.feature_id, plan.shader.as_ref());
-        let empty_group0 = if material_resources.is_some() && bind_group_layout.is_none() {
-            let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("engine_compiled_graphics_empty_group0_layout"),
-                entries: &[],
-            });
-            let bind_group = device.create_bind_group(&BindGroupDescriptor {
-                label: Some("engine_compiled_graphics_empty_group0_bind_group"),
-                layout: &layout,
-                entries: &[],
-            });
-            Some((layout, bind_group))
-        } else {
-            None
-        };
-        let mut pipeline_layout_entries = Vec::<&BindGroupLayout>::new();
-        if let Some(layout) = bind_group_layout.as_ref() {
-            pipeline_layout_entries.push(layout);
-        } else if let Some((layout, _)) = empty_group0.as_ref() {
-            pipeline_layout_entries.push(layout);
-        }
-        if let Some(resources) = material_resources {
-            pipeline_layout_entries.push(resources.layout());
-        }
-        let pipeline_layout = if pipeline_layout_entries.is_empty() {
-            None
-        } else {
-            Some(self.flow_pipeline_cache.get_or_create_pipeline_layout(
-                pipeline_key.clone(),
-                || {
-                    device.create_pipeline_layout(&PipelineLayoutDescriptor {
-                        label: Some("engine_compiled_graphics_pipeline_layout"),
-                        bind_group_layouts: &pipeline_layout_entries,
-                        push_constant_ranges: &[],
-                    })
-                },
-            ))
-        };
-
         let vertex_attribute_sets = build_vertex_attribute_sets(&plan.draw_buffers);
         let vertex_buffer_layouts =
             build_vertex_buffer_layouts(&plan.draw_buffers, &vertex_attribute_sets);
-        let shader_constant_values =
-            wgpu_specialization_constants(render_descriptor.specialization());
-        let fragment_entry_point =
-            render_descriptor.entry_points().fragment().ok_or_else(|| {
-                anyhow::anyhow!("graphics render descriptor is missing fragment entry point")
-            })?;
-
-        let pipeline =
-            self.flow_pipeline_cache
-                .get_or_create_render_pipeline(pipeline_key.clone(), || {
-                    device.create_render_pipeline(&RenderPipelineDescriptor {
-                        label: Some("engine_compiled_graphics_pipeline"),
-                        layout: pipeline_layout.as_ref(),
-                        vertex: VertexState {
-                            module: &shader_module,
-                            entry_point: Some(render_descriptor.entry_points().vertex().as_str()),
-                            compilation_options: PipelineCompilationOptions {
-                                constants: shader_constant_values.as_slice(),
-                                ..PipelineCompilationOptions::default()
-                            },
-                            buffers: &vertex_buffer_layouts,
+        let pipeline = match self.flow_pipeline_cache.render_pipeline(&pipeline_key) {
+            Some(pipeline) => pipeline,
+            None => {
+                let mut created = None;
+                context
+                    .current_render_pipeline_bridge()
+                    .for_pipeline_creation(
+                        &prepared.bindings.program,
+                        &prepared.bindings.pipeline_layout,
+                        CreateFlowGraphicsPipeline {
+                            device,
+                            descriptor: render_descriptor,
+                            color_format: color_target.format,
+                            depth_format: depth_target.as_ref().map(|target| target.format),
+                            raster_state: plan.raster_state.state,
+                            vertex_buffer_layouts: &vertex_buffer_layouts,
+                            output: &mut created,
                         },
-                        fragment: Some(FragmentState {
-                            module: &shader_module,
-                            entry_point: Some(fragment_entry_point.as_str()),
-                            compilation_options: PipelineCompilationOptions {
-                                constants: shader_constant_values.as_slice(),
-                                ..PipelineCompilationOptions::default()
-                            },
-                            targets: &[Some(ColorTargetState {
-                                format: color_target.format,
-                                blend: blend_state_for_policy(
-                                    color_target.format,
-                                    plan.raster_state.state.blend_mode,
-                                ),
-                                write_mask: ColorWrites::ALL,
-                            })],
-                        }),
-                        primitive: primitive_state_from_raster_state(plan.raster_state.state),
-                        depth_stencil: depth_stencil_state_for_policy(
-                            depth_target.as_ref().map(|target| target.format),
-                            plan.raster_state.state.depth_policy,
-                        ),
-                        multisample: MultisampleState::default(),
-                        multiview: None,
-                        cache: None,
-                    })
-                });
+                    )?;
+                let created = created.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "current render pipeline bridge did not create graphics pipeline for pass '{}'",
+                        plan.pass_id
+                    )
+                })?;
+                self.flow_pipeline_cache
+                    .insert_render_pipeline(pipeline_key.clone(), created)
+            }
+        };
 
         let load = match plan.clear_color {
             Some(color) => LoadOp::Clear(Color {
@@ -835,7 +790,7 @@ impl Renderer {
         }
         let mut encode_result = Ok(());
         context
-            .current_render_resource_bridge()
+            .current_render_pipeline_bridge()
             .for_pass_attachments(
                 &attachment_views,
                 EncodeGraphicsPass {
@@ -845,8 +800,7 @@ impl Renderer {
                     color_is_realized: surface_color_view.is_none(),
                     has_depth: depth_target.is_some(),
                     pipeline: &pipeline,
-                    bind_group: bind_group.as_ref(),
-                    empty_bind_group: empty_group0.as_ref().map(|(_, bind_group)| bind_group),
+                    bind_group: prepared.bindings.bind_group.as_ref(),
                     material_resources,
                     load,
                     gpu_timestamp_writes,
@@ -859,9 +813,9 @@ impl Renderer {
         encode_result?;
         Ok(EncodedPipelinePass {
             dispatch_workgroups: None,
-            shader_id: shader.shader_id,
-            shader_revision: shader.revision,
-            fallback_used: shader.fallback_used,
+            shader_id: prepared.shader_id.clone(),
+            shader_revision: prepared.shader_revision,
+            fallback_used: prepared.fallback_used,
             pipeline_key,
         })
     }
@@ -911,7 +865,7 @@ impl Renderer {
         };
         match (source.texture, destination.texture) {
             (RuntimeTextureRef::Realized(source), RuntimeTextureRef::Realized(destination)) => {
-                context.current_render_resource_bridge().for_texture_copy(
+                context.current_render_pipeline_bridge().for_texture_copy(
                     source,
                     destination,
                     CopyTextures { encoder, extent },
@@ -919,7 +873,7 @@ impl Renderer {
             }
             (RuntimeTextureRef::Realized(source), RuntimeTextureRef::Surface(destination)) => {
                 context
-                    .current_render_resource_bridge()
+                    .current_render_pipeline_bridge()
                     .for_surface_texture_copy(
                         source,
                         CopySurfaceTexture {
@@ -932,7 +886,7 @@ impl Renderer {
             }
             (RuntimeTextureRef::Surface(source), RuntimeTextureRef::Realized(destination)) => {
                 context
-                    .current_render_resource_bridge()
+                    .current_render_pipeline_bridge()
                     .for_surface_texture_copy(
                         destination,
                         CopySurfaceTexture {
@@ -981,7 +935,7 @@ impl Renderer {
                 destination.id
             );
         }
-        context.current_render_resource_bridge().for_buffer_copy(
+        context.current_render_pipeline_bridge().for_buffer_copy(
             source.buffer,
             destination.buffer,
             CopyBuffers { encoder, size },
@@ -1128,11 +1082,10 @@ impl Renderer {
         let destination = ResolvedTextureRef {
             id: RuntimeResourceKey::SurfaceColor,
             texture: RuntimeTextureRef::Surface(frame_texture),
-            realized_view: None,
+            view_handle: None,
             format: packet.surface_format,
             size: packet.surface_size,
             is_depth: false,
-            generation: None,
         };
         self.encode_texture_copy(context, encoder, pass.pass_id, source, destination)
     }
@@ -1216,15 +1169,159 @@ impl Renderer {
     }
 }
 
+/// G4C3's temporary compute-pipeline creation terminal. The G4C2 program and layout are lent
+/// only for this one lexical WGPU call; this terminal retains no backend reference.
+struct CreateFlowComputePipeline<'a> {
+    device: &'a Device,
+    descriptor: &'a GpuComputePipelineDescriptor,
+    output: &'a mut Option<ComputePipeline>,
+}
+
+impl CurrentRenderPipelineCreationTerminal for CreateFlowComputePipeline<'_> {
+    fn create_pipeline(self, program: &ShaderModule, layout: &PipelineLayout) {
+        let constants = wgpu_specialization_constants(self.descriptor.specialization());
+        *self.output = Some(
+            self.device
+                .create_compute_pipeline(&ComputePipelineDescriptor {
+                    label: Some("engine_compiled_compute_pipeline"),
+                    layout: Some(layout),
+                    module: program,
+                    entry_point: Some(self.descriptor.entry_point().as_str()),
+                    compilation_options: PipelineCompilationOptions {
+                        constants: constants.as_slice(),
+                        ..PipelineCompilationOptions::default()
+                    },
+                    cache: None,
+                }),
+        );
+    }
+}
+
+/// G4C3's temporary fullscreen render-pipeline creation terminal.
+struct CreateFlowFullscreenPipeline<'a> {
+    device: &'a Device,
+    descriptor: &'a GpuRenderPipelineDescriptor,
+    color_format: TextureFormat,
+    output: &'a mut Option<RenderPipeline>,
+}
+
+impl CurrentRenderPipelineCreationTerminal for CreateFlowFullscreenPipeline<'_> {
+    fn create_pipeline(self, program: &ShaderModule, layout: &PipelineLayout) {
+        let constants = wgpu_specialization_constants(self.descriptor.specialization());
+        let fragment = self
+            .descriptor
+            .entry_points()
+            .fragment()
+            .expect("G4B fullscreen descriptor always names a fragment entry point");
+        *self.output = Some(
+            self.device
+                .create_render_pipeline(&RenderPipelineDescriptor {
+                    label: Some("engine_compiled_fullscreen_pipeline"),
+                    layout: Some(layout),
+                    vertex: VertexState {
+                        module: program,
+                        entry_point: Some(self.descriptor.entry_points().vertex().as_str()),
+                        compilation_options: PipelineCompilationOptions {
+                            constants: constants.as_slice(),
+                            ..PipelineCompilationOptions::default()
+                        },
+                        buffers: &[],
+                    },
+                    fragment: Some(FragmentState {
+                        module: program,
+                        entry_point: Some(fragment.as_str()),
+                        compilation_options: PipelineCompilationOptions {
+                            constants: constants.as_slice(),
+                            ..PipelineCompilationOptions::default()
+                        },
+                        targets: &[Some(ColorTargetState {
+                            format: self.color_format,
+                            blend: blend_state_for_color_format(self.color_format),
+                            write_mask: ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+                }),
+        );
+    }
+}
+
+/// G4C3's temporary graphics render-pipeline creation terminal.
+struct CreateFlowGraphicsPipeline<'a, 'layouts> {
+    device: &'a Device,
+    descriptor: &'a GpuRenderPipelineDescriptor,
+    color_format: TextureFormat,
+    depth_format: Option<TextureFormat>,
+    raster_state: RenderRasterState,
+    vertex_buffer_layouts: &'layouts [VertexBufferLayout<'layouts>],
+    output: &'a mut Option<RenderPipeline>,
+}
+
+impl CurrentRenderPipelineCreationTerminal for CreateFlowGraphicsPipeline<'_, '_> {
+    fn create_pipeline(self, program: &ShaderModule, layout: &PipelineLayout) {
+        let constants = wgpu_specialization_constants(self.descriptor.specialization());
+        let fragment = self
+            .descriptor
+            .entry_points()
+            .fragment()
+            .expect("G4B graphics descriptor always names a fragment entry point");
+        *self.output = Some(
+            self.device
+                .create_render_pipeline(&RenderPipelineDescriptor {
+                    label: Some("engine_compiled_graphics_pipeline"),
+                    layout: Some(layout),
+                    vertex: VertexState {
+                        module: program,
+                        entry_point: Some(self.descriptor.entry_points().vertex().as_str()),
+                        compilation_options: PipelineCompilationOptions {
+                            constants: constants.as_slice(),
+                            ..PipelineCompilationOptions::default()
+                        },
+                        buffers: self.vertex_buffer_layouts,
+                    },
+                    fragment: Some(FragmentState {
+                        module: program,
+                        entry_point: Some(fragment.as_str()),
+                        compilation_options: PipelineCompilationOptions {
+                            constants: constants.as_slice(),
+                            ..PipelineCompilationOptions::default()
+                        },
+                        targets: &[Some(ColorTargetState {
+                            format: self.color_format,
+                            blend: blend_state_for_policy(
+                                self.color_format,
+                                self.raster_state.blend_mode,
+                            ),
+                            write_mask: ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: primitive_state_from_raster_state(self.raster_state),
+                    depth_stencil: depth_stencil_state_for_policy(
+                        self.depth_format,
+                        self.raster_state.depth_policy,
+                    ),
+                    multisample: MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+                }),
+        );
+    }
+}
+
 struct EncodeComputePass<'a> {
+    context: &'a GpuContext,
     encoder: &'a mut CommandEncoder,
     pipeline: &'a ComputePipeline,
-    bind_group: Option<&'a BindGroup>,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
     dispatch: [u32; 3],
 }
 
 impl EncodeComputePass<'_> {
-    fn encode(self, timestamp: Option<(&QuerySet, GpuPassTimestampIndices)>) {
+    fn encode(self, timestamp: Option<(&QuerySet, GpuPassTimestampIndices)>) -> Result<()> {
         let timestamp_writes = timestamp.map(|(query_set, indices)| ComputePassTimestampWrites {
             query_set,
             beginning_of_pass_write_index: Some(indices.begin),
@@ -1236,20 +1333,62 @@ impl EncodeComputePass<'_> {
         });
         pass.set_pipeline(self.pipeline);
         if let Some(bind_group) = self.bind_group {
-            pass.set_bind_group(0, bind_group, &[]);
+            self.context
+                .current_render_pipeline_bridge()
+                .for_pipeline_bind_groups(
+                    &[bind_group],
+                    SetComputeBindGroup {
+                        pass: &mut pass,
+                        index: 0,
+                    },
+                )?;
         }
         pass.dispatch_workgroups(self.dispatch[0], self.dispatch[1], self.dispatch[2]);
+        Ok(())
     }
 }
 
 struct EncodeTimestampedComputePass<'a> {
     operation: EncodeComputePass<'a>,
     indices: GpuPassTimestampIndices,
+    result: &'a mut Result<()>,
 }
 
 impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedComputePass<'_> {
     fn write_timestamps(self, query_set: &QuerySet) {
-        self.operation.encode(Some((query_set, self.indices)));
+        *self.result = self.operation.encode(Some((query_set, self.indices)));
+    }
+}
+
+struct SetComputeBindGroup<'a, 'pass> {
+    pass: &'a mut ComputePass<'pass>,
+    index: u32,
+}
+
+impl CurrentRenderPipelineBindGroupsTerminal for SetComputeBindGroup<'_, '_> {
+    fn bind_groups(self, groups: &[&BindGroup]) {
+        debug_assert_eq!(
+            groups.len(),
+            1,
+            "each current render terminal binds one group"
+        );
+        self.pass.set_bind_group(self.index, groups[0], &[]);
+    }
+}
+
+struct SetRenderBindGroup<'a, 'pass> {
+    pass: &'a mut RenderPass<'pass>,
+    index: u32,
+}
+
+impl CurrentRenderPipelineBindGroupsTerminal for SetRenderBindGroup<'_, '_> {
+    fn bind_groups(self, groups: &[&BindGroup]) {
+        debug_assert_eq!(
+            groups.len(),
+            1,
+            "each current render terminal binds one group"
+        );
+        self.pass.set_bind_group(self.index, groups[0], &[]);
     }
 }
 
@@ -1258,8 +1397,7 @@ struct EncodeFullscreenPass<'a> {
     encoder: &'a mut CommandEncoder,
     surface_view: Option<&'a TextureView>,
     pipeline: &'a RenderPipeline,
-    bind_group: Option<&'a BindGroup>,
-    empty_bind_group: Option<&'a BindGroup>,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
     material_resources: Option<&'a PreparedMaterialGpuResources>,
     load: LoadOp<Color>,
     gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
@@ -1274,7 +1412,6 @@ impl CurrentRenderAttachmentsTerminal for EncodeFullscreenPass<'_> {
             surface_view,
             pipeline,
             bind_group,
-            empty_bind_group,
             material_resources,
             load,
             gpu_timestamp_writes,
@@ -1282,45 +1419,49 @@ impl CurrentRenderAttachmentsTerminal for EncodeFullscreenPass<'_> {
         } = self;
         let view = surface_view.unwrap_or_else(|| views[0]);
         let operation = FullscreenPassOperation {
+            context,
             encoder,
             view,
             pipeline,
             bind_group,
-            empty_bind_group,
             material_resources,
             load,
         };
         if let Some(writes) = gpu_timestamp_writes {
-            if let Err(error) = context
-                .current_render_resource_bridge()
+            let mut nested_result = Ok(());
+            let bridge_result = context
+                .current_render_pipeline_bridge()
                 .for_timestamp_writes(
                     &writes.query_set,
                     EncodeTimestampedFullscreenPass {
                         operation,
                         indices: writes.indices,
+                        result: &mut nested_result,
                     },
-                )
-            {
+                );
+            if let Err(error) = bridge_result {
                 *result = Err(error.into());
+            } else {
+                *result = nested_result;
             }
         } else {
-            operation.encode(None);
+            *result = operation.encode(None);
         }
     }
 }
 
 struct FullscreenPassOperation<'a> {
+    context: &'a GpuContext,
     encoder: &'a mut CommandEncoder,
     view: &'a TextureView,
     pipeline: &'a RenderPipeline,
-    bind_group: Option<&'a BindGroup>,
-    empty_bind_group: Option<&'a BindGroup>,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
     material_resources: Option<&'a PreparedMaterialGpuResources>,
     load: LoadOp<Color>,
 }
 
 impl FullscreenPassOperation<'_> {
-    fn encode(self, timestamp: Option<(&QuerySet, GpuPassTimestampIndices)>) {
+    fn encode(self, timestamp: Option<(&QuerySet, GpuPassTimestampIndices)>) -> Result<()> {
         let color_attachment = Some(RenderPassColorAttachment {
             view: self.view,
             depth_slice: None,
@@ -1343,24 +1484,42 @@ impl FullscreenPassOperation<'_> {
             occlusion_query_set: None,
         });
         pass.set_pipeline(self.pipeline);
-        if let Some(bind_group) = self.bind_group.or(self.empty_bind_group) {
-            pass.set_bind_group(0, bind_group, &[]);
+        if let Some(bind_group) = self.bind_group {
+            self.context
+                .current_render_pipeline_bridge()
+                .for_pipeline_bind_groups(
+                    &[bind_group],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 0,
+                    },
+                )?;
         }
         if let Some(resources) = self.material_resources {
-            pass.set_bind_group(1, resources.bind_group(), &[]);
+            self.context
+                .current_render_pipeline_bridge()
+                .for_pipeline_bind_groups(
+                    &[resources.bind_group()],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 1,
+                    },
+                )?;
         }
         pass.draw(0..3, 0..1);
+        Ok(())
     }
 }
 
 struct EncodeTimestampedFullscreenPass<'a> {
     operation: FullscreenPassOperation<'a>,
     indices: GpuPassTimestampIndices,
+    result: &'a mut Result<()>,
 }
 
 impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedFullscreenPass<'_> {
     fn write_timestamps(self, query_set: &QuerySet) {
-        self.operation.encode(Some((query_set, self.indices)));
+        *self.result = self.operation.encode(Some((query_set, self.indices)));
     }
 }
 
@@ -1384,8 +1543,7 @@ struct EncodeGraphicsPass<'a> {
     color_is_realized: bool,
     has_depth: bool,
     pipeline: &'a RenderPipeline,
-    bind_group: Option<&'a BindGroup>,
-    empty_bind_group: Option<&'a BindGroup>,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
     material_resources: Option<&'a PreparedMaterialGpuResources>,
     load: LoadOp<Color>,
     gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
@@ -1405,7 +1563,6 @@ impl CurrentRenderAttachmentsTerminal for EncodeGraphicsPass<'_> {
             has_depth,
             pipeline,
             bind_group,
-            empty_bind_group,
             material_resources,
             load,
             gpu_timestamp_writes,
@@ -1429,7 +1586,6 @@ impl CurrentRenderAttachmentsTerminal for EncodeGraphicsPass<'_> {
             depth_view,
             pipeline,
             bind_group,
-            empty_bind_group,
             material_resources,
             load,
             vertex_buffers,
@@ -1439,7 +1595,7 @@ impl CurrentRenderAttachmentsTerminal for EncodeGraphicsPass<'_> {
         if let Some(writes) = gpu_timestamp_writes {
             let mut nested_result = Ok(());
             let bridge_result = context
-                .current_render_resource_bridge()
+                .current_render_pipeline_bridge()
                 .for_timestamp_writes(
                     &writes.query_set,
                     EncodeTimestampedGraphicsPass {
@@ -1465,8 +1621,7 @@ struct GraphicsPassOperation<'a> {
     color_view: &'a TextureView,
     depth_view: Option<&'a TextureView>,
     pipeline: &'a RenderPipeline,
-    bind_group: Option<&'a BindGroup>,
-    empty_bind_group: Option<&'a BindGroup>,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
     material_resources: Option<&'a PreparedMaterialGpuResources>,
     load: LoadOp<Color>,
     vertex_buffers: &'a [(u32, &'a GpuRealizedBuffer)],
@@ -1513,14 +1668,36 @@ impl GraphicsPassOperation<'_> {
             occlusion_query_set: None,
         });
         pass.set_pipeline(self.pipeline);
-        if let Some(bind_group) = self.bind_group.or(self.empty_bind_group) {
-            pass.set_bind_group(0, bind_group, &[]);
+        if let Some(bind_group) = self.bind_group
+            && let Err(error) = context
+                .current_render_pipeline_bridge()
+                .for_pipeline_bind_groups(
+                    &[bind_group],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 0,
+                    },
+                )
+        {
+            *result = Err(error.into());
+            return;
         }
-        if let Some(resources) = self.material_resources {
-            pass.set_bind_group(1, resources.bind_group(), &[]);
+        if let Some(resources) = self.material_resources
+            && let Err(error) = context
+                .current_render_pipeline_bridge()
+                .for_pipeline_bind_groups(
+                    &[resources.bind_group()],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 1,
+                    },
+                )
+        {
+            *result = Err(error.into());
+            return;
         }
         for &(slot, buffer) in self.vertex_buffers {
-            if let Err(error) = context.current_render_resource_bridge().for_vertex_buffer(
+            if let Err(error) = context.current_render_pipeline_bridge().for_vertex_buffer(
                 buffer,
                 SetVertexBuffer {
                     pass: &mut pass,
@@ -1533,7 +1710,7 @@ impl GraphicsPassOperation<'_> {
         }
         if let Some(index) = self.index_buffer
             && let Err(error) = context
-                .current_render_resource_bridge()
+                .current_render_pipeline_bridge()
                 .for_index_buffer(index, SetIndexBuffer { pass: &mut pass })
         {
             *result = Err(error.into());
@@ -1557,7 +1734,7 @@ impl GraphicsPassOperation<'_> {
                 indexed,
             } => {
                 if let Err(error) = context
-                    .current_render_resource_bridge()
+                    .current_render_pipeline_bridge()
                     .for_indirect_buffer(
                         buffer,
                         DrawIndirect {

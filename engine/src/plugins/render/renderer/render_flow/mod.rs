@@ -22,7 +22,7 @@ use crate::plugins::render::inspect::{
     ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry, RuntimeResourceReuse,
     resource_kind_name,
 };
-use crate::plugins::render::pipelines::{FlowPassBindGroupKey, FlowPassKind, FlowPassPipelineKey};
+use crate::plugins::render::pipelines::{FlowPassKind, FlowPassPipelineKey};
 use crate::plugins::render::{RenderResourceDeclaration, current_runtime_gpu_capabilities};
 use anyhow::{Result, bail};
 use std::collections::{BTreeMap, BTreeSet};
@@ -39,9 +39,19 @@ mod program_sources;
 mod provenance;
 mod runtime_resources;
 
+/// A G4C2 realization result carried from the render batch's first phase into the temporary
+/// G4C3/G5 operation phase. It is deliberately renderer-local and does not create a pipeline.
+pub(super) struct PreparedPipelinePass {
+    pub(super) bindings: bindings::RealizedFlowProgramBindings,
+    pub(super) shader_id: String,
+    pub(super) shader_revision: u64,
+    pub(super) fallback_used: bool,
+}
+
 pub(super) use capture::{
-    CaptureTextureSource, FrameCaptureRuntime, PendingCaptureReadback,
-    enqueue_texture_capture_copy, read_capture_back, texture_readback_format,
+    CaptureTextureSource, FrameCaptureRuntime, PendingCaptureReadback, PreparedCaptureReadback,
+    encode_prepared_texture_capture_copy, prepare_texture_capture_copy, read_capture_back,
+    texture_readback_format,
 };
 #[cfg(test)]
 pub(super) use execute::FeaturePassAction;

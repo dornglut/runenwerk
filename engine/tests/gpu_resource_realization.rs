@@ -2,12 +2,12 @@ use engine::plugins::gpu::{
     GpuAddressMode, GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements, GpuContext,
     GpuContextDescriptor, GpuContextRequestErrorCategory, GpuFilterMode, GpuFormatRole,
-    GpuMemoryIntent, GpuQueryKind, GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon,
-    GpuResourceLabel, GpuResourceLifetime, GpuResourceOwnership, GpuResourceProvenance,
-    GpuResourceRealizationErrorCategory, GpuResourceRealizationPolicy, GpuSamplerDescriptor,
-    GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent, GpuTextureFormat,
-    GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
-    GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+    GpuMemoryIntent, GpuQueryKind, GpuQuerySetDescriptor, GpuRealizationPolicies,
+    GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
+    GpuResourceOwnership, GpuResourceProvenance, GpuResourceRealizationErrorCategory,
+    GpuResourceRealizationPolicy, GpuSamplerDescriptor, GpuTextureDescriptor, GpuTextureDimension,
+    GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization, GpuTextureSubresourceRange,
+    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
 };
 use std::num::NonZeroUsize;
 
@@ -48,9 +48,12 @@ fn admitted_context() -> Result<GpuContext, engine::plugins::gpu::GpuContextRequ
     let descriptor = GpuContextDescriptor::new(requirements)
         .with_label("G4C1 representative resource realization")
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Sampled);
-    pollster::block_on(GpuContext::request_with_resource_realization_policy(
+    pollster::block_on(GpuContext::request_with_realization_policies(
         descriptor,
-        GpuResourceRealizationPolicy::new(NonZeroUsize::new(5).unwrap()),
+        GpuRealizationPolicies::new(
+            GpuResourceRealizationPolicy::new(NonZeroUsize::new(5).unwrap()),
+            Default::default(),
+        ),
     ))
 }
 

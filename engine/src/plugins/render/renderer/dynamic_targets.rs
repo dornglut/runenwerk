@@ -21,7 +21,7 @@ use wgpu::*;
 #[derive(Debug)]
 pub struct RendererDynamicTextureTarget {
     pub _handle: GpuTextureHandle,
-    pub _view_handle: GpuTextureViewHandle,
+    pub view_handle: GpuTextureViewHandle,
     pub realized: GpuRealizedTexture,
     pub realized_view: GpuRealizedTextureView,
     pub format: TextureFormat,
@@ -97,7 +97,7 @@ impl RendererDynamicTextureTargetCache {
                     descriptor.key.clone(),
                     RendererDynamicTextureTarget {
                         _handle: handle,
-                        _view_handle: view_handle,
+                        view_handle,
                         realized,
                         realized_view,
                         format: dynamic_format_to_wgpu(descriptor.format),
@@ -211,7 +211,7 @@ impl RendererDynamicTextureTargetCache {
         }
         let bytes = upload_bytes_for_gpu(upload);
         context
-            .current_render_resource_bridge()
+            .current_render_pipeline_bridge()
             .for_texture_upload(
                 &target.realized,
                 UploadDynamicTexture {
@@ -240,11 +240,10 @@ impl RendererDynamicTextureTargetCache {
         Ok(ResolvedTextureRef {
             id: RuntimeResourceKey::DynamicTexture(key.clone()),
             texture: RuntimeTextureRef::Realized(&target.realized),
-            realized_view: Some(&target.realized_view),
+            view_handle: Some(&target.view_handle),
             format: target.format,
             size: target.size,
             is_depth: target.descriptor.format.is_depth(),
-            generation: Some(target.generation),
         })
     }
 
@@ -298,10 +297,10 @@ impl RendererDynamicTextureTargetCache {
         })
     }
 
-    pub fn ui_texture_view(
+    pub fn ui_texture_view_handle(
         &self,
         key: &RenderDynamicTextureTargetKey,
-    ) -> Result<GpuRealizedTextureView> {
+    ) -> Result<GpuTextureViewHandle> {
         let target = self.targets.get(key).ok_or_else(|| {
             anyhow::anyhow!("ui viewport embed references missing dynamic texture '{key}'")
         })?;
@@ -313,7 +312,7 @@ impl RendererDynamicTextureTargetCache {
         if !target.descriptor.format.is_displayable() {
             bail!("ui viewport embed cannot sample non-displayable dynamic texture '{key}'");
         }
-        Ok(target.realized_view.clone())
+        Ok(target.view_handle.clone())
     }
 }
 

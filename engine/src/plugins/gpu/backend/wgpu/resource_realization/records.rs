@@ -16,7 +16,7 @@ macro_rules! resource_record {
                 dead_code,
                 reason = "the later G4C1 consumer-migration unit adds the audited lexical borrows"
             )]
-            pub(super) object: $object,
+            pub(in crate::plugins::gpu::backend::wgpu) object: $object,
         }
 
         impl $name {
@@ -51,7 +51,7 @@ pub(crate) struct TextureRealizationRecord {
     pub(super) affinity: GpuContextAffinity,
     pub(super) logical_identity: GpuWorkResourceId,
     pub(super) descriptor: Arc<GpuTextureDescriptor>,
-    pub(super) object: Texture,
+    pub(in crate::plugins::gpu::backend::wgpu) object: Texture,
     pub(super) permits_format_reinterpretation: bool,
 }
 
@@ -85,7 +85,7 @@ pub(crate) struct TextureViewRealizationRecord {
         dead_code,
         reason = "the later G4C1 consumer-migration unit adds the audited lexical borrow"
     )]
-    pub(super) object: TextureView,
+    pub(in crate::plugins::gpu::backend::wgpu) object: TextureView,
     // Fields drop in declaration order, so the backend view is released before its retained
     // parent texture when this is the final record reference.
     pub(super) parent: Arc<TextureRealizationRecord>,
