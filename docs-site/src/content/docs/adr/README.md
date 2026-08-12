@@ -36,6 +36,7 @@ Architectural decision records capture long-term decisions, rejected alternative
 - [0015: Separate GPU Execution from Rendering](accepted/0015-separate-gpu-execution-from-rendering.md)
 - [0017: Cross-Authority Consistency and Graph Semantics](accepted/0017-cross-authority-consistency-and-graph-semantics.md)
 - [0018: Semantic Federation and Physical Realization](accepted/0018-semantic-federation-and-physical-realization.md)
+- [0019: Batteries-Included Application Composition](accepted/0019-batteries-included-application-composition.md)
 
 Accepted ADR identifiers are not required to be contiguous; this index lists the files that currently exist in the accepted lifecycle folder.
 
