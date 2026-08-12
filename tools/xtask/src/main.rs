@@ -203,7 +203,7 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         root,
         ".github/workflows/docs-validation.yml",
         "validate_docs.py",
-        "the path-scoped docs build must not duplicate baseline documentation validation",
+        "the documentation build must not duplicate baseline documentation validation",
     )?;
 
     validate_workflow_inventory(root)?;
@@ -296,15 +296,9 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "docs-site/**"
-      - ".github/workflows/docs-validation.yml"
   push:
     branches:
       - main
-    paths:
-      - "docs-site/**"
-      - ".github/workflows/docs-validation.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -791,9 +785,14 @@ mod tests {
                 "actions/checkout@v4",
             ),
             (
-                "path filter drift",
-                "      - \"docs-site/**\"\n",
-                "      - \"website/**\"\n",
+                "pull-request path filter",
+                "  pull_request:\n    branches:\n      - main\n",
+                "  pull_request:\n    branches:\n      - main\n    paths:\n      - \"docs-site/**\"\n",
+            ),
+            (
+                "push path filter",
+                "  push:\n    branches:\n      - main\n",
+                "  push:\n    branches:\n      - main\n    paths:\n      - \"docs-site/**\"\n",
             ),
             (
                 "documentation permission drift",
