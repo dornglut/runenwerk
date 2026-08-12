@@ -4,15 +4,9 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "docs-site/**"
-      - ".github/workflows/docs-validation.yml"
   push:
     branches:
       - main
-    paths:
-      - "docs-site/**"
-      - ".github/workflows/docs-validation.yml"
   workflow_dispatch:
 
 permissions:
