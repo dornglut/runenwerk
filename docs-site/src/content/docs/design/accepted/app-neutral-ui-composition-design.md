@@ -13,8 +13,7 @@ related_designs:
   - ./editor-native-multi-window-presentation-design.md
   - ../active/ui-program-architecture-owner-map.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # App-Neutral UI Composition Clean Cutover Design
@@ -22,8 +21,10 @@ related_roadmaps:
 ## Status And Authority
 
 This is the accepted core-composition contract for
-`PT-UI-COMPOSITION-CUTOVER`. Implementation requires the ordered roadmap and
-production checkpoints. It does not by itself claim that current code conforms.
+`PT-UI-COMPOSITION-CUTOVER`. The label is retained as historical decomposition
+vocabulary, not live work authority. Implementation must be activated by an
+owning GitHub issue and sequenced by the canonical UI/workspace roadmap when
+relevant. This design does not by itself claim that current code conforms.
 
 The cutover is deliberately clean:
 
