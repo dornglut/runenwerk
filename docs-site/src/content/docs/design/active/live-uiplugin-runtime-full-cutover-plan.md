@@ -15,7 +15,6 @@ related_docs:
   - ../../architecture/ui-framework-architecture.md
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
   - ../../workspace/engineering-workflow.md
@@ -608,7 +607,6 @@ Allowed scope:
 
 ```text
 docs-site/src/content/docs/reports/closeouts/**
-docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 owning design docs only for final truth and known gaps
