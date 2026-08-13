@@ -16,8 +16,7 @@ related_designs:
   - ../active/editor-tool-suite-registry-and-workbench-host-design.md
   - ../active/editor-ui-workspace-tool-surface-architecture.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer Target Projection Profiles Design
@@ -28,8 +27,10 @@ This is the accepted design contract for `PM-UI-DESIGN-003`.
 
 It accepts two target projection profiles for the UI Designer platform:
 editor/workbench UI and game-runtime UI. It does not implement projection code,
-does not create game-runtime UI crates, and does not authorize product code
-without later WR roadmap legality.
+does not create game-runtime UI crates, and does not authorize product code by
+itself. Later implementation requires an owning GitHub issue, canonical roadmap
+sequencing where relevant, and pull-request-owned review and exact-head
+validation.
 
 ## Goal
 
@@ -112,7 +113,7 @@ The profile covers:
 
 The Workbench projection may depend on `domain/editor/editor_definition` and
 `domain/editor/editor_shell` contracts. It may reuse PT-WB-CAP identity and host
-policy vocabulary.
+policy vocabulary as historical/decomposition terminology.
 
 Workbench projection must not:
 
@@ -195,12 +196,18 @@ game-runtime/editor coupling all fail closed.
 PM-003 is design-only. Later implementation must:
 
 1. Keep PM-002 Canonical UI IR and deterministic composition as the input.
-2. Create a legal WR row before any code-bearing target projection slice.
-3. Run `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>`.
-4. Add focused tests for profile compatibility, unsupported features,
-   projection reproducibility, and fail-closed diagnostics.
-5. Keep Workbench projection and game-runtime projection separated by explicit
+2. Create or select an owning GitHub issue before any code-bearing target
+   projection slice.
+3. Keep the issue scope bounded and add focused tests for profile compatibility,
+   unsupported features, projection reproducibility, and fail-closed
+   diagnostics.
+4. Keep Workbench projection and game-runtime projection separated by explicit
    extension ownership.
+5. Deliver through a pull request with one unchanged reviewed feature head and
+   current repository validation evidence.
+
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
 
 ## Non-Goals
 
@@ -225,4 +232,4 @@ PM-003 is accepted when:
 - the game-runtime target has no dependency on editor shell ownership;
 - reproducibility inputs are named;
 - fail-closed diagnostics are named;
-- production, roadmap, docs, and planning validators pass.
+- current repository validation passes at the accepted revision.
