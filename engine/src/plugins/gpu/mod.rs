@@ -7,9 +7,10 @@ pub(crate) use api::GpuWorkAuthoringErrorContext;
 pub use api::*;
 pub(crate) use backend::{
     CurrentRenderAttachmentsTerminal, CurrentRenderBufferCopyTerminal,
-    CurrentRenderBufferUploadTerminal, CurrentRenderIndexBufferTerminal,
-    CurrentRenderIndirectBufferTerminal, CurrentRenderPipelineBindGroupsTerminal,
-    CurrentRenderPipelineCreationTerminal, CurrentRenderReadbackBufferTerminal,
+    CurrentRenderBufferUploadTerminal, CurrentRenderComputePipelineTerminal,
+    CurrentRenderIndexBufferTerminal, CurrentRenderIndirectBufferTerminal,
+    CurrentRenderPipelineBindGroupsTerminal, CurrentRenderReadbackBufferTerminal,
+    CurrentRenderRenderPipelineTerminal, CurrentRenderRenderPipelinesTerminal,
     CurrentRenderTextureCopyTerminal, CurrentRenderTextureReadbackCopyTerminal,
     CurrentRenderTextureUploadTerminal, CurrentRenderTimestampResourcesTerminal,
     CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,
@@ -103,21 +104,14 @@ mod tests {
         let wgpu_context = manifest.join("src/plugins/render/backend/wgpu_ctx.rs");
         let renderer_root = manifest.join("src/plugins/render");
 
+        assert!(backend_root.exists(), "G4A must retain exactly one private WGPU owner");
         assert!(
-            backend_root.exists(),
-            "G4A must retain exactly one private WGPU owner"
-        );
-        assert!(
-            !manifest
-                .join("src/plugins/render/backend/device.rs")
-                .exists(),
+            !manifest.join("src/plugins/render/backend/device.rs").exists(),
             "renderer device-request authority must remain deleted"
         );
 
-        let context_source =
-            fs::read_to_string(wgpu_context).expect("current host terminal should be readable");
-        let current_host_source =
-            fs::read_to_string(&current_host).expect("current-host bridge should be readable");
+        let context_source = fs::read_to_string(wgpu_context).expect("current host terminal should be readable");
+        let current_host_source = fs::read_to_string(&current_host).expect("current-host bridge should be readable");
         let mut backend_paths = Vec::new();
         rust_sources_below(&backend, &mut backend_paths);
         backend_paths.sort();
@@ -126,61 +120,23 @@ mod tests {
             .map(|path| fs::read_to_string(path).expect("private WGPU backend should be readable"))
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(
-            !context_source.contains("pub device") && !context_source.contains("pub queue"),
-            "WgpuCtx must not restore public device or queue authority"
-        );
-        assert!(
-            context_source.matches("request_for_current_host").count() == 1,
-            "the host terminal must use the sole G4A compatibility request path"
-        );
-        assert_eq!(
-            backend_source.matches("request_for_current_host").count(),
-            1,
-            "G4A must retain exactly one current-host request terminal"
-        );
-        assert_eq!(
-            backend_source
-                .matches("current_host_surface_bridge")
-                .count(),
-            1,
-            "G4A must retain exactly one current-host surface bridge accessor"
-        );
-        assert_eq!(
-            backend_source
-                .matches("struct CurrentHostSurfaceBridge")
-                .count(),
-            1,
-            "G4A must retain exactly one bounded current-host bridge type"
-        );
+        assert!(!context_source.contains("pub device") && !context_source.contains("pub queue"), "WgpuCtx must not restore public device or queue authority");
+        assert!(context_source.matches("request_for_current_host").count() == 1, "the host terminal must use the sole G4A compatibility request path");
+        assert_eq!(backend_source.matches("request_for_current_host").count(), 1, "G4A must retain exactly one current-host request terminal");
+        assert_eq!(backend_source.matches("current_host_surface_bridge").count(), 1, "G4A must retain exactly one current-host surface bridge accessor");
+        assert_eq!(backend_source.matches("struct CurrentHostSurfaceBridge").count(), 1, "G4A must retain exactly one bounded current-host bridge type");
         let bridge_definition = current_host_source
-            .split("struct CurrentHostSurfaceBridge")
-            .nth(1)
+            .split("struct CurrentHostSurfaceBridge").nth(1)
             .and_then(|source| source.split("impl<'a> CurrentHostSurfaceBridge").next())
             .expect("current-host bridge definition should be present");
         let bridge_implementation = current_host_source
-            .split("impl<'a> CurrentHostSurfaceBridge")
-            .nth(1)
+            .split("impl<'a> CurrentHostSurfaceBridge").nth(1)
             .and_then(|source| source.split("impl GpuContext").next())
             .expect("current-host bridge implementation should be present");
-        assert!(
-            !bridge_definition.contains("pub"),
-            "the current-host bridge must not expose raw fields"
-        );
-        assert_eq!(
-            bridge_implementation.matches("pub(crate) fn").count(),
-            3,
-            "the current-host bridge may expose only create, capabilities, and configure"
-        );
-        for retired_surface_operation in [
-            "create_current_host_surface",
-            "current_host_surface_capabilities",
-            "configure_current_host_surface",
-        ] {
-            assert!(
-                !backend_source.contains(retired_surface_operation),
-                "GpuContext must not retain G7 surface operation: {retired_surface_operation}"
-            );
+        assert!(!bridge_definition.contains("pub"), "the current-host bridge must not expose raw fields");
+        assert_eq!(bridge_implementation.matches("pub(crate) fn").count(), 3, "the current-host bridge may expose only create, capabilities, and configure");
+        for retired_surface_operation in ["create_current_host_surface", "current_host_surface_capabilities", "configure_current_host_surface"] {
+            assert!(!backend_source.contains(retired_surface_operation), "GpuContext must not retain G7 surface operation: {retired_surface_operation}");
         }
         assert!(
             !bridge_implementation.contains("fn device(")
@@ -212,11 +168,7 @@ mod tests {
             let source = fs::read_to_string(&path).expect("source should be readable");
             for creation in &creation_tokens {
                 if source.contains(creation) {
-                    assert!(
-                        path.starts_with(&backend),
-                        "replaced instance/adapter/device creation escaped the private RunenGPU owner: {}",
-                        path.display()
-                    );
+                    assert!(path.starts_with(&backend), "replaced instance/adapter/device creation escaped the private RunenGPU owner: {}", path.display());
                 }
             }
         }
@@ -225,11 +177,7 @@ mod tests {
         rust_sources_below(&renderer_root, &mut render_sources);
         for path in render_sources {
             let source = fs::read_to_string(&path).expect("render source should be readable");
-            assert!(
-                !source.contains("RenderBackendTimingCapabilities"),
-                "retired timing authority remains in {}",
-                path.display()
-            );
+            assert!(!source.contains("RenderBackendTimingCapabilities"), "retired timing authority remains in {}", path.display());
         }
     }
 
@@ -238,54 +186,28 @@ mod tests {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let gpu_root = manifest.join("src/plugins/gpu");
         let realization_root = gpu_root.join("backend/wgpu/resource_realization");
-        let context_state = fs::read_to_string(gpu_root.join("backend/wgpu/state.rs"))
-            .expect("private context state should be readable");
-        let context_descriptor = fs::read_to_string(gpu_root.join("api/context/descriptor.rs"))
-            .expect("context descriptor should be readable");
-        let public_realization = fs::read_to_string(gpu_root.join("api/realization.rs"))
-            .expect("public realization contract should be readable");
+        let context_state = fs::read_to_string(gpu_root.join("backend/wgpu/state.rs")).expect("private context state should be readable");
+        let context_descriptor = fs::read_to_string(gpu_root.join("api/context/descriptor.rs")).expect("context descriptor should be readable");
+        let public_realization = fs::read_to_string(gpu_root.join("api/realization.rs")).expect("public realization contract should be readable");
         let mut realization_paths = Vec::new();
         rust_sources_below(&realization_root, &mut realization_paths);
         realization_paths.sort();
-        let realization_source = realization_paths
-            .iter()
-            .map(|path| fs::read_to_string(path).expect("realization source should be readable"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let realization_source = realization_paths.iter().map(|path| fs::read_to_string(path).expect("realization source should be readable")).collect::<Vec<_>>().join("\n");
         let realization_creation_source = realization_paths
             .iter()
-            .filter(|path| {
-                path.file_name().and_then(|name| name.to_str())
-                    != Some("current_render_resource_bridge.rs")
-            })
+            .filter(|path| path.file_name().and_then(|name| name.to_str()) != Some("current_render_resource_bridge.rs"))
             .map(|path| fs::read_to_string(path).expect("realization source should be readable"))
-            .collect::<Vec<_>>()
-            .join("\n");
+            .collect::<Vec<_>>().join("\n");
 
         assert!(context_state.contains("resource_realization: ResourceRealizationState"));
-        assert_eq!(
-            context_state
-                .matches("resource_realization: ResourceRealizationState")
-                .count(),
-            1,
-            "the existing private context must own exactly one resource-realization state"
-        );
-        assert!(
-            !context_descriptor.contains("GpuResourceRealizationPolicy"),
-            "operational record policy must not enter adapter selection or retry identity"
-        );
+        assert_eq!(context_state.matches("resource_realization: ResourceRealizationState").count(), 1, "the existing private context must own exactly one resource-realization state");
+        assert!(!context_descriptor.contains("GpuResourceRealizationPolicy"), "operational record policy must not enter adapter selection or retry identity");
         assert!(public_realization.contains("max_records: NonZeroUsize"));
         assert!(!public_realization.contains(&["wgpu", "::"].concat()));
         assert!(!realization_source.contains("async fn"));
         assert!(!realization_source.contains("GpuLogicalLease"));
         assert!(!realization_source.contains("Weak<"));
-        for forbidden_per_kind_quota in [
-            "max_buffers",
-            "max_textures",
-            "max_texture_views",
-            "max_samplers",
-            "max_query_sets",
-        ] {
+        for forbidden_per_kind_quota in ["max_buffers", "max_textures", "max_texture_views", "max_samplers", "max_query_sets"] {
             assert!(!public_realization.contains(forbidden_per_kind_quota));
             assert!(!realization_source.contains(forbidden_per_kind_quota));
         }
@@ -299,10 +221,7 @@ mod tests {
             ["map", "_async"].concat(),
             ["device", ".poll"].concat(),
         ] {
-            assert!(
-                !realization_creation_source.contains(&forbidden_transfer),
-                "G4C1 object creation must not absorb G5 transfer/lifecycle authority: {forbidden_transfer}"
-            );
+            assert!(!realization_creation_source.contains(&forbidden_transfer), "G4C1 object creation must not absorb G5 transfer/lifecycle authority: {forbidden_transfer}");
         }
         for creation in [
             ["device", ".create_", "buffer(&BufferDescriptor"].concat(),
@@ -311,11 +230,7 @@ mod tests {
             ["device", ".create_", "sampler(&SamplerDescriptor"].concat(),
             ["device", ".create_", "query_set(&QuerySetDescriptor"].concat(),
         ] {
-            assert_eq!(
-                realization_creation_source.matches(&creation).count(),
-                1,
-                "each accepted resource family must have one private creation terminal: {creation}"
-            );
+            assert_eq!(realization_creation_source.matches(&creation).count(), 1, "each accepted resource family must have one private creation terminal: {creation}");
         }
     }
 
@@ -353,12 +268,7 @@ mod tests {
                 let trimmed = line.trim_start();
                 !trimmed.starts_with("//") && !trimmed.starts_with('*')
             }) {
-                assert!(
-                    retired.iter().all(|token| !line.contains(token)),
-                    "retired G2 authority remains in {}: {}",
-                    path.display(),
-                    line
-                );
+                assert!(retired.iter().all(|token| !line.contains(token)), "retired G2 authority remains in {}: {}", path.display(), line);
             }
         }
 
@@ -370,10 +280,7 @@ mod tests {
             "src/plugins/render/api/resources.rs",
             "src/plugins/render/graph/resource_lifetimes.rs",
         ] {
-            assert!(
-                !manifest.join(retired_path).exists(),
-                "retired forwarding or duplicate authority path remains: {retired_path}"
-            );
+            assert!(!manifest.join(retired_path).exists(), "retired forwarding or duplicate authority path remains: {retired_path}");
         }
     }
 
@@ -382,20 +289,11 @@ mod tests {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let adapter = manifest.join("src/plugins/render/adapters/gpu_resources.rs");
         let source = fs::read_to_string(adapter).expect("GPU resource adapter should be readable");
-        let compact = source
-            .chars()
-            .filter(|character| !character.is_whitespace())
-            .collect::<String>();
+        let compact = source.chars().filter(|character| !character.is_whitespace()).collect::<String>();
         let obsolete_optional_type = ["Option<", "GpuResourceDescriptor", ">"].concat();
         let obsolete_method = ["fngpu", "_descriptor("].concat();
 
-        assert!(
-            !compact.contains(&obsolete_optional_type),
-            "render GPU lowering must use an explicit non-optional outcome"
-        );
-        assert!(
-            !compact.contains(&obsolete_method),
-            "the obsolete optional GPU descriptor lowering method must remain deleted"
-        );
+        assert!(!compact.contains(&obsolete_optional_type), "render GPU lowering must use an explicit non-optional outcome");
+        assert!(!compact.contains(&obsolete_method), "the obsolete optional GPU descriptor lowering method must remain deleted");
     }
 }
