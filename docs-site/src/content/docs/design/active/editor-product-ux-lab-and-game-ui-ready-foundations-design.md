@@ -1,6 +1,6 @@
 ---
 title: Editor Product UX Lab And Game UI Ready Foundations
-description: Active governance design for PT-EDITOR-UX, native editor UX Lab, all-surface certification, and future game-runtime UI compatibility.
+description: Active product/architecture design for native editor UX Lab, all-surface certification, and future game-runtime UI compatibility.
 status: active
 owner: editor
 layer: domain/ui-definition / domain/editor / app
@@ -20,25 +20,31 @@ related_designs:
   - ../accepted/ui-lab-perfectionist-audit-design.md
   - ./game-runtime-ui-projection-and-hud-platform-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # Editor Product UX Lab And Game UI Ready Foundations
 
 ## Decision
 
-`PT-EDITOR-UX` is the editor product UX perfection track. It does not reopen
-`PT-UI-LAB`, and it does not implement game-runtime UI from
-`PT-GAME-RUNTIME-UI`. It consumes completed UI Designer, UI Lab perfection, and
-Workbench capability evidence, then adds the missing product-wide editor UX
-layer: native scenario coverage, all-surface certification, widget gates, graph
-canvas productization, standalone UI Designer workbench proof, and final
-local-native no-gap certification.
+This design defines the editor product UX perfection target historically
+decomposed as `PT-EDITOR-UX`. It does not reopen the completed UI Lab work, and
+it does not implement the separate future game-runtime UI target historically
+called `PT-GAME-RUNTIME-UI`. It consumes completed UI Designer, UI Lab
+perfection, and Workbench capability evidence, then adds the missing
+product-wide editor UX layer: native scenario coverage, all-surface
+certification, widget gates, graph canvas productization, standalone UI Designer
+workbench proof, and final local-native no-gap certification.
 
-The track is intentionally long-term. It rejects app-only styling patches,
+The target is intentionally long-term. It rejects app-only styling patches,
 descriptor-only proof, visible placeholder product surfaces, and screenshot-free
 claims for user-visible workflows.
+
+`PT-EDITOR-UX` and the `PM-EDITOR-UX-*` labels below are retained as useful
+historical/decomposition vocabulary only. There is no live production-track
+authority in this document. Future implementation requires an owning GitHub
+issue; canonical roadmap placement is required when cross-family sequence
+matters; the delivery pull request owns review and exact-head validation.
 
 ## Architecture Governance
 
@@ -63,16 +69,15 @@ Architecture governance accepts this split:
   runners, app command execution, and final certification artifacts.
 
 Future game-runtime UI compatibility is an explicit target-profile seam only.
-No `PT-EDITOR-UX` milestone may make game-runtime UI depend on
+No Editor UX implementation slice may make game-runtime UI depend on
 `domain/editor/editor_shell`, Workbench host policy, editor command routing, or
 editor provider vocabulary.
 
-No ADR is required for `PM-EDITOR-UX-001` because it creates governance and
-does not change durable source-truth authority. Require an ADR or accepted
-design update before moving generic UI truth into app code, moving app evidence
-capture into `domain/ui`, changing dependency direction, introducing a
-game-runtime UI owner crate, or making projection/evidence artifacts
-authoritative state.
+No ADR is required for the governance/decomposition target because it does not
+change durable source-truth authority. Require an ADR or accepted design update
+before moving generic UI truth into app code, moving app evidence capture into
+`domain/ui`, changing dependency direction, introducing a game-runtime UI owner
+crate, or making projection/evidence artifacts authoritative state.
 
 ## UX Lab Contract
 
@@ -153,7 +158,7 @@ Required evidence families:
 
 ## Product Scope
 
-`PT-EDITOR-UX` covers:
+The Editor UX target covers:
 
 - all registered visible user-facing editor surfaces;
 - explicit fallback and diagnostic surfaces;
@@ -166,52 +171,48 @@ Required evidence families:
 - game-runtime UI compatibility seams at the target-profile and evidence
   descriptor level only.
 
-`PT-EDITOR-UX` excludes:
+It excludes:
 
 - implementing game-runtime HUD behavior;
 - adding `domain/game_ui` or equivalent owner crates;
-- reopening completed `PT-UI-LAB` milestones;
+- reopening completed UI Lab milestones;
 - app-only style fixes without token/recipe/state ownership;
 - generic UI truth owned by `apps/runenwerk_editor`;
 - editor-shell dependencies in future game-runtime UI contracts.
 
-## Milestone Sequence
+## Proposed Decomposition
 
-`PM-EDITOR-UX-001` is governance only. It activates the track, records the
-source-truth and evidence doctrine, and creates follow-on WR candidates.
+The historical `PM-EDITOR-UX-*` sequence remains useful as proposed
+architecture/product decomposition, but it is not live lifecycle state:
 
-`PM-EDITOR-UX-002` builds the native Editor UX Lab and evidence harness.
-This must land before design-system migration so later polish has executable
-proof.
+- `PM-EDITOR-UX-001`: governance and source-truth/evidence doctrine.
+- `PM-EDITOR-UX-002`: native Editor UX Lab and evidence harness; this precedes
+  broad design-system migration so later polish has executable proof.
+- `PM-EDITOR-UX-003`: layered design-system migration for primitives and editor
+  product patterns over UI Designer token/recipe/state contracts.
+- `PM-EDITOR-UX-004`: standalone UI Designer workbench with real canvas,
+  hierarchy, inspector, property panels, token/recipe/binding previews,
+  scenario matrices, and readiness evidence.
+- `PM-EDITOR-UX-005`: graph canvas and node-editor productization, including
+  material graph UX and hide-or-certify policy for SDF, procgen, gameplay,
+  particle, and animation graph surfaces.
+- `PM-EDITOR-UX-006`: shell/product-pattern migration: inspector, palette,
+  diagnostics, preview, tables, trees, tabs, toolbar/status, split/dock,
+  empty/loading/error/degraded states, and keyboard/focus workflows.
+- `PM-EDITOR-UX-007`: all-surface certification over registered visible
+  surfaces and explicit diagnostic/fallback surfaces.
+- `PM-EDITOR-UX-008`: game UI readiness seam proof without implementing game
+  UI; it verifies recipes, target profiles, fixtures, safe-area/layout axes,
+  input-modality axes, and evidence descriptors without editor-shell coupling.
+- `PM-EDITOR-UX-009`: final local-native no-gap certification.
 
-`PM-EDITOR-UX-003` adds the layered design-system migration for primitives and
-editor product patterns over UI Designer token/recipe/state contracts.
-
-`PM-EDITOR-UX-004` creates the standalone UI Designer workbench with real
-canvas, hierarchy, inspector, property panels, token/recipe/binding previews,
-scenario matrices, and readiness evidence.
-
-`PM-EDITOR-UX-005` productizes graph canvas and node-editor workflows, including
-material graph UX and hide-or-certify policy for SDF, procgen, gameplay,
-particle, and animation graph surfaces.
-
-`PM-EDITOR-UX-006` migrates shell and product patterns: inspector, palette,
-diagnostics, preview, tables, trees, tabs, toolbar/status, split/dock,
-empty/loading/error/degraded states, and keyboard/focus workflows.
-
-`PM-EDITOR-UX-007` runs the all-surface certification wave over registered
-visible surfaces and explicit diagnostic/fallback surfaces.
-
-`PM-EDITOR-UX-008` proves game UI readiness seams without implementing game UI.
-It verifies that editor UI recipes, target profiles, fixtures, safe-area/layout
-axes, input-modality axes, and evidence descriptors can represent future
-`game.runtime` UI without editor-shell coupling.
-
-`PM-EDITOR-UX-009` performs final local-native no-gap certification.
+An owning GitHub issue may adopt, refine, split, or reject this decomposition
+when the work is actually activated. This document does not create active
+milestones by naming them.
 
 ## Code Truth Snapshot
 
-Current repo truth at track activation:
+Current repo truth at the original decomposition point:
 
 - `domain/editor/editor_shell/src/workspace/surface_contract.rs` registers many
   visible surface definitions, including UI Designer, material/SDF/procgen,
@@ -230,7 +231,7 @@ Current repo truth at track activation:
   families and generic self-authoring/control-panel surfaces still require
   productization, hide/fallback policy, or certification.
 - Workbench profile and layout code knows an editor-design profile and surfaces,
-  but this track still requires a standalone product-grade UI Designer
+  but this target still requires a standalone product-grade UI Designer
   workbench with native evidence.
 
 ## Quality Gates
@@ -252,18 +253,26 @@ readonly, loading, warning, error, degraded, long localized text, keyboard
 focus, mouse, gamepad-like navigation where supported, high contrast, reduced
 motion, small/large viewport, and native capture.
 
+## Current Activation Rule
+
+This design is durable architecture/product guidance, not a live work tracker.
+Any implementation requires an owning GitHub issue that names current scope,
+accepted base, dependencies, validation, and evidence. Put the work into the
+maintained roadmap when sequence across active families matters. The pull
+request owns the reviewed feature head, complete diff, and acceptance evidence.
+
 ## Stop Conditions
 
 Stop before implementation if:
 
-- a milestone tries to treat app-hosted screenshot/evidence artifacts as domain
+- a slice tries to treat app-hosted screenshot/evidence artifacts as domain
   truth;
 - generic UI contracts start depending on editor shell or app state;
 - future game-runtime UI contracts import editor shell vocabulary;
 - visible placeholder product surfaces remain normal workflow surfaces;
 - UX Lab proof is descriptor-only, retained-only, or screenshot-free for a
   claim that needs local-native evidence;
-- a milestone cannot name its exact scenario matrix, evidence artifacts, and hard
+- a slice cannot name its exact scenario matrix, evidence artifacts, and hard
   gates before product code starts.
 
 <!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:product-ux-certification -->
