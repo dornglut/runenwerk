@@ -1,8 +1,8 @@
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuContext, GpuRealizedBindGroup, GpuRealizedBindGroupLayout,
-    GpuRealizedBuffer, GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRealizedSampler,
-    GpuRealizedTexture, GpuRealizedTextureView, GpuSamplerHandle, GpuTextureHandle,
-    GpuTextureViewHandle, GpuWorkResourceIdAllocator,
+    GpuRealizedBuffer, GpuRealizedRenderPipeline, GpuRealizedSampler, GpuRealizedTexture,
+    GpuRealizedTextureView, GpuSamplerHandle, GpuTextureHandle, GpuTextureViewHandle,
+    GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::backend::WgpuCtx;
@@ -583,24 +583,21 @@ struct ScreenUniformRaw {
 
 #[derive(Debug)]
 struct RectPass {
-    pipeline: Option<RenderPipeline>,
-    pipeline_artifacts: UiPipelineArtifacts,
+    pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
     screen_bind_group: GpuRealizedBindGroup,
 }
 
 #[derive(Debug)]
 struct StrokePass {
-    pipeline: Option<RenderPipeline>,
-    pipeline_artifacts: UiPipelineArtifacts,
+    pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
     screen_bind_group: GpuRealizedBindGroup,
 }
 
 #[derive(Debug)]
 struct GlyphPass {
-    pipeline: Option<RenderPipeline>,
-    pipeline_artifacts: UiPipelineArtifacts,
+    pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
     screen_bind_group: GpuRealizedBindGroup,
     texture_bind_group_layout: GpuRealizedBindGroupLayout,
@@ -609,8 +606,7 @@ struct GlyphPass {
 
 #[derive(Debug)]
 struct ViewportEmbedPass {
-    pipeline: Option<RenderPipeline>,
-    pipeline_artifacts: UiPipelineArtifacts,
+    pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
     screen_bind_group: GpuRealizedBindGroup,
     texture_bind_group_layout: GpuRealizedBindGroupLayout,
@@ -619,8 +615,7 @@ struct ViewportEmbedPass {
 
 #[derive(Debug)]
 struct ProductSurfacePass {
-    pipeline: Option<RenderPipeline>,
-    pipeline_artifacts: UiPipelineArtifacts,
+    pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
     screen_bind_group: GpuRealizedBindGroup,
     texture_bind_group_layout: GpuRealizedBindGroupLayout,
@@ -649,17 +644,6 @@ struct RendererTextureViewResource {
 struct RendererSamplerResource {
     _handle: GpuSamplerHandle,
     _realized: GpuRealizedSampler,
-}
-
-/// G4C2's accepted UI program/layout realization is retained separately from the temporary
-/// G4C3 pipeline object. The latter is deliberately created only after the render batch enters
-/// its one raw device/queue operation interval.
-#[derive(Debug)]
-struct UiPipelineArtifacts {
-    kind: UiPipelineKind,
-    format: TextureFormat,
-    program: GpuRealizedProgram,
-    pipeline_layout: GpuRealizedPipelineLayout,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -693,8 +677,8 @@ struct UiDynamicBindGroups {
     product_surface: UiProductSurfaceBindGroups,
 }
 
-/// Data uploads are intentionally staged while G4C1/G4C2 resources are realized. Their queue
-/// operations execute only after the batch has acquired its raw G4C3/G5 loan.
+/// Data uploads are intentionally staged while G4C1/G4C2/G4C3 resources are realized. Their
+/// queue operations execute only after the batch has acquired its raw G5 operation loan.
 #[derive(Debug, Clone, Default)]
 struct RendererPendingOperations {
     buffer_uploads: Vec<RendererPendingBufferUpload>,
