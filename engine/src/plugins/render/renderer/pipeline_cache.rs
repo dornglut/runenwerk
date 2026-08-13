@@ -8,7 +8,6 @@ use crate::plugins::gpu::{
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::pipelines::FlowPassPipelineKey;
 use std::collections::HashMap;
-use wgpu::{ComputePipeline, RenderPipeline};
 
 const RENDERER_PROGRAM_SOURCE_MAX_RECORDS: usize = 1024;
 const RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES: usize = 64 * 1024 * 1024;
@@ -27,8 +26,6 @@ pub struct RendererPipelineCacheStats {
 
 #[derive(Debug)]
 pub struct FlowPipelineArtifactCache {
-    pub compute_pipelines: HashMap<FlowPassPipelineKey, ComputePipeline>,
-    pub render_pipelines: HashMap<FlowPassPipelineKey, RenderPipeline>,
     samplers: HashMap<FlowPassPipelineKey, RendererRealizedSampler>,
     pub stats: RendererPipelineCacheStats,
     program_sources: RendererProgramSourceAuthority,
@@ -55,8 +52,6 @@ impl Default for FlowPipelineArtifactCache {
         )
         .expect("renderer program-source authority policy is nonzero and process-local");
         let mut cache = Self {
-            compute_pipelines: HashMap::new(),
-            render_pipelines: HashMap::new(),
             samplers: HashMap::new(),
             stats: RendererPipelineCacheStats::default(),
             program_sources,
@@ -93,42 +88,6 @@ impl FlowPipelineArtifactCache {
             .admit_wgsl(key, renderer_revision, canonical_wgsl, provenance)
     }
 
-    pub fn compute_pipeline(&mut self, key: &FlowPassPipelineKey) -> Option<ComputePipeline> {
-        if let Some(value) = self.compute_pipelines.get(key) {
-            self.stats.hits = self.stats.hits.saturating_add(1);
-            return Some(value.clone());
-        }
-        self.stats.misses = self.stats.misses.saturating_add(1);
-        None
-    }
-
-    pub fn insert_compute_pipeline(
-        &mut self,
-        key: FlowPassPipelineKey,
-        pipeline: ComputePipeline,
-    ) -> ComputePipeline {
-        self.compute_pipelines.insert(key, pipeline.clone());
-        pipeline
-    }
-
-    pub fn render_pipeline(&mut self, key: &FlowPassPipelineKey) -> Option<RenderPipeline> {
-        if let Some(value) = self.render_pipelines.get(key) {
-            self.stats.hits = self.stats.hits.saturating_add(1);
-            return Some(value.clone());
-        }
-        self.stats.misses = self.stats.misses.saturating_add(1);
-        None
-    }
-
-    pub fn insert_render_pipeline(
-        &mut self,
-        key: FlowPassPipelineKey,
-        pipeline: RenderPipeline,
-    ) -> RenderPipeline {
-        self.render_pipelines.insert(key, pipeline.clone());
-        pipeline
-    }
-
     pub fn get_or_realize_sampler(
         &mut self,
         context: &GpuContext,
@@ -162,10 +121,6 @@ impl FlowPipelineArtifactCache {
     }
 
     pub fn retain_flows(&mut self, active_flow_ids: &[RenderFlowId]) {
-        self.compute_pipelines
-            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
-        self.render_pipelines
-            .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.samplers
             .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.program_sources.collect_unretained();
@@ -285,7 +240,6 @@ mod tests {
     fn independent_renderer_caches_do_not_share_source_owner_identity() {
         let first = FlowPipelineArtifactCache::default().stats();
         let second = FlowPipelineArtifactCache::default().stats();
-
         assert_ne!(first.program_source_owner, second.program_source_owner);
     }
 
