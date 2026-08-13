@@ -24,8 +24,7 @@ related_reports:
   - ../../reports/closeouts/pm-ui-lab-007-api-docs-examples-and-runtime-proven-closeout/closeout.md
   - ../../reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Persistence API Examples Ergonomics Closure Design
@@ -35,18 +34,18 @@ related_roadmaps:
 Accepted for `PM-UI-LAB-PERF-005`.
 
 This design clears only the PM005 no-gap design gate. It does not authorize
-product code until roadmap intake selects a linked WR row, `task
-production:plan` creates a decision-complete implementation contract, and WR
-roadmap gates allow implementation.
+product code by itself. Any implementation requires an owning GitHub issue,
+canonical roadmap sequencing where relevant, and a pull request that owns the
+reviewed feature head and exact-head validation evidence.
 
 ## Goal
 
-The completed PT-UI-LAB track already implemented project IO, diff/apply,
-rollback, public API docs, examples, and runtime-proven closeout evidence.
-PM005 in the perfectionist track asks a stricter question: whether persistence,
-structural diff/apply, rollback review, public APIs, preludes, guides, and
-examples form one discoverable normal workflow without hidden shortcuts or
-conflicting source truth.
+The completed historical UI Lab sequence already implemented project IO,
+diff/apply, rollback, public API docs, examples, and runtime-proven closeout
+evidence. PM005 in the perfectionist sequence asks a stricter question: whether
+persistence, structural diff/apply, rollback review, public APIs, preludes,
+guides, and examples form one discoverable normal workflow without hidden
+shortcuts or conflicting source truth.
 
 The target normal workflow is:
 
@@ -67,7 +66,7 @@ Completed inputs:
   apply review, activation reports, failed activation preservation,
   reload-last-applied, and rollback.
 - `PM-UI-LAB-007` implemented public API ergonomics review, usage docs,
-  examples, and final PT-UI-LAB runtime-proven closeout.
+  examples, and final UI Lab runtime-proven closeout.
 - `PM-UI-LAB-PERF-002` through `PM-UI-LAB-PERF-004` added typed no-gap
   runtime evidence, command/surface source-truth audits, and direct
   manipulation product-surface evidence.
@@ -84,18 +83,12 @@ Remaining no-gap blockers:
   `editor_definition` workflows easy to discover without glob-export guesswork;
 - examples and guides must use the preferred public APIs rather than app
   internals, test-only helpers, or stale shortcuts;
-- docs, examples, public API review, runtime artifacts, roadmap state, and
-  production state must agree before PM006 final certification.
+- docs, examples, public API review, runtime artifacts, and code truth must
+  agree before PM006 final certification.
 
 ## Architecture Governance
 
-Architecture governance for this design-only action:
-
-```text
-task ai:architecture-governance -- --task "PM-UI-LAB-PERF-005 persistence diff apply API and examples ergonomics design" --scope "Editor Lab persistence, structural diff/apply, rollback review, public API, prelude, usage guide, and examples ergonomics closure; design-only action, no product code"
-```
-
-Governance decisions:
+Architecture governance for this design established:
 
 - DDD owner: the `editor` bounded context owns Editor Lab persistence,
   structural review, activation reports, rollback, API ergonomics, and example
@@ -124,6 +117,9 @@ Governance decisions:
   compatibility fifth.
 - Ownership mode: stream-aligned editor product work with complicated-subsystem
   support from UI definition, editor definition, and docs owners.
+
+The historical architecture-governance command associated with this design is
+provenance only, not a current work-selection mechanism.
 
 ## Closure Contract
 
@@ -161,7 +157,7 @@ proves all of these states:
 
 ## Implementation Shape
 
-Use a Strangler migration over the existing completed PT-UI-LAB paths:
+Use a Strangler migration over the existing completed UI Lab paths:
 
 1. audit current package, review, activation, rollback, public API, guide, and
    examples against the PM005 evidence matrix;
@@ -181,26 +177,19 @@ catch-all `utils`, `helpers`, or `_internal` modules.
 
 ## Required Fitness Functions
 
-The linked implementation WR must include focused validation for:
+The owning implementation issue must include focused validation for:
 
 ```text
-cargo fmt
+cargo fmt --all --check
 cargo test -p ui_definition
 cargo test -p editor_definition
 cargo test -p runenwerk_editor editor_lab_project
 cargo test -p runenwerk_editor pm_ui_lab_perf_005
 cargo test -p runenwerk_editor editor_lab
 cargo test -p runenwerk_editor editor_definition_activation
-task docs:validate
-task puml:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
+cargo validate
 git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
 Tests must prove:
@@ -215,13 +204,16 @@ Tests must prove:
 - `ui_definition` remains behavior-free;
 - PM006 final no-gap certification stays out of PM005 scope.
 
-## Roadmap Candidate
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
-Roadmap intake after this design should create a bounded WR row for PM005. It
-may be one full-slice row only if the write scopes stay clear; otherwise split
-project/review/runtime evidence from public API/docs/examples.
+## Implementation Activation
 
-Primary write scopes should include whichever of these the intake selects:
+The historical PM/PT/WR roadmap-intake vocabulary for this slice is retained
+only as decomposition/provenance. Any current implementation is activated by an
+owning GitHub issue and delivered through a reviewed pull request.
+
+The bounded expected write scope may include:
 
 - `apps/runenwerk_editor/src/shell/editor_lab_project/`
 - `apps/runenwerk_editor/src/shell/self_authoring.rs`
@@ -231,9 +223,11 @@ Primary write scopes should include whichever of these the intake selects:
 - `apps/runenwerk_editor/src/runtime/`
 - `domain/editor/editor_definition/src/`
 - `domain/ui/ui_definition/src/`
-- Editor Lab examples and docs-site usage guides
-- PM005 implementation plan, closeout, roadmap, production, and generated
-  planning docs
+- Editor Lab examples and docs-site usage guides.
+
+The issue owns current scope and accepted base; the pull request owns the exact
+reviewed diff and validation evidence. Canonical roadmaps may sequence the
+work, but historical planning rows do not authorize it.
 
 ## Non-Goals
 
@@ -260,4 +254,4 @@ Stop before implementation if:
   or docs-only;
 - a breaking public API migration is required without an accepted migration
   design or ADR;
-- the row starts PM006 final certification scope.
+- the slice starts PM006 final certification scope.

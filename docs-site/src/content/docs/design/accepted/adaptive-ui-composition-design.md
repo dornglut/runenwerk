@@ -12,8 +12,7 @@ related_designs:
   - ./app-neutral-ui-composition-design.md
   - ./editor-native-multi-window-presentation-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # Adaptive UI Composition And Docking Design

@@ -1,6 +1,6 @@
 ---
 title: Render Product Graph Platform
-description: Accepted design for product-first render graph planning, production-track sequencing, and the boundary between Product Graph/Product Jobs and render execution graph compilation.
+description: Accepted design for product-first render graph planning, durable renderer sequencing, and the boundary between Product Graph/Product Jobs and render execution graph compilation.
 status: accepted
 owner: engine
 layer: engine-runtime / product-platform
@@ -19,20 +19,22 @@ related_designs:
   - ./render-production-readiness-and-inspection-design.md
 related_roadmaps:
   - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
-  - ../../workspace/production-tracks.yaml
 ---
 
 # Render Product Graph Platform
 
 ## Status
 
-This is the accepted boundary design for `PT-RENDER-PG`.
+This is the accepted boundary design historically decomposed under
+`PT-RENDER-PG`.
 
-It ratifies the long-term renderer production-track doctrine and the ownership
-boundary between Product Graph/Product Jobs and render execution graph
-compilation. It does not authorize standalone code changes. Implementation
-still flows through the WR roadmap, the relevant milestone design gates,
-architecture governance when required, validation, and closeout evidence.
+It ratifies the long-term renderer doctrine and the ownership boundary between
+Product Graph/Product Jobs and render execution graph compilation. The
+`PT-RENDER-PG` label remains decomposition/provenance vocabulary, not live-work
+authority. This design does not authorize standalone code changes.
+Implementation is activated by an owning GitHub issue, sequenced by canonical
+roadmaps where relevant, and delivered/reviewed through a pull request with
+exact-head validation evidence.
 
 ## Purpose
 
@@ -176,7 +178,8 @@ A safe later implementation should follow this sequence:
 ## Explicitly Deferred / Requires Separate Design
 
 The following areas remain outside this planning slice and require separate
-accepted designs, WR rows, or product-family gates before implementation:
+accepted designs, owning GitHub issues, or product-family gates before
+implementation:
 
 - SDF brick/page-table GPU residency, sparse bricks, clipmaps, distance mips,
   analytic SDF instances, raymarch acceleration, empty-space skipping, tile
@@ -203,31 +206,31 @@ accepted designs, WR rows, or product-family gates before implementation:
 
 This design was accepted for PM-RENDER-PG-001 after:
 
-- stale render docs have been reconciled with implemented product-surface,
+- stale render docs had been reconciled with implemented product-surface,
   prepared-view, target-alias, and dynamic-target behavior;
-- the fully featured renderer roadmap maps FR-0 through FR-8 to
+- the fully featured renderer roadmap mapped FR-0 through FR-8 to
   `PM-RENDER-PG` milestones or explicitly deferred product-family designs;
-- production, roadmap, docs, and planning validators pass;
-- Product Graph/Product Jobs and Render Execution Graph Compiler ownership is
+- repository validation passed for the accepted delivery revision;
+- Product Graph/Product Jobs and Render Execution Graph Compiler ownership was
   unambiguous;
-- architecture governance decides that the current accepted ADR/design set is
+- architecture governance decided that the current accepted ADR/design set was
   sufficient for PM-RENDER-PG-001 and that a future `domain/render_contracts`
   crate should wait for a concrete cross-domain engine-agnostic consumer.
 
+Historical production-track/work-request labels in this record describe the
+accepted decomposition at the time; they do not replace current GitHub issue or
+pull-request state.
+
 ## Validation
 
-The documentation-only planning slice must pass:
+Any delivery that changes this accepted boundary must pass the current
+repository validation contract at one reviewed head:
 
 ```text
-task production:render
-task docs:validate
-task production:validate
-task production:check
-task roadmap:validate
-task roadmap:check
-task planning:validate
-task ai:goal -- --track PT-RENDER-PG
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
-No renderer code, tests, public Rust APIs, or runtime behavior should change in
-this slice.
+No renderer code, tests, public Rust APIs, or runtime behavior changed in the
+original documentation-only acceptance slice.

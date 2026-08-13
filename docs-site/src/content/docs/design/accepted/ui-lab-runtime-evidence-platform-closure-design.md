@@ -15,9 +15,7 @@ related_reports:
   - ../../reports/closeouts/pm-ui-lab-006-preview-lab-and-runtime-evidence/closeout.md
   - ../../reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
-  - ../../reports/roadmap-intake/2026-05-25-pm-ui-lab-perf-002-runtime-evidence-plat/proposal.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Runtime Evidence Platform Closure Design
@@ -27,9 +25,9 @@ related_roadmaps:
 Accepted for `PM-UI-LAB-PERF-002`.
 
 This design clears the design gate for the runtime evidence platform closure
-only. It does not authorize product code until a linked WR row is selected,
-`task production:plan -- --milestone PM-UI-LAB-PERF-002 --roadmap WR-105`
-produces an implementation contract, and roadmap promotion gates pass.
+only. It does not authorize product code by itself. Any implementation requires
+an owning GitHub issue, canonical roadmap sequencing where relevant, and a pull
+request that owns the reviewed feature head and exact-head validation evidence.
 
 ## Goal
 
@@ -38,10 +36,10 @@ native runtime artifacts or explicit typed platform-impossible diagnostics.
 
 The PM006 Preview Lab already records retained visual artifacts, diagnostics,
 accessibility snapshots, performance snapshots, unsupported checks, reload,
-apply, rollback, and degraded-provider proof. PM002 of the perfectionist track
-does not replace that harness. It tightens the evidence platform so every
-unsupported PM006 check is re-evaluated through a capability probe and recorded
-as one of:
+apply, rollback, and degraded-provider proof. PM002 of the perfectionist
+sequence does not replace that harness. It tightens the evidence platform so
+every unsupported PM006 check is re-evaluated through a capability probe and
+recorded as one of:
 
 - captured native/runtime artifact;
 - typed platform-impossible diagnostic with backend, environment, and reason;
@@ -169,23 +167,16 @@ Use a Strangler migration over PM006:
 
 ## Validation
 
-The linked implementation row must include focused validation:
+The owning implementation issue must include focused validation such as:
 
 ```text
-cargo fmt
+cargo fmt --all --check
 cargo test -p runenwerk_editor editor_lab_evidence
 cargo test -p runenwerk_editor pm_ui_lab_perf_002
 $env:RUNENWERK_WRITE_PM_UI_LAB_PERF_002_EVIDENCE='1'; cargo test -p runenwerk_editor pm_ui_lab_perf_002_runtime_evidence_platform_closure -- --nocapture
-task docs:validate
-task puml:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
+cargo validate
 git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
 Tests must prove:
@@ -198,22 +189,25 @@ Tests must prove:
 - app-owned evidence code does not move into `ui_definition` or
   `editor_definition`.
 
-## WR Candidate
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
-The bounded implementation row is `WR-105: UI Lab runtime evidence platform
-closure`.
+## Implementation Activation
 
-Primary write scopes:
+Historical `WR-105` and its roadmap-intake record are retained as provenance for
+the original runtime-evidence platform closure slice. They do not authorize
+current work.
+
+Any current implementation is activated by an owning GitHub issue. The bounded
+expected write scope remains:
 
 - `apps/runenwerk_editor/src/shell/editor_lab_evidence/mod.rs`
 - `apps/runenwerk_editor/src/shell/tests.rs`
-- `docs-site/src/content/docs/reports/implementation-plans/wr-105-ui-lab-runtime-evidence-platform-closure/plan.md`
-- `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md`
-- `docs-site/src/content/docs/workspace/production-tracks.yaml`
-- `docs-site/src/content/docs/workspace/roadmap-items.yaml`
+- PM002 closeout/evidence documentation as needed.
 
 Runtime artifacts belong under the PM002 closeout directory. Raw artifacts must
-not be mixed into prose docs.
+not be mixed into prose docs. The pull request owns the complete diff, reviewed
+feature head, validation evidence, and acceptance state.
 
 ## Non-Goals
 

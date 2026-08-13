@@ -25,8 +25,7 @@ related_designs:
   - ./ui-designer-view-model-capability-and-intent-binding-design.md
   - ./ui-designer-persistence-migration-diff-and-activation-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab App-Hosted Editor Lab Surface Shell Design
@@ -36,9 +35,9 @@ related_roadmaps:
 This is the accepted implementation design for `PM-UI-LAB-003`.
 
 It clears the design gate for the app-hosted Editor Lab surface shell only. It
-does not authorize product code until a linked WR row is selected, production
-planning produces a decision-complete implementation contract, and roadmap
-promotion gates pass.
+does not authorize product code by itself. Implementation requires an owning
+GitHub issue, canonical roadmap sequencing where relevant, and a pull request
+that owns the reviewed feature head and exact-head validation evidence.
 
 ## Goal
 
@@ -104,7 +103,9 @@ surface, or provider-family side tables.
 
 ## Architecture Governance Result
 
-Architecture governance was run for this scope:
+Architecture governance was run for this scope. The historical command and
+then-current file scope are retained here as provenance only; they are not a
+current work-authorization mechanism:
 
 ```text
 task ai:architecture-governance -- --task "PM-UI-LAB-003 App-Hosted Editor Lab Surface Shell design gate" --scope "docs-site/src/content/docs/design/active/ui-lab-productization-design.md; docs-site/src/content/docs/workspace/production-tracks.yaml; apps/runenwerk_editor/src/shell/providers/self_authoring.rs; apps/runenwerk_editor/src/shell/self_authoring.rs; apps/runenwerk_editor/src/shell/tool_suites/editor_design_tool_suite.rs; domain/editor/editor_shell/src/composition/build_self_authoring_control_panel.rs; domain/editor/editor_shell/src/composition/build_editor_shell.rs; domain/editor/editor_shell/src/surfaces/editor_definition.rs; domain/editor/editor_definition; domain/ui/ui_definition"
@@ -268,7 +269,8 @@ accessibility checks, performance evidence, and visual-diff suite.
 
 ## Fitness Functions
 
-The PM-003 implementation WR must include focused validation before closeout:
+The owning PM-003 implementation issue must include focused validation before
+closeout:
 
 - editor-shell tests for each Editor Lab composition builder and route table;
 - app-shell tests proving every supported Editor Design surface builds a typed
@@ -279,32 +281,32 @@ The PM-003 implementation WR must include focused validation before closeout:
 - runtime evidence test or harness that writes a PM-003 proof artifact;
 - source or behavior guard preventing hard-coded demo edit values from becoming
   normal workflows;
-- docs, roadmap, production, and planning validation.
+- current repository validation.
 
-Minimum validation commands for the linked WR row:
+Minimum validation for an implementation slice includes the focused tests plus:
 
 ```text
-cargo fmt
+cargo fmt --all --check
 cargo test -p editor_shell editor_lab
 cargo test -p runenwerk_editor editor_lab
 cargo test -p runenwerk_editor pm_ui_lab_003
-task docs:validate
-task puml:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
-## WR Candidate
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
-The next roadmap row should be a bounded implementation slice, tentatively
-`WR-095: UI Lab app-hosted Editor Lab surface shell`.
+## Implementation Activation
 
-Primary write scopes:
+Historical `WR-095`, `WR-004`, `WR-046`, and `WR-094` labels are retained only
+as decomposition/provenance for the earlier delivery plan. They do not select or
+authorize current work.
+
+Any current implementation must be activated by an owning GitHub issue whose
+scope remains bounded to the Editor Lab surface shell. Expected code ownership
+remains concentrated in:
 
 - `apps/runenwerk_editor/src/shell/providers/self_authoring.rs`
 - `apps/runenwerk_editor/src/shell/self_authoring.rs`
@@ -312,21 +314,10 @@ Primary write scopes:
 - `domain/editor/editor_shell/src/surfaces/editor_definition.rs`
 - `domain/editor/editor_shell/src/composition`
 - `domain/editor/editor_shell/src/workspace/profile.rs`
-- `docs-site/src/content/docs/reports/implementation-plans/wr-084-ui-lab-app-hosted-editor-lab-surface-shell/plan.md`
-- `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md`
-- `docs-site/src/content/docs/workspace/production-tracks.yaml`
-- `docs-site/src/content/docs/workspace/roadmap-items.yaml`
 
-Expected dependencies:
-
-- `WR-004` for ongoing UI/editor guard coverage.
-- `WR-046` for UI Designer doctrine and target-boundary ratification.
-- `WR-094` for completed command catalog and registry-owned surface metadata.
-
-The row should start as ready-next unless roadmap promotion policy selects it
-as current candidate. Product code still requires `task production:plan
--- --milestone PM-UI-LAB-003 --roadmap WR-095` and the implementation contract
-it produces.
+The pull request owns the reviewed feature head, complete diff, validation
+evidence, and acceptance state. Canonical roadmaps may sequence this work, but
+neither historical WR rows nor PM/PT labels grant implementation authority.
 
 ## Non-Goals
 

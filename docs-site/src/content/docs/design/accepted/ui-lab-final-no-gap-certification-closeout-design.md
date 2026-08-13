@@ -26,8 +26,7 @@ related_reports:
   - ../../reports/closeouts/pm-ui-lab-perf-004-direct-manipulation-ux-closure/closeout.md
   - ../../reports/closeouts/pm-ui-lab-perf-005-persistence-diff-apply-api-and-examples-ergonomics/closeout.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Final No Gap Certification Closeout Design
@@ -38,17 +37,17 @@ Accepted for `PM-UI-LAB-PERF-006`.
 
 This design clears only the PM006 final-certification design gate. It does not
 authorize product code, mark the milestone complete, or assign
-`perfectionist_verified`. A final claim still requires a legal roadmap row or
-workflow-approved closeout path, `task production:plan` when a WR row is linked,
-validated closeout evidence, updated production and roadmap metadata, and a
-rerun of `task ai:goal -- --track PT-UI-LAB-PERFECTION`.
+`perfectionist_verified` by itself. A final claim requires an owning GitHub
+issue, direct verification of prerequisite closeouts and runtime artifacts,
+current repository validation, a reviewed pull request, and no unresolved
+quality gap.
 
 ## Goal
 
 PM006 is the final audit for the completed Editor Lab V1 perfectionist track.
 It must answer one question: do code truth, runtime artifacts, public APIs,
-usage docs, examples, generated roadmap state, production state, and previous
-milestone closeouts all agree with zero known quality gaps?
+usage docs, examples, accepted closeouts, and current documentation all agree
+with zero known quality gaps?
 
 The certification chain is:
 
@@ -58,12 +57,12 @@ PM001 governance doctrine
   -> PM003 command and surface source-truth closure
   -> PM004 direct-manipulation UX closure
   -> PM005 persistence, diff/apply, public API, and examples closure
-  -> PM006 final audit, drift check, metadata reconciliation, and no-gap claim
+  -> PM006 final audit, drift check, evidence reconciliation, and no-gap claim
 ```
 
-The completed `PT-UI-LAB` track remains `runtime_proven` input. PM006 must not
-reopen it to justify stronger claims and must not expand into game-runtime UI
-projection.
+The completed `PT-UI-LAB` label remains historical decomposition/provenance for
+the `runtime_proven` input. PM006 must not reopen completed slices merely to
+justify stronger claims and must not expand into game-runtime UI projection.
 
 ## Current Evidence Inputs
 
@@ -83,13 +82,7 @@ known gap blocks PM006 completion.
 
 ## Architecture Governance
 
-Architecture governance for this design-only action:
-
-```text
-task ai:architecture-governance -- --task "PM-UI-LAB-PERF-006 final no-gap certification closeout design" --scope "Editor Lab final no-gap certification, completed milestone evidence audit, runtime artifacts, API/docs/examples agreement, roadmap and production state agreement, phase drift-check evidence, known quality gaps, and perfectionist_verified claim rules; design-only action, no product code"
-```
-
-Governance decisions:
+Architecture governance for this design-only action established:
 
 - DDD bounded context owner: `editor`.
 - App owner: `apps/runenwerk_editor` owns concrete Editor Lab runtime evidence,
@@ -99,17 +92,17 @@ Governance decisions:
   contracts; `domain/editor/editor_definition` owns reusable editor definition,
   validation, operation report, package, and review DTO contracts;
   `domain/editor/editor_shell` owns editor shell projection contracts.
-- Docs and workflow owners: docs under `docs-site/src/content/docs`, roadmap
-  YAML, production YAML, and generated planning docs own certification evidence
-  traceability. They do not create runtime truth.
+- Docs and workflow owners: docs under `docs-site/src/content/docs`, canonical
+  roadmaps, GitHub issues, pull requests, and validation evidence own
+  certification traceability. They do not create runtime truth.
 - Vocabulary: final no-gap certification, drift check, completed closeout,
   evidence gate, runtime artifact, platform-impossible result, source truth,
   structural apply review, public API ergonomics, known quality gap, and
   `perfectionist_verified`.
 - Clean Architecture direction: final audit may read and reconcile contracts
-  across app, domain, docs, roadmap, and production state, but it must not move
-  app execution into domain crates or make docs/generated state authoritative
-  over code or runtime evidence.
+  across app, domain, docs, roadmaps, and delivery evidence, but it must not move
+  app execution into domain crates or make documentation/workflow state
+  authoritative over code or runtime evidence.
 - ADR need: no new ADR is required for a certification closeout that preserves
   the accepted ownership model. Add an ADR or accepted design update before
   changing source-truth authority, persisted public formats, dependency
@@ -119,22 +112,20 @@ Governance decisions:
   fifth, compatibility sixth.
 - Team Topologies ownership: stream-aligned editor product certification with
   complicated-subsystem support from UI definition, editor definition, app
-  runtime evidence, and workspace planning owners.
-- Recommended next action after this design validates: rerun
-  `task ai:goal -- --track PT-UI-LAB-PERFECTION` and follow only the next legal
-  PM006 action it reports.
+  runtime evidence, and documentation owners.
+
+Historical production-track planning commands associated with this design are
+provenance only; they no longer grant or discover current work authority.
 
 ## Certification Contract
 
 PM006 closeout may claim `perfectionist_verified` only when all of the
 following are true:
 
-- `PM-UI-LAB-PERF-001` through `PM-UI-LAB-PERF-005` are completed in production
-  metadata with existing evidence gates, completed closeouts, and honest
-  completion-quality tiers.
-- Every linked WR row for the completed milestones is completed or archived
-  with matching closeout evidence and no stronger quality claim than its
-  evidence supports.
+- `PM-UI-LAB-PERF-001` through `PM-UI-LAB-PERF-005` have completed closeouts,
+  existing evidence gates, and honest completion-quality tiers.
+- Historical WR/PM state agrees with the closeout record where it is retained as
+  provenance, but current acceptance is not inferred from that metadata.
 - Runtime artifact paths named by the closeouts exist and the artifact contents
   match the claimed coverage.
 - Public APIs, focused preludes, usage guides, examples, and product-surface
@@ -144,15 +135,14 @@ following are true:
 - Generic `ui_definition` logic remains behavior-free, and app execution,
   provider sessions, project IO, rollback, activation, and artifact writing stay
   app-owned.
-- `task docs:validate`, `task puml:validate`, `task roadmap:render`,
-  `task roadmap:validate`, `task roadmap:check`, `task production:render`,
-  `task production:validate`, `task production:check`,
-  `task planning:validate`, `git diff --check`, and the focused runtime and
-  example commands selected by the closeout all pass.
-- The phase completion drift-check routine is completed after the last
-  implementation slice and before final certification is claimed.
-- `known_quality_gaps` is empty for PM006 and for the completed production track
+- Focused tests plus `cargo validate`, `git diff --check`, and the documentation
+  build pass at one unchanged reviewed feature head.
+- The phase completion drift check is completed after the last implementation
+  slice and before final certification is claimed.
+- `known_quality_gaps` is empty for PM006 and for the certified Editor Lab V1
   claim.
+- The owning pull request is reviewed and its exact head has green repository
+  CI and Documentation Build evidence.
 
 If any item is false, PM006 must close as blocked or remain incomplete with the
 exact gap recorded. It must not downgrade a real gap into wording that looks
@@ -177,17 +167,16 @@ Required contents:
 - A source-truth review for commands, surfaces, operations, persistence,
   diff/apply, rollback, and API entry points.
 - Phase completion drift-check evidence.
-- Final generated roadmap and production state evidence.
-- The final `task ai:goal -- --track PT-UI-LAB-PERFECTION` result showing the
-  track has no remaining legal incomplete milestone action.
+- The exact reviewed GitHub pull-request head and repository-owned validation
+  evidence used for acceptance.
 
 ## Required Fitness Functions
 
-The final audit implementation contract or closeout must justify the exact
-focused runtime commands. At minimum, it must include:
+The final audit issue or closeout must justify the exact focused runtime
+commands. At minimum, it must include:
 
 ```text
-cargo fmt
+cargo fmt --all --check
 cargo test -p ui_definition
 cargo test -p editor_definition
 cargo test -p runenwerk_editor editor_lab_project
@@ -195,49 +184,42 @@ cargo test -p runenwerk_editor editor_lab
 cargo test -p runenwerk_editor editor_definition_activation
 cargo run -p ui_definition --example ui_definition_workflow
 cargo run -p editor_definition --example editor_definition_workflow
-task docs:validate
-task puml:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
+cargo validate
 git diff --check
-task ai:goal -- --track PT-UI-LAB-PERFECTION
+CI=true pnpm --dir docs-site build
 ```
 
 Add PM-specific evidence-generation test commands when they are used as final
-proof, especially the PM002 and PM005 artifact-writing tests.
+proof, especially the PM002 and PM005 artifact-writing tests. Repository-owned
+exact-head CI and Documentation Build are the acceptance evidence for the
+reviewed revision.
 
-## Roadmap And Production Handling
+## Work Activation And Closeout Handling
 
-PM006 currently has no implementation authority from this design alone. If the
-workflow requires a WR row for final closeout, create a bounded roadmap intake
-for the audit and metadata work before changing product, production, or roadmap
-completion state. If a linked WR row becomes active or `ready_next`, run:
+PM006 has no implementation authority from this design alone. Any final audit
+or metadata reconciliation is activated by a bounded GitHub issue. The issue
+owns current scope, prerequisites, accepted base, and any discovered blockers.
+The pull request owns the complete diff, reviewed feature head, validation
+evidence, and acceptance state.
 
-```text
-task production:plan -- --milestone "PM-UI-LAB-PERF-006" --roadmap "<WR-ID>"
-```
+The write scope should stay limited to final audit artifacts, documentation and
+validation evidence unless the audit discovers a real product gap. A discovered
+product gap stops PM006 completion and becomes a separate owning issue or design
+slice; it must not be silently repaired inside the final certification closeout.
 
-The implementation contract must keep the write scope to final audit artifacts,
-planning metadata, and validation evidence unless it discovers a real product
-gap. A discovered product gap stops PM006 completion and must become a separate
-legal follow-up scope; it must not be repaired inside the final certification
-closeout unless workflow, WR scope, design gates, and validation explicitly
-authorize that repair.
+Historical PM/PT/WR rows and generated planning records may be inspected as
+provenance and drift evidence, but they do not authorize changes or substitute
+for current issue/PR state.
 
 ## Non-Goals
 
 PM006 does not:
 
 - implement new Editor Lab product behavior;
-- reopen completed `PT-UI-LAB` milestones;
+- reopen completed `PT-UI-LAB` historical slices;
 - expand into game-runtime UI projection;
 - replace PM002 platform-impossible evidence with native screenshot or GPU
-  visual-diff work unless a legal follow-up scope first accepts that platform
+  visual-diff work unless a separate accepted scope first accepts that platform
   decision;
 - move app-owned project IO, activation, rollback, provider sessions, or
   artifact generation into `ui_definition` or `editor_definition`;
@@ -249,10 +231,9 @@ Stop before completing PM006 if:
 
 - ownership of any audited source of truth is unclear;
 - a prerequisite closeout or artifact is missing, stale, or unverifiable;
-- a completed WR row or production milestone claims a stronger quality tier
-  than its evidence supports;
+- a historical delivery record claims a stronger quality tier than its evidence
+  supports;
 - final validation fails;
-- roadmap or production render/check output is stale;
-- a source file changes enough that `task ai:goal` must be rerun before
-  continuing;
+- current documentation or delivery evidence disagrees with code/runtime truth;
+- the reviewed feature head changes and therefore invalidates prior validation;
 - any known quality gap remains.

@@ -1,6 +1,6 @@
 ---
 title: UI Lab Productization Design
-description: Active productization design for the runtime-proven app-hosted Editor Interface Lab track.
+description: Active productization design for the runtime-proven app-hosted Editor Interface Lab target.
 status: active
 owner: editor
 layer: domain/app
@@ -35,29 +35,29 @@ related_designs:
   - ../accepted/ui-lab-preview-lab-runtime-evidence-design.md
   - ../accepted/ui-lab-api-docs-examples-runtime-closeout-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
-  - ../../reports/roadmap-intake/2026-05-24-pt-ui-lab-runtime-proven-editor-interfac/proposal.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Productization Design
 
 ## Status
 
-This is the active productization design for `PT-UI-LAB`.
+This is the active productization design for the Editor Interface Lab target
+historically decomposed as `PT-UI-LAB`.
 
-It does not reopen `PT-UI-DESIGN`. The completed `PT-UI-DESIGN` milestones are
-design-contract input with bounded evidence. They are not runtime-proven proof
-for an app-hosted Editor Lab.
+It does not reopen the historical UI Designer sequence. The completed
+UI Designer milestones are design-contract input with bounded evidence; they
+are not runtime-proven proof for an app-hosted Editor Lab.
 
-This design authorizes planning, governance, and roadmap intake for
-`PM-UI-LAB-001`. It does not authorize implementation of later milestones until
-their WR rows, implementation contracts, validation, and closeout requirements
-are accepted.
+This design does not authorize implementation or create live work state by
+itself. `PT-UI-LAB`, `PM-UI-LAB-*`, old WR rows, and roadmap-intake records are
+retained only as architecture/decomposition provenance. Any implementation
+requires an owning GitHub issue, canonical roadmap sequencing when relevant,
+and a reviewed pull request with exact-head validation evidence.
 
 ## Product Goal
 
-`PT-UI-LAB` turns the completed UI Designer contracts into a real Editor
+The UI Lab target turns the completed UI Designer contracts into a real Editor
 Interface Lab inside the editor application. The first product target is Editor
 Lab V1, not the full game-runtime UI platform.
 
@@ -69,13 +69,14 @@ only descriptors, docs, or retained preview data.
 The target path is:
 
 ```text
-PT-UI-DESIGN contracts
+accepted UI Designer contracts
   -> code-truth reconciliation
   -> Editor Lab product contracts
-  -> WR implementation rows
+  -> bounded owning GitHub issues
   -> app-hosted Editor Lab runtime evidence
+  -> reviewed exact-head delivery
   -> runtime_proven closeout
-  -> separate no-gap audit intake
+  -> separate no-gap audit when justified
 ```
 
 ## Code-Truth Reconciliation
@@ -113,14 +114,7 @@ not yet the planned Editor Interface Lab.
 
 ## Architecture Governance
 
-The repository architecture-governance kickoff was run for this scope:
-
-```text
-PT-UI-LAB Editor Interface Lab productization from completed PT-UI-DESIGN
-contracts into runtime-proven app-hosted Editor Lab
-```
-
-Governance findings for this design:
+Architecture governance findings for this design:
 
 - DDD bounded context owner: `editor`, with generic UI definition mechanics
   owned by `domain/ui/ui_definition` and reusable editor-definition mechanics
@@ -143,21 +137,24 @@ Governance findings for this design:
   shell-provider, project IO, renderer, or runtime execution concerns.
   `domain/editor/editor_shell` may host structural shell contracts, but
   semantic execution remains app/provider owned.
-- ADR need: no new ADR is required for `PM-UI-LAB-001`; accepted ADRs already
-  cover domain-owned commands, separation of description from execution,
-  derived projections, provider seams, graph substrate boundaries, and
-  Workbench clean-break direction. Later milestones must add or update an ADR
-  if they change durable ownership, dependency direction, or cross-domain
-  authority.
+- ADR need: no new ADR is required for the existing productization boundary;
+  accepted ADRs already cover domain-owned commands, separation of description
+  from execution, derived projections, provider seams, graph substrate
+  boundaries, and the Workbench clean-break direction. A later slice must add
+  or update an ADR if it changes durable ownership, dependency direction, or
+  cross-domain authority.
 - ATAM-lite priority order: correctness and ownership first, runtime evidence
   second, author ergonomics third, migration compatibility fourth, performance
-  and accessibility evidence fifth. A milestone may not trade ownership
-  boundaries for short-term UI convenience.
+  and accessibility evidence fifth. A slice may not trade ownership boundaries
+  for short-term UI convenience.
 - Team Topologies label: stream-aligned editor product work, supported by
   complicated-subsystem owners for UI definition, editor shell, runtime
   evidence, and public API review.
-- Next legal action: update the design and production track, then promote
-  disjoint WR candidates through roadmap review before code implementation.
+
+The next legal action for any implementation is to create or select one bounded
+owning GitHub issue. The issue owns current scope, dependencies, accepted base,
+and evidence requirements; canonical roadmaps own durable sequence where
+needed; the pull request owns the reviewed feature head and acceptance evidence.
 
 ## Product Contracts
 
@@ -190,50 +187,44 @@ Focused public API entry points and usage examples are required for normal
 `ui_definition` and `editor_definition` workflows. Broad glob exports are not
 an ergonomic product API by themselves.
 
-## Milestone Boundaries
+## Historical Milestone Decomposition
 
-`PM-UI-LAB-001` is design and governance only. It registers the track, records
-this design, captures code-truth findings, and prepares WR candidates. It does
-not edit runtime code.
+The historical PM sequence remains useful architecture/product decomposition.
+It is not live lifecycle state:
 
-`PM-UI-LAB-002` owns command catalog and surface registry source-of-truth
-cleanup.
+- `PM-UI-LAB-001`: design and governance only; code-truth findings and bounded
+  implementation candidates.
+- `PM-UI-LAB-002`: command catalog and surface registry source-of-truth cleanup.
+- `PM-UI-LAB-003`: app-hosted Editor Lab shell and direct authoring panels. Its
+  accepted design is
+  `docs-site/src/content/docs/design/accepted/ui-lab-app-hosted-editor-lab-surface-shell-design.md`.
+- `PM-UI-LAB-004`: operation-driven visual authoring, deterministic diffs,
+  history, validation, and diagnostics. Its accepted design is
+  `docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md`.
+- `PM-UI-LAB-005`: app project IO, diff/apply, activation reports, and rollback.
+  Its accepted design is
+  `docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md`.
+- `PM-UI-LAB-006`: preview scenarios, screenshot or equivalent visual evidence,
+  diagnostics snapshots, accessibility checks, performance evidence, and
+  runtime-proof artifacts. Its accepted design is
+  `docs-site/src/content/docs/design/accepted/ui-lab-preview-lab-runtime-evidence-design.md`.
+- `PM-UI-LAB-007`: public API ergonomics, usage docs, examples, final
+  runtime-proven closeout, and intake for the later no-gap audit.
 
-`PM-UI-LAB-003` owns the app-hosted Editor Lab shell and direct authoring
-panels. Its accepted design is
-`docs-site/src/content/docs/design/accepted/ui-lab-app-hosted-editor-lab-surface-shell-design.md`.
+Game-runtime UI projection execution is outside Editor Lab V1 until the
+editor/workbench target is runtime-proven.
 
-`PM-UI-LAB-004` owns operation-driven visual authoring, deterministic diffs,
-history, validation, and diagnostics. Its accepted design is
-`docs-site/src/content/docs/design/accepted/ui-lab-operation-driven-visual-authoring-design.md`.
+An owning GitHub issue may adopt, refine, split, or reject this decomposition
+when work is activated. Naming a historical PM does not create an active
+milestone.
 
-`PM-UI-LAB-005` owns app project IO, diff/apply, activation reports, and
-rollback. Its accepted design is
-`docs-site/src/content/docs/design/accepted/ui-lab-persistence-project-io-diff-apply-rollback-design.md`.
+## Bounded Implementation Slice Candidates
 
-`PM-UI-LAB-006` owns preview scenarios, screenshot or equivalent visual
-evidence, diagnostics snapshots, accessibility checks, performance evidence,
-and runtime-proof artifacts. Its accepted design is
-`docs-site/src/content/docs/design/accepted/ui-lab-preview-lab-runtime-evidence-design.md`.
+The old roadmap-intake proposal is retained as historical provenance only. Its
+useful decomposition is preserved here as candidate slices, not WR rows or live
+work authority:
 
-`PM-UI-LAB-007` owns public API ergonomics, usage docs, examples, final
-runtime-proven closeout, and intake for the later no-gap audit.
-
-Game-runtime UI projection execution is out of scope for Editor Lab V1 until
-the editor/workbench target is runtime-proven.
-
-## WR Candidate Set
-
-The generated roadmap intake seed is:
-
-```text
-docs-site/src/content/docs/reports/roadmap-intake/2026-05-24-pt-ui-lab-runtime-proven-editor-interfac/proposal.yaml
-```
-
-Roadmap review should split or promote it into these disjoint implementation
-rows:
-
-| Candidate | Milestone | Primary write scope | Runtime evidence |
+| Candidate | Historical mapping | Primary write scope | Runtime evidence |
 |---|---|---|---|
 | UI Lab command catalog and surface registry | PM-UI-LAB-002 | `apps/runenwerk_editor/src/shell`, `domain/editor/editor_shell/src/{tool_suite,workspace,composition}`, editor bindings assets | Menu, toolbar, keybinding, palette, routing, disabled states, and unavailable-command diagnostics derive from one catalog. |
 | Editor Lab shell product surface | PM-UI-LAB-003 | `apps/runenwerk_editor/src/shell/providers`, `domain/editor/editor_shell/src/composition`, editor workspace fixtures | Launched editor shows hierarchy, palette, canvas or preview, inspector, diff, diagnostics, and console workflows without debug action lists. |
@@ -242,35 +233,53 @@ rows:
 | Preview and evidence capture | PM-UI-LAB-006 | editor preview/evidence harness, closeout artifact folders, diagnostics fixtures | Success, warning, error, reload, apply, rollback, degraded-provider, accessibility, and performance states have captured artifacts. |
 | Public API and closeout ergonomics | PM-UI-LAB-007 | `domain/ui/ui_definition`, `domain/editor/editor_definition`, docs and examples | Usage examples compile or run, docs validate, public API review passes, and runtime-proven closeout links all evidence. |
 
-Each promoted WR row must name exact dependencies, write scopes, validation
-commands, closeout artifact paths, and stop conditions before implementation.
+Any activated slice must state exact dependencies, write scope, focused tests,
+runtime evidence, stop conditions, and accepted base in its owning issue before
+implementation. The reviewed pull request then owns the exact delivery diff and
+validation evidence.
 
 ## Runtime-Proven Acceptance
 
-No `PT-UI-LAB` milestone may claim runtime_proven unless closeout evidence
-includes:
+No Editor Lab implementation may claim `runtime_proven` unless closeout
+evidence includes:
 
 - launched editor behavior, not only data descriptors;
 - screenshots or equivalent visual artifacts for supported visible states;
 - command, provider, validation, persistence, activation, and rollback
   diagnostics;
 - focused automated tests for owned contracts;
-- docs validation and production-track validation;
+- current repository and documentation validation at one unchanged reviewed
+  head;
 - explicit known gaps when an expected check is unsupported by the current
   runtime.
 
-`perfectionist_verified` is not available to this track. The final milestone
-must open a separate no-gap audit intake if runtime-proven evidence is strong
-enough to justify it.
+`perfectionist_verified` is not implied by the historical UI Lab sequence. A
+separate no-gap audit is required if runtime-proven evidence is strong enough to
+justify the stronger claim.
+
+## Validation
+
+Design-only changes use the current repository validation contract:
+
+```text
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
+```
+
+Code-bearing slices add focused tests for the exact changed boundary.
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
 ## Stop Conditions
 
-Stop before implementation if a milestone would:
+Stop before implementation if a slice would:
 
 - require `ui_definition` to execute editor, game, app, project IO, or runtime
   behavior;
 - make provider output or retained preview data source truth;
-- bypass WR roadmap review or production implementation contracts;
+- bypass the owning GitHub issue, canonical roadmap sequence when relevant, or
+  reviewed pull-request acceptance;
 - claim runtime proof from descriptors, docs, static fixtures, or status panels
   alone;
 - add game-runtime UI projection execution before Editor Lab V1 is proven;

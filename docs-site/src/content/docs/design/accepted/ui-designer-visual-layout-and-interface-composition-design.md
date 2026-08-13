@@ -16,8 +16,7 @@ related_designs:
   - ../implemented/ui-definition-formation-foundation-design.md
   - ../implemented/editor-self-authoring-and-final-ui-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer Visual Layout And Interface Composition Design
@@ -26,10 +25,11 @@ related_roadmaps:
 
 This is the accepted implementation design for `PM-UI-DESIGN-004`.
 
-It defines the first legal implementation direction for visual layout editing
-over Canonical UI IR. It does not implement code, does not mark PM-004
-complete, and does not authorize product code until a linked WR row passes
-`task production:plan`.
+It defines the first implementation direction for visual layout editing over
+Canonical UI IR. It does not implement code, does not mark PM-004 complete, and
+does not authorize product changes by itself. Implementation requires an owning
+GitHub issue, canonical roadmap sequencing where relevant, and
+pull-request-owned review and exact-head validation.
 
 ## Goal
 
@@ -82,7 +82,7 @@ mutations. Each operation declares:
 - source location when available;
 - preview-only flag when the edit cannot be serialized deterministically.
 
-The first bounded implementation row may focus on core layout-tree operations:
+The first bounded implementation slice may focus on core layout-tree operations:
 
 - insert node;
 - remove node;
@@ -138,19 +138,24 @@ Diagnostics must cover:
 - non-deterministic diff output;
 - preview-only activation attempt.
 
-## Implementation Row
+## Implementation Activation
 
-The first PM-004 implementation row is `WR-047`.
+`WR-047` is retained as historical decomposition/provenance for the first
+PM-004 definition-layer edit slice. It is not current implementation authority.
 
-`WR-047` is bounded to the core definition-layer edit operation path. App-hosted
-Designer/Lab UI and broad visual editor UX remain later PM-004 or downstream
-work. The row must not move provider behavior, editor command execution,
-runtime `WidgetId`, ECS entity ids, renderer handles, or app sessions into
-Canonical UI IR.
+Any current or future implementation must be activated by an owning GitHub
+issue. The bounded first slice remains the core definition-layer edit-operation
+path. App-hosted Designer/Lab UI and broad visual editor UX remain later PM-004
+or downstream work. The slice must not move provider behavior, editor command
+execution, runtime `WidgetId`, ECS entity ids, renderer handles, or app sessions
+into Canonical UI IR.
+
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
 
 ## Required Fitness Functions
 
-The implementation row must add focused validation for:
+The implementation slice must add focused validation for:
 
 - stable id preservation after move/reorder/edit operations;
 - deterministic textual diff output;
@@ -173,10 +178,11 @@ PM-004 design acceptance does not:
 
 ## Acceptance Bar
 
-PM-004 can move from `designing` to `ready_next` when:
+PM-004 remains an accepted design when:
 
-- this accepted design exists;
-- a bounded WR row exists for the first implementation slice;
-- the production milestone links both the accepted design and WR row;
-- production, roadmap, docs, and planning validators pass;
-- `task ai:goal -- --track PT-UI-DESIGN` reports the next WR-planning action.
+- this accepted design exists and is discoverable from current UI design
+  navigation;
+- the canonical UI roadmap carries any durable sequence that remains relevant;
+- implementation is activated only by an owning GitHub issue;
+- delivery evidence belongs to the reviewed pull request;
+- current repository validation passes at the accepted revision.

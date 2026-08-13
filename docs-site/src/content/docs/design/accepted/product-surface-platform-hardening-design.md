@@ -17,8 +17,6 @@ related_designs:
   - ../active/drawing-authoring-and-comic-layout-platform-design.md
 related_roadmaps:
   - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
 ---
 
 # Product Surface Platform Hardening Design
@@ -30,10 +28,9 @@ This is the accepted design contract for `PM-RENDER-PG-005`.
 It accepts the shared product-surface platform hardening direction before
 implementation work starts. It does not authorize product code changes by
 itself, does not mark `PM-RENDER-PG-005` complete, and does not assign
-`completion_quality`. Implementation still requires a legal bounded WR row,
-`task production:plan`, roadmap promotion or current-candidate selection,
-focused validation, closeout evidence, and a rerun of
-`task ai:goal -- --track PT-RENDER-PG`.
+`completion_quality`. Implementation requires an owning GitHub issue, focused
+validation, pull-request review/evidence, and sequencing through the canonical
+renderer/workspace roadmaps where relevant.
 
 ## Goal
 
@@ -174,8 +171,8 @@ PM-005 accepts these decisions:
 - Existing viewport and material preview producers remain valid; PM-005
   hardens the shared contract and migrates additional producer families only
   through explicit tests and bounded write scopes.
-- `WR-003` remains contextual support evidence only. PM-005 implementation
-  needs its own bounded WR row before code changes.
+- `WR-003` remains contextual support evidence only. It is historical
+  decomposition/provenance, not current implementation authority.
 
 ## Public Contract Shape
 
@@ -238,8 +235,9 @@ PM-005 should harden current producer families in this priority order:
 6. Future preview products: new producers must start from the same manifest
    path and may not introduce renderer-private binding shortcuts.
 
-The implementation WR may stage these migrations if needed, but closeout for
-PM-005 must prove the shared contract across more than the two PM-002 producers.
+The owning implementation issue may stage these migrations if needed, but
+closeout for PM-005 must prove the shared contract across more than the two
+PM-002 producers.
 
 ## Diagnostics Contract
 
@@ -331,16 +329,17 @@ Architecture governance review for this design resolves as:
 
 Before code changes:
 
-1. Rerun `task ai:goal -- --track PT-RENDER-PG`.
-2. Create a new bounded PM-005 implementation WR row through roadmap
-   intake/apply. Do not repurpose `WR-003`.
-3. Link `PM-RENDER-PG-005` to the new WR row.
-4. Run `task production:plan -- --milestone PM-RENDER-PG-005 --roadmap <WR-ID>`
-   before promotion or implementation.
-5. Promote or switch WR state only through the roadmap workflow.
-6. Implement one bounded product-surface hardening slice, validate it, create
-   closeout evidence, and rerun `task ai:goal -- --track PT-RENDER-PG` before
-   PM-006.
+1. Confirm this accepted design and the canonical renderer/workspace roadmaps
+   still support the intended bounded PM-005 slice.
+2. Create or select an owning GitHub issue. The issue owns activation, current
+   scope, dependencies, and the accepted base.
+3. Deliver through a pull request. The PR owns the reviewed feature head,
+   complete diff, validation evidence, and acceptance state.
+4. Implement one bounded product-surface hardening slice, validate it at one
+   unchanged reviewed head, and close it before activating PM-006 work.
+
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
 
 ## Validation Required For Implementation
 
@@ -356,8 +355,8 @@ cargo test -p runenwerk_editor texture_preview
 cargo test -p runenwerk_draw product_surface
 ```
 
-The implementation WR may adjust exact test filters to existing module names,
-but it must prove:
+The owning implementation issue may adjust exact test filters to existing module
+names, but it must prove:
 
 - helper-built manifests for flow-backed and upload-backed surfaces;
 - diagnostics for duplicate, missing, stale, rejected, fallback, unavailable,
@@ -372,19 +371,16 @@ but it must prove:
   upload, view, invocation, UI binding, history, and diagnostics;
 - no product truth or product policy moves into renderer helper code.
 
-Workflow validation:
+Repository validation:
 
 ```text
-task docs:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
-task ai:goal -- --track PT-RENDER-PG
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
+
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
 ## Non-Goals
 
@@ -416,5 +412,5 @@ This design is accepted when:
 - diagnostics distinguish renderer execution invalidity from producer-owned
   product status;
 - UI bindings are backend-neutral and traceable to declared producer requests;
-- implementation cannot start until a legal bounded WR row and production plan
-  exist.
+- implementation is activated by an owning GitHub issue and delivered through
+  a reviewed, exact-head-validated pull request.

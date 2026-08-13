@@ -20,10 +20,9 @@ related_designs:
   - ./ui-designer-component-surface-and-widget-recipe-library-design.md
   - ../active/ui-designer-interface-lab-platform-design.md
   - ../active/editor-tool-suite-registry-and-workbench-host-design.md
-  - ../active/runenwerk-capability-workbench-target-architecture.md
+  - ../superseded/runenwerk-capability-workbench-target-architecture.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer View-Model Capability And Intent Binding Design
@@ -34,8 +33,9 @@ This is the accepted implementation design for `PM-UI-DESIGN-007`.
 
 It defines the ownership and contract shape for read-only view-model bindings,
 capability-gated target-profile compatibility, and validated UI intent
-declarations. It does not implement code, select a WR roadmap row, or authorize
-product code until a linked WR row exists and passes `task production:plan`.
+declarations. It does not implement code or authorize product changes by itself.
+Implementation requires an owning GitHub issue, canonical roadmap sequencing
+where relevant, and pull-request-owned review and exact-head validation.
 
 ## Goal
 
@@ -157,20 +157,23 @@ unknown command or intent descriptors, invalid payload bindings, command and
 shortcut conflicts, focus conflicts, preview-only validation attempts, and
 direct mutation attempts.
 
-## Implementation Row
+## Implementation Activation
 
-No PM-007 implementation WR row is selected by this design action.
+This accepted design does not select or activate an implementation slice.
 
-The next legal production-track action after this design is accepted is to add
-or select one bounded WR row. That row should cover only the first generic
+The next legal implementation action is to create or select one bounded owning
+GitHub issue. That issue should cover only the first generic
 `domain/ui/ui_definition` binding and intent declaration contract slice and
 should not implement app-hosted Designer/Lab binding UI, editor-specific package
 persistence, game-runtime package loading, concrete command execution, preview
 fixture matrices, persistence activation, or production readiness.
 
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
+
 ## Required Fitness Functions
 
-The first implementation row must add focused validation for:
+The first implementation slice must add focused validation for:
 
 - read-only binding declarations that preserve stable ids;
 - binding value type compatibility diagnostics;
@@ -199,10 +202,11 @@ PM-007 design acceptance does not:
 
 ## Acceptance Bar
 
-PM-007 can move from `designing` to `ready_next` when:
+PM-007 remains an accepted design when:
 
-- this accepted design exists;
-- the production milestone points to this accepted design gate;
-- production, roadmap, docs, and planning validators pass;
-- `task ai:goal -- --track PT-UI-DESIGN` reports the next action as
-  `add_or_select_wr_roadmap_link`.
+- this accepted design exists and is discoverable from current UI design
+  navigation;
+- the canonical UI roadmap carries any durable sequence that remains relevant;
+- implementation is activated only by an owning GitHub issue;
+- delivery evidence belongs to the reviewed pull request;
+- current repository validation passes at the accepted revision.

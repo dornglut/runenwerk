@@ -22,8 +22,7 @@ related_designs:
   - ./ui-designer-component-surface-and-widget-recipe-library-design.md
   - ./ui-designer-view-model-capability-and-intent-binding-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Command Catalog And Surface Registry Design
@@ -33,10 +32,10 @@ related_roadmaps:
 This is the accepted implementation design for `PM-UI-LAB-002`.
 
 It defines the command catalog and registry-owned surface metadata direction for
-the Editor Interface Lab productization track. It does not implement code and
-does not authorize product implementation until the linked WR row is promoted
-and `task production:plan -- --milestone PM-UI-LAB-002 --roadmap WR-094`
-reports an implementation-contract action.
+the Editor Interface Lab productization work. It does not implement code or
+authorize product changes by itself. Implementation requires an owning GitHub
+issue, canonical roadmap sequencing where relevant, and pull-request-owned
+review and exact-head validation.
 
 ## Goal
 
@@ -221,7 +220,7 @@ diagnostics remain structural and must not depend on app runtime state.
 
 ## Fitness Functions
 
-PM-UI-LAB-002 implementation must add focused tests before closeout:
+Any PM-UI-LAB-002 implementation slice must add focused tests before closeout:
 
 - catalog coverage proves every route in `assets/editor/ui/editor_bindings.ron`
   resolves to exactly one catalog command;
@@ -237,20 +236,34 @@ PM-UI-LAB-002 implementation must add focused tests before closeout:
 - legacy compatibility tests prove old persisted `ToolSurfaceKind` data can be
   mapped or rejected with a typed diagnostic.
 
-Minimum validation commands for the linked WR row:
+Minimum validation includes the focused tests plus:
 
 ```text
 cargo test -p editor_shell
 cargo test -p runenwerk_editor command
 cargo test -p runenwerk_editor surface
-task docs:validate
-task production:validate
-task roadmap:validate
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
+
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
+
+## Implementation Activation
+
+Historical `WR-094` and `PT-UI-LAB` references are retained only as
+accepted-decomposition/provenance vocabulary. They do not grant current
+implementation authority.
+
+Any current implementation is activated by an owning GitHub issue whose scope
+is bounded to the command catalog and registry-owned surface metadata contract.
+The pull request owns the reviewed feature head, complete diff, validation
+evidence, and acceptance state.
 
 ## Non-Goals
 
 PM-UI-LAB-002 does not build the visual Editor Lab shell, project IO,
 operation-driven visual authoring, screenshot capture, runtime evidence
 harness, game-runtime UI projection execution, or public API closeout. Those
-remain later `PT-UI-LAB` milestones.
+remain later UI Lab slices.

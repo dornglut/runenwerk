@@ -8,16 +8,15 @@ canonical: false
 last_reviewed: 2026-05-23
 related_designs:
   - ../../../../design/accepted/renderer-hardware-ray-query-and-hybrid-tracing-design.md
-related_roadmaps:
-  - ../../../../workspace/roadmap-archive.yaml
-  - ../../../../workspace/production-tracks.yaml
 ---
 
 # Renderer Ray Query Production Evidence
 
-This evidence packet closes `WR-075` for optional ray-query production support.
-Ray-query is a capability-gated renderer path; raster, SDF raymarch, temporal
-reconstruction, and visible non-RT fallback remain the portable baseline.
+This is a historical production-evidence packet for the work recorded as
+`WR-075`. The identifier is retained as provenance; it is not current work or
+activation authority. Ray-query is a capability-gated renderer path; raster,
+SDF raymarch, temporal reconstruction, and visible non-RT fallback remain the
+portable baseline.
 
 ## Evidence Sources
 
@@ -83,9 +82,12 @@ data, unsupported ray-query capability, stale resources, missing lineage, and
 over-budget acceleration resources are diagnostics. They are not collapsed into
 empty success data.
 
-## Validation
+## Historical Validation Evidence
 
-The production packet is reproducible with:
+The original production packet was reproduced with the following commands.
+These are preserved exactly as historical evidence; the retired `task roadmap:*`,
+`task production:*`, and `task planning:*` commands are **not** current workflow
+or permission gates:
 
 ```text
 cargo test -p engine render_ray_query
@@ -100,6 +102,11 @@ task production:validate
 task production:check
 task planning:validate
 ```
+
+For new changes, use the repository's current engineering validation contract:
+focused tests for the changed boundary, `cargo validate`, `git diff --check`,
+the documentation build, and repository-owned exact-head CI/Documentation Build
+for the reviewed pull-request revision.
 
 ## Quality Claim
 

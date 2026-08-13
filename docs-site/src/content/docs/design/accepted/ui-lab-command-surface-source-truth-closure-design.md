@@ -23,8 +23,7 @@ related_reports:
   - ../../reports/closeouts/pm-ui-lab-perf-001-governance-audit-doctrine-and-code-truth-matrix/closeout.md
   - ../../reports/closeouts/pm-ui-lab-perf-002-runtime-evidence-platform-closure/closeout.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Command And Surface Source Truth Closure Design
@@ -35,8 +34,9 @@ Accepted for `PM-UI-LAB-PERF-003`.
 
 This design clears the design gate for command, surface, ownership, and
 module-structure source-of-truth closure only. It does not authorize product
-code until a linked WR row is selected, `task production:plan` produces an
-implementation contract, and roadmap promotion gates pass.
+code by itself. Any implementation requires an owning GitHub issue, canonical
+roadmap sequencing where relevant, and a pull request that owns the reviewed
+feature head and exact-head validation evidence.
 
 ## Goal
 
@@ -63,7 +63,7 @@ parallel authorities.
 ## Current Code Truth
 
 Current code already contains useful foundations from the earlier
-`PM-UI-LAB-002` track:
+`PM-UI-LAB-002` work:
 
 - `apps/runenwerk_editor/src/shell/command_catalog/mod.rs` defines
   `KnownEditorCommand`, `EditorCommandDescriptor`, availability rules, aliases,
@@ -199,7 +199,7 @@ Use a Strangler migration:
 
 ## Fitness Functions
 
-The linked implementation WR must add focused validation before closeout:
+The owning implementation issue must include focused validation before closeout:
 
 ```text
 cargo test -p runenwerk_editor command_catalog
@@ -207,16 +207,9 @@ cargo test -p runenwerk_editor command_source_truth
 cargo test -p runenwerk_editor surface_source_truth
 cargo test -p editor_shell tool_suite
 cargo test -p editor_shell surface_contract
-task docs:validate
-task puml:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
+cargo validate
 git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
 Tests must prove:
@@ -230,12 +223,16 @@ Tests must prove:
   diagnostics for missing or stale mappings;
 - module placement follows subdomain ownership boundaries.
 
-## WR Candidate
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
-The bounded implementation row should be `WR-107: UI Lab command and surface
-source-truth closure`.
+## Implementation Activation
 
-Primary write scopes:
+`WR-107` is retained as historical decomposition/provenance for the command and
+surface source-truth closure slice. It is not current implementation authority.
+
+Any current implementation is activated by an owning GitHub issue. The bounded
+expected write scope remains concentrated in:
 
 - `apps/runenwerk_editor/src/shell/command_catalog/`
 - `apps/runenwerk_editor/src/shell/command_resolution.rs`
@@ -247,6 +244,10 @@ Primary write scopes:
 - `domain/editor/editor_shell/src/workspace/surface_contract.rs`
 - `assets/editor/ui/editor_bindings.ron`
 - `apps/runenwerk_editor/src/shell/tests.rs`
+
+The pull request owns the reviewed feature head, complete diff, validation
+evidence, and acceptance state. Historical PM/PT/WR labels remain provenance,
+not permission.
 
 ## Non-Goals
 
@@ -272,4 +273,4 @@ Stop before implementation if:
 - closing the normal path requires breaking persisted legacy surface data
   without an accepted migration plan;
 - implementation would move editor/app execution into `ui_definition`;
-- the row starts PM004, PM005, or PM006 scope.
+- the slice starts PM004, PM005, or PM006 scope.

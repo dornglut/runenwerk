@@ -1,6 +1,6 @@
 ---
 title: Game Runtime UI Projection And HUD Platform
-description: Active governance design for a runtime-proven game UI projection and HUD platform, starting with an SDF screen-HUD proof.
+description: Active architecture design for a runtime-proven game UI projection and HUD platform, starting with an SDF screen-HUD proof.
 status: active
 owner: workspace
 layer: domain/ui-definition / engine-runtime
@@ -20,39 +20,34 @@ related_designs:
   - ../accepted/ui-designer-production-readiness-and-evidence-design.md
   - ./engine-game-runtime-editor-ecs-scripting-hot-reload-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
-  - ../../reports/roadmap-intake/2026-05-24-game-runtime-ui-projection-and-hud-platf/proposal.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # Game Runtime UI Projection And HUD Platform
 
 ## Decision
 
-`PT-GAME-RUNTIME-UI` is the runtime-proven production track for game-runtime UI
-projection, HUD composition, view-model binding, validated game intents, runtime
-UI expression submission, and SDF screen-HUD proof.
+This design defines the runtime-proven game-runtime UI projection and HUD target
+historically decomposed as `PT-GAME-RUNTIME-UI`: HUD composition, read-only
+view-model binding, validated game intents, runtime UI expression submission,
+and an SDF screen-HUD proof.
 
-The track consumes the completed UI Designer contracts as design input. It does
-not reopen `PT-UI-DESIGN`, does not make `PT-UI-LAB` a dependency, does not
-expand `PT-UI-LAB`, and does not claim perfectionist verification. `PT-UI-LAB`
-may be cited only as an evidence-pattern reference. A separate no-gap audit
-intake must exist before any later `perfectionist_verified` claim.
+It consumes the completed UI Designer contracts as design input. It does not
+reopen the historical UI Designer or UI Lab sequences and does not claim
+perfectionist verification. UI Lab evidence may be cited only as an
+evidence-pattern reference. A separate no-gap audit must exist before any later
+`perfectionist_verified` claim.
 
-The first roadmap row, `WR-104`, is governance only. It may update this design,
-production planning, roadmap intake, code-truth matrices, and follow-on WR
-candidates. It must not create `domain/game_ui`, edit engine runtime code, edit
-SDF examples, or implement game UI behavior.
+`PT-GAME-RUNTIME-UI`, `PM-GAME-RUNTIME-UI-*`, `WR-104`, and the old roadmap
+intake are retained only as architecture/decomposition provenance. There is no
+live production-track or WR lifecycle authority in this design. Future work
+requires an owning GitHub issue and roadmap placement when sequence across
+active families matters; the delivery pull request owns review and exact-head
+validation.
 
 ## Architecture Governance
 
-The repository architecture-governance kickoff was run for this scope:
-
-```text
-Design roadmap intake for PT-GAME-RUNTIME-UI: a perfectionist game-runtime UI projection/HUD production track starting with governance only, no implementation
-```
-
-Governance findings for this design:
+Architecture governance findings for this design:
 
 - DDD bounded context owner is unresolved by implementation and must be decided
   by accepted design or ADR before a game UI owner crate exists.
@@ -149,10 +144,13 @@ The SDF proof is the first runtime evidence target, not the architecture owner.
 It must prove screen HUD and control behavior without implementing
 world-space/entity-attached UI.
 
-## Production Slices
+## Proposed Decomposition
+
+The historical PM sequence remains useful as a proposed implementation
+decomposition, not current lifecycle state:
 
 - `PM-GAME-RUNTIME-UI-001`: governance, owner boundary, code-truth matrix, and
-  follow-on WR candidates.
+  follow-on decomposition.
 - `PM-GAME-RUNTIME-UI-002`: accepted game-runtime target extension contract and
   owner decision.
 - `PM-GAME-RUNTIME-UI-003`: read-only view-model and validated intent contract
@@ -163,11 +161,14 @@ world-space/entity-attached UI.
 - `PM-GAME-RUNTIME-UI-007`: runtime-proven closeout and perfectionist-audit
   intake.
 
-World-space and screen-projected attachment UI is deferred to
-`PT-GAME-WORLDSPACE-UI`. Nameplates, damage numbers, boss frames,
-entity-attached widgets, and split-screen attachment contracts must wait for
-explicit authored binding contracts, viewport/projection readiness, renderer
-readiness where needed, and runtime formation seams.
+An owning GitHub issue may adopt, refine, split, or reject this decomposition
+when the work is activated.
+
+World-space and screen-projected attachment UI remains a separate future target,
+historically labelled `PT-GAME-WORLDSPACE-UI`. Nameplates, damage numbers, boss
+frames, entity-attached widgets, and split-screen attachment contracts must wait
+for explicit authored binding contracts, viewport/projection readiness,
+renderer readiness where needed, and runtime formation seams.
 
 ## Evidence Rules
 
@@ -187,6 +188,15 @@ Runtime proof must show that:
 - diagnostics are typed for unsupported target features, denied capabilities,
   missing view-model data, stale data, invalid intents, and unsafe coupling.
 
+## Current Activation Rule
+
+This document is durable architecture, not a work tracker. Before product code
+changes, create or select an owning GitHub issue that resolves the still-open
+owner boundary and names exact scope, accepted base, validation, and runtime
+evidence. Put the work on the maintained roadmap when cross-family sequencing
+matters. Deliver through a pull request with one unchanged reviewed head and
+repository-owned exact-head CI/Documentation Build evidence.
+
 ## Stop Conditions
 
 - A slice creates `domain/game_ui` or equivalent before accepted owner-boundary
@@ -196,26 +206,19 @@ Runtime proof must show that:
 - Engine render code starts owning game HUD semantics.
 - SDF proof changes become the architecture instead of a bounded consumer proof.
 - World-space/screen-projected attachment UI is folded into the first screen HUD
-  proof instead of `PT-GAME-WORLDSPACE-UI`.
-- The track claims `perfectionist_verified` before a separate completed no-gap
+  proof instead of remaining a separate design slice.
+- The work claims `perfectionist_verified` before a separate completed no-gap
   audit with empty known gaps.
 
 ## Validation
 
-Governance validation:
-
-```text
-task production:render
-task production:validate
-task production:check
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task planning:validate
-task puml:validate
-task docs:validate
-```
-
-Later implementation rows must add focused crate tests for target-profile
+Any implementation must add focused crate tests for target-profile
 compatibility, fail-closed diagnostics, view-model/intent behavior, engine UI
 submission ordering, SDF render-flow UI composite shape, and in-frame HUD proof.
+Broad validation at the reviewed head includes:
+
+```text
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
+```

@@ -11,8 +11,6 @@ related_designs:
   - ../../design/active/editor-ui-workspace-tool-surface-architecture.md
 related_adrs:
   - ../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md
-related_roadmaps:
-  - ../../workspace/production-tracks.yaml
 ---
 
 # Runenwerk Editor Current Architecture

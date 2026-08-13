@@ -15,8 +15,6 @@ related_designs:
   - ./render-fragment-data-driven-maturity-design.md
 related_roadmaps:
   - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
 ---
 
 # Render Execution Graph Compiler Maturity Design
@@ -28,10 +26,9 @@ This is the accepted design contract for `PM-RENDER-PG-004`.
 It accepts the render execution graph compiler maturity direction before any
 implementation work starts. It does not authorize product code changes by
 itself, does not mark `PM-RENDER-PG-004` complete, and does not assign
-`completion_quality`. Implementation still requires a legal bounded WR row,
-`task production:plan`, roadmap promotion or current-candidate selection,
-focused validation, closeout evidence, and a rerun of
-`task ai:goal -- --track PT-RENDER-PG`.
+`completion_quality`. Implementation requires an owning GitHub issue, focused
+validation, pull-request review/evidence, and sequencing through the canonical
+renderer/workspace roadmaps where relevant.
 
 ## Goal
 
@@ -164,10 +161,9 @@ PM-004 accepts these decisions:
   `RenderFlow` or equivalent backend-neutral flow descriptions before compiler
   validation. PM-004 does not implement fragment assets, fragment registries,
   hot reload, merge provenance, or last-good fragment promotion.
-- `WR-010` remains the render fragment and hot-reload row for
-  `PM-RENDER-PG-007`. PM-004 implementation should use a new bounded compiler
-  maturity WR row or an explicitly narrowed legal row created by roadmap
-  workflow; it must not repurpose `WR-010` for fragment implementation.
+- `WR-010` is retained only as historical decomposition/provenance for the
+  render-fragment and hot-reload work associated with `PM-RENDER-PG-007`. It is
+  not current implementation authority for PM-004.
 
 ## Public Contract Shape
 
@@ -380,17 +376,17 @@ Architecture governance review for this design resolves as:
 
 Before code changes:
 
-1. Rerun `task ai:goal -- --track PT-RENDER-PG`.
-2. Use roadmap intake/apply or an existing legal row to create/select a bounded
-   PM-004 compiler maturity WR row.
-3. Do not repurpose `WR-010` for PM-004 fragment or hot-reload implementation.
-   `WR-010` remains the render fragment and data-driven maturity row for
-   `PM-RENDER-PG-007`.
-4. Run `task production:plan -- --milestone PM-RENDER-PG-004 --roadmap <WR-ID>`
-   before promotion or implementation.
-5. Promote or switch WR state only through the roadmap workflow.
-6. Implement one bounded compiler-maturity slice, validate it, create closeout
-   evidence, and rerun `task ai:goal -- --track PT-RENDER-PG` before PM-005.
+1. Confirm this accepted design and the canonical renderer/workspace roadmaps
+   still support the intended bounded PM-004 slice.
+2. Create or select an owning GitHub issue. The issue owns activation, current
+   scope, dependencies, and the accepted base.
+3. Deliver through a pull request. The PR owns the reviewed feature head,
+   complete diff, validation evidence, and acceptance state.
+4. Implement one bounded compiler-maturity slice, validate it at one unchanged
+   reviewed head, and close it before activating PM-005 work.
+
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
 
 ## Validation Required For Implementation
 
@@ -412,16 +408,13 @@ Expected command families:
 cargo test -p engine render_flow
 cargo test -p engine render_dynamic_targets
 cargo test -p engine render_runtime_inspect
-task docs:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
-task ai:goal -- --track PT-RENDER-PG
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
+
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
 ## Non-Goals
 
@@ -452,5 +445,5 @@ This design is accepted when:
   capability checks are typed and inspectable;
 - render fragments and hot reload remain PM-007 scope;
 - product-surface hardening remains PM-005 scope;
-- implementation cannot start until a legal bounded WR row and production plan
-  exist.
+- implementation is activated by an owning GitHub issue and delivered through
+  a reviewed, exact-head-validated pull request.
