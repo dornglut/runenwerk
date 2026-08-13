@@ -15,8 +15,6 @@ related_designs:
   - ./render-fragment-data-driven-maturity-design.md
 related_roadmaps:
   - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
 ---
 
 # Feature-Owned Render Contributions Design
@@ -27,9 +25,9 @@ This is the accepted design contract for `PM-RENDER-PG-003`.
 
 It accepts a bounded design for replacing central render feature contribution
 growth with typed, inspectable, feature-owned collectors. It does not authorize
-product code changes by itself. Implementation still requires the normal
-production planning gate, legal WR state, focused validation, closeout evidence,
-and a rerun of `task ai:goal -- --track PT-RENDER-PG`.
+product code changes by itself. Implementation requires an owning GitHub issue,
+focused validation, pull-request review/evidence, and sequencing through the
+canonical renderer/workspace roadmaps where relevant.
 
 ## Goal
 
@@ -305,16 +303,17 @@ Architecture governance review for this design resolves as:
 
 Before code changes:
 
-1. Rerun `task ai:goal -- --track PT-RENDER-PG`.
-2. Create or select a bounded PM-003 implementation WR row through the roadmap
-   workflow. Do not repurpose `WR-010`; `WR-010` remains the render-fragment
-   and hot-reload row for `PM-RENDER-PG-007`.
-3. Run `task production:plan -- --milestone PM-RENDER-PG-003 --roadmap <WR-ID>`
-   only when `task ai:goal` selects an active or ready-next implementation
-   action for that bounded PM-003 row.
-4. Promote or switch WR state only through the roadmap workflow.
-5. Implement one bounded collector-registry slice, then validate and close it
-   out before starting PM-004.
+1. Confirm this accepted design and the canonical renderer/workspace roadmap
+   still support the intended bounded implementation slice.
+2. Create or select an owning GitHub issue for the bounded PM-003 work. The
+   issue owns activation, current scope, dependencies, and the accepted base.
+3. Deliver through a pull request. The PR owns the reviewed feature head,
+   complete diff, validation evidence, and acceptance state.
+4. Implement one bounded collector-registry slice, validate it at one unchanged
+   reviewed head, and close it before activating PM-004 work.
+
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
 
 ## Validation Required For Implementation
 
@@ -335,16 +334,13 @@ Expected command families:
 cargo test -p engine render_feature_contributions
 cargo test -p engine render_runtime_inspect
 cargo test -p engine render_flow
-task docs:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
-task ai:goal -- --track PT-RENDER-PG
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
+
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
 ## Non-Goals
 
