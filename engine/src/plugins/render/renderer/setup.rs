@@ -1,18 +1,24 @@
 use super::resource_descriptors::{
-    buffer_descriptor, linear_sampler_descriptor, texture_descriptor, whole_texture_view_descriptor,
+    buffer_descriptor, gpu_texture_format, linear_sampler_descriptor, texture_descriptor,
+    whole_texture_view_descriptor,
 };
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderPipelineBindGroupsTerminal, CurrentRenderPipelineCreationTerminal,
-    CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,
-    GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingProvenance, GpuBufferUsage, GpuEntryPointDescriptor, GpuEntryPointName,
-    GpuMemoryIntent, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
-    GpuProgramInterfaceDescriptor, GpuProgramSourceKey, GpuProgramSourceProvenance,
-    GpuRealizedBindGroup, GpuRealizedBindGroupLayout, GpuResourceLifetime,
-    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
-    GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuShaderStage, GpuShaderStages,
-    GpuTextureFormat, GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDimension,
+    CurrentRenderPipelineBindGroupsTerminal, CurrentRenderRenderPipelinesTerminal,
+    CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal, GpuBindGroupLayoutDescriptor,
+    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode,
+    GpuBufferUsage, GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
+    GpuEntryPointDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMemoryIntent,
+    GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    GpuProgramDescriptor, GpuProgramInterfaceDescriptor, GpuProgramSourceKey,
+    GpuProgramSourceProvenance, GpuRealizedBindGroup, GpuRealizedBindGroupLayout,
+    GpuRealizedRenderPipeline, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
+    GpuRenderPipelineStateDescriptor, GpuResourceLifetime, GpuRuntimeBindingResource,
+    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuSpecializationSchema,
+    GpuSpecializationValueSet, GpuTextureFormat, GpuTextureSampleClass, GpuTextureUsage,
+    GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
+    GpuVertexInputStateDescriptor, GpuVertexStepMode,
 };
 use std::num::NonZeroU64;
 
@@ -165,8 +171,7 @@ impl Renderer {
         screen_label: &'static str,
         texture_sampler_label: Option<&'static str>,
     ) -> Result<UiProgramBindingArtifacts> {
-        // This is the renderer's narrow integration boundary for driving the asynchronous G4C2
-        // publication operations. Callers prepare these artifacts before entering G5 encoding.
+        // The renderer realizes the full G4C1/G4C2/G4C3 UI dependency chain before G5 begins.
         let screen_buffer = self.realize_buffer_resource(
             context,
             screen_label,
@@ -207,12 +212,24 @@ impl Renderer {
             interface.clone(),
             [
                 GpuEntryPointDescriptor::new(
-                    vertex_entry,
+                    vertex_entry.clone(),
                     GpuShaderStage::Vertex,
                     interface.clone(),
                 ),
-                GpuEntryPointDescriptor::new(fragment_entry, GpuShaderStage::Fragment, interface),
+                GpuEntryPointDescriptor::new(
+                    fragment_entry.clone(),
+                    GpuShaderStage::Fragment,
+                    interface,
+                ),
             ],
+        )?;
+        let pipeline_descriptor = ui_render_pipeline_descriptor(
+            kind,
+            format,
+            program_descriptor.clone(),
+            pipeline_layout_descriptor.clone(),
+            vertex_entry,
+            fragment_entry,
         )?;
 
         let program = pollster::block_on(context.realize_program(&program_descriptor))?;
@@ -224,6 +241,11 @@ impl Renderer {
             .transpose()?;
         let pipeline_layout =
             pollster::block_on(context.realize_pipeline_layout(&pipeline_layout_descriptor))?;
+        let pipeline = pollster::block_on(context.realize_render_pipeline(
+            &pipeline_descriptor,
+            &program,
+            &pipeline_layout,
+        ))?;
         let screen_size = NonZeroU64::new(screen_buffer._handle.descriptor().size_bytes())
             .expect("screen uniform buffers are nonempty");
         let screen_bind_group = pollster::block_on(context.realize_bind_group(
@@ -242,12 +264,7 @@ impl Renderer {
         ))?;
 
         Ok(UiProgramBindingArtifacts {
-            pipeline_artifacts: UiPipelineArtifacts {
-                kind,
-                format,
-                program,
-                pipeline_layout,
-            },
+            pipeline,
             screen_buffer,
             screen_bind_group,
             texture_bind_group_layout: texture_layout,
@@ -280,8 +297,7 @@ impl Renderer {
         )?;
 
         self.rect_pass = Some(RectPass {
-            pipeline: None,
-            pipeline_artifacts: artifacts.pipeline_artifacts,
+            pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
             screen_bind_group: artifacts.screen_bind_group,
         });
@@ -310,8 +326,7 @@ impl Renderer {
         )?;
 
         self.stroke_pass = Some(StrokePass {
-            pipeline: None,
-            pipeline_artifacts: artifacts.pipeline_artifacts,
+            pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
             screen_bind_group: artifacts.screen_bind_group,
         });
@@ -339,8 +354,7 @@ impl Renderer {
         )?;
 
         self.glyph_pass = Some(GlyphPass {
-            pipeline: None,
-            pipeline_artifacts: artifacts.pipeline_artifacts,
+            pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
             screen_bind_group: artifacts.screen_bind_group,
             texture_bind_group_layout: artifacts
@@ -375,8 +389,7 @@ impl Renderer {
         )?;
 
         self.viewport_embed_pass = Some(ViewportEmbedPass {
-            pipeline: None,
-            pipeline_artifacts: artifacts.pipeline_artifacts,
+            pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
             screen_bind_group: artifacts.screen_bind_group,
             texture_bind_group_layout: artifacts
@@ -410,8 +423,7 @@ impl Renderer {
         )?;
 
         self.product_surface_pass = Some(ProductSurfacePass {
-            pipeline: None,
-            pipeline_artifacts: artifacts.pipeline_artifacts,
+            pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
             screen_bind_group: artifacts.screen_bind_group,
             texture_bind_group_layout: artifacts
@@ -422,88 +434,6 @@ impl Renderer {
                 .expect("product-surface pipeline should realize a texture sampler"),
         });
         self.product_surface_pass_format = Some(format);
-        Ok(())
-    }
-
-    /// G4C3 retains temporary pipeline construction. This runs only after every G4C1/G4C2
-    /// artifact for the frame has been realized and the renderer has entered its one raw
-    /// device/queue operation interval.
-    pub(super) fn create_ui_pipelines_for_raw_phase(
-        &mut self,
-        context: &GpuContext,
-        device: &Device,
-    ) -> Result<()> {
-        if let Some(pass) = self.rect_pass.as_mut() {
-            Self::create_ui_pipeline_for_raw_phase(
-                context,
-                device,
-                &mut pass.pipeline,
-                &pass.pipeline_artifacts,
-            )?;
-        }
-        if let Some(pass) = self.stroke_pass.as_mut() {
-            Self::create_ui_pipeline_for_raw_phase(
-                context,
-                device,
-                &mut pass.pipeline,
-                &pass.pipeline_artifacts,
-            )?;
-        }
-        if let Some(pass) = self.glyph_pass.as_mut() {
-            Self::create_ui_pipeline_for_raw_phase(
-                context,
-                device,
-                &mut pass.pipeline,
-                &pass.pipeline_artifacts,
-            )?;
-        }
-        if let Some(pass) = self.viewport_embed_pass.as_mut() {
-            Self::create_ui_pipeline_for_raw_phase(
-                context,
-                device,
-                &mut pass.pipeline,
-                &pass.pipeline_artifacts,
-            )?;
-        }
-        if let Some(pass) = self.product_surface_pass.as_mut() {
-            Self::create_ui_pipeline_for_raw_phase(
-                context,
-                device,
-                &mut pass.pipeline,
-                &pass.pipeline_artifacts,
-            )?;
-        }
-        Ok(())
-    }
-
-    fn create_ui_pipeline_for_raw_phase(
-        context: &GpuContext,
-        device: &Device,
-        pipeline: &mut Option<RenderPipeline>,
-        artifacts: &UiPipelineArtifacts,
-    ) -> Result<()> {
-        if pipeline.is_some() {
-            return Ok(());
-        }
-        let mut created = None;
-        context
-            .current_render_pipeline_bridge()
-            .for_pipeline_creation(
-                &artifacts.program,
-                &artifacts.pipeline_layout,
-                CreateUiRenderPipeline {
-                    device,
-                    kind: artifacts.kind,
-                    format: artifacts.format,
-                    output: &mut created,
-                },
-            )?;
-        *pipeline = Some(created.ok_or_else(|| {
-            anyhow::anyhow!(
-                "current render pipeline bridge did not create '{} pipeline'",
-                artifacts.kind.label()
-            )
-        })?);
         Ok(())
     }
 
@@ -571,8 +501,8 @@ impl Renderer {
             ],
         ))?;
 
-        // The glyph texture/view/sampler resources and G4C2 bind group are authoritative before
-        // the batch crosses into G4C3/G5. Retain only the eventual queue write for that phase.
+        // The glyph texture/view/sampler resources and bind group are authoritative before G5.
+        // Retain only the eventual queue write for the G5 operation interval.
         pending_operations
             .texture_uploads
             .push(RendererPendingTextureUpload {
@@ -634,40 +564,52 @@ impl Renderer {
         product_surface_bind_groups: &UiProductSurfaceBindGroups,
         gpu_timestamp_writes: Option<super::render_flow::GpuPassTimestampWrites>,
     ) -> Result<()> {
-        // These bind groups were realized in the batch's first phase. In particular, a timestamp
-        // terminal must not call back into realization after it has borrowed the query set.
-        if let Some(writes) = gpu_timestamp_writes {
-            let mut output = Ok(());
-            context
-                .current_render_pipeline_bridge()
-                .for_timestamp_writes(
-                    &writes.query_set,
-                    EncodeTimestampedUiPass {
-                        renderer: self,
-                        context,
-                        encoder,
-                        frame_view,
-                        prepared,
-                        viewport_surface_bindings,
-                        viewport_bind_groups,
-                        product_surface_bind_groups,
-                        indices: writes.indices,
-                        output: &mut output,
-                    },
-                )?;
-            output
-        } else {
-            self.encode_ui_pass_current(
-                context,
-                encoder,
-                frame_view,
-                prepared,
-                viewport_surface_bindings,
-                viewport_bind_groups,
-                product_surface_bind_groups,
-                None,
-            )
+        let Some(rect_pass) = self.rect_pass.as_ref() else {
+            return Ok(());
+        };
+
+        let mut realized = vec![&rect_pass.pipeline];
+        let mut slots = UiPipelineSlots {
+            rect: 0,
+            ..UiPipelineSlots::default()
+        };
+        if let Some(pass) = self.stroke_pass.as_ref() {
+            slots.stroke = Some(realized.len());
+            realized.push(&pass.pipeline);
         }
+        if let Some(pass) = self.glyph_pass.as_ref() {
+            slots.glyph = Some(realized.len());
+            realized.push(&pass.pipeline);
+        }
+        if let Some(pass) = self.viewport_embed_pass.as_ref() {
+            slots.viewport_embed = Some(realized.len());
+            realized.push(&pass.pipeline);
+        }
+        if let Some(pass) = self.product_surface_pass.as_ref() {
+            slots.product_surface = Some(realized.len());
+            realized.push(&pass.pipeline);
+        }
+
+        let mut output = Ok(());
+        context
+            .current_render_execution_bridge()
+            .for_render_pipelines(
+                &realized,
+                EncodeUiPipelines {
+                    renderer: self,
+                    context,
+                    encoder,
+                    frame_view,
+                    prepared,
+                    viewport_surface_bindings,
+                    viewport_bind_groups,
+                    product_surface_bind_groups,
+                    slots,
+                    gpu_timestamp_writes,
+                    output: &mut output,
+                },
+            )?;
+        output
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -680,6 +622,8 @@ impl Renderer {
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
         viewport_bind_groups: &UiViewportBindGroups,
         product_surface_bind_groups: &UiProductSurfaceBindGroups,
+        pipelines: &[&RenderPipeline],
+        slots: UiPipelineSlots,
         timestamp: Option<(&QuerySet, super::render_flow::GpuPassTimestampIndices)>,
     ) -> Result<()> {
         let Some(rect_pass) = self.rect_pass.as_ref() else {
@@ -713,9 +657,7 @@ impl Renderer {
                     let Some(batch) = prepared.rect_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(rect_pass.pipeline.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!("rect UI pipeline was not created in the raw phase")
-                    })?);
+                    pass.set_pipeline(pipelines[slots.rect]);
                     set_ui_bind_group(context, &mut pass, 0, &rect_pass.screen_bind_group)?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
@@ -723,7 +665,7 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_pipeline_bridge().for_vertex_buffer(
+                    context.current_render_execution_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -735,12 +677,13 @@ impl Renderer {
                     let Some(stroke_pass) = self.stroke_pass.as_ref() else {
                         continue;
                     };
+                    let Some(slot) = slots.stroke else {
+                        continue;
+                    };
                     let Some(batch) = prepared.stroke_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(stroke_pass.pipeline.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!("stroke UI pipeline was not created in the raw phase")
-                    })?);
+                    pass.set_pipeline(pipelines[slot]);
                     set_ui_bind_group(context, &mut pass, 0, &stroke_pass.screen_bind_group)?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
@@ -748,7 +691,7 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_pipeline_bridge().for_vertex_buffer(
+                    context.current_render_execution_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -760,14 +703,13 @@ impl Renderer {
                     let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() else {
                         continue;
                     };
+                    let Some(slot) = slots.viewport_embed else {
+                        continue;
+                    };
                     let Some(batch) = prepared.viewport_embed_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(viewport_embed_pass.pipeline.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "viewport-embed UI pipeline was not created in the raw phase"
-                        )
-                    })?);
+                    pass.set_pipeline(pipelines[slot]);
                     set_ui_bind_group(
                         context,
                         &mut pass,
@@ -790,7 +732,7 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_pipeline_bridge().for_vertex_buffer(
+                    context.current_render_execution_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -802,14 +744,13 @@ impl Renderer {
                     let Some(product_surface_pass) = self.product_surface_pass.as_ref() else {
                         continue;
                     };
+                    let Some(slot) = slots.product_surface else {
+                        continue;
+                    };
                     let Some(batch) = prepared.product_surface_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(product_surface_pass.pipeline.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "product-surface UI pipeline was not created in the raw phase"
-                        )
-                    })?);
+                    pass.set_pipeline(pipelines[slot]);
                     set_ui_bind_group(
                         context,
                         &mut pass,
@@ -827,7 +768,7 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_pipeline_bridge().for_vertex_buffer(
+                    context.current_render_execution_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -839,12 +780,13 @@ impl Renderer {
                     let Some(glyph_pass) = self.glyph_pass.as_ref() else {
                         continue;
                     };
+                    let Some(slot) = slots.glyph else {
+                        continue;
+                    };
                     let Some(batch) = prepared.glyph_batches.get(index) else {
                         continue;
                     };
-                    pass.set_pipeline(glyph_pass.pipeline.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!("glyph UI pipeline was not created in the raw phase")
-                    })?);
+                    pass.set_pipeline(pipelines[slot]);
                     set_ui_bind_group(context, &mut pass, 0, &glyph_pass.screen_bind_group)?;
                     let Some(atlas_gpu) = self.glyph_atlas_gpu.get(&batch.texture_id) else {
                         continue;
@@ -856,7 +798,7 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_pipeline_bridge().for_vertex_buffer(
+                    context.current_render_execution_bridge().for_vertex_buffer(
                         &batch.instance_buffer.realized,
                         DrawUiInstances {
                             pass: &mut pass,
@@ -959,7 +901,7 @@ impl Renderer {
 
 #[derive(Debug)]
 struct UiProgramBindingArtifacts {
-    pipeline_artifacts: UiPipelineArtifacts,
+    pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
     screen_bind_group: GpuRealizedBindGroup,
     texture_bind_group_layout: Option<GpuRealizedBindGroupLayout>,
@@ -1014,167 +956,89 @@ fn ui_texture_bind_group_layout() -> Result<GpuBindGroupLayoutDescriptor> {
     )?)
 }
 
-struct CreateUiRenderPipeline<'a> {
-    device: &'a Device,
+fn ui_render_pipeline_descriptor(
     kind: UiPipelineKind,
     format: TextureFormat,
-    output: &'a mut Option<RenderPipeline>,
+    program: GpuProgramDescriptor,
+    layout: GpuPipelineLayoutDescriptor,
+    vertex_entry: GpuEntryPointName,
+    fragment_entry: GpuEntryPointName,
+) -> Result<GpuRenderPipelineDescriptor> {
+    let vertex_layout = GpuVertexBufferLayoutDescriptor::new(
+        0,
+        ui_pipeline_stride(kind),
+        GpuVertexStepMode::Instance,
+        ui_pipeline_attributes(kind),
+    )?;
+    let vertex_input = GpuVertexInputStateDescriptor::new([vertex_layout])?;
+    let color_target = GpuColorTargetStateDescriptor::new(
+        gpu_texture_format(format)?,
+        GpuBlendMode::Alpha,
+        GpuColorWriteMask::ALL,
+    )?;
+    let state = GpuRenderPipelineStateDescriptor::new(
+        vertex_input,
+        Some(GpuFragmentOutputStateDescriptor::new([color_target])),
+        GpuPrimitiveStateDescriptor::default(),
+        None,
+        GpuMultisampleStateDescriptor::default(),
+    )?;
+    let specialization = GpuSpecializationValueSet::new(GpuSpecializationSchema::new([])?, [])?;
+    Ok(GpuRenderPipelineDescriptor::new(
+        program,
+        GpuRenderEntryPoints::new(vertex_entry, Some(fragment_entry)),
+        state,
+        layout,
+        specialization,
+        GpuCapabilityRequirements::new(),
+    )?)
 }
 
-impl CurrentRenderPipelineCreationTerminal for CreateUiRenderPipeline<'_> {
-    fn create_pipeline(self, program: &ShaderModule, layout: &PipelineLayout) {
-        *self.output = Some(create_ui_render_pipeline(
-            self.device,
-            self.kind,
-            self.format,
-            program,
-            layout,
-        ));
-    }
-}
-
-fn create_ui_render_pipeline(
-    device: &Device,
-    kind: UiPipelineKind,
-    format: TextureFormat,
-    program: &ShaderModule,
-    layout: &PipelineLayout,
-) -> RenderPipeline {
-    let targets = [Some(ColorTargetState {
-        format,
-        blend: Some(BlendState::ALPHA_BLENDING),
-        write_mask: ColorWrites::ALL,
-    })];
-    macro_rules! pipeline {
-        ($stride:expr, $attributes:expr) => {{
-            device.create_render_pipeline(&RenderPipelineDescriptor {
-                label: Some(kind.label()),
-                layout: Some(layout),
-                vertex: VertexState {
-                    module: program,
-                    entry_point: Some("vs_main"),
-                    compilation_options: PipelineCompilationOptions::default(),
-                    buffers: &[VertexBufferLayout {
-                        array_stride: $stride,
-                        step_mode: VertexStepMode::Instance,
-                        attributes: &$attributes,
-                    }],
-                },
-                fragment: Some(FragmentState {
-                    module: program,
-                    entry_point: Some("fs_main"),
-                    compilation_options: PipelineCompilationOptions::default(),
-                    targets: &targets,
-                }),
-                primitive: PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: MultisampleState::default(),
-                multiview: None,
-                cache: None,
-            })
-        }};
-    }
+fn ui_pipeline_stride(kind: UiPipelineKind) -> u64 {
     match kind {
-        UiPipelineKind::Rect => {
-            let attributes = [
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 16,
-                    shader_location: 1,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32,
-                    offset: 32,
-                    shader_location: 2,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32,
-                    offset: 36,
-                    shader_location: 3,
-                },
-            ];
-            pipeline!(std::mem::size_of::<RectInstanceRaw>() as u64, attributes)
-        }
-        UiPipelineKind::Stroke => {
-            let attributes = [
-                VertexAttribute {
-                    format: VertexFormat::Float32x2,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x2,
-                    offset: 8,
-                    shader_location: 1,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 16,
-                    shader_location: 2,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32,
-                    offset: 32,
-                    shader_location: 3,
-                },
-            ];
-            pipeline!(
-                std::mem::size_of::<StrokeSegmentInstanceRaw>() as u64,
-                attributes
-            )
-        }
-        UiPipelineKind::Glyph => {
-            let attributes = [
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 16,
-                    shader_location: 1,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 32,
-                    shader_location: 2,
-                },
-            ];
-            pipeline!(std::mem::size_of::<GlyphInstanceRaw>() as u64, attributes)
-        }
+        UiPipelineKind::Rect => std::mem::size_of::<RectInstanceRaw>() as u64,
+        UiPipelineKind::Stroke => std::mem::size_of::<StrokeSegmentInstanceRaw>() as u64,
+        UiPipelineKind::Glyph => std::mem::size_of::<GlyphInstanceRaw>() as u64,
         UiPipelineKind::ViewportEmbed | UiPipelineKind::ProductSurface => {
-            let attributes = [
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 16,
-                    shader_location: 1,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: 32,
-                    shader_location: 2,
-                },
-            ];
-            pipeline!(
-                std::mem::size_of::<ViewportEmbedInstanceRaw>() as u64,
-                attributes
-            )
+            std::mem::size_of::<ViewportEmbedInstanceRaw>() as u64
         }
     }
 }
 
-struct EncodeTimestampedUiPass<'a, 'bindings> {
+fn ui_pipeline_attributes(kind: UiPipelineKind) -> Vec<GpuVertexAttribute> {
+    match kind {
+        UiPipelineKind::Rect => vec![
+            GpuVertexAttribute::new(0, 0, GpuVertexFormat::Float32x4),
+            GpuVertexAttribute::new(1, 16, GpuVertexFormat::Float32x4),
+            GpuVertexAttribute::new(2, 32, GpuVertexFormat::Float32),
+            GpuVertexAttribute::new(3, 36, GpuVertexFormat::Float32),
+        ],
+        UiPipelineKind::Stroke => vec![
+            GpuVertexAttribute::new(0, 0, GpuVertexFormat::Float32x2),
+            GpuVertexAttribute::new(1, 8, GpuVertexFormat::Float32x2),
+            GpuVertexAttribute::new(2, 16, GpuVertexFormat::Float32x4),
+            GpuVertexAttribute::new(3, 32, GpuVertexFormat::Float32),
+        ],
+        UiPipelineKind::Glyph
+        | UiPipelineKind::ViewportEmbed
+        | UiPipelineKind::ProductSurface => vec![
+            GpuVertexAttribute::new(0, 0, GpuVertexFormat::Float32x4),
+            GpuVertexAttribute::new(1, 16, GpuVertexFormat::Float32x4),
+            GpuVertexAttribute::new(2, 32, GpuVertexFormat::Float32x4),
+        ],
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct UiPipelineSlots {
+    rect: usize,
+    stroke: Option<usize>,
+    glyph: Option<usize>,
+    viewport_embed: Option<usize>,
+    product_surface: Option<usize>,
+}
+
+struct EncodeUiPipelines<'a, 'bindings> {
     renderer: &'a Renderer,
     context: &'a GpuContext,
     encoder: &'a mut CommandEncoder,
@@ -1183,11 +1047,72 @@ struct EncodeTimestampedUiPass<'a, 'bindings> {
     viewport_surface_bindings: &'a ViewportSurfaceBindingRegistry,
     viewport_bind_groups: &'bindings UiViewportBindGroups,
     product_surface_bind_groups: &'bindings UiProductSurfaceBindGroups,
+    slots: UiPipelineSlots,
+    gpu_timestamp_writes: Option<super::render_flow::GpuPassTimestampWrites>,
+    output: &'a mut Result<()>,
+}
+
+impl CurrentRenderRenderPipelinesTerminal for EncodeUiPipelines<'_, '_> {
+    fn use_render_pipelines(self, pipelines: &[&RenderPipeline]) {
+        if let Some(writes) = self.gpu_timestamp_writes {
+            let mut nested_result = Ok(());
+            let bridge_result = self
+                .context
+                .current_render_execution_bridge()
+                .for_timestamp_writes(
+                    &writes.query_set,
+                    EncodeTimestampedUiPass {
+                        renderer: self.renderer,
+                        context: self.context,
+                        encoder: self.encoder,
+                        frame_view: self.frame_view,
+                        prepared: self.prepared,
+                        viewport_surface_bindings: self.viewport_surface_bindings,
+                        viewport_bind_groups: self.viewport_bind_groups,
+                        product_surface_bind_groups: self.product_surface_bind_groups,
+                        pipelines,
+                        slots: self.slots,
+                        indices: writes.indices,
+                        output: &mut nested_result,
+                    },
+                );
+            *self.output = match bridge_result {
+                Ok(()) => nested_result,
+                Err(error) => Err(error.into()),
+            };
+        } else {
+            *self.output = self.renderer.encode_ui_pass_current(
+                self.context,
+                self.encoder,
+                self.frame_view,
+                self.prepared,
+                self.viewport_surface_bindings,
+                self.viewport_bind_groups,
+                self.product_surface_bind_groups,
+                pipelines,
+                self.slots,
+                None,
+            );
+        }
+    }
+}
+
+struct EncodeTimestampedUiPass<'a, 'bindings, 'pipelines> {
+    renderer: &'a Renderer,
+    context: &'a GpuContext,
+    encoder: &'a mut CommandEncoder,
+    frame_view: &'a TextureView,
+    prepared: &'a UiPreparedDraws,
+    viewport_surface_bindings: &'a ViewportSurfaceBindingRegistry,
+    viewport_bind_groups: &'bindings UiViewportBindGroups,
+    product_surface_bind_groups: &'bindings UiProductSurfaceBindGroups,
+    pipelines: &'pipelines [&'pipelines RenderPipeline],
+    slots: UiPipelineSlots,
     indices: super::render_flow::GpuPassTimestampIndices,
     output: &'a mut Result<()>,
 }
 
-impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedUiPass<'_, '_> {
+impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedUiPass<'_, '_, '_> {
     fn write_timestamps(self, query_set: &QuerySet) {
         *self.output = self.renderer.encode_ui_pass_current(
             self.context,
@@ -1197,6 +1122,8 @@ impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedUiPass<'_, '_> {
             self.viewport_surface_bindings,
             self.viewport_bind_groups,
             self.product_surface_bind_groups,
+            self.pipelines,
+            self.slots,
             Some((query_set, self.indices)),
         );
     }
@@ -1239,7 +1166,7 @@ fn set_ui_bind_group(
     bind_group: &GpuRealizedBindGroup,
 ) -> Result<()> {
     context
-        .current_render_pipeline_bridge()
+        .current_render_execution_bridge()
         .for_pipeline_bind_groups(&[bind_group], SetUiBindGroup { pass, index })?;
     Ok(())
 }
