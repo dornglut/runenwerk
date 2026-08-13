@@ -13,8 +13,7 @@ related_designs:
   - ../../design/accepted/app-neutral-ui-composition-design.md
   - ../../design/accepted/adaptive-ui-composition-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # ADR 0013: App-Neutral UI Composition Clean Cutover
@@ -102,10 +101,13 @@ derived and must restore automatically.
 
 ## Fitness Functions
 
-The production track must prove deterministic serialization, graph invariants,
-atomic transactions, structural inverse validation, unavailable-content
-fallbacks, linked persistence bundles, headless fixtures, dependency direction,
-input/accessibility parity, native-window ownership, measured performance, full
-`ui_surface` supersession, and current documentation/truth evidence.
+Any implementation issue that activates this accepted design must prove
+deterministic serialization, graph invariants, atomic transactions, structural
+inverse validation, unavailable-content fallbacks, linked persistence bundles,
+headless fixtures, dependency direction, input/accessibility parity,
+native-window ownership, measured performance, full `ui_surface` supersession,
+and current documentation/truth evidence.
 
-Final completion requires no unowned, unexplained, or unaccepted risk.
+Acceptance belongs to the reviewed pull request and its exact-head repository
+validation. Final completion requires no unowned, unexplained, or unaccepted
+risk.
