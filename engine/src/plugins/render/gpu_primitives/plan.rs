@@ -526,19 +526,22 @@ mod tests {
     use super::*;
     use crate::plugins::gpu::{
         CurrentRenderBufferCopyTerminal, CurrentRenderBufferUploadTerminal,
-        CurrentRenderPipelineBindGroupsTerminal, CurrentRenderPipelineCreationTerminal,
+        CurrentRenderComputePipelineTerminal, CurrentRenderPipelineBindGroupsTerminal,
         CurrentRenderReadbackBufferTerminal, GpuBindGroupLayoutDescriptor, GpuBindingDeclaration,
         GpuBindingKind, GpuBindingProvenance, GpuBufferDescriptor, GpuBufferInitialization,
         GpuBufferUsage, GpuBufferUsages, GpuCapabilityFeature, GpuCapabilityProfile,
-        GpuCapabilityRequirement, GpuContext, GpuContextDescriptor, GpuEntryPointDescriptor,
-        GpuEntryPointName, GpuMemoryIntent, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
+        GpuCapabilityRequirement, GpuCapabilityRequirements, GpuComputePipelineDescriptor,
+        GpuContext, GpuContextDescriptor, GpuEntryPointDescriptor, GpuEntryPointName,
+        GpuMemoryIntent, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
         GpuProgramInterfaceDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
         GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
         GpuProgramSourceRevision, GpuRealizedBindGroup, GpuRealizedBuffer,
-        GpuRealizedPipelineLayout, GpuRealizedProgram, GpuReconstruction, GpuResourceCommon,
-        GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource,
+        GpuRealizedComputePipeline, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+        GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource,
         GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuShaderStage, GpuShaderStages,
-        GpuSpecializationValue, GpuWorkResourceIdAllocator,
+        GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
+        GpuSpecializationSchema, GpuSpecializationValue, GpuSpecializationValueSet,
+        GpuWorkResourceIdAllocator,
     };
     use crate::plugins::render::{
         CompiledDrawSource, CompiledPassExecutionPlan, CounterResetDescriptor, DrawIndirectArgs,
@@ -1003,8 +1006,8 @@ mod tests {
         let args_readback =
             prepare_readback_buffer(&context, &mut readback_ids, DrawIndirectArgs::BYTE_SIZE);
 
-        // The test deliberately completes G4C1 resource and G4C2 program/binding realization
-        // before borrowing the current raw device/queue operation interval below.
+        // The test deliberately completes G4C1 resource, G4C2 program/binding, and G4C3 pipeline
+        // realization before borrowing the raw G5 device/queue operation interval below.
         let realized_stages = realize_runtime_primitive_stages(
             &context,
             workspace_root,
@@ -1071,7 +1074,7 @@ mod tests {
             label: Some("gpu_primitive_runtime_test_encoder"),
         });
         for stage in &realized_stages {
-            encode_runtime_primitive_stage(&context, device, &mut encoder, stage);
+            encode_runtime_primitive_stage(&context, &mut encoder, stage);
         }
         copy_storage_buffer_to_readback(
             &context,
@@ -1156,7 +1159,7 @@ mod tests {
         values: &[u32],
     ) {
         context
-            .current_render_pipeline_bridge()
+            .current_render_execution_bridge()
             .for_buffer_upload(
                 buffer,
                 UploadPrimitiveStorage {
@@ -1170,8 +1173,7 @@ mod tests {
     #[derive(Debug, Clone)]
     struct RealizedPrimitiveStage {
         stage: GpuPrimitiveDispatchStage,
-        program: GpuRealizedProgram,
-        pipeline_layout: GpuRealizedPipelineLayout,
+        pipeline: GpuRealizedComputePipeline,
         bind_group: GpuRealizedBindGroup,
     }
 
@@ -1243,7 +1245,7 @@ mod tests {
                     admitted_source,
                     interface.clone(),
                     [GpuEntryPointDescriptor::new(
-                        entry_point,
+                        entry_point.clone(),
                         GpuShaderStage::Compute,
                         interface,
                     )],
@@ -1252,6 +1254,15 @@ mod tests {
                 let pipeline_layout_descriptor =
                     GpuPipelineLayoutDescriptor::new([bind_group_layout.clone()])
                         .expect("primitive pipeline layout descriptor should construct");
+                let specialization = primitive_specialization(stage);
+                let pipeline_descriptor = GpuComputePipelineDescriptor::new(
+                    program.clone(),
+                    entry_point,
+                    pipeline_layout_descriptor.clone(),
+                    specialization,
+                    GpuCapabilityRequirements::new(),
+                )
+                .expect("primitive compute pipeline descriptor should construct");
                 let realized_program = pollster::block_on(context.realize_program(&program))
                     .expect("primitive shader program should realize");
                 let realized_bind_group_layout =
@@ -1261,6 +1272,12 @@ mod tests {
                     context.realize_pipeline_layout(&pipeline_layout_descriptor),
                 )
                 .expect("primitive pipeline layout should realize");
+                let realized_pipeline = pollster::block_on(context.realize_compute_pipeline(
+                    &pipeline_descriptor,
+                    &realized_program,
+                    &realized_pipeline_layout,
+                ))
+                .expect("primitive compute pipeline should realize");
                 let values = stage
                     .shader_bindings
                     .iter()
@@ -1296,51 +1313,55 @@ mod tests {
 
                 RealizedPrimitiveStage {
                     stage: stage.clone(),
-                    program: realized_program,
-                    pipeline_layout: realized_pipeline_layout,
+                    pipeline: realized_pipeline,
                     bind_group: realized_bind_group,
                 }
             })
             .collect()
     }
 
+    fn primitive_specialization(stage: &GpuPrimitiveDispatchStage) -> GpuSpecializationValueSet {
+        let mut declarations = Vec::with_capacity(stage.constants.len());
+        let mut entries = Vec::with_capacity(stage.constants.len());
+        for constant in &stage.constants {
+            let key = GpuSpecializationKey::new(constant.name.clone())
+                .expect("primitive specialization key should construct");
+            declarations.push(
+                GpuSpecializationDeclaration::new(
+                    key.clone(),
+                    constant.value.value_type(),
+                    None,
+                    GpuCapabilityRequirements::new(),
+                )
+                .expect("primitive specialization declaration should construct"),
+            );
+            entries.push(GpuSpecializationEntry::new(key, constant.value));
+        }
+        GpuSpecializationValueSet::new(
+            GpuSpecializationSchema::new(declarations)
+                .expect("primitive specialization schema should construct"),
+            entries,
+        )
+        .expect("primitive specialization values should construct")
+    }
+
     fn encode_runtime_primitive_stage(
         context: &GpuContext,
-        device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         realized: &RealizedPrimitiveStage,
     ) {
-        let mut pipeline = None;
         context
-            .current_render_pipeline_bridge()
-            .for_pipeline_creation(
-                &realized.program,
-                &realized.pipeline_layout,
-                CreatePrimitiveComputePipeline {
-                    device,
+            .current_render_execution_bridge()
+            .for_compute_pipeline(
+                &realized.pipeline,
+                EncodePrimitivePipeline {
+                    context,
+                    encoder,
                     stage: &realized.stage,
-                    output: &mut pipeline,
+                    bind_group: &realized.bind_group,
                 },
             )
-            .expect("primitive pipeline inputs should bridge");
-        let pipeline = pipeline.expect("primitive compute pipeline should create");
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("gpu_primitive_runtime_test_pass"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        context
-            .current_render_pipeline_bridge()
-            .for_pipeline_bind_groups(
-                &[&realized.bind_group],
-                EncodePrimitiveStage { pass: &mut pass },
-            )
-            .expect("primitive bind group should bridge");
-        pass.dispatch_workgroups(
-            realized.stage.dispatch[0],
-            realized.stage.dispatch[1],
-            realized.stage.dispatch[2],
-        );
+            .expect("primitive compute pipeline should bridge");
     }
 
     #[derive(Debug)]
@@ -1375,7 +1396,7 @@ mod tests {
         destination: &TestReadbackBuffer,
     ) {
         context
-            .current_render_pipeline_bridge()
+            .current_render_execution_bridge()
             .for_buffer_copy(
                 source,
                 &destination.realized,
@@ -1411,7 +1432,7 @@ mod tests {
     ) -> Vec<u32> {
         let mut output = None;
         context
-            .current_render_pipeline_bridge()
+            .current_render_execution_bridge()
             .for_buffer_readback(
                 &buffer.realized,
                 ReadPrimitiveBuffer {
@@ -1434,47 +1455,32 @@ mod tests {
         }
     }
 
-    struct CreatePrimitiveComputePipeline<'a> {
-        device: &'a wgpu::Device,
+    struct EncodePrimitivePipeline<'a> {
+        context: &'a GpuContext,
+        encoder: &'a mut wgpu::CommandEncoder,
         stage: &'a GpuPrimitiveDispatchStage,
-        output: &'a mut Option<wgpu::ComputePipeline>,
+        bind_group: &'a GpuRealizedBindGroup,
     }
 
-    impl CurrentRenderPipelineCreationTerminal for CreatePrimitiveComputePipeline<'_> {
-        fn create_pipeline(self, program: &wgpu::ShaderModule, layout: &wgpu::PipelineLayout) {
-            let constants = self
-                .stage
-                .constants
-                .iter()
-                .map(|constant| {
-                    let value = match constant.value {
-                        GpuSpecializationValue::Bool(value) => {
-                            if value {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        GpuSpecializationValue::U32(value) => f64::from(value),
-                        GpuSpecializationValue::I32(value) => f64::from(value),
-                        GpuSpecializationValue::F32(value) => f64::from(value.get()),
-                    };
-                    (constant.name.as_str(), value)
-                })
-                .collect::<Vec<_>>();
-            *self.output = Some(self.device.create_compute_pipeline(
-                &wgpu::ComputePipelineDescriptor {
-                    label: Some("gpu_primitive_runtime_test_pipeline"),
-                    layout: Some(layout),
-                    module: program,
-                    entry_point: Some("cs_main"),
-                    compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: constants.as_slice(),
-                        ..wgpu::PipelineCompilationOptions::default()
-                    },
-                    cache: None,
-                },
-            ));
+    impl CurrentRenderComputePipelineTerminal for EncodePrimitivePipeline<'_> {
+        fn use_compute_pipeline(self, pipeline: &wgpu::ComputePipeline) {
+            let mut pass = self.encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gpu_primitive_runtime_test_pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(pipeline);
+            self.context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[self.bind_group],
+                    EncodePrimitiveStage { pass: &mut pass },
+                )
+                .expect("primitive bind group should bridge");
+            pass.dispatch_workgroups(
+                self.stage.dispatch[0],
+                self.stage.dispatch[1],
+                self.stage.dispatch[2],
+            );
         }
     }
 
