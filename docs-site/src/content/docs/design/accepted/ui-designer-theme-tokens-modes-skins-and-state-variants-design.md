@@ -16,8 +16,7 @@ related_designs:
   - ../active/ui-designer-interface-lab-platform-design.md
   - ../implemented/editor-self-authoring-and-final-ui-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer Theme Tokens Modes Skins And State Variants Design
@@ -26,10 +25,11 @@ related_roadmaps:
 
 This is the accepted implementation design for `PM-UI-DESIGN-005`.
 
-It defines deterministic styling ownership and the first legal implementation
+It defines deterministic styling ownership and the first implementation
 direction for token graph and mode resolution. It does not implement code, does
-not mark PM-005 complete, and does not authorize product code until a linked WR
-row passes `task production:plan`.
+not mark PM-005 complete, and does not authorize product changes by itself.
+Implementation requires an owning GitHub issue, canonical roadmap sequencing
+where relevant, and pull-request-owned review and exact-head validation.
 
 ## Goal
 
@@ -70,7 +70,7 @@ Architecture governance accepts this implementation direction:
 - `apps/runenwerk_editor` may host Theme Designer and Lab surfaces, preview
   orchestration, and project IO, but it must not own generic token graph truth.
 
-No new ADR is required for the first PM-005 implementation row because this
+No new ADR is required for the first PM-005 implementation slice because this
 preserves the accepted description-versus-execution and derived-projection
 decisions. A future ADR or accepted design update is required before editor app
 state, runtime renderer handles, material graphs, or provider sessions become
@@ -135,21 +135,26 @@ unknown modes, duplicate selectors, incompatible state/mode combinations,
 accessibility override conflicts, unsupported target-profile features, malformed
 values, and preview-only activation attempts.
 
-## Implementation Row
+## Implementation Activation
 
-The first PM-005 implementation row is `WR-049`.
+`WR-049` is retained as historical decomposition/provenance for the first
+PM-005 token-graph slice. It is not current implementation authority.
 
-`WR-049` is bounded to the generic `domain/ui/ui_theme` token graph and
-resolution diagnostics. It may add narrow `domain/ui/ui_definition` token
-reference contracts only when needed to keep Canonical UI IR references typed.
-It must not implement app-hosted Theme Designer UI, editor-specific package
-storage, game-runtime theme package loading, renderer material lowering,
+Any current or future implementation must be activated by an owning GitHub
+issue. The bounded first slice remains the generic `domain/ui/ui_theme` token
+graph and resolution diagnostics, with narrow `domain/ui/ui_definition` token
+reference contracts only when required to keep Canonical UI IR references
+typed. It must not implement app-hosted Theme Designer UI, editor-specific
+package storage, game-runtime theme package loading, renderer material lowering,
 component recipe libraries, binding, preview matrices, persistence activation,
 or production readiness.
 
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
+
 ## Required Fitness Functions
 
-The implementation row must add focused validation for:
+The implementation slice must add focused validation for:
 
 - deterministic layer ordering;
 - alias cycle rejection;
@@ -175,10 +180,11 @@ PM-005 design acceptance does not:
 
 ## Acceptance Bar
 
-PM-005 can move from `designing` to `ready_next` when:
+PM-005 remains an accepted design when:
 
-- this accepted design exists;
-- a bounded WR row exists for the first implementation slice;
-- the production milestone links both the accepted design and WR row;
-- production, roadmap, docs, and planning validators pass;
-- `task ai:goal -- --track PT-UI-DESIGN` reports the next WR-planning action.
+- this accepted design exists and is discoverable from current UI design
+  navigation;
+- the canonical UI roadmap carries any durable sequence that remains relevant;
+- implementation is activated only by an owning GitHub issue;
+- delivery evidence belongs to the reviewed pull request;
+- current repository validation passes at the accepted revision.
