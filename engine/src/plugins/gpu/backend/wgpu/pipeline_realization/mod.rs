@@ -12,8 +12,13 @@ mod render_validation;
 
 pub(crate) use records::{ComputePipelineRealizationRecord, RenderPipelineRealizationRecord};
 
+use super::program_binding_realization::ProgramBindingRealizationState;
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
-use crate::plugins::gpu::GpuContextAffinity;
+use crate::plugins::gpu::{
+    GpuContextAffinity, GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory,
+    GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory,
+    GpuRealizedComputePipeline, GpuRealizedProgram, GpuRealizedRenderPipeline,
+};
 use compute::{ComputePipelineRequestKey, ComputeRecord};
 use diagnostics::PipelineCacheDiagnosticRegistry;
 use registry::SingleFlightRegistry;
@@ -53,6 +58,175 @@ impl PipelineRealizationState {
             error_attribution_gate,
         }
     }
+
+    /// Validates one already-issued opaque compute-pipeline handle for the lexical execution
+    /// bridge and lends only its private WGPU object to the supplied call. Pipeline lookup-cache
+    /// residency is deliberately not consulted: the retained G4C3 record is execution authority.
+    pub(crate) fn with_execution_compute_pipeline<R>(
+        &self,
+        pipeline: &GpuRealizedComputePipeline,
+        program_binding_state: &ProgramBindingRealizationState,
+        operation: impl FnOnce(&wgpu::ComputePipeline) -> R,
+    ) -> Result<R, GpuPipelineRealizationError> {
+        let request = "current render compute-pipeline execution";
+        let record = &pipeline.record;
+        self.validate_execution_affinity(request, record.affinity())?;
+        publication::ensure_available(self, request)?;
+        self.validate_compute_execution_record(request, record, program_binding_state)?;
+        Ok(operation(&record.object))
+    }
+
+    /// Validates one already-issued opaque render-pipeline handle for the lexical execution bridge
+    /// and lends only its private WGPU object to the supplied call.
+    pub(crate) fn with_execution_render_pipeline<R>(
+        &self,
+        pipeline: &GpuRealizedRenderPipeline,
+        program_binding_state: &ProgramBindingRealizationState,
+        operation: impl FnOnce(&wgpu::RenderPipeline) -> R,
+    ) -> Result<R, GpuPipelineRealizationError> {
+        let request = "current render render-pipeline execution";
+        let record = &pipeline.record;
+        self.validate_execution_affinity(request, record.affinity())?;
+        publication::ensure_available(self, request)?;
+        self.validate_render_execution_record(request, record, program_binding_state)?;
+        Ok(operation(&record.object))
+    }
+
+    /// Validates a lexical set of render pipelines before one render pass that may switch between
+    /// them. This is required by UI encoding and still exposes no reusable raw-pipeline authority.
+    pub(crate) fn with_execution_render_pipelines<R>(
+        &self,
+        pipelines: &[&GpuRealizedRenderPipeline],
+        program_binding_state: &ProgramBindingRealizationState,
+        operation: impl FnOnce(&[&wgpu::RenderPipeline]) -> R,
+    ) -> Result<R, GpuPipelineRealizationError> {
+        let request = "current render render-pipeline-set execution";
+        publication::ensure_available(self, request)?;
+        let mut objects = Vec::with_capacity(pipelines.len());
+        for pipeline in pipelines {
+            let record = &pipeline.record;
+            self.validate_execution_affinity(request, record.affinity())?;
+            self.validate_render_execution_record(request, record, program_binding_state)?;
+            objects.push(&record.object);
+        }
+        Ok(operation(&objects))
+    }
+
+    fn validate_compute_execution_record(
+        &self,
+        request: &'static str,
+        record: &Arc<ComputePipelineRealizationRecord>,
+        program_binding_state: &ProgramBindingRealizationState,
+    ) -> Result<(), GpuPipelineRealizationError> {
+        if record.program.affinity() != record.affinity()
+            || record.layout.affinity() != record.affinity()
+            || record.program.descriptor() != record.descriptor().program()
+            || record.layout.descriptor() != record.descriptor().layout()
+        {
+            return Err(execution_bridge_violation(
+                request,
+                "the retained compute-pipeline record no longer agrees with its exact G4C2 dependencies",
+            ));
+        }
+        program_binding_state
+            .validate_execution_bridge_program(&record.program)
+            .map_err(|error| map_execution_dependency_error(request, error))?;
+        program_binding_state
+            .validate_execution_bridge_pipeline_layout(&record.layout)
+            .map_err(|error| map_execution_dependency_error(request, error))?;
+        Ok(())
+    }
+
+    fn validate_render_execution_record(
+        &self,
+        request: &'static str,
+        record: &Arc<RenderPipelineRealizationRecord>,
+        program_binding_state: &ProgramBindingRealizationState,
+    ) -> Result<(), GpuPipelineRealizationError> {
+        if record.program.affinity() != record.affinity()
+            || record.layout.affinity() != record.affinity()
+            || record.program.descriptor() != record.descriptor().program()
+            || record.layout.descriptor() != record.descriptor().layout()
+        {
+            return Err(execution_bridge_violation(
+                request,
+                "the retained render-pipeline record no longer agrees with its exact G4C2 dependencies",
+            ));
+        }
+        program_binding_state
+            .validate_execution_bridge_program(&record.program)
+            .map_err(|error| map_execution_dependency_error(request, error))?;
+        program_binding_state
+            .validate_execution_bridge_pipeline_layout(&record.layout)
+            .map_err(|error| map_execution_dependency_error(request, error))?;
+
+        let program = GpuRealizedProgram::from_record(Arc::clone(&record.program));
+        let stage_io = render_validation::validate_stage_io(record.descriptor(), &program)?;
+        if stage_io != record.stage_io {
+            return Err(execution_bridge_violation(
+                request,
+                "the retained render-pipeline stage-IO evidence no longer matches its descriptor and realized program",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_execution_affinity(
+        &self,
+        request: &'static str,
+        observed: GpuContextAffinity,
+    ) -> Result<(), GpuPipelineRealizationError> {
+        if observed.context() != self.affinity.context() {
+            return Err(GpuPipelineRealizationError::affinity(
+                GpuPipelineRealizationErrorCategory::ForeignContext,
+                request,
+                self.affinity,
+                observed,
+            ));
+        }
+        if observed.generation() != self.affinity.generation() {
+            return Err(GpuPipelineRealizationError::affinity(
+                GpuPipelineRealizationErrorCategory::StaleDeviceGeneration,
+                request,
+                self.affinity,
+                observed,
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn map_execution_dependency_error(
+    request: &'static str,
+    error: GpuProgramBindingRealizationError,
+) -> GpuPipelineRealizationError {
+    let category = match error.category() {
+        GpuProgramBindingRealizationErrorCategory::ForeignContext => {
+            GpuPipelineRealizationErrorCategory::ForeignContext
+        }
+        GpuProgramBindingRealizationErrorCategory::StaleDeviceGeneration => {
+            GpuPipelineRealizationErrorCategory::StaleDeviceGeneration
+        }
+        GpuProgramBindingRealizationErrorCategory::BackendResourceExhaustion => {
+            GpuPipelineRealizationErrorCategory::BackendResourceExhaustion
+        }
+        GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost => {
+            GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
+        }
+        _ => GpuPipelineRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
+    };
+    GpuPipelineRealizationError::new(category, request, error.to_string())
+}
+
+fn execution_bridge_violation(
+    request: &'static str,
+    detail: &'static str,
+) -> GpuPipelineRealizationError {
+    GpuPipelineRealizationError::new(
+        GpuPipelineRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
+        request,
+        detail,
+    )
 }
 
 impl core::fmt::Debug for PipelineRealizationState {
