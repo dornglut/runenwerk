@@ -20,7 +20,6 @@ related_docs:
   - ../../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/active-work.md
 ---
 
 # RunenGPU and RunenRender Decomposition Execution Plan

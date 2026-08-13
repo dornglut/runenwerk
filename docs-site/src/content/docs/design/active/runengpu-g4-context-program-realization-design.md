@@ -18,7 +18,6 @@ related_docs:
   - ../../workspace/specs/pt-runengpu-g4b-program-interface-layout.ron
   - ../../workspace/specs/pt-runengpu-g4c-wgpu-realization-cutover.ron
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/active-work.md
 ---
 
 # RunenGPU G4 Context, Program, and WGPU Realization Design
