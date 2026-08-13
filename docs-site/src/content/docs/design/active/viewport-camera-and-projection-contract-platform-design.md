@@ -11,20 +11,18 @@ related_designs:
   - renderer-procedural-population-hardening-platform-design.md
   - ../implemented/render-product-surface-foundation-bundle-design.md
   - game-runtime-ui-projection-and-hud-platform-design.md
-related_roadmaps:
-  - ../workspace/roadmap-deferred.yaml
-  - ../workspace/production-tracks.yaml
 ---
 
 # Viewport Camera And Projection Contract Platform
 
 ## Decision
 
-`PT-VIEWPORT-PROJECTION` owns the long-term planning path for camera,
-projection, viewport presentation, and surface-fit contracts that cross renderer,
-editor viewport, app adapter, example, and UI embedding boundaries.
+This design owns the long-term camera, projection, viewport presentation, and
+surface-fit contract boundary historically decomposed as
+`PT-VIEWPORT-PROJECTION`. It crosses renderer, editor viewport, app adapter,
+example, and UI embedding boundaries.
 
-This is not a renderer-only cleanup and not a UI feature track. The platform
+This is not a renderer-only cleanup and not a UI feature target. The platform
 must preserve these source-truth rules:
 
 - camera intent belongs to the producer or editor viewport context that owns the
@@ -38,14 +36,20 @@ must preserve these source-truth rules:
 - app/runtime adapters pack uniforms, route input, and bridge CPU picking to GPU
   products without becoming a new semantic owner.
 
-The track exists because the current codebase has correct pieces in separate
+The design exists because the current codebase has correct pieces in separate
 owners, but the overall contract is not yet production-complete.
+
+`PT-VIEWPORT-PROJECTION`, `PM-VIEWPORT-PROJECTION-*`, `WR-101`, `WR-102`,
+`WR-104`, and `WR-106` are retained as historical decomposition/provenance
+vocabulary. They are not current work authority. Any implementation requires an
+owning GitHub issue, canonical roadmap sequencing when a maintained roadmap is
+relevant, and a reviewed pull request with exact-head validation evidence.
 
 ## Current Evidence And Gaps
 
-`WR-101` completed reusable renderer procedural 2D camera projection for the
-boids proof. That work is evidence for aspect-correct fill-viewport projection,
-equal projected world x/y scale, and producer-owned camera intent.
+Historical `WR-101` completed reusable renderer procedural 2D camera projection
+for the boids proof. That work is evidence for aspect-correct fill-viewport
+projection, equal projected world x/y scale, and producer-owned camera intent.
 
 The remaining platform gaps are broader:
 
@@ -59,8 +63,9 @@ The remaining platform gaps are broader:
 - viewport surface embedding still needs to stay camera-free while future
   identity typing and product-surface evidence improve.
 
-These gaps should not be patched as local example fixes. They need a production
-track, design gates, and follow-on WR rows with disjoint ownership.
+These gaps should not be patched as local example fixes. They need explicit
+owning issues, accepted design gates where ownership changes, disjoint write
+scopes, and reviewable evidence.
 
 ## Ownership
 
@@ -91,39 +96,37 @@ UI ownership remains camera-free:
 - no camera intent, projection policy, world ray, or gameplay/editor camera
   semantics.
 
-## Production Milestones
+## Historical Milestone Decomposition
 
-`PT-VIEWPORT-PROJECTION` is the long-term production track for this platform.
+The former production milestone sequence remains useful as architecture
+planning, but it is not live lifecycle state:
 
-- `PM-VIEWPORT-PROJECTION-001` records governance, architecture, ADR triage,
-  and the accepted follow-on WR split.
-- `PM-VIEWPORT-PROJECTION-002` covers renderer surface-fit and procedural
-  projection contracts.
-- `PM-VIEWPORT-PROJECTION-003` covers editor viewport camera and projection
-  hardening.
-- `PM-VIEWPORT-PROJECTION-004` covers example migration and product-surface
-  evidence.
-- `PM-VIEWPORT-PROJECTION-005` closes the track at `runtime_proven` and hands
-  renderer-only no-gap audit inputs to `PT-RENDER-PERFECTION`.
+- `PM-VIEWPORT-PROJECTION-001`: governance, architecture, ADR triage, and
+  follow-on decomposition.
+- `PM-VIEWPORT-PROJECTION-002`: renderer surface-fit and procedural projection
+  contracts.
+- `PM-VIEWPORT-PROJECTION-003`: editor viewport camera and projection hardening.
+- `PM-VIEWPORT-PROJECTION-004`: example migration and product-surface evidence.
+- `PM-VIEWPORT-PROJECTION-005`: runtime-proven closeout and renderer-only
+  no-gap-audit handoff.
 
-`WR-106` is the governance intake row for `PM-VIEWPORT-PROJECTION-001`. It must
-not implement renderer, editor, UI, or example behavior.
+The historical `WR-106` governance intake did not implement renderer, editor,
+UI, or example behavior. A current owning issue may adopt, refine, split, or
+reject this decomposition when work is activated.
 
-## Future WR Split
+## Bounded Follow-On Candidates
 
-`WR-106` completes only when it produces accepted governance evidence:
-
-- the design status and ADR need are resolved;
-- renderer, editor viewport, app adapter, and UI boundaries are named;
-- follow-on implementation WR candidates have disjoint write scopes;
-- each follow-on WR names focused validations and closeout evidence.
-
-Expected follow-on rows:
+Useful follow-on slices remain:
 
 - renderer surface-fit and procedural projection contracts;
 - editor viewport camera and projection hardening;
 - example and product-surface evidence migration;
 - runtime-proven closeout and renderer perfection handoff.
+
+Each activated slice must name exact ownership, write scope, focused tests,
+runtime evidence, accepted base, and stop conditions in its owning GitHub issue.
+The delivery pull request owns the complete diff, reviewed feature head, and
+acceptance evidence.
 
 ## ADR Triggers
 
@@ -140,22 +143,23 @@ An ADR or accepted design update is required before:
 
 ## Exclusions
 
-This track does not own richer boid/flock behavior. Flock identity, overlap
+This design does not own richer boid/flock behavior. Flock identity, overlap
 policy, multiple flocks, affinity groups, split/merge behavior, attractors, and
-semantic population dynamics remain separate behavior-authoring work in the
-`WR-102` direction.
+semantic population dynamics remain separate behavior-authoring work; the old
+`WR-102` label is provenance for that direction only.
 
-This track does not own game runtime HUD, world-space attachment UI, screen-space
-nameplates, damage numbers, or gameplay UI projection. Screen-space game HUD
-remains in `WR-104` and `PT-GAME-RUNTIME-UI`; world-space and entity-attached
-game UI remains deferred to `PT-GAME-WORLDSPACE-UI`.
+This design does not own game runtime HUD, world-space attachment UI,
+screen-space nameplates, damage numbers, or gameplay UI projection. Screen-space
+game HUD remains owned by the game-runtime UI design; world-space and
+entity-attached game UI remains a separate deferred boundary.
 
-This track does not reopen `WR-101`. `WR-101` is completed renderer procedural
-camera evidence and remains an input dependency.
+This design does not reopen the historical `WR-101` delivery. Its completed
+renderer procedural camera evidence remains an input dependency.
 
 ## Fitness Functions
 
-Before implementation promotion, follow-on rows must name tests for:
+Before any implementation is accepted, the owning issue and pull request must
+prove the relevant focused checks for:
 
 - renderer landscape, portrait, square, and extreme aspect projection;
 - equal projected world x/y scale where a world projection contract requires it;
@@ -165,3 +169,8 @@ Before implementation promotion, follow-on rows must name tests for:
 - examples proving migration without boids-only shortcuts;
 - guards proving no viewport-specific camera truth enters `PreparedViewFrame`;
 - guards proving generic UI primitives remain camera-free.
+
+Broad repository validation at one unchanged reviewed head includes focused
+crate tests plus `cargo validate`, `git diff --check`, and the documentation
+build. Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
