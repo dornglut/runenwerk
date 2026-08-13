@@ -6,9 +6,7 @@ layer: domain
 canonical: true
 last_reviewed: 2026-06-28
 related_docs:
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/completed-work.md
   - ../../reports/closeouts/pt-ui-component-platform-011-base-control-packages-closeout.md
   - ./ui-component-platform-generic-interaction-design.md
   - ./ui-component-platform-ownership-realignment-design.md
