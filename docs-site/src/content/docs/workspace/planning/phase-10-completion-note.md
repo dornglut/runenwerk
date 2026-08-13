@@ -27,7 +27,7 @@ engine render
   backend-side submission proof consuming evidence without owning UI semantics
 ```
 
-Validation required before recording completed-work:
+Validation required before recording completion evidence:
 
 ```text
 cargo fmt --all --check

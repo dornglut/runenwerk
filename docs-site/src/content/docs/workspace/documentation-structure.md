@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-22
+last_reviewed: 2026-08-13
 related_docs:
   - ./start-here.md
   - ./engineering-workflow.md
@@ -67,17 +67,17 @@ docs-site/src/content/docs/
 - **ADR:** durable decision, alternatives, and consequences.
 - **Architecture:** repository or subsystem ownership and dependency structure.
 - **Design:** target behavior, public vocabulary, boundaries, and migration.
-- **Investigation report:** source-grounded current reality and unresolved findings.
-- **Roadmap:** high-level sequence and dependencies; never an execution ledger.
-- **Active work:** concise cross-project summary; GitHub issues remain authoritative.
+- **Investigation report:** source-grounded point-in-time reality and unresolved findings.
+- **Roadmap:** durable high-level sequence and dependencies; never an execution or live-state ledger.
+- **GitHub issue / Engineering Portfolio:** proposed, active, blocked, deferred, completed, and prioritized work state.
 - **Closeout report:** historical completion evidence when a PR and issue are not enough.
 - **Archive:** superseded or historical context that does not authorize new work.
 
 ## Placement rules
 
 1. Put one durable decision in one ADR or accepted design.
-2. Put one active task in one GitHub issue.
-3. Put high-level sequence in the maintained roadmap.
+2. Put one active or deferred task in one GitHub issue and use the Engineering Portfolio for live priority/status.
+3. Put durable high-level sequence and dependencies in the maintained roadmap.
 4. Put current behavior in code and tests.
 5. Put delivery evidence in the pull request.
 6. Cross-link instead of copying full state.
@@ -90,4 +90,4 @@ docs-site/src/content/docs/
 - Keep names literal and searchable.
 - Prefer ownership-oriented names for architecture and task-oriented names for procedures.
 
-When pruning or moving documents, update inbound links and record any compatibility entrypoint that remains.
+When pruning or moving documents, update current inbound links. Historical reports may preserve point-in-time provenance, but they do not authorize current work.

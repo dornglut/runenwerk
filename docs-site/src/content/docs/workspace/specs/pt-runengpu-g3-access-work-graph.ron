@@ -34,7 +34,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/reports/closeouts/pt-runengpu-g2-implementation-closeout.md",
         "docs-site/src/content/docs/workspace/specs/pt-runengpu-g2-capabilities-resource-descriptors.ron",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
     ],
 
     goal: "Create one future-transferable RunenGPU authority for checked work-time resource access, region-aware initialization flow, hazards, access-derived dependencies, operation-implied capability requirements, immutable generic work fragments and typed operation intent including exact render attachments, buffer-zero clearing, and query resolution, deterministic graph preparation, and inspection; migrate current render, GPU-primitive, and timestamp consumers through one temporary adapter; and delete replaced renderer-owned generic correctness authority without implementing backend admission or execution.",

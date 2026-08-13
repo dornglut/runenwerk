@@ -1,5 +1,5 @@
 // Compact handoff contract for one bounded implementation phase.
-// Markdown authority remains primary; this spec derives from active-work,
+// Markdown authority remains primary; this spec derives from the owning GitHub issue,
 // roadmap, production-tracks, the accepted cutover plan, runtime architecture,
 // and Phase 011 closeout truth.
 
@@ -17,7 +17,6 @@ PhaseImplementationSpec(
         "TESTING.md",
         "docs-site/src/content/docs/workspace/start-here.md",
         "docs-site/src/content/docs/workspace/engineering-workflow.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
         "docs-site/src/content/docs/workspace/planning/production-tracks.md",
         "docs-site/src/content/docs/workspace/planning/decision-register.md",
@@ -29,8 +28,8 @@ PhaseImplementationSpec(
 
     complete_investigation_gate_status: "complete for implementation authorization; current source inspection found no apps/ui_counter_runtime crate, inspected workspace app membership, existing app command patterns, App windowed/headless APIs, UiPlugin mount/source/action/evaluation/trace/frame-publication APIs, focused engine tests, and the proof-local ui_app_integration boundary",
     complete_design_gate_status: "complete for implementation authorization; accepted cutover plus this activation contract records owner, allowed paths, forbidden paths, validation, evidence, principle checks, module decomposition, and stop conditions",
-    principle_compliance_status: "complete in active-work principle compliance matrix",
-    module_decomposition_status: "complete in active-work module decomposition map",
+    principle_compliance_status: "complete in the accepted cutover plan's principle-compliance matrix",
+    module_decomposition_status: "complete in the accepted cutover plan's module decomposition map",
     maintainability_review_status: "complete for activation; implementation must keep product app code, generic UiPlugin runtime fixes, assets, tests, and proof docs separated by owner",
 
     allowed_paths: [
@@ -153,7 +152,7 @@ PhaseImplementationSpec(
 
     closeout_expectations: [
         "Record delivered contract, changed files, exact modules/functions, evidence classes, validation, forbidden-scope proof, known gaps, merge readiness, and next action.",
-        "Update planning/completed-work/decision-register/closeout truth before Phase 013 implementation starts.",
+        "Update the owning GitHub issue/portfolio, durable roadmap when applicable, decision register when a durable decision changed, and closeout evidence before Phase 013 implementation starts.",
         "Open Phase 013 active planning only after Phase 012 is reviewed, merged, and truthfully closed.",
     ],
 

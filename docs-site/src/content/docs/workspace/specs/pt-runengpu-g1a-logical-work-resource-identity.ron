@@ -176,7 +176,7 @@ PhaseImplementationSpec(
         "focused compile-fail, cross-flow rejection, and source-guard tests owned by engine",
         "docs-site/src/content/docs/reports/proofs/pt-runengpu-g1a-*.md",
         "docs-site/src/content/docs/reports/closeouts/pt-runengpu-g1a-closeout.md only after implementation merges",
-        "roadmap, active-work, decision-register, and phase-spec status updates required for closeout",
+        "durable roadmap/decision-register updates when applicable, owning GitHub issue/portfolio updates, and phase-spec status updates required for closeout",
     ],
 
     forbidden_scope: [

@@ -12,7 +12,6 @@ related_designs:
   - ../../design/active/runenrender-decomposition-design.md
   - ../../design/active/runenrender-internal-decomposition-execution-plan.md
 related_roadmaps:
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
 ---
 
