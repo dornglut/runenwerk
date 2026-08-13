@@ -17,7 +17,6 @@ related_docs:
   - ../../reports/investigations/runengpu-runenrender-application-domain-fit.md
   - ../../reports/investigations/runengpu-proof-workload-strategy.md
   - ../../workspace/planning/roadmap.md
-  - ../../workspace/planning/active-work.md
 ---
 
 # Runen Family Operational Hardening Design
