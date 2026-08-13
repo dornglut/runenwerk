@@ -84,11 +84,20 @@ impl Renderer {
                     runtime_resources,
                 )?;
                 let pipeline = match &bindings.pipeline_key.pipeline_descriptor {
-                    FlowPassPipelineDescriptor::Compute(descriptor) => PreparedFlowPipeline::Compute(
-                        pollster::block_on(context.realize_compute_pipeline(descriptor))?,
-                    ),
+                    FlowPassPipelineDescriptor::Compute(descriptor) => {
+                        PreparedFlowPipeline::Compute(pollster::block_on(
+                            context.realize_compute_pipeline(
+                                descriptor,
+                                &bindings.program,
+                                &bindings.pipeline_layout,
+                            ),
+                        )?)
+                    }
                     FlowPassPipelineDescriptor::Render(_) => {
-                        bail!("compute pass '{}' resolved a render pipeline descriptor", value.pass_id)
+                        bail!(
+                            "compute pass '{}' resolved a render pipeline descriptor",
+                            value.pass_id
+                        )
                     }
                 };
                 Ok(Some(PreparedPipelinePass {
@@ -159,11 +168,20 @@ impl Renderer {
                     runtime_resources,
                 )?;
                 let pipeline = match &bindings.pipeline_key.pipeline_descriptor {
-                    FlowPassPipelineDescriptor::Render(descriptor) => PreparedFlowPipeline::Render(
-                        pollster::block_on(context.realize_render_pipeline(descriptor))?,
-                    ),
+                    FlowPassPipelineDescriptor::Render(descriptor) => {
+                        PreparedFlowPipeline::Render(pollster::block_on(
+                            context.realize_render_pipeline(
+                                descriptor,
+                                &bindings.program,
+                                &bindings.pipeline_layout,
+                            ),
+                        )?)
+                    }
                     FlowPassPipelineDescriptor::Compute(_) => {
-                        bail!("fullscreen pass '{}' resolved a compute pipeline descriptor", value.pass_id)
+                        bail!(
+                            "fullscreen pass '{}' resolved a compute pipeline descriptor",
+                            value.pass_id
+                        )
                     }
                 };
                 Ok(Some(PreparedPipelinePass {
@@ -229,11 +247,20 @@ impl Renderer {
                     runtime_resources,
                 )?;
                 let pipeline = match &bindings.pipeline_key.pipeline_descriptor {
-                    FlowPassPipelineDescriptor::Render(descriptor) => PreparedFlowPipeline::Render(
-                        pollster::block_on(context.realize_render_pipeline(descriptor))?,
-                    ),
+                    FlowPassPipelineDescriptor::Render(descriptor) => {
+                        PreparedFlowPipeline::Render(pollster::block_on(
+                            context.realize_render_pipeline(
+                                descriptor,
+                                &bindings.program,
+                                &bindings.pipeline_layout,
+                            ),
+                        )?)
+                    }
                     FlowPassPipelineDescriptor::Compute(_) => {
-                        bail!("graphics pass '{}' resolved a compute pipeline descriptor", value.pass_id)
+                        bail!(
+                            "graphics pass '{}' resolved a compute pipeline descriptor",
+                            value.pass_id
+                        )
                     }
                 };
                 Ok(Some(PreparedPipelinePass {
@@ -426,17 +453,19 @@ impl Renderer {
             }
         };
         let mut encode_result = Ok(());
-        context.current_render_execution_bridge().for_compute_pipeline(
-            pipeline,
-            EncodeComputePipeline {
-                context,
-                encoder,
-                bind_group: prepared.bindings.bind_group.as_ref(),
-                dispatch,
-                gpu_timestamp_writes,
-                result: &mut encode_result,
-            },
-        )?;
+        context
+            .current_render_execution_bridge()
+            .for_compute_pipeline(
+                pipeline,
+                EncodeComputePipeline {
+                    context,
+                    encoder,
+                    bind_group: prepared.bindings.bind_group.as_ref(),
+                    dispatch,
+                    gpu_timestamp_writes,
+                    result: &mut encode_result,
+                },
+            )?;
         encode_result?;
         Ok(EncodedPipelinePass {
             dispatch_workgroups: Some(dispatch),
@@ -470,7 +499,10 @@ impl Renderer {
         let pipeline = match &prepared.pipeline {
             PreparedFlowPipeline::Render(pipeline) => pipeline,
             PreparedFlowPipeline::Compute(_) => {
-                bail!("fullscreen pass '{}' retained a compute pipeline", plan.pass_id)
+                bail!(
+                    "fullscreen pass '{}' retained a compute pipeline",
+                    plan.pass_id
+                )
             }
         };
         let material_resources =
@@ -489,20 +521,22 @@ impl Renderer {
             RuntimeTextureView::Realized(view) => (None, vec![view]),
         };
         let mut encode_result = Ok(());
-        context.current_render_execution_bridge().for_render_pipeline(
-            pipeline,
-            EncodeFullscreenPipeline {
-                context,
-                encoder,
-                surface_view,
-                realized_views: &realized_views,
-                bind_group: prepared.bindings.bind_group.as_ref(),
-                material_resources,
-                load,
-                gpu_timestamp_writes,
-                result: &mut encode_result,
-            },
-        )?;
+        context
+            .current_render_execution_bridge()
+            .for_render_pipeline(
+                pipeline,
+                EncodeFullscreenPipeline {
+                    context,
+                    encoder,
+                    surface_view,
+                    realized_views: &realized_views,
+                    bind_group: prepared.bindings.bind_group.as_ref(),
+                    material_resources,
+                    load,
+                    gpu_timestamp_writes,
+                    result: &mut encode_result,
+                },
+            )?;
         encode_result?;
         Ok(EncodedPipelinePass {
             dispatch_workgroups: None,
@@ -538,7 +572,10 @@ impl Renderer {
         let pipeline = match &prepared.pipeline {
             PreparedFlowPipeline::Render(pipeline) => pipeline,
             PreparedFlowPipeline::Compute(_) => {
-                bail!("graphics pass '{}' retained a compute pipeline", plan.pass_id)
+                bail!(
+                    "graphics pass '{}' retained a compute pipeline",
+                    plan.pass_id
+                )
             }
         };
         let material_resources =
@@ -612,10 +649,18 @@ impl Renderer {
         let instance_range = draw.first_instance..draw.first_instance + draw.instance_count;
         let draw = match (index_buffer.as_ref(), indirect_buffer) {
             (Some(_), Some((indirect, RenderIndirectDrawArgsKind::DrawIndexed, byte_offset))) => {
-                GraphicsDraw::Indirect { buffer: indirect.buffer, byte_offset, indexed: true }
+                GraphicsDraw::Indirect {
+                    buffer: indirect.buffer,
+                    byte_offset,
+                    indexed: true,
+                }
             }
             (None, Some((indirect, RenderIndirectDrawArgsKind::Draw, byte_offset))) => {
-                GraphicsDraw::Indirect { buffer: indirect.buffer, byte_offset, indexed: false }
+                GraphicsDraw::Indirect {
+                    buffer: indirect.buffer,
+                    byte_offset,
+                    indexed: false,
+                }
             }
             (Some(_), Some((_indirect, RenderIndirectDrawArgsKind::Draw, _))) => bail!(
                 "graphics pass '{}' indexed indirect draw uses non-indexed indirect args",
@@ -625,12 +670,23 @@ impl Renderer {
                 "graphics pass '{}' non-indexed indirect draw uses indexed indirect args",
                 plan.pass_id
             ),
-            (Some(_), None) => GraphicsDraw::Direct { indexed: true, vertex_range, instance_range },
-            (None, None) => GraphicsDraw::Direct { indexed: false, vertex_range, instance_range },
+            (Some(_), None) => GraphicsDraw::Direct {
+                indexed: true,
+                vertex_range,
+                instance_range,
+            },
+            (None, None) => GraphicsDraw::Direct {
+                indexed: false,
+                vertex_range,
+                instance_range,
+            },
         };
         let index_buffer = index_buffer.as_ref().map(|buffer| buffer.buffer);
         let depth_target = depth_target.as_ref().filter(|_| {
-            !matches!(plan.raster_state.state.depth_policy, RenderDepthPolicy::Disabled)
+            !matches!(
+                plan.raster_state.state.depth_policy,
+                RenderDepthPolicy::Disabled
+            )
         });
         let surface_color_view = match &color_target.view {
             RuntimeTextureView::Surface(view) => Some(*view),
@@ -644,25 +700,27 @@ impl Renderer {
             attachment_views.push(&depth.view);
         }
         let mut encode_result = Ok(());
-        context.current_render_execution_bridge().for_render_pipeline(
-            pipeline,
-            EncodeGraphicsPipeline {
-                context,
-                encoder,
-                surface_color_view,
-                color_is_realized: surface_color_view.is_none(),
-                has_depth: depth_target.is_some(),
-                attachment_views: &attachment_views,
-                bind_group: prepared.bindings.bind_group.as_ref(),
-                material_resources,
-                load,
-                gpu_timestamp_writes,
-                vertex_buffers: &vertex_buffers,
-                index_buffer,
-                draw,
-                result: &mut encode_result,
-            },
-        )?;
+        context
+            .current_render_execution_bridge()
+            .for_render_pipeline(
+                pipeline,
+                EncodeGraphicsPipeline {
+                    context,
+                    encoder,
+                    surface_color_view,
+                    color_is_realized: surface_color_view.is_none(),
+                    has_depth: depth_target.is_some(),
+                    attachment_views: &attachment_views,
+                    bind_group: prepared.bindings.bind_group.as_ref(),
+                    material_resources,
+                    load,
+                    gpu_timestamp_writes,
+                    vertex_buffers: &vertex_buffers,
+                    index_buffer,
+                    draw,
+                    result: &mut encode_result,
+                },
+            )?;
         encode_result?;
         Ok(EncodedPipelinePass {
             dispatch_workgroups: None,
@@ -694,14 +752,17 @@ impl CurrentRenderComputePipelineTerminal for EncodeComputePipeline<'_> {
         };
         if let Some(writes) = self.gpu_timestamp_writes {
             let mut nested_result = Ok(());
-            let bridge_result = self.context.current_render_execution_bridge().for_timestamp_writes(
-                &writes.query_set,
-                EncodeTimestampedComputePass {
-                    operation,
-                    indices: writes.indices,
-                    result: &mut nested_result,
-                },
-            );
+            let bridge_result = self
+                .context
+                .current_render_execution_bridge()
+                .for_timestamp_writes(
+                    &writes.query_set,
+                    EncodeTimestampedComputePass {
+                        operation,
+                        indices: writes.indices,
+                        result: &mut nested_result,
+                    },
+                );
             *self.result = match bridge_result {
                 Ok(()) => nested_result,
                 Err(error) => Err(error.into()),
@@ -733,10 +794,15 @@ impl EncodeComputePass<'_> {
         });
         pass.set_pipeline(self.pipeline);
         if let Some(bind_group) = self.bind_group {
-            self.context.current_render_execution_bridge().for_pipeline_bind_groups(
-                &[bind_group],
-                SetComputeBindGroup { pass: &mut pass, index: 0 },
-            )?;
+            self.context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[bind_group],
+                    SetComputeBindGroup {
+                        pass: &mut pass,
+                        index: 0,
+                    },
+                )?;
         }
         pass.dispatch_workgroups(self.dispatch[0], self.dispatch[1], self.dispatch[2]);
         Ok(())
@@ -760,7 +826,11 @@ struct SetComputeBindGroup<'a, 'pass> {
 }
 impl CurrentRenderPipelineBindGroupsTerminal for SetComputeBindGroup<'_, '_> {
     fn bind_groups(self, groups: &[&BindGroup]) {
-        debug_assert_eq!(groups.len(), 1, "each current render terminal binds one group");
+        debug_assert_eq!(
+            groups.len(),
+            1,
+            "each current render terminal binds one group"
+        );
         self.pass.set_bind_group(self.index, groups[0], &[]);
     }
 }
@@ -770,7 +840,11 @@ struct SetRenderBindGroup<'a, 'pass> {
 }
 impl CurrentRenderPipelineBindGroupsTerminal for SetRenderBindGroup<'_, '_> {
     fn bind_groups(self, groups: &[&BindGroup]) {
-        debug_assert_eq!(groups.len(), 1, "each current render terminal binds one group");
+        debug_assert_eq!(
+            groups.len(),
+            1,
+            "each current render terminal binds one group"
+        );
         self.pass.set_bind_group(self.index, groups[0], &[]);
     }
 }
@@ -788,20 +862,23 @@ struct EncodeFullscreenPipeline<'a> {
 }
 impl CurrentRenderRenderPipelineTerminal for EncodeFullscreenPipeline<'_> {
     fn use_render_pipeline(self, pipeline: &RenderPipeline) {
-        let bridge_result = self.context.current_render_execution_bridge().for_pass_attachments(
-            self.realized_views,
-            EncodeFullscreenPass {
-                context: self.context,
-                encoder: self.encoder,
-                surface_view: self.surface_view,
-                pipeline,
-                bind_group: self.bind_group,
-                material_resources: self.material_resources,
-                load: self.load,
-                gpu_timestamp_writes: self.gpu_timestamp_writes,
-                result: self.result,
-            },
-        );
+        let bridge_result = self
+            .context
+            .current_render_execution_bridge()
+            .for_pass_attachments(
+                self.realized_views,
+                EncodeFullscreenPass {
+                    context: self.context,
+                    encoder: self.encoder,
+                    surface_view: self.surface_view,
+                    pipeline,
+                    bind_group: self.bind_group,
+                    material_resources: self.material_resources,
+                    load: self.load,
+                    gpu_timestamp_writes: self.gpu_timestamp_writes,
+                    result: self.result,
+                },
+            );
         if let Err(error) = bridge_result {
             *self.result = Err(error.into());
         }
@@ -833,14 +910,17 @@ impl CurrentRenderAttachmentsTerminal for EncodeFullscreenPass<'_> {
         };
         if let Some(writes) = self.gpu_timestamp_writes {
             let mut nested_result = Ok(());
-            let bridge_result = self.context.current_render_execution_bridge().for_timestamp_writes(
-                &writes.query_set,
-                EncodeTimestampedFullscreenPass {
-                    operation,
-                    indices: writes.indices,
-                    result: &mut nested_result,
-                },
-            );
+            let bridge_result = self
+                .context
+                .current_render_execution_bridge()
+                .for_timestamp_writes(
+                    &writes.query_set,
+                    EncodeTimestampedFullscreenPass {
+                        operation,
+                        indices: writes.indices,
+                        result: &mut nested_result,
+                    },
+                );
             *self.result = match bridge_result {
                 Ok(()) => nested_result,
                 Err(error) => Err(error.into()),
@@ -866,7 +946,10 @@ impl FullscreenPassOperation<'_> {
             view: self.view,
             depth_slice: None,
             resolve_target: None,
-            ops: Operations { load: self.load, store: StoreOp::Store },
+            ops: Operations {
+                load: self.load,
+                store: StoreOp::Store,
+            },
         });
         let timestamp_writes = timestamp.map(|(query_set, indices)| RenderPassTimestampWrites {
             query_set,
@@ -882,16 +965,26 @@ impl FullscreenPassOperation<'_> {
         });
         pass.set_pipeline(self.pipeline);
         if let Some(bind_group) = self.bind_group {
-            self.context.current_render_execution_bridge().for_pipeline_bind_groups(
-                &[bind_group],
-                SetRenderBindGroup { pass: &mut pass, index: 0 },
-            )?;
+            self.context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[bind_group],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 0,
+                    },
+                )?;
         }
         if let Some(resources) = self.material_resources {
-            self.context.current_render_execution_bridge().for_pipeline_bind_groups(
-                &[resources.bind_group()],
-                SetRenderBindGroup { pass: &mut pass, index: 1 },
-            )?;
+            self.context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[resources.bind_group()],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 1,
+                    },
+                )?;
         }
         pass.draw(0..3, 0..1);
         Ok(())
@@ -940,25 +1033,28 @@ struct EncodeGraphicsPipeline<'a> {
 }
 impl CurrentRenderRenderPipelineTerminal for EncodeGraphicsPipeline<'_> {
     fn use_render_pipeline(self, pipeline: &RenderPipeline) {
-        let bridge_result = self.context.current_render_execution_bridge().for_pass_attachments(
-            self.attachment_views,
-            EncodeGraphicsPass {
-                context: self.context,
-                encoder: self.encoder,
-                surface_color_view: self.surface_color_view,
-                color_is_realized: self.color_is_realized,
-                has_depth: self.has_depth,
-                pipeline,
-                bind_group: self.bind_group,
-                material_resources: self.material_resources,
-                load: self.load,
-                gpu_timestamp_writes: self.gpu_timestamp_writes,
-                vertex_buffers: self.vertex_buffers,
-                index_buffer: self.index_buffer,
-                draw: self.draw,
-                result: self.result,
-            },
-        );
+        let bridge_result = self
+            .context
+            .current_render_execution_bridge()
+            .for_pass_attachments(
+                self.attachment_views,
+                EncodeGraphicsPass {
+                    context: self.context,
+                    encoder: self.encoder,
+                    surface_color_view: self.surface_color_view,
+                    color_is_realized: self.color_is_realized,
+                    has_depth: self.has_depth,
+                    pipeline,
+                    bind_group: self.bind_group,
+                    material_resources: self.material_resources,
+                    load: self.load,
+                    gpu_timestamp_writes: self.gpu_timestamp_writes,
+                    vertex_buffers: self.vertex_buffers,
+                    index_buffer: self.index_buffer,
+                    draw: self.draw,
+                    result: self.result,
+                },
+            );
         if let Err(error) = bridge_result {
             *self.result = Err(error.into());
         }
@@ -1007,15 +1103,18 @@ impl CurrentRenderAttachmentsTerminal for EncodeGraphicsPass<'_> {
         };
         if let Some(writes) = self.gpu_timestamp_writes {
             let mut nested_result = Ok(());
-            let bridge_result = self.context.current_render_execution_bridge().for_timestamp_writes(
-                &writes.query_set,
-                EncodeTimestampedGraphicsPass {
-                    context: self.context,
-                    operation,
-                    indices: writes.indices,
-                    result: &mut nested_result,
-                },
-            );
+            let bridge_result = self
+                .context
+                .current_render_execution_bridge()
+                .for_timestamp_writes(
+                    &writes.query_set,
+                    EncodeTimestampedGraphicsPass {
+                        context: self.context,
+                        operation,
+                        indices: writes.indices,
+                        result: &mut nested_result,
+                    },
+                );
             *self.result = match bridge_result {
                 Ok(()) => nested_result,
                 Err(error) => Err(error.into()),
@@ -1045,16 +1144,24 @@ impl GraphicsPassOperation<'_> {
         timestamp: Option<(&QuerySet, GpuPassTimestampIndices)>,
         result: &mut Result<()>,
     ) {
-        let depth_attachment = self.depth_view.map(|view| RenderPassDepthStencilAttachment {
-            view,
-            depth_ops: Some(Operations { load: LoadOp::Clear(1.0), store: StoreOp::Store }),
-            stencil_ops: None,
-        });
+        let depth_attachment = self
+            .depth_view
+            .map(|view| RenderPassDepthStencilAttachment {
+                view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            });
         let color_attachment = Some(RenderPassColorAttachment {
             view: self.color_view,
             depth_slice: None,
             resolve_target: None,
-            ops: Operations { load: self.load, store: StoreOp::Store },
+            ops: Operations {
+                load: self.load,
+                store: StoreOp::Store,
+            },
         });
         let timestamp_writes = timestamp.map(|(query_set, indices)| RenderPassTimestampWrites {
             query_set,
@@ -1070,19 +1177,29 @@ impl GraphicsPassOperation<'_> {
         });
         pass.set_pipeline(self.pipeline);
         if let Some(bind_group) = self.bind_group
-            && let Err(error) = context.current_render_execution_bridge().for_pipeline_bind_groups(
-                &[bind_group],
-                SetRenderBindGroup { pass: &mut pass, index: 0 },
-            )
+            && let Err(error) = context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[bind_group],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 0,
+                    },
+                )
         {
             *result = Err(error.into());
             return;
         }
         if let Some(resources) = self.material_resources
-            && let Err(error) = context.current_render_execution_bridge().for_pipeline_bind_groups(
-                &[resources.bind_group()],
-                SetRenderBindGroup { pass: &mut pass, index: 1 },
-            )
+            && let Err(error) = context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[resources.bind_group()],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 1,
+                    },
+                )
         {
             *result = Err(error.into());
             return;
@@ -1090,31 +1207,47 @@ impl GraphicsPassOperation<'_> {
         for &(slot, buffer) in self.vertex_buffers {
             if let Err(error) = context.current_render_execution_bridge().for_vertex_buffer(
                 buffer,
-                SetVertexBuffer { pass: &mut pass, slot },
+                SetVertexBuffer {
+                    pass: &mut pass,
+                    slot,
+                },
             ) {
                 *result = Err(error.into());
                 return;
             }
         }
         if let Some(index) = self.index_buffer
-            && let Err(error) = context.current_render_execution_bridge()
+            && let Err(error) = context
+                .current_render_execution_bridge()
                 .for_index_buffer(index, SetIndexBuffer { pass: &mut pass })
         {
             *result = Err(error.into());
             return;
         }
         match self.draw {
-            GraphicsDraw::Direct { indexed, vertex_range, instance_range } => {
+            GraphicsDraw::Direct {
+                indexed,
+                vertex_range,
+                instance_range,
+            } => {
                 if indexed {
                     pass.draw_indexed(vertex_range, 0, instance_range);
                 } else {
                     pass.draw(vertex_range, instance_range);
                 }
             }
-            GraphicsDraw::Indirect { buffer, byte_offset, indexed } => {
+            GraphicsDraw::Indirect {
+                buffer,
+                byte_offset,
+                indexed,
+            } => {
                 if let Err(error) = context.current_render_execution_bridge().for_indirect_buffer(
                     buffer,
-                    DrawIndirect { pass: &mut pass, byte_offset, indexed },
+                    DrawIndirect {
+                        pass: &mut pass,
+                        byte_offset,
+                        indexed,
+                    },
                 ) {
                     *result = Err(error.into());
                 }
@@ -1131,8 +1264,11 @@ struct EncodeTimestampedGraphicsPass<'a> {
 }
 impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedGraphicsPass<'_> {
     fn write_timestamps(self, query_set: &QuerySet) {
-        self.operation
-            .encode(self.context, Some((query_set, self.indices)), self.result);
+        self.operation.encode(
+            self.context,
+            Some((query_set, self.indices)),
+            self.result,
+        );
     }
 }
 
