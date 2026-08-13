@@ -1,7 +1,7 @@
 ---
 title: Runenwerk UI Platform Capability Roadmap
-description: Non-authoritative compatibility pointer for the superseded UI capability decomposition.
-status: superseded
+description: Active non-authoritative compatibility pointer for the superseded UI capability decomposition.
+status: active
 owner: ui
 layer: domain
 canonical: false
@@ -14,8 +14,9 @@ related_designs:
 
 # Runenwerk UI Platform Capability Roadmap
 
-This former active planning roadmap has been superseded as a sequencing and
-work-activation authority.
+This active-path document is a compatibility pointer only. The former planning
+roadmap has been superseded as a sequencing and work-activation authority, and
+this file is not canonical architecture or roadmap authority.
 
 Use [`../../domain/ui/roadmap.md`](../../domain/ui/roadmap.md) for canonical UI
 execution sequencing. Cross-family sequence belongs to the maintained workspace
