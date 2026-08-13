@@ -18,7 +18,6 @@ related_docs:
   - ../../reports/closeouts/phase-16-surface2d-closeout.md
   - ../../reports/investigations/phase-16-surface2d-source-investigation.md
   - ../../reports/investigations/surface2d-future-pressure-branch-review.md
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
   - ../../workspace/engineering-workflow.md
@@ -59,7 +58,6 @@ AGENTS.md and repository workflow authority through merged PR #59
 DOMAIN_MAP.md
 CRATES.md
 docs-site/src/content/docs/domain/ui/architecture.md
-docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/design/active/ui-component-platform-surface2d-design.md
 docs-site/src/content/docs/reports/investigations/phase-16-surface2d-source-investigation.md
@@ -108,8 +106,8 @@ Current document purpose: historical design reference
 
 | Claim | Source inspected | Evidence basis | Evidence found | Conflict / drift |
 |---|---|---|---|---|
-| Phase 16 is completed | `workspace/planning/completed-work.md`, closeout report | Accepted authority and aligned closeout | Completed through PR #62 and PR #61, with post-merge validation recorded. | None. |
-| No active implementation is authorized by closeout | `active-work.md`, closeout report | Accepted planning authority | Active work records no current implementation focus after closeout. | None. |
+| Phase 16 is completed | Phase 16 closeout report | Accepted authority and aligned closeout | Completed through PR #62 and PR #61, with post-merge validation recorded. | None. |
+| No active implementation is authorized by closeout | Phase 16 closeout report | Accepted closeout authority | The closeout records no remaining Phase 16 product blocker and identifies the next step as a separate Phase 17 intake. | None. |
 | `Surface2D` must not own product/editor/game truth | existing design, UI architecture | Accepted design authority | Host/product/editor/game mutation remains outside the reusable UI substrate. | None. |
 | `ui_surface` is existing semantic vocabulary | `DOMAIN_MAP.md`, UI architecture, source investigation | Source inspection and accepted authority | `ui_surface` owns semantic surface modules and is not a Phase 16 implementation owner. | None. |
 | Surface2D implementation exists on `main` | PR #61 metadata and source closeout | Source/history inspection, local validation, aligned closeout | Phase 16 implementation is merged and validated post-merge. | None. |
@@ -119,7 +117,7 @@ Current document purpose: historical design reference
 
 | Area | Current repository reality | Current docs/planning reality | Evidence | Closeout status |
 |---|---|---|---|---|
-| Active planning | No active implementation focus is selected after closeout. | Active work points to next planning intake only. | Accepted planning authority | Closed. |
+| Active planning | No active implementation focus is selected after closeout. | The closeout identifies the next planning intake as a separate Phase 17 step. | Phase 16 closeout report | Closed. |
 | Existing code | Surface2D implementation is merged on `main`. | Completed work, roadmap, production track, and closeout identify Phase 16 as completed. | Source inspection, local validation, aligned closeout | Closed. |
 | `ui_surface` relationship | `ui_surface` owns semantic surface modules and remains separate. | Surface2D sits below `ui_surface` as coordinate/navigation vocabulary. | Source inspection and accepted design authority | None for Phase 16. |
 | Prior validation | Post-merge Phase 16 validation from `main` is recorded. | Closeout records focused Surface2D, workspace, docs, and diff validation. | Local validation and aligned closeout | Closed. |
