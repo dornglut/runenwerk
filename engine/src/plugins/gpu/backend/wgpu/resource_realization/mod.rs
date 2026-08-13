@@ -81,8 +81,8 @@ impl ResourceRealizationState {
     }
 
     /// Acquires the shared WGPU attribution gate before this G4C1 owner takes its registry
-    /// mutex. The bridge takes those locks in the same order while a raw operation loan is live,
-    /// so reversing them would permit a cross-thread gate/registry deadlock.
+    /// mutex. The execution bridge takes those locks in the same order while a raw operation loan
+    /// is live, so reversing them would permit a cross-thread gate/registry deadlock.
     fn attributed_registries(
         &self,
         resource: GpuWorkResourceId,
@@ -108,17 +108,17 @@ impl ResourceRealizationState {
         self.ensure_available(resource)?;
         // A synchronously delivered WGPU callback is observed before publication. WGPU may also
         // deliver a backend fault later; in that case the context becomes unavailable and every
-        // later realization/bridge access rejects it rather than attributing the fault to another
-        // constructor call.
+        // later realization/execution-bridge access rejects it rather than attributing the fault
+        // to another constructor call.
         self.ensure_available(resource)?;
         Ok(created)
     }
 
-    pub(crate) fn validate_pipeline_bridge_buffer(
+    pub(crate) fn validate_execution_bridge_buffer(
         &self,
         resource: &GpuRealizedBuffer,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_pipeline_bridge_record(
+        self.validate_execution_bridge_record(
             resource.logical_identity(),
             resource.affinity(),
             |registries| {
@@ -130,11 +130,11 @@ impl ResourceRealizationState {
         )
     }
 
-    pub(crate) fn validate_pipeline_bridge_texture(
+    pub(crate) fn validate_execution_bridge_texture(
         &self,
         resource: &GpuRealizedTexture,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_pipeline_bridge_record(
+        self.validate_execution_bridge_record(
             resource.logical_identity(),
             resource.affinity(),
             |registries| {
@@ -146,11 +146,11 @@ impl ResourceRealizationState {
         )
     }
 
-    pub(crate) fn validate_pipeline_bridge_texture_view(
+    pub(crate) fn validate_execution_bridge_texture_view(
         &self,
         resource: &GpuRealizedTextureView,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_pipeline_bridge_record(
+        self.validate_execution_bridge_record(
             resource.logical_identity(),
             resource.affinity(),
             |registries| {
@@ -162,11 +162,11 @@ impl ResourceRealizationState {
         )
     }
 
-    pub(crate) fn validate_pipeline_bridge_query_set(
+    pub(crate) fn validate_execution_bridge_query_set(
         &self,
         resource: &GpuRealizedQuerySet,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.validate_pipeline_bridge_record(
+        self.validate_execution_bridge_record(
             resource.logical_identity(),
             resource.affinity(),
             |registries| {
@@ -178,7 +178,7 @@ impl ResourceRealizationState {
         )
     }
 
-    fn validate_pipeline_bridge_record<Record>(
+    fn validate_execution_bridge_record<Record>(
         &self,
         identity: GpuWorkResourceId,
         observed_affinity: GpuContextAffinity,
@@ -192,16 +192,16 @@ impl ResourceRealizationState {
         let registries = self.registries(identity)?;
         let authoritative = lookup(&registries)?.ok_or_else(|| {
             GpuResourceRealizationError::new(
-                GpuResourceRealizationErrorCategory::CurrentRenderPipelineBridgeViolation,
+                GpuResourceRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
                 Some(identity),
-                "the bridge input is absent from authoritative resource realization",
+                "the execution-bridge input is absent from authoritative resource realization",
             )
         })?;
         if !Arc::ptr_eq(&authoritative, observed_record) {
             return Err(GpuResourceRealizationError::new(
-                GpuResourceRealizationErrorCategory::CurrentRenderPipelineBridgeViolation,
+                GpuResourceRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
                 Some(identity),
-                "the bridge input is not the authoritative realization record",
+                "the execution-bridge input is not the authoritative realization record",
             ));
         }
         Ok(())
