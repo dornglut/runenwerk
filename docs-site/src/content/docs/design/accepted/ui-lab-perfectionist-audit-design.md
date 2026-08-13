@@ -1,6 +1,6 @@
 ---
 title: UI Lab Perfectionist Audit Design
-description: Accepted design for Editor Lab V1 no-gap certification after PT-UI-LAB runtime-proven closeout.
+description: Accepted design for Editor Lab V1 no-gap certification after the runtime-proven UI Lab closeout.
 status: accepted
 owner: editor
 layer: domain/app
@@ -25,9 +25,7 @@ related_designs:
   - ./ui-lab-preview-lab-runtime-evidence-design.md
   - ./ui-lab-api-docs-examples-runtime-closeout-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
-  - ../../reports/roadmap-intake/2026-05-24-pt-ui-lab-perfection-no-gap-audit/proposal.yaml
+  - ../../domain/ui/roadmap.md
 related_reports:
   - ../../reports/implementation-plans/wr-100-ui-lab-perfectionist-governance-and-no-gap-audit-doctrine/plan.md
 ---
@@ -36,35 +34,28 @@ related_reports:
 
 ## Decision
 
-`PT-UI-LAB-PERFECTION` is the no-gap certification track for Editor Lab V1.
-It consumes completed `PT-UI-LAB` as runtime-proven input and does not reopen
-that track. It also does not expand into game-runtime UI projection; that is a
-separate future production track.
+`PT-UI-LAB-PERFECTION` is retained as the historical decomposition label for the
+Editor Lab V1 no-gap certification sequence. It consumed the completed UI Lab
+runtime-proven work as input and did not reopen that work. It also did not
+expand into game-runtime UI projection, which remains separate work.
 
-The track may claim `perfectionist_verified` only after runtime evidence,
-public APIs, examples, docs, generated planning state, and code truth agree
+Editor Lab V1 may claim `perfectionist_verified` only after runtime evidence,
+public APIs, examples, docs, current delivery evidence, and code truth agree
 with no known quality gaps.
 
-## WR-100 Governance Contract
+## Historical WR-100 Governance Contract
 
-The detailed `PM-UI-LAB-PERF-001` execution contract is
+The detailed `PM-UI-LAB-PERF-001` execution contract is retained at
 `docs-site/src/content/docs/reports/implementation-plans/wr-100-ui-lab-perfectionist-governance-and-no-gap-audit-doctrine/plan.md`.
 
-That contract owns the current code-truth reconciliation, evidence matrix, hard
-blockers, and disjoint follow-on WR candidate matrix for this audit track.
-This accepted design remains the doctrine source; the WR-100 contract is the
-bounded governance work package for clearing the first milestone before any
-product implementation starts.
+That contract records the historical code-truth reconciliation, evidence
+matrix, hard blockers, and follow-on decomposition for the audit sequence. This
+accepted design remains the durable doctrine source. `WR-100` is provenance,
+not current work authority.
 
 ## Architecture Governance
 
-The repository architecture-governance kickoff was run for this scope:
-
-```text
-PT-UI-LAB-PERFECTION Editor Lab V1 no-gap certification
-```
-
-Governance findings for this design:
+The repository architecture-governance kickoff established:
 
 - DDD bounded context owner: `editor`.
 - Supporting owners: `domain/ui/ui_definition` for behavior-free generic UI
@@ -81,9 +72,9 @@ Governance findings for this design:
   expose typed contracts and validation, but app windowing, provider execution,
   project IO, screenshot capture, and activation execution stay in
   `apps/runenwerk_editor` or an app-owned adapter.
-- ADR need: no ADR is required for the audit-track setup. Later milestones
-  must add or update an ADR if they change durable ownership, dependency
-  direction, source-of-truth authority, or cross-domain boundary contracts.
+- ADR need: no ADR is required for the audit setup. Later implementation must
+  add or update an ADR if it changes durable ownership, dependency direction,
+  source-of-truth authority, or cross-domain boundary contracts.
 - ATAM-lite priority order: correctness and ownership first, runtime evidence
   second, author ergonomics third, compatibility fourth, performance fifth.
 - Team Topologies label: stream-aligned editor product work with
@@ -102,17 +93,17 @@ The audit covers only Editor Lab V1:
   and failed activation preservation;
 - public API ergonomics, focused preludes, usage guides, and examples;
 - module structure and ownership-boundary consistency;
-- generated production and roadmap state.
+- agreement between current documentation, delivery evidence, and code truth.
 
 The audit explicitly excludes game-runtime UI projection implementation. If
-that work becomes active, it must enter through a separate production track and
-roadmap intake.
+that work becomes active, it requires its own owning GitHub issue and accepted
+boundary.
 
 ## Code-Truth Matrix
 
-`PM-UI-LAB-001` through `PM-UI-LAB-007` closed `PT-UI-LAB` as
-`runtime_proven`, but their closeouts intentionally preserved several
-no-gap blockers:
+`PM-UI-LAB-001` through `PM-UI-LAB-007` closed the historical UI Lab sequence as
+`runtime_proven`, but their closeouts intentionally preserved several no-gap
+blockers:
 
 - Native window screenshots, GPU visual diffing, native focus traversal, pixel
   contrast sampling, native screenshot timing, and GPU visual-diff timing are
@@ -138,58 +129,52 @@ no-gap blockers:
 Descriptor-only, docs-only, retained-preview-only, or status-panel-only proof
 is insufficient for no-gap certification.
 
-Every implementation milestone must produce runtime evidence that a reviewer
-can reproduce or inspect without reading internal provider code. Evidence may
-use a typed unsupported result only when the target runtime genuinely cannot
-perform that check; an unsupported result is not acceptable for a capability
-that the runtime can reasonably expose.
+Every implementation slice must produce runtime evidence that a reviewer can
+reproduce or inspect without reading internal provider code. Evidence may use a
+typed unsupported result only when the target runtime genuinely cannot perform
+that check; an unsupported result is not acceptable for a capability that the
+runtime can reasonably expose.
 
 Closeout evidence must include the command used, artifact paths, scenario
 coverage, diagnostics snapshots, and any remaining platform constraints.
 
 ## Milestone Doctrine
 
-`PM-UI-LAB-PERF-001` is governance and design only. It may update production
-planning, roadmap intake, and the audit design. It must not edit app or domain
-runtime code.
+The historical PM labels retain useful audit decomposition:
 
-`PM-UI-LAB-PERF-002` owns the runtime evidence platform closure.
+- `PM-UI-LAB-PERF-001`: governance and design only; no app/domain runtime code.
+- `PM-UI-LAB-PERF-002`: runtime evidence platform closure.
+- `PM-UI-LAB-PERF-003`: command, surface, ownership, and module-structure
+  source-of-truth closure.
+- `PM-UI-LAB-PERF-004`: direct-manipulation Editor Lab UX closure.
+- `PM-UI-LAB-PERF-005`: persistence, structural diff/apply, public API, and
+  examples ergonomics closure.
+- `PM-UI-LAB-PERF-006`: final no-gap audit; `perfectionist_verified` is legal
+  only when `known_quality_gaps` is empty.
 
-`PM-UI-LAB-PERF-003` owns command, surface, ownership, and module-structure
-source-of-truth closure.
+These labels describe the accepted decomposition and evidence chain. They do
+not grant current implementation authority.
 
-`PM-UI-LAB-PERF-004` owns direct-manipulation Editor Lab UX closure.
+## Current Work Gates
 
-`PM-UI-LAB-PERF-005` owns persistence, structural diff/apply, public API, and
-examples ergonomics closure.
+Any new implementation or audit repair is activated by an owning GitHub issue.
+The issue owns current scope, prerequisites, accepted base, and blockers. The
+pull request owns the complete diff, reviewed feature head, exact-head
+validation evidence, and acceptance state.
 
-`PM-UI-LAB-PERF-006` owns the final no-gap audit and may claim
-`perfectionist_verified` only when `known_quality_gaps` is empty.
-
-## Workflow Gates
-
-Before any implementation milestone starts, run:
-
-```text
-task production:plan -- --milestone "<PM-ID>" --roadmap "<WR-ID>"
-```
-
-After planning or evidence edits, run:
+Focused tests are required for the exact boundary touched. Broad repository
+validation then includes:
 
 ```text
-task production:render
-task production:validate
-task production:check
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task planning:validate
-task puml:validate
-task docs:validate
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
-After every completed phase, run the phase completion drift-check routine
-before starting the next milestone.
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision. A completed phase must still receive a
+drift review before a stronger no-gap claim is made, but historical task-based
+planning routines no longer authorize or select work.
 
 ## Stop Conditions
 
@@ -199,3 +184,4 @@ before starting the next milestone.
   normal sources of truth.
 - Evidence cannot be reproduced or inspected from closeout artifacts.
 - A milestone tries to claim `perfectionist_verified` with any known gap.
+- Prior validation is reused after the reviewed feature head changes.
