@@ -28,7 +28,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/reports/investigations/runengpu-g4-context-program-realization-investigation.md",
         "docs-site/src/content/docs/reports/closeouts/pt-runengpu-g3-implementation-closeout.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
     ],
 
     goal: "Create one future-transferable, async, headless-first GpuContext admission authority with opaque context and device-generation identity, normalized backend and portability facts, deterministic requirement admission and degradation, private WGPU instance/adapter/device/queue ownership, and structured diagnostics; migrate current context consumers without implementing reusable surfaces or G5 execution.",

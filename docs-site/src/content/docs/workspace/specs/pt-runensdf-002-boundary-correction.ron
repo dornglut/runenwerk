@@ -17,7 +17,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/reports/investigations/runensdf-extraction-investigation.md",
         "docs-site/src/content/docs/design/active/runensdf-extraction-design.md",
         "docs-site/src/content/docs/reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
         "docs-site/src/content/docs/guidelines/programming-principles.md",
     ],
@@ -34,8 +33,6 @@ PhaseImplementationSpec(
         "domain/sdf/tests/**",
         "Cargo.lock only for the bounded sdf dependency correction",
         "docs-site/src/content/docs/reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
-        "docs-site/src/content/docs/workspace/planning/completed-work.md",
         "docs-site/src/content/docs/workspace/specs/pt-runensdf-002-boundary-correction.ron",
     ],
 
@@ -116,7 +113,7 @@ PhaseImplementationSpec(
 
     closeout_expectations: [
         "Keep pt-runensdf-002-boundary-correction-closeout.md as durable historical evidence.",
-        "Keep active-work focused on the queued PT-RUNENSDF-003 planning gate rather than this completed implementation.",
+        "Keep PT-RUNENSDF-003 live state in its owning GitHub issue/portfolio rather than treating this completed implementation as active.",
         "Do not activate external repository transfer without a new bounded specification and explicit owner authorization.",
     ],
 

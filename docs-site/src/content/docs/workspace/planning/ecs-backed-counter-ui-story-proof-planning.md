@@ -7,7 +7,6 @@ layer: workspace
 canonical: false
 last_reviewed: 2026-08-04
 related_docs:
-  - ./active-work.md
   - ../engineering-workflow.md
   - ../authority-model.md
   - ../../design/active/ui-framework-app-integration-direction-review.md

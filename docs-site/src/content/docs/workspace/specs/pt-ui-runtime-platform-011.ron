@@ -1,5 +1,5 @@
 // Compact handoff contract for one bounded implementation phase.
-// Markdown authority remains primary; this spec derives from active-work,
+// Markdown authority remains primary; this spec derives from the owning GitHub issue,
 // roadmap, production-tracks, the accepted cutover plan, runtime architecture,
 // and Phase 010 closeout truth.
 
@@ -17,7 +17,6 @@ PhaseImplementationSpec(
         "TESTING.md",
         "docs-site/src/content/docs/workspace/start-here.md",
         "docs-site/src/content/docs/workspace/engineering-workflow.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
         "docs-site/src/content/docs/workspace/planning/production-tracks.md",
         "docs-site/src/content/docs/workspace/planning/decision-register.md",
@@ -29,8 +28,8 @@ PhaseImplementationSpec(
 
     complete_investigation_gate_status: "complete for implementation authorization; current source inspection named the scene overlay and debug metrics producer collection paths, their RenderPlugin schedule/export points, existing frame producers, generic registry, and focused test coverage",
     complete_design_gate_status: "complete for implementation authorization; accepted cutover plus this activation contract records owner, allowed paths, forbidden paths, validation, evidence, principle checks, module decomposition, and stop conditions",
-    principle_compliance_status: "complete in active-work principle compliance matrix",
-    module_decomposition_status: "complete in active-work module decomposition map",
+    principle_compliance_status: "complete in the accepted cutover plan's principle-compliance matrix",
+    module_decomposition_status: "complete in the accepted cutover plan's module decomposition map",
     maintainability_review_status: "complete for activation; implementation must keep generation, publication, render preparation, and tests separated",
 
     allowed_paths: [
@@ -110,7 +109,7 @@ PhaseImplementationSpec(
     ],
 
     evidence_expectations: [
-        "Report the two legacy producer paths named by active-work and how each was migrated or retired.",
+        "Report the two legacy producer paths named by the accepted cutover plan and how each was migrated or retired.",
         "Report source inspection proving RenderPlugin no longer owns scene/debug UI semantic producer collection.",
         "Report focused test evidence for scene overlay, debug metrics overlay, generic seam, UiPlugin publication regression, render flow, and surface guard behavior.",
         "Distinguish source inspection, local executable validation, exact-head CI, user-reported evidence, and unverified claims.",
@@ -128,7 +127,7 @@ PhaseImplementationSpec(
 
     closeout_expectations: [
         "Record delivered contract, changed files, exact modules/functions, evidence classes, validation, forbidden-scope proof, known gaps, merge readiness, and next action.",
-        "Update planning/completed-work/decision-register/closeout truth before Phase 012 implementation starts.",
+        "Update the owning GitHub issue/portfolio, durable roadmap when applicable, decision register when a durable decision changed, and closeout evidence before Phase 012 implementation starts.",
         "Open Phase 012 active planning only after Phase 011 is reviewed, merged, and truthfully closed.",
     ],
 

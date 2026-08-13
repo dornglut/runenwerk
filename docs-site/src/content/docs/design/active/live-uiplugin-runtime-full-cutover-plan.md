@@ -706,7 +706,7 @@ A simple implementation agent must receive exactly one phase at a time. The prom
 
 ```text
 phase ID and title
-authority docs to read, including AGENTS.md, ARCHITECTURE.md, DOMAIN_MAP.md, TESTING.md, engineering-workflow.md, active-work, roadmap, and the owning design/architecture docs
+authority docs to read, including AGENTS.md, ARCHITECTURE.md, DOMAIN_MAP.md, TESTING.md, engineering-workflow.md, roadmap, the owning GitHub issue/Engineering Portfolio, and the owning design/architecture docs
 allowed files/crates
 forbidden files/crates
 expected public API shape

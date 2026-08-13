@@ -27,8 +27,8 @@ related:
 ## Status
 
 Active design for the Counter proof target. This document does not authorize
-product implementation by itself. Implementation still requires an active-work
-entry or equivalent planning contract naming files, validation commands, stop
+product implementation by itself. Implementation still requires an owning GitHub issue
+or equivalent planning contract naming files, validation commands, stop
 conditions, and evidence expectations.
 
 `owner: ui` is temporary for the first UI proving slice. The app-program pattern

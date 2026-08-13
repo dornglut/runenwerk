@@ -30,6 +30,11 @@ ALLOWED_STATUS = {
     "rejected",
     "archived",
 }
+RETIRED_PLANNING_LEDGER_PATTERNS = {
+    "active-work.md": "GitHub issues and the Engineering Portfolio own live work state; the Markdown active-work ledger is retired",
+    "deferred-work.md": "GitHub issues and the Engineering Portfolio own deferred work state; the Markdown deferred-work ledger is retired",
+    "completed-work.md": "pull requests, reports, accepted documents, and Git history own completed evidence; the Markdown completed-work ledger is retired",
+}
 STALE_PATTERNS = {
     "engine/docs/": "engine docs moved under docs-site/src/content/docs/engine",
     "engine/README.md": "engine crate docs moved under docs-site/src/content/docs/engine/README.md",
@@ -45,6 +50,7 @@ STALE_PATTERNS = {
     "engine_net_quic/src/runtime/utils.rs": "engine_net_quic runtime utils.rs was removed",
     "domain/editor/editor_shell/src/runtime/output/build_ui_frame.rs": "UI frame output moved to domain/ui/ui_runtime/src/output/build_ui_frame.rs",
     "no `impl TextLayouter`": "AtlasTextLayouter now implements TextLayouter",
+    **RETIRED_PLANNING_LEDGER_PATTERNS,
 }
 
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
@@ -258,6 +264,8 @@ def main() -> int:
     validate_crate_docs_coverage(errors)
     validate_domain_map_alignment(errors)
 
+    reports_root = DOCS_ROOT / "reports"
+
     for path in DOCS_ROOT.rglob("*"):
         if any(path.is_relative_to(subtree) for subtree in IGNORED_DOCS_SUBTREES):
             continue
@@ -282,6 +290,8 @@ def main() -> int:
                         errors.append(f"invalid status '{status}': {path}")
 
             for stale, reason in STALE_PATTERNS.items():
+                if path.is_relative_to(reports_root) and stale in RETIRED_PLANNING_LEDGER_PATTERNS:
+                    continue
                 if contains_stale_pattern(text, stale):
                     errors.append(f"stale docs reference '{stale}' in {path}: {reason}")
 

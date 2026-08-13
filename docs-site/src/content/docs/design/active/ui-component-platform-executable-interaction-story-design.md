@@ -73,7 +73,7 @@ Tier 5 — Executable interaction story
 Default rule for later reusable interaction phases:
 
 ```text
-If a phase claims reusable interaction behavior, require Tier 5 unless the active-work entry explicitly accepts a contract-only or static-only scope.
+If a phase claims reusable interaction behavior, require Tier 5 unless the owning GitHub issue explicitly accepts a contract-only or static-only scope.
 ```
 
 ## Owner map

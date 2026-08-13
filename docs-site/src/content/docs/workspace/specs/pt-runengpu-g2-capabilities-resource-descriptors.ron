@@ -35,7 +35,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/reports/investigations/runengpu-g2-capabilities-resources-investigation.md",
         "docs-site/src/content/docs/reports/closeouts/pt-runengpu-g1a-closeout.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
     ],
 
     goal: "Create future-transferable RunenGPU-owned capability, logical-resource, kind-typed-handle, prepared-data, descriptor-validation, provenance, and error contracts inside Runenwerk; migrate current G2 declaration authority to those contracts; split render and host semantics from generic GPU semantics; and delete replaced authority without implementing later phases or creating the external package.",
@@ -369,7 +368,7 @@ PhaseImplementationSpec(
         "the inventoried render capability/resource/API/graph/procedural/renderer/runtime files for mechanical G2 migration only",
         "apps/runenwerk_draw/** and apps/runenwerk_editor/** only where compiler-backed facade migration requires it",
         "the inventoried examples, benchmark, and tests for compiler-backed migration and focused assertions",
-        "docs-site proof, closeout, roadmap, active-work, completed-work, decision-register, and spec lifecycle updates after evidence exists",
+        "docs-site proof/closeout, durable roadmap/decision-register, owning GitHub issue/portfolio, and spec lifecycle updates after evidence exists",
     ],
 
     forbidden_scope: [
@@ -500,7 +499,7 @@ PhaseImplementationSpec(
         "exact-head Actions URLs and conclusions",
         "zero remaining old-authority or compatibility references",
         "confirmation that no implementation outside G2 scope was introduced",
-        "updated roadmap, active-work, completed-work, and next safe action",
+        "updated durable roadmap when dependencies changed, completed evidence, and next safe action",
     ],
 
     stop_conditions: [
