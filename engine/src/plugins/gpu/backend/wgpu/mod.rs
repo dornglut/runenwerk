@@ -20,9 +20,10 @@ pub(crate) use pipeline_realization::{
 pub(crate) use program_binding_realization::{
     BindGroupLayoutRealizationRecord, BindGroupRealizationRecord, CurrentRenderAttachmentsTerminal,
     CurrentRenderBufferCopyTerminal, CurrentRenderBufferUploadTerminal,
-    CurrentRenderIndexBufferTerminal, CurrentRenderIndirectBufferTerminal,
-    CurrentRenderPipelineBindGroupsTerminal, CurrentRenderPipelineCreationTerminal,
-    CurrentRenderReadbackBufferTerminal, CurrentRenderTextureCopyTerminal,
+    CurrentRenderComputePipelineTerminal, CurrentRenderIndexBufferTerminal,
+    CurrentRenderIndirectBufferTerminal, CurrentRenderPipelineBindGroupsTerminal,
+    CurrentRenderReadbackBufferTerminal, CurrentRenderRenderPipelineTerminal,
+    CurrentRenderRenderPipelinesTerminal, CurrentRenderTextureCopyTerminal,
     CurrentRenderTextureReadbackCopyTerminal, CurrentRenderTextureUploadTerminal,
     CurrentRenderTimestampResourcesTerminal, CurrentRenderTimestampWritesTerminal,
     CurrentRenderVertexBufferTerminal, CurrentSurfaceReadbackCopyTerminal,
