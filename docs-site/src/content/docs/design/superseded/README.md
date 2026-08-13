@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-13
 ---
 
 # Superseded Designs
@@ -24,7 +24,7 @@ No superseded editor-domain design documents are currently tracked in this folde
 
 ### UI Domain
 
-No superseded UI-domain design documents are currently tracked in this folder.
+- [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 
 ### Engine Runtime
 
