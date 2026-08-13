@@ -20,7 +20,6 @@ related_docs:
   - ./runenwerk-typed-app-composition-plugin-framework-design.md
   - ./typed-app-program-and-ui-proof-design.md
   - ../../workspace/planning/typed-app-program-ui-proof-001-planning.md
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
   - ./live-uiplugin-runtime-and-surface-frame-rendering-design.md
