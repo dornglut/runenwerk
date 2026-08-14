@@ -4,11 +4,15 @@ use std::path::{Path, PathBuf};
 const FLOW_KEYS: &str = "src/plugins/render/pipelines/flow_keys.rs";
 const BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings.rs";
 const EXECUTION_PLAN: &str = "src/plugins/render/graph/execution_plan.rs";
-const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes.rs";
+const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes/pipeline.rs";
 const EXECUTE: &str = "src/plugins/render/renderer/render_flow/execute.rs";
 const RENDER_FLOW_MOD: &str = "src/plugins/render/renderer/render_flow/mod.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
+const PIPELINE_COMPUTE_REALIZATION: &str =
+    "src/plugins/gpu/backend/wgpu/pipeline_realization/compute.rs";
+const PIPELINE_RENDER_REALIZATION: &str =
+    "src/plugins/gpu/backend/wgpu/pipeline_realization/render.rs";
 const MATERIAL_COMPILER_BINDINGS: &str = "src/plugins/render/material_compiler/bindings.rs";
 const MATERIAL_COMPILER_TYPES: &str = "src/plugins/render/material_compiler/types.rs";
 const MATERIAL_WGSL_PROGRAM: &str = "src/plugins/render/material_compiler/wgsl/program.rs";
@@ -522,12 +526,14 @@ fn render_pipeline_state_is_typed_before_complete_descriptor_publication() {
 #[test]
 fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let execute_passes = read(&manifest_dir, EXECUTE_PASSES);
+    let pipeline_passes = read(&manifest_dir, EXECUTE_PASSES);
     let bindings = read(&manifest_dir, BINDINGS);
+    let compute_realization = read(&manifest_dir, PIPELINE_COMPUTE_REALIZATION);
+    let render_realization = read(&manifest_dir, PIPELINE_RENDER_REALIZATION);
     let realization = section(
-        &execute_passes,
-        "pub(super) fn realize_compiled_pass(",
-        "pub(super) fn encode_compiled_pass(",
+        &pipeline_passes,
+        "pub(in crate::plugins::render::renderer::render_flow) fn realize_compiled_pass(",
+        "pub(in crate::plugins::render::renderer::render_flow) fn encode_compiled_pass(",
         EXECUTE_PASSES,
     );
     let paths = [
@@ -535,25 +541,44 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
             "compute",
             "CompiledPassExecutionPlan::Compute(value) => {",
             "CompiledPassExecutionPlan::Fullscreen(value) => {",
+            "context.realize_compute_pipeline(",
             "fn encode_compute_pass(",
             "fn encode_fullscreen_pass(",
+            ".for_compute_pipeline(",
+            "PreparedFlowPipeline::Compute",
         ),
         (
             "fullscreen",
             "CompiledPassExecutionPlan::Fullscreen(value) => {",
             "CompiledPassExecutionPlan::Graphics(value) => {",
+            "context.realize_render_pipeline(",
             "fn encode_fullscreen_pass(",
             "fn encode_graphics_pass(",
+            ".for_render_pipeline(",
+            "PreparedFlowPipeline::Render",
         ),
         (
             "graphics",
             "CompiledPassExecutionPlan::Graphics(value) => {",
             "CompiledPassExecutionPlan::Copy(_)",
+            "context.realize_render_pipeline(",
             "fn encode_graphics_pass(",
-            "fn encode_copy_pass(",
+            "struct EncodeComputePipeline",
+            ".for_render_pipeline(",
+            "PreparedFlowPipeline::Render",
         ),
     ];
-    for (label, realization_start, realization_end, raw_start, raw_end) in paths {
+    for (
+        label,
+        realization_start,
+        realization_end,
+        pipeline_realization_token,
+        encode_start,
+        encode_end,
+        execution_bridge_token,
+        prepared_pipeline_kind,
+    ) in paths
+    {
         let realized = section(
             realization,
             realization_start,
@@ -562,26 +587,45 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
         );
         assert!(
             realized.contains(".resolve_compiled_bind_group("),
-            "{label} must resolve its complete descriptor through G4C2 before any pipeline creation"
+            "{label} must resolve its complete G4B/G4C2 descriptor dependencies before pipeline realization"
         );
         assert!(
-            !realized.contains(".for_pipeline_creation("),
-            "{label} must complete G4C2 realization before the raw G4C3 phase"
+            realized.contains(pipeline_realization_token),
+            "{label} must delegate pipeline realization to the private G4C3 authority"
         );
-        let raw = section(&execute_passes, raw_start, raw_end, EXECUTE_PASSES);
+        for forbidden in [
+            ".for_pipeline_creation(",
+            ".create_compute_pipeline(",
+            ".create_render_pipeline(",
+            "ShaderSource::Wgsl(",
+        ] {
+            assert!(
+                !realized.contains(forbidden),
+                "{label} renderer realization must not regain private backend pipeline authority through {forbidden:?}"
+            );
+        }
+
+        let encode = section(&pipeline_passes, encode_start, encode_end, EXECUTE_PASSES);
         assert!(
-            raw.contains(".for_pipeline_creation("),
-            "{label} must use the bounded temporary G4C3 pipeline creation terminal"
+            encode.contains("prepared.pipeline")
+                && encode.contains(prepared_pipeline_kind)
+                && encode.contains(".current_render_execution_bridge()")
+                && encode.contains(execution_bridge_token),
+            "{label} G5 encode path must consume the opaque pipeline realized by G4C3"
         );
-        assert!(
-            !raw.contains(".resolve_compiled_bind_group(") && !raw.contains("context.realize_"),
-            "{label} raw G4C3 phase must consume completed G4C2 artifacts rather than re-enter realization"
-        );
-        assert!(
-            raw.contains("prepared.bindings.program")
-                && raw.contains("prepared.bindings.pipeline_layout"),
-            "{label} raw G4C3 creation must borrow the G4C2 program and layout artifacts"
-        );
+        for forbidden in [
+            ".resolve_compiled_bind_group(",
+            "context.realize_compute_pipeline(",
+            "context.realize_render_pipeline(",
+            ".for_pipeline_creation(",
+            ".create_compute_pipeline(",
+            ".create_render_pipeline(",
+        ] {
+            assert!(
+                !encode.contains(forbidden),
+                "{label} G5 encode path must not re-enter G4 realization through {forbidden:?}"
+            );
+        }
     }
     for required in [
         "context.realize_program(pipeline_key.pipeline_descriptor.program())",
@@ -594,61 +638,47 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
             "G4C2 binding resolution must own {required:?}"
         );
     }
-    let compute_terminal = section(
-        &execute_passes,
-        "impl CurrentRenderPipelineCreationTerminal for CreateFlowComputePipeline",
-        "/// G4C3's temporary fullscreen render-pipeline creation terminal.",
-        EXECUTE_PASSES,
-    );
-    assert!(
-        compute_terminal.contains("self.descriptor.entry_point().as_str()"),
-        "temporary G4C3 compute-pipeline creation must consume its typed descriptor entry point"
-    );
-    assert!(
-        compute_terminal
-            .contains("wgpu_specialization_constants(self.descriptor.specialization())"),
-        "temporary G4C3 compute-pipeline creation must consume typed descriptor specialization"
-    );
-    let fullscreen_terminal = section(
-        &execute_passes,
-        "impl CurrentRenderPipelineCreationTerminal for CreateFlowFullscreenPipeline",
-        "/// G4C3's temporary graphics render-pipeline creation terminal.",
-        EXECUTE_PASSES,
-    );
-    let graphics_terminal = section(
-        &execute_passes,
-        "impl CurrentRenderPipelineCreationTerminal for CreateFlowGraphicsPipeline",
-        "struct EncodeComputePass<'a>",
-        EXECUTE_PASSES,
-    );
-    for (label, source) in [
-        ("fullscreen", fullscreen_terminal),
-        ("graphics", graphics_terminal),
+
+    for required in [
+        ".create_compute_pipeline(&ComputePipelineDescriptor",
+        "entry_point: Some(descriptor.entry_point().as_str())",
+        "wgpu_specialization_constants(descriptor)",
+        "layout: Some(layout.record.wgpu_object())",
+        "module: program.record.wgpu_object()",
     ] {
         assert!(
-            source.contains("self.descriptor.entry_points().vertex().as_str()"),
-            "temporary G4C3 {label} pipeline creation must consume its typed vertex entry point"
+            compute_realization.contains(required),
+            "private G4C3 compute realization must project complete descriptor semantics: {required}"
         );
+    }
+    for required in [
+        ".create_render_pipeline(&RenderPipelineDescriptor",
+        "entry_point: Some(descriptor.entry_points().vertex().as_str())",
+        "descriptor.entry_points()",
+        ".fragment()",
+        "wgpu_specialization_constants(descriptor)",
+        "layout: Some(layout.record.wgpu_object())",
+        "module: program.record.wgpu_object()",
+        "targets: lowered.color_targets.as_slice()",
+        "primitive: lowered.primitive",
+        "depth_stencil: lowered.depth_stencil.clone()",
+        "multisample: lowered.multisample",
+    ] {
         assert!(
-            source.contains("entry_points()\n            .fragment()"),
-            "temporary G4C3 {label} pipeline creation must consume its typed fragment entry point"
-        );
-        assert!(
-            source.contains("wgpu_specialization_constants(self.descriptor.specialization())"),
-            "temporary G4C3 {label} pipeline creation must consume typed descriptor specialization"
+            render_realization.contains(required),
+            "private G4C3 render realization must project complete descriptor semantics: {required}"
         );
     }
     for forbidden in [
-        "FlowPassPipelineVariant",
-        "pipeline_key.pipeline_variant",
-        "entry_point: Some(\"cs_main\")",
-        "entry_point: Some(\"vs_main\")",
-        "entry_point: Some(\"fs_main\")",
-        "ShaderSource::Wgsl(shader.source.into())",
+        "CurrentRenderPipelineCreationTerminal",
+        ".for_pipeline_creation(",
+        ".create_compute_pipeline(",
+        ".create_render_pipeline(",
+        "ShaderSource::Wgsl(",
     ] {
         assert!(
-            !execute_passes.contains(forbidden),
-            "parallel shader pipeline semantics bypassed complete G4B descriptor authority: {forbidden}"
+            !pipeline_passes.contains(forbidden),
+            "renderer pipeline consumer must not regain private or predecessor pipeline authority through {forbidden:?}"
         );
     }
 }
@@ -671,7 +701,7 @@ fn renderer_source_authority_normalizes_identity_only_during_admission() {
     let cache_gateway = section(
         &cache,
         "pub(crate) fn admit_program_source(",
-        "pub fn compute_pipeline(",
+        "pub fn retain_flows(",
         PIPELINE_CACHE,
     );
     assert_eq!(
