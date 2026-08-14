@@ -655,18 +655,6 @@ enum UiPipelineKind {
     ProductSurface,
 }
 
-impl UiPipelineKind {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Rect => "engine_ui_rect_pipeline",
-            Self::Stroke => "engine_ui_stroke_pipeline",
-            Self::Glyph => "engine_ui_glyph_pipeline",
-            Self::ViewportEmbed => "engine_ui_viewport_embed_pipeline",
-            Self::ProductSurface => "engine_ui_product_surface_pipeline",
-        }
-    }
-}
-
 type UiViewportBindGroups = BTreeMap<ViewportSurfaceBindingSource, GpuRealizedBindGroup>;
 type UiProductSurfaceBindGroups =
     BTreeMap<ProductSurfaceTextureBindingSource, GpuRealizedBindGroup>;
