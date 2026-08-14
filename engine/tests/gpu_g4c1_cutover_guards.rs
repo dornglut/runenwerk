@@ -1,7 +1,7 @@
-//! Structural G4C1/G4C2 cutover guards.
+//! Structural G4C1/G4C2/G4C3 cutover guards.
 //!
-//! These intentionally guard topology only. Behavioural G4C1/G4C2 tests exercise the public
-//! typed API; this file prevents superseded raw ownership from quietly returning.
+//! Behavioural tests exercise the typed API. These guards keep the accepted G4 ownership
+//! topology from regressing while G5 still owns the residual execution interval.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -156,12 +156,56 @@ fn g4c2_is_the_only_shader_layout_and_bind_group_creation_owner() {
 }
 
 #[test]
-fn g4c2_replaces_the_resource_bridge_and_surface_shader_binding_exception() {
+fn g4c3_is_the_only_compute_and_render_pipeline_creation_owner() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for (token, owner) in [
+        (
+            ".create_compute_pipeline(",
+            "src/plugins/gpu/backend/wgpu/pipeline_realization/compute.rs",
+        ),
+        (
+            ".create_render_pipeline(",
+            "src/plugins/gpu/backend/wgpu/pipeline_realization/render.rs",
+        ),
+    ] {
+        assert_eq!(
+            inventory(&manifest, &[token]),
+            BTreeMap::from([((owner.to_owned(), token.to_owned()), 1)]),
+            "G4C3 {token} must have exactly one source-wide private realization owner"
+        );
+    }
+
+    let cache = compact(&read(
+        &manifest,
+        "src/plugins/render/renderer/pipeline_cache.rs",
+    ));
+    for forbidden in [
+        "GpuRealizedComputePipeline",
+        "GpuRealizedRenderPipeline",
+        "wgpu::ComputePipeline",
+        "wgpu::RenderPipeline",
+    ] {
+        assert!(
+            !cache.contains(forbidden),
+            "renderer pipeline cache regained reusable raw pipeline authority via {forbidden}"
+        );
+    }
+
+    let state = compact(&read(&manifest, "src/plugins/gpu/backend/wgpu/state.rs"));
+    assert!(!state.contains("create_compute_pipeline("));
+    assert!(!state.contains("create_render_pipeline("));
+}
+
+#[test]
+fn accepted_g4_bridge_ladder_has_one_execution_bridge_and_no_predecessor_authority() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let forbidden = inventory(
         &manifest,
         &[
             "CurrentRenderResourceBridge",
+            "CurrentRenderPipelineBridge",
+            "CurrentRenderPipelineCreationTerminal",
+            "current_render_pipeline_bridge",
             "CurrentRenderBindGroupTerminal",
             "CurrentRenderMaterialBindingTerminal",
             "CurrentRenderSampledTextureBindingTerminal",
@@ -172,35 +216,44 @@ fn g4c2_replaces_the_resource_bridge_and_surface_shader_binding_exception() {
     );
     assert!(
         forbidden.is_empty(),
-        "superseded G4C1/G4C2 compatibility authority remains: {forbidden:#?}"
+        "superseded G4 compatibility authority remains: {forbidden:#?}"
     );
 
-    let bridge_path = "src/plugins/gpu/backend/wgpu/program_binding_realization/current_render_pipeline_bridge.rs";
+    let bridge_path = "src/plugins/gpu/backend/wgpu/program_binding_realization/current_render_execution_bridge.rs";
     let bridge = compact(&read(&manifest, bridge_path));
     assert_eq!(
-        inventory(&manifest, &["structCurrentRenderPipelineBridge"]),
+        inventory(&manifest, &["structCurrentRenderExecutionBridge"]),
         BTreeMap::from([(
             (
                 bridge_path.to_owned(),
-                "structCurrentRenderPipelineBridge".to_owned()
+                "structCurrentRenderExecutionBridge".to_owned()
             ),
             1,
         )]),
-        "exactly one successor bridge may remain until G4C3"
+        "the accepted G4 boundary permits exactly one residual G5 execution bridge"
     );
     for forbidden in [
-        "pubstructCurrentRenderPipelineBridge",
+        "pubstructCurrentRenderExecutionBridge",
         "Deref",
         "AsRef<",
         "FnOnce",
+        "for_pipeline_creation(",
     ] {
         assert!(
             !bridge.contains(forbidden),
-            "successor bridge exposed forbidden raw authority: {forbidden}"
+            "G5 execution bridge exposed forbidden authority: {forbidden}"
         );
     }
-    assert!(bridge.contains("for_pipeline_creation("));
-    assert!(bridge.contains("for_pipeline_bind_groups("));
+    for required in [
+        "for_compute_pipeline(",
+        "for_render_pipeline(",
+        "for_pipeline_bind_groups(",
+    ] {
+        assert!(
+            bridge.contains(required),
+            "G5 execution bridge lost required lexical consumption terminal {required}"
+        );
+    }
 
     let bindings = compact(&read(
         &manifest,
@@ -211,7 +264,7 @@ fn g4c2_replaces_the_resource_bridge_and_surface_shader_binding_exception() {
 }
 
 #[test]
-fn g4c2_successor_bridge_keeps_lent_backend_objects_private_and_nonretaining() {
+fn execution_bridge_keeps_lent_backend_objects_private_and_nonretaining() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let records = compact(&read(
         &manifest,
@@ -219,11 +272,11 @@ fn g4c2_successor_bridge_keeps_lent_backend_objects_private_and_nonretaining() {
     ));
     assert!(
         records.contains("pub(incrate::plugins::gpu::backend::wgpu)object:"),
-        "residual G4C1 objects must be visible only to the private WGPU backend subtree"
+        "residual G4 objects must be visible only to the private WGPU backend subtree"
     );
     assert!(
         !records.contains("pub(crate)object:"),
-        "G4C2 must not widen residual G4C1 backend objects into a crate-wide raw escape path"
+        "G4 must not widen private backend objects into a crate-wide raw escape path"
     );
 
     let mut paths = Vec::new();
@@ -242,6 +295,7 @@ fn g4c2_successor_bridge_keeps_lent_backend_objects_private_and_nonretaining() {
                 "program.clone()",
                 "layout.clone()",
                 "bind_group.clone()",
+                "pipeline.clone()",
                 "buffer.clone()",
                 "texture.clone()",
                 "view.clone()",
@@ -255,14 +309,14 @@ fn g4c2_successor_bridge_keeps_lent_backend_objects_private_and_nonretaining() {
             ] {
                 assert!(
                     !terminal.contains(forbidden),
-                    "current pipeline bridge terminal exceeded its lexical lending role via {forbidden} in {relative}"
+                    "current execution terminal exceeded lexical lending via {forbidden} in {relative}"
                 );
             }
         }
     }
     assert!(
         terminal_count != 0,
-        "the successor bridge must retain audited current terminals until G4C3"
+        "the residual G5 execution bridge must retain audited purpose-typed terminals"
     );
 }
 
@@ -324,6 +378,7 @@ fn g4c2_uses_one_shared_health_gate_and_the_fixed_naga_profile() {
         "letgate=self.error_attribution_gate.acquire();letregistries=self.registries(resource)?;"
     ));
     assert!(program.contains("let_gate=realization.error_attribution_gate.acquire();"));
+
     let current_host = compact(&read(
         &manifest,
         "src/plugins/gpu/backend/wgpu/current_host.rs",
@@ -348,12 +403,12 @@ fn g4c2_uses_one_shared_health_gate_and_the_fixed_naga_profile() {
 }
 
 #[test]
-fn renderer_completes_g4c1_g4c2_realization_before_its_one_raw_device_queue_interval() {
+fn renderer_completes_g4_realization_before_its_one_raw_g5_interval() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let renderer = compact(&read(&manifest, "src/plugins/render/renderer/mod.rs"));
     assert!(
         !renderer.contains("current_render_device_queue"),
-        "Gfx::render must not retain a broad raw loan around renderer realization"
+        "Gfx::render must not retain a broad raw loan around realization"
     );
 
     let execute = compact(&read(
@@ -362,11 +417,11 @@ fn renderer_completes_g4c1_g4c2_realization_before_its_one_raw_device_queue_inte
     ));
     let realization = execute
         .find("letmutbatch=self.realize_render_batch(")
-        .expect("render packet must begin with its G4C1/G4C2 realization batch");
+        .expect("render packet must begin with its complete G4 realization batch");
     let loan_marker = "letloan=context.current_render_device_queue()";
     let loan = execute
         .find(loan_marker)
-        .expect("render packet must retain its one current G4C3/G5 raw interval");
+        .expect("render packet must retain its one residual G5 raw interval");
     assert_eq!(
         execute.matches(loan_marker).count(),
         1,
@@ -374,7 +429,7 @@ fn renderer_completes_g4c1_g4c2_realization_before_its_one_raw_device_queue_inte
     );
     assert!(
         realization < loan,
-        "the G4C1/G4C2 realization batch must complete before the raw G4C3/G5 interval"
+        "G4 realization must complete before the residual G5 interval"
     );
     let raw_phase = &execute[loan + loan_marker.len()..];
     for forbidden in [
@@ -382,66 +437,73 @@ fn renderer_completes_g4c1_g4c2_realization_before_its_one_raw_device_queue_inte
         "context.realize_",
         "pollster::block_on(context.realize",
         "current_render_device_queue()",
+        "create_compute_pipeline(",
+        "create_render_pipeline(",
     ] {
         assert!(
             !raw_phase.contains(forbidden),
-            "the raw G4C3/G5 phase must not re-enter G4C1/G4C2 via {forbidden}"
+            "the G5 raw phase must not re-enter G4 realization via {forbidden}"
         );
     }
-    assert!(raw_phase.contains("self.create_ui_pipelines_for_raw_phase(context,loan.device)?"));
     assert!(raw_phase.contains("self.execute_realized_batch("));
 
     let setup = compact(&read(&manifest, "src/plugins/render/renderer/setup.rs"));
-    let program = setup
+    let ui_realization = setup
         .find("fnrealize_ui_program_binding_artifacts(")
-        .expect("UI G4C2 program realization must remain explicit");
-    let pipeline_creation = setup
-        .find("fncreate_ui_pipelines_for_raw_phase(")
-        .expect("UI G4C3 pipeline creation must remain explicit");
-    assert!(
-        program < pipeline_creation,
-        "UI program/layout/bind-group realization must remain separate from G4C3 pipeline creation"
-    );
-    assert!(setup.contains("pollster::block_on(context.realize_program"));
-    assert!(setup.contains("pollster::block_on(context.realize_bind_group_layout"));
-    assert!(setup.contains("pollster::block_on(context.realize_pipeline_layout"));
-    assert!(setup.contains("pollster::block_on(context.realize_bind_group("));
-    assert!(
-        !setup.contains("current_render_device_queue("),
-        "UI realization and G4C3 pipeline helper must receive no raw loan themselves"
-    );
+        .expect("UI G4 realization must remain explicit");
+    let ui_realization = &setup[ui_realization..];
+    for required in [
+        "context.realize_program",
+        "context.realize_bind_group_layout",
+        "context.realize_pipeline_layout",
+        "context.realize_render_pipeline",
+        "context.realize_bind_group(",
+    ] {
+        assert!(
+            ui_realization.contains(required),
+            "UI realization must delegate {required:?} to RunenGPU"
+        );
+    }
+    assert!(!setup.contains("current_render_device_queue("));
+    assert!(!setup.contains("create_render_pipeline("));
 
     let flow = compact(&read(
         &manifest,
-        "src/plugins/render/renderer/render_flow/execute_passes.rs",
+        "src/plugins/render/renderer/render_flow/execute_passes/pipeline.rs",
     ));
     let pass_realization = flow
         .find("fnrealize_compiled_pass(")
-        .expect("flow G4C2 realization helper must remain present");
+        .expect("flow G4 realization helper must remain present");
     let pass_encoding = flow
         .find("fnencode_compiled_pass(")
-        .expect("flow G4C3/G5 encoding helper must remain present");
+        .expect("flow G5 encoding helper must remain present");
     assert!(
         pass_realization < pass_encoding,
-        "flow G4C2 program/layout/bind-group realization must be structurally separate from encoding"
+        "flow G4 realization must remain structurally separate from G5 encoding"
     );
-    assert!(
-        !flow.contains("current_render_device_queue("),
-        "flow realization and encoding helpers must receive the one renderer raw loan instead"
-    );
-    assert!(
-        !flow[pass_encoding..].contains(".resolve_compiled_bind_group("),
-        "G4C3/G5 pass encoders must consume prepared G4C2 artifacts rather than realize bindings"
-    );
+    let realization_phase = &flow[pass_realization..pass_encoding];
+    assert!(realization_phase.contains("context.realize_compute_pipeline("));
+    assert!(realization_phase.contains("context.realize_render_pipeline("));
+    let encoding_phase = &flow[pass_encoding..];
+    assert!(!encoding_phase.contains("context.realize_"));
+    assert!(!flow.contains("current_render_device_queue("));
+    assert!(!flow.contains("create_compute_pipeline("));
+    assert!(!flow.contains("create_render_pipeline("));
 
     for path in [
         "src/plugins/render/renderer/prepare.rs",
         "src/plugins/render/renderer/dynamic_targets.rs",
         "src/plugins/render/renderer/render_flow/capture.rs",
+        "src/plugins/render/renderer/render_flow/gpu_timing.rs",
     ] {
+        let source = read(&manifest, path);
+        let production = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("Rust source split always retains the production prefix");
         assert!(
-            !compact(&read(&manifest, path)).contains("current_render_device_queue("),
-            "{path} must finish G4C1/G4C2 preparation before renderer raw execution"
+            !compact(production).contains("current_render_device_queue("),
+            "{path} production code must use typed realization/execution bridges rather than regain a raw loan"
         );
     }
 
@@ -459,20 +521,21 @@ fn renderer_completes_g4c1_g4c2_realization_before_its_one_raw_device_queue_inte
         .expect("primitive runtime proof body must remain");
     let realization = fixture_body
         .find("letrealized_stages=realize_runtime_primitive_stages(")
-        .expect("fixture must invoke its complete G4C2 primitive realization before raw work");
+        .expect("fixture must complete its G4 primitive realization before raw work");
     let last_resource = fixture_body
         .rfind("prepare_readback_buffer(")
         .expect("fixture must retain G4C1 readback resource realization");
     let loan = fixture_body
         .find("context.current_render_device_queue()")
-        .expect("fixture must retain its current G4C3/G5 interval");
+        .expect("fixture must retain its residual G5 interval");
     let encoding = fixture_body
-        .find("encode_runtime_primitive_stage(&context,device,&mutencoder,stage)")
-        .expect("fixture must preserve its G5 primitive encoding after the raw interval begins");
+        .find("encode_runtime_primitive_stage(&context,&mutencoder,stage)")
+        .expect("fixture must preserve G5 primitive encoding after the raw interval begins");
     assert!(
         last_resource < realization && realization < loan && loan < encoding,
-        "fixture must complete G4C1 resources, then G4C2 program/layout/bindings, before G4C3/G5"
+        "fixture must complete G4C1/G4C2/G4C3 before its G5 interval"
     );
+
     let primitive_realization = primitive
         .split("fnrealize_runtime_primitive_stages(")
         .nth(1)
@@ -481,19 +544,15 @@ fn renderer_completes_g4c1_g4c2_realization_before_its_one_raw_device_queue_inte
         "context.realize_program",
         "context.realize_bind_group_layout",
         "context.realize_pipeline_layout",
+        "context.realize_compute_pipeline",
         "context.realize_bind_group",
     ] {
         assert!(
             primitive_realization.contains(required),
-            "primitive fixture realization helper must delegate {required:?} to G4C2"
+            "primitive fixture realization must delegate {required:?} to RunenGPU"
         );
     }
-    assert!(
-        primitive.contains(".for_pipeline_creation("),
-        "fixture must lend G4C2 program/layout to temporary G4C3 pipeline creation"
-    );
-    assert!(
-        primitive.contains("self.device.create_compute_pipeline("),
-        "temporary G4C3 compute-pipeline creation must remain isolated in its terminal"
-    );
+    assert!(primitive.contains(".for_compute_pipeline("));
+    assert!(!primitive.contains(".for_pipeline_creation("));
+    assert!(!primitive.contains(".create_compute_pipeline("));
 }

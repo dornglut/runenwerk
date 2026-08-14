@@ -37,6 +37,10 @@ impl ProgramRealizationRecord {
         &self.descriptor
     }
 
+    pub(crate) fn wgpu_object(&self) -> &ShaderModule {
+        &self.object
+    }
+
     #[allow(
         dead_code,
         reason = "G4C3 will consume retained normalized program-interface evidence"
@@ -98,6 +102,10 @@ impl PipelineLayoutRealizationRecord {
 
     pub(crate) fn descriptor(&self) -> &GpuPipelineLayoutDescriptor {
         &self.descriptor
+    }
+
+    pub(crate) fn wgpu_object(&self) -> &PipelineLayout {
+        &self.object
     }
 }
 

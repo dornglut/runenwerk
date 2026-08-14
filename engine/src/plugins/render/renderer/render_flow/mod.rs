@@ -39,10 +39,18 @@ mod program_sources;
 mod provenance;
 mod runtime_resources;
 
-/// A G4C2 realization result carried from the render batch's first phase into the temporary
-/// G4C3/G5 operation phase. It is deliberately renderer-local and does not create a pipeline.
+/// Opaque G4C3 pipeline realization retained between the renderer's realization and G5
+/// execution phases. No raw backend pipeline reference crosses this boundary.
+pub(super) enum PreparedFlowPipeline {
+    Compute(crate::plugins::gpu::GpuRealizedComputePipeline),
+    Render(crate::plugins::gpu::GpuRealizedRenderPipeline),
+}
+
+/// Complete G4C2/G4C3 shader-pipeline realization carried from the batch's first phase into G5.
+/// The renderer retains only opaque RunenGPU handles and does not own a reusable raw pipeline.
 pub(super) struct PreparedPipelinePass {
     pub(super) bindings: bindings::RealizedFlowProgramBindings,
+    pub(super) pipeline: PreparedFlowPipeline,
     pub(super) shader_id: String,
     pub(super) shader_revision: u64,
     pub(super) fallback_used: bool,

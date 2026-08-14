@@ -1,12 +1,12 @@
 //! Context/device-generation-bound G4C2 program, layout, and bind-group realization.
 
-mod current_render_pipeline_bridge;
+mod current_render_execution_bridge;
 mod evidence;
 mod lowering;
 mod records;
 mod registry;
 
-pub(crate) use current_render_pipeline_bridge::*;
+pub(crate) use current_render_execution_bridge::*;
 pub(crate) use records::{
     BindGroupLayoutRealizationRecord, BindGroupRealizationRecord, PipelineLayoutRealizationRecord,
     ProgramRealizationRecord,
@@ -80,34 +80,34 @@ impl ProgramBindingRealizationState {
         self.health.ensure_program_binding(request)
     }
 
-    pub(crate) fn validate_pipeline_bridge_program(
+    pub(crate) fn validate_execution_bridge_program(
         &self,
         record: &Arc<ProgramRealizationRecord>,
     ) -> Result<(), GpuProgramBindingRealizationError> {
-        self.validate_pipeline_bridge_record("program", record.affinity(), |registries| {
+        self.validate_execution_bridge_record("program", record.affinity(), |registries| {
             registries.contains_program(record)
         })
     }
 
-    pub(crate) fn validate_pipeline_bridge_pipeline_layout(
+    pub(crate) fn validate_execution_bridge_pipeline_layout(
         &self,
         record: &Arc<PipelineLayoutRealizationRecord>,
     ) -> Result<(), GpuProgramBindingRealizationError> {
-        self.validate_pipeline_bridge_record("pipeline layout", record.affinity(), |registries| {
+        self.validate_execution_bridge_record("pipeline layout", record.affinity(), |registries| {
             registries.contains_pipeline_layout(record)
         })
     }
 
-    pub(crate) fn validate_pipeline_bridge_bind_group(
+    pub(crate) fn validate_execution_bridge_bind_group(
         &self,
         record: &Arc<BindGroupRealizationRecord>,
     ) -> Result<(), GpuProgramBindingRealizationError> {
-        self.validate_pipeline_bridge_record("bind group", record.affinity(), |registries| {
+        self.validate_execution_bridge_record("bind group", record.affinity(), |registries| {
             registries.contains_bind_group(record)
         })
     }
 
-    fn validate_pipeline_bridge_record(
+    fn validate_execution_bridge_record(
         &self,
         request: &'static str,
         observed_affinity: GpuContextAffinity,
@@ -123,9 +123,9 @@ impl ProgramBindingRealizationState {
             Ok(())
         } else {
             Err(GpuProgramBindingRealizationError::new(
-                GpuProgramBindingRealizationErrorCategory::CurrentRenderPipelineBridgeViolation,
+                GpuProgramBindingRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
                 request,
-                "the bridge input is absent from authoritative G4C2 realization",
+                "the execution-bridge input is absent from authoritative G4C2 realization",
             ))
         }
     }
@@ -849,8 +849,8 @@ fn resource_failure(
         ResourceCategory::ContextOrDeviceUnavailableOrLost => {
             GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
         }
-        ResourceCategory::CurrentRenderPipelineBridgeViolation => {
-            GpuProgramBindingRealizationErrorCategory::CurrentRenderPipelineBridgeViolation
+        ResourceCategory::CurrentRenderExecutionBridgeViolation => {
+            GpuProgramBindingRealizationErrorCategory::CurrentRenderExecutionBridgeViolation
         }
     };
 
@@ -970,8 +970,8 @@ mod tests {
                 GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost,
             ),
             (
-                ResourceCategory::CurrentRenderPipelineBridgeViolation,
-                GpuProgramBindingRealizationErrorCategory::CurrentRenderPipelineBridgeViolation,
+                ResourceCategory::CurrentRenderExecutionBridgeViolation,
+                GpuProgramBindingRealizationErrorCategory::CurrentRenderExecutionBridgeViolation,
             ),
         ];
 

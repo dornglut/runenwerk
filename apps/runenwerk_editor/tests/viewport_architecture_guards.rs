@@ -1377,15 +1377,16 @@ fn wr021_material_product_spine_runtime_boundaries_are_consumed() {
         "PreparedSceneMaterialBundle must be consumed during shader resolution, and missing generated bundles must be treated as forbidden fallbacks",
     );
 
-    let execute =
-        read_workspace_source("engine/src/plugins/render/renderer/render_flow/execute_passes.rs");
+    let execute = read_workspace_source_tree_contents(
+        "engine/src/plugins/render/renderer/render_flow/execute_passes",
+    );
     assert!(
         execute.contains("resolve_shader_material_for_packet")
             && execute.contains("for_pipeline_bind_groups(")
             && execute.contains("&[resources.bind_group()]")
             && execute.contains("pass_consumes_material_resources")
             && execute.contains("builtin or scene-bundle fallback is forbidden"),
-        "material feature passes must lend prepared group-1 resources through the bounded pipeline bridge and fail closed instead of falling back to old scene shaders",
+        "material feature passes must lend prepared group-1 resources through the bounded execution bridge and fail closed instead of falling back to old scene shaders",
     );
 
     let material_runtime_state =

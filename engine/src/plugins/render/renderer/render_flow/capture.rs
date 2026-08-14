@@ -383,10 +383,10 @@ pub fn encode_prepared_texture_capture_copy(
     };
     match source {
         PreparedCaptureTextureSource::Surface => context
-            .current_render_pipeline_bridge()
+            .current_render_execution_bridge()
             .for_surface_readback_copy(&buffer, copy)?,
         PreparedCaptureTextureSource::Realized(texture) => context
-            .current_render_pipeline_bridge()
+            .current_render_execution_bridge()
             .for_texture_readback_copy(&texture, &buffer, copy)?,
     }
 
@@ -432,7 +432,7 @@ pub fn read_capture_back(
 
     let mut output = None;
     let bridge_result = context
-        .current_render_pipeline_bridge()
+        .current_render_execution_bridge()
         .for_buffer_readback(
             &buffer,
             ReadCaptureBuffer {

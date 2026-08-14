@@ -6,24 +6,20 @@ fn read(path: &str) -> String {
 }
 
 fn read_render_flow_sources() -> String {
+    let mut files = Vec::new();
+    collect_source_files(
+        Path::new("src/plugins/render/renderer/render_flow"),
+        &mut files,
+    );
+    files.sort();
+
     let mut combined = String::new();
-    let mut entries = fs::read_dir("src/plugins/render/renderer/render_flow")
-        .expect("failed to read render_flow source directory")
-        .collect::<Result<Vec<_>, _>>()
-        .expect("failed to collect render_flow source files");
-    entries.sort_by_key(|entry| entry.path());
-
-    for entry in entries {
-        let path = entry.path();
-        if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
-            combined.push_str(
-                &fs::read_to_string(&path)
-                    .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display())),
-            );
-            combined.push('\n');
-        }
+    for path in files {
+        let source = fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
+        combined.push_str(&strip_cfg_test_modules(&source));
+        combined.push('\n');
     }
-
     combined
 }
 
@@ -184,9 +180,16 @@ fn hard_cutoff_removes_legacy_render_symbols_and_fallbacks() {
         "renderer runtime should not iterate raw pass_order for encoding"
     );
     assert!(
-        render_flow.contains("flow_pipeline_cache.render_pipeline")
-            && render_flow.contains("insert_render_pipeline"),
-        "renderer runtime should retain renderer-owned artifact-cache lookup and publication for render pipelines"
+        render_flow.contains("context.realize_compute_pipeline(")
+            && render_flow.contains("context.realize_render_pipeline(")
+            && render_flow.contains(".for_compute_pipeline(")
+            && render_flow.contains(".for_render_pipeline("),
+        "renderer runtime must realize pipelines through G4C3 and consume opaque realized handles through the execution bridge"
+    );
+    assert!(
+        !render_flow.contains("flow_pipeline_cache.render_pipeline")
+            && !render_flow.contains("insert_render_pipeline"),
+        "renderer runtime must not restore renderer-owned reusable compute/render pipeline cache authority"
     );
     assert!(
         render_flow.contains("execution_pass_feature_id(pass)"),

@@ -11,8 +11,8 @@ pub enum FeaturePassAction {
     Skip,
 }
 
-/// Renderer-local handoff between the G4C1/G4C2 realization phase and the current G4C3/G5
-/// operation phase. It holds no raw device or queue reference.
+/// Renderer-local handoff between the G4C1/G4C2/G4C3 realization phase and the G5 operation
+/// phase. It holds no raw device or queue reference.
 struct RendererRealizationBatch<'a> {
     packet: RendererPreparedPacket,
     capture_runtime: FrameCaptureRuntime,
@@ -77,7 +77,7 @@ impl Renderer {
         timings.preflight_ms = preflight_start.elapsed().as_secs_f32() * 1000.0;
 
         let flow_encode_start = Instant::now();
-        // Phase one: all G4C1/G4C2 realization completes without a raw device/queue loan.
+        // Phase one: all G4C1/G4C2/G4C3 realization completes without a raw device/queue loan.
         let mut batch = self.realize_render_batch(
             context,
             frame_texture,
@@ -92,8 +92,8 @@ impl Renderer {
         )?;
 
         let encode_submit_start = Instant::now();
-        // Phase two: one non-reentrant raw loan covers only current G4C3 pipeline creation and
-        // unchanged G5 upload, encoding, submission, and readback operations.
+        // Phase two: one non-reentrant raw loan covers only unchanged G5 upload, encoding,
+        // submission, and readback operations.
         {
             let _span = tracing::info_span!("renderer.encode_submit").entered();
             let loan = context.current_render_device_queue();
@@ -102,7 +102,6 @@ impl Renderer {
                 .create_command_encoder(&CommandEncoderDescriptor {
                     label: Some("engine_render_encoder"),
                 });
-            self.create_ui_pipelines_for_raw_phase(context, loan.device)?;
             std::mem::take(&mut batch.packet.pending_operations).apply(context, loan.queue)?;
             let upload_report = self.dynamic_texture_targets.apply_uploads(
                 context,
@@ -413,7 +412,7 @@ impl Renderer {
     fn execute_realized_batch(
         &mut self,
         context: &GpuContext,
-        device: &Device,
+        _device: &Device,
         queue: &Queue,
         encoder: &mut CommandEncoder,
         frame_texture: &Texture,
@@ -499,7 +498,6 @@ impl Renderer {
                         let has_gpu_timestamp_writes = gpu_timestamp_writes.is_some();
                         let evidence = self.encode_compiled_pass(
                             context,
-                            device,
                             encoder,
                             frame_texture,
                             frame_view,

@@ -1,7 +1,7 @@
 use super::adapter_mapping::adapter_facts;
 use super::{
-    ProgramBindingRealizationState, ResourceRealizationState, WgpuContextState, WgpuDeviceHealth,
-    WgpuErrorAttributionGate,
+    PipelineRealizationState, ProgramBindingRealizationState, ResourceRealizationState,
+    WgpuContextState, WgpuDeviceHealth, WgpuErrorAttributionGate,
 };
 use crate::plugins::gpu::{
     GpuAdapterFacts, GpuAlignmentFacts, GpuCandidateEnvironmentEvidence, GpuCandidateId,
@@ -106,6 +106,11 @@ pub(super) async fn request_with_instance(
         Arc::clone(&health),
         Arc::clone(&error_attribution_gate),
     );
+    let pipeline_realization = PipelineRealizationState::new(
+        affinity,
+        Arc::clone(&health),
+        Arc::clone(&error_attribution_gate),
+    );
     let adapter_facts = candidate.adapter().clone();
     Ok(GpuContext {
         id,
@@ -127,6 +132,7 @@ pub(super) async fn request_with_instance(
             error_attribution_gate,
             resource_realization,
             program_binding_realization,
+            pipeline_realization,
         },
     })
 }

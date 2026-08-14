@@ -7,9 +7,10 @@ pub(crate) use api::GpuWorkAuthoringErrorContext;
 pub use api::*;
 pub(crate) use backend::{
     CurrentRenderAttachmentsTerminal, CurrentRenderBufferCopyTerminal,
-    CurrentRenderBufferUploadTerminal, CurrentRenderIndexBufferTerminal,
-    CurrentRenderIndirectBufferTerminal, CurrentRenderPipelineBindGroupsTerminal,
-    CurrentRenderPipelineCreationTerminal, CurrentRenderReadbackBufferTerminal,
+    CurrentRenderBufferUploadTerminal, CurrentRenderComputePipelineTerminal,
+    CurrentRenderIndexBufferTerminal, CurrentRenderIndirectBufferTerminal,
+    CurrentRenderPipelineBindGroupsTerminal, CurrentRenderReadbackBufferTerminal,
+    CurrentRenderRenderPipelineTerminal, CurrentRenderRenderPipelinesTerminal,
     CurrentRenderTextureCopyTerminal, CurrentRenderTextureReadbackCopyTerminal,
     CurrentRenderTextureUploadTerminal, CurrentRenderTimestampResourcesTerminal,
     CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,
@@ -224,7 +225,7 @@ mod tests {
         let mut render_sources = Vec::new();
         rust_sources_below(&renderer_root, &mut render_sources);
         for path in render_sources {
-            let source = fs::read_to_string(&path).expect("render source should be readable");
+            let source = fs::read_to_string(&path).expect("source should be readable");
             assert!(
                 !source.contains("RenderBackendTimingCapabilities"),
                 "retired timing authority remains in {}",

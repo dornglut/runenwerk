@@ -820,7 +820,7 @@ impl RendererPendingOperations {
         }
         for upload in self.texture_uploads {
             context
-                .current_render_pipeline_bridge()
+                .current_render_execution_bridge()
                 .for_texture_upload(
                     &upload.texture,
                     UploadRendererTexture {
@@ -840,13 +840,15 @@ impl RendererPendingOperations {
         queue: &Queue,
         upload: &RendererPendingBufferUpload,
     ) -> Result<()> {
-        context.current_render_pipeline_bridge().for_buffer_upload(
-            &upload.buffer,
-            WriteRendererBuffer {
-                queue,
-                contents: &upload.bytes,
-            },
-        )?;
+        context
+            .current_render_execution_bridge()
+            .for_buffer_upload(
+                &upload.buffer,
+                WriteRendererBuffer {
+                    queue,
+                    contents: &upload.bytes,
+                },
+            )?;
         Ok(())
     }
 }

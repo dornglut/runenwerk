@@ -267,7 +267,7 @@ pub enum GpuResourceRealizationErrorCategory {
     UnexpectedBackendValidationRejection,
     BackendResourceExhaustion,
     ContextOrDeviceUnavailableOrLost,
-    CurrentRenderPipelineBridgeViolation,
+    CurrentRenderExecutionBridgeViolation,
 }
 
 impl GpuResourceRealizationErrorCategory {
@@ -311,8 +311,8 @@ impl GpuResourceRealizationErrorCategory {
             Self::ContextOrDeviceUnavailableOrLost => {
                 "stop using this context and let the owning product choose recovery"
             }
-            Self::CurrentRenderPipelineBridgeViolation => {
-                "use only the audited lexical current-render pipeline terminal"
+            Self::CurrentRenderExecutionBridgeViolation => {
+                "use only the audited lexical current-render execution terminal"
             }
         }
     }
@@ -446,7 +446,7 @@ pub enum GpuProgramBindingRealizationErrorCategory {
     UnexpectedBackendProgramOrBindingValidationRejection,
     BackendResourceExhaustion,
     ContextOrDeviceUnavailableOrLost,
-    CurrentRenderPipelineBridgeViolation,
+    CurrentRenderExecutionBridgeViolation,
 }
 
 impl GpuProgramBindingRealizationErrorCategory {
@@ -502,8 +502,8 @@ impl GpuProgramBindingRealizationErrorCategory {
             Self::ContextOrDeviceUnavailableOrLost => {
                 "stop using this context and let the owning product choose recovery"
             }
-            Self::CurrentRenderPipelineBridgeViolation => {
-                "use only an audited lexical current-render pipeline terminal"
+            Self::CurrentRenderExecutionBridgeViolation => {
+                "use only an audited lexical current-render execution terminal"
             }
         }
     }

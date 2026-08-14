@@ -1,6 +1,6 @@
 use super::{
-    ProgramBindingRealizationState, ResourceRealizationState, WgpuDeviceHealth,
-    WgpuErrorAttributionGate,
+    PipelineRealizationState, ProgramBindingRealizationState, ResourceRealizationState,
+    WgpuDeviceHealth, WgpuErrorAttributionGate,
 };
 use std::sync::{Arc, MutexGuard};
 use wgpu::{Adapter, Device, Instance, Queue};
@@ -22,6 +22,7 @@ pub(crate) struct WgpuContextState {
     pub(super) error_attribution_gate: Arc<WgpuErrorAttributionGate>,
     pub(super) resource_realization: ResourceRealizationState,
     pub(super) program_binding_realization: ProgramBindingRealizationState,
+    pub(super) pipeline_realization: PipelineRealizationState,
 }
 
 /// Separate temporary backend-operation loan for current renderer execution.

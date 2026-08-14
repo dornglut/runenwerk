@@ -1,18 +1,20 @@
-//! Temporary, purpose-typed lexical G4C1/G4C2 access for current uncut renderer operations.
+//! Purpose-typed lexical access for current renderer execution after G4C3 pipeline realization.
 //!
-//! G4C3 replaces and deletes this bridge. Each consumer trait has a fixed `()` result and receives
-//! backend references with an anonymous call-only lifetime, which prevents returning the borrow
-//! itself. WGPU resource handles are cloneable, so the temporary no-retention rule is additionally
-//! enforced by exact repository source inventories of all terminal implementations and by review.
+//! G4C3 owns pipeline creation privately. This bridge is the single residual current-render
+//! execution boundary for G5 operations and for borrowing already-realized private pipeline
+//! objects. Every backend reference has an anonymous call-only lifetime and cannot become reusable
+//! renderer authority.
 
+use super::super::pipeline_realization::PipelineRealizationState;
 use super::super::resource_realization::ResourceRealizationState;
 use super::ProgramBindingRealizationState;
 use crate::plugins::gpu::{
-    GpuContext, GpuProgramBindingRealizationError, GpuRealizedBindGroup, GpuRealizedBuffer,
-    GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRealizedQuerySet, GpuRealizedTexture,
-    GpuRealizedTextureView, GpuResourceRealizationError,
+    GpuContext, GpuPipelineRealizationError, GpuProgramBindingRealizationError,
+    GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline, GpuRealizedQuerySet,
+    GpuRealizedRenderPipeline, GpuRealizedTexture, GpuRealizedTextureView,
+    GpuResourceRealizationError,
 };
-use wgpu::{BindGroup, Buffer, PipelineLayout, QuerySet, ShaderModule, Texture, TextureView};
+use wgpu::{BindGroup, Buffer, ComputePipeline, QuerySet, RenderPipeline, Texture, TextureView};
 
 macro_rules! purpose_terminal {
     ($trait_name:ident, $method_name:ident, $object:ty) => {
@@ -37,6 +39,20 @@ purpose_terminal!(
     write_timestamps,
     QuerySet
 );
+purpose_terminal!(
+    CurrentRenderComputePipelineTerminal,
+    use_compute_pipeline,
+    ComputePipeline
+);
+purpose_terminal!(
+    CurrentRenderRenderPipelineTerminal,
+    use_render_pipeline,
+    RenderPipeline
+);
+
+pub(crate) trait CurrentRenderRenderPipelinesTerminal {
+    fn use_render_pipelines(self, pipelines: &[&RenderPipeline]);
+}
 
 pub(crate) trait CurrentRenderBufferCopyTerminal {
     fn copy_buffers(self, source: &Buffer, destination: &Buffer);
@@ -71,47 +87,65 @@ pub(crate) trait CurrentRenderAttachmentsTerminal {
     fn encode_with_attachments(self, views: &[&TextureView]);
 }
 
-/// G4C3-owned temporary pipeline creation terminal. It can borrow a G4C2 program and pipeline
-/// layout only for the lexical WGPU pipeline call and cannot return or retain either reference.
-pub(crate) trait CurrentRenderPipelineCreationTerminal {
-    fn create_pipeline(self, program: &ShaderModule, layout: &PipelineLayout);
-}
-
 /// G5-owned temporary bind-group encoding terminal. G4C2 supplies validated bind groups but does
 /// not take command-encoding ownership.
 pub(crate) trait CurrentRenderPipelineBindGroupsTerminal {
     fn bind_groups(self, groups: &[&BindGroup]);
 }
 
-/// The only G4C2 object-reference bridge. G4C3 owns its immediate deletion.
+/// The sole current-render lexical execution bridge after the G4C3 cutover.
 #[derive(Debug)]
-pub(crate) struct CurrentRenderPipelineBridge<'a> {
+pub(crate) struct CurrentRenderExecutionBridge<'a> {
     resource_state: &'a ResourceRealizationState,
     program_binding_state: &'a ProgramBindingRealizationState,
+    pipeline_state: &'a PipelineRealizationState,
 }
 
 impl GpuContext {
-    pub(crate) fn current_render_pipeline_bridge(&self) -> CurrentRenderPipelineBridge<'_> {
-        CurrentRenderPipelineBridge {
+    pub(crate) fn current_render_execution_bridge(&self) -> CurrentRenderExecutionBridge<'_> {
+        CurrentRenderExecutionBridge {
             resource_state: &self.backend.resource_realization,
             program_binding_state: &self.backend.program_binding_realization,
+            pipeline_state: &self.backend.pipeline_realization,
         }
     }
 }
 
-impl CurrentRenderPipelineBridge<'_> {
-    pub(crate) fn for_pipeline_creation(
+impl CurrentRenderExecutionBridge<'_> {
+    pub(crate) fn for_compute_pipeline(
         self,
-        program: &GpuRealizedProgram,
-        layout: &GpuRealizedPipelineLayout,
-        terminal: impl CurrentRenderPipelineCreationTerminal,
-    ) -> Result<(), GpuProgramBindingRealizationError> {
-        self.program_binding_state
-            .validate_pipeline_bridge_program(&program.record)?;
-        self.program_binding_state
-            .validate_pipeline_bridge_pipeline_layout(&layout.record)?;
-        terminal.create_pipeline(&program.record.object, &layout.record.object);
-        Ok(())
+        pipeline: &GpuRealizedComputePipeline,
+        terminal: impl CurrentRenderComputePipelineTerminal,
+    ) -> Result<(), GpuPipelineRealizationError> {
+        self.pipeline_state.with_execution_compute_pipeline(
+            pipeline,
+            self.program_binding_state,
+            |pipeline| terminal.use_compute_pipeline(pipeline),
+        )
+    }
+
+    pub(crate) fn for_render_pipeline(
+        self,
+        pipeline: &GpuRealizedRenderPipeline,
+        terminal: impl CurrentRenderRenderPipelineTerminal,
+    ) -> Result<(), GpuPipelineRealizationError> {
+        self.pipeline_state.with_execution_render_pipeline(
+            pipeline,
+            self.program_binding_state,
+            |pipeline| terminal.use_render_pipeline(pipeline),
+        )
+    }
+
+    pub(crate) fn for_render_pipelines(
+        self,
+        pipelines: &[&GpuRealizedRenderPipeline],
+        terminal: impl CurrentRenderRenderPipelinesTerminal,
+    ) -> Result<(), GpuPipelineRealizationError> {
+        self.pipeline_state.with_execution_render_pipelines(
+            pipelines,
+            self.program_binding_state,
+            |pipelines| terminal.use_render_pipelines(pipelines),
+        )
     }
 
     pub(crate) fn for_pipeline_bind_groups(
@@ -121,7 +155,7 @@ impl CurrentRenderPipelineBridge<'_> {
     ) -> Result<(), GpuProgramBindingRealizationError> {
         for group in groups {
             self.program_binding_state
-                .validate_pipeline_bridge_bind_group(&group.record)?;
+                .validate_execution_bridge_bind_group(&group.record)?;
         }
         let groups = groups
             .iter()
@@ -296,7 +330,7 @@ impl CurrentRenderPipelineBridge<'_> {
         resource: &GpuRealizedBuffer,
     ) -> Result<(), GpuResourceRealizationError> {
         self.resource_state
-            .validate_pipeline_bridge_buffer(resource)
+            .validate_execution_bridge_buffer(resource)
     }
 
     fn validate_texture(
@@ -304,7 +338,7 @@ impl CurrentRenderPipelineBridge<'_> {
         resource: &GpuRealizedTexture,
     ) -> Result<(), GpuResourceRealizationError> {
         self.resource_state
-            .validate_pipeline_bridge_texture(resource)
+            .validate_execution_bridge_texture(resource)
     }
 
     fn validate_texture_view(
@@ -312,7 +346,7 @@ impl CurrentRenderPipelineBridge<'_> {
         resource: &GpuRealizedTextureView,
     ) -> Result<(), GpuResourceRealizationError> {
         self.resource_state
-            .validate_pipeline_bridge_texture_view(resource)
+            .validate_execution_bridge_texture_view(resource)
     }
 
     fn validate_query_set(
@@ -320,6 +354,6 @@ impl CurrentRenderPipelineBridge<'_> {
         resource: &GpuRealizedQuerySet,
     ) -> Result<(), GpuResourceRealizationError> {
         self.resource_state
-            .validate_pipeline_bridge_query_set(resource)
+            .validate_execution_bridge_query_set(resource)
     }
 }

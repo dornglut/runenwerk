@@ -211,7 +211,7 @@ impl RendererDynamicTextureTargetCache {
         }
         let bytes = upload_bytes_for_gpu(upload);
         context
-            .current_render_pipeline_bridge()
+            .current_render_execution_bridge()
             .for_texture_upload(
                 &target.realized,
                 UploadDynamicTexture {
