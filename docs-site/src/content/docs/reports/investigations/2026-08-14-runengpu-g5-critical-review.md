@@ -1,6 +1,6 @@
 ---
 title: RunenGPU G5 Critical Review
-description: Source-grounded pre-owner-review audit of G5 executable-work, lifecycle, retention, render-pass compatibility, and current-host surface integration decisions.
+description: Source-grounded pre-owner-review audit of G5 executable-work, dynamic binding, lifecycle, retention, render-pass compatibility, and current-host surface integration decisions.
 status: active
 owner: gpu
 layer: reports
@@ -43,12 +43,13 @@ The review re-read accepted source rather than relying only on planning prose, i
 - `engine/src/plugins/gpu/api/work.rs`;
 - `engine/src/plugins/gpu/api/graph/{authoring,preparation}.rs`;
 - G4 program/pipeline/render-state/runtime-binding contracts;
+- G4 bind-group lowering, request keys, realization records, and current execution bridge;
 - `engine/src/plugins/gpu/api/{context,realization}.rs`;
 - G4 resource and pipeline realization registries;
 - private WGPU context state and current execution loan;
 - current UI multi-pipeline render-pass execution;
 - current-host surface ownership and accepted G4C2 presentation-surface boundary;
-- pinned WGPU 27.0.1 render-pass/dynamic-state validation behavior;
+- pinned WGPU 27.0.1 render-pass, dynamic-state, bind-group dynamic-offset, and type behavior;
 - G5 investigation/design/G5A/G5B/G5C specifications;
 - exact-head CI failure evidence from PR `#285`.
 
@@ -148,10 +149,10 @@ ordered color formats
 optional depth/stencil format
 ```
 
-Every active attachment must share extent/sample count. Every draw pipeline must exactly match
-ordered color-target count/formats, depth/stencil presence/format and sample count. Existing G3
-resolve compatibility remains authoritative. Default viewport/scissor derive from the validated
-common extent.
+Every active attachment shares extent/sample count. Every draw pipeline exactly matches ordered
+color-target count/formats, depth/stencil presence/format and sample count. Existing G3 resolve
+compatibility remains authoritative. Default viewport/scissor derive from the validated common
+extent.
 
 Accepted RunenGPU has no multiview or 3D depth-slice render contract; G5A does not invent one. A
 real current need is a separately accepted extension stop condition.
@@ -215,14 +216,9 @@ encoder needs one legal way to consume the current acquired surface without pret
 
 ### Rejected approaches
 
-Do not:
-
-- realize `SurfaceAcquired` through G4C1;
-- expose raw `SurfaceTexture`/`Texture`/`TextureView` in public RunenGPU;
-- add sampled/storage surface exceptions;
-- create a broad external-resource import API;
-- retain the old renderer execution bridge merely for surfaces;
-- implement reusable G7 surface identity/generation/recovery early.
+Do not realize `SurfaceAcquired` through G4C1, expose raw surface objects publicly, add
+sampled/storage exceptions, create a broad import API, retain the old renderer execution bridge for
+surfaces, or implement reusable G7 identity/generation/recovery early.
 
 ### Decision
 
@@ -247,19 +243,18 @@ Partial acquisition/binding failure before commit drops already acquired leases 
 releases provisional capacity, preserves prepared work and creates no submission ID.
 
 Attachment encoding receives only the matching acquired `TextureView`; copy encoding receives only
-the matching acquired `Texture`. Both are lexical private values and never become G4 realization,
+the matching acquired `Texture`. Both remain lexical private values and never become G4 realization,
 logical work, renderer authority or generic callback data. Sampled/storage use remains forbidden.
 
 If encoding fails after ID commit but before `Queue::submit` returns, the submission terminalizes as
 Failed and the surface lease is dropped without present.
 
-After `Queue::submit` returns, the current-host owner may call its existing `present()` terminal.
-That is a **presentation attempt**, not GPU-completion or display/compositor-completion evidence. A
-later asynchronous execution/device failure may be observed after a present attempt; the G5
-submission outcome and pre-G7 presentation-attempt fact remain separate rather than retroactively
-rewriting each other.
+After `Queue::submit` returns, current-host may call its existing `present()` terminal. That is a
+presentation attempt, not GPU-completion or display/compositor-completion evidence. A later
+asynchronous execution/device failure may be observed after a present attempt; the G5 outcome and
+pre-G7 presentation-attempt fact remain separate rather than retroactively rewriting each other.
 
-This owner-local terminal is explicit G7 deletion inventory, not a third generic G5 bridge.
+This terminal is explicit G7 deletion inventory, not a third generic G5 bridge.
 
 ## 11. G5B remains one complete lifecycle slice
 
@@ -278,6 +273,51 @@ G5A executable logical work
 G5B should decompose internally by source ownership/state-machine responsibility rather than by
 accepting a partial public lifecycle.
 
+## 12. Dynamic offsets are execution-use state, not physical bind-group identity
+
+Accepted G4B stores `dynamic_offset: Option<u64>` in `GpuRuntimeBufferBinding`. Its validation uses
+the static-plus-dynamic effective range. Accepted G4C2 WGPU lowering creates the backend buffer
+binding from the **static** offset/size only; WGPU applies dynamic offsets later at
+`set_bind_group`. The realization record nevertheless currently keys on complete runtime values,
+including dynamic offset, and `GpuRealizedBindGroup::values()` exposes one request's values.
+
+That current G4C2 shape is correct enough before execution exists but is a poor G5 terminal:
+different dynamic offsets can allocate identical backend bind groups and consume bounded registry
+capacity, while one shared physical record cannot truthfully own one invocation's dynamic offset.
+
+Pinned WGPU 27 defines `DynamicOffset = u32`; RunenGPU's logical buffer-address model is u64.
+
+**Decision:**
+
+```text
+GpuRuntimeBindingSet
+  complete logical per-use values including u64 dynamic offsets
+        |
+        +--> effective access/hazard range
+        |
+        +--> private static physical bind-group projection
+                excludes dynamic offset
+                full equality over layout/resource/static offset/size
+        |
+        +--> prepared checked per-use backend dynamic-offset slice
+```
+
+G5A refines the G4C2 bind-group single-flight key/record so requests differing only in dynamic
+offset reuse one physical `GpuRealizedBindGroup`. Static layout/resource/offset/size differences
+still split realization.
+
+The G5A clean cutover removes public `GpuRealizedBindGroup::values()` rather than returning a first-
+request or synthetic value set. Logical values remain on `GpuRuntimeBindingSet`; no compatibility
+alias conflates physical realization with invocation state.
+
+G5B preparation derives one dynamic-offset slice per bind-group slot in canonical layout binding
+order. The logical u64 offset remains reusable API semantics; WGPU preparation performs checked
+u64->u32 conversion and rejects nonrepresentable values before encoding. Private `set_bind_group`
+receives the realized physical group plus that exact slice. Offsets are never reconstructed from
+the realization record or renderer state.
+
+This preserves both long-term abstraction and the performance/capacity purpose of dynamic offsets.
+
 # Additional implementation invariants
 
 The implementation specs preserve these conclusions:
@@ -286,8 +326,10 @@ The implementation specs preserve these conclusions:
 - pass attachments and every draw pipeline are compatible before backend encoding;
 - zero-area viewport/scissor remain valid;
 - device-specific viewport bounds are G5B preparation facts;
+- dynamic offsets affect logical access ranges but not physical bind-group identity;
+- WGPU dynamic offsets are checked for u32 representability and passed in canonical binding order;
 - queue-write upload lowering is permitted only when exactly equivalent to graph position;
-- independent G5B proof is surface-independent and RunenRender-free;
+- independent G5B proof is surface-independent, RunenRender-free, and exercises dynamic offsets;
 - readback result completion is distinct from submission GPU completion;
 - observer drop never cancels accepted work;
 - terminal result handles detach from execution capacity after safe internal cleanup;
