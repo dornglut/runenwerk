@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-13
 ---
 
 # Active Designs
@@ -158,6 +158,7 @@ active design contains older conflicting target language.
 
 ### Workspace / Cross-Domain
 
+- [Runen Semantic Platform and Plan IR North Star](runen-semantic-platform-plan-ir-north-star-design.md)
 - [Drawing Authoring and Comic Layout Platform Design](drawing-authoring-and-comic-layout-platform-design.md)
 - [Drawing Domain Crate Design](drawing-domain-crate-design.md)
 - [Field Visualizer Product Workflow Design](field-visualizer-product-workflow-design.md)

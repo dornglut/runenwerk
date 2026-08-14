@@ -1,21 +1,23 @@
 ---
 title: Runenwerk Platform Architecture
-description: Canonical top-down architecture spine for the Runenwerk integration platform, semantic federation, specialized execution, Workbench inspection, and batteries-included application composition.
+description: Canonical top-down architecture spine for the Runenwerk typed semantic Plan platform, federated planning, specialized execution, Workbench inspection, and batteries-included application composition.
 status: accepted
 owner: workspace
 layer: architecture
 canonical: true
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-13
 related_adrs:
   - ../adr/accepted/0014-repository-family-extraction-boundaries.md
   - ../adr/accepted/0015-separate-gpu-execution-from-rendering.md
   - ../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
   - ../adr/accepted/0018-semantic-federation-and-physical-realization.md
   - ../adr/accepted/0019-batteries-included-application-composition.md
+  - ../adr/accepted/0020-adopt-typed-semantic-plan-platform.md
 related_docs:
   - ./repository-family-architecture.md
   - ../guidelines/authority-centered-boundary-architecture.md
   - ../guidelines/domain-program-architecture-pattern.md
+  - ../design/active/runen-semantic-platform-plan-ir-north-star-design.md
   - ../reports/investigations/2026-08-12-semantic-federation-and-inspection-provenance.md
   - ../reports/investigations/2026-08-12-application-composition-and-networking-ergonomics.md
 ---
@@ -38,7 +40,10 @@ independently owned Runen systems**.
 Its long-term target combines:
 
 - independently useful typed frameworks and domain owners;
-- explicit semantic ownership and cross-owner contracts;
+- one typed semantic programming model and extensible logical Plan IR;
+- relational, graph, temporal, expression, and domain dialects;
+- a logical semantic catalog and federated planner/provider layer;
+- explicit semantic ownership, effects, provenance, and cross-owner admission;
 - freedom to choose specialized CPU, GPU, spatial, field, network, persisted, or other
   physical representations;
 - specialized execution rather than one universal runtime substrate;
@@ -52,8 +57,9 @@ The compact form is:
 
 ```text
 Independent owners.
-One semantic grammar.
-Explicit typed integration.
+One typed semantic programming model.
+One extensible logical Plan IR.
+One logical semantic catalog and federation/planning layer.
 Owner-local versions; consumer-owned admission.
 Many physical realizations.
 Specialized execution.
@@ -61,54 +67,43 @@ One inspectable Workbench.
 One batteries-included App experience.
 ```
 
-Runenwerk is ambitious about product capability and conservative about universal
-machinery.
+Runenwerk standardizes logical semantic composition and planning without standardizing
+physical storage or execution.
 
 ## One picture
 
 ```text
-                         PRODUCT / APPLICATION
+                 PRODUCT / APPLICATION / TOOL / SIMULATION
+                                    |
+                            semantic program / Plan
+                                    |
+                         typed extensible Plan IR
+                                    |
+                  common algebras + domain dialects
+                                    |
+                       semantic catalog / planner
+                                    |
+                    provider partition / lowering
+                                    |
+                   specialized owner-native execution
+                                    |
+       +------------+---------------+---------------+------------+
+       |            |               |               |            |
+   RunenECS    RunenSpatial      RunenSDF      RunenRender    RunenGPU
 
-                     one App composition root
-                              |
-                transparent product/plugin groups
-                              |
-                 product- and domain-specific intent
-                              |
-                              v
-                     RUNENWERK INTEGRATION
+Product/application Plans may lower through Runenwerk product composition into:
 
-             adapters / lifecycle / product policy / hosts
-                 /          |          |          \
-                v           v          v           v
-             owner       owner      owner       owner
-          / framework  / framework / framework / framework
-                \          |          |          /
-                 +---------+----------+---------+
-                              |
-                       typed contracts
-                              |
-                explicit compatibility/admission
-                              |
-                              v
-                 SPECIALIZED REALIZATION / EXECUTION
+              App + plugins + resources + adapters
+                                    |
+                                  runtime
 
-          CPU / ECS / fields / spatial / GPU / persistence /
-                   networking / external services / ...
-
-
-                       OPTIONAL WORKBENCH
-
-          owner-selected read-oriented inspection projections
-          tables / trees / graphs / timelines / fields /
-                    images / resources / reports
-                              |
-                    lineage and correlation
-
-          inspection never becomes foreign semantic authority
+Workbench consumes the same Plan/catalog model through explain, table, graph,
+timeline, field, image, resource, report, and owner-specific projections.
 ```
 
-This is an ownership/integration map, not one mandatory dataflow pipeline.
+This is a logical composition and ownership map, not one physical dataflow pipeline.
+`App` remains the one live runtime composition root. Inspection never becomes foreign
+semantic authority or runtime admission authority.
 
 # 1. Family ownership
 
@@ -160,6 +155,34 @@ Correspondence does not imply shared identity or authority.
 A cache, database row, GPU buffer, persisted artifact, index, or expensive derived value
 does not become semantic authority merely because runtime behavior relies on it.
 
+## Typed semantic Plan platform
+
+ADR 0020 accepts one typed, extensible logical Plan IR as Runenwerk's semantic
+programming and composition substrate.
+
+```text
+typed source program
+    -> Plan IR + dialect semantics
+    -> verification / normalization
+    -> optional logical optimization
+    -> provider partitioning / physical planning
+    -> lowering / compilation
+    -> owner-native products and execution
+```
+
+The common Plan layer may compose relational, graph, temporal, expression, world,
+spatial, field, effect, and owner-specific semantics. Dialects contribute typed
+operations, verification, interfaces, lowering contracts, diagnostics, and explanation
+without turning the core into one closed application ontology.
+
+The semantic catalog/database is logical. It describes explicitly participating
+sources, schemas, relationships, capabilities, provenance, providers, and alternatives;
+it is not one physical store or authority over private owner state.
+
+A provider may realize a Plan region without acquiring that region's semantic
+authority. Deterministic straightforward lowering is a valid complete baseline;
+correctness does not depend on a sophisticated optimizer.
+
 ## Shared reasoning grammar
 
 ADR 0018 gives Runenwerk one common way to reason across heterogeneous owners without
@@ -174,8 +197,9 @@ forcing them onto one implementation substrate:
 | **Realization** | How is semantic meaning represented, retained, located, or accelerated physically? |
 | **Effect** | Where does authoritative or external state actually change? |
 
-These are architecture questions, not mandatory runtime wrappers such as
-`MetaContract<T>`, `MetaNode`, or `RunenObject`.
+These questions also remain useful within Plan verification, lowering, and explanation.
+They are not mandatory empty wrappers such as `MetaContract<T>`, `MetaNode`, or
+`RunenObject`.
 
 Useful owner-specific roles remain distinct, including:
 
@@ -196,8 +220,9 @@ Diagnostic / Report
 ```
 
 Cross-domain explanatory verbs such as `Observe`, `Propose`, `Derive`, `Adapt`,
-`Admit`, `Realize`, `Execute`, and `Commit` are open vocabulary, not a closed enum or
-universal execution pipeline.
+`Admit`, `Realize`, `Execute`, and `Commit` remain open vocabulary. Concrete typed Plan
+operations and dialect contracts may use them where their semantics are defined; the
+vocabulary itself is not a closed enum or physical execution pipeline.
 
 # 3. Versions and compatibility
 
@@ -325,37 +350,30 @@ patterns.
 
 # 7. Shared extraction
 
-Shared implementation is earned by repeated neutral proof:
+ADR 0020 accepts the logical Plan, catalog, dialect, planner/provider, lowering, and
+explanation architecture. It does not choose a crate, repository, dependency topology,
+or concrete shared runtime implementation.
+
+Implementation and any later extraction advance through evidence:
 
 ```text
-design locally
--> prove one real domain
--> prove a structurally different second domain
--> identify concrete repeated implementation/maintenance burden
--> characterize dependency/runtime/memory/version/cognitive cost
--> accept a separate extraction decision
--> extract only the repeated neutral primitive
+semantic API and workload corpus
+-> minimal Plan IR and dialect design
+-> planner/provider contracts with straightforward lowering
+-> world + ECS proving path
+-> structurally different second provider
+-> concrete independent-consumer evidence
+-> separate ADR 0014 extraction decision if warranted
 ```
 
-A shared contract must remain meaningful if either proving domain disappears and must
-not contain proving-domain semantic branches.
+Initial Plan integration and providers may remain Runenwerk-owned. Peer frameworks do
+not depend on Runenwerk merely to participate and retain independently usable native
+APIs. A future `runen-plan`, `runen-semantic`, or similar extraction requires a
+separate ADR under ADR 0014 and must remain meaningful without the proving domains.
 
-The acceptance bar rises with commitment:
-
-```text
-Level A
-  conceptual law / vocabulary
-
-Level B
-  interoperability / reflection contract
-
-Level C
-  shared runtime mechanism
-```
-
-ADR 0018 accepts Level-A semantic federation. It does not pre-authorize a shared
-Workbench protocol, query engine, dataflow runtime, global store, generic optimizer, or
-meta-executor.
+The accepted logical planner does not pre-authorize a retained incremental database,
+dataflow runtime, physical store, universal scheduler/executor, or sophisticated global
+optimizer. Deterministic straightforward lowering is a complete correctness baseline.
 
 # 8. Workbench
 
@@ -364,16 +382,13 @@ editor/workbench applications, procedural and field workflows, simulation/render
 inspection, asset/content formation, networking inspection, diagnostics, and headless
 automation.
 
-The Workbench obtains coherence through **federation**, not ownership centralization:
+The Workbench obtains coherence as a consumer of the semantic Plan/catalog model, not
+through ownership centralization:
 
 ```text
-owners / peer frameworks
-        |
-        v
-explicit Runenwerk integration / inspection adapters
-        |
-        v
-optional Workbench inspection session
+semantic Plan + logical catalog + provider explanation
+        -> table / graph / timeline / field / image / resource / report
+        -> optional Workbench inspection session
 ```
 
 Owners may expose zero or more read-oriented inspection projections, directionally:
@@ -391,7 +406,8 @@ Text / Report
 Opaque / Custom
 ```
 
-These are tooling views, not semantic storage classes.
+These are projections of the same semantic fabric, not semantic storage classes or a
+parallel inspection database.
 
 The Workbench must not become a global semantic ID/revision authority, domain mutation
 authority, runtime admission authority, universal payload store, universal serialization
@@ -401,7 +417,10 @@ Inspection should remain optional, lazy, bounded, pressure-aware, and device/loc
 aware. Inspecting GPU metadata must not imply payload readback; inspecting a field must
 not imply eager dense materialization.
 
-Any peer-neutral inspection/reflection API requires a separate Level-B decision.
+Inspection correlation still does not certify runtime admission. The consuming owner or
+Runenwerk integration boundary decides whether owner-local revisions, capabilities,
+scope, provenance, quality, and lifetime form a legal input set. Any concrete
+peer-neutral inspection/reflection API remains separately gated.
 
 # 9. Application and product experience
 
@@ -410,6 +429,20 @@ ADR 0019 establishes:
 > **Internal decomposition must not determine application complexity.**
 
 `App` remains Runenwerk's one runtime composition root.
+
+Product/application Plans may describe semantic composition and then lower through
+ordinary product composition:
+
+```text
+semantic application Plan
+    -> product/plugin/resource/adapter composition
+    -> App
+    -> runtime
+```
+
+Plan is not a second live application runtime. After lowering it must not persist as a
+parallel application-configuration authority, service locator, or meta-executor beside
+`App`.
 
 The product-facing model is progressive disclosure:
 
@@ -456,7 +489,8 @@ supported products.
 
 ## Current implementation honesty
 
-The target is not fully implemented.
+The target is not fully implemented. Current code does not provide the accepted typed
+Plan IR, semantic catalog/planner, provider federation, or Plan-to-`App` composition.
 
 Current `App` construction still installs broader builtin state than the long-term
 product-capability ownership rule, and the `engine` package has a broader compile-time
@@ -540,6 +574,10 @@ It is not the universal root of Runenwerk. GPU resources, mounted UI runtime sta
 input events, spatial availability, render scene snapshots, network streams, scheduler
 readiness, and query results need not become Domain Programs.
 
+Where a Domain Program is useful, it may compile into Plan operations or a Plan region
+before provider lowering. It remains a specialized authoring pattern, not a competing
+universal IR and not a requirement for native owner APIs.
+
 Use the [Domain Program Architecture Pattern](../guidelines/domain-program-architecture-pattern.md)
 for full guidance.
 
@@ -553,30 +591,32 @@ Other powerful patterns remain local where their semantics fit:
 
 # 12. What is deliberately not universal
 
-Current architecture does not authorize one family-wide implementation for:
+Runenwerk has one logical semantic programming/planning substrate. It does not have one
+physical storage/execution substrate.
+
+Current architecture does not authorize one family-wide physical implementation or
+authority for:
 
 ```text
 object identity
 revision / transaction / global snapshot
-storage engine
-ECS
-query language / query engine
-graph runtime
-dataflow runtime
-incremental database
+physical database / storage engine
+ECS ontology
+physical graph runtime
+retained dataflow / incremental database runtime
 logical clock
 scheduler / executor
 event bus
 serialization / wire format
 memory layout
 GPU representation
-compiler / evaluator framework
-reconciliation runtime
+global reconciliation runtime
 managed backend services
 Workbench reflection ABI
 ```
 
-These may exist locally. Shared extraction remains possible after real repeated proof.
+These may exist locally or behind specialized providers. Shared extraction remains
+possible after real repeated proof and a separate owning decision.
 
 # 13. Accepted architecture versus future implementation
 
@@ -589,21 +629,32 @@ Accepted durable authority includes:
 - graph/feedback separation and incremental/full correctness;
 - semantic/physical realization separation;
 - semantic-federation reasoning vocabulary;
-- no pre-authorized shared meta runtime;
+- one typed semantic programming model and extensible logical Plan IR;
+- relational, graph, temporal, expression, and extensible domain dialects;
+- a logical semantic catalog/database surface;
+- planner/provider interfaces, logical optimization, provider partitioning, physical
+  planning, lowering/compilation, and Plan explanation;
+- deterministic straightforward lowering as a complete correctness baseline;
+- no universal physical store, identity, revision, transaction, scheduler, executor,
+  graph runtime, or representation model;
 - `App` as the one runtime composition root;
 - product/plugin groups as the accepted future composition concept;
 - custom Runen networking semantic ownership with contained transport realization.
 
 Still separately gated:
 
+- semantic API/workload corpus and concrete Plan IR/API design;
+- concrete dialect, planner, provider, and lowering implementation;
+- world-plus-ECS and structurally different second-provider proofs;
+- extraction into any new crate/repository or dependency topology;
 - concrete product/plugin-group API and memberships;
 - moving current `App` builtin resources;
 - Cargo feature/dependency topology for smaller builds;
 - peer-neutral Workbench inspection/reflection protocol;
-- Workbench query capabilities;
+- concrete Workbench Plan/query/explain surfaces;
 - low-boilerplate standard ECS networking completion;
 - managed backend/provider integrations;
-- any new shared runtime mechanism.
+- any universal physical runtime mechanism.
 
 Documentation must not describe these future items as already implemented.
 
@@ -612,19 +663,23 @@ Documentation must not describe these future items as already implemented.
 The architecture remains healthy when:
 
 1. semantic invariants have identifiable owners;
-2. peer frameworks remain independently useful;
-3. cross-owner reads use explicit contracts instead of private mutable reach-through;
-4. multi-owner consumers define enough compatibility/admission facts;
-5. physical optimization can change without silently changing semantic meaning;
-6. graph species retain their real edge semantics;
-7. incremental systems retain clean/full or full-resynchronization safety behavior;
-8. Workbench inspection stays optional and non-authoritative;
-9. shared infrastructure is extracted only after structurally different real proofs;
-10. routine application paths expose product/domain concepts instead of internal wiring;
-11. defaults remain inspectable and lower to the same owners used by expert paths;
-12. custom Runen systems can use contained lower-level libraries without giving away
-    their higher-level semantic ownership;
-13. docs distinguish accepted architecture, current implementation, future target, and
+2. one typed Plan can compose logical semantics across extensible dialects;
+3. peer frameworks remain independently useful and retain native APIs;
+4. planner/provider participation does not transfer semantic authority;
+5. cross-owner reads use explicit contracts instead of private mutable reach-through;
+6. multi-owner consumers define enough compatibility/admission facts;
+7. straightforward deterministic lowering remains sufficient for correctness;
+8. physical optimization can change without silently changing semantic meaning;
+9. graph species retain their real edge semantics;
+10. incremental systems retain clean/full or full-resynchronization safety behavior;
+11. effects, provenance, lifetime, budgets, quality, cancellation, and recovery remain
+    explicit;
+12. Workbench Plan/catalog inspection stays optional and non-authoritative;
+13. shared physical infrastructure is extracted only after structurally different real
+    proofs;
+14. product Plans lower into `App` rather than creating a second runtime;
+15. routine application paths expose product/domain concepts instead of internal wiring;
+16. docs distinguish accepted architecture, current implementation, future target, and
     historical evidence.
 
 # 15. Cold-start reading path
@@ -634,15 +689,19 @@ For cross-domain architecture work:
 1. **This page** — current Runenwerk-wide synthesis.
 2. [ADR 0014](../adr/accepted/0014-repository-family-extraction-boundaries.md) —
    repository-family ownership and dependency direction.
-3. [ADR 0017](../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md) —
+3. [ADR 0020](../adr/accepted/0020-adopt-typed-semantic-plan-platform.md) —
+   typed logical Plan, dialect, catalog, planner/provider, and precise precedence.
+4. [ADR 0017](../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md) —
    authority, consistency, graph, incremental, capability, extraction, and safety laws.
-4. [ADR 0018](../adr/accepted/0018-semantic-federation-and-physical-realization.md) —
+5. [ADR 0018](../adr/accepted/0018-semantic-federation-and-physical-realization.md) —
    positive semantic-federation, physical-realization, and Workbench direction.
-5. [ADR 0019](../adr/accepted/0019-batteries-included-application-composition.md) —
+6. [ADR 0019](../adr/accepted/0019-batteries-included-application-composition.md) —
    product-facing `App` and usability doctrine.
-6. [Repository Family Architecture](./repository-family-architecture.md) and the owning
+7. [Runen Semantic Platform and Plan IR North Star](../design/active/runen-semantic-platform-plan-ir-north-star-design.md) —
+   detailed target subordinate to the accepted ADRs and this spine.
+8. [Repository Family Architecture](./repository-family-architecture.md) and the owning
    subsystem/framework design for the work at hand.
-7. [Authority-Centered Boundary Architecture](../guidelines/authority-centered-boundary-architecture.md)
+9. [Authority-Centered Boundary Architecture](../guidelines/authority-centered-boundary-architecture.md)
    or [Domain Program Architecture Pattern](../guidelines/domain-program-architecture-pattern.md)
    when those specialized guidelines apply.
 
@@ -650,20 +709,23 @@ Investigation reports explain research ancestry; they do not override accepted A
 
 ## Final position
 
-Runenwerk is not one database, ECS, graph, compiler, meta-framework, editor shell, or
-renderer.
+Runenwerk is not one physical database, ECS ontology, physical graph runtime,
+scheduler/executor, representation model, meta-framework, editor shell, or renderer.
 
-It is a custom integration and Workbench platform whose owners can stay specialized
-while participating in one coherent product:
+It is a typed semantic programming, integration, and Workbench platform whose owners
+can stay specialized while participating in one coherent product:
 
 ```text
 owners keep meaning
-contracts make boundaries explicit
+Plan makes logical composition explicit
+dialects keep semantic vocabulary extensible
+planning partitions and lowers to owner-native providers
 admission makes multi-owner use deliberate
 realizations stay free to optimize
 execution stays specialized
-inspection makes the whole system understandable
-App composition makes the ordinary product path simple
+Workbench explains the same semantic fabric
+product Plans lower into the one App runtime root
 ```
 
-That combination—not one universal substrate—is the current Runenwerk North Star.
+One logical semantic programming/planning substrate without one physical
+storage/execution substrate is the current Runenwerk North Star.
