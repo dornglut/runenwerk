@@ -29,7 +29,7 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
     ],
 
-    goal: "Create one context/device-generation-bound RunenGPU execution lifecycle from accepted complete G5A work through capacity-bounded cancellation-safe asynchronous preparation, atomic prepared-to-in-flight submit admission, private WGPU encoding/submission, host-driven progress, exactly-once terminal outcomes, upload/readback staging, normalized asynchronous readback results, health integration, shutdown, terminal-record detachment, and submission-aware retention of accepted G4 realizations; prove the surface-independent boundary with an independent non-render consumer while leaving current-host SurfaceAcquired attachment/copy/present binding and renderer cutover to G5C.",
+    goal: "Create one context/device-generation-bound RunenGPU execution lifecycle from accepted complete G5A work through capacity-bounded cancellation-safe asynchronous preparation, static physical bind-group realization plus per-use checked dynamic-offset execution state, atomic prepared-to-in-flight submit admission, private WGPU encoding/submission, host-driven progress, exactly-once terminal outcomes, upload/readback staging, normalized asynchronous readback results, health integration, shutdown, terminal-record detachment, and submission-aware retention of accepted G4 realizations; prove the surface-independent boundary with an independent non-render consumer while leaving current-host SurfaceAcquired attachment/copy/present binding and renderer cutover to G5C.",
 
     dependency_direction: [
         "Accepted G5A GpuPreparedWorkGraph plus accepted G4 realization owners -> G5B private execution preparation.",
@@ -55,15 +55,25 @@ PhaseImplementationSpec(
         "Ordinary failure, future cancellation/drop, panic-unwind-safe Drop where applicable, shutdown/stale-generation rejection, or abandoned owned G4 single-flight realization releases owned reservations without publishing a prepared value.",
         "Preparation validates Running state, exact context/device generation, complete graph shape, operation-derived accesses/requirements, runtime binding device facts, transfer/readback bounds, and required logical SurfaceAcquired roles before backend encoding.",
         "Preparation realizes every ordinary referenced resource/program/layout/bind-group/pipeline only through accepted G4 owners and retains exact Arc realization records needed for execution.",
+        "For each accepted GpuRuntimeBindingSet, preparation validates the complete logical values first, then realizes each bind group through the G5A static physical projection and separately prepares the exact per-use dynamic-offset sequence for that group.",
         "SurfaceAcquired attachment/copy/present resources are not realized through G4C1; preparation records only their exact logical identity/descriptor/allowed role/current-host binding requirement and no raw Surface, SurfaceTexture, Texture, or TextureView.",
         "Preparation plans upload/readback staging size and strategy within configured limits but does not submit queue work; physical staging allocation is transactional after submit admission unless a backend constraint proves earlier allocation necessary while preserving the same bounded ownership.",
-        "Preparation publishes no partial prepared value on semantic, realization, pressure, stale-generation, unavailable-device, staging-plan, surface-requirement, or cancellation failure.",
+        "Preparation publishes no partial prepared value on semantic, realization, dynamic-offset, pressure, stale-generation, unavailable-device, staging-plan, surface-requirement, or cancellation failure.",
+    ],
+
+    prepared_dynamic_binding_use: [
+        "For each pipeline-layout bind-group slot actually used by one compute operation or render draw, private prepared execution state stores one opaque GpuRealizedBindGroup physical handle plus the checked dynamic-offset sequence derived from that invocation's original GpuRuntimeBindingSet.",
+        "The dynamic sequence contains exactly one offset for each buffer binding whose accepted GpuBindingKind uses dynamic offset, ordered by the canonical bind-group layout binding order; non-dynamic bindings contribute no entry and G4's existing fixed-array/dynamic-offset restrictions remain authoritative.",
+        "Logical GpuRuntimeBufferBinding keeps u64 dynamic-offset semantics. For the pinned WGPU 27 backend, preparation performs a checked conversion to wgpu DynamicOffset/u32 after existing alignment/effective-range validation; a value greater than u32::MAX rejects structurally before encoding rather than truncating or wrapping.",
+        "Backend dynamic-offset representability is a device/backend preparation fact, not a reason to narrow the reusable RunenGPU logical offset contract to u32 for every future backend.",
+        "Dynamic offsets are never recovered from GpuRealizedBindGroup, its physical record, a first-request cache value, renderer state, or a second public side channel. The exact logical GpuRuntimeBindingSet remains the per-use semantic authority.",
+        "Two prepared operations may therefore share one physical GpuRealizedBindGroup while carrying different checked dynamic-offset sequences and different effective access ranges.",
     ],
 
     prepared_submission_contract: [
         "GpuPreparedSubmission is opaque, immutable after publication, context/device-generation-bound, process-local, and single-use after successful submit.",
         "A live prepared value owns the same prepared-capacity slot reserved at prepare start and releases it on drop or atomically converts it to in-flight ownership on successful submit.",
-        "It may expose normalized graph/diagnostic/estimated-pressure facts but never WGPU command buffers, pipelines, bind groups, resources, mapped ranges, surfaces, or submission indices.",
+        "It may expose normalized graph/diagnostic/estimated-pressure facts but never WGPU command buffers, pipelines, bind groups, resources, dynamic-offset backend slices, mapped ranges, surfaces, or submission indices.",
         "Its private realized/encoding records are derived non-authoritative state reconstructable from accepted logical contracts while the generation remains valid.",
         "If the graph needs SurfaceAcquired attachment/copy/present roles, the prepared value retains only typed unresolved current-host binding requirements for G5C integration.",
         "Dropping a prepared submission creates no submission identity and is not reported as cancellation of accepted GPU work.",
@@ -90,14 +100,15 @@ PhaseImplementationSpec(
 
     private_encoding: [
         "G5B owns the sole new private lowering from prepared surface-independent operations to WGPU command encoding.",
-        "Encode Compute through G4C3 realized compute pipeline, G4C2 realized bindings, exact dispatch, and no consumer-provided raw callback.",
-        "Encode Render through ordinary realized attachments, ordered GpuRenderDraw state, G4C3 realized render pipelines, realized bind groups, vertex/index/indirect buffers, dynamic state, draw intent, and timestamp writes.",
+        "Encode Compute through G4C3 realized compute pipeline, prepared physical bind-group uses, exact dispatch, and no consumer-provided raw callback.",
+        "Encode Render through ordinary realized attachments, ordered GpuRenderDraw state, G4C3 realized render pipelines, prepared physical bind-group uses, vertex/index/indirect buffers, dynamic state, draw intent, and timestamp writes.",
+        "At each compute/render set_bind_group call, pass the prepared group's exact checked dynamic-offset slice in canonical binding order; do not pass an empty slice merely because the backend BindGroup was already realized.",
         "Encode accepted Copy, BufferZero, QueryResolve, Upload, and Readback operations in prepared graph order when all referenced resources are ordinarily realized.",
         "Upload may privately lower to queue write only when provably ordering-equivalent; otherwise use bounded private staging plus encoded copy.",
         "Readback keeps staging/mapping objects private and encodes its observation copy at the exact logical operation position.",
         "GpuPresentOperation is not a WGPU command-encoder operation. G5B records its logical ordering/current-host requirement but performs no physical surface action.",
         "G5B does not acquire/configure/bind/present SurfaceAcquired resources or lend a raw acquired TextureView; G5C owns the narrow existing-current-host integration required before G7.",
-        "No RunenRender/consumer module creates a new G5B CommandEncoder, Queue submission, or raw backend execution callback for consumers migrated to G5B.",
+        "No RunenRender/consumer module creates a new G5B CommandEncoder, Queue submission, raw bind-group/dynamic-offset terminal, or backend execution callback for consumers migrated to G5B.",
     ],
 
     submission_outcomes: [
@@ -162,7 +173,7 @@ PhaseImplementationSpec(
 
     realization_retention_contract: [
         "Each active prepare, prepared value, accepted submission, and readback retains only the accepted G4 realization Arc records required by its current lifecycle phase.",
-        "Accepted G4 resource/program/pipeline registries remain the sole realization lookup/capacity authority; they already collect lookup-only records and never evict records retained by live Arc handles.",
+        "Accepted G4 resource/program/pipeline/bind-group registries remain the sole physical realization lookup/capacity authority; corrected G5A bind-group identity excludes dynamic offsets but still uses complete full equality for static resource/layout facts.",
         "G5B introduces no second resource/program/pipeline retirement registry, duplicate realization identity, or max_deferred_retirement_records counter.",
         "Logical last-handle drop only makes a G4 registry record reclaimable; it cannot destroy a record still retained by a G5 lifecycle record.",
         "Submission completion releases execution-only G4 Arcs when safe; readback-dependent G4/staging references remain only until mapping/result materialization no longer needs them.",
@@ -185,7 +196,7 @@ PhaseImplementationSpec(
         "Preserve the accepted shared WGPU error-attribution gate as the outer backend-attribution lock.",
         "Preparation obtains G4 realization records before inserting published G5 prepared/submission lifecycle records; no inverse lifecycle-lock -> G4-registry acquisition path is allowed.",
         "Prepared-slot reservation is an independent RAII capacity token and its Drop path must not acquire G4 locks after a G5 lifecycle lock in inverse order.",
-        "Encoding operates on already-retained private records and does not look up renderer-owned authority under encoder locks.",
+        "Encoding operates on already-retained private records and prepared dynamic-offset slices and does not look up renderer-owned authority under encoder locks.",
         "Completion/map callbacks mutate only one matching G5 record under its registry lock, move notification/detachment data out, release locks, then notify observers or detach registry references.",
         "One guarded transition publishes terminal submission/readback state; duplicate callbacks are ignored or reported as invariant evidence without duplicate terminal publication.",
         "Shutdown uses the same registries/state transitions rather than a separate cleanup hierarchy.",
@@ -202,8 +213,9 @@ PhaseImplementationSpec(
 
     independent_consumer_proof: [
         "Add one non-render, surface-independent compute consumer using complete G5A compute work, GpuContext preparation, bounded submit, progress, submission outcome, and Readback without invoking RunenRender/current-render bridges.",
-        "Use a deterministic output vector and compare exact normalized CPU bytes or decoded values.",
-        "The proof must exercise public/typed execution and may not reach through to WGPU Device, Queue, CommandEncoder, pipeline, bind group, map, poll, surface, or submission-index APIs.",
+        "The independent proof includes at least one dynamic buffer binding with two executions using different valid offsets that reuse one physical bind-group realization while producing the correct per-use result, so the dynamic-offset execution path is not only source-guarded.",
+        "Use deterministic output data and compare exact normalized CPU bytes or decoded values.",
+        "The proof must exercise public/typed execution and may not reach through to WGPU Device, Queue, CommandEncoder, pipeline, bind group, map, poll, surface, dynamic-offset raw callback, or submission-index APIs.",
         "Adapter absence is an explicit environment-dependent unavailable result and cannot be reported as successful hardware execution.",
     ],
 
@@ -211,14 +223,16 @@ PhaseImplementationSpec(
         "Introduce G5 execution owners under engine/src/plugins/gpu before migrating any renderer consumer.",
         "The independent non-render proof is the first live consumer; existing renderer may temporarily remain on CurrentRenderDeviceQueue/CurrentRenderExecutionBridge and current-host G7 migration boundary until G5C.",
         "No second public execution API or compatibility alias may be created for renderer migration.",
-        "Use accepted G5A GpuWorkOperation/GpuPreparedWorkGraph directly; do not introduce another command graph or permanent sidecar.",
+        "Use accepted G5A GpuWorkOperation/GpuPreparedWorkGraph/GpuRuntimeBindingSet directly; do not introduce another command graph, permanent sidecar, or renderer-owned dynamic-offset representation.",
         "Do not widen current render bridges to support G5B; G5B accesses private G4 realization records through owner-local backend modules.",
     ],
 
     deterministic_tests: [
         "max_prepared_submissions counts active async prepare reservations plus published prepared values at the exact configured boundary.",
         "Cancelling an in-progress prepare or dropping a prepared value releases exactly one prepared slot and leaks no G4 owner reservation.",
-        "Preparation rejects foreign/stale generation, invalid binding device facts, impossible transfer staging, unavailable/lost context, and invalid surface requirements before submission.",
+        "Preparation rejects foreign/stale generation, invalid binding device facts, dynamic offsets unrepresentable by the pinned WGPU u32 DynamicOffset or violating admitted alignment/range facts, impossible transfer staging, unavailable/lost context, and invalid surface requirements before submission.",
+        "For each dynamic bind group, prepared offsets are in exact canonical layout binding order, contain one entry per dynamic buffer declaration, and are independent of non-dynamic bindings.",
+        "Two logical binding uses differing only in dynamic offset reuse one physical bind-group record but preserve distinct prepared offset slices and effective access ranges.",
         "Successful preparation allocates no submission identity and dropping it publishes no terminal submission outcome.",
         "Ordinary submit of a graph with unresolved SurfaceAcquired attachment/copy/present requirements returns SurfaceBindingRequired, allocates no ID, and preserves prepared work.",
         "Submit pressure allocates no submission identity, consumes no in-flight slot, and preserves retryable prepared semantics/slot.",
@@ -236,16 +250,17 @@ PhaseImplementationSpec(
     ],
 
     environment_dependent_tests: [
-        "Real WGPU headless compute prepare/submit/progress/readback proof on an available adapter.",
+        "Real WGPU headless compute prepare/submit/progress/readback proof on an available adapter, including dynamic-offset set_bind_group execution where admitted.",
         "Environment evidence reports adapter/backend absence separately from a successful device path.",
         "Native progress proof demonstrates completion through RunenGPU progress without public WGPU polling.",
         "Where WebGPU CI/runtime becomes available, prove the same public state machine without relying on Device::poll; absence of that CI does not authorize native-only public semantics.",
     ],
 
     source_guards: [
-        "No public WGPU Device, Queue, CommandEncoder, CommandBuffer, SubmissionIndex, PollType, BufferSlice, MapMode, mapped range, Surface, SurfaceTexture, acquired TextureView, fence/semaphore/native handle, pipeline, bind group, or callback escape in G5 contracts.",
+        "No public WGPU Device, Queue, CommandEncoder, CommandBuffer, SubmissionIndex, PollType, DynamicOffset, BufferSlice, MapMode, mapped range, Surface, SurfaceTexture, acquired TextureView, fence/semaphore/native handle, pipeline, bind group, or callback escape in G5 contracts.",
         "Exactly one G5 submission/progress/completion/readback authority exists under engine/src/plugins/gpu.",
-        "No permanent execution sidecar, second work graph, second realization-retirement registry, or context-owned unbounded terminal-history registry appears.",
+        "No permanent execution sidecar, second work graph, second realization-retirement registry, context-owned unbounded terminal-history registry, or renderer-owned dynamic-offset channel appears.",
+        "No dynamic-offset-sensitive physical G4 bind-group cache key survives G5A and no private encoder derives per-use offsets from GpuRealizedBindGroup record values.",
         "No second WGPU health/loss/error-attribution observer appears.",
         "No G5B source depends on RunenRender, ECS, UI, Winit, product/application, shader-file discovery, or physical surface policy.",
         "Current render bridges are not widened or made public while they await G5C deletion.",
@@ -255,13 +270,14 @@ PhaseImplementationSpec(
         "No renderer/UI/timing/capture final migration or bridge deletion in this slice except corrections strictly required to keep accepted G5A/G5B contracts coherent; G5C owns final cutover.",
         "No G7 reusable surface identity/generation/capability/acquisition/presentation/reconstruction or device replacement policy; G5B records only unresolved logical attachment/copy/present requirements.",
         "No implicit executor/thread pool/background progress service, universal blocking wait, second backend, multi-queue scheduler, graph optimizer, pass fusion, public raw backend handle, stable persisted execution record, unbounded terminal history, second retirement registry, or broad import API.",
-        "Stop for a new design decision if WGPU 27 requires a public semantic not representable by the accepted progress/submission/readback model or if current renderer surface use cannot be satisfied by the narrow G5C current-host integration without implementing reusable G7 ownership.",
+        "Stop for a new design decision if a future backend needs dynamic binding semantics not representable as the accepted logical u64 offset plus backend-specific checked lowering; do not preemptively narrow the reusable contract to WGPU's u32 type.",
+        "Stop for a new design decision if WGPU 27 requires another public semantic not representable by the accepted progress/submission/readback model or if current renderer surface use cannot be satisfied by the narrow G5C current-host integration without implementing reusable G7 ownership.",
     ],
 
     validation: [
-        "Focused preparation/submission/progress/pressure/readback/shutdown/realization-retention/terminal-detachment tests and source guards.",
+        "Focused preparation/dynamic-binding/submission/progress/pressure/readback/shutdown/realization-retention/terminal-detachment tests and source guards.",
         "Independent non-render exact compute/readback proof when an adapter is available.",
-        "Complete raw-WGPU execution owner, unresolved-current-host-surface requirement, and health-observer census.",
+        "Complete raw-WGPU execution owner, dynamic-offset, unresolved-current-host-surface requirement, and health-observer census.",
         "cargo validate",
         "git diff --check",
         "CI=true pnpm --dir docs-site build",
@@ -271,6 +287,7 @@ PhaseImplementationSpec(
     acceptance: [
         "One complete bounded surface-independent RunenGPU execution lifecycle exists for accepted G5A work without renderer dependency; logical SurfaceAcquired attachment/copy/present requirements remain typed and unresolved until G5C current-host integration.",
         "Active prepares and published prepared values share one finite prepared-capacity authority with cancellation-safe RAII release and atomic prepared-to-in-flight admission.",
+        "Dynamic offsets remain logical per-use state, are checked for backend representability during preparation, reuse static physical bind-group realizations, and are supplied explicitly at private set_bind_group encoding calls.",
         "Every accepted submission and readback has exactly one terminal semantic result and all private staging is bounded.",
         "G5 retains accepted G4 realizations through existing Arc records and introduces no duplicate realization-retirement authority.",
         "Terminal observation retention is detached from future context execution capacity after safe backend cleanup.",
