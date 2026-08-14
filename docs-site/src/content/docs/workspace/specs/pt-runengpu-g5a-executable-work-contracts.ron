@@ -66,12 +66,12 @@ PhaseImplementationSpec(
     render_pass_compatibility: [
         "Derive one backend-neutral render-pass attachment signature from logical attachments before backend access: effective render extent, common attachment sample count, ordered color attachment formats, and optional depth/stencil format.",
         "Every active color/depth attachment in one render operation must have the same effective render extent and sample count; reject mismatched logical attachment views before private WGPU begin_render_pass validation.",
-        "Existing G3 resolve validation remains authoritative for non-aliasing multisampled source versus single-sampled destination with matching color format and extent; G5A must preserve those facts in the complete pass signature.",
+        "Existing G3 resolve validation remains authoritative for non-aliasing multisampled source versus single-sampled destination with matching color format and extent; G5A preserves those facts in the complete pass signature.",
         "For every GpuRenderDraw, require exact compatibility between its GpuRenderPipelineDescriptor and the operation pass signature: ordered color-target count/formats, depth/stencil presence and format, and multisample sample_count.",
-        "Pipeline switches inside one render pass are therefore allowed only when each pipeline is compatible with the same pass signature; pipeline blend/write/primitive state may differ because those remain draw-pipeline state rather than attachment compatibility facts.",
+        "Pipeline switches inside one render pass are allowed only when each pipeline is compatible with the same pass signature; pipeline blend/write/primitive state may differ because those remain draw-pipeline state rather than attachment compatibility facts.",
         "Current accepted RunenGPU has no multiview render-pass contract and G5A does not invent one. If exact-current-main consumers require multiview or 3D depth-slice rendering, stop for a separately accepted semantic extension rather than forwarding raw WGPU state.",
         "The common logical render extent is the authority from which default viewport and scissor resolve; do not choose one arbitrary attachment when attachment extents disagree.",
-        "G5B may repeat device-dependent renderability/capability validation, but backend rejection must not be the first place a logically knowable attachment/pipeline mismatch is discovered.",
+        "G5B repeats device-dependent renderability/capability validation, but backend rejection must not be the first place a logically knowable attachment/pipeline mismatch is discovered.",
     ],
 
     vertex_index_contract: [
@@ -85,9 +85,10 @@ PhaseImplementationSpec(
 
     dynamic_draw_state: [
         "GpuRenderDynamicState owns normalized optional viewport/scissor/blend-constant overrides plus an explicit stencil-reference value; absence of an override has one defined semantic default and never means inherit accidental prior draw state.",
-        "GpuViewport stores canonical finite f32-bit values for x, y, width, height, min_depth, and max_depth; normalize signed zero, require positive width/height, require zero <= min_depth <= max_depth <= one, and reject arithmetic/non-finite invalidity before backend access.",
+        "GpuViewport stores canonical finite f32-bit values for x, y, width, height, min_depth, and max_depth; normalize signed zero, require nonnegative width/height, require zero <= min_depth <= max_depth <= one, and reject arithmetic/non-finite invalidity before backend access.",
+        "G5A does not require viewport x/y to lie inside the attachment or require nonzero area. G5B preparation validates WGPU/device-specific maximum viewport size and position range against admitted device facts.",
         "Viewport default resolves to the complete common logical render extent derived from the validated attachment set with depth range zero-to-one.",
-        "GpuScissorRect stores checked u32 x/y/width/height, requires positive width/height and checked x+width/y+height, and must fit the common logical render extent.",
+        "GpuScissorRect stores checked u32 x/y/width/height, allows zero-area rectangles, requires checked x+width/y+height, and requires the rectangle to fit the common logical render extent.",
         "Scissor default resolves to the complete common logical render extent.",
         "GpuBlendConstant stores four canonical finite f64-bit components with signed zero normalized; G5A does not invent a zero-to-one clamp unless an accepted backend-neutral rule requires it. Its default is transparent zero.",
         "Stencil reference is u32 with default zero.",
@@ -97,7 +98,7 @@ PhaseImplementationSpec(
     runtime_binding_split: [
         "Introduce one backend-neutral runtime binding-set contract derived from accepted G4B GpuRuntimeBindingValue and layout/interface types.",
         "Construction performs context-free exact group/key/cardinality/resource-kind/logical-range checks.",
-        "Device-dependent alignment, format capability, generation affinity, and private bind-group realization remain G5B preparation work using accepted G4 facts.",
+        "Device-dependent alignment, format capability, generation affinity, viewport device-limit validation, and private bind-group realization remain G5B preparation work using accepted G4/device facts.",
         "Do not create parallel structural and device binding authorities; both phases consume the same G4B declarations and exact runtime values.",
     ],
 
@@ -168,8 +169,8 @@ PhaseImplementationSpec(
         "Render construction rejects mismatched attachment extents or sample counts and rejects every draw pipeline whose ordered color formats, depth/stencil format/presence, or sample count is incompatible with the pass signature.",
         "One multi-draw UI-shaped render operation switches compatible pipelines, bind groups, vertex buffers, and scissor without creating additional render passes.",
         "Default viewport/scissor are derived from the validated common render extent rather than arbitrary first-attachment behavior.",
+        "Zero-area viewport and scissor remain valid deterministic state; non-finite viewport/blend values and out-of-bounds scissor reject structurally, while device-specific viewport maximum/position bounds reject during G5B preparation.",
         "Vertex slots and accepted GpuIndexFormat ranges validate deterministically and insertion-order-independent where order is not semantic.",
-        "Dynamic state canonicalizes signed zero, rejects non-finite/invalid viewport or blend values, validates scissor/viewport bounds, and makes defaults explicit so two draws cannot inherit unspecified prior state.",
         "GpuWorkOperation/GpuRenderDraw compile and remain semantically comparable without requiring Ord/Hash on G4 pipeline descriptors or transfer payloads.",
         "GpuTransferPayload clones preserve record identity and value; independently constructed equal payload bytes compare semantically equal while is_same_record distinguishes record identity.",
         "Upload writes satisfy initialization when complete and order against conflicting graph accesses.",
