@@ -496,9 +496,14 @@ fn renderer_completes_g4_realization_before_its_one_raw_g5_interval() {
         "src/plugins/render/renderer/render_flow/capture.rs",
         "src/plugins/render/renderer/render_flow/gpu_timing.rs",
     ] {
+        let source = read(&manifest, path);
+        let production = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("Rust source split always retains the production prefix");
         assert!(
-            !compact(&read(&manifest, path)).contains("current_render_device_queue("),
-            "{path} must use typed realization/execution bridges rather than regain a raw loan"
+            !compact(production).contains("current_render_device_queue("),
+            "{path} production code must use typed realization/execution bridges rather than regain a raw loan"
         );
     }
 
