@@ -132,7 +132,7 @@ impl GpuPassTimingFrame {
             return Ok(false);
         }
         context
-            .current_render_pipeline_bridge()
+            .current_render_execution_bridge()
             .for_timestamp_resources(
                 &self.query_set,
                 &self.resolve_buffer,
@@ -156,7 +156,7 @@ impl GpuPassTimingFrame {
         }
         let readback_size = u64::from(self.query_count) * u64::from(QUERY_SIZE);
         context
-            .current_render_pipeline_bridge()
+            .current_render_execution_bridge()
             .for_timestamp_resources(
                 &self.query_set,
                 &self.resolve_buffer,
@@ -260,7 +260,7 @@ pub(in crate::plugins::render::renderer) fn read_gpu_pass_timing_evidence(
     let fallback_entries = entries.clone();
     let mut output = None;
     let bridge_result = context
-        .current_render_pipeline_bridge()
+        .current_render_execution_bridge()
         .for_buffer_readback(
             &readback_buffer,
             ReadGpuTimingBuffer {
@@ -508,7 +508,7 @@ mod tests {
                     label: Some("engine_test_gpu_timestamp_encoder"),
                 });
             context
-                .current_render_pipeline_bridge()
+                .current_render_execution_bridge()
                 .for_timestamp_writes(
                     &writes.query_set,
                     EncodeTestTimestampPass {
