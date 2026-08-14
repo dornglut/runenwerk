@@ -28,29 +28,40 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
     ],
 
-    goal: "Create one context/device-generation-bound RunenGPU execution lifecycle from accepted complete G5A work through asynchronous preparation, bounded submission admission, private WGPU encoding/submission, host-driven progress, exactly-once terminal outcomes, upload/readback staging, normalized asynchronous readback results, health integration, shutdown, and submission-aware delayed retirement; prove the boundary with an independent non-render consumer while leaving the existing renderer on its temporary G5 seams until G5C.",
+    goal: "Create one context/device-generation-bound RunenGPU execution lifecycle from accepted complete G5A work through capacity-bounded asynchronous preparation, atomic prepared-to-in-flight submit admission, private WGPU encoding/submission, host-driven progress, exactly-once terminal outcomes, upload/readback staging, normalized asynchronous readback results, health integration, shutdown, terminal-record detachment, and submission-aware delayed retirement; prove the boundary with an independent non-render consumer while leaving the existing renderer on its temporary G5 seams until G5C.",
 
     dependency_direction: [
         "Accepted G5A GpuPreparedWorkGraph + accepted G4 realization owners -> G5B private execution preparation.",
         "GpuPreparedSubmission -> bounded GpuContext submit admission -> private WGPU encoding/Queue submission.",
         "Private backend completion/mapping callbacks -> one RunenGPU completion registry -> normalized GpuSubmission/GpuReadback outcomes.",
+        "Logical GpuPresentOperation -> G5 ordering/submission boundary -> separately G7-owned physical surface-present handoff; G5 does not acquire surfaces.",
         "G5C later migrates RunenRender/UI consumers to this accepted authority and deletes temporary raw execution seams.",
+    ],
+
+    execution_limits: [
+        "Introduce finite validated GpuExecutionLimits before G5B preparation can publish work.",
+        "Limits include max_prepared_submissions, max_in_flight_submissions, max_upload_bytes_in_flight, max_readback_bytes_in_flight, max_pending_readbacks, and max_deferred_retirement_records.",
+        "Prepared-submission capacity is distinct from in-flight capacity because a prepared value retains G4 realization records even before queue admission.",
+        "No context-wide max_retained_terminal_records budget is required: after terminal publication and backend cleanup/retirement become safe, the context detaches its registry reference and caller-held observation Arcs own final results independently of future execution capacity.",
+        "Defaults are finite and conservative; every limit is validated and reported as normalized execution policy rather than backend hardware identity.",
     ],
 
     preparation_contract: [
         "Provide one asynchronous GpuContext preparation terminal for complete accepted G5A work; convenience overloads must converge on this authority.",
+        "Before publishing a prepared value, reserve exactly one prepared-submission capacity slot transactionally; preparation failure releases that slot.",
         "Preparation validates context Running state, exact context/device generation, complete graph shape, operation-derived accesses/requirements, runtime binding device facts, and all transfer/readback bounds before backend encoding.",
         "Preparation realizes every referenced resource/program/layout/bind-group/pipeline only through accepted G4 owners and retains exact realization records needed for execution.",
-        "Preparation plans bounded private upload/readback staging but does not submit queue work or allocate a GpuSubmissionId.",
+        "Preparation plans upload/readback staging size and strategy within configured limits but does not allocate long-lived physical staging or submit queue work; physical staging allocation is transactional after submit admission unless backend constraints prove earlier allocation necessary and still bounded by the same prepared slot.",
         "Preparation publishes no partial prepared value on semantic, realization, pressure, stale-generation, unavailable-device, or staging-plan failure.",
     ],
 
     prepared_submission_contract: [
         "GpuPreparedSubmission is opaque, immutable after publication, context/device-generation-bound, process-local, and single-use after successful submit.",
+        "A live prepared value owns exactly one max_prepared_submissions capacity slot and releases it on drop or atomically converts it to in-flight ownership on successful submit.",
         "It may expose normalized graph/diagnostic/estimated-pressure facts but never WGPU command buffers, pipelines, bind groups, resources, mapped ranges, or submission indices.",
         "Its private realized/encoding records are derived non-authoritative state reconstructable from the accepted logical contracts while the generation remains valid.",
         "Dropping a prepared submission creates no submission identity and is not reported as cancellation of accepted GPU work.",
-        "A pressure rejection must return/preserve the prepared value so callers may retry without semantic reconstruction.",
+        "A submit pressure rejection returns/preserves the prepared value with its prepared capacity slot intact so callers may retry without semantic reconstruction.",
     ],
 
     submission_identity: [
@@ -61,9 +72,10 @@ PhaseImplementationSpec(
     ],
 
     submit_admission: [
-        "submit_prepared consumes one prepared value only after all synchronous admission checks succeed.",
-        "Reject stale generation, non-Running context, already-consumed prepared state, pressure, and incompatible execution state before queue submission.",
-        "Pressure rejection performs no queue operation, allocates no submission ID, mutates no logical resource authority, and returns the retryable prepared value.",
+        "submit_prepared performs one atomic logical transition from prepared-capacity ownership to in-flight-capacity ownership only after every synchronous admission check succeeds.",
+        "Reject stale generation, non-Running context, already-consumed prepared state, in-flight pressure, upload/readback staging pressure, and incompatible execution state before queue submission.",
+        "Pressure rejection performs no queue operation, allocates no submission ID, consumes no in-flight slot, mutates no logical resource authority, and returns the same prepared value with its prepared slot.",
+        "Successful admission allocates GpuSubmissionId, reserves all required in-flight/upload/readback/deferred-retirement capacity transactionally, releases the prepared slot as part of the same state transition, then begins private physical encoding/submission.",
         "After successful admission, accepted work is never silently discarded even if all caller observation handles are dropped.",
         "No hidden accepted-but-unsubmitted queue or unbounded retry loop is permitted.",
     ],
@@ -75,7 +87,8 @@ PhaseImplementationSpec(
         "Encode accepted Copy, BufferZero, QueryResolve, Upload, and Readback operations in prepared graph order.",
         "Upload may privately lower to queue write only when provably ordering-equivalent; otherwise use bounded private staging plus encoded copy.",
         "Readback always keeps staging/mapping objects private and encodes its observation copy at the exact logical operation position.",
-        "Logical Present is not generalized into G5 surface ownership; execute it only through a separately accepted G7 surface terminal when available, otherwise retain the current explicitly classified surface boundary outside this slice.",
+        "GpuPresentOperation is not a WGPU command-encoder operation: G5 validates/order-tracks its logical source and guarantees all preceding submitted GPU work is accepted in order, then exposes only the typed handoff fact needed by the separately G7-owned current surface terminal.",
+        "G5B does not create/acquire/configure Surface or SurfaceTexture and does not call physical surface present; the temporary G7 owner may present only after successful G5 submit admission according to its separate authority.",
         "No RunenRender/consumer module creates a new G5B CommandEncoder, Queue submission, or raw backend execution callback for consumers migrated to G5B.",
     ],
 
@@ -83,26 +96,26 @@ PhaseImplementationSpec(
         "Public semantic submission state is Submitted followed by exactly one terminal Completed or Failed outcome; backend-specific physical-start state is not promised.",
         "GpuSubmissionFailure structurally distinguishes context/device unavailable-or-lost, attributed backend execution/validation failure, forced shutdown terminalization, and invariant failure.",
         "Backend text remains bounded diagnostic evidence only and never determines identity or error category.",
-        "Already-submitted GPU work is never claimed physically cancellable; observer drop or product disinterest is not a fake Cancelled execution outcome.",
+        "Already-submitted GPU work is never advertised as physically cancellable; observer drop or product disinterest is not a fake Cancelled execution outcome.",
     ],
 
     progress_contract: [
         "Provide nonblocking GpuContext::progress as the portable execution-maintenance terminal.",
-        "GpuProgressReport is bounded normalized evidence covering completed/failed submissions, advanced/ready/failed readbacks, retired records, pressure relief, and terminal health facts without exposing backend poll/fence values.",
+        "GpuProgressReport is bounded normalized evidence covering completed/failed submissions, advanced/ready/failed readbacks, retired records, released prepared/in-flight/staging pressure, and terminal health facts without exposing backend poll/fence values.",
         "On native WGPU, progress may privately invoke nonblocking device/instance polling as required by the pinned backend.",
         "On WebGPU, browser/event-loop progress remains external; progress drains and publishes callback state and must not depend on WGPU Device::poll having effect.",
         "RunenGPU owns no mandatory Tokio/Futures executor, thread pool, or implicit immortal native progress thread in G5B.",
-        "Any callback/future observation adapter uses the same completion registry, does not transfer progress ownership, invokes observers outside locks, and bounds stored observer/waker state.",
+        "Any callback/future observation adapter uses the same completion registry, does not transfer progress ownership, invokes observers outside locks, and bounds stored observer/waker state per live observation record.",
         "A universal blocking wait is not part of the future-transferable G5B baseline; Runenwerk host/CLI policy may drive progress according to product needs.",
     ],
 
     pressure_contract: [
-        "Introduce finite validated GpuExecutionLimits for max in-flight submissions, upload bytes in flight, readback bytes in flight, pending readback count, retained terminal records, and deferred retirement records.",
-        "Every configured limit is nonzero where zero would make the context unusable; defaults are finite and documented.",
         "GpuPressure contains typed kind, current occupancy, requested increment, limit, and corrective action.",
-        "Submission-count, upload-byte, readback-byte, readback-count, terminal-record, and retirement pressure are distinguishable.",
+        "Prepared-submission count, in-flight submission count, upload bytes, readback bytes, pending readback count, and deferred retirement pressure are distinguishable.",
+        "Prepared pressure fails preparation before publishing a new prepared value; in-flight/staging pressure rejects submit while preserving the prepared value.",
         "Pressure never becomes silent eviction, dropped work, unbounded allocation, sleep, implicit blocking, device-loss error, or generic validation failure.",
         "Completion/progress retires occupancy monotonically when records become safe and reports relieved pressure without requiring a caller callback under a lock.",
+        "Caller retention of an already-terminal GpuSubmission/GpuReadback observation result does not consume context execution pressure once the internal record is detached after safe backend cleanup.",
     ],
 
     readback_contract: [
@@ -113,7 +126,7 @@ PhaseImplementationSpec(
         "Map callbacks publish only into the matching generation-bound readback record and cannot publish twice, after incompatible terminal state, or into another submission.",
         "Mapped WGPU ranges never escape; copy/normalize bytes into immutable GpuReadbackBytes, unmap, and then make staging eligible for retirement.",
         "Normalize texture result data to tight logical rows and preserve logical texture format/provenance rather than exposing backend row padding.",
-        "Parent submission failure terminalizes dependent readbacks structurally; dropping a readback observer does not leak or cancel internal cleanup.",
+        "Parent submission failure terminalizes dependent readbacks structurally; dropping a readback observer does not leak, cancel internal cleanup, or retain context pressure after safe terminal detachment.",
     ],
 
     upload_contract: [
@@ -121,6 +134,14 @@ PhaseImplementationSpec(
         "Private queue-write staging and encoded staging-copy paths share one logical Upload operation and pressure accounting.",
         "Physical lowering may differ by operation position/size/backend but cannot change logical ordering, destination contents, initialization facts, or failure classification.",
         "No raw queue-write handle or staging buffer becomes public or renderer-owned authority.",
+    ],
+
+    terminal_record_detachment: [
+        "The context registry owns nonterminal and backend-cleanup-pending submission/readback records only as long as execution safety requires.",
+        "After a submission/readback has a terminal immutable result and all backend staging/retirement dependencies for that record are safe, detach the context registry reference.",
+        "Caller-held GpuSubmission/GpuReadback observation handles may retain immutable terminal result Arcs indefinitely without consuming max_prepared_submissions, max_in_flight_submissions, readback, upload, or retirement capacity.",
+        "If all observation handles were dropped before terminalization, the context still retains the internal record until exactly-once terminalization and backend cleanup, then discards it rather than creating a hidden terminal-history cache.",
+        "G5B does not provide an unbounded global terminal-history ledger; diagnostics/history beyond live observation handles belongs to separately bounded diagnostics/capture policy if later required.",
     ],
 
     health_integration: [
@@ -131,18 +152,19 @@ PhaseImplementationSpec(
     ],
 
     retirement_contract: [
-        "Each accepted submission retains Arc/owned references to every G4 realization and G5 staging record required until safe backend completion.",
+        "Each prepared/accepted submission retains Arc/owned references to every G4 realization and G5 staging record required until safe backend completion.",
         "Logical last-handle drop only makes a registry record reclaimable; it cannot destroy a record still retained by an accepted submission/readback.",
         "Submission completion may release execution-only records, but readback-dependent staging/realizations remain until mapping/result materialization no longer needs them.",
         "Deferred-retirement records are bounded by GpuExecutionLimits and contribute structured pressure rather than silent unbounded growth.",
-        "Retirement publishes no external callback while realization/execution registries are locked.",
+        "Retirement and terminal-record detachment publish no external callback while realization/execution registries are locked.",
     ],
 
     shutdown_contract: [
         "Execution state is Running, ShuttingDown, or Closed with one atomic/serialized authority.",
         "begin_shutdown is idempotent, atomically prevents new preparation/submission admission, and does not invent cancellation for already accepted work.",
-        "progress remains valid while ShuttingDown and drives backend completion, readback terminalization, and retirement.",
-        "Closed requires all accepted records/readbacks terminal plus private retirement complete, or a terminal context/device failure that structurally failed unresolved records and made backend release safe.",
+        "Live prepared-but-unsubmitted values become non-submittable after shutdown begins; dropping them releases their prepared slots and no submission outcome is fabricated.",
+        "progress remains valid while ShuttingDown and drives backend completion, readback terminalization, record detachment, and retirement.",
+        "Closed requires all accepted work/readbacks terminal plus private retirement complete, or a terminal context/device failure that structurally failed unresolved records and made backend release safe.",
         "No background task, callback, mapped range, Device, Queue, realization or staging record retains implicit immortal authority after Closed.",
         "Runenwerk may implement a blocking shutdown terminal by driving the portable state machine; RunenGPU G5B does not own product timeout/yield policy.",
     ],
@@ -151,7 +173,7 @@ PhaseImplementationSpec(
         "Preserve the accepted shared WGPU error-attribution gate as the outer backend-attribution lock.",
         "Preparation obtains G4 realization records before inserting G5 prepared/submission lifecycle records; no G5 lifecycle lock may be held while acquiring G4 registry locks in an inverse path.",
         "Encoding operates on already-retained private records and does not look up renderer-owned authority under encoder locks.",
-        "Completion/map callbacks mutate only one matching G5 record under its registry lock, move any notification data out, release locks, then notify observers.",
+        "Completion/map callbacks mutate only one matching G5 record under its registry lock, move notification/terminal-detachment data out, release locks, then notify observers or detach registry references.",
         "One compare/guarded transition publishes terminal submission/readback state; duplicate callbacks are ignored/reported as invariant evidence without duplicate terminal publication.",
         "Shutdown uses the same registries/state transitions rather than a separate cleanup lock hierarchy.",
         "Implementation must document the exact concrete mutex/registry order after source decomposition and source-guard against an inversion.",
@@ -161,6 +183,7 @@ PhaseImplementationSpec(
         "GpuSubmission observation exposes identity, affinity, try_outcome, bounded diagnostics and readback lookup; it exposes no backend synchronization object.",
         "GpuReadback observation exposes identity, parent submission identity, try_result and bounded diagnostics; it exposes no mapped range/staging object.",
         "Dropping either observation handle never discards accepted internal lifecycle records before safe terminalization/retirement.",
+        "Terminal observation handles retain detached immutable result state without keeping the context execution registry occupied.",
         "If async Future adapters are implemented, they are library-owned wrappers over the same state with caller-owned executor/progress and no mandatory runtime dependency in the public contract.",
     ],
 
@@ -180,17 +203,20 @@ PhaseImplementationSpec(
     ],
 
     deterministic_tests: [
-        "Preparation is transactional and rejects foreign/stale generation, invalid binding device facts, impossible transfer staging, and unavailable/lost context before submission.",
+        "Prepared-capacity boundary rejects the next prepare transactionally and dropping a prepared value releases exactly one prepared slot.",
+        "Preparation rejects foreign/stale generation, invalid binding device facts, impossible transfer staging, and unavailable/lost context before submission.",
         "Successful preparation allocates no submission identity and dropping it publishes no terminal submission outcome.",
-        "Submit pressure allocates no submission identity and returns the same retryable prepared semantics.",
-        "Submission IDs are nonzero/monotonic within generation and never reused within one live generation.",
+        "Submit pressure allocates no submission identity, consumes no in-flight slot, and returns the same retryable prepared semantics with its prepared slot.",
+        "Successful submit atomically converts one prepared slot into one in-flight slot and allocates exactly one nonzero monotonic submission ID.",
         "Each accepted submission terminalizes exactly once under duplicate/out-of-order completion callbacks.",
         "Submission completion and readback completion remain separately observable.",
         "Each accepted readback terminalizes exactly once and texture padding normalization is deterministic.",
-        "Upload/readback byte/count limits and submission/retirement/terminal-record limits reject structurally at exact boundaries.",
+        "Upload/readback byte/count, prepared/in-flight submission, and retirement limits reject structurally at exact boundaries.",
+        "Terminal records detach after safe backend cleanup; retaining terminal observation handles does not consume context execution capacity.",
         "Dropped observers do not alter execution/readback terminal state or leak bounded records.",
-        "Shutdown rejects new work, keeps progress valid, drains/fails accepted records deterministically, and reaches Closed only after safe retirement.",
+        "Shutdown rejects new work, invalidates submit of prepared values, keeps progress valid, drains/fails accepted records deterministically, and reaches Closed only after safe retirement.",
         "Lost/unavailable health facts terminalize exactly the affected generation without invoking product recovery.",
+        "Logical Present performs no WGPU command encoding or surface acquisition/presentation inside G5B.",
         "No callback/waker executes while internal locks are held and lock-order tests/source guards cover the concrete registry order.",
         "Independent compute submission/readback uses no renderer dependency and exact output is deterministic when a device is available.",
     ],
@@ -203,25 +229,25 @@ PhaseImplementationSpec(
     ],
 
     source_guards: [
-        "No public WGPU Device, Queue, CommandEncoder, CommandBuffer, SubmissionIndex, PollType, BufferSlice, MapMode, mapped range, fence/semaphore/native handle, pipeline, bind group, or callback escape in RunenGPU contracts.",
+        "No public WGPU Device, Queue, CommandEncoder, CommandBuffer, SubmissionIndex, PollType, BufferSlice, MapMode, mapped range, Surface, SurfaceTexture, fence/semaphore/native handle, pipeline, bind group, or callback escape in RunenGPU G5 contracts.",
         "Exactly one G5 submission/progress/completion/readback authority exists under engine/src/plugins/gpu.",
-        "No permanent execution sidecar or second work graph appears.",
+        "No permanent execution sidecar, second work graph, or context-owned unbounded terminal-history registry appears.",
         "No second WGPU health/loss/error-attribution observer appears.",
-        "No G5B source depends on RunenRender, ECS, UI, Winit, product/application, shader-file discovery, or surface policy.",
+        "No G5B source depends on RunenRender, ECS, UI, Winit, product/application, shader-file discovery, or physical surface policy.",
         "Current render bridges are not widened or made public while they await G5C deletion.",
     ],
 
     stop_conditions: [
         "No renderer/UI/timing/capture final migration or bridge deletion in this slice except corrections strictly required to keep accepted G5A/G5B contracts coherent; G5C owns final cutover.",
         "No G7 surface acquisition/presentation/reconstruction or device replacement policy.",
-        "No implicit executor/thread pool/background progress service, universal blocking wait, second backend, multi-queue scheduler, graph optimizer, pass fusion, public raw backend handle, stable persisted execution record, or broad import API.",
+        "No implicit executor/thread pool/background progress service, universal blocking wait, second backend, multi-queue scheduler, graph optimizer, pass fusion, public raw backend handle, stable persisted execution record, unbounded terminal history, or broad import API.",
         "Stop for a new design decision if WGPU 27 requires a public semantic that cannot be represented by the accepted G5 progress/submission/readback model or if safe retirement cannot be bounded without changing G4 realization ownership.",
     ],
 
     validation: [
-        "Focused preparation/submission/progress/pressure/readback/shutdown/retirement tests and source guards.",
+        "Focused preparation/submission/progress/pressure/readback/shutdown/retirement/terminal-detachment tests and source guards.",
         "Independent non-render exact compute/readback proof when an adapter is available.",
-        "Complete raw-WGPU execution owner and health-observer census.",
+        "Complete raw-WGPU execution owner, G7-present boundary, and health-observer census.",
         "cargo validate",
         "git diff --check",
         "CI=true pnpm --dir docs-site build",
@@ -230,8 +256,11 @@ PhaseImplementationSpec(
 
     acceptance: [
         "One complete bounded RunenGPU execution lifecycle exists for all accepted G5A operations without renderer dependency.",
+        "Prepared values and accepted submissions/readbacks have distinct finite capacity rules with atomic prepared-to-in-flight admission.",
         "Every accepted submission and readback has exactly one terminal semantic result and all staging/retirement is bounded.",
+        "Terminal observation retention is detached from future context execution capacity after safe backend cleanup.",
         "Portable progress owns no public backend synchronization type or mandatory executor.",
+        "Logical Present remains a G5 ordering intent with physical surface presentation separately G7-owned.",
         "Independent non-render proof uses only RunenGPU public/typed contracts.",
         "Current renderer remains the only explicitly temporary G5C migration consumer and the two accepted G4 execution seams have not been widened.",
         "Accepted-main validation must pass before activating G5C.",
