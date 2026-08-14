@@ -287,12 +287,30 @@ impl Renderer {
         gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     ) -> Result<EncodedPassEvidence> {
         match pass {
-            CompiledPassExecutionPlan::Compute(value) => self
-                .encode_compute_pass(
+            CompiledPassExecutionPlan::Compute(value) => {
+                let dispatch = flow_inputs
+                    .projected_dispatch_workgroups
+                    .get(&value.pass_id)
+                    .copied()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "missing prepared dispatch for pass '{}' in flow '{}'",
+                            value.pass_id,
+                            flow.flow_id
+                        )
+                    })?;
+                if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
+                    bail!(
+                        "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
+                        value.pass_id,
+                        dispatch[0],
+                        dispatch[1],
+                        dispatch[2]
+                    );
+                }
+                self.encode_compute_pass(
                     context,
                     encoder,
-                    flow,
-                    flow_inputs,
                     value,
                     prepared_pipeline.ok_or_else(|| {
                         anyhow::anyhow!(
@@ -300,6 +318,7 @@ impl Renderer {
                             value.pass_id
                         )
                     })?,
+                    dispatch,
                     gpu_timestamp_writes,
                 )
                 .map(|value| EncodedPassEvidence {
@@ -308,7 +327,8 @@ impl Renderer {
                     shader_revision: value.shader_revision,
                     fallback_used: value.fallback_used,
                     pipeline_key: Some(value.pipeline_key),
-                }),
+                })
+            }
             CompiledPassExecutionPlan::Fullscreen(value) => self
                 .encode_fullscreen_pass(
                     context,
@@ -413,32 +433,11 @@ impl Renderer {
         &mut self,
         context: &GpuContext,
         encoder: &mut CommandEncoder,
-        flow: &CompiledRenderFlowPlan,
-        flow_inputs: &PreparedFlowInputs,
         pass: &CompiledComputeExecutionPlan,
         prepared: &PreparedPipelinePass,
+        dispatch: [u32; 3],
         gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     ) -> Result<EncodedPipelinePass> {
-        let dispatch = flow_inputs
-            .projected_dispatch_workgroups
-            .get(&pass.pass_id)
-            .copied()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "missing prepared dispatch for pass '{}' in flow '{}'",
-                    pass.pass_id,
-                    flow.flow_id
-                )
-            })?;
-        if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
-            bail!(
-                "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
-                pass.pass_id,
-                dispatch[0],
-                dispatch[1],
-                dispatch[2]
-            );
-        }
         let pipeline_key = prepared.bindings.pipeline_key.clone();
         let pipeline = match &prepared.pipeline {
             PreparedFlowPipeline::Compute(pipeline) => pipeline,
