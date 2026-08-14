@@ -412,7 +412,7 @@ impl Renderer {
     fn execute_realized_batch(
         &mut self,
         context: &GpuContext,
-        device: &Device,
+        _device: &Device,
         queue: &Queue,
         encoder: &mut CommandEncoder,
         frame_texture: &Texture,
