@@ -163,10 +163,7 @@ where
         rejected = true;
     }
     if let Some(attempt) = locked.in_flight.get(&key).cloned() {
-        return Ok((
-            Reservation::Waiter(attempt),
-            PipelineCacheObservation::Hit,
-        ));
+        return Ok((Reservation::Waiter(attempt), PipelineCacheObservation::Hit));
     }
     if locked.total_len() >= max_records.get() {
         locked.collect_lookup_only();
@@ -227,8 +224,7 @@ mod tests {
             Reservation::Owner(owner) => owner,
             Reservation::Ready(_) | Reservation::Waiter(_) => panic!("first caller owns"),
         };
-        let (attempt, observation) =
-            reserve(&registry, max, 7, "compute 7", |_, _| true).unwrap();
+        let (attempt, observation) = reserve(&registry, max, 7, "compute 7", |_, _| true).unwrap();
         assert_eq!(observation, PipelineCacheObservation::Hit);
         let attempt = match attempt {
             Reservation::Waiter(attempt) => attempt,
@@ -248,10 +244,7 @@ mod tests {
         let waker = Waker::from(Arc::clone(&counter));
         let mut context = Context::from_waker(&waker);
         let mut waiter = std::pin::pin!(attempt.wait());
-        assert!(matches!(
-            waiter.as_mut().poll(&mut context),
-            Poll::Pending
-        ));
+        assert!(matches!(waiter.as_mut().poll(&mut context), Poll::Pending));
         drop(owner);
         assert!(counter.0.load(Ordering::SeqCst) > 0);
         assert!(matches!(
@@ -292,11 +285,7 @@ mod tests {
         let registry = Arc::new(Mutex::new(SingleFlightRegistry::<u32, u32>::default()));
         let max = NonZeroUsize::new(2).unwrap();
         let stale = Arc::new(8_u32);
-        registry
-            .lock()
-            .unwrap()
-            .ready
-            .insert(7, Arc::clone(&stale));
+        registry.lock().unwrap().ready.insert(7, Arc::clone(&stale));
 
         let (reservation, observation) =
             reserve(&registry, max, 7, "compute 7", |key, record| key == record).unwrap();
