@@ -6,8 +6,7 @@ const PASS_BINDINGS: &str = "src/plugins/render/api/bindings.rs";
 const EXECUTION_PLAN: &str = "src/plugins/render/graph/execution_plan.rs";
 const RUNTIME_BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings.rs";
 const PRIMITIVE_PLAN: &str = "src/plugins/render/gpu_primitives/plan.rs";
-const PIPELINE_PASSES: &str =
-    "src/plugins/render/renderer/render_flow/execute_passes/pipeline.rs";
+const PIPELINE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes/pipeline.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
 const FRAGMENTS: &str = "src/plugins/render/composition/fragments.rs";
