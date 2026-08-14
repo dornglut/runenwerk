@@ -133,7 +133,7 @@ fn bootstrap_seeding_is_explicit_and_main_viewport_scoped() {
     let presentations = app
         .world()
         .resource::<ViewportPresentationStateResource>()
-        .expect("viewport presentation registry should exist");
+        .expect("presentation state resource should exist");
 
     assert!(
         surface_sets.surface_set(MAIN_VIEWPORT_ID).is_some(),
@@ -697,6 +697,7 @@ fn production_picking_routes_only_through_viewport_scene_region() {
 #[test]
 fn editor_frame_submission_runs_after_input_bridge() {
     let plugin = include_str!("../src/runtime/plugin.rs");
+
     assert!(
         plugin.contains("sync_viewport_instances_system")
             && plugin.contains(".after(EditorRuntimeSet::InputBridge)"),
