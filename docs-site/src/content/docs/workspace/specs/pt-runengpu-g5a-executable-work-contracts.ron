@@ -30,12 +30,12 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
     ],
 
-    goal: "Close the logical execution gap left by G3-before-G4 sequencing: make compute/render work self-contained through accepted G4 pipeline and runtime-binding contracts, add generic Upload/Readback operations inside the one G3 initialization/hazard authority, preserve semantic value equality without inventing operation ordering or content-addressed transfer identity, derive executable resource accesses from operations, migrate RunenRender lowering into those contracts, and delete execution-semantic truth from the temporary render sidecar without implementing command submission or progress.",
+    goal: "Close the logical execution gap left by G3-before-G4 sequencing: make compute/render work self-contained through accepted G4 pipeline and runtime-binding contracts, bind render-pass attachment/pipeline compatibility before backend encoding, add generic Upload/Readback operations inside the one G3 initialization/hazard authority, preserve semantic value equality without inventing operation ordering or content-addressed transfer identity, derive executable resource accesses from operations, migrate RunenRender lowering into those contracts, and delete execution-semantic truth from the temporary render sidecar without implementing command submission or progress.",
 
     dependency_direction: [
         "RunenRender semantic planning -> complete backend-neutral G5A GpuWorkOperation values.",
         "G5A operations -> accepted G3 preparation for order, initialization, hazards, requirements, outputs, and provenance.",
-        "Accepted G4B pipeline/interface/runtime-binding contracts remain the only program/layout/pipeline semantic authority used by G5A.",
+        "Accepted G4B pipeline/interface/runtime-binding/render-state contracts remain the only program/layout/pipeline semantic authority used by G5A.",
         "G5B later prepares and realizes complete G5A work for one context/device generation; G5A does not encode or submit backend work.",
     ],
 
@@ -59,25 +59,36 @@ PhaseImplementationSpec(
         "GpuRenderOperation remains one logical render pass with color attachments, optional depth/stencil attachment, ordered GpuRenderDraw values, and timestamp writes.",
         "Each GpuRenderDraw owns one complete GpuRenderPipelineDescriptor, one runtime binding set, ordered vertex-buffer bindings, optional index-buffer binding, one GpuDrawIntent, and complete normalized dynamic state.",
         "A render operation may switch pipelines and bindings between draws without splitting one logical render pass; the current multi-pipeline UI pass is the representative proof.",
-        "The pipeline descriptor is the sole authority for vertex stride, step mode, attributes, primitive state, depth/stencil state, multisample state, and color-target state.",
+        "The pipeline descriptor is the sole authority for vertex stride, step mode, attributes, primitive state, depth/stencil state, multisample state, and ordered color-target state.",
         "Draw bindings contain only runtime resource/range/state facts required to execute that pipeline.",
+    ],
+
+    render_pass_compatibility: [
+        "Derive one backend-neutral render-pass attachment signature from logical attachments before backend access: effective render extent, common attachment sample count, ordered color attachment formats, and optional depth/stencil format.",
+        "Every active color/depth attachment in one render operation must have the same effective render extent and sample count; reject mismatched logical attachment views before private WGPU begin_render_pass validation.",
+        "Existing G3 resolve validation remains authoritative for non-aliasing multisampled source versus single-sampled destination with matching color format and extent; G5A must preserve those facts in the complete pass signature.",
+        "For every GpuRenderDraw, require exact compatibility between its GpuRenderPipelineDescriptor and the operation pass signature: ordered color-target count/formats, depth/stencil presence and format, and multisample sample_count.",
+        "Pipeline switches inside one render pass are therefore allowed only when each pipeline is compatible with the same pass signature; pipeline blend/write/primitive state may differ because those remain draw-pipeline state rather than attachment compatibility facts.",
+        "Current accepted RunenGPU has no multiview render-pass contract and G5A does not invent one. If exact-current-main consumers require multiview or 3D depth-slice rendering, stop for a separately accepted semantic extension rather than forwarding raw WGPU state.",
+        "The common logical render extent is the authority from which default viewport and scissor resolve; do not choose one arbitrary attachment when attachment extents disagree.",
+        "G5B may repeat device-dependent renderability/capability validation, but backend rejection must not be the first place a logically knowable attachment/pipeline mismatch is discovered.",
     ],
 
     vertex_index_contract: [
         "GpuVertexBufferBinding contains slot, GpuBufferHandle, and checked nonempty GpuBufferRange.",
         "Reject duplicate slots, undeclared slots, missing pipeline-required slots, non-Vertex usage, zero/out-of-bounds ranges, and incompatible logical buffer state before G5B backend access.",
-        "GpuIndexFormat has exactly Uint16 and Uint32 in G5A and is a RunenGPU type, not a WGPU re-export.",
-        "GpuIndexBufferBinding contains GpuBufferHandle, checked nonempty range, and GpuIndexFormat; validate Index usage and element alignment.",
+        "Reuse the already accepted RunenGPU GpuIndexFormat::{Uint16, Uint32} from the G4 render-pipeline contract; G5A must not create a duplicate index-format type or WGPU re-export.",
+        "GpuIndexBufferBinding contains GpuBufferHandle, checked nonempty range, and accepted GpuIndexFormat; validate Index usage, element alignment, and direct indexed range coverage where knowable from the bound range.",
         "Direct Indexed or indexed Indirect draw intent requires exactly one index binding; non-indexed intent rejects an index binding until a separately accepted semantic justifies one.",
-        "Existing GpuDrawIntent::Indirect retains the argument buffer/range/indexed flag; G5A does not add multi-draw-indirect or mesh-shader vocabulary without an accepted consumer requirement.",
+        "Existing GpuDrawIntent::Indirect retains the argument buffer/range/indexed flag; GPU-produced indirect counts/indices are not pre-read by G5A. G5A does not add multi-draw-indirect or mesh-shader vocabulary without an accepted consumer requirement.",
     ],
 
     dynamic_draw_state: [
         "GpuRenderDynamicState owns normalized optional viewport/scissor/blend-constant overrides plus an explicit stencil-reference value; absence of an override has one defined semantic default and never means inherit accidental prior draw state.",
         "GpuViewport stores canonical finite f32-bit values for x, y, width, height, min_depth, and max_depth; normalize signed zero, require positive width/height, require zero <= min_depth <= max_depth <= one, and reject arithmetic/non-finite invalidity before backend access.",
-        "Viewport default resolves to the complete logical attachment extent with depth range zero-to-one.",
-        "GpuScissorRect stores checked u32 x/y/width/height, requires positive width/height and checked x+width/y+height, and must fit the effective logical attachment extent.",
-        "Scissor default resolves to the complete logical attachment extent.",
+        "Viewport default resolves to the complete common logical render extent derived from the validated attachment set with depth range zero-to-one.",
+        "GpuScissorRect stores checked u32 x/y/width/height, requires positive width/height and checked x+width/y+height, and must fit the common logical render extent.",
+        "Scissor default resolves to the complete common logical render extent.",
         "GpuBlendConstant stores four canonical finite f64-bit components with signed zero normalized; G5A does not invent a zero-to-one clamp unless an accepted backend-neutral rule requires it. Its default is transparent zero.",
         "Stencil reference is u32 with default zero.",
         "Every draw therefore has deterministic effective dynamic state and semantic Eq; backend lowering may elide redundant setters but no draw inherits unspecified state from a previous draw.",
@@ -92,10 +103,11 @@ PhaseImplementationSpec(
 
     operation_access_derivation: [
         "Compute derives buffer/texture accesses from runtime bindings and program declarations, including accepted storage-buffer ReadOnly/ReadWrite and storage-texture ReadOnly/WriteOnly/ReadWrite modes.",
-        "Render derives attachment, runtime binding, vertex, index, indirect-argument, and timestamp accesses.",
+        "Render derives attachment, resolve, runtime binding, vertex, index, indirect-argument, and timestamp accesses.",
         "Copy, Clear, Resolve, and Present retain accepted G3 derived-access semantics.",
         "Upload derives exactly one destination write over its exact logical region.",
         "Readback derives exactly one source read over its exact logical region.",
+        "Validate the complete derived access set for overlapping contradictory roles inside one operation, including runtime bindings versus attachments and multiple write-capable bindings.",
         "Preparation rejects caller-supplied access facts that contradict operation-derived facts; current renderer lower_caller_accesses duplication is deleted.",
     ],
 
@@ -116,7 +128,7 @@ PhaseImplementationSpec(
         "Upload source is one immutable GpuTransferPayload with checked layout/provenance; no public WGPU staging object appears.",
         "The logical operation does not select queue-write versus encoded-copy mechanics.",
         "Graph initialization simulation treats a complete Upload write as an initializing write and normal hazard/order rules apply.",
-        "Backend-private physical lowering may choose queue write only when ordering-equivalent to the graph operation; otherwise G5B uses private staging plus encoded copy.",
+        "Backend-private physical lowering may choose queue write only when ordering-equivalent to the exact graph node position; otherwise G5B uses private staging plus encoded copy.",
     ],
 
     readback_contract: [
@@ -137,7 +149,7 @@ PhaseImplementationSpec(
 
     sidecar_cutover: [
         "Migrate RenderGraph lowering so compute/fullscreen/graphics/UI/copy/present/timing work produces complete generic GpuWorkOperation values.",
-        "Delete program, pipeline, binding, vertex/index, draw, copy/query, and other GPU execution truth from RenderGpuWorkSidecar/CompiledPassExecutionPlan after its generic equivalent is admitted.",
+        "Delete program, pipeline, binding, vertex/index, draw, copy/query, render-pass-compatibility, and other GPU execution truth from RenderGpuWorkSidecar/CompiledPassExecutionPlan after its generic equivalent is admitted.",
         "Do not move RenderPassId, feature/view/material/image-formation policy into RunenGPU.",
         "If a renderer-local planning/provenance record remains before lowering, it cannot be keyed as permanent prepared-node execution authority.",
         "Do not introduce a permanent GpuExecutionBindings, command-list sidecar, or second executable graph.",
@@ -152,9 +164,11 @@ PhaseImplementationSpec(
 
     deterministic_tests: [
         "Compute operation derives exact uniform/storage/sampled/storage-texture accesses from runtime bindings and rejects contradictory/missing/duplicate binding input.",
-        "Render operation derives exact attachment/binding/vertex/index/indirect/query accesses across multiple draws.",
-        "One multi-draw UI-shaped render operation switches pipeline, bind groups, vertex buffers, and scissor without creating additional render passes.",
-        "Vertex slots and index formats/ranges validate deterministically and insertion-order-independent where order is not semantic.",
+        "Render operation derives exact attachment/resolve/binding/vertex/index/indirect/query accesses across multiple draws.",
+        "Render construction rejects mismatched attachment extents or sample counts and rejects every draw pipeline whose ordered color formats, depth/stencil format/presence, or sample count is incompatible with the pass signature.",
+        "One multi-draw UI-shaped render operation switches compatible pipelines, bind groups, vertex buffers, and scissor without creating additional render passes.",
+        "Default viewport/scissor are derived from the validated common render extent rather than arbitrary first-attachment behavior.",
+        "Vertex slots and accepted GpuIndexFormat ranges validate deterministically and insertion-order-independent where order is not semantic.",
         "Dynamic state canonicalizes signed zero, rejects non-finite/invalid viewport or blend values, validates scissor/viewport bounds, and makes defaults explicit so two draws cannot inherit unspecified prior state.",
         "GpuWorkOperation/GpuRenderDraw compile and remain semantically comparable without requiring Ord/Hash on G4 pipeline descriptors or transfer payloads.",
         "GpuTransferPayload clones preserve record identity and value; independently constructed equal payload bytes compare semantically equal while is_same_record distinguishes record identity.",
@@ -163,7 +177,7 @@ PhaseImplementationSpec(
         "Texture transfer/readback shape, row coverage, format and bounds reject arithmetic overflow and invalid regions.",
         "Complete operation-derived access set matches the former renderer caller-access set for representative current passes.",
         "Prepared graph order, diagnostics and requirements remain deterministic across fragment composition without sorting GpuWorkOperation payloads.",
-        "Source guards reject permanent sidecar execution truth, duplicate manual bound-resource accesses, raw WGPU types in new public contracts, operation ordering invented from hashes/labels, and content-digest identity replacing semantic payload equality.",
+        "Source guards reject permanent sidecar execution truth, duplicate manual bound-resource accesses, duplicate GpuIndexFormat, raw WGPU types in new public contracts, operation ordering invented from hashes/labels, and content-digest identity replacing semantic payload equality.",
     ],
 
     environment_dependent_tests: [
@@ -172,7 +186,7 @@ PhaseImplementationSpec(
 
     delete_after_migration: [
         "Current renderer lower_caller_accesses duplication for bindings/vertex/index/indirect resources represented by executable operations.",
-        "Execution-semantic RenderGpuWorkSidecar payload and node-keyed pipeline/binding/draw truth.",
+        "Execution-semantic RenderGpuWorkSidecar payload and node-keyed pipeline/binding/draw/render-pass-compatibility truth.",
         "Renderer-only duplicate compute/render execution descriptors replaced by G4/G5 logical contracts.",
         "Any WGPU IndexFormat or dynamic-state type exposed above private backend lowering.",
         "Accidental GpuWorkOperation/GpuComputeOperation/GpuRenderOperation Ord/Hash derives that cannot remain semantically valid once complete G4 executable descriptors are embedded.",
@@ -190,12 +204,13 @@ PhaseImplementationSpec(
         "No RunenRender image-formation/material/view semantics in RunenGPU.",
         "No G7 reusable surface acquisition/reconstruction implementation.",
         "No second graph/command IR, permanent node sidecar, public raw WGPU/Naga type, broad import API, executor dependency, new stable persistence format, compatibility alias, content-addressed transfer identity promise, or fabricated total ordering for pipeline/program contracts.",
+        "Do not add multiview, 3D render depth-slice, multi-draw-indirect, mesh-shader, or other undemonstrated render vocabulary in G5A. Stop for a separately accepted semantic extension if exact current consumers require it.",
         "Stop for a new design decision if current consumers require a dynamic render state outside viewport/scissor/blend-constant/stencil-reference or an execution semantic not representable without changing accepted G3/G4 ownership.",
     ],
 
     validation: [
-        "Focused executable-work/access/value-semantics/dynamic-state/sidecar-cutover tests and source guards.",
-        "Complete current consumer census for compute/render/binding/vertex/index/upload/readback construction.",
+        "Focused executable-work/access/value-semantics/render-pass-compatibility/dynamic-state/sidecar-cutover tests and source guards.",
+        "Complete current consumer census for compute/render/attachment/binding/vertex/index/upload/readback construction.",
         "cargo validate",
         "git diff --check",
         "CI=true pnpm --dir docs-site build",
@@ -205,6 +220,7 @@ PhaseImplementationSpec(
     acceptance: [
         "One complete executable logical work authority exists in RunenGPU and the renderer sidecar no longer owns GPU execution semantics.",
         "Every current G5A operation derives complete access/requirement truth without renderer duplicate bindings/access lists.",
+        "Every render draw is logically compatible with one validated pass attachment extent/format/sample signature before backend encoding.",
         "Executable operation value semantics do not fabricate Ord/Hash contracts for G4 pipeline descriptors or use process-local payload identity as semantic equality.",
         "Upload/Readback contracts are graph-visible and backend-neutral; transfer payload record identity remains distinct from semantic immutable payload value.",
         "Logical Present remains distinct from G7 physical surface ownership.",
