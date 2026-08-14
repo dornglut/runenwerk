@@ -6,7 +6,8 @@ const PASS_BINDINGS: &str = "src/plugins/render/api/bindings.rs";
 const EXECUTION_PLAN: &str = "src/plugins/render/graph/execution_plan.rs";
 const RUNTIME_BINDINGS: &str = "src/plugins/render/renderer/render_flow/bindings.rs";
 const PRIMITIVE_PLAN: &str = "src/plugins/render/gpu_primitives/plan.rs";
-const EXECUTE_PASSES: &str = "src/plugins/render/renderer/render_flow/execute_passes.rs";
+const PIPELINE_PASSES: &str =
+    "src/plugins/render/renderer/render_flow/execute_passes/pipeline.rs";
 const PIPELINE_CACHE: &str = "src/plugins/render/renderer/pipeline_cache.rs";
 const PROGRAM_SOURCES: &str = "src/plugins/render/renderer/render_flow/program_sources.rs";
 const FRAGMENTS: &str = "src/plugins/render/composition/fragments.rs";
@@ -177,9 +178,9 @@ fn render_flow_validates_explicit_shader_binding_identity() {
 }
 
 #[test]
-fn resolved_renderer_programs_admit_before_g4c2_realization_and_g4c3_pipeline_creation() {
+fn resolved_renderer_programs_admit_and_realize_before_g5_pipeline_consumption() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source = read(&manifest_dir, EXECUTE_PASSES);
+    let source = read(&manifest_dir, PIPELINE_PASSES);
     let bindings = read(&manifest_dir, RUNTIME_BINDINGS);
     for required in [
         "context.realize_program(",
@@ -192,42 +193,62 @@ fn resolved_renderer_programs_admit_before_g4c2_realization_and_g4c3_pipeline_cr
             "renderer binding resolution must delegate {required:?} to the G4C2 realization authority"
         );
     }
+
     let realization = section(
         &source,
-        "pub(super) fn realize_compiled_pass(",
-        "pub(super) fn encode_compiled_pass(",
-        EXECUTE_PASSES,
+        "pub(in crate::plugins::render::renderer::render_flow) fn realize_compiled_pass(",
+        "pub(in crate::plugins::render::renderer::render_flow) fn encode_compiled_pass(",
+        PIPELINE_PASSES,
     );
     let paths = [
         (
             "compute",
             "CompiledPassExecutionPlan::Compute(value) => {",
             "CompiledPassExecutionPlan::Fullscreen(value) => {",
+            "context.realize_compute_pipeline(",
             "fn encode_compute_pass(",
             "fn encode_fullscreen_pass(",
+            ".for_compute_pipeline(",
+            "PreparedFlowPipeline::Compute",
         ),
         (
             "fullscreen",
             "CompiledPassExecutionPlan::Fullscreen(value) => {",
             "CompiledPassExecutionPlan::Graphics(value) => {",
+            "context.realize_render_pipeline(",
             "fn encode_fullscreen_pass(",
             "fn encode_graphics_pass(",
+            ".for_render_pipeline(",
+            "PreparedFlowPipeline::Render",
         ),
         (
             "graphics",
             "CompiledPassExecutionPlan::Graphics(value) => {",
             "CompiledPassExecutionPlan::Copy(_)",
+            "context.realize_render_pipeline(",
             "fn encode_graphics_pass(",
-            "fn encode_copy_pass(",
+            "struct EncodeComputePipeline",
+            ".for_render_pipeline(",
+            "PreparedFlowPipeline::Render",
         ),
     ];
 
-    for (label, realization_start, realization_end, raw_start, raw_end) in paths {
+    for (
+        label,
+        realization_start,
+        realization_end,
+        pipeline_realization_token,
+        encode_start,
+        encode_end,
+        execution_bridge_token,
+        prepared_pipeline_kind,
+    ) in paths
+    {
         let realization_path = section(
             realization,
             realization_start,
             realization_end,
-            EXECUTE_PASSES,
+            PIPELINE_PASSES,
         );
         let admission = unique_position(
             realization_path,
@@ -235,79 +256,91 @@ fn resolved_renderer_programs_admit_before_g4c2_realization_and_g4c3_pipeline_cr
             label,
             "resolved source admission",
         );
-        let key_resolution = unique_position(
+        let binding_realization = unique_position(
             realization_path,
             ".resolve_compiled_bind_group(",
             label,
             "G4C2 pipeline-key and bind-group realization",
         );
-        assert!(
-            admission < key_resolution,
-            "{label} constructs renderer cache identity before admitting its exact resolved canonical WGSL source"
+        let pipeline_realization = unique_position(
+            realization_path,
+            pipeline_realization_token,
+            label,
+            "G4C3 pipeline realization",
         );
         assert!(
-            !realization_path.contains(".for_pipeline_creation("),
-            "{label} must finish G4C2 realization before G4C3 pipeline creation begins"
+            admission < binding_realization && binding_realization < pipeline_realization,
+            "{label} must admit source, realize G4C2 dependencies, then realize its G4C3 pipeline before G5"
         );
         assert_eq!(
             realization_path.matches("&admitted_source,").count(),
             1,
-            "{label} must hand the retained admitted source record into complete descriptor construction exactly once"
+            "{label} must hand the retained admitted source record into descriptor construction exactly once"
         );
-        assert!(
-            !realization_path.contains("admitted_source.identity(),"),
-            "{label} must not collapse the retained admitted source record back to identity-only key authority"
-        );
-        assert!(
-            !realization_path.contains("ShaderSource::Wgsl("),
-            "{label} must not retain a parallel raw WGPU WGSL realization path after G4C2"
-        );
-
-        let raw_path = section(&source, raw_start, raw_end, EXECUTE_PASSES);
-        unique_position(
-            raw_path,
+        for forbidden in [
             ".for_pipeline_creation(",
+            ".create_compute_pipeline(",
+            ".create_render_pipeline(",
+            "ShaderSource::Wgsl(",
+            "admitted_source.identity(),",
+        ] {
+            assert!(
+                !realization_path.contains(forbidden),
+                "{label} no-loan realization must not regain retired/raw pipeline authority through {forbidden:?}"
+            );
+        }
+
+        let encode_path = section(&source, encode_start, encode_end, PIPELINE_PASSES);
+        unique_position(
+            encode_path,
+            ".current_render_execution_bridge()",
             label,
-            "temporary G4C3 pipeline creation",
+            "G5 execution bridge access",
+        );
+        unique_position(
+            encode_path,
+            execution_bridge_token,
+            label,
+            "opaque realized pipeline consumption",
+        );
+        assert!(
+            encode_path.contains("prepared.pipeline")
+                && encode_path.contains(prepared_pipeline_kind),
+            "{label} encode path must consume the pipeline realized before the G5 interval"
         );
         for forbidden in [
             "admit_resolved_program_source(",
             ".resolve_compiled_bind_group(",
-            "context.realize_",
+            "context.realize_compute_pipeline(",
+            "context.realize_render_pipeline(",
+            ".for_pipeline_creation(",
+            ".create_compute_pipeline(",
+            ".create_render_pipeline(",
         ] {
             assert!(
-                !raw_path.contains(forbidden),
-                "{label} raw G4C3/G5 phase must not re-enter G4C2 through {forbidden:?}"
-            );
-        }
-        for required in [
-            "prepared.bindings.program",
-            "prepared.bindings.pipeline_layout",
-        ] {
-            assert!(
-                raw_path.contains(required),
-                "{label} G4C3 creation must consume the completed G4C2 artifact {required:?}"
+                !encode_path.contains(forbidden),
+                "{label} G5 encode path must not re-enter G4 realization through {forbidden:?}"
             );
         }
     }
 }
 
 #[test]
-fn compute_specialization_is_typed_and_separate_from_source_identity() {
+fn compute_specialization_is_typed_and_realized_before_g5_consumption() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let graph = read(&manifest_dir, PASS_GRAPH);
-    let execution = read(&manifest_dir, EXECUTE_PASSES);
+    let execution = read(&manifest_dir, PIPELINE_PASSES);
     let realization = section(
         &execution,
-        "pub(super) fn realize_compiled_pass(",
-        "pub(super) fn encode_compiled_pass(",
-        EXECUTE_PASSES,
+        "pub(in crate::plugins::render::renderer::render_flow) fn realize_compiled_pass(",
+        "pub(in crate::plugins::render::renderer::render_flow) fn encode_compiled_pass(",
+        PIPELINE_PASSES,
     );
     let compute = section(
         realization,
         "CompiledPassExecutionPlan::Compute(value) => {",
         "CompiledPassExecutionPlan::Fullscreen(value) => {",
-        EXECUTE_PASSES,
+        PIPELINE_PASSES,
     );
 
     assert!(
@@ -323,26 +356,17 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
             .matches("compute_specialization_from_constants(")
             .count(),
         1,
-        "compute execution must derive one normalized typed G4B specialization value set"
+        "compute realization must derive one normalized typed G4B specialization value set"
     );
     assert_eq!(
         compute.matches("specialization,").count(),
         1,
-        "compute execution must pass typed specialization independently from the admitted source record"
+        "compute realization must pass typed specialization independently from source identity"
     );
     assert!(
-        !compute.contains("shader_pipeline_identity_with_constants("),
-        "compute specialization must not be recombined with source identity"
-    );
-    assert!(
-        !compute.contains("FlowPassPipelineVariant"),
-        "renderer-local specialization wrapper authority must remain retired"
-    );
-    let key_resolution = unique_position(
-        compute,
-        ".resolve_compiled_bind_group(",
-        "compute",
-        "G4C2 pipeline-key resolution",
+        !compute.contains("shader_pipeline_identity_with_constants(")
+            && !compute.contains("FlowPassPipelineVariant"),
+        "compute specialization must not be recombined with source identity or renderer-local variant authority"
     );
     let specialization = unique_position(
         compute,
@@ -350,41 +374,52 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
         "compute",
         "typed specialization lowering",
     );
-    assert!(
-        specialization < key_resolution,
-        "the typed G4B specialization descriptor must feed G4C2 realization before descriptor publication"
+    let binding_realization = unique_position(
+        compute,
+        ".resolve_compiled_bind_group(",
+        "compute",
+        "G4C2 binding realization",
+    );
+    let pipeline_realization = unique_position(
+        compute,
+        "context.realize_compute_pipeline(",
+        "compute",
+        "G4C3 compute-pipeline realization",
     );
     assert!(
-        !compute.contains(".for_pipeline_creation("),
-        "typed G4B specialization must complete in the no-loan G4C2 phase"
+        specialization < binding_realization && binding_realization < pipeline_realization,
+        "typed specialization must enter the G4B/G4C2 descriptor before private G4C3 pipeline realization"
     );
 
-    let raw_compute = section(
+    let encode_compute = section(
         &execution,
         "fn encode_compute_pass(",
         "fn encode_fullscreen_pass(",
-        EXECUTE_PASSES,
+        PIPELINE_PASSES,
     );
-    unique_position(
-        raw_compute,
+    assert!(
+        encode_compute.contains("prepared.pipeline")
+            && encode_compute.contains("PreparedFlowPipeline::Compute")
+            && encode_compute.contains(".for_compute_pipeline("),
+        "G5 compute encoding must consume the already-realized opaque compute pipeline"
+    );
+    for forbidden in [
+        "compute_specialization_from_constants(",
+        "context.realize_compute_pipeline(",
         ".for_pipeline_creation(",
-        "compute",
-        "temporary G4C3 pipeline creation",
-    );
-    assert!(
-        !raw_compute.contains("compute_specialization_from_constants("),
-        "raw G4C3 compute creation must consume, not recompute, the G4B specialization descriptor"
-    );
-    assert!(
-        raw_compute.contains("prepared.bindings.pipeline_key"),
-        "raw G4C3 compute creation must consume the completed G4C2 pipeline descriptor"
-    );
+        ".create_compute_pipeline(",
+    ] {
+        assert!(
+            !encode_compute.contains(forbidden),
+            "G5 compute encoding must not re-enter specialization or pipeline realization through {forbidden:?}"
+        );
+    }
 
     let specialization_helper = section(
         &execution,
         "fn compute_specialization_from_constants(",
-        "fn wgpu_specialization_constants(",
-        EXECUTE_PASSES,
+        "fn compiled_resource_ref_matches_id(",
+        PIPELINE_PASSES,
     );
     for required in [
         "GpuSpecializationKey::new(",
@@ -409,42 +444,23 @@ fn compute_specialization_is_typed_and_separate_from_source_identity() {
             "string-encoded or renderer-local specialization authority returned: {forbidden}"
         );
     }
-
-    let backend_helper = section(
-        &execution,
-        "fn wgpu_specialization_constants(",
-        "fn render_vertex_format_to_wgpu(",
-        EXECUTE_PASSES,
-    );
-    assert!(
-        backend_helper.contains("values: &GpuSpecializationValueSet"),
-        "backend specialization lowering must accept the typed G4B value set directly"
-    );
-    assert!(
-        backend_helper.contains(".entries()"),
-        "backend specialization lowering must project constants from typed G4B entries"
-    );
-    assert!(
-        !backend_helper.contains("RenderShaderConstant"),
-        "WGPU specialization lowering must not bypass typed G4B specialization authority"
-    );
-    let compute_terminal = section(
-        &execution,
-        "impl CurrentRenderPipelineCreationTerminal for CreateFlowComputePipeline",
-        "/// G4C3's temporary fullscreen render-pipeline creation terminal.",
-        EXECUTE_PASSES,
-    );
-    assert!(
-        compute_terminal
-            .contains("wgpu_specialization_constants(self.descriptor.specialization())"),
-        "the temporary G4C3 compute terminal must project specialization from the completed typed descriptor"
-    );
+    for retired in [
+        "CurrentRenderPipelineCreationTerminal",
+        "wgpu_specialization_constants(",
+        ".for_pipeline_creation(",
+        ".create_compute_pipeline(",
+    ] {
+        assert!(
+            !execution.contains(retired),
+            "renderer pipeline consumer must not regain retired/private backend specialization authority through {retired:?}"
+        );
+    }
 }
 
 #[test]
 fn renderer_program_source_admission_has_one_cache_gateway_without_renderer_lifetime_pins() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let execution = read(&manifest_dir, EXECUTE_PASSES);
+    let execution = read(&manifest_dir, PIPELINE_PASSES);
     let cache = read(&manifest_dir, PIPELINE_CACHE);
     let authority = read(&manifest_dir, PROGRAM_SOURCES);
 
@@ -452,7 +468,7 @@ fn renderer_program_source_admission_has_one_cache_gateway_without_renderer_life
         &execution,
         "fn admit_resolved_program_source(",
         "fn reject_material_shader_fallback(",
-        EXECUTE_PASSES,
+        PIPELINE_PASSES,
     );
     assert!(
         execution_gateway.contains(") -> Result<GpuAdmittedProgramSource>"),
@@ -482,7 +498,7 @@ fn renderer_program_source_admission_has_one_cache_gateway_without_renderer_life
     let cache_gateway = section(
         &cache,
         "pub(crate) fn admit_program_source(",
-        "pub fn compute_pipeline(",
+        "pub fn retain_flows(",
         PIPELINE_CACHE,
     );
     assert_eq!(
