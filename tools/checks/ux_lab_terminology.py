@@ -23,7 +23,6 @@ CURRENT_PATHS = (
     "apps/runenwerk_editor/src/shell",
     "docs-site/src/content/docs/design/active",
     "docs-site/src/content/docs/workspace/planning/roadmap.md",
-    "docs-site/src/content/docs/workspace/planning/active-work.md",
 )
 
 TEXT_SUFFIXES = {".md", ".puml", ".rs", ".toml", ".txt", ".yaml", ".yml"}

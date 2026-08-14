@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-05-16
+last_reviewed: 2026-08-13
 ---
 
 # Superseded Designs
@@ -24,7 +24,7 @@ No superseded editor-domain design documents are currently tracked in this folde
 
 ### UI Domain
 
-No superseded UI-domain design documents are currently tracked in this folder.
+- [Runenwerk UI Platform Capability Roadmap](runenwerk-ui-platform-capability-roadmap.md)
 
 ### Engine Runtime
 
@@ -37,6 +37,9 @@ No superseded app/tooling design documents are currently tracked in this folder.
 
 ### Workspace / Cross-Domain
 
+- [Runenwerk Domain Workbench North Star](runenwerk-domain-workbench-north-star.md)
+- [Runenwerk Capability Workbench Target Architecture](runenwerk-capability-workbench-target-architecture.md)
+- [Domain Authoring Source And Program Pattern](domain-authoring-source-and-program-pattern.md)
 - [Runenwerk Field World and Simulation Platform Design](workspace-field-world-and-simulation-platform-design.md)
 - [Adaptive Field Product System Design](adaptive-field-product-system-design.md)
 - [Open World Product Streaming System Design](open-world-product-streaming-system-design.md)

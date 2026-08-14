@@ -7,7 +7,6 @@ canonical: true
 last_reviewed: 2026-07-24
 related_docs:
   - ./runensdf-extraction-design.md
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/specs/pt-runensdf-003-standalone-transfer.ron
 ---

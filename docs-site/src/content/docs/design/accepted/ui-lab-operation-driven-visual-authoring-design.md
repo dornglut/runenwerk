@@ -23,8 +23,7 @@ related_designs:
 related_reports:
   - ../../reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Operation-Driven Visual Authoring Design
@@ -34,9 +33,9 @@ related_roadmaps:
 This is the accepted implementation design for `PM-UI-LAB-004`.
 
 It clears the design gate for operation-driven visual authoring only. It does
-not authorize product code until a linked WR row is selected, production
-planning produces a decision-complete implementation contract, and roadmap
-promotion gates pass.
+not authorize product code by itself. Any implementation requires an owning
+GitHub issue, canonical roadmap sequencing where relevant, and a pull request
+that owns the reviewed feature head and exact-head validation evidence.
 
 ## Goal
 
@@ -104,11 +103,9 @@ the source of truth.
 
 ## Architecture Governance Result
 
-Architecture governance was run for this scope:
-
-```text
-task ai:architecture-governance -- --task "PM-UI-LAB-004 Operation-Driven Visual Authoring design gate" --scope "docs-site/src/content/docs/design/active/ui-lab-productization-design.md; docs-site/src/content/docs/design/accepted/ui-designer-visual-layout-and-interface-composition-design.md; docs-site/src/content/docs/reports/closeouts/pm-ui-lab-003-app-hosted-editor-lab-surface-shell/closeout.md; domain/ui/ui_definition/src/visual_layout; domain/editor/editor_definition; domain/editor/editor_shell/src/surfaces/editor_definition.rs; apps/runenwerk_editor/src/shell/self_authoring.rs; apps/runenwerk_editor/src/shell/providers/self_authoring.rs; domain/editor/editor_core/src/history.rs; apps/runenwerk_editor/src/editor_runtime/history"
-```
+Architecture governance was completed for this scope. The historical
+architecture-governance command and its then-current file scope are provenance,
+not current work authority.
 
 Governance decisions:
 
@@ -333,7 +330,7 @@ and performance evidence remain `PM-UI-LAB-006`.
 
 ## Required Fitness Functions
 
-The linked PM-004 WR must include focused validation for:
+The owning PM-004 implementation issue must include focused validation for:
 
 - generic UI visual layout operation reuse from `domain/ui/ui_definition`;
 - editor-specific operation kind validation in the editor-owned boundary;
@@ -348,32 +345,31 @@ The linked PM-004 WR must include focused validation for:
 - absence of project IO, persisted operation logs, full apply/rollback, or
   game-runtime projection execution in PM-004.
 
-Minimum validation for the linked implementation row:
+Minimum validation for an implementation slice:
 
 ```text
-cargo fmt
+cargo fmt --all --check
 cargo test -p ui_definition visual_layout
 cargo test -p editor_definition operation
 cargo test -p editor_shell editor_lab
 cargo test -p runenwerk_editor editor_lab_operation
 cargo test -p runenwerk_editor pm_ui_lab_004
-task docs:validate
-task puml:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
-## WR Candidate
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
-The next roadmap row should be a bounded implementation slice, tentatively
-`WR-096: UI Lab operation-driven visual authoring core`.
+## Implementation Activation
 
-Primary write scopes:
+`WR-096`, `WR-004`, `WR-046`, `WR-094`, and `WR-095` are retained as
+historical decomposition/dependency provenance for the original PM-004 plan.
+They are not current implementation authority.
+
+Any current implementation is activated by an owning GitHub issue. The bounded
+expected write scope remains concentrated in:
 
 - `domain/ui/ui_definition/src/visual_layout`
 - `domain/editor/editor_definition/src`
@@ -384,22 +380,10 @@ Primary write scopes:
 - `apps/runenwerk_editor/src/shell/providers/self_authoring.rs`
 - `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`
 - `apps/runenwerk_editor/src/shell/tests.rs`
-- `docs-site/src/content/docs/reports/implementation-plans/wr-085-ui-lab-operation-driven-visual-authoring-core/plan.md`
-- `docs-site/src/content/docs/reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md`
-- `docs-site/src/content/docs/workspace/production-tracks.yaml`
-- `docs-site/src/content/docs/workspace/roadmap-items.yaml`
 
-Expected dependencies:
-
-- `WR-004` for editor surface guard support.
-- `WR-046` for UI Designer doctrine and target-boundary ratification.
-- `WR-094` for completed command catalog and surface registry source of truth.
-- `WR-095` for completed app-hosted Editor Lab shell surfaces and
-  direct-control route evidence.
-
-The WR row should start as `ready_next`. Product code still requires
-`task production:plan -- --milestone PM-UI-LAB-004 --roadmap WR-096` and the
-implementation contract it produces.
+The pull request owns the complete diff, reviewed feature head, validation
+evidence, and acceptance state. Canonical roadmaps may sequence the work, but
+historical PM/PT/WR records do not authorize it.
 
 ## Non-Goals
 
@@ -437,11 +421,11 @@ Stop before implementation if PM-004 would:
 
 ## Acceptance Bar
 
-PM-004 can move from `designing` to `ready_next` when:
+PM-004 remains an accepted design when:
 
-- this accepted design exists;
-- a bounded WR row exists for `WR-096`;
-- the production milestone links this accepted design and WR row;
-- production, roadmap, docs, PUML, and planning validators pass;
-- `task ai:goal -- --track PT-UI-LAB --scope non-deferred` reports the next
-  legal PM-004 action after design acceptance.
+- this accepted design exists and is discoverable from current UI design
+  navigation;
+- implementation is activated by an owning GitHub issue;
+- canonical UI roadmaps carry any durable sequence that remains relevant;
+- the reviewed pull request has current exact-head repository validation;
+- no implementation claims stronger quality than its evidence supports.

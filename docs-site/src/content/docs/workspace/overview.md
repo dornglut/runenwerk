@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-04
+last_reviewed: 2026-08-12
 ---
 
 # Runenwerk Workspace
@@ -32,9 +32,15 @@ This page is a short orientation map.
 - `assets/`: data assets consumed by runtime code.
 - `docs-site/`: documentation source.
 
+Physical workspace location is implementation evidence, not permanent semantic or
+repository-family ownership. Use the current architecture spine and accepted ADRs for
+cross-domain ownership decisions.
+
 ## Core references
 
+- [Runenwerk Platform Architecture](../architecture/runenwerk-platform-architecture.md)
 - [Architecture Boundaries](../guidelines/architecture.md)
+- [Repository Family Architecture](../architecture/repository-family-architecture.md)
 - [Programming Principles](../guidelines/programming-principles.md)
 - [Domain Overview](../domain/00-overview.md)
 - [Engine Docs](../engine/index.md)

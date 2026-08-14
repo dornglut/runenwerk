@@ -1,16 +1,17 @@
 ---
 title: Planning Records
-description: Concise Markdown planning summaries for Runenwerk.
+description: Durable sequencing guidance for Runenwerk without duplicating GitHub live state.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-04
+last_reviewed: 2026-08-13
 related_docs:
   - ../engineering-workflow.md
   - ../authority-model.md
   - ../documentation-structure.md
   - ./roadmap.md
+  - ./decision-register.md
 ---
 
 # Planning Records
@@ -20,79 +21,77 @@ Runenwerk keeps planning readable without creating a second work-management syst
 ## Authority split
 
 ```text
-GitHub issue
-  live task state, scope, owner, blockers, and acceptance criteria
+GitHub issues / Engineering Portfolio
+  live task state, priority, scope, owner, blockers, and activation
 
 accepted ADR or design
-  durable architecture, ownership, dependency direction, and migration
+  durable architecture, ownership, dependency direction, and migration contracts
 
 roadmap
-  high-level sequence and dependencies
+  durable high-level sequence and dependencies only
 
 pull request
-  proposed diff, review findings, validation, and merge evidence
+  proposed diff, review findings, exact-head validation, and merge evidence
 
 code and tests
   current behavior
 
-reports and archive
-  historical evidence and context
+reports and Git history
+  historical evidence and chronology
 ```
 
-Do not copy live issue or pull-request state into stable architecture documents. Do not use planning files as execution ledgers, branch trackers, CI dashboards, generated task databases, or implementation authorization certificates.
+Planning Markdown must not mirror live issue state, completed chronology, deferred
+queues, branches, workflow runs, or delivery evidence.
 
-## Maintained planning files
+## Maintained planning surfaces
 
-- [Active Work](active-work.md) — concise cross-project summary of current focus and blockers.
-- [Roadmap](roadmap.md) — durable high-level sequence and dependencies.
-- [Deferred Work](deferred-work.md) — work intentionally postponed, with reason and reactivation condition.
-- [Completed Work](completed-work.md) — short historical index linking accepted evidence.
-- [Decision Register](decision-register.md) — durable planning decisions that materially change priority, sequence, ownership, or disposition.
+- [Roadmap](roadmap.md) — the canonical workspace sequencing page. It contains only
+  durable phase ordering, dependency direction, extraction direction, and cross-family
+  sequencing constraints.
+- [Decision Register](decision-register.md) — navigation to durable accepted decisions;
+  it is not a live decision or task database.
 
-GitHub issues remain authoritative when a summary disagrees with live work state. Correct the summary rather than creating another planning record.
+There is intentionally no separate Markdown active, deferred, or completion ledger.
+GitHub owns live and deferred work state; reports, pull requests, accepted documents,
+and Git history preserve completed evidence.
 
 ## Planning rules
 
 1. Give each live task one owning GitHub issue.
-2. Keep the roadmap at milestone and dependency level; do not enumerate branch execution state.
-3. Put architecture and public-contract decisions in an accepted ADR or design before implementation when the engineering workflow classifies the change as architectural or extraction work.
-4. Record delivery evidence in the pull request, not in the roadmap.
-5. Keep completed-work entries short; use a closeout report only when durable historical evidence would otherwise bloat the index.
-6. Name why deferred work is deferred and what would reactivate it.
-7. Cross-link owners instead of duplicating their content.
-8. Remove obsolete planning authority after current consumers are migrated; do not preserve compatibility pages without a real consumer and removal condition.
-
-## Work states
-
-Use the operational states defined by [Engineering Workflow](../engineering-workflow.md):
-
-```text
-proposed
-active
-blocked
-done
-deferred
-```
-
-Durable documents may additionally be `accepted`, `superseded`, or `archived` when those words describe document authority rather than task execution.
-
-Do not invent intermediate process states merely to record review ceremony. A pull request and its checks already own delivery and merge state.
+2. Keep the roadmap at durable milestone/phase and dependency level; do not enumerate
+   branch execution state or current issue status.
+3. Put architecture and public-contract decisions in accepted ADRs or designs.
+4. Keep delivery evidence in pull requests and repository validation, not in planning
+   summaries.
+5. Keep chronology and historical evidence in reports, closeouts, pull requests, and Git
+   history rather than maintaining a completion mirror.
+6. Keep intentionally postponed work in its owning GitHub issue/portfolio state rather
+   than maintaining a separate deferral mirror.
+7. Cross-link the true owner instead of duplicating its content.
+8. Do not introduce generated planning databases, execution ledgers, truth certificates,
+   or compatibility planning pages without a proven consumer and explicit removal
+   condition.
 
 ## Updating planning truth
 
 When work changes:
 
-- update the owning issue first;
-- update the roadmap only when high-level sequence or dependency truth changed;
-- update active work only when the concise current-focus summary changed;
-- update deferred or completed indexes only when disposition changed;
-- add a decision-register entry only for a durable planning decision;
-- keep exact branch heads, workflow run IDs, and transient diagnostics in the pull request.
+- update the owning issue or Engineering Portfolio for live state;
+- update the roadmap only when durable sequence or dependency truth changes;
+- update an accepted ADR/design when durable architecture changes;
+- record delivery and exact-head evidence in the pull request;
+- retain historical evidence in its report/closeout or Git history.
 
-A phase specification may provide a bounded implementation handoff when an accepted design calls for one. It derives from the owning issue and accepted architecture; it does not replace them or create a parallel lifecycle.
+A phase specification may provide a bounded implementation handoff when accepted
+authority requires one. It remains subordinate to accepted Markdown and the owning
+GitHub issue and does not own lifecycle, activation, current base/head, CI, or delivery
+state.
 
 ## Review and validation
 
-Planning changes are reviewed against the owning issue, accepted architecture, current code where behavior claims are made, and the repository authority model.
+Planning changes are reviewed against the owning issue, accepted architecture, current
+code where behavior claims are made, and the repository authority model.
 
-Run the documentation checks required by [Engineering Workflow](../engineering-workflow.md) and [TESTING.md](../../../../../../TESTING.md). Report inspection as inspection and executable validation as validation.
+Run the documentation checks required by [Engineering Workflow](../engineering-workflow.md)
+and [TESTING.md](../../../../../../TESTING.md). Report inspection as inspection and
+executable validation as validation.

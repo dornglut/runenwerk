@@ -24,11 +24,10 @@ related_designs:
   - ../accepted/ui-designer-persistence-migration-diff-and-activation-design.md
   - ../accepted/ui-designer-production-readiness-and-evidence-design.md
   - ./editor-tool-suite-registry-and-workbench-host-design.md
-  - ./runenwerk-capability-workbench-target-architecture.md
+  - ../superseded/runenwerk-capability-workbench-target-architecture.md
   - ./editor-ui-workspace-tool-surface-architecture.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer And Interface Lab Platform
@@ -37,11 +36,14 @@ related_roadmaps:
 
 This is an active design, not an accepted implementation contract.
 
-It defines the long-term direction for the `PT-UI-DESIGN` production track. It
-does not authorize code, schema, runtime, UI-surface, or roadmap execution-state
-changes by itself. Implementation must still move through accepted designs,
-architecture governance when ownership changes, WR roadmap legality, validation,
-and closeout evidence.
+It defines the long-term UI Designer/Lab direction historically decomposed as
+`PT-UI-DESIGN`. It does not authorize code, schema, runtime, UI-surface, or work
+state changes by itself. Any implementation requires an owning GitHub issue,
+architecture governance when ownership changes, canonical roadmap sequencing
+when relevant, and a reviewed pull request with exact-head validation evidence.
+
+`PT-UI-DESIGN`, `PM-UI-DESIGN-*`, and old WR/workflow records are retained only
+as architecture/decomposition provenance.
 
 ## Purpose
 
@@ -64,15 +66,17 @@ authored UI/interface definitions
   -> app/runtime/provider consumers
 ```
 
-## Relationship To PT-WB-CAP
+## Relationship To The Workbench Capability Substrate
 
-`PT-WB-CAP` is the completed Workbench substrate for the editor/workbench target
-profile. It provides typed suite/profile/provider identity, host capability
-policy, product/service declarations, and multi-host Workbench composition.
+The completed Workbench capability work provides typed suite/profile/provider
+identity, host capability policy, product/service declarations, and multi-host
+Workbench composition. Its former Capability Workbench North Star is now
+superseded by the current platform architecture; the implemented Workbench
+contracts remain valid inputs.
 
-`PT-UI-DESIGN` sits above that substrate as the generic UI/interface
-Designer/Lab platform. The editor/workbench target profile uses `PT-WB-CAP`; the
-game-runtime UI target must not depend on editor shell ownership.
+The UI Designer/Lab sits above that substrate as the generic UI/interface
+Designer/Lab platform. The editor/workbench target profile may use Workbench
+contracts; the game-runtime UI target must not depend on editor shell ownership.
 
 Workbench is one target profile, not the whole Designer platform.
 
@@ -85,7 +89,7 @@ substrate, and reusable interaction substrate.
 `domain/ui/ui_definition` is the current owner for generic authored
 UI/interface definition documents, Canonical UI IR, validation, normalization,
 migration, diagnostics, source maps, and retained UI formation. The accepted
-PM-UI-DESIGN-002 design fixes this as the near-term owner. A future standalone
+canonical-IR design fixes this as the near-term owner. A future standalone
 `domain/ui_definition` crate remains a possible extraction only after a new
 accepted design or ADR.
 
@@ -162,7 +166,7 @@ The editor/workbench target covers:
 - editor command routing;
 - diagnostics and tool-lab surfaces.
 
-This target may depend on `domain/editor/editor_shell` and `PT-WB-CAP`
+This target may depend on `domain/editor/editor_shell` and accepted Workbench
 contracts.
 
 ### Game Runtime UI Target
@@ -327,46 +331,45 @@ only and must not activate.
 
 ## Non-Goals
 
-This first slice does not include:
+This design does not itself:
 
-- Rust source changes;
-- schema changes;
-- runtime behavior changes;
-- UI surface changes;
-- formatter changes unless validators explicitly require them;
-- renderer, product, or domain semantic ownership changes;
-- external plugin sandbox work;
-- roadmap execution-state changes except registering the planning track.
+- authorize Rust source, schema, runtime, or UI-surface changes;
+- change renderer, product, or domain semantic ownership;
+- create a standalone `domain/ui_definition`, `domain/game_ui`, or
+  `domain/game/interface` crate;
+- make external plugin sandbox decisions;
+- create work state merely by naming PT/PM/WR decomposition labels.
 
-This design also does not create a standalone `domain/ui_definition`,
-`domain/game_ui`, or `domain/game/interface` crate. Those are future boundary
-decisions.
+Those are future boundary or implementation decisions owned by accepted designs,
+ADRs where required, GitHub issues, and reviewed pull requests.
 
 ## Promotion Criteria
 
 This design can move from `active` to `accepted` only after:
 
-- the production track validates;
-- docs validators pass;
 - the domain split is unambiguous;
 - editor/workbench and game-runtime target profiles are explicit;
 - architecture governance decides whether an ADR or future
   `domain/ui_definition` / `domain/game_ui` crate boundary decision is required;
-- first implementation slices have clear WR roadmap legality.
+- the accepted designs below it still support the current architecture;
+- current repository documentation validation passes at the reviewed revision.
+
+Promotion is a documentation/architecture state decision, not a production-track
+or WR lifecycle event.
 
 ## Validation
 
-The planning slice must pass:
+For design-only changes:
 
 ```text
-task production:render
-task docs:validate
-task production:validate
-task production:check
-task roadmap:validate
-task roadmap:check
-task planning:validate
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
+
+Code-bearing implementations add focused tests for the exact changed boundary.
+Repository-owned exact-head CI and Documentation Build are the delivery
+acceptance evidence.
 
 ## Acceptance Criteria
 
@@ -383,11 +386,9 @@ task planning:validate
 - Workbench-only wording is not used as the platform-level description.
 - The composition, styling, binding, diagnostics, fixture/golden, and round-trip
   sections are present.
-- `PT-UI-DESIGN` and all ten `PM-UI-DESIGN-*` milestones validate against the
-  existing production-track schema.
-- Generated production docs are current after `task production:render`.
-- No Rust source, schemas, runtime behavior, UI surfaces, roadmap execution
-  state beyond registering the planning track, staging, or commits change.
+- The active design is sequenced through canonical roadmaps rather than a
+  parallel production-track ledger.
+- No implementation is inferred from PT/PM/WR labels alone.
 
 <!-- BEGIN RUNENWERK:UI_COMPONENT_PLATFORM:designer-consumption -->
 ## Component Platform catalog consumption

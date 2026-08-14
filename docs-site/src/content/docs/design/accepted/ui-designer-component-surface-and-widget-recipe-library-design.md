@@ -18,8 +18,7 @@ related_designs:
   - ../active/ui-designer-interface-lab-platform-design.md
   - ../active/editor-tool-suite-registry-and-workbench-host-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer Component Surface And Widget Recipe Library Design
@@ -29,9 +28,10 @@ related_roadmaps:
 This is the accepted implementation design for `PM-UI-DESIGN-006`.
 
 It defines the ownership and contract shape for reusable component, surface, and
-widget recipes. It does not implement code, does not select a WR roadmap row,
-and does not authorize product code until a linked WR row exists and passes
-`task production:plan`.
+widget recipes. It does not implement code or authorize product changes by
+itself. Implementation requires an owning GitHub issue, canonical roadmap
+sequencing where relevant, and pull-request-owned review and exact-head
+validation.
 
 ## Goal
 
@@ -146,20 +146,23 @@ missing required token families, missing accessibility semantics, incompatible
 state variants, invalid focus/navigation descriptors, and preview-only
 composition attempts.
 
-## Implementation Row
+## Implementation Activation
 
-No PM-006 implementation WR row is selected by this design action.
+This accepted design does not select or activate an implementation slice.
 
-The next legal production-track action after this design is accepted is to add
-or select one bounded WR row. That row should cover only the first generic
-`domain/ui/ui_definition` recipe contract slice and should not implement
+The next legal implementation action is to create or select one bounded owning
+GitHub issue. That issue should cover only the first generic
+`domain/ui/ui_definition` recipe-contract slice and should not implement
 app-hosted recipe browsers, game-runtime package loading, renderer lowering,
 binding activation, preview matrices, persistence activation, or production
 readiness.
 
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
+
 ## Required Fitness Functions
 
-The first implementation row must add focused validation for:
+The first implementation slice must add focused validation for:
 
 - stable recipe id preservation;
 - deterministic recipe expansion into Canonical UI IR;
@@ -188,10 +191,11 @@ PM-006 design acceptance does not:
 
 ## Acceptance Bar
 
-PM-006 can move from `designing` to `ready_next` when:
+PM-006 remains an accepted design when:
 
-- this accepted design exists;
-- the production milestone points to this accepted design gate;
-- production, roadmap, docs, and planning validators pass;
-- `task ai:goal -- --track PT-UI-DESIGN` reports the next action as
-  `add_or_select_wr_roadmap_link`.
+- this accepted design exists and is discoverable from current UI design
+  navigation;
+- the canonical UI roadmap carries any durable sequence that remains relevant;
+- implementation is activated only by an owning GitHub issue;
+- delivery evidence belongs to the reviewed pull request;
+- current repository validation passes at the accepted revision.

@@ -7,7 +7,6 @@ layer: architecture
 canonical: true
 last_reviewed: 2026-07-29
 related_docs:
-  - ../workspace/planning/active-work.md
   - ../workspace/planning/roadmap.md
   - ../reports/investigations/repository-family-current-state-investigation.md
   - ../reports/investigations/runenrender-extraction-investigation.md

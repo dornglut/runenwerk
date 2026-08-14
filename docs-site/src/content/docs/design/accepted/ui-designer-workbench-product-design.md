@@ -35,8 +35,7 @@ related_designs:
   - ./ui-lab-persistence-project-io-diff-apply-rollback-design.md
   - ./ui-lab-preview-lab-runtime-evidence-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer Workbench Product Design
@@ -46,12 +45,12 @@ related_roadmaps:
 This is an accepted product design, not an implementation contract.
 
 It defines the target shape for a proper Runenwerk UI Designer workbench. It
-does not authorize code changes, roadmap state changes, production-track
-completion claims, or game-runtime UI implementation by itself.
+does not authorize code changes, work-state changes, completion claims, or
+game-runtime UI implementation by itself.
 
-Implementation must still move through architecture governance when ownership
-changes, accepted design gates, WR roadmap legality, validation, and closeout
-evidence.
+Implementation still requires architecture governance when ownership changes,
+an owning GitHub issue, canonical roadmap sequencing where relevant, and a pull
+request that owns review and exact-head validation evidence.
 
 ## Purpose
 
@@ -106,11 +105,11 @@ This design does not:
 
 - implement the standalone app;
 - implement game-runtime HUD behavior;
-- reopen completed `PT-UI-DESIGN` or `PT-UI-LAB` milestones;
+- reopen completed `PT-UI-DESIGN` or `PT-UI-LAB` decomposition milestones;
 - move generic UI truth into `apps/runenwerk_editor`;
 - make projection output authoritative state;
 - make editor shell policy part of `game.runtime` UI contracts;
-- replace roadmap or production-track governance;
+- replace GitHub issue/PR authority or canonical roadmap sequencing;
 - claim `runtime_proven` or `perfectionist_verified` quality.
 
 ## Architecture Governance Result
@@ -167,11 +166,10 @@ product workbench.
   updates split fractions on pointer movement, which can drive expensive
   rebuild/relayout work during resize.
 
-The planning sources currently contain production-track evidence claims for
-later UI/editor UX milestones. This design treats source code and runtime
-evidence as the implementation truth for product readiness. Any planning drift
-must be reconciled by a separate planning or closeout repair, not by this
-design alone.
+The planning sources currently contain evidence claims for later UI/editor UX
+milestones. This design treats source code and runtime evidence as the
+implementation truth for product readiness. Any planning drift must be
+reconciled by a separate planning or closeout repair, not by this design alone.
 
 ### Drift Preflight Gate
 
@@ -951,7 +949,7 @@ than internal shortcuts.
 
 ## Implementation Order
 
-This is design-level sequencing, not roadmap authorization.
+This is design-level sequencing, not work authorization.
 
 1. Reconcile code truth and planning truth for the existing UI Designer and
    Editor UX claims.
@@ -969,6 +967,10 @@ This is design-level sequencing, not roadmap authorization.
 9. Add performance instrumentation and resize transaction behavior.
 10. Prove embedded `Editor Design` uses the same product contract.
 11. Only then run the game UI readiness seam before game-runtime HUD work.
+
+Each code-bearing slice is activated by an owning GitHub issue and delivered
+through a reviewed pull request; this order alone grants no permission to
+implement.
 
 ## Fitness Functions
 
@@ -1033,32 +1035,22 @@ Stop and redesign if:
 - public examples require internal shortcuts to use normal workflows;
 - implementation starts from game HUD runtime code instead of the Designer
   compatibility seam;
-- product readiness is inferred from production-track metadata without current
+- product readiness is inferred from stale planning metadata without current
   code-backed evidence.
 
 ## Validation Plan
 
-For this design document only:
+For documentation-only changes to this design:
 
 ```text
-task docs:validate
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
-If planning metadata changes later:
-
-```text
-task production:render
-task production:validate
-task production:check
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task planning:validate
-task puml:validate
-```
-
-Future code implementation must add focused tests for changed crates and use
-`./quiet_full_gate.sh` for broad closeout when appropriate.
+Future code implementation must add focused tests for changed crates and pass
+the repository-owned exact-head CI and Documentation Build at the reviewed
+revision.
 
 ## Open Questions
 

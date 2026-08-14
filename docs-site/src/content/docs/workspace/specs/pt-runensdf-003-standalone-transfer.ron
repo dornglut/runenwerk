@@ -15,7 +15,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/design/active/runensdf-extraction-design.md",
         "docs-site/src/content/docs/design/active/runensdf-repository-identity-decision.md",
         "docs-site/src/content/docs/reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
         "docs-site/src/content/docs/guidelines/programming-principles.md",
     ],
@@ -30,7 +29,6 @@ PhaseImplementationSpec(
         "Crystonix/runen-sdf root package manifest, lockfile, source, tests, documentation, licenses, security policy, CI, conformance/downstream, and xtask",
         "Runenwerk docs-site/src/content/docs/design/active/runensdf-extraction-design.md",
         "Runenwerk docs-site/src/content/docs/design/active/runensdf-repository-identity-decision.md",
-        "Runenwerk docs-site/src/content/docs/workspace/planning/active-work.md",
         "Runenwerk docs-site/src/content/docs/workspace/planning/roadmap.md",
         "Runenwerk docs-site/src/content/docs/workspace/specs/pt-runensdf-003-standalone-transfer.ron",
         "Runenwerk durable documentation-validation workflow required to validate this authority change",
@@ -115,7 +113,7 @@ PhaseImplementationSpec(
 
     closeout_expectations: [
         "Update standalone provenance with the accepted parity commit and successful workflow run.",
-        "Update Runenwerk active-work and roadmap to PT-RUNENSDF-003 complete and PT-RUNENSDF-004 ready for bounded activation.",
+        "Record PT-RUNENSDF-003 completion and PT-RUNENSDF-004 activation in their owning GitHub issues/portfolio; update the roadmap only if durable sequence changes.",
         "Do not merge module-vocabulary cleanup into the parity closeout.",
         "Do not delete domain/sdf, remove its workspace membership, or add a Runenwerk dependency during this phase.",
         "PT-RUNENSDF-004 must coordinate the exact external revision, final consumer migration, original-source deletion, lockfile change, and absence proof without a forwarding package.",

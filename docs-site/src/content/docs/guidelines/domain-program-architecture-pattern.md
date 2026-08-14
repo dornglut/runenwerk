@@ -5,14 +5,14 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-11
+last_reviewed: 2026-08-12
 related:
-  - ./runenwerk-architecture.md
+  - ../architecture/runenwerk-platform-architecture.md
   - ./architecture.md
-  - ../design/active/runenwerk-domain-workbench-north-star.md
   - ../design/active/ui-program-architecture.md
   - ../design/active/ui-program-architecture-owner-map.md
   - ../adr/accepted/0017-cross-authority-consistency-and-graph-semantics.md
+  - ../adr/accepted/0018-semantic-federation-and-physical-realization.md
 ---
 
 # Domain Program Architecture Pattern

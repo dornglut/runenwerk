@@ -25,8 +25,7 @@ related_reports:
   - ../../reports/closeouts/pm-ui-lab-perf-003-command-and-surface-source-truth-closure/closeout.md
   - ../../reports/closeouts/pm-ui-lab-004-operation-driven-visual-authoring/closeout.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Direct Manipulation UX Closure Design
@@ -36,9 +35,9 @@ related_roadmaps:
 Accepted for `PM-UI-LAB-PERF-004`.
 
 This design clears only the direct-manipulation UX closure design gate. It does
-not authorize product code until a linked WR row is selected, `task
-production:plan` creates a decision-complete implementation contract, and the
-roadmap gates allow implementation.
+not authorize product code by itself. Any implementation requires an owning
+GitHub issue, canonical roadmap sequencing where relevant, and a pull request
+that owns the reviewed feature head and exact-head validation evidence.
 
 ## Goal
 
@@ -67,7 +66,7 @@ Completed inputs:
 - `PM-UI-LAB-PERF-002` added typed captured-or-platform-impossible runtime
   evidence results.
 - `PM-UI-LAB-PERF-003` completed catalog and registry source-truth audits.
-- `PM-UI-LAB-004` and `WR-096` already implemented typed
+- `PM-UI-LAB-004` and historical `WR-096` already implemented typed
   `EditorLabOperation` contracts, deterministic diffs, diagnostics,
   app-owned operation history, undo, redo, and retained preview refresh.
 
@@ -86,11 +85,9 @@ Remaining no-gap UX blockers:
 
 ## Architecture Governance
 
-Architecture governance for this design-only action:
-
-```text
-task ai:architecture-governance -- --task "PM-UI-LAB-PERF-004 direct manipulation Editor Lab UX closure design" --scope "Editor Lab hierarchy, palette, canvas, inspector, operation diff, diagnostics, preview console, undo, redo, and runtime evidence UX closure; design-only action, no product code"
-```
+Architecture governance for this design-only action established the following
+boundary. The historical governance command is no longer a work-authorization
+mechanism.
 
 Governance decisions:
 
@@ -188,26 +185,19 @@ modules.
 
 ## Required Fitness Functions
 
-The linked implementation WR must include focused validation for:
+The owning implementation issue must include focused validation for:
 
 ```text
-cargo fmt
+cargo fmt --all --check
 cargo test -p ui_definition visual_layout
 cargo test -p editor_definition operation
 cargo test -p editor_shell editor_lab
 cargo test -p runenwerk_editor editor_lab_operation
 cargo test -p runenwerk_editor direct_manipulation
 cargo test -p runenwerk_editor pm_ui_lab_perf_004
-task docs:validate
-task puml:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
+cargo validate
 git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
 Tests must prove:
@@ -225,13 +215,14 @@ Tests must prove:
 - project IO, persisted operation logs, public API examples, final no-gap
   certification, and game-runtime UI projection stay out of PM004 scope.
 
-## Roadmap Candidate
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
-The implementation row must be created through roadmap intake after this design
-gate. The intake should assign the next available WR id instead of reusing the
-older placeholder ids from PM001 planning notes.
+## Implementation Activation
 
-Primary write scopes should include:
+The historical PM/WR planning vocabulary for this slice remains provenance only.
+Any current implementation is activated by an owning GitHub issue and delivered
+through a reviewed pull request. The bounded expected write scope remains:
 
 - `domain/editor/editor_definition/src/operation.rs`
 - `domain/editor/editor_definition/src/workflow.rs`
@@ -241,8 +232,9 @@ Primary write scopes should include:
 - `apps/runenwerk_editor/src/shell/providers/self_authoring.rs`
 - `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs`
 - `apps/runenwerk_editor/src/shell/tests.rs`
-- PM004 implementation plan, closeout, roadmap, production, and generated
-  planning docs.
+
+Canonical roadmaps may sequence the work; they do not replace issue activation
+or pull-request acceptance.
 
 ## Non-Goals
 

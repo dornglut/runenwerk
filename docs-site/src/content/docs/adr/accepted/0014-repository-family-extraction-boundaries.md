@@ -13,7 +13,6 @@ related_designs:
   - ../../design/active/runengpu-architecture-design.md
   - ../../design/active/runenrender-decomposition-design.md
 related_roadmaps:
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
 ---
 

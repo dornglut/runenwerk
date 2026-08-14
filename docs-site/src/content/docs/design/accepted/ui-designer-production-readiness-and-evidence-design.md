@@ -23,8 +23,7 @@ related_designs:
   - ./ui-designer-persistence-migration-diff-and-activation-design.md
   - ../active/ui-designer-interface-lab-platform-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer Production Readiness And Evidence Design
@@ -36,8 +35,9 @@ This is the accepted hardening design for `PM-UI-DESIGN-010`.
 It defines the ownership and contract shape for production readiness evidence,
 diagnostic inspection, golden projection snapshots, accessibility reports,
 compatibility reports, performance budget reports, and example evidence. It
-does not implement code, select a WR roadmap row, or authorize hardening code
-until a linked WR row exists and passes `task production:plan`.
+does not implement code or authorize hardening changes by itself. Implementation
+requires an owning GitHub issue, canonical roadmap sequencing where relevant,
+and pull-request-owned review and exact-head validation.
 
 ## Goal
 
@@ -177,23 +177,26 @@ reports, missing performance budget reports, stale evidence, target-profile
 mismatch, expected diagnostic mismatch, artifact ownership violation, and
 preview-only production readiness attempts.
 
-## Implementation Row
+## Implementation Activation
 
-No PM-010 implementation WR row is selected by this design action.
+This accepted design does not select or activate an implementation slice.
 
-The next legal production-track action after this design is accepted is to add
-or select one bounded WR row. That row should cover only the first generic
+The next legal implementation action is to create or select one bounded owning
+GitHub issue. That issue should cover only the first generic
 `domain/ui/ui_definition` readiness evidence packet, inspection report,
 readiness request, readiness decision, and readiness diagnostic contract slice.
 
-The first row must not implement app-hosted readiness UI, screenshot capture,
+The first slice must not implement app-hosted readiness UI, screenshot capture,
 renderer golden comparison, accessibility engine integration, performance
 runner integration, project IO, runtime replay, provider sessions, or concrete
 release tooling.
 
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
+
 ## Required Fitness Functions
 
-The first implementation row must add focused validation for:
+The first implementation slice must add focused validation for:
 
 - required evidence kind coverage;
 - target-profile compatibility diagnostics;
@@ -224,11 +227,11 @@ PM-010 design acceptance does not:
 
 ## Acceptance Bar
 
-PM-010 can move from `designing` to ready-next planning when:
+PM-010 remains an accepted design when:
 
-- this accepted design exists;
-- the production milestone points to this accepted design gate;
-- production, roadmap, docs, and planning validators pass;
-- a bounded WR row can be added or selected for the first generic readiness
-  evidence packet, inspection report, readiness request, readiness decision,
-  and readiness diagnostic contract slice.
+- this accepted design exists and is discoverable from current UI design
+  navigation;
+- the canonical UI roadmap carries any durable sequence that remains relevant;
+- implementation is activated only by an owning GitHub issue;
+- delivery evidence belongs to the reviewed pull request;
+- current repository validation passes at the accepted revision.

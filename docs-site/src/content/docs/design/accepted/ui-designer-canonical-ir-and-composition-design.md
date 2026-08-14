@@ -17,8 +17,7 @@ related_designs:
   - ../implemented/editor-self-authoring-and-final-ui-design.md
   - ../active/editor-ui-workspace-tool-surface-architecture.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Designer Canonical IR And Composition Design
@@ -30,8 +29,9 @@ This is the accepted design contract for `PM-UI-DESIGN-002`.
 It accepts the canonical UI definition and composition boundary needed before
 later UI Designer implementation milestones can write product code. It does not
 mark any implementation milestone complete, does not create runtime behavior,
-does not create schemas, and does not authorize code changes without a later
-linked WR row and production plan.
+does not create schemas, and does not authorize code changes by itself. Later
+implementation requires an owning GitHub issue, canonical roadmap sequencing
+where relevant, and pull-request-owned review and exact-head validation.
 
 ## Goal
 
@@ -189,20 +189,25 @@ formatting, and reviewable diff output remains preview-only and cannot activate.
 
 PM-002 is design-only. Later code-bearing work must follow this sequence:
 
-1. Create or select the relevant downstream PM milestone.
-2. Link that milestone to a legal WR row.
-3. Run `task production:plan -- --milestone <PM-ID> --roadmap <WR-ID>`.
-4. Implement only the bounded WR slice after gates pass.
-5. Add focused tests and closeout evidence.
-6. Rerun `task ai:goal -- --track PT-UI-DESIGN`.
+1. Confirm the downstream PM slice remains supported by this accepted design
+   and the canonical UI/workspace roadmap.
+2. Create or select an owning GitHub issue. The issue owns activation, current
+   scope, dependencies, and the accepted base.
+3. Implement only the bounded issue scope.
+4. Add focused tests and current repository validation.
+5. Deliver through a pull request; the PR owns the reviewed feature head,
+   complete diff, validation evidence, and acceptance state.
 
-No implementation row may treat PM-002 as permission to move editor,
+Historical `PT-*`, `PM-*`, and `WR-*` labels may remain as decomposition or
+provenance vocabulary; they do not grant current implementation authority.
+
+No implementation issue may treat PM-002 as permission to move editor,
 gameplay, render, material, scene, asset, simulation, save-game, network, or
 project semantics into the Designer.
 
 ## Required Fitness Functions
 
-Later implementation rows must add focused checks for:
+Later implementation slices must add focused checks for:
 
 - schema/version failures before composition;
 - unsupported migration failures before activation;
@@ -213,7 +218,8 @@ Later implementation rows must add focused checks for:
 - app/provider/runtime layers consuming projection output without becoming
   source truth.
 
-For this design-only slice, validation is documentation and planning validation.
+For this design-only slice, validation is documentation and repository
+validation.
 
 ## Non-Goals
 
@@ -237,8 +243,9 @@ PM-002 does not:
 PM-002 is accepted when:
 
 - this document is in `design/accepted` with `status: accepted`;
-- the production milestone links this accepted design as its design gate;
+- the accepted design is discoverable from the canonical UI roadmap and related
+  design navigation;
 - architecture governance records that existing `domain/ui/ui_definition` and
   `domain/editor/editor_definition` ownership is sufficient for PM-002;
-- PM-002 closeout evidence records validation and known gaps;
-- production, roadmap, docs, and planning validators pass.
+- accepted delivery evidence is owned by its reviewed pull request;
+- current repository validation passes at the accepted revision.

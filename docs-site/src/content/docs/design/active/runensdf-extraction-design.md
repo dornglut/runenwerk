@@ -12,7 +12,6 @@ related_docs:
   - ../../reports/investigations/runensdf-extraction-investigation.md
   - ../../reports/closeouts/pt-runensdf-002-boundary-correction-closeout.md
   - ./runensdf-repository-identity-decision.md
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/specs/pt-runensdf-003-standalone-transfer.ron
 ---

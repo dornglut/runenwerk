@@ -17,7 +17,6 @@ related_docs:
   - ../../workspace/authority-model.md
   - ../../guidelines/domain-program-architecture-pattern.md
   - ../../guidelines/programming-principles.md
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
 ---
 

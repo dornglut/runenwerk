@@ -29,7 +29,6 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c2-program-binding-realization.ron",
         "docs-site/src/content/docs/workspace/specs/pt-runengpu-g4c3-pipeline-cutover.ron",
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
-        "docs-site/src/content/docs/workspace/planning/active-work.md",
     ],
 
     goal: "Complete private context/device-generation-bound WGPU realization and remove renderer-owned realization authority through three independently reviewable ordered deliveries with a serialized, narrowly scoped successor-bridge ladder, without collapsing resource realization, program/binding realization, pipeline realization, consumer migration, and deletion into one unsafe cutover.",

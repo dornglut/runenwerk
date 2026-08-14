@@ -13,26 +13,30 @@ related_designs:
   - ../accepted/render-production-readiness-and-inspection-design.md
   - ../accepted/renderer-gpu-evidence-and-procedural-visuals-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
-  - ../../reports/implementation-plans/wr-103-shader-bound-sparse-sdf-terrain-runtime-governance-and-track-activation/plan.md
+  - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
 ---
 
 # Sparse SDF Terrain Runtime Integration
 
 ## Decision
 
-Create a renderer follow-up track for shader-bound sparse SDF terrain runtime
-integration. The completed `PT-RENDER-SDF` track remains valid and closed:
-it proved derived residency, raymarch acceleration inspection, runtime
-evidence aggregation, and diagnostics. This design records the remaining gap:
-there is not yet a production-oriented terrain render path where WGSL traversal
-consumes the sparse SDF page table, brick atlas, distance mip, and candidate
-list resources produced by renderer residency.
+This design records a renderer follow-up target for shader-bound sparse SDF
+terrain runtime integration. The completed historical `PT-RENDER-SDF` work
+remains valid and closed: it proved derived residency, raymarch acceleration
+inspection, runtime evidence aggregation, and diagnostics. The remaining gap is
+that there is not yet a production-oriented terrain render path where WGSL
+traversal consumes the sparse SDF page table, brick atlas, distance mip, and
+candidate-list resources produced by renderer residency.
 
 The source truth stays in `domain/world_sdf::SdfChunkPayload`, product
 publication, and source generations. The renderer owns only derived GPU
 resources, bind plans, pass execution, timing, and diagnostics.
+
+`PT-RENDER-SDF`, `PM-RENDER-SDF-RUNTIME-*`, and `WR-103` are retained as
+historical decomposition/provenance vocabulary. They are not live work
+authority. Any implementation requires an owning GitHub issue, sequencing
+through the canonical renderer/workspace roadmaps when relevant, and a reviewed
+pull request with exact-head validation evidence.
 
 ## Current State
 
@@ -84,7 +88,7 @@ responsibilities:
 
 The first proof should use deterministic synthetic `SdfChunkPayload` terrain
 products. That keeps the renderer integration unblocked while the final
-open-world terrain product pipeline remains `PM-SDF-OW-002` scope.
+open-world terrain product pipeline remains separate product-family scope.
 
 ## Rendering Rules
 
@@ -99,31 +103,31 @@ open-world terrain product pipeline remains `PM-SDF-OW-002` scope.
 - Camera-relative world framing is required so endless-world coordinates do
   not depend on fragile absolute `f32` positions.
 
-## Track Split
+## Proposed Decomposition
 
-`PM-RENDER-SDF-RUNTIME-001` is governance only. It creates the track, this
-design, `WR-103`, and the implementation contract.
+The historical milestone split remains useful architecture decomposition:
 
-`PM-RENDER-SDF-RUNTIME-002` owns GPU ABI and runtime bind-plan implementation.
-It must keep backend handles inside renderer boundaries and keep product truth
-outside renderer state.
+- `PM-RENDER-SDF-RUNTIME-001`: governance and implementation-contract boundary.
+- `PM-RENDER-SDF-RUNTIME-002`: GPU ABI and runtime bind-plan implementation,
+  keeping backend handles inside renderer boundaries and product truth outside.
+- `PM-RENDER-SDF-RUNTIME-003`: dedicated sparse terrain runtime example and WGSL
+  traversal proof.
+- `PM-RENDER-SDF-RUNTIME-004`: evidence commands, focused tests, benchmarks,
+  docs, and runtime-proven closeout.
 
-`PM-RENDER-SDF-RUNTIME-003` owns the dedicated sparse terrain runtime example
-and WGSL traversal proof.
-
-`PM-RENDER-SDF-RUNTIME-004` owns evidence commands, focused tests, benchmarks,
-docs, and closeout. It is the only milestone in this track that may claim
-`runtime_proven`.
+An owning GitHub issue may adopt, refine, split, or reject this decomposition
+when work is activated. Naming these phases does not create active milestones.
 
 ## Non-Goals
 
-- Do not reopen `PT-RENDER-SDF` or rewrite its closeout claims.
+- Do not reopen the completed historical sparse-SDF renderer work or rewrite its
+  closeout claims.
 - Do not make `procedural_sky_sdf_terrain` the production sparse runtime proof.
-- Do not implement renderer modules, shaders, assets, or examples in `WR-103`.
+- Do not treat historical `WR-103` as implementation authority.
 - Do not make renderer code authoritative for SDF payload truth, collision
   truth, query policy, product fallback legality, or open-world generation.
-- Do not claim `perfectionist_verified`; that remains `PT-RENDER-PERFECTION`
-  scope.
+- Do not claim `perfectionist_verified` without a separate accepted no-gap
+  certification scope.
 
 ## Evidence Expectations
 
@@ -138,3 +142,8 @@ Follow-on implementation evidence must prove:
 - runtime budget and residency pressure reporting;
 - docs that distinguish renderer runtime proof from real open-world terrain
   product integration.
+
+Broad acceptance validation at one unchanged reviewed head includes focused
+crate tests plus `cargo validate`, `git diff --check`, and the documentation
+build. Repository-owned exact-head CI and Documentation Build are the delivery
+acceptance evidence.

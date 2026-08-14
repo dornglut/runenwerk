@@ -13,7 +13,6 @@ related_docs:
   - ../../reports/investigations/runengpu-g3-access-work-graph-investigation.md
   - ../../reports/closeouts/pt-runengpu-g3-implementation-closeout.md
   - ../../workspace/specs/pt-runengpu-g3-access-work-graph.ron
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
 ---
 

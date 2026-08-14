@@ -18,8 +18,6 @@ related_designs:
 related_roadmaps:
   - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
   - ../../engine/plugins/render/docs/roadmap.md
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
 ---
 
 # Render Production Readiness And Inspection Design
@@ -31,10 +29,9 @@ This is the accepted design contract for `PM-RENDER-PG-008`.
 It accepts the production-readiness and inspection direction before
 implementation work starts. It does not authorize product code changes by
 itself, does not mark `PM-RENDER-PG-008` complete, and does not assign
-`completion_quality`. Implementation still requires a legal bounded WR row,
-`task production:plan`, roadmap promotion or current-candidate selection,
-focused validation, closeout evidence, and a rerun of
-`task ai:goal -- --track PT-RENDER-PG`.
+`completion_quality`. Implementation requires an owning GitHub issue, focused
+validation, pull-request review/evidence, and sequencing through the canonical
+renderer/workspace roadmaps where relevant.
 
 ## Goal
 
@@ -153,9 +150,9 @@ PM-008 accepts these decisions:
 - Examples must demonstrate the production contract path through normal public
   APIs. They must not use renderer-private handles or bypass prepare/compile
   validation.
-- PM-008 implementation needs its own bounded WR row. `WR-003` remains support
-  context, `WR-009` remains PM-006 completion evidence, and `WR-010` remains
-  PM-007 completion evidence.
+- `WR-003`, `WR-009`, and `WR-010` are retained only as historical support or
+  completion provenance for the accepted PM slices they described. They are not
+  current implementation authority for PM-008.
 - Completion quality starts at `bounded_contract`. Claim `runtime_proven` only
   if host-backed runtime capture/replay, budget, and multi-surface evidence
   actually pass. Claim `perfectionist_verified` only with a completed audit and
@@ -288,25 +285,21 @@ cargo test -p engine --test render_flow_fragments
 cargo test -p engine --test render_multi_surface
 cargo test -p engine --example render_fragment_compositor
 cargo test -p engine --example render_readiness_inspection
-task docs:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
-task ai:goal -- --track PT-RENDER-PG
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
 
 Add narrower tests as implementation names stabilize. Do not use broad
-validation to compensate for missing focused coverage.
+validation to compensate for missing focused coverage. Repository-owned
+exact-head CI and Documentation Build are the acceptance evidence for the
+reviewed revision.
 
 ## Acceptance Criteria
 
-- The accepted design is linked from render platform, renderer roadmap, and
-  production-track gates.
-- PM-008 has a legal bounded WR row before implementation.
+- The accepted design is linked from render platform and canonical renderer
+  roadmaps.
+- PM-008 requires an owning GitHub issue before implementation.
 - Renderer readiness inspection aggregates existing typed contracts instead of
   replacing them.
 - Capture/replay policy is fail-closed, backend-neutral at the contract layer,

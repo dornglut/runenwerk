@@ -19,8 +19,7 @@ related_designs:
   - ./ui-lab-operation-driven-visual-authoring-design.md
   - ./ui-designer-persistence-migration-diff-and-activation-design.md
 related_roadmaps:
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
+  - ../../domain/ui/roadmap.md
 ---
 
 # UI Lab Persistence Project IO Diff Apply Rollback Design
@@ -29,11 +28,11 @@ related_roadmaps:
 
 This is the accepted design gate for `PM-UI-LAB-005`.
 
-It authorizes roadmap intake and implementation-contract preparation for the
-Editor Lab persistence, project IO, diff/apply, activation-report, failed
-activation preservation, and rollback product slice. It does not authorize
-product-code changes until a linked WR row exists, `task production:plan`
-passes for that row, and the row names write scopes, validation, and runtime
+It defines the Editor Lab persistence, project IO, diff/apply,
+activation-report, failed-activation preservation, and rollback product slice.
+It does not authorize product-code changes by itself. Any implementation
+requires an owning GitHub issue, canonical roadmap sequencing where relevant,
+and a pull request that owns the reviewed feature head and exact-head validation
 evidence.
 
 `PM-UI-DESIGN-009` remains the accepted generic UI persistence contract. This
@@ -96,6 +95,9 @@ product contract end to end:
   package, but operation history is not allowed to become the only source of
   document truth.
 
+The implementation must preserve these ownership boundaries rather than use a
+persistence refactor to centralize app behavior in a generic domain crate.
+
 ## Architecture Governance Result
 
 Architecture governance accepts the PM005 direction with these boundaries:
@@ -131,8 +133,6 @@ Architecture governance accepts the PM005 direction with these boundaries:
 - Team Topologies label: stream-aligned editor product work with
   complicated-subsystem support from UI definition and editor definition
   owners.
-- Next action: add bounded WR roadmap rows for project-store/package work and
-  apply-review/activation/rollback work before implementation.
 
 ## Contracts
 
@@ -220,7 +220,7 @@ Rollback must fail closed when no prior applied snapshot exists.
 
 ## Runtime Workflow
 
-PM005 implementation rows must converge on these runtime workflows:
+PM005 implementation slices must converge on these runtime workflows:
 
 1. Save current Editor Lab drafts into an `EditorLabProjectPackage`.
 2. Reload the saved package into the lab without changing live editor state.
@@ -235,22 +235,25 @@ PM005 implementation rows must converge on these runtime workflows:
 9. Reload last applied state after app/session reconstruction where the current
    runtime supports it.
 
-## Implementation Row Candidates
+## Implementation Decomposition
 
-Roadmap intake should split PM005 into bounded rows unless review decides a
-single row is safer:
+A current owning issue may split PM005 into bounded child slices when that
+improves reviewability:
 
 | Candidate | Primary scope | Runtime evidence |
 |---|---|---|
 | Editor Lab project package and document store | `apps/runenwerk_editor/src/shell` or a new app-owned Editor Lab project IO module, plus editor-definition package DTOs if runtime-neutral | Save, reload, import, export, migration preflight, parse failure, invalid package preservation, and deterministic package diff artifacts. |
 | Definition apply review, activation report, and rollback | `apps/runenwerk_editor/src/shell`, `apps/runenwerk_editor/src/editor_app`, `apps/runenwerk_editor/src/runtime`, and runtime-neutral review DTOs if needed | Review, reject, apply, activation success, activation failure preservation, previous-state preservation, rollback, and reload-last-applied artifacts. |
 
-Both rows must keep write scopes disjoint from PM006 screenshot/accessibility
+The slices must keep write scopes disjoint from PM006 screenshot/accessibility
 evidence breadth and PM007 public API/docs/examples closeout.
+
+Historical WR-row planning is retained as provenance only; current scope and
+activation belong to GitHub issues and pull requests.
 
 ## Required Fitness Functions
 
-PM005 implementation rows must add focused validation for:
+Any PM005 implementation slice must add focused validation for:
 
 - deterministic package serialization and reload round-trip;
 - import/export of a selected definition and full package;
@@ -265,6 +268,18 @@ PM005 implementation rows must add focused validation for:
 - reload-last-applied behavior where the runtime supports it;
 - command/catalog and provider UI paths exposing typed diagnostics rather than
   generic unavailable messages.
+
+Focused tests plus broad validation must pass at one unchanged reviewed head:
+
+```text
+cargo fmt --all --check
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
+```
+
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
 ## Non-Goals
 
@@ -283,17 +298,14 @@ PM005 does not:
 
 ## Acceptance Bar
 
-PM005 can move from design to implementation planning when:
+PM005 is implementation-ready only when:
 
-- this accepted design exists and is linked from the production milestone;
-- the active UI Lab productization design references this PM005 design;
-- roadmap intake creates bounded WR rows or one explicitly bounded full-slice
-  WR with write scopes, dependencies, validation, and closeout evidence;
-- `task docs:validate`, `task roadmap:render`, `task roadmap:validate`,
-  `task roadmap:check`, `task production:render`,
-  `task production:validate`, `task production:check`, and
-  `task planning:validate` pass after metadata edits.
+- this accepted design remains current for the intended bounded slice;
+- an owning GitHub issue names scope, prerequisites, accepted base, validation,
+  and runtime evidence expectations;
+- canonical UI roadmaps still support the sequence when sequencing is relevant;
+- the implementation is delivered through a reviewed pull request.
 
-PM005 can be closed only when closeout evidence proves save, reload, import,
-export, migration, diff, apply, reject, failed activation preservation, and
-rollback in the app-hosted Editor Lab.
+PM005 can be closed only when the exact reviewed implementation evidence proves
+save, reload, import, export, migration, diff, apply, reject, failed activation
+preservation, and rollback in the app-hosted Editor Lab.

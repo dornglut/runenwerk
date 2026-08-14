@@ -18,7 +18,6 @@ related_docs:
   - ../../workspace/specs/pt-runengpu-g4c1-resource-realization.ron
   - ../../workspace/specs/pt-runengpu-g4c2-program-binding-realization.ron
   - ../../workspace/specs/pt-runengpu-g4c3-pipeline-cutover.ron
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
 ---
 

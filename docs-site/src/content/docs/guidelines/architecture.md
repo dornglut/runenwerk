@@ -5,15 +5,18 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-08-12
 ---
 
 # Architecture
 
 This document defines the active crate/domain boundaries in `Runenwerk` and where new code belongs.
 
-For the canonical governing architecture doctrine, see
-[`runenwerk-architecture.md`](runenwerk-architecture.md).
+For the canonical Runenwerk-wide architecture spine, see
+[`../architecture/runenwerk-platform-architecture.md`](../architecture/runenwerk-platform-architecture.md).
+
+For the reusable boundary doctrine underneath that specialization, see
+[`authority-centered-boundary-architecture.md`](authority-centered-boundary-architecture.md).
 
 This page remains the workspace boundary and placement guide.
 
@@ -41,6 +44,11 @@ Keep dependency flow unidirectional:
 
 Avoid sideways coupling between app crates via private internals.
 
+Repository-family extraction and peer-framework dependency direction are governed by
+[Repository Family Architecture](../architecture/repository-family-architecture.md) and
+[ADR 0014](../adr/accepted/0014-repository-family-extraction-boundaries.md), not by the
+physical location of legacy code in this workspace.
+
 ## Ownership Boundaries
 
 - `domain/*` owns engine-agnostic domain contracts, data structures, and execution primitives.
@@ -49,23 +57,28 @@ Avoid sideways coupling between app crates via private internals.
 - `apps/*` owns process wiring, config loading, and external system integration.
 - `adapters/*` owns interop glue to external runtimes and host engines.
 
-If logic must remain reusable across engine hosts, keep it in `domain/`. If it is engine-specific runtime glue, keep it in `engine/`.
+If logic must remain reusable across engine hosts, keep it in the owning reusable domain
+or peer framework. If it is Runenwerk-specific runtime/product glue, keep it in
+Runenwerk's engine/app/integration surfaces according to the current owner architecture.
 
 ## Placement Rules
 
 When adding code:
 
-1. Choose the owning domain first (`domain`, `engine`, `net`, `apps`, or `adapters`).
-2. Reuse local helpers in that domain before adding new abstractions.
+1. Choose the semantic owner first; current code location is evidence, not permanent ownership.
+2. Reuse local helpers in that owner before adding new abstractions.
 3. Expose narrow public interfaces instead of reaching into internals across crates.
-4. Add or update local docs (`README.md`, `usage-guide.md`, `architecture.md`) when behavior or scope changes.
+4. Keep peer frameworks independent of Runenwerk unless a separate ADR accepts a direct dependency.
+5. Add or update local docs when behavior or scope changes.
 
 ## Architecture Guardrails
 
 - Prefer explicit types, deterministic control flow, and clear ownership.
+- One semantic invariant set has one authority.
 - Do not add silent failure paths or broad catch-all error handling.
 - Do not move code across domains unless the ownership boundary itself is changing.
-- Keep docs and crate boundaries aligned with `Cargo.toml` workspace members.
+- Do not infer one universal ID, graph, registry, database, transaction, or runtime merely from repeated vocabulary.
+- Keep docs and crate boundaries aligned with current accepted ownership and `Cargo.toml` workspace evidence.
 
 See also:
 
@@ -73,5 +86,4 @@ See also:
 - `domain-map.md` for crate-level ownership and dependency summary.
 - `code-patterns.md` for implementation patterns used across domains.
 - [`domain-program-architecture-pattern.md`](domain-program-architecture-pattern.md)
-  for the reusable domain-program, typed-graph, compiler/evaluator, artifact,
-  host, and extraction-gate pattern.
+  for the optional durable domain-program/compiler/evaluator pattern when a domain actually needs it.

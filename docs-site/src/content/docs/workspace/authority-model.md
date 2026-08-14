@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-22
+last_reviewed: 2026-08-13
 related_docs:
   - ./start-here.md
   - ./engineering-workflow.md
@@ -42,11 +42,13 @@ Implementation conforms to accepted architecture or explicitly revises the ownin
 ## Active work
 
 ```text
-GitHub issue
--> maintained roadmap summary
+GitHub issue / Engineering Portfolio
 -> pull-request delivery state
 -> historical report
 ```
+
+The roadmap participates only when durable sequence or dependency truth changes. It does
+not mirror live issue state, activation, priority, blockers, branch heads, or CI state.
 
 Do not place transient branch heads, daily execution state, or CI runs in stable architecture documents.
 
@@ -67,7 +69,8 @@ Inspection can establish structure and likely behavior. It is not executed valid
 - **Code and tests:** current behavior and executable invariants.
 - **ADRs and accepted designs:** durable decisions, ownership, dependency direction, migration, and deletion contracts.
 - **GitHub issues:** proposed, active, blocked, deferred, and completed work.
-- **Roadmap:** high-level sequencing and dependencies.
+- **Engineering Portfolio:** live priority and portfolio status across owning issues and pull requests.
+- **Roadmap:** durable high-level sequencing and dependencies only.
 - **Pull requests:** diff review, delivery evidence, and merge decision.
 - **Root documents:** concise navigation and stable repository shape.
 - **Reports and archive:** historical evidence and context only.

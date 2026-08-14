@@ -14,8 +14,6 @@ related_designs:
   - ./field-product-contracts-diagnostics-and-residency-design.md
 related_roadmaps:
   - ../../engine/roadmaps/fully-featured-renderer-roadmap.md
-  - ../../workspace/production-tracks.yaml
-  - ../../workspace/roadmap-items.yaml
 ---
 
 # Render Contract Ergonomics Design
@@ -26,9 +24,10 @@ This is the accepted design contract for `PM-RENDER-PG-002`.
 
 It accepts a bounded ergonomics slice for shared render product-surface request
 construction. It does not mark `PM-RENDER-PG-002` complete, does not assign
-`completion_quality`, and does not authorize implementation until the milestone
-is linked to a legal bounded WR row and the normal production workflow gates
-allow code changes.
+`completion_quality`, and does not authorize implementation by itself.
+Implementation requires an owning GitHub issue, sequencing through the
+canonical renderer/workspace roadmaps where relevant, and pull-request-owned
+review and exact-head validation evidence.
 
 ## Goal
 
@@ -91,8 +90,8 @@ freshness, authority, fallback legality, or rebuild behavior.
 - Producer systems keep explicit publication into
   `RenderDynamicTextureTargetRequestRegistryResource` and
   `PreparedRenderFrameRequestResource`.
-- `WR-003` remains contextual support evidence only. A new bounded implementation
-  WR row must be created for `PM-RENDER-PG-002` before code changes are made.
+- `WR-003` remains contextual support evidence only. It is historical
+  decomposition/provenance, not current implementation authority.
 - `PreparedRenderFrameRequestResource` must return typed request errors and
   expose producer-scoped typed diagnostics instead of only returning
   unstructured `anyhow::Error`.
@@ -190,21 +189,19 @@ policy into the request helper.
 
 Implementation must follow this order:
 
-1. Accept this design and update indexes, related links, and production-track
-   gate paths.
-2. Create a new bounded implementation WR row through roadmap intake/apply and
-   link `PM-RENDER-PG-002` to that row. Do not repurpose `WR-003`.
-3. Run the relevant production planning gate for the milestone and WR row before
-   code changes.
-4. Add additive constructors, fluent helpers, and typed request diagnostics.
-5. Add `engine/src/plugins/render/frame/product_surface.rs` with return-only
+1. Confirm this accepted design and the canonical renderer/workspace roadmaps
+   still support the intended bounded PM-002 slice.
+2. Create or select an owning GitHub issue for PM-002. The issue owns activation,
+   current scope, dependencies, and the accepted base.
+3. Add additive constructors, fluent helpers, and typed request diagnostics.
+4. Add `engine/src/plugins/render/frame/product_surface.rs` with return-only
    request batch helpers.
-6. Migrate editor viewport request construction.
-7. Migrate material preview request construction.
-8. Update render usage docs and public API reference with the common path.
-9. Add focused tests.
-10. After validation passes, create closeout evidence and only then update
-    `PM-RENDER-PG-002` completion evidence.
+5. Migrate editor viewport request construction.
+6. Migrate material preview request construction.
+7. Update render usage docs and public API reference with the common path.
+8. Add focused tests.
+9. Deliver through a pull request; the PR owns the reviewed feature head,
+   complete diff, validation evidence, and acceptance state.
 
 ## Required Tests And Validation
 
@@ -230,25 +227,22 @@ cargo test -p engine render_dynamic_targets
 cargo test -p engine render_runtime_inspect
 cargo test -p runenwerk_editor viewport::render_jobs
 cargo test -p runenwerk_editor material_preview
-task docs:validate
-task roadmap:render
-task roadmap:validate
-task roadmap:check
-task production:render
-task production:validate
-task production:check
-task planning:validate
-task ai:goal -- --track PT-RENDER-PG
+cargo validate
+git diff --check
+CI=true pnpm --dir docs-site build
 ```
+
+Repository-owned exact-head CI and Documentation Build are the acceptance
+evidence for the reviewed revision.
 
 ## Write Scope
 
-The implementation WR row for PM-002 must keep write scope bounded to:
+The owning PM-002 implementation issue must keep write scope bounded to:
 
 - `engine/src/plugins/render`;
 - `apps/runenwerk_editor/src/runtime/viewport`;
 - `apps/runenwerk_editor/src/runtime/systems/material_preview.rs`;
-- relevant render/product-track docs and focused tests.
+- relevant render documentation and focused tests.
 
 ## Non-Goals
 

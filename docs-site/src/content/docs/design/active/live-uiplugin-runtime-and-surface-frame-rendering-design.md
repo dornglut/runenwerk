@@ -11,7 +11,6 @@ related_docs:
   - ./ui-framework-app-integration-direction-review.md
   - ../../reports/investigations/live-uiplugin-runtime-current-state-investigation.md
   - ../../reports/closeouts/pt-ui-framework-app-integration-002-closeout.md
-  - ../../workspace/planning/active-work.md
   - ../../workspace/planning/roadmap.md
   - ../../workspace/planning/decision-register.md
   - ../../workspace/engineering-workflow.md
@@ -183,7 +182,6 @@ engine/src/prelude.rs
 engine/Cargo.toml
 engine tests/examples needed for live Counter proof
 docs-site/src/content/docs/design/active/live-uiplugin-runtime-and-surface-frame-rendering-design.md
-docs-site/src/content/docs/workspace/planning/active-work.md
 docs-site/src/content/docs/workspace/planning/roadmap.md
 docs-site/src/content/docs/workspace/planning/decision-register.md
 ```
