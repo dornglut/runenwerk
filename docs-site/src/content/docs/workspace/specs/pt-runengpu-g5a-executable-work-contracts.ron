@@ -30,12 +30,13 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
     ],
 
-    goal: "Close the logical execution gap left by G3-before-G4 sequencing: make compute/render work self-contained through accepted G4 pipeline and runtime-binding contracts, bind render-pass attachment/pipeline compatibility before backend encoding, add generic Upload/Readback operations inside the one G3 initialization/hazard authority, preserve semantic value equality without inventing operation ordering or content-addressed transfer identity, derive executable resource accesses from operations, migrate RunenRender lowering into those contracts, and delete execution-semantic truth from the temporary render sidecar without implementing command submission or progress.",
+    goal: "Close the logical execution gap left by G3-before-G4 sequencing: make compute/render work self-contained through accepted G4 pipeline and runtime-binding contracts, separate per-use dynamic binding state from physical bind-group realization identity, bind render-pass attachment/pipeline compatibility before backend encoding, add generic Upload/Readback operations inside the one G3 initialization/hazard authority, preserve semantic value equality without inventing operation ordering or content-addressed transfer identity, derive executable resource accesses from operations, migrate RunenRender lowering into those contracts, and delete execution-semantic truth from the temporary render sidecar without implementing command submission or progress.",
 
     dependency_direction: [
         "RunenRender semantic planning -> complete backend-neutral G5A GpuWorkOperation values.",
         "G5A operations -> accepted G3 preparation for order, initialization, hazards, requirements, outputs, and provenance.",
         "Accepted G4B pipeline/interface/runtime-binding/render-state contracts remain the only program/layout/pipeline semantic authority used by G5A.",
+        "G5A refines G4C2 bind-group physical realization identity only where the accepted backend object demonstrably excludes per-use dynamic offsets; it creates no second binding authority.",
         "G5B later prepares and realizes complete G5A work for one context/device generation; G5A does not encode or submit backend work.",
     ],
 
@@ -48,16 +49,16 @@ PhaseImplementationSpec(
     ],
 
     compute_contract: [
-        "GpuComputeOperation owns one complete GpuComputePipelineDescriptor, one backend-neutral runtime binding set, and one checked nonzero dispatch extent.",
+        "GpuComputeOperation owns one complete GpuComputePipelineDescriptor, one backend-neutral GpuRuntimeBindingSet, and one checked nonzero dispatch extent.",
         "Pipeline descriptor semantics are not copied into a second compute-execution descriptor.",
-        "Runtime bindings use typed GpuBindingKey and logical buffer/texture-view/sampler handles; GpuRuntimeBufferBinding already owns its exact static range and optional dynamic offset, so G5A introduces no parallel dynamic-offset side channel.",
-        "Compute accesses are derived from the selected program interface, binding declarations, runtime resources, ranges, dynamic/static offsets where semantically relevant, and storage access modes; callers do not supply duplicate bound-resource access truth.",
+        "Runtime bindings use typed GpuBindingKey and logical buffer/texture-view/sampler handles; GpuRuntimeBufferBinding already owns its exact static range and optional dynamic offset, so G5A introduces no parallel public dynamic-offset side channel.",
+        "Compute accesses are derived from the selected program interface, binding declarations, runtime resources, ranges, effective static-plus-dynamic offsets, and storage access modes; callers do not supply duplicate bound-resource access truth.",
         "Compute requirements merge operation kind, pipeline requirements, runtime resource requirements, and admitted format/limit facts deterministically.",
     ],
 
     render_contract: [
         "GpuRenderOperation remains one logical render pass with color attachments, optional depth/stencil attachment, ordered GpuRenderDraw values, and timestamp writes.",
-        "Each GpuRenderDraw owns one complete GpuRenderPipelineDescriptor, one runtime binding set, ordered vertex-buffer bindings, optional index-buffer binding, one GpuDrawIntent, and complete normalized dynamic state.",
+        "Each GpuRenderDraw owns one complete GpuRenderPipelineDescriptor, one GpuRuntimeBindingSet, ordered vertex-buffer bindings, optional index-buffer binding, one GpuDrawIntent, and complete normalized dynamic state.",
         "A render operation may switch pipelines and bindings between draws without splitting one logical render pass; the current multi-pipeline UI pass is the representative proof.",
         "The pipeline descriptor is the sole authority for vertex stride, step mode, attributes, primitive state, depth/stencil state, multisample state, and ordered color-target state.",
         "Draw bindings contain only runtime resource/range/state facts required to execute that pipeline.",
@@ -95,11 +96,21 @@ PhaseImplementationSpec(
         "Every draw therefore has deterministic effective dynamic state and semantic Eq; backend lowering may elide redundant setters but no draw inherits unspecified state from a previous draw.",
     ],
 
-    runtime_binding_split: [
-        "Introduce one backend-neutral runtime binding-set contract derived from accepted G4B GpuRuntimeBindingValue and layout/interface types.",
-        "Construction performs context-free exact group/key/cardinality/resource-kind/logical-range checks.",
-        "Device-dependent alignment, format capability, generation affinity, viewport device-limit validation, and private bind-group realization remain G5B preparation work using accepted G4/device facts.",
-        "Do not create parallel structural and device binding authorities; both phases consume the same G4B declarations and exact runtime values.",
+    runtime_binding_set: [
+        "GpuRuntimeBindingSet is the one backend-neutral logical binding-use aggregate for one compute invocation or render draw. It contains the complete accepted G4B runtime values across the pipeline layout and preserves every per-use dynamic offset as u64 logical buffer-address semantics.",
+        "Construction groups and canonically orders values by typed GpuBindingKey, requires exact pipeline-layout/interface coverage, rejects duplicate/missing/unexpected keys, and performs context-free resource-kind/cardinality/logical-range checks.",
+        "Operation-derived buffer access uses the effective static offset plus dynamic offset and exact bound size, so hazard/initialization semantics follow the actual invocation range rather than the physical bind-group object's static base.",
+        "Device-dependent dynamic-offset alignment and backend representability remain G5B preparation checks against accepted device/backend facts; G5A does not narrow the public logical offset from u64 merely because the first WGPU backend uses u32 DynamicOffset.",
+    ],
+
+    bind_group_realization_projection: [
+        "Accepted G4C2 currently keys BindGroupRequestKey by complete GpuRuntimeBindingValue values even though WGPU bind-group creation uses only each buffer binding's static offset/size and applies dynamic offsets later at set_bind_group. G5A corrects this physical-identity overconstraint before G5 execution relies on it.",
+        "After validating the complete logical GpuRuntimeBindingSet, derive one private static bind-group realization projection containing exact context affinity, layout, resource identities, texture/sampler facts, and buffer static offsets/sizes while excluding per-use dynamic offset values from physical realization equality/hash.",
+        "GpuContext bind-group realization and its single-flight key/record use complete full-equality static projection, not a naked hash and not a synthetic dynamic-offset value. Requests differing only in dynamic offsets reuse the same backend BindGroup realization record.",
+        "The physical record retains exactly the static resource dependencies needed for object lifetime and registry membership. Per-use dynamic offsets remain only in the logical GpuRuntimeBindingSet and later G5 prepared execution state.",
+        "GpuRealizedBindGroup remains an opaque physical realization handle with affinity, layout descriptor, and record identity. Remove the public GpuRealizedBindGroup::values() accessor in the G5A clean cutover because one shared physical record cannot truthfully expose one invocation's dynamic offsets; callers needing logical values inspect their GpuRuntimeBindingSet instead.",
+        "Do not leave values() as a compatibility alias returning a first-request, zeroed, or otherwise synthetic dynamic-offset view. If static physical-value introspection is later demonstrated as necessary, add a separately named contract after review rather than conflating it with logical binding use.",
+        "Current realize_bind_group callers and tests are censused and migrated in the same G5A slice; no parallel old dynamic-offset-sensitive and new static-projection realization keys may survive acceptance.",
     ],
 
     operation_access_derivation: [
@@ -157,10 +168,10 @@ PhaseImplementationSpec(
     ],
 
     migration_rules: [
-        "Change generic work contracts before deleting caller duplication, then migrate every renderer/UI adapter constructor to the checked new contract in the same slice.",
+        "Change generic work contracts and bind-group static-realization projection before deleting caller duplication, then migrate every renderer/UI adapter constructor and current direct realize_bind_group consumer to the checked new contracts in the same slice.",
         "Keep existing G5 raw encoding seams only as execution mechanics; they must read complete generic prepared work rather than a render execution sidecar after G5A.",
         "Do not implement G5B submit/progress/completion APIs in this slice.",
-        "Delete superseded access and execution-semantic sidecar code rather than leaving aliases or dual authoring paths.",
+        "Delete superseded access, execution-semantic sidecar, dynamic-offset-sensitive physical bind-group keying, and ambiguous realized-bind-group values introspection rather than leaving aliases or dual paths.",
     ],
 
     deterministic_tests: [
@@ -172,13 +183,16 @@ PhaseImplementationSpec(
         "Zero-area viewport and scissor remain valid deterministic state; non-finite viewport/blend values and out-of-bounds scissor reject structurally, while device-specific viewport maximum/position bounds reject during G5B preparation.",
         "Vertex slots and accepted GpuIndexFormat ranges validate deterministically and insertion-order-independent where order is not semantic.",
         "GpuWorkOperation/GpuRenderDraw compile and remain semantically comparable without requiring Ord/Hash on G4 pipeline descriptors or transfer payloads.",
+        "Two GpuRuntimeBindingSet values differing only by one valid dynamic offset remain distinct logical invocation values and derive different effective access ranges where applicable, while their G4C2 physical bind-group realization reuses one identical backend record.",
+        "Static offset/size/resource changes split physical bind-group realization; dynamic-offset-only changes do not.",
+        "GpuRealizedBindGroup exposes no values() API after the clean cutover, and source guards reject a compatibility alias that would confuse physical realization with per-use dynamic state.",
         "GpuTransferPayload clones preserve record identity and value; independently constructed equal payload bytes compare semantically equal while is_same_record distinguishes record identity.",
         "Upload writes satisfy initialization when complete and order against conflicting graph accesses.",
         "Readback reads order against conflicting writes and retains one unique result identity.",
         "Texture transfer/readback shape, row coverage, format and bounds reject arithmetic overflow and invalid regions.",
         "Complete operation-derived access set matches the former renderer caller-access set for representative current passes.",
         "Prepared graph order, diagnostics and requirements remain deterministic across fragment composition without sorting GpuWorkOperation payloads.",
-        "Source guards reject permanent sidecar execution truth, duplicate manual bound-resource accesses, duplicate GpuIndexFormat, raw WGPU types in new public contracts, operation ordering invented from hashes/labels, and content-digest identity replacing semantic payload equality.",
+        "Source guards reject permanent sidecar execution truth, duplicate manual bound-resource accesses, duplicate GpuIndexFormat, dynamic-offset-sensitive physical bind-group keys, public realized-group per-use values introspection, raw WGPU types in new public contracts, operation ordering invented from hashes/labels, and content-digest identity replacing semantic payload equality.",
     ],
 
     environment_dependent_tests: [
@@ -189,6 +203,7 @@ PhaseImplementationSpec(
         "Current renderer lower_caller_accesses duplication for bindings/vertex/index/indirect resources represented by executable operations.",
         "Execution-semantic RenderGpuWorkSidecar payload and node-keyed pipeline/binding/draw/render-pass-compatibility truth.",
         "Renderer-only duplicate compute/render execution descriptors replaced by G4/G5 logical contracts.",
+        "Dynamic-offset-sensitive G4C2 BindGroupRequestKey/record identity and public GpuRealizedBindGroup::values() semantics that conflate one physical backend object with one invocation's dynamic offsets.",
         "Any WGPU IndexFormat or dynamic-state type exposed above private backend lowering.",
         "Accidental GpuWorkOperation/GpuComputeOperation/GpuRenderOperation Ord/Hash derives that cannot remain semantically valid once complete G4 executable descriptors are embedded.",
     ],
@@ -196,7 +211,7 @@ PhaseImplementationSpec(
     retain_for_g5b: [
         "CurrentRenderDeviceQueue and CurrentRenderExecutionBridge only as temporary backend execution mechanics.",
         "Current renderer command encoding/submission/poll/map orchestration until G5C.",
-        "Accepted G4 realization owners and Arc-backed registries.",
+        "Accepted G4 realization owners and Arc-backed registries, with bind-group physical identity corrected to static binding semantics.",
         "Complete generic G5A GpuWorkOperation/GpuPreparedWorkGraph as the only logical execution authority.",
     ],
 
@@ -204,14 +219,14 @@ PhaseImplementationSpec(
         "No G5B command submission, progress, completion, pressure, shutdown, or private mapping implementation beyond type-level seams required to keep compilation coherent.",
         "No RunenRender image-formation/material/view semantics in RunenGPU.",
         "No G7 reusable surface acquisition/reconstruction implementation.",
-        "No second graph/command IR, permanent node sidecar, public raw WGPU/Naga type, broad import API, executor dependency, new stable persistence format, compatibility alias, content-addressed transfer identity promise, or fabricated total ordering for pipeline/program contracts.",
+        "No second graph/command IR, permanent node sidecar, public raw WGPU/Naga type, broad import API, executor dependency, new stable persistence format, compatibility alias, content-addressed transfer identity promise, fabricated total ordering for pipeline/program contracts, or second public dynamic-offset representation.",
         "Do not add multiview, 3D render depth-slice, multi-draw-indirect, mesh-shader, or other undemonstrated render vocabulary in G5A. Stop for a separately accepted semantic extension if exact current consumers require it.",
         "Stop for a new design decision if current consumers require a dynamic render state outside viewport/scissor/blend-constant/stencil-reference or an execution semantic not representable without changing accepted G3/G4 ownership.",
     ],
 
     validation: [
-        "Focused executable-work/access/value-semantics/render-pass-compatibility/dynamic-state/sidecar-cutover tests and source guards.",
-        "Complete current consumer census for compute/render/attachment/binding/vertex/index/upload/readback construction.",
+        "Focused executable-work/access/value-semantics/render-pass-compatibility/dynamic-binding/dynamic-state/sidecar-cutover tests and source guards.",
+        "Complete current consumer census for compute/render/attachment/binding/vertex/index/upload/readback construction and every direct realize_bind_group/GpuRealizedBindGroup::values use.",
         "cargo validate",
         "git diff --check",
         "CI=true pnpm --dir docs-site build",
@@ -222,6 +237,7 @@ PhaseImplementationSpec(
         "One complete executable logical work authority exists in RunenGPU and the renderer sidecar no longer owns GPU execution semantics.",
         "Every current G5A operation derives complete access/requirement truth without renderer duplicate bindings/access lists.",
         "Every render draw is logically compatible with one validated pass attachment extent/format/sample signature before backend encoding.",
+        "Dynamic offsets remain logical per-use execution state, affect effective access ranges, do not split physical bind-group realization identity, and are not exposed ambiguously through GpuRealizedBindGroup.",
         "Executable operation value semantics do not fabricate Ord/Hash contracts for G4 pipeline descriptors or use process-local payload identity as semantic equality.",
         "Upload/Readback contracts are graph-visible and backend-neutral; transfer payload record identity remains distinct from semantic immutable payload value.",
         "Logical Present remains distinct from G7 physical surface ownership.",
