@@ -1,0 +1,188 @@
+// Decision-complete implementation specification for RunenGPU G5C.
+// G5C starts only after accepted G5B and an explicitly activated child issue.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENGPU-G5C",
+    title: "Renderer, UI, Timing, Capture, and Final Execution Cutover",
+    lifecycle_state: "planned-blocked",
+    implementation_authorization_status: "blocked-until-accepted-g5b-and-explicit-g5c-issue",
+    owner: "RunenGPU final execution cutover owner",
+    source_baseline: "accepted-g5b-merge-to-be-recorded-by-g5c-issue",
+    planning_issue: "dornglut/runenwerk#284",
+    implementation_issue: "pending-after-accepted-g5b",
+    parent_issue: "dornglut/runenwerk#167",
+    blocking_predecessor: "PT-RUNENGPU-G5B",
+    successor: "PT-RUNENGPU-G6-planning",
+    target_repository_after_internal_conformance: "dornglut/runen-gpu",
+
+    authority_docs: [
+        "AGENTS.md",
+        "TESTING.md",
+        "ARCHITECTURE.md",
+        "docs-site/src/content/docs/architecture/repository-family-architecture.md",
+        "docs-site/src/content/docs/adr/accepted/0015-separate-gpu-execution-from-rendering.md",
+        "docs-site/src/content/docs/design/active/runengpu-architecture-design.md",
+        "docs-site/src/content/docs/design/active/runengpu-g5-execution-lifecycle-design.md",
+        "docs-site/src/content/docs/reports/investigations/runengpu-g5-execution-lifecycle-investigation.md",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g5a-executable-work-contracts.ron",
+        "docs-site/src/content/docs/workspace/specs/pt-runengpu-g5b-execution-lifecycle.ron",
+        "docs-site/src/content/docs/workspace/planning/roadmap.md",
+    ],
+
+    goal: "Migrate every current renderer/UI/timing/capture G5 execution consumer to the accepted G5B prepare/submit/progress/readback lifecycle, preserve RunenRender semantic ownership while removing backend orchestration from it, delete CurrentRenderDeviceQueue and CurrentRenderExecutionBridge plus every current-render execution accessor/terminal, and prove one private RunenGPU execution authority with no renderer raw Device/Queue/CommandEncoder/submit/map/poll reach-through.",
+
+    dependency_direction: [
+        "RunenRender planning -> accepted G5A complete GpuWorkOperation/GpuPreparedWorkGraph.",
+        "Accepted G5B GpuContext prepare/submit/progress/readback -> private WGPU execution.",
+        "Renderer/UI consume normalized submission/readback outcomes only; they do not borrow backend objects.",
+        "G7 surface boundary remains separately classified and is not absorbed by this cutover.",
+    ],
+
+    current_source_census_before_change: [
+        "Re-resolve exact accepted G5B main and enumerate every CurrentRenderDeviceQueue/current_render_device_queue reference.",
+        "Enumerate every CurrentRenderExecutionBridge/current_render_execution_bridge reference and every purpose-typed terminal implementation/call site.",
+        "Enumerate renderer/UI Device, Queue, CommandEncoder, queue.submit, map_async, Device::poll, mapped range, WGPU pipeline/bind-group/resource, timestamp/query, upload and copy use.",
+        "Enumerate timing/capture staging buffers, readback helpers, synchronous channels/poll loops, and renderer-owned completion assumptions.",
+        "Enumerate every renderer/UI work-lowering path and prove it emits accepted complete G5A operations before deleting backend orchestration.",
+        "Enumerate tests/examples/benches/primitive fixtures that still borrow the current-render seams and classify migrate/delete/retain-under-other-owner.",
+    ],
+
+    renderer_execution_cutover: [
+        "Replace renderer phase-two current_render_device_queue acquisition with accepted G5B preparation/submission calls.",
+        "Renderer no longer creates WGPU CommandEncoder or submits WGPU Queue work.",
+        "Renderer does not reproduce G5B pressure, progress, completion, shutdown, retirement, upload staging, or readback state.",
+        "Renderer retains image-formation planning, semantic pass construction, frame timing policy, capture policy, product diagnostics presentation, and decoding/interpretation of normalized readback results.",
+        "RenderFlow node/order truth remains the accepted GpuPreparedWorkGraph; no renderer execution sidecar is recreated.",
+        "Surface acquisition/present policy stays on the separately accepted G7 migration boundary; G5C consumes only the logical present/surface-bound resource relation available at its accepted base.",
+    ],
+
+    ui_cutover: [
+        "Lower one current UI render pass to one GpuRenderOperation containing ordered GpuRenderDraw values for rect/stroke/glyph/viewport-embed/product-surface batches.",
+        "Preserve current pipeline switches, group-zero/group-one bindings, per-batch instance buffers, draw counts, and scissor semantics through generic G5A contracts.",
+        "Do not split one UI render pass merely to simplify backend encoding.",
+        "Delete UI-specific CurrentRenderExecutionBridge pipeline/bind-group/vertex-buffer terminals after the generic path is proven.",
+        "No UI type enters RunenGPU public contracts.",
+    ],
+
+    timing_cutover: [
+        "Express timing through generic render timestamp writes, GpuQueryResolveOperation, and GpuReadbackOperation.",
+        "Delete renderer-owned WGPU query resolve encoding, map_async, Device::poll wait loop, mapped-range ownership, and private timing readback staging lifecycle replaced by G5B.",
+        "Renderer timing policy may decode GpuReadbackBytes into durations using admitted timestamp facts; RunenGPU does not own renderer profiling policy or UI presentation.",
+        "Environment-dependent timestamp availability remains an admitted capability fact and absence is not a generic execution failure.",
+    ],
+
+    capture_cutover: [
+        "Express generic GPU capture transfer through accepted Copy/Readback operations over exact logical resources/regions.",
+        "Delete renderer-owned WGPU map/poll/mapped-range and staging completion lifecycle replaced by G5B.",
+        "RunenRender/Runenwerk retain capture request policy, naming, artifact encoding, persistence and presentation; G5 returns normalized bytes/provenance only.",
+        "Texture row-padding/alignment is private G5B implementation and never leaks into capture policy.",
+    ],
+
+    upload_cutover: [
+        "Migrate staged renderer buffer/texture queue-write operations to exact GpuUploadOperation values at their logical graph positions.",
+        "Delete RendererPendingOperations upload execution authority after every current upload is represented by G5A work.",
+        "No renderer raw queue-write terminal, staging allocator, or duplicated upload pressure owner remains.",
+    ],
+
+    primitive_and_test_cutover: [
+        "Migrate the current environment-dependent primitive runtime fixture from raw CurrentRenderDeviceQueue/CurrentRenderExecutionBridge use to accepted G5B execution/readback APIs or delete it if fully superseded by stronger G5B/G5C representative proofs.",
+        "Preserve deterministic primitive semantics and adapter-unavailable classification; do not keep a raw backend fixture only for historical evidence.",
+        "Migrate examples/benches/tests that exercise ordinary GPU execution through public/typed RunenGPU APIs; retain raw WGPU only inside private backend conformance tests where the backend itself is the subject under test.",
+    ],
+
+    bridge_deletion: [
+        "Delete CurrentRenderDeviceQueue type after its final G5 execution user migrates.",
+        "Delete GpuContext::current_render_device_queue and every source reference.",
+        "Delete CurrentRenderExecutionBridge and all purpose-terminal traits/implementations after generic G5B encoder ownership is complete.",
+        "Delete GpuContext::current_render_execution_bridge and every source reference.",
+        "Do not rename either bridge into a compatibility alias, forwarding module, generic backend callback, execution facade, or native-handle escape hatch.",
+        "Preserve only separately accepted non-G5 temporary backend boundaries, notably the G7 current-host surface migration bridge, and source-guard their distinct ownership.",
+    ],
+
+    final_execution_census: [
+        "CurrentRenderDeviceQueue definitions = 0.",
+        "current_render_device_queue accessor/calls = 0.",
+        "CurrentRenderExecutionBridge definitions = 0.",
+        "current_render_execution_bridge accessor/calls = 0.",
+        "Renderer direct WGPU Device/Queue use for G5 execution = 0.",
+        "Renderer WGPU CommandEncoder creation for G5 execution = 0.",
+        "Renderer queue.submit calls = 0.",
+        "Renderer map_async/Device::poll/mapped-range ownership for G5 readback = 0.",
+        "RenderGpuWorkSidecar execution truth = 0.",
+        "Renderer duplicated executable binding/access truth = 0.",
+        "Public RunenGPU raw WGPU execution/fence/map/poll escape hatches = 0.",
+        "Private RunenGPU G5B execution lifecycle authorities = 1 coherent owner family.",
+    ],
+
+    retained_boundaries: [
+        "RunenRender retains scene/view/material/lighting/visibility/image-formation/planning semantics and lowering policy.",
+        "Runenwerk retains app scheduling, event-loop/yield/blocking policy, shader discovery/hot reload, product recovery, capture artifact encoding/persistence and diagnostics presentation.",
+        "G7 retains reusable surfaces, surface acquisition/configuration/presentation generations, device replacement/reconstruction and product-visible recovery facts.",
+        "G6 remains future proof/performance work and is not pulled into G5C acceptance.",
+    ],
+
+    migration_order: [
+        "First revalidate complete consumer/raw-reach-through census against accepted G5B main.",
+        "Migrate renderer generic compute/render/copy/clear/resolve execution through G5B without changing image semantics.",
+        "Migrate uploads, timing readback, capture readback and UI multi-draw execution.",
+        "Migrate/supersede primitive fixtures, examples and benches.",
+        "Delete renderer pending-operation/raw encoding helpers once no call site remains.",
+        "Delete CurrentRenderExecutionBridge and CurrentRenderDeviceQueue/accessors in the same final cutover change; do not leave a zero-user compatibility shell.",
+        "Run final complete source/reach-through census and exact representative proofs before acceptance.",
+    ],
+
+    deterministic_tests: [
+        "Renderer prepared work contains the same logical compute/render/copy/resolve/upload/readback semantics before and after backend orchestration migration.",
+        "UI one-pass multi-draw ordering, pipeline/binding switches, instance counts and scissor values are preserved exactly.",
+        "Timing query resolve/readback decoding produces the same deterministic normalized query bytes/values for synthetic data.",
+        "Capture readback normalization strips backend padding and renderer artifact policy receives only logical bytes/format/provenance.",
+        "Upload graph position preserves exact initialization/hazard dependencies formerly represented by pending renderer operations.",
+        "Pressure and terminal submission/readback failures propagate through renderer integration without silent frame/capture/timing discard.",
+        "Source guards enforce every final-execution-census zero/one invariant and reject aliases/forwarders.",
+        "No RunenRender/UI/application/product vocabulary enters RunenGPU public contracts during migration.",
+    ],
+
+    environment_dependent_tests: [
+        "Representative renderer frame executes through G5B on an available adapter with no current-render execution bridge/loan.",
+        "Representative UI frame exercises multiple GpuRenderDraw pipelines/bindings/scissors in one pass.",
+        "Representative timing or generic query readback executes when TimestampQuery is admitted.",
+        "Representative texture/buffer capture readback executes asynchronously through G5B.",
+        "One independent non-render G5B consumer remains green after renderer integration.",
+        "Adapter/capability absence is reported separately from successful hardware execution.",
+    ],
+
+    source_guards: [
+        "Exact zero counts for both deleted current-render execution seams/accessors.",
+        "Exact zero renderer Device/Queue/CommandEncoder/queue.submit/map_async/Device::poll execution ownership outside separately classified non-G5 backend code.",
+        "No permanent render execution sidecar or duplicated access/binding authority.",
+        "No public raw WGPU/Naga/backend synchronization or mapped-range escape.",
+        "No new compatibility module/alias forwarding deleted bridge or raw execution authority.",
+        "G7 surface bridge remains distinct and cannot be used as a generic G5 Device/Queue/resource execution escape.",
+    ],
+
+    stop_conditions: [
+        "No G6 performance/offscreen expansion beyond proofs required to establish the accepted G5 boundary.",
+        "No G7 reusable surface/device reconstruction implementation or product recovery policy.",
+        "No RunenRender image-formation redesign, broad renderer rearchitecture unrelated to execution ownership, new executor/runtime, second backend, multi-queue scheduler, graph optimizer, stable persisted execution format, broad import API, or native interop.",
+        "Stop for a new owner decision if any remaining raw renderer backend use cannot be classified as G5 execution, G7 surface migration, or private backend conformance.",
+    ],
+
+    validation: [
+        "Focused renderer/UI/timing/capture integration tests and final source guards.",
+        "Complete raw-WGPU/current-render execution reach-through and deletion census.",
+        "Representative render plus independent non-render environment-dependent proof when adapters/capabilities are available.",
+        "cargo validate",
+        "git diff --check",
+        "CI=true pnpm --dir docs-site build",
+        "Exact-head CI and Documentation Build must succeed before acceptance.",
+    ],
+
+    acceptance: [
+        "All ordinary renderer/UI/timing/capture G5 execution uses accepted RunenGPU prepare/submit/progress/readback authority.",
+        "Both residual G4/G5 current-render execution seams and their accessors are deleted with zero compatibility aliases.",
+        "Renderer has no raw Device/Queue/CommandEncoder/submit/map/poll authority for G5 execution.",
+        "One generic execution lifecycle serves representative render and independent non-render consumers.",
+        "G7 surface ownership remains separate and G6/G7 are not implemented prematurely.",
+        "Accepted-main validation must pass before G5 is marked complete and G6 planning may become active.",
+    ],
+)
