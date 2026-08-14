@@ -17,7 +17,7 @@ impl Renderer {
     /// First half of the renderer's two-phase integration: realize every G4C1/G4C2/G4C3
     /// dependency while no raw device/queue operation loan is live.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn realize_compiled_pass(
+    pub(in crate::plugins::render::renderer::render_flow) fn realize_compiled_pass(
         &mut self,
         context: &GpuContext,
         frame_texture: &Texture,
@@ -272,7 +272,7 @@ impl Renderer {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn encode_compiled_pass(
+    pub(in crate::plugins::render::renderer::render_flow) fn encode_compiled_pass(
         &mut self,
         context: &GpuContext,
         encoder: &mut CommandEncoder,
