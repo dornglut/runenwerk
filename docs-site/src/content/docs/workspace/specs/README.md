@@ -5,13 +5,14 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-14
 related_docs:
   - ../authority-model.md
   - ../engineering-workflow.md
   - ../operating-model.md
   - ./phase-implementation-spec.md
   - ../../design/active/runengpu-g4b-contracts-g4c-delivery-design.md
+  - ../../design/active/runengpu-g5-execution-lifecycle-design.md
 ---
 
 # Workspace Specs
@@ -57,9 +58,9 @@ old lifecycle string.
 ## Current use
 
 RON phase specs are retained where they contain useful bounded implementation detail,
-including the RunenGPU G4 family. The current RunenGPU implementation slice and exact
-accepted base are determined from the owning issue and current roadmap, not from stale
-RON lifecycle fields.
+including the RunenGPU G4 and G5 families. The current RunenGPU implementation slice
+and exact accepted base are determined from the owning issue and current roadmap, not
+from stale RON lifecycle fields.
 
 Older RunenECS, RunenSDF and UI RON files may remain as historical handoff snapshots
 until their owning documentation cleanup decides whether the detail is still useful.
