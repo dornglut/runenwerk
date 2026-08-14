@@ -840,13 +840,15 @@ impl RendererPendingOperations {
         queue: &Queue,
         upload: &RendererPendingBufferUpload,
     ) -> Result<()> {
-        context.current_render_execution_bridge().for_buffer_upload(
-            &upload.buffer,
-            WriteRendererBuffer {
-                queue,
-                contents: &upload.bytes,
-            },
-        )?;
+        context
+            .current_render_execution_bridge()
+            .for_buffer_upload(
+                &upload.buffer,
+                WriteRendererBuffer {
+                    queue,
+                    contents: &upload.bytes,
+                },
+            )?;
         Ok(())
     }
 }
@@ -963,8 +965,7 @@ fn group_stroke_batches_ordered(
             )
             && batch.scissor == scissor
             && (batch.order.last_primitive_order == instance.primitive_order
-                || batch.order.last_primitive_order.saturating_add(1)
-                    == instance.primitive_order)
+                || batch.order.last_primitive_order.saturating_add(1) == instance.primitive_order)
         {
             batch.instances.push(instance.raw);
             batch.order.last_primitive_order = instance.primitive_order;
