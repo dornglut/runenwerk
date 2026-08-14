@@ -11,9 +11,7 @@ use crate::plugins::gpu::{
 };
 use crate::plugins::render::graph::{CompiledDrawSource, CompiledResourceRef};
 use crate::plugins::render::pipelines::FlowPassPipelineDescriptor;
-use crate::plugins::render::{
-    RenderDepthPolicy, RenderIndirectDrawArgsKind, RenderShaderConstant,
-};
+use crate::plugins::render::{RenderDepthPolicy, RenderIndirectDrawArgsKind, RenderShaderConstant};
 
 impl Renderer {
     /// First half of the renderer's two-phase integration: realize every G4C1/G4C2/G4C3
@@ -168,15 +166,13 @@ impl Renderer {
                     runtime_resources,
                 )?;
                 let pipeline = match &bindings.pipeline_key.pipeline_descriptor {
-                    FlowPassPipelineDescriptor::Render(descriptor) => {
-                        PreparedFlowPipeline::Render(pollster::block_on(
-                            context.realize_render_pipeline(
-                                descriptor,
-                                &bindings.program,
-                                &bindings.pipeline_layout,
-                            ),
-                        )?)
-                    }
+                    FlowPassPipelineDescriptor::Render(descriptor) => PreparedFlowPipeline::Render(
+                        pollster::block_on(context.realize_render_pipeline(
+                            descriptor,
+                            &bindings.program,
+                            &bindings.pipeline_layout,
+                        ))?,
+                    ),
                     FlowPassPipelineDescriptor::Compute(_) => {
                         bail!(
                             "fullscreen pass '{}' resolved a compute pipeline descriptor",
@@ -247,15 +243,13 @@ impl Renderer {
                     runtime_resources,
                 )?;
                 let pipeline = match &bindings.pipeline_key.pipeline_descriptor {
-                    FlowPassPipelineDescriptor::Render(descriptor) => {
-                        PreparedFlowPipeline::Render(pollster::block_on(
-                            context.realize_render_pipeline(
-                                descriptor,
-                                &bindings.program,
-                                &bindings.pipeline_layout,
-                            ),
-                        )?)
-                    }
+                    FlowPassPipelineDescriptor::Render(descriptor) => PreparedFlowPipeline::Render(
+                        pollster::block_on(context.realize_render_pipeline(
+                            descriptor,
+                            &bindings.program,
+                            &bindings.pipeline_layout,
+                        ))?,
+                    ),
                     FlowPassPipelineDescriptor::Compute(_) => {
                         bail!(
                             "graphics pass '{}' resolved a compute pipeline descriptor",
@@ -1241,14 +1235,17 @@ impl GraphicsPassOperation<'_> {
                 byte_offset,
                 indexed,
             } => {
-                if let Err(error) = context.current_render_execution_bridge().for_indirect_buffer(
-                    buffer,
-                    DrawIndirect {
-                        pass: &mut pass,
-                        byte_offset,
-                        indexed,
-                    },
-                ) {
+                if let Err(error) = context
+                    .current_render_execution_bridge()
+                    .for_indirect_buffer(
+                        buffer,
+                        DrawIndirect {
+                            pass: &mut pass,
+                            byte_offset,
+                            indexed,
+                        },
+                    )
+                {
                     *result = Err(error.into());
                 }
             }
@@ -1264,11 +1261,8 @@ struct EncodeTimestampedGraphicsPass<'a> {
 }
 impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedGraphicsPass<'_> {
     fn write_timestamps(self, query_set: &QuerySet) {
-        self.operation.encode(
-            self.context,
-            Some((query_set, self.indices)),
-            self.result,
-        );
+        self.operation
+            .encode(self.context, Some((query_set, self.indices)), self.result);
     }
 }
 
@@ -1286,7 +1280,8 @@ struct SetIndexBuffer<'a, 'pass> {
 }
 impl CurrentRenderIndexBufferTerminal for SetIndexBuffer<'_, '_> {
     fn use_index_buffer(self, buffer: &Buffer) {
-        self.pass.set_index_buffer(buffer.slice(..), IndexFormat::Uint32);
+        self.pass
+            .set_index_buffer(buffer.slice(..), IndexFormat::Uint32);
     }
 }
 struct DrawIndirect<'a, 'pass> {

@@ -5,20 +5,21 @@ use super::resource_descriptors::{
 use super::*;
 use crate::plugins::gpu::{
     CurrentRenderPipelineBindGroupsTerminal, CurrentRenderRenderPipelinesTerminal,
-    CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal, GpuBindGroupLayoutDescriptor,
-    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuBlendMode,
-    GpuBufferUsage, GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-    GpuEntryPointDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMemoryIntent,
-    GpuMultisampleStateDescriptor, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
-    GpuProgramDescriptor, GpuProgramInterfaceDescriptor, GpuProgramSourceKey,
-    GpuProgramSourceProvenance, GpuRealizedBindGroup, GpuRealizedBindGroupLayout,
-    GpuRealizedRenderPipeline, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
-    GpuRenderPipelineStateDescriptor, GpuResourceLifetime, GpuRuntimeBindingResource,
-    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding,
-    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuSpecializationSchema,
-    GpuSpecializationValueSet, GpuTextureFormat, GpuTextureSampleClass, GpuTextureUsage,
-    GpuTextureViewDimension, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-    GpuVertexInputStateDescriptor, GpuVertexStepMode,
+    CurrentRenderTimestampWritesTerminal, CurrentRenderVertexBufferTerminal,
+    GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
+    GpuBindingProvenance, GpuBlendMode, GpuBufferUsage, GpuCapabilityRequirements,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuEntryPointDescriptor, GpuEntryPointName,
+    GpuFragmentOutputStateDescriptor, GpuMemoryIntent, GpuMultisampleStateDescriptor,
+    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor, GpuProgramDescriptor,
+    GpuProgramInterfaceDescriptor, GpuProgramSourceKey, GpuProgramSourceProvenance,
+    GpuRealizedBindGroup, GpuRealizedBindGroupLayout, GpuRealizedRenderPipeline,
+    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
+    GpuResourceLifetime, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
+    GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuShaderStage,
+    GpuShaderStages, GpuSpecializationSchema, GpuSpecializationValueSet, GpuTextureFormat,
+    GpuTextureSampleClass, GpuTextureUsage, GpuTextureViewDimension, GpuVertexAttribute,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode,
 };
 use std::num::NonZeroU64;
 
@@ -665,13 +666,15 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_execution_bridge().for_vertex_buffer(
-                        &batch.instance_buffer.realized,
-                        DrawUiInstances {
-                            pass: &mut pass,
-                            instance_count: batch.instance_count,
-                        },
-                    )?;
+                    context
+                        .current_render_execution_bridge()
+                        .for_vertex_buffer(
+                            &batch.instance_buffer.realized,
+                            DrawUiInstances {
+                                pass: &mut pass,
+                                instance_count: batch.instance_count,
+                            },
+                        )?;
                 }
                 UiPreparedDrawCommand::Stroke(index) => {
                     let Some(stroke_pass) = self.stroke_pass.as_ref() else {
@@ -691,13 +694,15 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_execution_bridge().for_vertex_buffer(
-                        &batch.instance_buffer.realized,
-                        DrawUiInstances {
-                            pass: &mut pass,
-                            instance_count: batch.instance_count,
-                        },
-                    )?;
+                    context
+                        .current_render_execution_bridge()
+                        .for_vertex_buffer(
+                            &batch.instance_buffer.realized,
+                            DrawUiInstances {
+                                pass: &mut pass,
+                                instance_count: batch.instance_count,
+                            },
+                        )?;
                 }
                 UiPreparedDrawCommand::ViewportEmbed(index) => {
                     let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() else {
@@ -732,13 +737,15 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_execution_bridge().for_vertex_buffer(
-                        &batch.instance_buffer.realized,
-                        DrawUiInstances {
-                            pass: &mut pass,
-                            instance_count: batch.instance_count,
-                        },
-                    )?;
+                    context
+                        .current_render_execution_bridge()
+                        .for_vertex_buffer(
+                            &batch.instance_buffer.realized,
+                            DrawUiInstances {
+                                pass: &mut pass,
+                                instance_count: batch.instance_count,
+                            },
+                        )?;
                 }
                 UiPreparedDrawCommand::ProductSurface(index) => {
                     let Some(product_surface_pass) = self.product_surface_pass.as_ref() else {
@@ -768,13 +775,15 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_execution_bridge().for_vertex_buffer(
-                        &batch.instance_buffer.realized,
-                        DrawUiInstances {
-                            pass: &mut pass,
-                            instance_count: batch.instance_count,
-                        },
-                    )?;
+                    context
+                        .current_render_execution_bridge()
+                        .for_vertex_buffer(
+                            &batch.instance_buffer.realized,
+                            DrawUiInstances {
+                                pass: &mut pass,
+                                instance_count: batch.instance_count,
+                            },
+                        )?;
                 }
                 UiPreparedDrawCommand::Glyph(index) => {
                     let Some(glyph_pass) = self.glyph_pass.as_ref() else {
@@ -798,13 +807,15 @@ impl Renderer {
                         batch.scissor.2,
                         batch.scissor.3,
                     );
-                    context.current_render_execution_bridge().for_vertex_buffer(
-                        &batch.instance_buffer.realized,
-                        DrawUiInstances {
-                            pass: &mut pass,
-                            instance_count: batch.instance_count,
-                        },
-                    )?;
+                    context
+                        .current_render_execution_bridge()
+                        .for_vertex_buffer(
+                            &batch.instance_buffer.realized,
+                            DrawUiInstances {
+                                pass: &mut pass,
+                                instance_count: batch.instance_count,
+                            },
+                        )?;
                 }
             }
         }
@@ -1019,13 +1030,13 @@ fn ui_pipeline_attributes(kind: UiPipelineKind) -> Vec<GpuVertexAttribute> {
             GpuVertexAttribute::new(2, 16, GpuVertexFormat::Float32x4),
             GpuVertexAttribute::new(3, 32, GpuVertexFormat::Float32),
         ],
-        UiPipelineKind::Glyph
-        | UiPipelineKind::ViewportEmbed
-        | UiPipelineKind::ProductSurface => vec![
-            GpuVertexAttribute::new(0, 0, GpuVertexFormat::Float32x4),
-            GpuVertexAttribute::new(1, 16, GpuVertexFormat::Float32x4),
-            GpuVertexAttribute::new(2, 32, GpuVertexFormat::Float32x4),
-        ],
+        UiPipelineKind::Glyph | UiPipelineKind::ViewportEmbed | UiPipelineKind::ProductSurface => {
+            vec![
+                GpuVertexAttribute::new(0, 0, GpuVertexFormat::Float32x4),
+                GpuVertexAttribute::new(1, 16, GpuVertexFormat::Float32x4),
+                GpuVertexAttribute::new(2, 32, GpuVertexFormat::Float32x4),
+            ]
+        }
     }
 }
 

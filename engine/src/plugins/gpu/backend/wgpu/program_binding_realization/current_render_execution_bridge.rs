@@ -329,14 +329,16 @@ impl CurrentRenderExecutionBridge<'_> {
         &self,
         resource: &GpuRealizedBuffer,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.resource_state.validate_execution_bridge_buffer(resource)
+        self.resource_state
+            .validate_execution_bridge_buffer(resource)
     }
 
     fn validate_texture(
         &self,
         resource: &GpuRealizedTexture,
     ) -> Result<(), GpuResourceRealizationError> {
-        self.resource_state.validate_execution_bridge_texture(resource)
+        self.resource_state
+            .validate_execution_bridge_texture(resource)
     }
 
     fn validate_texture_view(

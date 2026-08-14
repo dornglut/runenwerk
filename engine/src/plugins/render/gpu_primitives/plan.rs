@@ -1464,10 +1464,12 @@ mod tests {
 
     impl CurrentRenderComputePipelineTerminal for EncodePrimitivePipeline<'_> {
         fn use_compute_pipeline(self, pipeline: &wgpu::ComputePipeline) {
-            let mut pass = self.encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("gpu_primitive_runtime_test_pass"),
-                timestamp_writes: None,
-            });
+            let mut pass = self
+                .encoder
+                .begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("gpu_primitive_runtime_test_pass"),
+                    timestamp_writes: None,
+                });
             pass.set_pipeline(pipeline);
             self.context
                 .current_render_execution_bridge()

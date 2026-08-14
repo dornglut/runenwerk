@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
-use tokio::sync::Notify;
+use tokio::sync::watch;
 
 pub(super) struct SingleFlightRegistry<K, R> {
     ready: HashMap<K, Arc<R>>,
@@ -37,16 +37,13 @@ pub(super) enum Reservation<K: Clone + Eq + Hash, R> {
 }
 
 pub(super) struct InFlight<R> {
-    outcome: Mutex<InFlightOutcome<R>>,
-    notify: Notify,
+    outcome: watch::Sender<InFlightOutcome<R>>,
 }
 
 impl<R> Default for InFlight<R> {
     fn default() -> Self {
-        Self {
-            outcome: Mutex::new(InFlightOutcome::Pending),
-            notify: Notify::new(),
-        }
+        let (outcome, _receiver) = watch::channel(InFlightOutcome::Pending);
+        Self { outcome }
     }
 }
 
@@ -68,26 +65,20 @@ impl<R> Clone for InFlightOutcome<R> {
 
 impl<R> InFlight<R> {
     pub(super) async fn wait(&self) -> InFlightOutcome<R> {
+        let mut receiver = self.outcome.subscribe();
         loop {
-            let notified = self.notify.notified();
-            let outcome = self
-                .outcome
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
+            let outcome = receiver.borrow_and_update().clone();
             if !matches!(outcome, InFlightOutcome::Pending) {
                 return outcome;
             }
-            notified.await;
+            if receiver.changed().await.is_err() {
+                return InFlightOutcome::Abandoned;
+            }
         }
     }
 
     fn complete(&self, outcome: InFlightOutcome<R>) {
-        *self
-            .outcome
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = outcome;
-        self.notify.notify_waiters();
+        self.outcome.send_replace(outcome);
     }
 }
 
@@ -172,7 +163,10 @@ where
         rejected = true;
     }
     if let Some(attempt) = locked.in_flight.get(&key).cloned() {
-        return Ok((Reservation::Waiter(attempt), PipelineCacheObservation::Hit));
+        return Ok((
+            Reservation::Waiter(attempt),
+            PipelineCacheObservation::Hit,
+        ));
     }
     if locked.total_len() >= max_records.get() {
         locked.collect_lookup_only();
@@ -233,7 +227,8 @@ mod tests {
             Reservation::Owner(owner) => owner,
             Reservation::Ready(_) | Reservation::Waiter(_) => panic!("first caller owns"),
         };
-        let (attempt, observation) = reserve(&registry, max, 7, "compute 7", |_, _| true).unwrap();
+        let (attempt, observation) =
+            reserve(&registry, max, 7, "compute 7", |_, _| true).unwrap();
         assert_eq!(observation, PipelineCacheObservation::Hit);
         let attempt = match attempt {
             Reservation::Waiter(attempt) => attempt,
@@ -253,7 +248,10 @@ mod tests {
         let waker = Waker::from(Arc::clone(&counter));
         let mut context = Context::from_waker(&waker);
         let mut waiter = std::pin::pin!(attempt.wait());
-        assert!(matches!(waiter.as_mut().poll(&mut context), Poll::Pending));
+        assert!(matches!(
+            waiter.as_mut().poll(&mut context),
+            Poll::Pending
+        ));
         drop(owner);
         assert!(counter.0.load(Ordering::SeqCst) > 0);
         assert!(matches!(
@@ -268,11 +266,37 @@ mod tests {
     }
 
     #[test]
+    fn completion_is_retained_when_it_precedes_waiter_polling() {
+        let attempt = InFlight::<u32>::default();
+        attempt.complete(InFlightOutcome::Complete(Ok(Arc::new(11))));
+
+        let counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
+        let waker = Waker::from(counter);
+        let mut context = Context::from_waker(&waker);
+        let mut waiter = std::pin::pin!(attempt.wait());
+        let outcome = waiter.as_mut().poll(&mut context);
+
+        match outcome {
+            Poll::Ready(InFlightOutcome::Complete(Ok(record))) => assert_eq!(*record, 11),
+            Poll::Ready(InFlightOutcome::Complete(Err(error))) => {
+                panic!("completion unexpectedly failed: {error}")
+            }
+            Poll::Ready(InFlightOutcome::Pending) => panic!("pending is not terminal"),
+            Poll::Ready(InFlightOutcome::Abandoned) => panic!("completion was not abandoned"),
+            Poll::Pending => panic!("stored completion must be observed without another wake"),
+        }
+    }
+
+    #[test]
     fn incompatible_ready_candidate_is_rejected_then_realized_ordinally() {
         let registry = Arc::new(Mutex::new(SingleFlightRegistry::<u32, u32>::default()));
         let max = NonZeroUsize::new(2).unwrap();
         let stale = Arc::new(8_u32);
-        registry.lock().unwrap().ready.insert(7, Arc::clone(&stale));
+        registry
+            .lock()
+            .unwrap()
+            .ready
+            .insert(7, Arc::clone(&stale));
 
         let (reservation, observation) =
             reserve(&registry, max, 7, "compute 7", |key, record| key == record).unwrap();
