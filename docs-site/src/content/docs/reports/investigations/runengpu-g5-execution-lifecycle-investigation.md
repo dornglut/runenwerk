@@ -21,23 +21,23 @@ related_docs:
 
 ## Question
 
-What execution, transfer, progress, completion, readback, and retirement authority remains after accepted G4, and what is the smallest future-transferable G5 design that can delete the remaining renderer/raw-WGPU execution seams without duplicating G3 work semantics or absorbing RunenRender image-formation policy?
+What execution, transfer, progress, completion, readback, pressure and retirement authority remains after accepted G4, and what is the smallest future-transferable G5 design that can delete the remaining renderer/raw-WGPU execution seams without duplicating G3 work semantics or absorbing RunenRender/G7 policy?
 
-## Resolved baseline and authorization
+## Accepted baseline and authorization
 
-The exact accepted G4 planning base is:
+Exact accepted G4 base:
 
 ```text
 ed2bcc2dbe4a302032c2ee53b6972facba7f940e
 ```
 
-That revision is the guarded squash merge of G4C3 PR `#242`. Automatic push CI `#648` and Documentation Build `#435` succeeded on that exact revision. Issues `#214` and `#188` are accepted and closed.
+That revision is the guarded squash acceptance of G4C3 PR `#242`; exact push/main CI and Documentation Build succeeded. Issues `#214` and `#188` are accepted/closed.
 
-Issue `#284` authorizes only G5 investigation, design, implementation specifications, and later implementation decomposition. It does not authorize G5 Rust implementation.
+Issue `#284` authorizes investigation/design/specification only. No G5 Rust implementation is authorized by this report.
 
 ## Evidence inspected
 
-The census covered accepted source and authority under:
+Accepted source census covered:
 
 ```text
 engine/src/plugins/gpu/api/**
@@ -47,41 +47,43 @@ engine/src/plugins/render/graph/execution_plan.rs
 engine/src/plugins/render/renderer/**
 engine/tests/gpu_g4c1_cutover_guards.rs
 engine/Cargo.toml
-docs-site/src/content/docs/design/active/runengpu-architecture-design.md
-docs-site/src/content/docs/workspace/planning/roadmap.md
 ```
 
-Upstream behavior was checked against the pinned WGPU 27.0.1 source plus WebGPU, Vulkan, and D3D12 synchronization contracts. The comparison is used to reject backend-shaped public APIs, not to authorize a second backend in G5.
+Authority census covered the RunenGPU architecture, G3/G4 designs/specifications, repository-family architecture, ADR 0015, and durable roadmap.
 
-## Accepted G4 backend boundary
+Backend behavior was checked against pinned WGPU 27.0.1 and primary WebGPU/Vulkan/D3D12 synchronization semantics. Those comparisons constrain the abstraction; they do not authorize another backend in G5.
 
-`WgpuContextState` is the sole private owner of WGPU `Instance`, `Adapter`, `Device`, and `Queue`, health/error attribution, and G4 realization state.
+# Accepted G4 execution boundary
 
-Two temporary G5 migration seams remain.
+## One private backend owner
+
+`WgpuContextState` remains sole private owner of WGPU `Instance`, `Adapter`, `Device`, `Queue`, health/error attribution, and G4 realization state.
+
+Two explicitly temporary G5 migration seams remain.
 
 ### `CurrentRenderDeviceQueue`
 
-`engine/src/plugins/gpu/backend/wgpu/state.rs` defines one non-reentrant borrowing loan containing only:
+Defined inside `engine/src/plugins/gpu/backend/wgpu/state.rs` as one non-reentrant raw operation loan containing only:
 
 ```text
 &wgpu::Device
 &wgpu::Queue
-error-attribution gate guard
+error-attribution guard
 ```
 
-It owns no G4 realization. Its accepted comment assigns migration/deletion of remaining execution operations to G5.
+It owns no G4 realization. Accepted comments assign migration/deletion of its remaining execution operations to G5.
 
-The G4 structural guard proves production renderer execution has exactly one `current_render_device_queue()` interval and that it begins only after all G4C1/G4C2/G4C3 realization has completed.
+The accepted G4 structural guard proves production renderer execution has exactly one `current_render_device_queue()` interval and that it begins only after G4C1/G4C2/G4C3 realization.
 
 ### `CurrentRenderExecutionBridge`
 
-`engine/src/plugins/gpu/backend/wgpu/program_binding_realization/current_render_execution_bridge.rs` is the sole lexical bridge for already-realized private objects. It validates and temporarily lends buffers, textures/views, query sets, bind groups, compute/render pipelines, and purpose-typed resource references into encoding callbacks.
+`engine/src/plugins/gpu/backend/wgpu/program_binding_realization/current_render_execution_bridge.rs` is the sole lexical bridge for already-realized private objects. It validates and temporarily lends buffers, texture views, query sets, bind groups, compute/render pipelines, and purpose-typed resource references into the unchanged renderer encoder.
 
-It creates no backend object, returns no reusable backend reference, and is a deletion target rather than a permanent public abstraction.
+It creates no backend objects and returns no reusable backend references. It is a deletion target, not a future public API.
 
 ## Current renderer phase two
 
-`engine/src/plugins/render/renderer/render_flow/execute.rs` has a clean G4/G5 phase boundary:
+`engine/src/plugins/render/renderer/render_flow/execute.rs` has a clean G4/G5 split:
 
 ```text
 phase 1
@@ -91,17 +93,19 @@ phase 1
 phase 2
   current_render_device_queue()
   create command encoder
-  apply staged buffer/texture uploads
-  encode realized compute/render/copy/query/timestamp work
+  apply staged uploads
+  encode compute/render/copy/query/timestamp/readback work
   queue.submit(...)
   synchronously drive timing/capture readback helpers
 ```
 
-The remaining problem is therefore concentrated: one raw orchestration interval plus distributed execution-bridge callbacks. G5 does not need to discover many independent queue owners.
+G5 therefore has a concentrated migration: one raw operation interval plus distributed execution-bridge callbacks, not many independent queue owners.
 
-## G3 already owns the GPU work model
+# G3/G4 already contain almost all logical execution semantics
 
-`GpuPreparedWorkGraph` is already the immutable deterministic execution authority. It owns prepared nodes, dependencies, topological order, graph-entry initialization, merged requirements, outputs, and diagnostics.
+## G3 is the work authority
+
+`GpuPreparedWorkGraph` already owns immutable deterministic nodes, dependencies, topological order, graph-entry initialization, hazards, requirements, outputs and diagnostics.
 
 `GpuWorkOperation` already covers:
 
@@ -114,275 +118,337 @@ Resolve(QueryResolve)
 Present
 ```
 
-The operation contracts already contain dispatch dimensions, attachments/load-store/resolve semantics, direct/indexed/indirect draw intent, copy regions/layouts, query ranges, and logical present source. Copy/clear/render/resolve/present operations derive their resource accesses directly.
+Its contracts already carry dispatch dimensions, render attachments/load-store/resolve semantics, direct/indexed/indirect draw intent, copy regions/layouts, query ranges and logical present source. Most operations already derive their resource accesses.
 
-G5 must not introduce a second public command graph, executable command list, render-pass IR, or backend-neutral command encoder that repeats these semantics.
+A second public command graph/IR would duplicate accepted G3 authority.
 
-## The temporary render sidecar is no longer a valid long-term boundary
+## G4B/G4C3 now close the semantic gap G3 intentionally left
 
-`engine/src/plugins/render/adapters/gpu_work.rs` explicitly describes `RenderGpuWorkSidecar` as a temporary G3 bridge. It maps prepared node IDs to `CompiledPassExecutionPlan` payload while declaring the prepared graph authoritative for access, initialization, hazards, requirements, and ordering.
+G3 was implemented before complete G4 logical contracts existed. Accepted G4 now supplies:
 
-`CompiledPassExecutionPlan` mixes several ownership domains:
+- complete backend-neutral `GpuComputePipelineDescriptor`;
+- complete backend-neutral `GpuRenderPipelineDescriptor`;
+- exact typed `GpuRuntimeBindingValue` values over logical resources;
+- static buffer range plus optional per-binding dynamic offset in `GpuRuntimeBufferBinding`;
+- structural/device binding validation and private bind-group realization;
+- opaque private pipeline realization.
 
-- RunenRender planning/provenance (`RenderPassId`, feature IDs, view masks, authoring indices);
-- G4 pipeline meaning (program, specialization, raster/vertex state);
-- generic execution bindings (bind groups, vertex/index/indirect resources);
-- generic copy/query work already represented by G3;
-- present/surface meaning deferred to G7.
+Therefore G5 does not need a permanent node-keyed execution-binding sidecar. Compute/render operations can become logically executable using accepted G4 descriptors while G5 preparation privately realizes them.
 
-Moving this enum into RunenGPU would therefore import renderer semantics and duplicate G3/G4 authority.
+# Temporary renderer sidecar disposition
 
-## G4B now provides the missing backend-neutral execution contracts
+`RenderGpuWorkSidecar` is explicitly documented as a temporary G3 bridge. It maps prepared node IDs to `CompiledPassExecutionPlan` only because G3 predated G4/G5 execution ownership.
 
-G3 predated G4B. Accepted G4B/G4C3 now provide complete logical contracts that can close the G3 execution gap without a permanent sidecar:
+`CompiledPassExecutionPlan` mixes:
 
-- `GpuComputePipelineDescriptor` is a complete backend-neutral compute pipeline contract with semantic equality/hash;
-- `GpuRenderPipelineDescriptor` is a complete backend-neutral render pipeline contract with semantic equality/hash and exact vertex/fragment state;
-- `GpuRuntimeBindingValue` names typed logical buffer/texture-view/sampler resources by validated binding key;
-- `GpuValidatedBindGroupBindings` validates exact layouts, resource types, dynamic/static offsets, ranges, texture format/dimension/sample/storage facts, sampler class, and admitted device alignment/format facts.
+- RunenRender provenance/planning (`RenderPassId`, feature IDs, view masks, authoring indices);
+- G4 pipeline/program/specialization/raster meaning;
+- generic bindings/vertex/index/indirect execution state;
+- copy/query work already represented by G3;
+- logical Present that physically belongs to the G7 surface boundary.
 
-The durable clean cutover is therefore to make compute/render `GpuWorkOperation` values logically executable and let G5 preparation privately realize those contracts.
+Moving this enum into RunenGPU would import renderer semantics and duplicate G3/G4 truth. The clean cutover is to make generic work complete and delete sidecar execution authority.
 
-## Required executable logical work closure
+# Executable compute/render closure
 
-### Compute
+## Compute
 
-A compute operation needs exactly:
+Required generic semantics reduce to:
 
 ```text
 GpuComputePipelineDescriptor
-runtime binding values grouped by logical bind-group layout
-dispatch size
+runtime binding set
+dispatch
 ```
 
-The runtime binding declarations and pipeline interface are sufficient to derive buffer/texture/sampler resource accesses. Renderer-authored duplicate access lists must disappear.
+Runtime binding declarations are sufficient to derive bound-resource accesses and requirements.
 
-### Render
+## Render
 
-One render pass can contain many draws with different pipelines and bindings. Current UI is the decisive proof: one pass switches among rect, stroke, glyph, viewport-embed, and product-surface pipelines; changes bind groups and instance buffers; and sets a scissor per draw.
+Current UI proves one render pass can legitimately contain multiple draws with different pipelines/bindings/scissors. Splitting each draw into a new render-pass node would alter load/store/pass structure and add avoidable backend overhead.
 
-Splitting those batches into separate graph nodes would alter pass structure and add avoidable load/store/encoder overhead.
-
-The generic logical shape must therefore be:
+Therefore the generic shape must support:
 
 ```text
 GpuRenderOperation
   attachments
-  draws: [GpuRenderDraw]
-  timestamp writes
+  [GpuRenderDraw]
+  timestamps
 
 GpuRenderDraw
-  GpuRenderPipelineDescriptor
-  runtime binding groups
-  vertex buffer bindings by slot/range
+  pipeline descriptor
+  runtime binding set
+  vertex buffer slot/range bindings
   optional index buffer binding + normalized index format
-  GpuDrawIntent
+  draw intent
   explicit dynamic draw state
 ```
 
-Dynamic state must include the backend-neutral equivalents of viewport, scissor, blend constant, and stencil reference. Defaults are explicit semantic defaults rather than inherited hidden backend state. Private encoding may elide redundant `set_*` calls.
+Dynamic state required by current/future portable render-pass semantics is viewport, scissor, blend constant and stencil reference, each with explicit semantic defaults. The backend may elide redundant setter calls; callers never depend on inherited hidden state.
 
-Normalized index format needs only the portable `Uint16` / `Uint32` vocabulary used by WebGPU/WGPU today. It is logical draw state, not a WGPU type.
+Existing `GpuDrawIntent::Indirect` already owns indirect argument buffer/range and indexed flag. Multi-draw-indirect/mesh-shader vocabulary is not required by current consumers and remains YAGNI.
 
-## Upload and readback must participate in the graph
+# Transfer operations must remain inside the graph
 
-An initial submission-only transfer design was rejected during this investigation.
+An early possibility was to treat uploads/readbacks only as submission-prefix/suffix concerns. That was rejected after rechecking G3 initialization/hazard authority.
 
-`GpuPreparedWorkGraph` is the sole initialization and hazard authority. Hiding an upload outside the graph could initialize or overwrite a logical resource without G3 seeing the write, forcing either weakened initialization proof or a second transfer-side access authority.
-
-G5A should therefore extend `GpuWorkOperation` with typed transfer operations:
+A hidden upload could initialize or overwrite a resource without G3 seeing the write, forcing either weakened initialization proof or a second transfer access model. The correct design is therefore:
 
 ```text
-Upload
-Readback
+GpuWorkOperation::Upload
+GpuWorkOperation::Readback
 ```
 
-### Upload semantics
+Their **logical** source/destination access is graph authority; physical staging/mapping stays private G5 implementation.
 
-`GpuUploadOperation` is a host-data-to-GPU write at an exact graph point. It uses immutable checked `PreparedGpuData<TransferData>` or a purpose-specific normalized transfer payload plus an exact buffer/texture destination region.
+## Immutable transfer payload identity — final decision
 
-The logical operation does not choose queue-write versus encoded staging-copy mechanics. Backend-private lowering may use a queue write only when its ordering is equivalent; otherwise it uses private staging/copy work. The graph sees one exact destination write either way.
+A second intermediate idea considered hashing transfer bytes and caching a content fingerprint. That is also rejected as the primary operation-identity mechanism.
 
-Large transfer bytes must not become stable identity or be repeatedly rehashed as a hidden hot-path cost. Any precomputed content fingerprint is an in-process hashing accelerator only; equality still confirms complete semantic data and no persistence/wire/cache identity is implied.
+Reason: `GpuWorkOperation` participates in equality/order/hash. Repeatedly traversing large upload bytes would make graph hashing/sorting scale with payload size; using a process-random digest for ordering would undermine deterministic order; treating a digest as stable identity would also overreach into persistence/content-addressing policy.
 
-### Readback semantics
-
-`GpuReadbackOperation` is a GPU-to-host observation point with an exact logical source region and an opaque process-local `GpuReadbackId` allocated by RunenGPU authoring.
-
-The graph records only the source read and readback identity. G5 privately allocates staging, encodes the copy at the operation's exact position, maps only after the submitted work permits it, normalizes/removes backend padding, and publishes `GpuReadbackBytes` asynchronously.
-
-A readback operation does not permit CPU data to influence later nodes in the same GPU graph. CPU feedback is a submission boundary: consume the result, build/prepare subsequent work, then submit again.
-
-## Existing data contracts already support G5 transfers
-
-`PreparedGpuData<TransferData>` is immutable Arc-backed checked transfer data with explicit layout/provenance. `GpuReadbackBytes` is already documented as normalized bytes returned by a future G5 readback operation, with checked layout, optional texture format, and provenance.
-
-G5 should extend these contracts rather than expose raw mapped ranges or renderer-owned staging buffers.
-
-## Progress and completion are not one backend fence API
-
-The pinned WGPU 27 path exposes backend-specific mechanisms:
-
-- queue submission returns a WGPU submission index;
-- queue completion callbacks require runtime progress;
-- native WGPU progress can be driven through device/instance polling;
-- WebGPU progress is browser/event-loop driven and WGPU `Device::poll` is not a universal execution primitive;
-- `map_async` completes separately and mapped buffers cannot simultaneously be submitted for GPU access.
-
-WebGPU deliberately gives limited ordering guarantees between different promise classes. Submission completion and mapping/readback completion must therefore remain separate RunenGPU lifecycle facts.
-
-Vulkan and D3D12 reinforce the same abstraction conclusion: queue execution is asynchronous and host-visible completion uses backend-specific synchronization (fences/semaphores or monotonically valued fences). None of those backend objects is an appropriate RunenGPU public contract.
-
-G5 should expose a process-local context/generation-bound `GpuSubmissionId`, structured submission state/outcome, and readback state/outcome. WGPU submission indices, Vulkan fences, D3D12 fence values, Metal completion handlers, and browser promises remain private lowering strategies.
-
-## No hidden executor or universal blocking wait
-
-RunenGPU should not own a Tokio runtime or require one through its public API. Existing Tokio use is synchronization-only and does not justify executor ownership.
-
-The portable baseline is host-driven progress:
+Final design:
 
 ```text
-GpuContext::progress() -> GpuProgressReport
-GpuSubmission::try_outcome()
-GpuReadback::try_result()
+GpuTransferPayloadId
+  opaque nonzero process-local runtime identity
+
+GpuTransferPayload
+  id
+  immutable Arc-backed checked transfer data/layout/provenance
 ```
 
-Callbacks/future observation may be layered over the same completion registry, but callers remain responsible for driving the host/event loop. On native, `progress()` may privately poll WGPU. On WebGPU it drains/publishes state while browser progress occurs externally.
+Rules:
 
-A future cannot silently rely on `Device::poll(Wait)` as a universal wake mechanism. A blocking terminal, if a Runenwerk binary needs one, remains host policy outside the standalone portable contract unless separately justified.
+- one ID binds to one immutable payload for its lifetime;
+- clones preserve ID and Arc-backed bytes;
+- operation Eq/Ord/Hash may use payload ID, keeping graph metadata operations bounded independently of byte size;
+- separately constructed equal bytes may have distinct payload IDs;
+- payload ID is not content identity, persistence identity, replay identity, wire identity or stable cache identity;
+- an optional digest may later be diagnostic/dedup evidence only;
+- the payload object itself owns the Arc-backed data, so no renderer-owned payload table/sidecar is introduced.
 
-## Submission acceptance and pressure
+Accepted `PreparedGpuData<TransferData>` and `GpuPreparedTextureData` already provide checked immutable transfer-data/layout building blocks.
 
-There should be no hidden accepted-but-not-submitted queue.
+## Upload
 
-`GpuContext::prepare(...)` may asynchronously realize the complete work for one context/device generation and return an immutable single-use `GpuPreparedSubmission`. Preparation is inspectable and does not mean the GPU has accepted work.
+Upload is one exact logical destination write. A complete upload can satisfy G3 initialization exactly like another complete initializing write.
 
-`submit_prepared` performs bounded admission. On pressure it rejects synchronously and returns/preserves the prepared value for retry. Only successful submission allocates/publishes a `GpuSubmission` whose accepted work must reach exactly one terminal semantic outcome.
+The logical operation does not choose queue-write versus encoded staging copy. G5 may use queue write only when ordering-equivalent; otherwise it must use private staging/copy without changing graph semantics.
 
-Pressure domains must be distinct and bounded at minimum for:
+## Readback
 
-- in-flight submissions;
-- upload/staging bytes;
-- pending readback bytes/mappings;
-- retained completion/readback records;
-- delayed-retirement records.
+Readback is one exact logical source read plus opaque process-local `GpuReadbackId`. Private staging/mapping is not exposed to the graph.
 
-Pressure is neither validation failure nor device loss.
+Result is normalized immutable `GpuReadbackBytes`; texture backend row padding is removed before publication.
 
-## Completion and readback are separate lifecycles
+CPU feedback cannot affect later nodes inside the same submitted graph. The result must be observed before constructing a later submission.
 
-A submission may be GPU-complete while one or more readback mappings/results are still being materialized. Therefore:
+# Logical Present stays distinct from G7 physical presentation
+
+Accepted `GpuPresentOperation` is logical ordering/presentation intent and source-access truth. Current `WgpuCtx` still owns raw `Surface`, `SurfaceConfiguration` and `SurfaceTexture` under the explicitly temporary G7 boundary.
+
+Therefore G5 must not “execute Present” by acquiring/presenting a surface.
+
+G5 validates/orders logical Present and submits all preceding GPU work. After successful G5 submit admission, the current temporary G7 owner may physically present its already-acquired surface texture according to that separate authority. G7 later replaces this raw boundary with reusable typed surface/generation/reconstruction contracts.
+
+The final G5 raw-execution census explicitly excludes separately classified G7 surface-only acquisition/present operations while forbidding that boundary from becoming a generic Device/Queue execution escape.
+
+# Progress/completion abstraction
+
+Pinned WGPU 27 exposes backend-specific facts:
+
+- queue submission returns a submission index;
+- completion callbacks require runtime progress;
+- native WGPU can drive callbacks/mapping through polling;
+- WebGPU underlying progress is browser/event-loop driven;
+- `map_async` has a separate mapping lifecycle and mapped resources cannot simultaneously participate in GPU submission.
+
+WebGPU, Vulkan and D3D12 therefore support a monotonic submission-completion abstraction but not one universal public fence/poll object.
+
+G5 should expose:
 
 ```text
-submission lifecycle
-  Submitted -> InFlight -> Completed | Failed
-
-readback lifecycle
-  PendingGpuCopy -> PendingMap -> Ready | Failed
+GpuSubmissionId
+GpuSubmission outcome
+GpuReadback result
+GpuContext::progress()
 ```
 
-The exact implementation may collapse transient internal states, but public semantics must preserve the distinction.
+WGPU submission indices/poll types, Vulkan/D3D12 synchronization objects, browser promises and mapped ranges remain private backend mechanisms.
 
-Dropping a `GpuSubmission` or readback observation handle does not cancel submitted GPU work. There is no claim that already-submitted GPU work is physically cancellable. Dropping or explicitly abandoning a prepared-but-unsubmitted value creates no submission identity and therefore is not a fake `Cancelled` submission outcome.
+RunenGPU does not own a mandatory Tokio/Futures executor or implicit immortal progress thread. Host/event-loop policy owns when progress is driven.
 
-## Retirement and shutdown
+# Prepared and in-flight capacity — final decision
 
-G4 registries use generation-bound Arc records and bounded single-flight publication. G5 must retain every realized resource/program/layout/bind-group/pipeline record needed by an accepted submission until backend execution and dependent readback staging are safe to retire.
+A later critical review found that bounded in-flight work alone is insufficient: a prepared-but-unsubmitted value can pin G4 realization records.
 
-Logical last-handle drop cannot imply immediate backend destruction when in-flight submissions still depend on the record.
+Final execution-pressure domains include at least:
 
-Shutdown must:
+```text
+max_prepared_submissions
+max_in_flight_submissions
+max_upload_bytes_in_flight
+max_readback_bytes_in_flight
+max_pending_readbacks
+max_deferred_retirement_records
+```
 
-1. reject new preparation/submission admission;
-2. stop creating new readback/upload work;
-3. continue publishing terminal outcomes for already accepted work where backend progress permits;
-4. fail unresolved work structurally on terminal context/device loss or forced closure;
-5. release mapped/staging state safely;
-6. retire private records only when no accepted work/readback requires them;
-7. invoke no consumer callback while an internal lock is held.
+Preparation reserves exactly one prepared slot transactionally. Failure/drop releases it.
 
-G7 still owns surface/device reconstruction policy. G5 reports context/device unavailable/lost facts required to terminate execution; it does not choose product recovery.
+Successful submit atomically converts one prepared slot into one in-flight slot plus required bounded staging/readback/retirement capacity. If submit pressure rejects, it allocates no submission ID and returns/preserves the prepared value **with its prepared slot** for retry.
 
-## Imported and surface resources
+There is no hidden accepted-but-unsubmitted queue.
 
-G4C1 intentionally rejects generic `Imported` realization because no concrete import-source contract is accepted, and reserves `SurfaceAcquired` realization for G7.
+# Terminal record retention — final decision
 
-G5 must not solve this with a broad raw-WGPU resource import API.
+A context-wide retained-terminal-history budget was considered and rejected as unnecessary coupling.
 
-- Existing RunenGPU-owned resources reused across work use their actual logical `Gpu*Handle`s.
-- Truly external resources require a separately typed import source contract.
-- Surface-acquired resources remain G7-owned; G5 consumes only the logical execution resource bound by that future G7 boundary.
+If a completed observation handle kept consuming context execution capacity, a slow inspector could backpressure unrelated future GPU work even though backend cleanup was already safe.
 
-## Rejected alternatives
+Final rule:
 
-### Permanent `GpuExecutionBindings` sidecar
-Rejected. G4B now supplies complete logical pipeline/binding contracts, so a node-keyed permanent sidecar would perpetuate transitional decomposition and duplicate semantic ownership.
+- context registry owns nonterminal or backend-cleanup-pending records;
+- exactly-once terminal result is published into immutable shared result state;
+- once backend cleanup/retirement for that record is safe, context registry reference detaches;
+- caller-held `GpuSubmission`/`GpuReadback` Arcs may retain terminal results without consuming execution pressure;
+- if all observers were dropped early, context still terminalizes/cleans the record and then discards it;
+- G5 does not create an unbounded global terminal-history ledger.
 
-### Second backend-neutral command IR
-Rejected. G3 already owns operations, accesses, hazards, order, initialization, and requirements.
+# Submission/readback lifecycle
 
-### Renderer `CompiledPassExecutionPlan` as RunenGPU API
-Rejected. It mixes renderer planning/provenance with generic GPU execution.
+Successful submit is the exact semantic acceptance point and allocates `GpuSubmissionId` only after bounded admission succeeds.
 
-### Raw fence / WGPU `SubmissionIndex` public API
-Rejected. It is backend-shaped and fails WebGPU/backend-neutral semantics.
+Public submission state is intentionally small:
 
-### Universal `Device::poll` / blocking-wait API
-Rejected. Native and WebGPU progress mechanisms differ.
+```text
+Submitted -> Completed | Failed
+```
 
-### Hidden unbounded submission or callback queues
-Rejected. Pressure must be explicit and bounded.
+Backend-specific “physically started” state is not promised.
 
-### Submission-only invisible uploads/readbacks
-Rejected. They would bypass G3 initialization/hazard authority or force a second access model.
+Readback is separate:
 
-## Ordered implementation decomposition
+```text
+Pending -> Ready(GpuReadbackBytes) | Failed
+```
 
-Planning should produce three implementation slices:
+A submission may be GPU-complete while dependent readback mapping/materialization remains pending.
+
+Already-submitted GPU work is not advertised as physically cancellable. Dropping observers does not cancel/discard accepted work. Dropping prepared-but-unsubmitted work creates no submission identity and no fake cancellation outcome.
+
+# Retirement and shutdown
+
+Accepted submissions retain exact G4 realization/staging records until backend execution and dependent readbacks are safe. Logical handle drop cannot destroy an in-flight dependency.
+
+Deferred retirement is bounded.
+
+Execution lifecycle:
+
+```text
+Running
+ShuttingDown
+Closed
+```
+
+Shutdown rejects new prepare/submit admission. Existing prepared values become non-submittable and release prepared slots when dropped. `progress()` remains valid while accepted work/readbacks terminalize and records retire/detach.
+
+Product timeout/block/yield/recovery policy remains Runenwerk. G7 owns device/surface reconstruction; G5 reports execution-terminal health facts only.
+
+# Ordered implementation decomposition
+
+Three slices are sufficient and intentionally ordered:
 
 ```text
 G5A executable logical work closure
- -> G5B execution lifecycle core
- -> G5C renderer/UI/timing/capture cutover and seam deletion
+ -> G5B complete execution lifecycle core
+ -> G5C renderer/UI/timing/capture cutover
 ```
 
-### G5A
-Owns complete executable compute/render operation contracts, generic draw state, Upload/Readback operations, operation-derived accesses/requirements, runtime-binding structural validation split, renderer adapter lowering into the generic work model, and deletion of execution-semantic truth from `RenderGpuWorkSidecar`.
+## G5A
+
+- executable compute/render logical contracts using G4 pipeline/binding types;
+- generic multi-draw render state;
+- immutable process-local transfer payload identity;
+- Upload/Readback operations;
+- operation-derived accesses/requirements;
+- structural/device binding validation split;
+- renderer lowering into generic work;
+- delete execution-semantic sidecar/manual duplicate access truth.
 
 No command submission/progress implementation.
 
-### G5B
-Owns context/generation-bound prepared submissions, private WGPU encoding for every accepted G5A operation, bounded submission/upload/readback pressure, submission IDs/outcomes, progress registry, asynchronous mapping/readback publication, health integration, delayed retirement, shutdown semantics, and one independent non-render execution proof.
+## G5B
 
-No renderer final cutover yet.
+- finite prepared/in-flight/staging/readback/retirement limits;
+- asynchronous prepared submissions;
+- atomic bounded submit admission;
+- private encoding/submission for accepted operations;
+- host-driven progress;
+- exactly-once submission/readback terminal state;
+- asynchronous normalized readback;
+- terminal-record detachment;
+- shutdown/delayed retirement;
+- one independent non-render compute/readback proof.
 
-### G5C
-Migrates renderer/UI/timing/capture to G5 prepare/submit/progress/readback, deletes temporary renderer execution orchestration, `CurrentRenderDeviceQueue`, `current_render_device_queue()`, `CurrentRenderExecutionBridge`, and `current_render_execution_bridge()`, and proves one private execution authority.
+Renderer remains temporarily on the existing G5 execution seams.
 
-## Investigation verdict
+## G5C
 
-G5 does not need a broader abstraction than G3+G4. It needs to finish their composition.
+- renderer/UI/timing/capture migrate to accepted G5B APIs;
+- generic uploads/readbacks replace renderer staging/map/poll orchestration;
+- delete `CurrentRenderDeviceQueue` and accessor;
+- delete `CurrentRenderExecutionBridge` and accessor;
+- delete renderer raw command encoder/queue submit/map/poll execution ownership;
+- preserve separately classified G7 surface-only acquisition/present boundary.
 
-The durable semantic spine is:
+# Rejected alternatives
+
+### Permanent `GpuExecutionBindings` sidecar
+Rejected: G4B supplies complete logical pipeline/binding contracts; retaining a node-keyed companion perpetuates transitional decomposition.
+
+### Second backend-neutral command IR
+Rejected: G3 already owns operation/access/hazard/order/initialization semantics.
+
+### Move `CompiledPassExecutionPlan` into RunenGPU
+Rejected: it mixes renderer planning/provenance with generic GPU execution.
+
+### Hidden submission-only uploads/readbacks
+Rejected: they bypass G3 initialization/hazard authority or force a second access model.
+
+### Content digest as transfer operation identity
+Rejected: large-byte hashing is avoidable, random digests harm deterministic ordering, and stable digest identity overreaches into persistence/content-addressing policy.
+
+### Raw WGPU/Vulkan/D3D12 fence or poll API
+Rejected: backend-shaped and not portable to WebGPU semantics.
+
+### Universal blocking wait or mandatory executor
+Rejected: progress ownership differs between native and browser hosts.
+
+### Unlimited prepared values
+Rejected: they pin G4 realization records before submission.
+
+### Context-owned terminal history
+Rejected: completed observer retention must not backpressure unrelated future execution.
+
+### G5-owned physical surface Present
+Rejected: surface acquisition/presentation/generations/reconstruction are G7 authority.
+
+# Investigation verdict
+
+G5 does not need a broader abstraction than G3+G4. It needs to finish their composition and own lifecycle.
+
+The durable spine is:
 
 ```text
-GpuWorkOperation
-  complete logical GPU work
-      |
-GpuPreparedWorkGraph
-  deterministic dependency/initialization/hazard authority
-      |
-GpuContext::prepare
-  device-dependent validation + private G4 realization
-      |
-GpuPreparedSubmission
-  derived context/generation-bound executable state
-      |
-GpuContext::submit_prepared
-  bounded admission + private encoding/submission
-      |
-GpuSubmission / GpuReadback
-  progress, terminal outcomes, normalized results, retirement
+complete GpuWorkOperation
+  -> GpuPreparedWorkGraph
+  -> bounded GpuContext::prepare
+  -> GpuPreparedSubmission
+  -> atomic bounded submit
+  -> private execution
+  -> GpuSubmission / GpuReadback
+  -> progress / cleanup / retirement / detached terminal result
 ```
 
-That path removes the transitional renderer sidecar and raw execution bridges without introducing another graph, executor, backend fence API, or renderer-specific RunenGPU contract.
+This path removes the transitional renderer sidecar and raw execution bridges without introducing another graph, hidden executor, content-addressed transfer scheme, backend fence API, retained terminal-history cache, or renderer-specific RunenGPU contract.
