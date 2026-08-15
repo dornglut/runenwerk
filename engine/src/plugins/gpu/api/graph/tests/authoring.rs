@@ -1,3 +1,4 @@
+use super::super::authoring::{normalize_node_accesses, preserve_caller_readable_accesses};
 use super::support::*;
 
 #[test]
@@ -94,6 +95,67 @@ fn large_strided_buffer_coverage_stays_compact() {
 }
 
 #[test]
+fn differently_shaped_large_strided_coverage_compares_exactly_and_canonically() {
+    let mut allocator = allocator();
+    let resource_label = label("large equivalent coverage");
+    let buffer = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common("large equivalent coverage"),
+                6_400_000,
+                GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let flat = GpuInitialCoverage::buffer(
+        &buffer,
+        [GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 0, 32, 64, 100_000, 0, 1).unwrap(),
+        )],
+    )
+    .unwrap();
+    let grouped = GpuInitialCoverage::buffer(
+        &buffer,
+        [GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 0, 32, 64, 100, 6_400, 1_000).unwrap(),
+        )],
+    )
+    .unwrap();
+    assert_eq!(flat, grouped);
+    assert_eq!(flat.buffer_values().unwrap().len(), 1);
+    assert_eq!(grouped.buffer_values().unwrap().len(), 1);
+
+    let canonical = GpuInitialCoverage::buffer(
+        &buffer,
+        [GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 0, 32, 32, 2, 0, 1).unwrap(),
+        )],
+    )
+    .unwrap();
+    assert_eq!(
+        canonical.buffer_values().unwrap(),
+        [GpuBufferCoverage::dense(
+            GpuBufferRange::new(&buffer, 0, 64).unwrap()
+        )]
+    );
+    let one_segment = GpuInitialCoverage::buffer(
+        &buffer,
+        [GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 64, 32, 48, 1, 96, 1).unwrap(),
+        )],
+    )
+    .unwrap();
+    assert_eq!(
+        one_segment.buffer_values().unwrap(),
+        [GpuBufferCoverage::dense(
+            GpuBufferRange::new(&buffer, 64, 32).unwrap()
+        )]
+    );
+}
+
+#[test]
 fn same_node_access_deduplicates_merges_and_rejects_incompatible_roles() {
     let mut allocator = allocator();
     let buffer = buffer(
@@ -109,7 +171,11 @@ fn same_node_access_deduplicates_merges_and_rejects_incompatible_roles() {
     fragment
         .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
         .unwrap();
-    add_compute(&mut fragment, "read write", [read.clone(), read, write]);
+    add_compute(
+        &mut fragment,
+        "read write",
+        [read.clone(), read.clone(), write],
+    );
     let fragment = fragment.finish().unwrap();
     assert_eq!(fragment.nodes()[0].accesses().len(), 1);
     assert!(matches!(
@@ -117,6 +183,7 @@ fn same_node_access_deduplicates_merges_and_rejects_incompatible_roles() {
         GpuResourceAccess::Buffer(ref access)
             if access.kind() == GpuBufferAccessKind::StorageReadWrite
     ));
+    assert_eq!(fragment.nodes()[0].caller_readable_accesses(), [read]);
 
     let mut invalid = builder("invalid normalize");
     invalid
@@ -138,6 +205,33 @@ fn same_node_access_deduplicates_merges_and_rejects_incompatible_roles() {
     assert_eq!(
         error.cause(),
         GpuWorkAuthoringCause::IncompatibleSameNodeAccess
+    );
+}
+
+#[test]
+fn caller_readable_initialization_truth_survives_derived_normalization() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "preserved caller read",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::Storage],
+    );
+    let range = GpuBufferRange::whole(&buffer).unwrap();
+    let derived = buffer_access(&buffer, range, GpuBufferAccessKind::StorageReadWrite);
+    let caller = buffer_access(&buffer, range, GpuBufferAccessKind::StorageRead);
+    let normalized = normalize_node_accesses(
+        &label("fragment"),
+        &label("node"),
+        &provenance("node"),
+        vec![derived.clone()],
+        vec![caller.clone()],
+    )
+    .unwrap();
+    assert_eq!(normalized, [derived]);
+    assert_eq!(
+        preserve_caller_readable_accesses(std::slice::from_ref(&caller)),
+        [caller]
     );
 }
 

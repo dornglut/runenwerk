@@ -5,6 +5,7 @@ use super::super::{
     GpuWorkAuthoringErrorContext, GpuWorkAuthoringErrorSource, GpuWorkResourceId,
 };
 use std::collections::BTreeMap;
+use std::{cmp::Reverse, collections::BinaryHeap};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuInitialCoverageKind {
@@ -45,7 +46,7 @@ impl GpuBufferCoverage {
         }
     }
 
-    fn contains(&self, required: &Self) -> bool {
+    fn fast_contains(&self, required: &Self) -> bool {
         match (self, required) {
             (Self::Dense(have), Self::Dense(required)) => {
                 have.offset() <= required.offset() && have.end() >= required.end()
@@ -53,16 +54,10 @@ impl GpuBufferCoverage {
             (Self::Dense(have), Self::Strided(required)) => {
                 have.offset() <= required.first && have.end() >= required.end
             }
-            (Self::Strided(have), Self::Dense(required)) => {
-                required_segments(*required).all(|required| {
-                    strided_segments(have).any(|have| have.0 <= required.0 && have.1 >= required.1)
-                })
-            }
-            (Self::Strided(have), Self::Strided(required)) if have == required => true,
+            (Self::Strided(have), Self::Dense(required)) => strided_segments(have)
+                .any(|have| have.0 <= required.offset() && have.1 >= required.end()),
             (Self::Strided(have), Self::Strided(required)) => {
-                strided_segments(required).all(|required| {
-                    strided_segments(have).any(|have| have.0 <= required.0 && have.1 >= required.1)
-                })
+                strided_coverage_fast_contains(have, required)
             }
         }
     }
@@ -187,10 +182,6 @@ impl GpuBufferStridedCoverage {
     }
 }
 
-fn required_segments(coverage: GpuBufferRange) -> impl Iterator<Item = (u64, u64)> {
-    core::iter::once((coverage.offset(), coverage.end()))
-}
-
 fn strided_segments(coverage: &GpuBufferStridedCoverage) -> impl Iterator<Item = (u64, u64)> + '_ {
     (0..coverage.group_count).flat_map(move |group| {
         let group_start = coverage.first + u64::from(group) * coverage.group_stride;
@@ -201,11 +192,50 @@ fn strided_segments(coverage: &GpuBufferStridedCoverage) -> impl Iterator<Item =
     })
 }
 
+fn strided_coverage_fast_contains(
+    have: &GpuBufferStridedCoverage,
+    required: &GpuBufferStridedCoverage,
+) -> bool {
+    if have == required {
+        return true;
+    }
+    if have.segment_size < required.segment_size
+        || have.segment_stride != required.segment_stride
+        || have.group_stride != required.group_stride
+        || required.first < have.first
+    {
+        return false;
+    }
+    let offset = required.first - have.first;
+    let (group_offset, within_group) = if have.group_count == 1 {
+        (0, offset)
+    } else {
+        (offset / have.group_stride, offset % have.group_stride)
+    };
+    let segment_offset = within_group / have.segment_stride;
+    within_group == segment_offset * have.segment_stride
+        && group_offset
+            .checked_add(u64::from(required.group_count))
+            .is_some_and(|end| end <= u64::from(have.group_count))
+        && segment_offset
+            .checked_add(u64::from(required.segment_count))
+            .is_some_and(|end| end <= u64::from(have.segment_count))
+}
+
 pub(super) fn normalize_buffer_coverage(
     buffer: &GpuBufferHandle,
     values: &mut Vec<GpuBufferCoverage>,
 ) {
-    let mut dense = values
+    let mut strided = Vec::new();
+    for value in values.drain(..) {
+        match value {
+            GpuBufferCoverage::Dense(range) => strided.push(GpuBufferCoverage::Dense(range)),
+            GpuBufferCoverage::Strided(coverage) => {
+                strided.push(canonical_strided_coverage(coverage));
+            }
+        }
+    }
+    let mut dense = strided
         .iter()
         .filter_map(|value| match value {
             GpuBufferCoverage::Dense(range) => Some((range.offset(), range.end())),
@@ -221,11 +251,11 @@ pub(super) fn normalize_buffer_coverage(
             )
         })
         .collect::<Vec<_>>();
-    normalized.extend(values.iter().filter_map(|value| match value {
+    normalized.extend(strided.into_iter().filter_map(|value| match value {
         GpuBufferCoverage::Dense(_) => None,
-        GpuBufferCoverage::Strided(coverage) => Some(GpuBufferCoverage::Strided(coverage.clone())),
+        GpuBufferCoverage::Strided(coverage) => Some(GpuBufferCoverage::Strided(coverage)),
     }));
-    normalized.sort_by_key(GpuBufferCoverage::first);
+    normalized.sort();
     normalized.dedup();
     *values = normalized
         .iter()
@@ -234,66 +264,160 @@ pub(super) fn normalize_buffer_coverage(
             !normalized.iter().enumerate().any(|(other_index, other)| {
                 index != &other_index
                     && matches!(other, GpuBufferCoverage::Dense(_))
-                    && other.contains(value)
+                    && other.fast_contains(value)
             })
         })
         .map(|(_, value)| value.clone())
         .collect();
 }
 
+fn canonical_strided_coverage(coverage: GpuBufferStridedCoverage) -> GpuBufferCoverage {
+    let segment_stride = if coverage.segment_count == 1 {
+        coverage.segment_size
+    } else {
+        coverage.segment_stride
+    };
+    let group_stride = if coverage.group_count == 1 {
+        0
+    } else {
+        coverage.group_stride
+    };
+    let group_payload =
+        u64::from(coverage.segment_count - 1) * segment_stride + coverage.segment_size;
+    if (coverage.segment_count == 1 && coverage.group_count == 1)
+        || (segment_stride == coverage.segment_size
+            && (coverage.group_count == 1 || coverage.group_stride == group_payload))
+    {
+        return GpuBufferCoverage::Dense(
+            GpuBufferRange::new(
+                &coverage.buffer,
+                coverage.first,
+                coverage.end - coverage.first,
+            )
+            .expect("canonical contiguous strided coverage remains checked"),
+        );
+    }
+    GpuBufferCoverage::Strided(
+        GpuBufferStridedCoverage::new(
+            &coverage.buffer,
+            coverage.first,
+            coverage.segment_size,
+            segment_stride,
+            coverage.segment_count,
+            group_stride,
+            coverage.group_count,
+        )
+        .expect("canonical strided coverage remains checked"),
+    )
+}
+
 pub(super) fn buffer_coverage_contains(
     have: &[GpuBufferCoverage],
     required: &[GpuBufferCoverage],
 ) -> bool {
-    required.iter().all(|required| {
-        have.iter().any(|coverage| coverage.contains(required))
-            || match required {
-                GpuBufferCoverage::Dense(range) => {
-                    buffer_interval_contains(have, (range.offset(), range.end()))
-                }
-                GpuBufferCoverage::Strided(strided) => strided_segments(strided)
-                    .all(|required| buffer_interval_contains(have, required)),
-            }
-    })
-}
-
-fn buffer_interval_contains(have: &[GpuBufferCoverage], required: (u64, u64)) -> bool {
-    if have.iter().any(|coverage| match coverage {
-        GpuBufferCoverage::Dense(range) => {
-            range.offset() <= required.0 && range.end() >= required.1
-        }
-        GpuBufferCoverage::Strided(strided) => {
-            strided_segments(strided).any(|have| have.0 <= required.0 && have.1 >= required.1)
-        }
-    }) {
+    if required
+        .iter()
+        .all(|required| have.iter().any(|coverage| coverage.fast_contains(required)))
+    {
         return true;
     }
-    let mut cursor = required.0;
-    while cursor < required.1 {
-        let mut next = cursor;
-        for coverage in have {
-            match coverage {
-                GpuBufferCoverage::Dense(range)
-                    if range.offset() <= cursor && range.end() > next =>
-                {
-                    next = range.end();
-                }
-                GpuBufferCoverage::Strided(strided) => {
-                    for (start, end) in strided_segments(strided) {
-                        if start <= cursor && end > next {
-                            next = end;
-                        }
-                    }
-                }
-                _ => {}
+    let mut available = CoverageIntervals::new(have);
+    let mut available_interval = available.next();
+    for (required_start, required_end) in CoverageIntervals::new(required) {
+        let mut cursor = required_start;
+        while cursor < required_end {
+            while available_interval.is_some_and(|(_, end)| end <= cursor) {
+                available_interval = available.next();
             }
+            let Some((start, end)) = available_interval else {
+                return false;
+            };
+            if start > cursor {
+                return false;
+            }
+            cursor = end.min(required_end);
         }
-        if next == cursor {
-            return false;
-        }
-        cursor = next.min(required.1);
     }
     true
+}
+
+struct CoverageIntervals<'a> {
+    cursors: Vec<CoverageIntervalCursor<'a>>,
+    next: BinaryHeap<Reverse<(u64, u64, usize)>>,
+}
+
+impl<'a> CoverageIntervals<'a> {
+    fn new(values: &'a [GpuBufferCoverage]) -> Self {
+        let mut cursors = values
+            .iter()
+            .map(CoverageIntervalCursor::new)
+            .collect::<Vec<_>>();
+        let mut next = BinaryHeap::new();
+        for (index, cursor) in cursors.iter_mut().enumerate() {
+            if let Some((start, end)) = cursor.next() {
+                next.push(Reverse((start, end, index)));
+            }
+        }
+        Self { cursors, next }
+    }
+
+    fn push_next(&mut self, index: usize) {
+        if let Some((start, end)) = self.cursors[index].next() {
+            self.next.push(Reverse((start, end, index)));
+        }
+    }
+}
+
+impl Iterator for CoverageIntervals<'_> {
+    type Item = (u64, u64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Reverse((start, mut end, index)) = self.next.pop()?;
+        self.push_next(index);
+        while self.next.peek().is_some_and(|entry| entry.0.0 <= end) {
+            let Reverse((_, candidate_end, index)) = self.next.pop().expect("peeked entry exists");
+            end = end.max(candidate_end);
+            self.push_next(index);
+        }
+        Some((start, end))
+    }
+}
+
+struct CoverageIntervalCursor<'a> {
+    coverage: &'a GpuBufferCoverage,
+    next_segment: u64,
+}
+
+impl<'a> CoverageIntervalCursor<'a> {
+    fn new(coverage: &'a GpuBufferCoverage) -> Self {
+        Self {
+            coverage,
+            next_segment: 0,
+        }
+    }
+
+    fn next(&mut self) -> Option<(u64, u64)> {
+        match self.coverage {
+            GpuBufferCoverage::Dense(range) if self.next_segment == 0 => {
+                self.next_segment = 1;
+                Some((range.offset(), range.end()))
+            }
+            GpuBufferCoverage::Dense(_) => None,
+            GpuBufferCoverage::Strided(coverage) => {
+                let count = u64::from(coverage.segment_count) * u64::from(coverage.group_count);
+                if self.next_segment == count {
+                    return None;
+                }
+                let group = self.next_segment / u64::from(coverage.segment_count);
+                let segment = self.next_segment % u64::from(coverage.segment_count);
+                self.next_segment += 1;
+                let start = coverage.first
+                    + group * coverage.group_stride
+                    + segment * coverage.segment_stride;
+                Some((start, start + coverage.segment_size))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

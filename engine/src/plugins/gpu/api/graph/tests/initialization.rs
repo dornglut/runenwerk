@@ -236,7 +236,11 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
         GpuTextureInitialization::Uninitialized,
         1,
         1,
-        [GpuTextureUsage::ColorAttachment, GpuTextureUsage::Sampled],
+        [
+            GpuTextureUsage::ColorAttachment,
+            GpuTextureUsage::CopyDestination,
+            GpuTextureUsage::Sampled,
+        ],
     );
     let range = GpuTextureSubresourceRange::whole(&texture).unwrap();
     let render = |store| {
@@ -653,6 +657,246 @@ fn buffer_zero_initializes_only_its_checked_range() {
         .unwrap();
     let final_coverage = summary.final_coverage().unwrap().buffer_values().unwrap();
     assert_eq!(final_coverage, [GpuBufferCoverage::dense(zeroed)]);
+}
+
+#[test]
+fn operation_effects_require_their_checked_write_role() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "effect role",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::CopyDestination, GpuBufferUsage::Storage],
+    );
+    let range = GpuBufferRange::new(&buffer, 0, 16).unwrap();
+    let clear =
+        GpuClearOperation::buffer_zero(GpuBufferRegion::new(&buffer, range).unwrap()).unwrap();
+    let mut fragment = builder("effect role");
+    fragment
+        .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+        .unwrap();
+    fragment
+        .add_node(
+            label("clear"),
+            GpuWorkOperation::Clear(clear),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("clear"),
+        )
+        .unwrap();
+    let mut fragment = fragment.finish().unwrap();
+    fragment.nodes[0].accesses = vec![buffer_access(
+        &buffer,
+        range,
+        GpuBufferAccessKind::StorageWrite,
+    )];
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare(label("effect role graph"), [fragment])
+            .unwrap_err()
+            .cause(),
+        GpuWorkGraphCause::OperationAccessContradiction
+    );
+}
+
+#[test]
+fn generic_attachment_shaped_access_cannot_discard_initialization() {
+    let mut allocator = allocator();
+    let texture = texture(
+        &mut allocator,
+        "generic discard",
+        GpuTextureInitialization::Zeroed,
+        1,
+        1,
+        [
+            GpuTextureUsage::ColorAttachment,
+            GpuTextureUsage::CopyDestination,
+            GpuTextureUsage::Sampled,
+        ],
+    );
+    let range = GpuTextureSubresourceRange::whole(&texture).unwrap();
+    let mut fragment = builder("generic discard");
+    fragment
+        .declare_resource(GpuResourceRef::Texture(texture.clone()))
+        .unwrap();
+    add_compute(
+        &mut fragment,
+        "generic discard shaped access",
+        [texture_access(
+            &texture,
+            range,
+            GpuTextureAccessKind::ColorAttachment {
+                load_kind: GpuAttachmentLoadKind::Clear,
+                store: GpuAttachmentStore::Discard,
+            },
+        )],
+    );
+    add_compute(
+        &mut fragment,
+        "sample retained texture",
+        [texture_access(
+            &texture,
+            range,
+            GpuTextureAccessKind::SampledRead,
+        )],
+    );
+    assert!(
+        GpuPreparedWorkGraph::prepare(label("generic discard graph"), [fragment.finish().unwrap()])
+            .is_ok()
+    );
+}
+
+#[test]
+fn complete_d2_array_copy_initializes_only_the_selected_nonzero_layers() {
+    let mut allocator = allocator();
+    let source = texture(
+        &mut allocator,
+        "array copy source",
+        GpuTextureInitialization::Zeroed,
+        1,
+        4,
+        [
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ],
+    );
+    let destination = texture(
+        &mut allocator,
+        "array copy destination",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        4,
+        [GpuTextureUsage::CopyDestination, GpuTextureUsage::Sampled],
+    );
+    let source_region = GpuTextureCopyRegion::new(
+        &source,
+        0,
+        GpuTextureOrigin::new(0, 0, 1),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(8, 8, 2).unwrap(),
+    )
+    .unwrap();
+    let destination_region = GpuTextureCopyRegion::new(
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 1),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(8, 8, 2).unwrap(),
+    )
+    .unwrap();
+    let copy = GpuCopyOperation::texture_to_texture(source_region, destination_region).unwrap();
+    let selected = GpuTextureSubresourceRange::new(
+        destination.descriptor().common().label(),
+        0,
+        1,
+        1,
+        2,
+        GpuTextureAspect::Color,
+    )
+    .unwrap();
+    let make_fragment = |read| {
+        let mut fragment = builder("array copy");
+        for resource in [
+            GpuResourceRef::Texture(source.clone()),
+            GpuResourceRef::Texture(destination.clone()),
+        ] {
+            fragment.declare_resource(resource).unwrap();
+        }
+        fragment
+            .add_node(
+                label("copy selected layers"),
+                GpuWorkOperation::Copy(copy.clone()),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::TransferPreferred,
+                provenance("copy selected layers"),
+            )
+            .unwrap();
+        add_compute(
+            &mut fragment,
+            "sample destination",
+            [texture_access(
+                &destination,
+                read,
+                GpuTextureAccessKind::SampledRead,
+            )],
+        );
+        fragment.finish().unwrap()
+    };
+    assert!(
+        GpuPreparedWorkGraph::prepare(
+            label("selected array copy graph"),
+            [make_fragment(selected)]
+        )
+        .is_ok()
+    );
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare(
+            label("whole array copy graph"),
+            [make_fragment(
+                GpuTextureSubresourceRange::whole(&destination).unwrap()
+            )]
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::ReadBeforeInitialization
+    );
+}
+
+#[test]
+fn buffer_effect_union_and_prepared_publication_are_canonical_and_deterministic() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "canonical effects",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::CopyDestination],
+    );
+    let make_fragment = || {
+        let mut fragment = builder("canonical effects");
+        fragment
+            .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+            .unwrap();
+        for (name, offset) in [("clear second", 16), ("clear first", 0)] {
+            let range = GpuBufferRange::new(&buffer, offset, 16).unwrap();
+            fragment
+                .add_node(
+                    label(name),
+                    GpuWorkOperation::Clear(
+                        GpuClearOperation::buffer_zero(
+                            GpuBufferRegion::new(&buffer, range).unwrap(),
+                        )
+                        .unwrap(),
+                    ),
+                    [],
+                    GpuCapabilityRequirements::new(),
+                    GpuExecutionPreference::TransferPreferred,
+                    provenance(name),
+                )
+                .unwrap();
+        }
+        fragment.finish().unwrap()
+    };
+    let first =
+        GpuPreparedWorkGraph::prepare(label("canonical effects graph"), [make_fragment()]).unwrap();
+    let second =
+        GpuPreparedWorkGraph::prepare(label("canonical effects graph"), [make_fragment()]).unwrap();
+    assert_eq!(first.initialization(), second.initialization());
+    let coverage = first
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == buffer.diagnostic_identity())
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .buffer_values()
+        .unwrap();
+    assert_eq!(
+        coverage,
+        [GpuBufferCoverage::dense(
+            GpuBufferRange::new(&buffer, 0, 32).unwrap()
+        )]
+    );
 }
 
 #[test]

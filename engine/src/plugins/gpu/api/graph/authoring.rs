@@ -173,6 +173,9 @@ pub struct GpuWorkNode {
     id: GpuWorkNodeId,
     operation: GpuWorkOperation,
     pub(super) accesses: Vec<GpuResourceAccess>,
+    // Initialization requirements belong to caller-declared reads, before the
+    // hazard access normalizer can merge them with operation-derived access.
+    pub(super) caller_readable_accesses: Vec<GpuResourceAccess>,
     requirements: GpuCapabilityRequirements,
     execution_preference: GpuExecutionPreference,
     label: GpuResourceLabel,
@@ -194,6 +197,10 @@ impl GpuWorkNode {
 
     pub fn accesses(&self) -> &[GpuResourceAccess] {
         &self.accesses
+    }
+
+    pub(super) fn caller_readable_accesses(&self) -> &[GpuResourceAccess] {
+        &self.caller_readable_accesses
     }
 
     pub fn requirements(&self) -> &GpuCapabilityRequirements {
@@ -676,6 +683,7 @@ impl GpuWorkFragmentBuilder {
                 ));
             }
         }
+        let caller_readable_accesses = preserve_caller_readable_accesses(&caller);
         let normalized =
             normalize_node_accesses(&self.label, &label, &provenance, derived, caller)?;
         validate_indexed_draw_access(&self.label, &label, &provenance, &operation, &normalized)?;
@@ -703,6 +711,7 @@ impl GpuWorkFragmentBuilder {
             id: id.clone(),
             operation,
             accesses: normalized,
+            caller_readable_accesses,
             requirements,
             execution_preference,
             label,
@@ -860,7 +869,7 @@ impl GpuWorkFragmentBuilder {
     }
 }
 
-fn normalize_node_accesses(
+pub(super) fn normalize_node_accesses(
     fragment_label: &GpuResourceLabel,
     node_label: &GpuResourceLabel,
     provenance: &GpuResourceProvenance,
@@ -894,6 +903,19 @@ fn normalize_node_accesses(
     }
     normalized.sort();
     Ok(normalized)
+}
+
+pub(super) fn preserve_caller_readable_accesses(
+    caller: &[GpuResourceAccess],
+) -> Vec<GpuResourceAccess> {
+    let mut readable = caller
+        .iter()
+        .filter(|access| access.reads())
+        .cloned()
+        .collect::<Vec<_>>();
+    readable.sort();
+    readable.dedup();
+    readable
 }
 
 fn insert_normalized_access(
