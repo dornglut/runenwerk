@@ -156,6 +156,38 @@ fn differently_shaped_large_strided_coverage_compares_exactly_and_canonically() 
 }
 
 #[test]
+fn compact_buffer_coverage_removes_all_cheaply_subsumed_terms_deterministically() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "subsumed compact coverage",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::Storage],
+    );
+    let superset = GpuBufferCoverage::strided(
+        GpuBufferStridedCoverage::new(&buffer, 0, 8, 16, 4, 0, 1).unwrap(),
+    );
+    let subset = GpuBufferCoverage::strided(
+        GpuBufferStridedCoverage::new(&buffer, 16, 8, 16, 2, 0, 1).unwrap(),
+    );
+    let dense_segment = GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 32, 8).unwrap());
+
+    let first = GpuInitialCoverage::buffer(
+        &buffer,
+        [subset.clone(), dense_segment.clone(), superset.clone()],
+    )
+    .unwrap();
+    let second =
+        GpuInitialCoverage::buffer(&buffer, [superset.clone(), dense_segment, subset]).unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first.buffer_values().unwrap(), [superset]);
+    assert_eq!(
+        second.buffer_values().unwrap(),
+        first.buffer_values().unwrap()
+    );
+}
+
+#[test]
 fn same_node_access_deduplicates_merges_and_rejects_incompatible_roles() {
     let mut allocator = allocator();
     let buffer = buffer(

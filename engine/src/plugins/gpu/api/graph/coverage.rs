@@ -263,8 +263,8 @@ pub(super) fn normalize_buffer_coverage(
         .filter(|(index, value)| {
             !normalized.iter().enumerate().any(|(other_index, other)| {
                 index != &other_index
-                    && matches!(other, GpuBufferCoverage::Dense(_))
                     && other.fast_contains(value)
+                    && (!value.fast_contains(other) || other_index < *index)
             })
         })
         .map(|(_, value)| value.clone())

@@ -900,6 +900,90 @@ fn buffer_effect_union_and_prepared_publication_are_canonical_and_deterministic(
 }
 
 #[test]
+fn strided_effect_union_and_prepared_publication_retain_the_canonical_superset() {
+    let mut allocator = allocator();
+    let destination_label = label("strided union destination");
+    let destination = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common("strided union destination"),
+                512,
+                GpuBufferUsages::new(&destination_label, [GpuBufferUsage::CopyDestination])
+                    .unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let source = texture(
+        &mut allocator,
+        "strided union source",
+        GpuTextureInitialization::Zeroed,
+        1,
+        1,
+        [
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ],
+    );
+    let copy = |height| {
+        GpuCopyOperation::texture_to_buffer(
+            GpuTextureCopyRegion::new(
+                &source,
+                0,
+                GpuTextureOrigin::new(0, 0, 0),
+                GpuTextureAspect::Color,
+                GpuCopyExtent::new(8, height, 1).unwrap(),
+            )
+            .unwrap(),
+            GpuBufferTextureLayout::new(&destination, 0, 64, 0).unwrap(),
+        )
+        .unwrap()
+    };
+    let mut fragment = builder("strided union");
+    for resource in [
+        GpuResourceRef::Texture(source.clone()),
+        GpuResourceRef::Buffer(destination.clone()),
+    ] {
+        fragment.declare_resource(resource).unwrap();
+    }
+    for (name, height) in [("copy complete rows", 8), ("copy contained rows", 4)] {
+        fragment
+            .add_node(
+                label(name),
+                GpuWorkOperation::Copy(copy(height)),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::TransferPreferred,
+                provenance(name),
+            )
+            .unwrap();
+    }
+    let fragment = fragment.finish().unwrap();
+    let first =
+        GpuPreparedWorkGraph::prepare(label("strided union graph"), [fragment.clone()]).unwrap();
+    let second = GpuPreparedWorkGraph::prepare(label("strided union graph"), [fragment]).unwrap();
+    assert_eq!(first.initialization(), second.initialization());
+    let coverage = first
+        .initialization()
+        .iter()
+        .find(|summary| {
+            summary.resource().diagnostic_identity() == destination.diagnostic_identity()
+        })
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .buffer_values()
+        .unwrap();
+    assert_eq!(
+        coverage,
+        [GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&destination, 0, 32, 64, 8, 0, 1).unwrap()
+        )]
+    );
+}
+
+#[test]
 fn padded_buffer_texture_copy_requires_and_initializes_only_logical_bytes() {
     let mut allocator = allocator();
     let source_label = label("padded source");
