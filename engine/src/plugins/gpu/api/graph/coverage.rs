@@ -54,8 +54,9 @@ impl GpuBufferCoverage {
             (Self::Dense(have), Self::Strided(required)) => {
                 have.offset() <= required.first && have.end() >= required.end
             }
-            (Self::Strided(have), Self::Dense(required)) => strided_segments(have)
-                .any(|have| have.0 <= required.offset() && have.1 >= required.end()),
+            (Self::Strided(have), Self::Dense(required)) => {
+                strided_coverage_fast_contains_dense(have, required)
+            }
             (Self::Strided(have), Self::Strided(required)) => {
                 strided_coverage_fast_contains(have, required)
             }
@@ -182,16 +183,6 @@ impl GpuBufferStridedCoverage {
     }
 }
 
-fn strided_segments(coverage: &GpuBufferStridedCoverage) -> impl Iterator<Item = (u64, u64)> + '_ {
-    (0..coverage.group_count).flat_map(move |group| {
-        let group_start = coverage.first + u64::from(group) * coverage.group_stride;
-        (0..coverage.segment_count).map(move |segment| {
-            let start = group_start + u64::from(segment) * coverage.segment_stride;
-            (start, start + coverage.segment_size)
-        })
-    })
-}
-
 fn strided_coverage_fast_contains(
     have: &GpuBufferStridedCoverage,
     required: &GpuBufferStridedCoverage,
@@ -220,6 +211,47 @@ fn strided_coverage_fast_contains(
         && segment_offset
             .checked_add(u64::from(required.segment_count))
             .is_some_and(|end| end <= u64::from(have.segment_count))
+}
+
+fn strided_coverage_fast_contains_dense(
+    have: &GpuBufferStridedCoverage,
+    required: &GpuBufferRange,
+) -> bool {
+    if required.offset() < have.first || required.end() > have.end {
+        return false;
+    }
+    if have.segment_stride == have.segment_size
+        && (have.group_count == 1
+            || have.group_stride
+                == u64::from(have.segment_count - 1) * have.segment_stride + have.segment_size)
+    {
+        return true;
+    }
+
+    let offset = required.offset() - have.first;
+    let group = if have.group_count == 1 {
+        0
+    } else {
+        offset / have.group_stride
+    };
+    if group >= u64::from(have.group_count) {
+        return false;
+    }
+    let group_start = have.first + group * have.group_stride;
+    let within_group = required.offset() - group_start;
+    if have.segment_stride == have.segment_size {
+        let group_end = group_start
+            + u64::from(have.segment_count - 1) * have.segment_stride
+            + have.segment_size;
+        return required.end() <= group_end;
+    }
+
+    let segment = within_group / have.segment_stride;
+    if segment >= u64::from(have.segment_count) {
+        return false;
+    }
+    let segment_start = group_start + segment * have.segment_stride;
+    required.end() <= segment_start + have.segment_size
 }
 
 pub(super) fn normalize_buffer_coverage(

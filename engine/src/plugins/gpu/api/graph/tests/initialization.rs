@@ -984,6 +984,88 @@ fn strided_effect_union_and_prepared_publication_retain_the_canonical_superset()
 }
 
 #[test]
+fn very_large_strided_dense_union_stays_compact_through_prepared_publication() {
+    let mut allocator = allocator();
+    let destination_label = label("large strided dense union destination");
+    let destination = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common("large strided dense union destination"),
+                64_000_000_000_000,
+                GpuBufferUsages::new(&destination_label, [GpuBufferUsage::CopyDestination])
+                    .unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let segment_count = 1_000_000_u32;
+    let group_count = 1_000_000_u32;
+    let strided = GpuBufferStridedCoverage::new(
+        &destination,
+        0,
+        32,
+        64,
+        segment_count,
+        64_000_000,
+        group_count,
+    )
+    .unwrap();
+    let last_segment = u64::from(group_count - 1) * 64_000_000 + u64::from(segment_count - 1) * 64;
+    let dense_segment = GpuBufferRange::new(&destination, last_segment, 32).unwrap();
+    let input = GpuWorkResourceInput::new(
+        GpuResourceRef::Buffer(destination.clone()),
+        GpuInitialCoverage::buffer(
+            &destination,
+            [
+                GpuBufferCoverage::strided(strided.clone()),
+                GpuBufferCoverage::dense(dense_segment),
+            ],
+        )
+        .unwrap(),
+        provenance("large strided dense input"),
+    )
+    .unwrap();
+    let mut fragment = builder("large strided dense union");
+    fragment
+        .declare_resource(GpuResourceRef::Buffer(destination.clone()))
+        .unwrap();
+    fragment.add_input(input).unwrap();
+    fragment
+        .add_node(
+            label("clear last strided segment"),
+            GpuWorkOperation::Clear(
+                GpuClearOperation::buffer_zero(
+                    GpuBufferRegion::new(&destination, dense_segment).unwrap(),
+                )
+                .unwrap(),
+            ),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("clear last strided segment"),
+        )
+        .unwrap();
+    let prepared = GpuPreparedWorkGraph::prepare(
+        label("large strided dense union graph"),
+        [fragment.finish().unwrap()],
+    )
+    .unwrap();
+    let coverage = prepared
+        .initialization()
+        .iter()
+        .find(|summary| {
+            summary.resource().diagnostic_identity() == destination.diagnostic_identity()
+        })
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .buffer_values()
+        .unwrap();
+    assert_eq!(coverage, [GpuBufferCoverage::strided(strided)]);
+}
+
+#[test]
 fn padded_buffer_texture_copy_requires_and_initializes_only_logical_bytes() {
     let mut allocator = allocator();
     let source_label = label("padded source");

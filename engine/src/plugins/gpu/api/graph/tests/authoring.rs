@@ -188,6 +188,57 @@ fn compact_buffer_coverage_removes_all_cheaply_subsumed_terms_deterministically(
 }
 
 #[test]
+fn strided_buffer_coverage_subsumes_only_dense_intervals_in_covered_runs() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "strided dense containment",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::Storage],
+    );
+    let strided = GpuBufferCoverage::strided(
+        GpuBufferStridedCoverage::new(&buffer, 0, 8, 16, 2, 32, 2).unwrap(),
+    );
+
+    let fully_inside = GpuInitialCoverage::buffer(
+        &buffer,
+        [
+            strided.clone(),
+            GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 17, 4).unwrap()),
+        ],
+    )
+    .unwrap();
+    assert_eq!(fully_inside.buffer_values().unwrap(), [strided.clone()]);
+
+    let group_boundary = GpuInitialCoverage::buffer(
+        &buffer,
+        [
+            strided.clone(),
+            GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 32, 8).unwrap()),
+        ],
+    )
+    .unwrap();
+    assert_eq!(group_boundary.buffer_values().unwrap(), [strided.clone()]);
+
+    for range in [
+        GpuBufferRange::new(&buffer, 6, 10).unwrap(),
+        GpuBufferRange::new(&buffer, 24, 8).unwrap(),
+    ] {
+        let coverage =
+            GpuInitialCoverage::buffer(&buffer, [strided.clone(), GpuBufferCoverage::dense(range)])
+                .unwrap();
+        assert_eq!(coverage.buffer_values().unwrap().len(), 2);
+        assert!(
+            coverage
+                .buffer_values()
+                .unwrap()
+                .contains(&GpuBufferCoverage::dense(range))
+        );
+        assert!(coverage.buffer_values().unwrap().contains(&strided));
+    }
+}
+
+#[test]
 fn same_node_access_deduplicates_merges_and_rejects_incompatible_roles() {
     let mut allocator = allocator();
     let buffer = buffer(
