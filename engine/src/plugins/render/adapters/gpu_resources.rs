@@ -463,7 +463,10 @@ impl RenderResourceDeclaration {
             common,
             layout.gpu_layout().byte_len(),
             usages,
-            GpuBufferInitialization::Uninitialized,
+            match lifetime {
+                GpuResourceLifetime::Transient => GpuBufferInitialization::Zeroed,
+                GpuResourceLifetime::Retained => GpuBufferInitialization::Uninitialized,
+            },
         )?;
         let handle = allocator.allocate_buffer_handle(descriptor)?;
         Ok(Self::Storage(RenderStorageDeclaration { handle, layout }))

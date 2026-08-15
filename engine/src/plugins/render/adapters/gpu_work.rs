@@ -1170,9 +1170,9 @@ fn graph_entry_coverage(
     resource: &GpuResourceRef,
 ) -> Result<GpuInitialCoverage, RenderGpuWorkAdapterError> {
     match resource {
-        GpuResourceRef::Buffer(buffer) => Ok(GpuInitialCoverage::buffer_ranges(
+        GpuResourceRef::Buffer(buffer) => Ok(GpuInitialCoverage::buffer(
             buffer,
-            [GpuBufferRange::whole(buffer)?],
+            [GpuBufferCoverage::dense(GpuBufferRange::whole(buffer)?)],
         )?),
         GpuResourceRef::Texture(texture) => {
             let access = GpuTextureAccessResource::Texture(texture.clone());

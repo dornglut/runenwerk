@@ -9,18 +9,21 @@ fn initial_coverage_is_checked_normalized_and_kind_preserving() {
         GpuBufferInitialization::Uninitialized,
         [GpuBufferUsage::Storage],
     );
-    let coverage = GpuInitialCoverage::buffer_ranges(
+    let coverage = GpuInitialCoverage::buffer(
         &buffer,
         [
-            GpuBufferRange::new(&buffer, 16, 16).unwrap(),
-            GpuBufferRange::new(&buffer, 0, 16).unwrap(),
-            GpuBufferRange::new(&buffer, 8, 8).unwrap(),
+            GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 16, 16).unwrap()),
+            GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 0, 16).unwrap()),
+            GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 8, 8).unwrap()),
         ],
     )
     .unwrap();
-    assert_eq!(coverage.kind(), GpuInitialCoverageKind::BufferRanges);
-    assert_eq!(coverage.buffer_range_values().unwrap().len(), 1);
-    assert_eq!(coverage.buffer_range_values().unwrap()[0].size(), 32);
+    assert_eq!(coverage.kind(), GpuInitialCoverageKind::Buffer);
+    assert_eq!(coverage.buffer_values().unwrap().len(), 1);
+    assert_eq!(
+        coverage.buffer_values().unwrap()[0],
+        GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 0, 32).unwrap())
+    );
 
     let queries = allocator
         .allocate_query_set_handle(
@@ -29,6 +32,64 @@ fn initial_coverage_is_checked_normalized_and_kind_preserving() {
         .unwrap();
     assert!(
         GpuInitialCoverage::descriptor_initialization(GpuResourceRef::QuerySet(queries)).is_err()
+    );
+}
+
+#[test]
+fn compact_buffer_coverage_compares_by_exact_semantics() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "semantic coverage",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::Storage],
+    );
+    let dense = GpuInitialCoverage::buffer(
+        &buffer,
+        [GpuBufferCoverage::dense(
+            GpuBufferRange::new(&buffer, 0, 64).unwrap(),
+        )],
+    )
+    .unwrap();
+    let strided = GpuInitialCoverage::buffer(
+        &buffer,
+        [GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 0, 32, 32, 2, 0, 1).unwrap(),
+        )],
+    )
+    .unwrap();
+    assert_eq!(dense, strided);
+}
+
+#[test]
+fn large_strided_buffer_coverage_stays_compact() {
+    let mut allocator = allocator();
+    let resource_label = label("large compact coverage");
+    let buffer = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common("large compact coverage"),
+                64_000_000,
+                GpuBufferUsages::new(&resource_label, [GpuBufferUsage::Storage]).unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let coverage = GpuInitialCoverage::buffer(
+        &buffer,
+        [GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 0, 32, 64, 1_000_000, 0, 1).unwrap(),
+        )],
+    )
+    .unwrap();
+    assert_eq!(coverage.buffer_values().unwrap().len(), 1);
+    assert_eq!(
+        match &coverage.buffer_values().unwrap()[0] {
+            GpuBufferCoverage::Strided(coverage) => coverage.segment_count(),
+            GpuBufferCoverage::Dense(_) => 0,
+        },
+        1_000_000
     );
 }
 

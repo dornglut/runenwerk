@@ -1,7 +1,7 @@
 use super::support::*;
 
 #[test]
-fn descriptor_and_partial_write_initialization_are_region_aware() {
+fn descriptor_initialization_is_region_aware_and_generic_writes_do_not_initialize() {
     let mut allocator = allocator();
     let zeroed = buffer(
         &mut allocator,
@@ -68,7 +68,6 @@ fn descriptor_and_partial_write_initialization_are_region_aware() {
         [GpuBufferUsage::Storage],
     );
     let written = GpuBufferRange::new(&uninitialized, 0, 16).unwrap();
-    let disjoint = GpuBufferRange::new(&uninitialized, 32, 16).unwrap();
     let mut partial = builder("partial");
     partial
         .declare_resource(GpuResourceRef::Buffer(uninitialized.clone()))
@@ -88,15 +87,6 @@ fn descriptor_and_partial_write_initialization_are_region_aware() {
         [buffer_access(
             &uninitialized,
             written,
-            GpuBufferAccessKind::StorageRead,
-        )],
-    );
-    add_compute(
-        &mut partial,
-        "read disjoint",
-        [buffer_access(
-            &uninitialized,
-            disjoint,
             GpuBufferAccessKind::StorageRead,
         )],
     );
@@ -567,6 +557,58 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
 }
 
 #[test]
+fn generic_timestamp_access_does_not_initialize_query_state() {
+    let mut allocator = allocator();
+    let queries = allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(common("generic timestamps"), GpuQueryKind::Timestamp, 1)
+                .unwrap(),
+        )
+        .unwrap();
+    let destination = buffer(
+        &mut allocator,
+        "generic timestamp resolve",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::QueryResolve],
+    );
+    let range = GpuQueryRange::whole(&queries).unwrap();
+    let resolve = GpuQueryResolveOperation::new(&queries, range, &destination, 0).unwrap();
+    let mut fragment = builder("generic timestamp");
+    for resource in [
+        GpuResourceRef::QuerySet(queries.clone()),
+        GpuResourceRef::Buffer(destination),
+    ] {
+        fragment.declare_resource(resource).unwrap();
+    }
+    add_compute(
+        &mut fragment,
+        "generic timestamp write",
+        [GpuResourceAccess::Query(
+            GpuQueryAccess::new(&queries, range, GpuQueryAccessKind::WriteTimestamp).unwrap(),
+        )],
+    );
+    fragment
+        .add_node(
+            label("resolve generic timestamp"),
+            GpuWorkOperation::Resolve(resolve),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("resolve generic timestamp"),
+        )
+        .unwrap();
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare(
+            label("generic timestamp graph"),
+            [fragment.finish().unwrap()]
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::ReadBeforeInitialization
+    );
+}
+
+#[test]
 fn buffer_zero_initializes_only_its_checked_range() {
     let mut allocator = allocator();
     let buffer = buffer(
@@ -609,12 +651,152 @@ fn buffer_zero_initializes_only_its_checked_range() {
         .iter()
         .find(|summary| summary.resource().diagnostic_identity() == buffer.diagnostic_identity())
         .unwrap();
-    let final_ranges = summary
-        .final_coverage()
-        .unwrap()
-        .buffer_range_values()
+    let final_coverage = summary.final_coverage().unwrap().buffer_values().unwrap();
+    assert_eq!(final_coverage, [GpuBufferCoverage::dense(zeroed)]);
+}
+
+#[test]
+fn padded_buffer_texture_copy_requires_and_initializes_only_logical_bytes() {
+    let mut allocator = allocator();
+    let source_label = label("padded source");
+    let source = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common("padded source"),
+                512,
+                GpuBufferUsages::new(&source_label, [GpuBufferUsage::CopySource]).unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
         .unwrap();
-    assert_eq!(final_ranges, [zeroed]);
+    let destination = texture(
+        &mut allocator,
+        "padded destination",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [GpuTextureUsage::CopyDestination, GpuTextureUsage::Sampled],
+    );
+    let logical_rows = GpuBufferStridedCoverage::new(&source, 0, 32, 64, 8, 0, 1).unwrap();
+    let input = GpuWorkResourceInput::new(
+        GpuResourceRef::Buffer(source.clone()),
+        GpuInitialCoverage::buffer(&source, [GpuBufferCoverage::strided(logical_rows.clone())])
+            .unwrap(),
+        provenance("padded source input"),
+    )
+    .unwrap();
+    let destination_region = GpuTextureCopyRegion::new(
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(8, 8, 1).unwrap(),
+    )
+    .unwrap();
+    let copy = GpuCopyOperation::buffer_to_texture(
+        GpuBufferTextureLayout::new(&source, 0, 64, 0).unwrap(),
+        destination_region,
+    )
+    .unwrap();
+    let mut fragment = builder("padded copy");
+    for resource in [
+        GpuResourceRef::Buffer(source.clone()),
+        GpuResourceRef::Texture(destination.clone()),
+    ] {
+        fragment.declare_resource(resource).unwrap();
+    }
+    fragment.add_input(input).unwrap();
+    fragment
+        .add_node(
+            label("copy"),
+            GpuWorkOperation::Copy(copy),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("copy"),
+        )
+        .unwrap();
+    add_compute(
+        &mut fragment,
+        "sample copied texture",
+        [texture_access(
+            &destination,
+            GpuTextureSubresourceRange::whole(&destination).unwrap(),
+            GpuTextureAccessKind::SampledRead,
+        )],
+    );
+    assert!(
+        GpuPreparedWorkGraph::prepare(label("padded copy graph"), [fragment.finish().unwrap()])
+            .is_ok()
+    );
+
+    let partial_destination = texture(
+        &mut allocator,
+        "partial padded destination",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [GpuTextureUsage::CopyDestination, GpuTextureUsage::Sampled],
+    );
+    let partial_copy = GpuCopyOperation::buffer_to_texture(
+        GpuBufferTextureLayout::new(&source, 0, 64, 0).unwrap(),
+        GpuTextureCopyRegion::new(
+            &partial_destination,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::Color,
+            GpuCopyExtent::new(4, 8, 1).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut partial = builder("partial padded copy");
+    for resource in [
+        GpuResourceRef::Buffer(source.clone()),
+        GpuResourceRef::Texture(partial_destination.clone()),
+    ] {
+        partial.declare_resource(resource).unwrap();
+    }
+    partial
+        .add_input(
+            GpuWorkResourceInput::new(
+                GpuResourceRef::Buffer(source.clone()),
+                GpuInitialCoverage::buffer(&source, [GpuBufferCoverage::strided(logical_rows)])
+                    .unwrap(),
+                provenance("partial padded source input"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    partial
+        .add_node(
+            label("partial copy"),
+            GpuWorkOperation::Copy(partial_copy),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("partial copy"),
+        )
+        .unwrap();
+    add_compute(
+        &mut partial,
+        "sample partial texture",
+        [texture_access(
+            &partial_destination,
+            GpuTextureSubresourceRange::whole(&partial_destination).unwrap(),
+            GpuTextureAccessKind::SampledRead,
+        )],
+    );
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare(
+            label("partial padded copy graph"),
+            [partial.finish().unwrap()]
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::ReadBeforeInitialization
+    );
 }
 
 #[test]
@@ -653,7 +835,7 @@ fn explicit_graph_entry_input_initializes_only_declared_coverage() {
         let initialized = GpuBufferRange::new(&resource, 16, 16).unwrap();
         let input = GpuWorkResourceInput::new(
             GpuResourceRef::Buffer(resource.clone()),
-            GpuInitialCoverage::buffer_ranges(&resource, [initialized]).unwrap(),
+            GpuInitialCoverage::buffer(&resource, [GpuBufferCoverage::dense(initialized)]).unwrap(),
             provenance("external input"),
         )
         .unwrap();
@@ -694,7 +876,7 @@ fn output_access_and_coverage_mismatches_are_structured() {
         &mut allocator,
         "mismatch",
         GpuBufferInitialization::Uninitialized,
-        [GpuBufferUsage::Storage],
+        [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
     );
     let written = GpuBufferRange::new(&resource, 0, 16).unwrap();
     let overstated = GpuBufferRange::new(&resource, 0, 32).unwrap();
@@ -703,15 +885,21 @@ fn output_access_and_coverage_mismatches_are_structured() {
         fragment
             .declare_resource(GpuResourceRef::Buffer(resource.clone()))
             .unwrap();
-        add_compute(
-            &mut fragment,
-            "write",
-            [buffer_access(
-                &resource,
-                written,
-                GpuBufferAccessKind::StorageWrite,
-            )],
-        );
+        fragment
+            .add_node(
+                label("write"),
+                GpuWorkOperation::Clear(
+                    GpuClearOperation::buffer_zero(
+                        GpuBufferRegion::new(&resource, written).unwrap(),
+                    )
+                    .unwrap(),
+                ),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::TransferPreferred,
+                provenance("write"),
+            )
+            .unwrap();
         fragment
             .add_output(
                 GpuWorkOutput::new(
@@ -721,7 +909,11 @@ fn output_access_and_coverage_mismatches_are_structured() {
                         intent,
                         provenance("mismatch output"),
                     ),
-                    GpuInitialCoverage::buffer_ranges(&resource, [coverage_range]).unwrap(),
+                    GpuInitialCoverage::buffer(
+                        &resource,
+                        [GpuBufferCoverage::dense(coverage_range)],
+                    )
+                    .unwrap(),
                 )
                 .unwrap(),
             )

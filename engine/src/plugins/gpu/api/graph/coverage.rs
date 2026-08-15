@@ -6,10 +6,10 @@ use super::super::{
 };
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuInitialCoverageKind {
     DescriptorInitialization,
-    BufferRanges,
+    Buffer,
     TextureSubresources,
     QueryRanges,
 }
@@ -17,17 +17,306 @@ pub enum GpuInitialCoverageKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum GpuInitialCoverageData {
     DescriptorInitialization,
-    BufferRanges(Vec<GpuBufferRange>),
+    Buffer(Vec<GpuBufferCoverage>),
     TextureSubresources(Vec<GpuTextureSubresourceRange>),
     QueryRanges(Vec<GpuQueryRange>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Exact initialized buffer coverage without expanding padded rows or images.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuBufferCoverage {
+    Dense(GpuBufferRange),
+    Strided(GpuBufferStridedCoverage),
+}
+
+impl GpuBufferCoverage {
+    pub const fn dense(range: GpuBufferRange) -> Self {
+        Self::Dense(range)
+    }
+
+    pub const fn strided(coverage: GpuBufferStridedCoverage) -> Self {
+        Self::Strided(coverage)
+    }
+
+    pub const fn first(&self) -> u64 {
+        match self {
+            Self::Dense(range) => range.offset(),
+            Self::Strided(coverage) => coverage.first(),
+        }
+    }
+
+    fn contains(&self, required: &Self) -> bool {
+        match (self, required) {
+            (Self::Dense(have), Self::Dense(required)) => {
+                have.offset() <= required.offset() && have.end() >= required.end()
+            }
+            (Self::Dense(have), Self::Strided(required)) => {
+                have.offset() <= required.first && have.end() >= required.end
+            }
+            (Self::Strided(have), Self::Dense(required)) => {
+                required_segments(*required).all(|required| {
+                    strided_segments(have).any(|have| have.0 <= required.0 && have.1 >= required.1)
+                })
+            }
+            (Self::Strided(have), Self::Strided(required)) if have == required => true,
+            (Self::Strided(have), Self::Strided(required)) => {
+                strided_segments(required).all(|required| {
+                    strided_segments(have).any(|have| have.0 <= required.0 && have.1 >= required.1)
+                })
+            }
+        }
+    }
+}
+
+/// A repeated exact buffer segment layout, used for padded buffer-texture copies.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuBufferStridedCoverage {
+    buffer: GpuBufferHandle,
+    first: u64,
+    segment_size: u64,
+    segment_stride: u64,
+    segment_count: u32,
+    group_stride: u64,
+    group_count: u32,
+    end: u64,
+}
+
+impl GpuBufferStridedCoverage {
+    pub fn new(
+        buffer: &GpuBufferHandle,
+        first: u64,
+        segment_size: u64,
+        segment_stride: u64,
+        segment_count: u32,
+        group_stride: u64,
+        group_count: u32,
+    ) -> Result<Self, GpuWorkAuthoringError> {
+        if segment_size == 0 || segment_count == 0 || group_count == 0 {
+            return Err(coverage_error(
+                "construct strided buffer coverage",
+                buffer.diagnostic_identity(),
+                "provide nonempty segment and group counts",
+            ));
+        }
+        if segment_stride < segment_size {
+            return Err(coverage_error(
+                "construct strided buffer coverage",
+                buffer.diagnostic_identity(),
+                "keep each segment stride at least as large as the segment size",
+            ));
+        }
+        let group_payload = u64::from(segment_count - 1)
+            .checked_mul(segment_stride)
+            .and_then(|value| value.checked_add(segment_size))
+            .ok_or_else(|| {
+                coverage_error(
+                    "construct strided buffer coverage",
+                    buffer.diagnostic_identity(),
+                    "reduce the strided segment layout to avoid arithmetic overflow",
+                )
+            })?;
+        if group_count > 1 && group_stride < group_payload {
+            return Err(coverage_error(
+                "construct strided buffer coverage",
+                buffer.diagnostic_identity(),
+                "keep each group stride large enough for all of its segments",
+            ));
+        }
+        let end = first
+            .checked_add(
+                u64::from(group_count - 1)
+                    .checked_mul(group_stride)
+                    .and_then(|value| value.checked_add(group_payload))
+                    .ok_or_else(|| {
+                        coverage_error(
+                            "construct strided buffer coverage",
+                            buffer.diagnostic_identity(),
+                            "reduce the strided group layout to avoid arithmetic overflow",
+                        )
+                    })?,
+            )
+            .ok_or_else(|| {
+                coverage_error(
+                    "construct strided buffer coverage",
+                    buffer.diagnostic_identity(),
+                    "reduce the strided buffer offset to avoid arithmetic overflow",
+                )
+            })?;
+        if first >= buffer.descriptor().size_bytes() || end > buffer.descriptor().size_bytes() {
+            return Err(coverage_error(
+                "construct strided buffer coverage",
+                buffer.diagnostic_identity(),
+                "keep every strided segment inside the buffer descriptor",
+            ));
+        }
+        Ok(Self {
+            buffer: buffer.clone(),
+            first,
+            segment_size,
+            segment_stride,
+            segment_count,
+            group_stride,
+            group_count,
+            end,
+        })
+    }
+
+    pub fn buffer(&self) -> &GpuBufferHandle {
+        &self.buffer
+    }
+    pub const fn first(&self) -> u64 {
+        self.first
+    }
+    pub const fn segment_size(&self) -> u64 {
+        self.segment_size
+    }
+    pub const fn segment_stride(&self) -> u64 {
+        self.segment_stride
+    }
+    pub const fn segment_count(&self) -> u32 {
+        self.segment_count
+    }
+    pub const fn group_stride(&self) -> u64 {
+        self.group_stride
+    }
+    pub const fn group_count(&self) -> u32 {
+        self.group_count
+    }
+    pub const fn end(&self) -> u64 {
+        self.end
+    }
+}
+
+fn required_segments(coverage: GpuBufferRange) -> impl Iterator<Item = (u64, u64)> {
+    core::iter::once((coverage.offset(), coverage.end()))
+}
+
+fn strided_segments(coverage: &GpuBufferStridedCoverage) -> impl Iterator<Item = (u64, u64)> + '_ {
+    (0..coverage.group_count).flat_map(move |group| {
+        let group_start = coverage.first + u64::from(group) * coverage.group_stride;
+        (0..coverage.segment_count).map(move |segment| {
+            let start = group_start + u64::from(segment) * coverage.segment_stride;
+            (start, start + coverage.segment_size)
+        })
+    })
+}
+
+pub(super) fn normalize_buffer_coverage(
+    buffer: &GpuBufferHandle,
+    values: &mut Vec<GpuBufferCoverage>,
+) {
+    let mut dense = values
+        .iter()
+        .filter_map(|value| match value {
+            GpuBufferCoverage::Dense(range) => Some((range.offset(), range.end())),
+            GpuBufferCoverage::Strided(_) => None,
+        })
+        .collect::<Vec<_>>();
+    let mut normalized = normalize_u64_intervals(core::mem::take(&mut dense))
+        .into_iter()
+        .map(|(start, end)| {
+            GpuBufferCoverage::Dense(
+                GpuBufferRange::new(buffer, start, end - start)
+                    .expect("normalized checked buffer coverage remains checked"),
+            )
+        })
+        .collect::<Vec<_>>();
+    normalized.extend(values.iter().filter_map(|value| match value {
+        GpuBufferCoverage::Dense(_) => None,
+        GpuBufferCoverage::Strided(coverage) => Some(GpuBufferCoverage::Strided(coverage.clone())),
+    }));
+    normalized.sort_by_key(GpuBufferCoverage::first);
+    normalized.dedup();
+    *values = normalized
+        .iter()
+        .enumerate()
+        .filter(|(index, value)| {
+            !normalized.iter().enumerate().any(|(other_index, other)| {
+                index != &other_index
+                    && matches!(other, GpuBufferCoverage::Dense(_))
+                    && other.contains(value)
+            })
+        })
+        .map(|(_, value)| value.clone())
+        .collect();
+}
+
+pub(super) fn buffer_coverage_contains(
+    have: &[GpuBufferCoverage],
+    required: &[GpuBufferCoverage],
+) -> bool {
+    required.iter().all(|required| {
+        have.iter().any(|coverage| coverage.contains(required))
+            || match required {
+                GpuBufferCoverage::Dense(range) => {
+                    buffer_interval_contains(have, (range.offset(), range.end()))
+                }
+                GpuBufferCoverage::Strided(strided) => strided_segments(strided)
+                    .all(|required| buffer_interval_contains(have, required)),
+            }
+    })
+}
+
+fn buffer_interval_contains(have: &[GpuBufferCoverage], required: (u64, u64)) -> bool {
+    if have.iter().any(|coverage| match coverage {
+        GpuBufferCoverage::Dense(range) => {
+            range.offset() <= required.0 && range.end() >= required.1
+        }
+        GpuBufferCoverage::Strided(strided) => {
+            strided_segments(strided).any(|have| have.0 <= required.0 && have.1 >= required.1)
+        }
+    }) {
+        return true;
+    }
+    let mut cursor = required.0;
+    while cursor < required.1 {
+        let mut next = cursor;
+        for coverage in have {
+            match coverage {
+                GpuBufferCoverage::Dense(range)
+                    if range.offset() <= cursor && range.end() > next =>
+                {
+                    next = range.end();
+                }
+                GpuBufferCoverage::Strided(strided) => {
+                    for (start, end) in strided_segments(strided) {
+                        if start <= cursor && end > next {
+                            next = end;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if next == cursor {
+            return false;
+        }
+        cursor = next.min(required.1);
+    }
+    true
+}
+
+#[derive(Debug, Clone)]
 pub struct GpuInitialCoverage {
     pub(super) resource: GpuResourceRef,
     pub(super) storage_resource: GpuWorkResourceId,
     pub(super) data: GpuInitialCoverageData,
 }
+
+impl PartialEq for GpuInitialCoverage {
+    fn eq(&self, other: &Self) -> bool {
+        self.resource == other.resource
+            && self.storage_resource == other.storage_resource
+            && match (&self.data, &other.data) {
+                (GpuInitialCoverageData::Buffer(left), GpuInitialCoverageData::Buffer(right)) => {
+                    buffer_coverage_contains(left, right) && buffer_coverage_contains(right, left)
+                }
+                _ => self.data == other.data,
+            }
+    }
+}
+
+impl Eq for GpuInitialCoverage {}
 
 impl GpuInitialCoverage {
     pub fn descriptor_initialization(
@@ -48,45 +337,35 @@ impl GpuInitialCoverage {
         })
     }
 
-    pub fn buffer_ranges(
+    pub fn buffer(
         buffer: &GpuBufferHandle,
-        ranges: impl IntoIterator<Item = GpuBufferRange>,
+        values: impl IntoIterator<Item = GpuBufferCoverage>,
     ) -> Result<Self, GpuWorkAuthoringError> {
-        let mut intervals = Vec::new();
-        for range in ranges {
-            let checked =
-                GpuBufferRange::new(buffer, range.offset(), range.size()).map_err(|source| {
-                    coverage_source_error(
-                        "construct initial buffer coverage",
-                        buffer.diagnostic_identity(),
-                        source,
-                    )
-                })?;
-            intervals.push((checked.offset(), checked.end()));
-        }
-        if intervals.is_empty() {
+        let mut values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() {
             return Err(coverage_error(
                 "construct initial buffer coverage",
                 buffer.diagnostic_identity(),
-                "provide at least one checked initialized byte range",
+                "provide at least one checked initialized buffer coverage value",
             ));
         }
-        let ranges = normalize_u64_intervals(intervals)
-            .into_iter()
-            .map(|(start, end)| {
-                GpuBufferRange::new(buffer, start, end - start).map_err(|source| {
-                    coverage_source_error(
-                        "normalize initial buffer coverage",
-                        buffer.diagnostic_identity(),
-                        source,
-                    )
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        if values.iter().any(|value| match value {
+            GpuBufferCoverage::Dense(range) => {
+                GpuBufferRange::new(buffer, range.offset(), range.size()).is_err()
+            }
+            GpuBufferCoverage::Strided(coverage) => coverage.buffer() != buffer,
+        }) {
+            return Err(coverage_error(
+                "construct initial buffer coverage",
+                buffer.diagnostic_identity(),
+                "provide coverage checked against the same buffer",
+            ));
+        }
+        normalize_buffer_coverage(buffer, &mut values);
         Ok(Self {
             resource: GpuResourceRef::Buffer(buffer.clone()),
             storage_resource: buffer.diagnostic_identity(),
-            data: GpuInitialCoverageData::BufferRanges(ranges),
+            data: GpuInitialCoverageData::Buffer(values),
         })
     }
 
@@ -214,7 +493,7 @@ impl GpuInitialCoverage {
             GpuInitialCoverageData::DescriptorInitialization => {
                 GpuInitialCoverageKind::DescriptorInitialization
             }
-            GpuInitialCoverageData::BufferRanges(_) => GpuInitialCoverageKind::BufferRanges,
+            GpuInitialCoverageData::Buffer(_) => GpuInitialCoverageKind::Buffer,
             GpuInitialCoverageData::TextureSubresources(_) => {
                 GpuInitialCoverageKind::TextureSubresources
             }
@@ -226,9 +505,9 @@ impl GpuInitialCoverage {
         &self.resource
     }
 
-    pub fn buffer_range_values(&self) -> Option<&[GpuBufferRange]> {
+    pub fn buffer_values(&self) -> Option<&[GpuBufferCoverage]> {
         match &self.data {
-            GpuInitialCoverageData::BufferRanges(ranges) => Some(ranges),
+            GpuInitialCoverageData::Buffer(values) => Some(values),
             _ => None,
         }
     }

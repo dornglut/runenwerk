@@ -18,7 +18,10 @@ pub use authoring::{
     GpuComputeNodeBuilder, GpuExecutionPreference, GpuExplicitOrder, GpuWorkFragment,
     GpuWorkFragmentBuilder, GpuWorkImport, GpuWorkNode, GpuWorkOutput,
 };
-pub use coverage::{GpuInitialCoverage, GpuInitialCoverageKind, GpuWorkResourceInput};
+pub use coverage::{
+    GpuBufferCoverage, GpuBufferStridedCoverage, GpuInitialCoverage, GpuInitialCoverageKind,
+    GpuWorkResourceInput,
+};
 pub use dependency::{GpuDependencyReason, GpuDependencyRegion, GpuWorkDependency};
 pub use diagnostics::GpuPreparedWorkDiagnostic;
 pub use identity::{GpuPreparedWorkNodeId, GpuWorkNodeId};
