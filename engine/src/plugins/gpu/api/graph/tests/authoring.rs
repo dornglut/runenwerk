@@ -208,7 +208,10 @@ fn strided_buffer_coverage_subsumes_only_dense_intervals_in_covered_runs() {
         ],
     )
     .unwrap();
-    assert_eq!(fully_inside.buffer_values().unwrap(), [strided.clone()]);
+    assert_eq!(
+        fully_inside.buffer_values().unwrap(),
+        std::slice::from_ref(&strided)
+    );
 
     let group_boundary = GpuInitialCoverage::buffer(
         &buffer,
@@ -218,7 +221,10 @@ fn strided_buffer_coverage_subsumes_only_dense_intervals_in_covered_runs() {
         ],
     )
     .unwrap();
-    assert_eq!(group_boundary.buffer_values().unwrap(), [strided.clone()]);
+    assert_eq!(
+        group_boundary.buffer_values().unwrap(),
+        std::slice::from_ref(&strided)
+    );
 
     for range in [
         GpuBufferRange::new(&buffer, 6, 10).unwrap(),
