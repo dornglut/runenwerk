@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-14
 ---
 
 # Active Designs
@@ -129,6 +129,7 @@ active design contains older conflicting target language.
 - [RunenECS Boundary Repair Execution Plan](runenecs-boundary-repair-execution-plan.md)
 - [RunenGPU Architecture Design](runengpu-architecture-design.md)
 - [RunenGPU G3 Access and Work Graph Design](runengpu-g3-access-work-graph-design.md)
+- [RunenGPU G3R Definite Initialization Semantics Correction](runengpu-g3r-definite-initialization-correction.md)
 - [RunenGPU G4 Context, Program, and WGPU Realization Design](runengpu-g4-context-program-realization-design.md)
 - [RunenGPU Shader Authoring and Canonical WGSL Artifact Boundary](runengpu-shader-authoring-artifact-boundary.md)
 - [RunenGPU G4B Contracts and G4C Delivery Design](runengpu-g4b-contracts-g4c-delivery-design.md)

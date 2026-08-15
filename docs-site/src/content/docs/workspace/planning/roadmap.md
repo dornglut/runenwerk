@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-13
+last_reviewed: 2026-08-14
 related_docs:
   - ../engineering-workflow.md
   - ../../architecture/runenwerk-platform-architecture.md
@@ -75,12 +75,25 @@ G1A logical resource identity
     -> G2 capabilities and logical resources
         -> G3 checked access and work graph
             -> G4 backend realization and ownership cutover
-                -> G5 execution and lifecycle
-                    -> G6 representative offscreen proof and cost characterization
-                        -> G7 surfaces, loss, generations, and reconstruction
-                            -> G8 operational conformance and no-reach-through proof
-                                -> GX standalone transfer to dornglut/runen-gpu
+                -> G3R initialization-semantics correction
+                    -> G4R backend-baseline refresh
+                        -> G5A/B executable work and surface-independent execution lifecycle
+                            -> G7A minimal durable surface foundation
+                                -> G5C final renderer execution cutover
+                                    -> G6 representative breadth, scale, offscreen proof, and cost characterization
+                                        -> G7B complete surface/device loss, generations, and reconstruction
+                                            -> G8 operational, scalability, extension, and no-reach-through conformance
+                                                -> GX standalone transfer to dornglut/runen-gpu
 ```
+
+`G3R` and `G4R` are corrective predecessor phases discovered by G5 owner review. They are
+ordered deliberately: backend-independent semantic correctness is repaired first, then the
+corrected G1-G4 authority is re-proven against the refreshed private WGPU/Naga baseline.
+
+`G7A` is intentionally narrower than complete G7. It establishes only the durable generic
+surface identity/generation/capability/acquisition/presentation foundation required so the final
+G5C renderer cutover does not create a disposable pre-G7 surface execution architecture. Full
+loss/reconstruction policy remains G7B.
 
 G4 is itself ordered:
 
