@@ -552,7 +552,7 @@ fn lower_pass_node(
     timing: Option<&TimingResources>,
     first_query: Option<u32>,
 ) -> Result<LoweredPass, RenderGpuWorkAdapterError> {
-    let mut accesses = lower_caller_accesses(node, resources)?;
+    let accesses = lower_caller_accesses(node, resources)?;
     let timestamp_access = match (timing, first_query) {
         (Some(timing), Some(first)) => {
             let range = GpuQueryRange::new(&timing.query_set, first, 2)?;
@@ -566,18 +566,19 @@ fn lower_pass_node(
     };
     let operation = match node.kind {
         RenderPassKind::Compute => {
-            if let Some(timestamp) = timestamp_access.clone() {
-                accesses.push(GpuResourceAccess::Query(timestamp));
-            }
             let dispatch = projected_dispatches
                 .get(&node.id)
                 .copied()
                 .ok_or(RenderGpuWorkAdapterError::MissingProjectedDispatch { pass_id: node.id })?;
-            GpuWorkOperation::Compute(GpuComputeOperation::new(GpuDispatchSize::new(
+            let operation = GpuComputeOperation::new(GpuDispatchSize::new(
                 dispatch[0],
                 dispatch[1],
                 dispatch[2],
-            )?))
+            )?);
+            GpuWorkOperation::Compute(match timestamp_access {
+                Some(timestamp) => operation.with_timestamp_writes([timestamp])?,
+                None => operation,
+            })
         }
         RenderPassKind::Fullscreen
         | RenderPassKind::Graphics
@@ -1523,7 +1524,16 @@ mod tests {
 
         assert_eq!(work.graph().nodes().len(), 4);
         let compute = prepared_node(&work, "adapter.compute").node();
-        let compute_timestamp = compute
+        let GpuWorkOperation::Compute(compute_operation) = compute.operation() else {
+            panic!("compute pass should lower to compute work");
+        };
+        let [compute_timestamp] = compute_operation.timestamp_writes() else {
+            panic!("compute operation should retain one timestamp range");
+        };
+        assert_eq!(compute_timestamp.kind(), GpuQueryAccessKind::WriteTimestamp);
+        assert_eq!(compute_timestamp.range().first(), 0);
+        assert_eq!(compute_timestamp.range().count(), 2);
+        let derived_compute_timestamp = compute
             .accesses()
             .iter()
             .find_map(|access| match access {
@@ -1535,8 +1545,7 @@ mod tests {
                 _ => None,
             })
             .expect("compute timestamp access should lower");
-        assert_eq!(compute_timestamp.range().first(), 0);
-        assert_eq!(compute_timestamp.range().count(), 2);
+        assert_eq!(derived_compute_timestamp, compute_timestamp);
 
         let render = prepared_node(&work, "adapter.render").node();
         let GpuWorkOperation::Render(render_operation) = render.operation() else {
