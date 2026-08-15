@@ -2579,7 +2579,7 @@ mod tests {
         let compute = GpuComputeOperation::new(GpuDispatchSize::new(1, 1, 1).unwrap())
             .with_timestamp_writes([timestamp.clone()])
             .unwrap();
-        assert_eq!(compute.timestamp_writes(), [timestamp.clone()]);
+        assert_eq!(compute.timestamp_writes(), std::slice::from_ref(&timestamp));
         assert_eq!(
             GpuComputeOperation::new(GpuDispatchSize::new(1, 1, 1).unwrap())
                 .with_timestamp_writes([resolve_source])
