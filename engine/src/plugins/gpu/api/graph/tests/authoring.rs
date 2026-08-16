@@ -1,5 +1,28 @@
 use super::super::authoring::{normalize_node_accesses, preserve_caller_readable_accesses};
+use super::super::coverage::buffer_coverage_contains;
 use super::support::*;
+
+fn naive_buffer_coverage_bytes(values: &[GpuBufferCoverage]) -> std::collections::BTreeSet<u64> {
+    let mut bytes = std::collections::BTreeSet::new();
+    for value in values {
+        match value {
+            GpuBufferCoverage::Dense(range) => {
+                bytes.extend(range.offset()..range.end());
+            }
+            GpuBufferCoverage::Strided(coverage) => {
+                for group in 0..u64::from(coverage.group_count()) {
+                    for segment in 0..u64::from(coverage.segment_count()) {
+                        let start = coverage.first()
+                            + group * coverage.group_stride()
+                            + segment * coverage.segment_stride();
+                        bytes.extend(start..start + coverage.segment_size());
+                    }
+                }
+            }
+        }
+    }
+    bytes
+}
 
 #[test]
 fn initial_coverage_is_checked_normalized_and_kind_preserving() {
@@ -60,6 +83,68 @@ fn compact_buffer_coverage_compares_by_exact_semantics() {
     )
     .unwrap();
     assert_eq!(dense, strided);
+}
+
+#[test]
+fn compact_buffer_coverage_matches_an_independent_explicit_byte_oracle() {
+    let mut allocator = allocator();
+    let buffer = buffer(
+        &mut allocator,
+        "coverage oracle",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::Storage],
+    );
+    let terms = vec![
+        GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 0, 1).unwrap()),
+        GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 1, 3).unwrap()),
+        GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 4, 4).unwrap()),
+        GpuBufferCoverage::dense(GpuBufferRange::new(&buffer, 8, 8).unwrap()),
+        GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 0, 1, 2, 4, 0, 1).unwrap(),
+        ),
+        GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 1, 1, 2, 4, 0, 1).unwrap(),
+        ),
+        GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 0, 2, 4, 2, 8, 2).unwrap(),
+        ),
+        GpuBufferCoverage::strided(
+            GpuBufferStridedCoverage::new(&buffer, 1, 1, 3, 2, 8, 2).unwrap(),
+        ),
+    ];
+    let mut unions = vec![Vec::new()];
+    for term in &terms {
+        unions.push(vec![term.clone()]);
+    }
+    for (index, first) in terms.iter().enumerate() {
+        for second in &terms[index..] {
+            unions.push(vec![first.clone(), second.clone()]);
+        }
+    }
+    unions.push(vec![terms[0].clone(), terms[4].clone(), terms[6].clone()]);
+    unions.push(vec![terms[1].clone(), terms[5].clone(), terms[7].clone()]);
+
+    for have in &unions {
+        let have_bytes = naive_buffer_coverage_bytes(have);
+        for required in &unions {
+            let required_bytes = naive_buffer_coverage_bytes(required);
+            assert_eq!(
+                buffer_coverage_contains(have, required),
+                required_bytes.is_subset(&have_bytes),
+                "compact containment disagreed with the explicit-byte oracle: have={have:?}, required={required:?}",
+            );
+            if !have.is_empty() && !required.is_empty() {
+                let have_coverage = GpuInitialCoverage::buffer(&buffer, have.clone()).unwrap();
+                let required_coverage =
+                    GpuInitialCoverage::buffer(&buffer, required.clone()).unwrap();
+                assert_eq!(
+                    have_coverage == required_coverage,
+                    have_bytes == required_bytes,
+                    "compact equality disagreed with the explicit-byte oracle: left={have:?}, right={required:?}",
+                );
+            }
+        }
+    }
 }
 
 #[test]

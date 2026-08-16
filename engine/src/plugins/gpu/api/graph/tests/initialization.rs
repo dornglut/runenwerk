@@ -660,6 +660,230 @@ fn buffer_zero_initializes_only_its_checked_range() {
 }
 
 #[test]
+fn buffer_to_buffer_copy_requires_and_initializes_exact_interior_ranges() {
+    let mut allocator = allocator();
+    let source = buffer(
+        &mut allocator,
+        "interior copy source",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::CopySource, GpuBufferUsage::Storage],
+    );
+    let destination = buffer(
+        &mut allocator,
+        "interior copy destination",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::CopyDestination, GpuBufferUsage::Storage],
+    );
+    let source_range = GpuBufferRange::new(&source, 8, 16).unwrap();
+    let destination_range = GpuBufferRange::new(&destination, 32, 16).unwrap();
+    let source_input = GpuWorkResourceInput::new(
+        GpuResourceRef::Buffer(source.clone()),
+        GpuInitialCoverage::buffer(&source, [GpuBufferCoverage::dense(source_range)]).unwrap(),
+        provenance("interior copy source input"),
+    )
+    .unwrap();
+    let copy = GpuCopyOperation::buffer_to_buffer(
+        GpuBufferRegion::new(&source, source_range).unwrap(),
+        GpuBufferRegion::new(&destination, destination_range).unwrap(),
+    )
+    .unwrap();
+    let make_fragment = |source_read: Option<GpuBufferRange>, destination_read| {
+        let mut fragment = builder("interior buffer copy");
+        for resource in [
+            GpuResourceRef::Buffer(source.clone()),
+            GpuResourceRef::Buffer(destination.clone()),
+        ] {
+            fragment.declare_resource(resource).unwrap();
+        }
+        fragment.add_input(source_input.clone()).unwrap();
+        if let Some(range) = source_read {
+            add_compute(
+                &mut fragment,
+                "read source",
+                [buffer_access(
+                    &source,
+                    range,
+                    GpuBufferAccessKind::StorageRead,
+                )],
+            );
+        }
+        fragment
+            .add_node(
+                label("copy interior range"),
+                GpuWorkOperation::Copy(copy.clone()),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::TransferPreferred,
+                provenance("copy interior range"),
+            )
+            .unwrap();
+        add_compute(
+            &mut fragment,
+            "read destination",
+            [buffer_access(
+                &destination,
+                destination_read,
+                GpuBufferAccessKind::StorageRead,
+            )],
+        );
+        fragment.finish().unwrap()
+    };
+
+    let prepared = GpuPreparedWorkGraph::prepare(
+        label("exact interior buffer copy"),
+        [make_fragment(None, destination_range)],
+    )
+    .unwrap();
+    let destination_coverage = prepared
+        .initialization()
+        .iter()
+        .find(|summary| {
+            summary.resource().diagnostic_identity() == destination.diagnostic_identity()
+        })
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .buffer_values()
+        .unwrap();
+    assert_eq!(
+        destination_coverage,
+        [GpuBufferCoverage::dense(destination_range)]
+    );
+
+    for fragment in [
+        make_fragment(
+            Some(GpuBufferRange::new(&source, 7, 18).unwrap()),
+            destination_range,
+        ),
+        make_fragment(None, GpuBufferRange::new(&destination, 31, 18).unwrap()),
+    ] {
+        assert_eq!(
+            GpuPreparedWorkGraph::prepare(label("neighbor interior buffer copy"), [fragment])
+                .unwrap_err()
+                .cause(),
+            GpuWorkGraphCause::ReadBeforeInitialization
+        );
+    }
+}
+
+#[test]
+fn query_resolve_uses_exact_input_indices_and_interior_destination_bytes() {
+    let mut allocator = allocator();
+    let queries = allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(
+                common("isolated query resolve"),
+                GpuQueryKind::Timestamp,
+                8,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let destination = buffer(
+        &mut allocator,
+        "isolated query destination",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::QueryResolve, GpuBufferUsage::Storage],
+    );
+    let query_range = GpuQueryRange::new(&queries, 2, 3).unwrap();
+    let destination_range = GpuBufferRange::new(&destination, 16, 24).unwrap();
+    let query_input = GpuWorkResourceInput::new(
+        GpuResourceRef::QuerySet(queries.clone()),
+        GpuInitialCoverage::query_ranges(&queries, [query_range]).unwrap(),
+        provenance("isolated query input"),
+    )
+    .unwrap();
+    let resolve = GpuQueryResolveOperation::new(&queries, query_range, &destination, 16).unwrap();
+    assert_eq!(resolve.destination_range(), destination_range);
+    let make_fragment = |query_read: Option<GpuQueryRange>, destination_read| {
+        let mut fragment = builder("isolated query resolve");
+        for resource in [
+            GpuResourceRef::QuerySet(queries.clone()),
+            GpuResourceRef::Buffer(destination.clone()),
+        ] {
+            fragment.declare_resource(resource).unwrap();
+        }
+        fragment.add_input(query_input.clone()).unwrap();
+        if let Some(range) = query_read {
+            add_compute(
+                &mut fragment,
+                "read neighboring queries",
+                [GpuResourceAccess::Query(
+                    GpuQueryAccess::new(&queries, range, GpuQueryAccessKind::ResolveSource)
+                        .unwrap(),
+                )],
+            );
+        }
+        fragment
+            .add_node(
+                label("resolve explicit query input"),
+                GpuWorkOperation::Resolve(resolve.clone()),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::TransferPreferred,
+                provenance("resolve explicit query input"),
+            )
+            .unwrap();
+        add_compute(
+            &mut fragment,
+            "read resolved bytes",
+            [buffer_access(
+                &destination,
+                destination_read,
+                GpuBufferAccessKind::StorageRead,
+            )],
+        );
+        fragment.finish().unwrap()
+    };
+
+    let prepared = GpuPreparedWorkGraph::prepare(
+        label("exact isolated query resolve"),
+        [make_fragment(None, destination_range)],
+    )
+    .unwrap();
+    let query_coverage = prepared
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == queries.diagnostic_identity())
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .query_range_values()
+        .unwrap();
+    assert_eq!(query_coverage, [query_range]);
+    let destination_coverage = prepared
+        .initialization()
+        .iter()
+        .find(|summary| {
+            summary.resource().diagnostic_identity() == destination.diagnostic_identity()
+        })
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .buffer_values()
+        .unwrap();
+    assert_eq!(
+        destination_coverage,
+        [GpuBufferCoverage::dense(destination_range)]
+    );
+
+    for fragment in [
+        make_fragment(
+            Some(GpuQueryRange::new(&queries, 1, 5).unwrap()),
+            destination_range,
+        ),
+        make_fragment(None, GpuBufferRange::new(&destination, 15, 26).unwrap()),
+    ] {
+        assert_eq!(
+            GpuPreparedWorkGraph::prepare(label("neighbor isolated query resolve"), [fragment])
+                .unwrap_err()
+                .cause(),
+            GpuWorkGraphCause::ReadBeforeInitialization
+        );
+    }
+}
+
+#[test]
 fn operation_effects_require_their_checked_write_role() {
     let mut allocator = allocator();
     let buffer = buffer(
@@ -840,6 +1064,128 @@ fn complete_d2_array_copy_initializes_only_the_selected_nonzero_layers() {
         .unwrap_err()
         .cause(),
         GpuWorkGraphCause::ReadBeforeInitialization
+    );
+}
+
+#[test]
+fn d3_texture_copy_initializes_a_mip_only_for_the_complete_volume() {
+    let mut allocator = allocator();
+    let source_label = label("d3 copy source");
+    let source = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common("d3 copy source"),
+                GpuTextureDimension::D3,
+                GpuTextureExtent::new(&source_label, GpuTextureDimension::D3, 8, 8, 4).unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &source_label,
+                    [
+                        GpuTextureUsage::CopySource,
+                        GpuTextureUsage::CopyDestination,
+                    ],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Zeroed,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let destination_label = label("d3 copy destination");
+    let destination = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common("d3 copy destination"),
+                GpuTextureDimension::D3,
+                GpuTextureExtent::new(&destination_label, GpuTextureDimension::D3, 8, 8, 4)
+                    .unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &destination_label,
+                    [GpuTextureUsage::CopyDestination, GpuTextureUsage::Sampled],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let make_fragment = |depth| {
+        let extent = GpuCopyExtent::new(8, 8, depth).unwrap();
+        let copy = GpuCopyOperation::texture_to_texture(
+            GpuTextureCopyRegion::new(
+                &source,
+                0,
+                GpuTextureOrigin::new(0, 0, 0),
+                GpuTextureAspect::Color,
+                extent,
+            )
+            .unwrap(),
+            GpuTextureCopyRegion::new(
+                &destination,
+                0,
+                GpuTextureOrigin::new(0, 0, 0),
+                GpuTextureAspect::Color,
+                extent,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let mut fragment = builder("d3 texture copy");
+        for resource in [
+            GpuResourceRef::Texture(source.clone()),
+            GpuResourceRef::Texture(destination.clone()),
+        ] {
+            fragment.declare_resource(resource).unwrap();
+        }
+        fragment
+            .add_node(
+                label("copy d3 volume"),
+                GpuWorkOperation::Copy(copy),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::TransferPreferred,
+                provenance("copy d3 volume"),
+            )
+            .unwrap();
+        add_compute(
+            &mut fragment,
+            "sample d3 destination",
+            [texture_access(
+                &destination,
+                GpuTextureSubresourceRange::whole(&destination).unwrap(),
+                GpuTextureAccessKind::SampledRead,
+            )],
+        );
+        fragment.finish().unwrap()
+    };
+
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare(label("partial d3 copy"), [make_fragment(2)])
+            .unwrap_err()
+            .cause(),
+        GpuWorkGraphCause::ReadBeforeInitialization
+    );
+    let prepared =
+        GpuPreparedWorkGraph::prepare(label("complete d3 copy"), [make_fragment(4)]).unwrap();
+    let destination_coverage = prepared
+        .initialization()
+        .iter()
+        .find(|summary| {
+            summary.resource().diagnostic_identity() == destination.diagnostic_identity()
+        })
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .texture_subresource_values()
+        .unwrap();
+    assert_eq!(
+        destination_coverage,
+        [GpuTextureSubresourceRange::whole(&destination).unwrap()]
     );
 }
 
@@ -1207,6 +1553,194 @@ fn padded_buffer_texture_copy_requires_and_initializes_only_logical_bytes() {
         .cause(),
         GpuWorkGraphCause::ReadBeforeInitialization
     );
+}
+
+#[test]
+fn multi_image_strided_coverage_round_trips_through_output_import_and_copy() {
+    let mut allocator = allocator();
+    let source = texture(
+        &mut allocator,
+        "multi image source",
+        GpuTextureInitialization::Zeroed,
+        1,
+        2,
+        [
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ],
+    );
+    let destination = texture(
+        &mut allocator,
+        "multi image destination",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        2,
+        [GpuTextureUsage::CopyDestination],
+    );
+    let staging_label = label("multi image staging");
+    let staging = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common("multi image staging"),
+                1024,
+                GpuBufferUsages::new(
+                    &staging_label,
+                    [
+                        GpuBufferUsage::CopySource,
+                        GpuBufferUsage::CopyDestination,
+                        GpuBufferUsage::Storage,
+                    ],
+                )
+                .unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let extent = GpuCopyExtent::new(8, 4, 2).unwrap();
+    let layout = GpuBufferTextureLayout::new(&staging, 0, 64, 6).unwrap();
+    let exact = GpuBufferStridedCoverage::new(&staging, 0, 32, 64, 4, 384, 2).unwrap();
+    let key = GpuExportKey::new("multi-image.staging").unwrap();
+
+    let mut producer = builder("multi image producer");
+    for resource in [
+        GpuResourceRef::Texture(source.clone()),
+        GpuResourceRef::Buffer(staging.clone()),
+    ] {
+        producer.declare_resource(resource).unwrap();
+    }
+    producer
+        .add_node(
+            label("copy texture images to staging"),
+            GpuWorkOperation::Copy(
+                GpuCopyOperation::texture_to_buffer(
+                    GpuTextureCopyRegion::new(
+                        &source,
+                        0,
+                        GpuTextureOrigin::new(0, 0, 0),
+                        GpuTextureAspect::Color,
+                        extent,
+                    )
+                    .unwrap(),
+                    layout.clone(),
+                )
+                .unwrap(),
+            ),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("copy texture images to staging"),
+        )
+        .unwrap();
+    producer
+        .add_output(
+            GpuWorkOutput::new(
+                GpuExportRelationship::new(
+                    GpuResourceRef::Buffer(staging.clone()),
+                    key.clone(),
+                    GpuResourceAccessIntent::Write,
+                    provenance("multi image staging output"),
+                ),
+                GpuInitialCoverage::buffer(&staging, [GpuBufferCoverage::strided(exact.clone())])
+                    .unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let producer = producer.finish().unwrap();
+
+    let make_consumer = |padding_read: Option<GpuBufferRange>| {
+        let mut consumer = builder("multi image consumer");
+        for resource in [
+            GpuResourceRef::Buffer(staging.clone()),
+            GpuResourceRef::Texture(destination.clone()),
+        ] {
+            consumer.declare_resource(resource).unwrap();
+        }
+        consumer
+            .add_import(GpuWorkImport::new(
+                GpuResourceRef::Buffer(staging.clone()),
+                key.clone(),
+                GpuResourceAccessIntent::Read,
+                provenance("multi image staging import"),
+            ))
+            .unwrap();
+        consumer
+            .add_node(
+                label("copy staging to texture images"),
+                GpuWorkOperation::Copy(
+                    GpuCopyOperation::buffer_to_texture(
+                        layout.clone(),
+                        GpuTextureCopyRegion::new(
+                            &destination,
+                            0,
+                            GpuTextureOrigin::new(0, 0, 0),
+                            GpuTextureAspect::Color,
+                            extent,
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap(),
+                ),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::TransferPreferred,
+                provenance("copy staging to texture images"),
+            )
+            .unwrap();
+        if let Some(range) = padding_read {
+            add_compute(
+                &mut consumer,
+                "read multi image padding",
+                [buffer_access(
+                    &staging,
+                    range,
+                    GpuBufferAccessKind::StorageRead,
+                )],
+            );
+        }
+        consumer.finish().unwrap()
+    };
+
+    let prepared = GpuPreparedWorkGraph::prepare(
+        label("multi image composition"),
+        [make_consumer(None), producer.clone()],
+    )
+    .unwrap();
+    let staging_coverage = prepared
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == staging.diagnostic_identity())
+        .unwrap()
+        .final_coverage()
+        .unwrap()
+        .buffer_values()
+        .unwrap();
+    assert_eq!(
+        staging_coverage,
+        [GpuBufferCoverage::strided(exact.clone())]
+    );
+    assert!(prepared.dependencies().iter().any(|dependency| {
+        dependency.reasons().iter().any(|reason| {
+            matches!(reason, GpuDependencyReason::ReadAfterWrite { resource, .. }
+                if *resource == staging.diagnostic_identity())
+        })
+    }));
+
+    for padding in [
+        GpuBufferRange::new(&staging, 32, 32).unwrap(),
+        GpuBufferRange::new(&staging, 224, 160).unwrap(),
+    ] {
+        assert_eq!(
+            GpuPreparedWorkGraph::prepare(
+                label("multi image padding rejection"),
+                [producer.clone(), make_consumer(Some(padding))],
+            )
+            .unwrap_err()
+            .cause(),
+            GpuWorkGraphCause::ReadBeforeInitialization
+        );
+    }
 }
 
 #[test]

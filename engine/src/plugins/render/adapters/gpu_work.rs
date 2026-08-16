@@ -1587,6 +1587,69 @@ mod tests {
             .expect("resolve-buffer readback copy should lower");
         assert_eq!(readback.1.range(), resolve.1.destination_range());
         assert_ne!(readback.1.buffer(), readback.2.buffer());
+        for identity in [
+            resolve.1.source().diagnostic_identity(),
+            resolve.1.destination().diagnostic_identity(),
+            readback.2.buffer().diagnostic_identity(),
+        ] {
+            assert!(
+                work.graph()
+                    .initialization()
+                    .iter()
+                    .find(|summary| summary.resource().diagnostic_identity() == identity)
+                    .expect("timing resource should have a prepared initialization summary")
+                    .initial()
+                    .is_none(),
+                "timing resources must begin without implicit initialization",
+            );
+        }
+        let query_coverage = work
+            .graph()
+            .initialization()
+            .iter()
+            .find(|summary| {
+                summary.resource().diagnostic_identity() == resolve.1.source().diagnostic_identity()
+            })
+            .unwrap()
+            .final_coverage()
+            .unwrap()
+            .query_range_values()
+            .unwrap();
+        assert_eq!(query_coverage, [resolve.1.source_range()]);
+        let resolve_coverage = work
+            .graph()
+            .initialization()
+            .iter()
+            .find(|summary| {
+                summary.resource().diagnostic_identity()
+                    == resolve.1.destination().diagnostic_identity()
+            })
+            .unwrap()
+            .final_coverage()
+            .unwrap()
+            .buffer_values()
+            .unwrap();
+        assert_eq!(
+            resolve_coverage,
+            [GpuBufferCoverage::dense(resolve.1.destination_range())]
+        );
+        let readback_coverage = work
+            .graph()
+            .initialization()
+            .iter()
+            .find(|summary| {
+                summary.resource().diagnostic_identity()
+                    == readback.2.buffer().diagnostic_identity()
+            })
+            .unwrap()
+            .final_coverage()
+            .unwrap()
+            .buffer_values()
+            .unwrap();
+        assert_eq!(
+            readback_coverage,
+            [GpuBufferCoverage::dense(readback.2.range())]
+        );
         assert!(work.graph().dependencies().iter().any(|dependency| {
             dependency.after() == resolve.0
                 && dependency.reasons().iter().any(|reason| {
