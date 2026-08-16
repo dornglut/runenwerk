@@ -178,7 +178,7 @@ impl GpuContext {
                         depth_stencil: lowered.depth_stencil.clone(),
                         multisample: lowered.multisample,
                         fragment,
-                        multiview: None,
+                        multiview_mask: None,
                         cache: None,
                     })
             },

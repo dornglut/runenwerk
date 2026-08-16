@@ -205,7 +205,7 @@ mod tests {
         let mut source_paths = Vec::new();
         rust_sources_below(&source_root, &mut source_paths);
         let creation_tokens = [
-            ["Instance", "::new(&InstanceDescriptor"].concat(),
+            ["Instance", "::new(InstanceDescriptor"].concat(),
             ["request", "_adapter(&RequestAdapterOptions"].concat(),
             ["request", "_device(&DeviceDescriptor"].concat(),
         ];

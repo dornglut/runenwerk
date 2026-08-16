@@ -28,13 +28,15 @@ struct LoweredVertexBuffer {
 }
 
 impl LoweredRenderPipeline {
-    pub(super) fn vertex_buffer_layouts(&self) -> Vec<VertexBufferLayout<'_>> {
+    pub(super) fn vertex_buffer_layouts(&self) -> Vec<Option<VertexBufferLayout<'_>>> {
         self.vertex_buffers
             .iter()
-            .map(|buffer| VertexBufferLayout {
-                array_stride: buffer.array_stride,
-                step_mode: buffer.step_mode,
-                attributes: buffer.attributes.as_slice(),
+            .map(|buffer| {
+                Some(VertexBufferLayout {
+                    array_stride: buffer.array_stride,
+                    step_mode: buffer.step_mode,
+                    attributes: buffer.attributes.as_slice(),
+                })
             })
             .collect()
     }
@@ -135,8 +137,8 @@ fn lower_vertex_buffers(
         .limits()
         .max_vertex_buffers();
 
-    // WGPU interprets VertexState::buffers by slice position, so sparse G4B slots are lowered
-    // positionally rather than compacted. Empty slots consume the same native slot index.
+    // The accepted G4B sparse-slot contract remains positional. Empty slots continue to be
+    // materialized as present, empty native layouts rather than adopting WGPU 30's new gap form.
     if positional_count_u32 > normalized_device_limit
         || positional_count_u32 > workload_limit
         || positional_count_u32 > native_limits.max_vertex_buffers
@@ -282,8 +284,8 @@ fn lower_depth_stencil(
 ) -> DepthStencilState {
     DepthStencilState {
         format: render_mapping::texture_format(depth.format()),
-        depth_write_enabled: depth.depth_write_enabled(),
-        depth_compare: render_mapping::compare_function(depth.depth_compare()),
+        depth_write_enabled: Some(depth.depth_write_enabled()),
+        depth_compare: Some(render_mapping::compare_function(depth.depth_compare())),
         stencil: StencilState::default(),
         bias: DepthBiasState::default(),
     }

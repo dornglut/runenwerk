@@ -1,8 +1,9 @@
 //! Context-wide private WGPU health and error-attribution ownership.
 //!
-//! Error scopes are a device-global stack, so all same-device operations that can overlap a
-//! scoped G4C2 publication share one short-lived gate. Device-loss and uncaptured-error
-//! observation is installed exactly once by `WgpuContextState`.
+//! WGPU 30 error scopes are thread-local under `std`, and their guards are non-send. Async tasks
+//! can still interleave scoped dispatch on the same owner thread, so all current-device operations
+//! share one short-lived gate. Device-loss and uncaptured-error observation is installed exactly
+//! once by `WgpuContextState`.
 
 use crate::plugins::gpu::{
     GpuContextAffinity, GpuProgramBindingRealizationError,
@@ -202,10 +203,10 @@ fn append_secondary(existing: Option<String>, next: impl AsRef<str>) -> Option<S
     }))
 }
 
-/// The one private device-global error-scope attribution gate.
+/// The one private current-device error-scope attribution gate.
 ///
-/// It serializes only synchronous push/create/pop dispatch. Users must release the returned
-/// guard before awaiting any `pop_error_scope` future.
+/// It serializes only synchronous push/create/pop dispatch. Users must release the returned guard
+/// before awaiting any popped scope future.
 #[derive(Debug, Default)]
 pub(crate) struct WgpuErrorAttributionGate {
     mutex: Mutex<()>,

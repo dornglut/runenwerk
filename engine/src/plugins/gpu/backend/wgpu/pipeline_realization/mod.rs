@@ -29,7 +29,7 @@ use std::sync::{Arc, Mutex};
 
 const DEFAULT_MAX_PIPELINE_REALIZATION_RECORDS: NonZeroUsize =
     NonZeroUsize::new(16_384).expect("the default pipeline realization-record bound is nonzero");
-const G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION: u32 = 1;
+const G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION: u32 = 2;
 
 /// The sole private G4C3 owner for one admitted WGPU device generation.
 pub(crate) struct PipelineRealizationState {

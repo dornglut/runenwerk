@@ -2,8 +2,8 @@ use crate::runtime::NativeWindowId;
 use id_macros::id;
 use std::collections::BTreeMap;
 use wgpu::{
-    CompositeAlphaMode, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat,
-    TextureUsages,
+    CompositeAlphaMode, Device, PresentMode, Surface, SurfaceColorSpace, SurfaceConfiguration,
+    TextureFormat, TextureUsages,
 };
 
 #[id]
@@ -170,6 +170,7 @@ pub fn build_surface_config(
     SurfaceConfiguration {
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
         format,
+        color_space: SurfaceColorSpace::Auto,
         width: width.max(1),
         height: height.max(1),
         present_mode: PresentMode::Fifo,

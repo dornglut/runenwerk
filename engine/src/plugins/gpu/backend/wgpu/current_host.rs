@@ -4,6 +4,7 @@ use crate::plugins::gpu::{
     GpuContext, GpuContextDescriptor, GpuContextRequestError, GpuContextRequestErrorCategory,
     GpuRealizationPolicies,
 };
+use wgpu::rwh::HasDisplayHandle;
 use wgpu::{
     Instance, InstanceDescriptor, Surface, SurfaceCapabilities, SurfaceConfiguration, SurfaceTarget,
 };
@@ -36,11 +37,22 @@ impl<'a> CurrentHostSurfaceBridge<'a> {
 
 impl GpuContext {
     /// The one crate-private current-host admission terminal. G7 deletes it with surface ownership.
-    pub(crate) async fn request_for_current_host<'window>(
+    pub(crate) async fn request_for_current_host<'window, T>(
         descriptor: GpuContextDescriptor,
-        target: impl Into<SurfaceTarget<'window>>,
-    ) -> Result<(Self, Surface<'window>), GpuContextRequestError> {
-        let instance = Instance::new(&InstanceDescriptor::default().with_env());
+        target: T,
+    ) -> Result<(Self, Surface<'window>), GpuContextRequestError>
+    where
+        T: Into<SurfaceTarget<'window>>
+            + HasDisplayHandle
+            + core::fmt::Debug
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        let instance = Instance::new(InstanceDescriptor::new_with_display_handle_from_env(
+            Box::new(target.clone()),
+        ));
         let surface = instance.create_surface(target).map_err(|error| {
             GpuContextRequestError::new(
                 GpuContextRequestErrorCategory::TemporaryHostCompatibilityFailure,

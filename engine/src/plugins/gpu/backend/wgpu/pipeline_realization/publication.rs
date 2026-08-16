@@ -24,13 +24,13 @@ pub(super) async fn scoped_create<T>(
     ensure_available(realization, request.clone())?;
     let (candidate, validation, out_of_memory, internal) = {
         let _gate = realization.error_attribution_gate.acquire();
-        device.push_error_scope(ErrorFilter::Internal);
-        device.push_error_scope(ErrorFilter::OutOfMemory);
-        device.push_error_scope(ErrorFilter::Validation);
+        let internal_scope = device.push_error_scope(ErrorFilter::Internal);
+        let out_of_memory_scope = device.push_error_scope(ErrorFilter::OutOfMemory);
+        let validation_scope = device.push_error_scope(ErrorFilter::Validation);
         let candidate = create();
-        let validation = device.pop_error_scope();
-        let out_of_memory = device.pop_error_scope();
-        let internal = device.pop_error_scope();
+        let validation = validation_scope.pop();
+        let out_of_memory = out_of_memory_scope.pop();
+        let internal = internal_scope.pop();
         (candidate, validation, out_of_memory, internal)
     };
     let validation = validation.await;

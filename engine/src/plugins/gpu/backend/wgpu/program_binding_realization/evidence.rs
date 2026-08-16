@@ -19,8 +19,8 @@ use naga::{
     StorageAccess, StorageFormat, TypeInner, VectorSize,
 };
 
-pub(super) const G4C2_NAGA_VALIDATION_PROFILE_REVISION: u32 = 1;
-pub(super) const G4C2_WGPU_REALIZATION_COMPATIBILITY_REVISION: u32 = 1;
+pub(super) const G4C2_NAGA_VALIDATION_PROFILE_REVISION: u32 = 2;
+pub(super) const G4C2_WGPU_REALIZATION_COMPATIBILITY_REVISION: u32 = 2;
 
 #[derive(Debug)]
 pub(super) struct ProgramEvidence {
@@ -443,8 +443,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn accepted_profile_is_the_exact_initial_profile() {
-        assert_eq!(G4C2_NAGA_VALIDATION_PROFILE_REVISION, 1);
+    fn accepted_profile_is_the_exact_refreshed_profile() {
+        assert_eq!(G4C2_NAGA_VALIDATION_PROFILE_REVISION, 2);
+        assert_eq!(G4C2_WGPU_REALIZATION_COMPATIBILITY_REVISION, 2);
         let _validator = naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),
             naga::valid::Capabilities::default(),

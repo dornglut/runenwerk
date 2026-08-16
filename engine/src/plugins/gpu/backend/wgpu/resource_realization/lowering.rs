@@ -9,8 +9,8 @@ use crate::plugins::gpu::{
 };
 use wgpu::{
     AddressMode, BufferUsages, CompareFunction, DownlevelFlags, Extent3d, Features, FilterMode,
-    QueryType, TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
-    TextureFormatFeatures, TextureUsages, TextureViewDimension,
+    MipmapFilterMode, QueryType, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureUsages, TextureViewDimension,
 };
 
 pub(super) struct LoweredTexture {
@@ -357,6 +357,13 @@ pub(super) const fn map_filter_mode(mode: GpuFilterMode) -> FilterMode {
     match mode {
         GpuFilterMode::Nearest => FilterMode::Nearest,
         GpuFilterMode::Linear => FilterMode::Linear,
+    }
+}
+
+pub(super) const fn map_mipmap_filter_mode(mode: GpuFilterMode) -> MipmapFilterMode {
+    match mode {
+        GpuFilterMode::Nearest => MipmapFilterMode::Nearest,
+        GpuFilterMode::Linear => MipmapFilterMode::Linear,
     }
 }
 

@@ -48,8 +48,8 @@ pub(super) fn adapter_facts(
         supported.push(GpuCapabilityFeature::DepthAttachment);
     }
     let adapter_limits = GpuLimits::from_validated_adapter_facts(
-        u64::from(native_limits.max_uniform_buffer_binding_size),
-        u64::from(native_limits.max_storage_buffer_binding_size),
+        native_limits.max_uniform_buffer_binding_size,
+        native_limits.max_storage_buffer_binding_size,
         native_limits.max_color_attachments,
         native_limits.max_vertex_buffers,
         native_limits.max_bindings_per_bind_group,
@@ -122,9 +122,8 @@ pub(super) fn normalized_features(
     if features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY) {
         supported.push(GpuCapabilityFeature::StorageResourceBindingArray);
     }
-    // Pinned WGPU 27 documents this feature as supported on no platforms. Do not
-    // advertise a generic capability merely because a synthetic or future native
-    // feature set contains the bit.
+    // G4R preserves the accepted RunenGPU capability mapping. Do not expand the public
+    // capability vocabulary merely because the refreshed private backend exposes this bit.
     if surface_compatible {
         supported.push(GpuCapabilityFeature::Presentation);
     }
@@ -273,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn native_binding_array_features_normalize_only_the_supported_wgpu_27_bits() {
+    fn native_binding_array_features_preserve_the_accepted_normalized_profile() {
         let normalized = normalized_features(
             Features::TEXTURE_BINDING_ARRAY
                 | Features::BUFFER_BINDING_ARRAY
@@ -289,12 +288,12 @@ mod tests {
         assert!(normalized.contains(&GpuCapabilityFeature::StorageResourceBindingArray));
         assert!(
             !normalized.contains(&GpuCapabilityFeature::UniformBufferBindingArray),
-            "WGPU 27 documents uniform-buffer binding arrays as unsupported on every platform"
+            "the G4R backend refresh must not expand the accepted capability profile"
         );
     }
 
     #[test]
-    fn pinned_wgpu_27_rejects_uniform_buffer_array_admission() {
+    fn refreshed_backend_rejects_unadmitted_uniform_buffer_array_capability() {
         let capabilities = GpuCapabilities::from_normalized_facts(
             normalized_features(
                 Features::UNIFORM_BUFFER_BINDING_ARRAYS,

@@ -969,7 +969,7 @@ impl Gfx {
         )?;
 
         let present_start = Instant::now();
-        frame.present();
+        self.ctx.present(frame);
         timings.present_ms = present_start.elapsed().as_secs_f32() * 1000.0;
         Ok(timings)
     }

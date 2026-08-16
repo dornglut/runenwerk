@@ -400,7 +400,10 @@ impl GpuContext {
         for group in &positional_descriptors {
             groups.push(self.realize_bind_group_layout(group).await?.record);
         }
-        let layout_refs = groups.iter().map(|group| &group.object).collect::<Vec<_>>();
+        let layout_refs = groups
+            .iter()
+            .map(|group| Some(&group.object))
+            .collect::<Vec<_>>();
         let object = scoped_create(
             &self.backend.device,
             &self.backend.program_binding_realization,
@@ -411,7 +414,7 @@ impl GpuContext {
                 self.backend.device.create_pipeline_layout(&PipelineLayoutDescriptor {
                     label: Some("runengpu-pipeline-layout"),
                     bind_group_layouts: &layout_refs,
-                    push_constant_ranges: &[],
+                    immediate_size: 0,
                 })
             },
         )
@@ -520,14 +523,14 @@ async fn scoped_create<T>(
     realization.health.ensure_program_binding(request.clone())?;
     let (candidate, validation, out_of_memory, internal) = {
         let _gate = realization.error_attribution_gate.acquire();
-        device.push_error_scope(ErrorFilter::Internal);
-        device.push_error_scope(ErrorFilter::OutOfMemory);
-        device.push_error_scope(ErrorFilter::Validation);
+        let internal_scope = device.push_error_scope(ErrorFilter::Internal);
+        let out_of_memory_scope = device.push_error_scope(ErrorFilter::OutOfMemory);
+        let validation_scope = device.push_error_scope(ErrorFilter::Validation);
         let candidate = create();
-        // Reverse stack order, all dispatched before releasing the global attribution gate.
-        let validation = device.pop_error_scope();
-        let out_of_memory = device.pop_error_scope();
-        let internal = device.pop_error_scope();
+        // Reverse stack order, all dispatched before releasing the shared attribution gate.
+        let validation = validation_scope.pop();
+        let out_of_memory = out_of_memory_scope.pop();
+        let internal = internal_scope.pop();
         (candidate, validation, out_of_memory, internal)
     };
     let validation = validation.await;

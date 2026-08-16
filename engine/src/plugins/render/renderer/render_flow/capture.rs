@@ -578,7 +578,18 @@ fn read_capture_buffer(
         }
     }
 
-    let data = slice.get_mapped_range();
+    let data = match slice.get_mapped_range() {
+        Ok(data) => data,
+        Err(err) => {
+            capture.terminal = RenderCaptureTerminal::with_reason(
+                RenderCaptureTerminalCode::ReadbackFailed,
+                "mapped_range_failed",
+                format!("failed to access mapped capture bytes: {err}"),
+            );
+            buffer.unmap();
+            return capture;
+        }
+    };
     let unpadded_bytes_per_row = width.saturating_mul(4) as usize;
     let expected_padded_len = padded_bytes_per_row as usize * height as usize;
     if data.len() < expected_padded_len {
