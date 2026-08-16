@@ -1,7 +1,7 @@
 use super::*;
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuBufferRange, GpuCopyOperation, GpuPreparedWorkNodeId, GpuQueryAccessKind,
-    GpuQuerySetHandle, GpuResourceAccess, GpuWorkOperation,
+    GpuQuerySetHandle, GpuWorkOperation,
 };
 use crate::plugins::render::{PreparedRenderWorkPlan, RenderGpuWorkPayload, RenderPassId};
 
@@ -1219,10 +1219,12 @@ fn prepared_timestamp_indices(
         .nodes()
         .iter()
         .find(|prepared| prepared.id() == node_id)?;
-    prepared.node().accesses().iter().find_map(|access| {
-        let GpuResourceAccess::Query(access) = access else {
-            return None;
-        };
+    let timestamp_writes = match prepared.node().operation() {
+        GpuWorkOperation::Compute(operation) => operation.timestamp_writes(),
+        GpuWorkOperation::Render(operation) => operation.timestamp_writes(),
+        _ => return None,
+    };
+    timestamp_writes.iter().find_map(|access| {
         if access.kind() != GpuQueryAccessKind::WriteTimestamp || access.range().count() != 2 {
             return None;
         }
@@ -1319,10 +1321,12 @@ fn prepared_timing_intent(work: &PreparedRenderWorkPlan) -> Result<Option<Prepar
         anyhow::bail!("prepared timestamp work has no typed readback destination");
     };
     for prepared in work.graph().nodes() {
-        for access in prepared.node().accesses() {
-            let GpuResourceAccess::Query(access) = access else {
-                continue;
-            };
+        let timestamp_writes = match prepared.node().operation() {
+            GpuWorkOperation::Compute(operation) => operation.timestamp_writes(),
+            GpuWorkOperation::Render(operation) => operation.timestamp_writes(),
+            _ => continue,
+        };
+        for access in timestamp_writes {
             if access.kind() == GpuQueryAccessKind::WriteTimestamp
                 && (access.query_set() != &query_set || access.range().end() > query_capacity)
             {

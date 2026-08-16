@@ -655,18 +655,49 @@ impl GpuDrawIntent {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuComputeOperation {
     dispatch: GpuDispatchSize,
+    timestamp_writes: Vec<GpuQueryAccess>,
 }
 
 impl GpuComputeOperation {
     pub const fn new(dispatch: GpuDispatchSize) -> Self {
-        Self { dispatch }
+        Self {
+            dispatch,
+            timestamp_writes: Vec::new(),
+        }
     }
 
-    pub const fn dispatch(self) -> GpuDispatchSize {
+    pub fn with_timestamp_writes(
+        mut self,
+        timestamp_writes: impl IntoIterator<Item = GpuQueryAccess>,
+    ) -> Result<Self, GpuWorkOperationError> {
+        let timestamp_writes = timestamp_writes.into_iter().collect::<Vec<_>>();
+        if timestamp_writes
+            .iter()
+            .any(|access| access.kind() != GpuQueryAccessKind::WriteTimestamp)
+        {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU compute operation",
+                "timestamp writes",
+                timestamp_writes
+                    .first()
+                    .map(GpuQueryAccess::resource_identity),
+                GpuWorkOperationCause::OperationAccessContradiction,
+                "provide only WriteTimestamp query accesses as compute-side timestamp writes",
+            ));
+        }
+        self.timestamp_writes = timestamp_writes;
+        Ok(self)
+    }
+
+    pub const fn dispatch(&self) -> GpuDispatchSize {
         self.dispatch
+    }
+
+    pub fn timestamp_writes(&self) -> &[GpuQueryAccess] {
+        &self.timestamp_writes
     }
 }
 
@@ -1658,7 +1689,12 @@ impl GpuWorkOperation {
 
     pub fn derived_accesses(&self) -> Result<Vec<GpuResourceAccess>, GpuWorkOperationError> {
         match self {
-            Self::Compute(_) => Ok(Vec::new()),
+            Self::Compute(operation) => Ok(operation
+                .timestamp_writes()
+                .iter()
+                .cloned()
+                .map(GpuResourceAccess::Query)
+                .collect()),
             Self::Render(operation) => operation.derived_accesses(),
             Self::Copy(operation) => operation.derived_accesses(),
             Self::Clear(operation) => operation.derived_accesses(),
@@ -1723,26 +1759,34 @@ impl GpuWorkOperation {
             Self::Present(_) => GpuCapabilityFeature::Presentation,
         };
         requirements.insert(GpuCapabilityRequirement::Required(primary))?;
-        if let Self::Render(operation) = self {
-            if operation
-                .draws()
-                .iter()
-                .any(|draw| matches!(draw, GpuDrawIntent::Indirect { .. }))
-            {
-                requirements.insert(GpuCapabilityRequirement::Required(
-                    GpuCapabilityFeature::IndirectDraw,
-                ))?;
-            }
-            if operation.depth_stencil_attachment().is_some() {
-                requirements.insert(GpuCapabilityRequirement::Required(
-                    GpuCapabilityFeature::DepthAttachment,
-                ))?;
-            }
-            if !operation.timestamp_writes().is_empty() {
+        match self {
+            Self::Compute(operation) if !operation.timestamp_writes().is_empty() => {
                 requirements.insert(GpuCapabilityRequirement::Required(
                     GpuCapabilityFeature::TimestampQuery,
                 ))?;
             }
+            Self::Render(operation) => {
+                if operation
+                    .draws()
+                    .iter()
+                    .any(|draw| matches!(draw, GpuDrawIntent::Indirect { .. }))
+                {
+                    requirements.insert(GpuCapabilityRequirement::Required(
+                        GpuCapabilityFeature::IndirectDraw,
+                    ))?;
+                }
+                if operation.depth_stencil_attachment().is_some() {
+                    requirements.insert(GpuCapabilityRequirement::Required(
+                        GpuCapabilityFeature::DepthAttachment,
+                    ))?;
+                }
+                if !operation.timestamp_writes().is_empty() {
+                    requirements.insert(GpuCapabilityRequirement::Required(
+                        GpuCapabilityFeature::TimestampQuery,
+                    ))?;
+                }
+            }
+            _ => {}
         }
         Ok(requirements)
     }
@@ -2489,6 +2533,11 @@ mod tests {
             GpuDispatchSize::new(1, 1, 1).unwrap(),
         ));
         assert_eq!(operation.kind(), GpuWorkNodeKind::Compute);
+        let GpuWorkOperation::Compute(compute) = &operation else {
+            unreachable!("compute operation should remain typed");
+        };
+        assert!(compute.timestamp_writes().is_empty());
+        assert!(operation.derived_accesses().unwrap().is_empty());
         assert_eq!(
             operation
                 .derived_requirements()
@@ -2496,6 +2545,65 @@ mod tests {
                 .get(GpuCapabilityFeature::Compute),
             Some(GpuCapabilityRequirement::Required(
                 GpuCapabilityFeature::Compute
+            ))
+        );
+        assert!(
+            operation
+                .derived_requirements()
+                .unwrap()
+                .get(GpuCapabilityFeature::TimestampQuery)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn compute_timestamp_writes_are_checked_and_derived() {
+        let mut allocator = allocator();
+        let queries = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(common("queries"), GpuQueryKind::Timestamp, 4).unwrap(),
+            )
+            .unwrap();
+        let timestamp = GpuQueryAccess::new(
+            &queries,
+            GpuQueryRange::new(&queries, 1, 2).unwrap(),
+            GpuQueryAccessKind::WriteTimestamp,
+        )
+        .unwrap();
+        let resolve_source = GpuQueryAccess::new(
+            &queries,
+            GpuQueryRange::new(&queries, 0, 1).unwrap(),
+            GpuQueryAccessKind::ResolveSource,
+        )
+        .unwrap();
+        let compute = GpuComputeOperation::new(GpuDispatchSize::new(1, 1, 1).unwrap())
+            .with_timestamp_writes([timestamp.clone()])
+            .unwrap();
+        assert_eq!(compute.timestamp_writes(), std::slice::from_ref(&timestamp));
+        assert_eq!(
+            GpuComputeOperation::new(GpuDispatchSize::new(1, 1, 1).unwrap())
+                .with_timestamp_writes([resolve_source])
+                .unwrap_err()
+                .cause(),
+            GpuWorkOperationCause::OperationAccessContradiction
+        );
+
+        let operation = GpuWorkOperation::Compute(compute);
+        assert_eq!(
+            operation.derived_accesses().unwrap(),
+            vec![GpuResourceAccess::Query(timestamp)]
+        );
+        let requirements = operation.derived_requirements().unwrap();
+        assert_eq!(
+            requirements.get(GpuCapabilityFeature::Compute),
+            Some(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Compute
+            ))
+        );
+        assert_eq!(
+            requirements.get(GpuCapabilityFeature::TimestampQuery),
+            Some(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TimestampQuery
             ))
         );
     }

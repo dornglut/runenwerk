@@ -278,18 +278,25 @@ fn partially_overlapping_query_ranges_retain_the_exact_intersection() {
             .unwrap(),
         )
         .unwrap();
-    add_compute(
-        &mut fragment,
-        "write queries",
-        [GpuResourceAccess::Query(
-            GpuQueryAccess::new(
-                &queries,
-                GpuQueryRange::new(&queries, 0, 6).unwrap(),
-                GpuQueryAccessKind::WriteTimestamp,
-            )
-            .unwrap(),
-        )],
-    );
+    fragment
+        .add_node(
+            label("write queries"),
+            GpuWorkOperation::Compute(
+                GpuComputeOperation::new(GpuDispatchSize::new(1, 1, 1).unwrap())
+                    .with_timestamp_writes([GpuQueryAccess::new(
+                        &queries,
+                        GpuQueryRange::new(&queries, 0, 6).unwrap(),
+                        GpuQueryAccessKind::WriteTimestamp,
+                    )
+                    .unwrap()])
+                    .unwrap(),
+            ),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::ComputePreferred,
+            provenance("write queries"),
+        )
+        .unwrap();
     add_compute(
         &mut fragment,
         "read queries",

@@ -552,7 +552,7 @@ fn lower_pass_node(
     timing: Option<&TimingResources>,
     first_query: Option<u32>,
 ) -> Result<LoweredPass, RenderGpuWorkAdapterError> {
-    let mut accesses = lower_caller_accesses(node, resources)?;
+    let accesses = lower_caller_accesses(node, resources)?;
     let timestamp_access = match (timing, first_query) {
         (Some(timing), Some(first)) => {
             let range = GpuQueryRange::new(&timing.query_set, first, 2)?;
@@ -566,18 +566,19 @@ fn lower_pass_node(
     };
     let operation = match node.kind {
         RenderPassKind::Compute => {
-            if let Some(timestamp) = timestamp_access.clone() {
-                accesses.push(GpuResourceAccess::Query(timestamp));
-            }
             let dispatch = projected_dispatches
                 .get(&node.id)
                 .copied()
                 .ok_or(RenderGpuWorkAdapterError::MissingProjectedDispatch { pass_id: node.id })?;
-            GpuWorkOperation::Compute(GpuComputeOperation::new(GpuDispatchSize::new(
+            let operation = GpuComputeOperation::new(GpuDispatchSize::new(
                 dispatch[0],
                 dispatch[1],
                 dispatch[2],
-            )?))
+            )?);
+            GpuWorkOperation::Compute(match timestamp_access {
+                Some(timestamp) => operation.with_timestamp_writes([timestamp])?,
+                None => operation,
+            })
         }
         RenderPassKind::Fullscreen
         | RenderPassKind::Graphics
@@ -1169,9 +1170,9 @@ fn graph_entry_coverage(
     resource: &GpuResourceRef,
 ) -> Result<GpuInitialCoverage, RenderGpuWorkAdapterError> {
     match resource {
-        GpuResourceRef::Buffer(buffer) => Ok(GpuInitialCoverage::buffer_ranges(
+        GpuResourceRef::Buffer(buffer) => Ok(GpuInitialCoverage::buffer(
             buffer,
-            [GpuBufferRange::whole(buffer)?],
+            [GpuBufferCoverage::dense(GpuBufferRange::whole(buffer)?)],
         )?),
         GpuResourceRef::Texture(texture) => {
             let access = GpuTextureAccessResource::Texture(texture.clone());
@@ -1523,7 +1524,16 @@ mod tests {
 
         assert_eq!(work.graph().nodes().len(), 4);
         let compute = prepared_node(&work, "adapter.compute").node();
-        let compute_timestamp = compute
+        let GpuWorkOperation::Compute(compute_operation) = compute.operation() else {
+            panic!("compute pass should lower to compute work");
+        };
+        let [compute_timestamp] = compute_operation.timestamp_writes() else {
+            panic!("compute operation should retain one timestamp range");
+        };
+        assert_eq!(compute_timestamp.kind(), GpuQueryAccessKind::WriteTimestamp);
+        assert_eq!(compute_timestamp.range().first(), 0);
+        assert_eq!(compute_timestamp.range().count(), 2);
+        let derived_compute_timestamp = compute
             .accesses()
             .iter()
             .find_map(|access| match access {
@@ -1535,8 +1545,7 @@ mod tests {
                 _ => None,
             })
             .expect("compute timestamp access should lower");
-        assert_eq!(compute_timestamp.range().first(), 0);
-        assert_eq!(compute_timestamp.range().count(), 2);
+        assert_eq!(derived_compute_timestamp, compute_timestamp);
 
         let render = prepared_node(&work, "adapter.render").node();
         let GpuWorkOperation::Render(render_operation) = render.operation() else {
@@ -1578,6 +1587,69 @@ mod tests {
             .expect("resolve-buffer readback copy should lower");
         assert_eq!(readback.1.range(), resolve.1.destination_range());
         assert_ne!(readback.1.buffer(), readback.2.buffer());
+        for identity in [
+            resolve.1.source().diagnostic_identity(),
+            resolve.1.destination().diagnostic_identity(),
+            readback.2.buffer().diagnostic_identity(),
+        ] {
+            assert!(
+                work.graph()
+                    .initialization()
+                    .iter()
+                    .find(|summary| summary.resource().diagnostic_identity() == identity)
+                    .expect("timing resource should have a prepared initialization summary")
+                    .initial()
+                    .is_none(),
+                "timing resources must begin without implicit initialization",
+            );
+        }
+        let query_coverage = work
+            .graph()
+            .initialization()
+            .iter()
+            .find(|summary| {
+                summary.resource().diagnostic_identity() == resolve.1.source().diagnostic_identity()
+            })
+            .unwrap()
+            .final_coverage()
+            .unwrap()
+            .query_range_values()
+            .unwrap();
+        assert_eq!(query_coverage, [resolve.1.source_range()]);
+        let resolve_coverage = work
+            .graph()
+            .initialization()
+            .iter()
+            .find(|summary| {
+                summary.resource().diagnostic_identity()
+                    == resolve.1.destination().diagnostic_identity()
+            })
+            .unwrap()
+            .final_coverage()
+            .unwrap()
+            .buffer_values()
+            .unwrap();
+        assert_eq!(
+            resolve_coverage,
+            [GpuBufferCoverage::dense(resolve.1.destination_range())]
+        );
+        let readback_coverage = work
+            .graph()
+            .initialization()
+            .iter()
+            .find(|summary| {
+                summary.resource().diagnostic_identity()
+                    == readback.2.buffer().diagnostic_identity()
+            })
+            .unwrap()
+            .final_coverage()
+            .unwrap()
+            .buffer_values()
+            .unwrap();
+        assert_eq!(
+            readback_coverage,
+            [GpuBufferCoverage::dense(readback.2.range())]
+        );
         assert!(work.graph().dependencies().iter().any(|dependency| {
             dependency.after() == resolve.0
                 && dependency.reasons().iter().any(|reason| {

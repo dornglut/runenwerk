@@ -1,6 +1,6 @@
 use crate::plugins::gpu::{
-    GpuBindingKey, GpuBufferHandle, GpuResourceLifetime, GpuWorkResourceId,
-    GpuWorkResourceIdAllocator,
+    GpuBindingKey, GpuBufferHandle, GpuBufferInitialization, GpuResourceLifetime,
+    GpuWorkResourceId, GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::api::{
     BuiltinUiCompositePassBuilder, ComputePassBuilder, CopyPassBuilder, FullscreenPassBuilder,
@@ -245,11 +245,15 @@ impl RenderFlow {
         mut self,
         plan: &GpuPrimitiveExecutionPlan,
     ) -> Result<Self, RenderFlowAuthoringError> {
-        let dispatch_plan = plan.dispatch_plan_with_temporary(|label, element_count| {
-            let id =
-                self.register_transient_storage_array::<U32ScanElement>(label, element_count)?;
-            self.buffer_handle(id)
-        })?;
+        let dispatch_plan =
+            plan.dispatch_plan_with_temporary(|label, element_count, initialization| {
+                let id = self.register_transient_storage_array::<U32ScanElement>(
+                    label,
+                    element_count,
+                    initialization,
+                )?;
+                self.buffer_handle(id)
+            })?;
         self.append_gpu_primitive_dispatch_plan(dispatch_plan)
     }
 
@@ -675,11 +679,17 @@ impl RenderFlow {
         &mut self,
         label: String,
         len: u64,
+        initialization: GpuBufferInitialization,
     ) -> Result<GpuWorkResourceId, RenderFlowAuthoringError>
     where
         T: GpuParams + 'static,
     {
-        self.register_storage_array_with_lifetime::<T>(label, len, GpuResourceLifetime::Transient)
+        self.register_storage_array_with_lifetime_and_initialization::<T>(
+            label,
+            len,
+            GpuResourceLifetime::Transient,
+            initialization,
+        )
     }
 
     fn register_storage_array_with_lifetime<T>(
@@ -691,16 +701,36 @@ impl RenderFlow {
     where
         T: GpuParams + 'static,
     {
+        self.register_storage_array_with_lifetime_and_initialization::<T>(
+            label,
+            len,
+            lifetime,
+            GpuBufferInitialization::Uninitialized,
+        )
+    }
+
+    fn register_storage_array_with_lifetime_and_initialization<T>(
+        &mut self,
+        label: String,
+        len: u64,
+        lifetime: GpuResourceLifetime,
+        initialization: GpuBufferInitialization,
+    ) -> Result<GpuWorkResourceId, RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
             return Ok(id);
         }
 
-        let declaration = RenderResourceDeclaration::declare_storage_array_with_lifetime::<T>(
-            &mut self.next_resource_id,
-            label.clone(),
-            len,
-            lifetime,
-        )?;
+        let declaration =
+            RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
+                &mut self.next_resource_id,
+                label.clone(),
+                len,
+                lifetime,
+                initialization,
+            )?;
         let id = *declaration.id();
         self.upsert_labeled_resource(label, id, declaration);
         Ok(id)

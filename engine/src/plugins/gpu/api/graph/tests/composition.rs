@@ -9,16 +9,20 @@ fn producer_fragment(
     producer
         .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
         .unwrap();
-    add_compute(
-        &mut producer,
-        "produce",
-        [buffer_access(
-            buffer,
-            range,
-            GpuBufferAccessKind::StorageWrite,
-        )],
-    );
-    let coverage = GpuInitialCoverage::buffer_ranges(buffer, [range]).unwrap();
+    producer
+        .add_node(
+            label("produce"),
+            GpuWorkOperation::Clear(
+                GpuClearOperation::buffer_zero(GpuBufferRegion::new(buffer, range).unwrap())
+                    .unwrap(),
+            ),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("produce"),
+        )
+        .unwrap();
+    let coverage = GpuInitialCoverage::buffer(buffer, [GpuBufferCoverage::dense(range)]).unwrap();
     producer
         .add_output(
             GpuWorkOutput::new(
@@ -99,7 +103,7 @@ fn typed_import_export_causality_overrides_fragment_input_order() {
         &mut allocator,
         "shared",
         GpuBufferInitialization::Uninitialized,
-        [GpuBufferUsage::Storage],
+        [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
     );
     let range = GpuBufferRange::new(&shared, 0, 32).unwrap();
     let key = GpuExportKey::new("shared.ready").unwrap();
@@ -137,7 +141,7 @@ fn cross_fragment_conflict_without_typed_causality_fails_before_initialization()
         &mut allocator,
         "unbound shared",
         GpuBufferInitialization::Uninitialized,
-        [GpuBufferUsage::Storage],
+        [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
     );
     let range = GpuBufferRange::whole(&shared).unwrap();
     let mut writer = builder("writer");
@@ -188,7 +192,7 @@ fn imports_reject_mismatched_resources_and_insufficient_export_coverage() {
         &mut allocator,
         "produced",
         GpuBufferInitialization::Uninitialized,
-        [GpuBufferUsage::Storage],
+        [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
     );
     let other = buffer(
         &mut allocator,
@@ -234,7 +238,7 @@ fn duplicate_export_keys_and_ambiguous_writers_are_rejected() {
         &mut allocator,
         "multi producer",
         GpuBufferInitialization::Uninitialized,
-        [GpuBufferUsage::Storage],
+        [GpuBufferUsage::Storage, GpuBufferUsage::CopyDestination],
     );
     let range = GpuBufferRange::whole(&shared).unwrap();
     let duplicate = GpuExportKey::new("duplicate").unwrap();

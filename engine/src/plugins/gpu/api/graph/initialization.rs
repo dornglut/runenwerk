@@ -1,16 +1,18 @@
 use super::super::{
-    GpuAttachmentStore, GpuBufferInitialization, GpuBufferRange, GpuQueryRange, GpuResourceAccess,
-    GpuResourceRef, GpuTextureAccessKind, GpuTextureAspect, GpuTextureDimension, GpuTextureHandle,
+    GpuAttachmentStore, GpuBufferCoverage, GpuBufferInitialization, GpuBufferRange,
+    GpuBufferStridedCoverage, GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad,
+    GpuCopyOperation, GpuDepthAttachmentLoad, GpuQueryRange, GpuResourceAccess, GpuResourceRef,
+    GpuTextureAspect, GpuTextureCopyRegion, GpuTextureDimension, GpuTextureHandle,
     GpuTextureInitialization, GpuTextureSubresourceRange, GpuWorkGraphCause, GpuWorkGraphError,
-    GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkResourceId,
+    GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkOperation, GpuWorkResourceId,
 };
 use super::{
     authoring::{GpuWorkFragment, GpuWorkNode},
     composition::ImportBindings,
     coverage::{
-        GpuInitialCoverage, GpuInitialCoverageData, canonical_storage_resource,
-        canonical_texture_aspect, coverage_source_error, normalize_u32_intervals,
-        normalize_u64_intervals, storage_identity, texture_aspect,
+        GpuInitialCoverage, GpuInitialCoverageData, buffer_coverage_contains,
+        canonical_storage_resource, canonical_texture_aspect, coverage_source_error,
+        normalize_buffer_coverage, normalize_u32_intervals, storage_identity, texture_aspect,
     },
     diagnostics::{
         GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error, graph_error_with_region,
@@ -21,7 +23,10 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum InitializedCoverage {
-    Buffer(Vec<(u64, u64)>),
+    Buffer {
+        buffer: super::super::GpuBufferHandle,
+        values: Vec<GpuBufferCoverage>,
+    },
     Texture(BTreeMap<(u32, GpuTextureAspect), Vec<(u32, u32)>>),
     Query(Vec<(u32, u32)>),
     Immutable,
@@ -30,7 +35,10 @@ enum InitializedCoverage {
 impl InitializedCoverage {
     fn empty_for(resource: &GpuResourceRef) -> Self {
         match resource {
-            GpuResourceRef::Buffer(_) => Self::Buffer(Vec::new()),
+            GpuResourceRef::Buffer(buffer) => Self::Buffer {
+                buffer: buffer.clone(),
+                values: Vec::new(),
+            },
             GpuResourceRef::Texture(_) | GpuResourceRef::TextureView(_) => {
                 Self::Texture(BTreeMap::new())
             }
@@ -41,9 +49,18 @@ impl InitializedCoverage {
 
     fn union(&mut self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Buffer(left), Self::Buffer(right)) => {
-                left.extend(right.iter().copied());
-                *left = normalize_u64_intervals(core::mem::take(left));
+            (
+                Self::Buffer {
+                    buffer: left_buffer,
+                    values: left,
+                },
+                Self::Buffer {
+                    buffer: right_buffer,
+                    values: right,
+                },
+            ) if left_buffer == right_buffer => {
+                left.extend(right.iter().cloned());
+                normalize_buffer_coverage(left_buffer, left);
                 true
             }
             (Self::Texture(left), Self::Texture(right)) => {
@@ -66,9 +83,12 @@ impl InitializedCoverage {
 
     fn contains(&self, required: &Self) -> bool {
         match (self, required) {
-            (Self::Buffer(have), Self::Buffer(required)) => required
-                .iter()
-                .all(|range| interval_set_contains_u64(have, *range)),
+            (
+                Self::Buffer { values: have, .. },
+                Self::Buffer {
+                    values: required, ..
+                },
+            ) => buffer_coverage_contains(have, required),
             (Self::Texture(have), Self::Texture(required)) => {
                 required.iter().all(|(key, intervals)| {
                     have.get(key).is_some_and(|have_intervals| {
@@ -88,12 +108,7 @@ impl InitializedCoverage {
 
     fn remove(&mut self, removed: &Self) -> bool {
         match (self, removed) {
-            (Self::Buffer(have), Self::Buffer(removed)) => {
-                for interval in removed {
-                    *have = subtract_u64_intervals(core::mem::take(have), *interval);
-                }
-                true
-            }
+            (Self::Buffer { .. }, Self::Buffer { .. }) => false,
             (Self::Texture(have), Self::Texture(removed)) => {
                 for (key, intervals) in removed {
                     if let Some(have_intervals) = have.get_mut(key) {
@@ -119,7 +134,7 @@ impl InitializedCoverage {
 
     fn is_empty(&self) -> bool {
         match self {
-            Self::Buffer(ranges) => ranges.is_empty(),
+            Self::Buffer { values, .. } => values.is_empty(),
             Self::Texture(ranges) => ranges.is_empty(),
             Self::Query(ranges) => ranges.is_empty(),
             Self::Immutable => false,
@@ -127,33 +142,16 @@ impl InitializedCoverage {
     }
 }
 
-fn interval_set_contains_u64(intervals: &[(u64, u64)], required: (u64, u64)) -> bool {
-    intervals
-        .iter()
-        .any(|&(start, end)| start <= required.0 && end >= required.1)
+impl InitializedCoverage {
+    fn semantically_equals(&self, other: &Self) -> bool {
+        self.contains(other) && other.contains(self)
+    }
 }
 
 fn interval_set_contains_u32(intervals: &[(u32, u32)], required: (u32, u32)) -> bool {
     intervals
         .iter()
         .any(|&(start, end)| start <= required.0 && end >= required.1)
-}
-
-fn subtract_u64_intervals(intervals: Vec<(u64, u64)>, removed: (u64, u64)) -> Vec<(u64, u64)> {
-    let mut result = Vec::new();
-    for (start, end) in intervals {
-        if end <= removed.0 || start >= removed.1 {
-            result.push((start, end));
-            continue;
-        }
-        if start < removed.0 {
-            result.push((start, removed.0));
-        }
-        if end > removed.1 {
-            result.push((removed.1, end));
-        }
-    }
-    result
 }
 
 fn subtract_u32_intervals(intervals: Vec<(u32, u32)>, removed: (u32, u32)) -> Vec<(u32, u32)> {
@@ -175,9 +173,10 @@ fn subtract_u32_intervals(intervals: Vec<(u32, u32)>, removed: (u32, u32)) -> Ve
 
 fn coverage_for_access(access: &GpuResourceAccess) -> InitializedCoverage {
     match access {
-        GpuResourceAccess::Buffer(access) => {
-            InitializedCoverage::Buffer(vec![(access.range().offset(), access.range().end())])
-        }
+        GpuResourceAccess::Buffer(access) => InitializedCoverage::Buffer {
+            buffer: access.buffer().clone(),
+            values: vec![GpuBufferCoverage::dense(access.range())],
+        },
         GpuResourceAccess::Texture(access) => {
             let range = access.normalized_subresources();
             let aspect = canonical_texture_aspect(
@@ -203,9 +202,18 @@ fn coverage_for_access(access: &GpuResourceAccess) -> InitializedCoverage {
 fn descriptor_coverage(resource: &GpuResourceRef) -> InitializedCoverage {
     match resource {
         GpuResourceRef::Buffer(buffer) => match buffer.descriptor().initialization() {
-            GpuBufferInitialization::Uninitialized => InitializedCoverage::Buffer(Vec::new()),
+            GpuBufferInitialization::Uninitialized => InitializedCoverage::Buffer {
+                buffer: buffer.clone(),
+                values: Vec::new(),
+            },
             GpuBufferInitialization::Zeroed | GpuBufferInitialization::Prepared(_) => {
-                InitializedCoverage::Buffer(vec![(0, buffer.descriptor().size_bytes())])
+                InitializedCoverage::Buffer {
+                    buffer: buffer.clone(),
+                    values: vec![GpuBufferCoverage::dense(
+                        GpuBufferRange::whole(buffer)
+                            .expect("buffer descriptor has nonzero checked coverage"),
+                    )],
+                }
             }
         },
         GpuResourceRef::Texture(texture) => descriptor_texture_coverage(texture),
@@ -256,10 +264,7 @@ fn texture_range_coverage(
 
 fn intersect_coverage(left: &mut InitializedCoverage, right: &InitializedCoverage) -> bool {
     match (left, right) {
-        (InitializedCoverage::Buffer(left), InitializedCoverage::Buffer(right)) => {
-            *left = intersect_u64_intervals(left, right);
-            true
-        }
+        (InitializedCoverage::Buffer { .. }, InitializedCoverage::Buffer { .. }) => true,
         (InitializedCoverage::Texture(left), InitializedCoverage::Texture(right)) => {
             left.retain(|key, left_intervals| {
                 let Some(right_intervals) = right.get(key) else {
@@ -277,20 +282,6 @@ fn intersect_coverage(left: &mut InitializedCoverage, right: &InitializedCoverag
         (InitializedCoverage::Immutable, InitializedCoverage::Immutable) => true,
         _ => false,
     }
-}
-
-fn intersect_u64_intervals(left: &[(u64, u64)], right: &[(u64, u64)]) -> Vec<(u64, u64)> {
-    let mut result = Vec::new();
-    for &(left_start, left_end) in left {
-        for &(right_start, right_end) in right {
-            let start = left_start.max(right_start);
-            let end = left_end.min(right_end);
-            if start < end {
-                result.push((start, end));
-            }
-        }
-    }
-    normalize_u64_intervals(result)
 }
 
 fn intersect_u32_intervals(left: &[(u32, u32)], right: &[(u32, u32)]) -> Vec<(u32, u32)> {
@@ -312,12 +303,13 @@ fn initial_coverage_value(coverage: &GpuInitialCoverage) -> InitializedCoverage 
         GpuInitialCoverageData::DescriptorInitialization => {
             descriptor_coverage(coverage.resource())
         }
-        GpuInitialCoverageData::BufferRanges(ranges) => InitializedCoverage::Buffer(
-            ranges
-                .iter()
-                .map(|range| (range.offset(), range.end()))
-                .collect(),
-        ),
+        GpuInitialCoverageData::Buffer(values) => match coverage.resource() {
+            GpuResourceRef::Buffer(buffer) => InitializedCoverage::Buffer {
+                buffer: buffer.clone(),
+                values: values.clone(),
+            },
+            _ => InitializedCoverage::Immutable,
+        },
         GpuInitialCoverageData::TextureSubresources(ranges) => {
             let texture = match coverage.resource() {
                 GpuResourceRef::Texture(texture) => texture,
@@ -425,7 +417,7 @@ pub(super) fn validate_fragment_initialization(
                 InitializedCoverage::empty_for(output.relationship().resource())
             });
             let domain = resource_domain_coverage(output.relationship().resource());
-            if !intersect_coverage(&mut actual, &domain) || actual != expected {
+            if !intersect_coverage(&mut actual, &domain) || !actual.semantically_equals(&expected) {
                 return Err(graph_error_with_region(
                     "validate GPU work output coverage",
                     graph_label,
@@ -504,9 +496,13 @@ fn union_state_coverage(
 
 fn resource_domain_coverage(resource: &GpuResourceRef) -> InitializedCoverage {
     match resource {
-        GpuResourceRef::Buffer(buffer) => {
-            InitializedCoverage::Buffer(vec![(0, buffer.descriptor().size_bytes())])
-        }
+        GpuResourceRef::Buffer(buffer) => InitializedCoverage::Buffer {
+            buffer: buffer.clone(),
+            values: vec![GpuBufferCoverage::dense(
+                GpuBufferRange::whole(buffer)
+                    .expect("buffer descriptor has nonzero checked coverage"),
+            )],
+        },
         GpuResourceRef::Texture(texture) => whole_texture_coverage(texture, None),
         GpuResourceRef::TextureView(view) => whole_texture_coverage(
             view.descriptor().texture(),
@@ -545,12 +541,19 @@ fn apply_node_initialization(
     prepared_id: GpuPreparedWorkNodeId,
     state: &mut BTreeMap<GpuWorkResourceId, InitializedCoverage>,
 ) -> Result<(), GpuWorkGraphError> {
-    for access in node.accesses().iter().filter(|access| access.reads()) {
-        let resource = access.resource_identity();
-        let required = coverage_for_access(access);
+    let mut requirements = node
+        .caller_readable_accesses()
+        .iter()
+        .map(initialization_region_for_access)
+        .collect::<Vec<_>>();
+    let (operation_requirements, effects) =
+        operation_initialization(node.operation(), graph_label, fragment, node, prepared_id)?;
+    requirements.extend(operation_requirements);
+    for required in requirements {
+        let resource = required.resource;
         if !state
             .get(&resource)
-            .is_some_and(|coverage| coverage.contains(&required))
+            .is_some_and(|coverage| coverage.contains(&required.coverage))
         {
             return Err(GpuWorkGraphError::invalid(
                 "prepare GPU work initialization",
@@ -560,7 +563,7 @@ fn apply_node_initialization(
                     Some(node.label().as_str().to_string()),
                     Some(prepared_id),
                     Some(resource),
-                    Some(access_region_description(access)),
+                    Some(required.description),
                     Some(node.provenance().clone()),
                 ),
                 GpuWorkGraphCause::ReadBeforeInitialization,
@@ -568,9 +571,49 @@ fn apply_node_initialization(
             ));
         }
     }
-    for access in node.accesses() {
-        let resource = access.resource_identity();
-        let affected = coverage_for_access(access);
+    for effect in effects {
+        let contained = node.accesses().iter().any(|access| {
+            access.resource_identity() == effect.resource
+                && access_has_compatible_role(access, &effect.support)
+                && coverage_for_access(access).contains(&effect.coverage)
+        });
+        if !contained {
+            return Err(graph_error(
+                "validate GPU operation initialization effect",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), Some(node)),
+                Some(prepared_id),
+                Some(effect.resource),
+                GpuWorkGraphCause::OperationAccessContradiction,
+                "keep every operation-guaranteed initialization effect inside a checked compatible write access",
+            ));
+        }
+        let Some(coverage) = state.get_mut(&effect.resource) else {
+            return Err(graph_error(
+                "apply GPU operation initialization effect",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), Some(node)),
+                Some(prepared_id),
+                Some(effect.resource),
+                GpuWorkGraphCause::UnknownIdentity,
+                "declare each normalized storage resource before applying operation effects",
+            ));
+        };
+        if !coverage.union(&effect.coverage) {
+            return Err(graph_error(
+                "apply GPU operation initialization effect",
+                graph_label,
+                GraphErrorOrigin::new(Some(fragment), Some(node)),
+                Some(prepared_id),
+                Some(effect.resource),
+                GpuWorkGraphCause::OperationAccessContradiction,
+                "apply initialization effects only to matching normalized storage kinds",
+            ));
+        }
+    }
+    for discarded in operation_discard_regions(node.operation()) {
+        let resource = discarded.resource;
+        let affected = discarded.coverage;
         let Some(coverage) = state.get_mut(&resource) else {
             return Err(graph_error(
                 "apply GPU work initialization",
@@ -582,48 +625,352 @@ fn apply_node_initialization(
                 "declare each normalized storage resource before use",
             ));
         };
-        if attachment_discards(access) {
-            if !coverage.remove(&affected) {
-                return Err(graph_error(
-                    "apply GPU attachment discard",
-                    graph_label,
-                    GraphErrorOrigin::new(Some(fragment), Some(node)),
-                    Some(prepared_id),
-                    Some(resource),
-                    GpuWorkGraphCause::OperationAccessContradiction,
-                    "discard coverage only from the matching texture storage",
-                ));
-            }
-        } else if access.writes() && !coverage.union(&affected) {
+        if !coverage.remove(&affected) {
             return Err(graph_error(
-                "apply GPU write initialization",
+                "apply GPU attachment discard",
                 graph_label,
                 GraphErrorOrigin::new(Some(fragment), Some(node)),
                 Some(prepared_id),
                 Some(resource),
                 GpuWorkGraphCause::OperationAccessContradiction,
-                "write coverage only to the matching normalized storage kind",
+                "discard coverage only from the matching texture storage",
             ));
         }
     }
     Ok(())
 }
 
-fn attachment_discards(access: &GpuResourceAccess) -> bool {
-    matches!(
-        access,
-        GpuResourceAccess::Texture(access)
-            if matches!(
-                access.kind(),
-                GpuTextureAccessKind::ColorAttachment {
-                    store: GpuAttachmentStore::Discard,
-                    ..
-                } | GpuTextureAccessKind::DepthStencilAttachment {
-                    store: GpuAttachmentStore::Discard,
-                    ..
+#[derive(Debug)]
+struct InitializationRegion {
+    resource: GpuWorkResourceId,
+    coverage: InitializedCoverage,
+    description: String,
+}
+
+#[derive(Debug)]
+struct InitializationEffect {
+    resource: GpuWorkResourceId,
+    coverage: InitializedCoverage,
+    support: GpuResourceAccess,
+}
+
+fn initialization_region_for_access(access: &GpuResourceAccess) -> InitializationRegion {
+    InitializationRegion {
+        resource: access.resource_identity(),
+        coverage: coverage_for_access(access),
+        description: access_region_description(access),
+    }
+}
+
+fn operation_initialization(
+    operation: &GpuWorkOperation,
+    graph_label: &str,
+    fragment: &GpuWorkFragment,
+    node: &GpuWorkNode,
+    prepared_id: GpuPreparedWorkNodeId,
+) -> Result<(Vec<InitializationRegion>, Vec<InitializationEffect>), GpuWorkGraphError> {
+    let mut requirements = Vec::new();
+    let mut effects = Vec::new();
+    let mut require =
+        |access: &GpuResourceAccess| requirements.push(initialization_region_for_access(access));
+    let mut effect =
+        |access: &GpuResourceAccess| effects.push(initialization_region_for_access(access));
+    match operation {
+        GpuWorkOperation::Compute(compute) => {
+            for timestamp in compute.timestamp_writes() {
+                effect(&GpuResourceAccess::Query(timestamp.clone()));
+            }
+        }
+        GpuWorkOperation::Render(render) => {
+            for attachment in render.color_attachments() {
+                let access = GpuResourceAccess::Texture(attachment.source_access().clone());
+                match attachment.load() {
+                    GpuColorAttachmentLoad::Load => require(&access),
+                    GpuColorAttachmentLoad::Clear(_) => effect(&access),
                 }
-            )
+                if let Some(resolve) = attachment.resolve_target() {
+                    effect(&GpuResourceAccess::Texture(resolve.access().clone()));
+                }
+            }
+            if let Some(attachment) = render.depth_stencil_attachment() {
+                let access = GpuResourceAccess::Texture(attachment.source_access().clone());
+                match attachment.load() {
+                    GpuDepthAttachmentLoad::Load => require(&access),
+                    GpuDepthAttachmentLoad::Clear(_) => effect(&access),
+                }
+            }
+            for timestamp in render.timestamp_writes() {
+                effect(&GpuResourceAccess::Query(timestamp.clone()));
+            }
+        }
+        GpuWorkOperation::Copy(copy) => match copy {
+            GpuCopyOperation::BufferToBuffer {
+                source,
+                destination,
+            } => {
+                requirements.push(buffer_region(
+                    source.buffer(),
+                    source.range(),
+                    "buffer copy source",
+                ));
+                effects.push(buffer_region(
+                    destination.buffer(),
+                    destination.range(),
+                    "buffer copy destination",
+                ));
+            }
+            GpuCopyOperation::BufferToTexture {
+                source,
+                destination,
+            } => {
+                requirements.push(buffer_layout_region(
+                    source,
+                    destination,
+                    "logical buffer copy source",
+                    graph_label,
+                    fragment,
+                    node,
+                    prepared_id,
+                )?);
+                if texture_copy_is_complete(destination) {
+                    effects.push(texture_copy_region(destination, "texture copy destination"));
+                }
+            }
+            GpuCopyOperation::TextureToBuffer {
+                source,
+                destination,
+            } => {
+                requirements.push(texture_copy_region(source, "texture copy source"));
+                effects.push(buffer_layout_region(
+                    destination,
+                    source,
+                    "logical buffer copy destination",
+                    graph_label,
+                    fragment,
+                    node,
+                    prepared_id,
+                )?);
+            }
+            GpuCopyOperation::TextureToTexture {
+                source,
+                destination,
+            } => {
+                requirements.push(texture_copy_region(source, "texture copy source"));
+                if texture_copy_is_complete(destination) {
+                    effects.push(texture_copy_region(destination, "texture copy destination"));
+                }
+            }
+        },
+        GpuWorkOperation::Clear(GpuClearOperation::BufferZero(region)) => {
+            effects.push(buffer_region(
+                region.buffer(),
+                region.range(),
+                "buffer zero",
+            ));
+        }
+        GpuWorkOperation::Resolve(resolve) => {
+            require(&GpuResourceAccess::Query(resolve.source_access().clone()));
+            effect(&GpuResourceAccess::Buffer(
+                resolve.destination_access().clone(),
+            ));
+        }
+        GpuWorkOperation::Present(present) => {
+            require(&GpuResourceAccess::Texture(present.source_access().clone()));
+        }
+    }
+    let derived = operation.derived_accesses().map_err(|_| {
+        graph_error(
+            "derive GPU operation initialization effects",
+            graph_label,
+            GraphErrorOrigin::new(Some(fragment), Some(node)),
+            Some(prepared_id),
+            None,
+            GpuWorkGraphCause::OperationAccessContradiction,
+            "retain checked operation-derived accesses while preparing initialization",
+        )
+    })?;
+    let effects = effects
+        .into_iter()
+        .map(|effect| {
+            let support = derived
+                .iter()
+                .find(|access| {
+                    access.resource_identity() == effect.resource
+                        && access.writes()
+                        && coverage_for_access(access).contains(&effect.coverage)
+                })
+                .cloned()
+                .ok_or_else(|| {
+                    graph_error(
+                        "derive GPU operation initialization effects",
+                        graph_label,
+                        GraphErrorOrigin::new(Some(fragment), Some(node)),
+                        Some(prepared_id),
+                        Some(effect.resource),
+                        GpuWorkGraphCause::OperationAccessContradiction,
+                        "derive each initialization effect from a checked operation write access",
+                    )
+                })?;
+            Ok(InitializationEffect {
+                resource: effect.resource,
+                coverage: effect.coverage,
+                support,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((requirements, effects))
+}
+
+fn buffer_region(
+    buffer: &super::super::GpuBufferHandle,
+    range: GpuBufferRange,
+    description: &'static str,
+) -> InitializationRegion {
+    InitializationRegion {
+        resource: buffer.diagnostic_identity(),
+        coverage: InitializedCoverage::Buffer {
+            buffer: buffer.clone(),
+            values: vec![GpuBufferCoverage::dense(range)],
+        },
+        description: description.to_string(),
+    }
+}
+
+fn texture_copy_region(
+    region: &GpuTextureCopyRegion,
+    description: &'static str,
+) -> InitializationRegion {
+    InitializationRegion {
+        resource: region.texture().diagnostic_identity(),
+        coverage: texture_range_coverage(region.texture(), region.subresources()),
+        description: description.to_string(),
+    }
+}
+
+fn buffer_layout_region(
+    layout: &GpuBufferTextureLayout,
+    texture: &GpuTextureCopyRegion,
+    description: &'static str,
+    graph_label: &str,
+    fragment: &GpuWorkFragment,
+    node: &GpuWorkNode,
+    prepared_id: GpuPreparedWorkNodeId,
+) -> Result<InitializationRegion, GpuWorkGraphError> {
+    let extent = texture.extent();
+    let segment_size = u64::from(extent.width())
+        .checked_mul(u64::from(
+            texture.texture().descriptor().format().bytes_per_texel(),
+        ))
+        .ok_or_else(|| {
+            initialization_layout_error(graph_label, fragment, node, prepared_id, layout)
+        })?;
+    let group_stride = if extent.depth_or_layers() > 1 {
+        u64::from(layout.bytes_per_row())
+            .checked_mul(u64::from(layout.rows_per_image()))
+            .ok_or_else(|| {
+                initialization_layout_error(graph_label, fragment, node, prepared_id, layout)
+            })?
+    } else {
+        0
+    };
+    let coverage = GpuBufferStridedCoverage::new(
+        layout.buffer(),
+        layout.byte_offset(),
+        segment_size,
+        u64::from(layout.bytes_per_row()),
+        extent.height(),
+        group_stride,
+        extent.depth_or_layers(),
     )
+    .map_err(|_| initialization_layout_error(graph_label, fragment, node, prepared_id, layout))?;
+    Ok(InitializationRegion {
+        resource: layout.buffer().diagnostic_identity(),
+        coverage: InitializedCoverage::Buffer {
+            buffer: layout.buffer().clone(),
+            values: vec![GpuBufferCoverage::strided(coverage)],
+        },
+        description: description.to_string(),
+    })
+}
+
+fn initialization_layout_error(
+    graph_label: &str,
+    fragment: &GpuWorkFragment,
+    node: &GpuWorkNode,
+    prepared_id: GpuPreparedWorkNodeId,
+    layout: &GpuBufferTextureLayout,
+) -> GpuWorkGraphError {
+    graph_error(
+        "derive GPU buffer-texture initialization coverage",
+        graph_label,
+        GraphErrorOrigin::new(Some(fragment), Some(node)),
+        Some(prepared_id),
+        Some(layout.buffer().diagnostic_identity()),
+        GpuWorkGraphCause::OperationAccessContradiction,
+        "retain the checked logical buffer-texture layout while preparing initialization",
+    )
+}
+
+fn texture_copy_is_complete(region: &GpuTextureCopyRegion) -> bool {
+    let descriptor = region.texture().descriptor();
+    let mip = region.mip_level();
+    let width = (descriptor.extent().width() >> mip).max(1);
+    let height = (descriptor.extent().height() >> mip).max(1);
+    let origin = region.origin();
+    let extent = region.extent();
+    if origin.x() != 0 || origin.y() != 0 || extent.width() != width || extent.height() != height {
+        return false;
+    }
+    match descriptor.dimension() {
+        GpuTextureDimension::D1 => origin.z() == 0 && extent.depth_or_layers() == 1,
+        // The checked subresource range carries the exact selected array layers.
+        GpuTextureDimension::D2 => true,
+        GpuTextureDimension::D3 => {
+            origin.z() == 0
+                && extent.depth_or_layers() == (descriptor.extent().depth_or_layers() >> mip).max(1)
+        }
+    }
+}
+
+fn access_has_compatible_role(
+    access: &GpuResourceAccess,
+    operation_access: &GpuResourceAccess,
+) -> bool {
+    match (access, operation_access) {
+        (GpuResourceAccess::Buffer(access), GpuResourceAccess::Buffer(operation_access)) => {
+            access.kind() == operation_access.kind()
+        }
+        (GpuResourceAccess::Texture(access), GpuResourceAccess::Texture(operation_access)) => {
+            access.kind() == operation_access.kind()
+        }
+        (GpuResourceAccess::Query(access), GpuResourceAccess::Query(operation_access)) => {
+            access.kind() == operation_access.kind()
+        }
+        (GpuResourceAccess::Sampler(_), GpuResourceAccess::Sampler(_)) => true,
+        _ => false,
+    }
+}
+
+fn operation_discard_regions(operation: &GpuWorkOperation) -> Vec<InitializationRegion> {
+    let GpuWorkOperation::Render(render) = operation else {
+        return Vec::new();
+    };
+    let mut discarded = Vec::new();
+    for attachment in render.color_attachments() {
+        if attachment.store() == GpuAttachmentStore::Discard {
+            discarded.push(initialization_region_for_access(
+                &GpuResourceAccess::Texture(attachment.source_access().clone()),
+            ));
+        }
+    }
+    if let Some(attachment) = render.depth_stencil_attachment()
+        && attachment.store() == GpuAttachmentStore::Discard
+    {
+        discarded.push(initialization_region_for_access(
+            &GpuResourceAccess::Texture(attachment.source_access().clone()),
+        ));
+    }
+    discarded
 }
 
 pub(super) fn access_region_description(access: &GpuResourceAccess) -> String {
@@ -739,37 +1086,19 @@ fn coverage_to_public(
         return Ok(None);
     }
     let value = match (resource, coverage) {
-        (GpuResourceRef::Buffer(buffer), InitializedCoverage::Buffer(intervals)) => {
-            let ranges = intervals
-                .iter()
-                .map(|&(start, end)| {
-                    GpuBufferRange::new(buffer, start, end - start).map_err(|source| {
-                        GpuWorkGraphError::with_source(
-                            "publish prepared buffer initialization",
-                            GpuWorkGraphErrorContext::new(
-                                graph_label,
-                                None,
-                                None,
-                                None,
-                                Some(buffer.diagnostic_identity()),
-                                Some(format!("bytes {start}..{end}")),
-                                Some(buffer.descriptor().common().provenance().clone()),
-                            ),
-                            GpuWorkGraphCause::OperationAccessContradiction,
-                            "retain checked buffer coverage during preparation",
-                            GpuWorkGraphErrorSource::Authoring(coverage_source_error(
-                                "publish prepared buffer initialization",
-                                buffer.diagnostic_identity(),
-                                source,
-                            )),
-                        )
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+        (
+            GpuResourceRef::Buffer(buffer),
+            InitializedCoverage::Buffer {
+                buffer: coverage_buffer,
+                values,
+            },
+        ) if buffer == coverage_buffer => {
+            let mut values = values.clone();
+            normalize_buffer_coverage(buffer, &mut values);
             GpuInitialCoverage {
                 resource: resource.clone(),
                 storage_resource: buffer.diagnostic_identity(),
-                data: GpuInitialCoverageData::BufferRanges(ranges),
+                data: GpuInitialCoverageData::Buffer(values),
             }
         }
         (GpuResourceRef::Texture(texture), InitializedCoverage::Texture(subresources)) => {

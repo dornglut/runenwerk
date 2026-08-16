@@ -3,7 +3,9 @@ use super::{
     IndirectDrawArgsGenerationDescriptor, PrefixScanMode, U32PrefixScanDescriptor,
     U32ScatterDescriptor,
 };
-use crate::plugins::gpu::{GpuBindingKey, GpuBufferHandle, GpuStorageBufferAccess};
+use crate::plugins::gpu::{
+    GpuBindingKey, GpuBufferHandle, GpuBufferInitialization, GpuStorageBufferAccess,
+};
 use crate::plugins::render::RenderShaderConstant;
 
 pub const GPU_PRIMITIVE_WORKGROUP_SIZE: u32 = 64;
@@ -174,7 +176,7 @@ impl GpuPrimitiveExecutionPlan {
         mut allocate_temporary: F,
     ) -> Result<GpuPrimitiveDispatchPlan, E>
     where
-        F: FnMut(String, u64) -> Result<GpuBufferHandle, E>,
+        F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
         E: From<GpuPrimitiveValidationError>,
     {
         self.validate().map_err(E::from)?;
@@ -214,7 +216,7 @@ impl GpuPrimitiveDispatchPlanBuilder {
         allocate_temporary: &mut F,
     ) -> Result<(), E>
     where
-        F: FnMut(String, u64) -> Result<GpuBufferHandle, E>,
+        F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
     {
         match step {
             GpuPrimitiveStep::CounterReset(step) => self.push_counter_reset(step_index, step),
@@ -256,7 +258,7 @@ impl GpuPrimitiveDispatchPlanBuilder {
         allocate_temporary: &mut F,
     ) -> Result<(), E>
     where
-        F: FnMut(String, u64) -> Result<GpuBufferHandle, E>,
+        F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
     {
         let mut levels = Vec::<PrefixScanLevel>::new();
         let mut input = step.input.clone();
@@ -454,7 +456,7 @@ impl GpuPrimitiveDispatchPlanBuilder {
         allocate_temporary: &mut F,
     ) -> Result<GpuBufferHandle, E>
     where
-        F: FnMut(String, u64) -> Result<GpuBufferHandle, E>,
+        F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
     {
         let label = self.temporary_label(step_index, step_label, level_index, suffix);
         if let Some(existing) = self
@@ -464,7 +466,11 @@ impl GpuPrimitiveDispatchPlanBuilder {
         {
             return Ok(existing.clone());
         }
-        let handle = allocate_temporary(label, u64::from(element_count.max(1)))?;
+        let handle = allocate_temporary(
+            label,
+            u64::from(element_count.max(1)),
+            GpuBufferInitialization::Zeroed,
+        )?;
         self.temporary_storage.push(handle.clone());
         Ok(handle)
     }
@@ -554,7 +560,7 @@ mod tests {
 
     fn dispatch_plan_for_test(plan: &GpuPrimitiveExecutionPlan) -> GpuPrimitiveDispatchPlan {
         let mut owner = Some(RenderFlow::new(format!("{}.test_temporaries", plan.label)));
-        plan.dispatch_plan_with_temporary(|label, element_count| {
+        plan.dispatch_plan_with_temporary(|label, element_count, _initialization| {
             let flow = owner
                 .take()
                 .expect("test temporary owner should be available");
@@ -660,6 +666,30 @@ mod tests {
             !temporary_ids.contains(resource.id())
                 || resource.lifetime() == crate::plugins::gpu::GpuResourceLifetime::Transient
         }));
+        for suffix in ["block_sums", "block_offsets"] {
+            let scratch_handles = compiled
+                .resources
+                .resources
+                .iter()
+                .filter_map(|resource| {
+                    let handle = resource.buffer_handle()?;
+                    (temporary_ids.contains(resource.id())
+                        && handle
+                            .descriptor()
+                            .common()
+                            .label()
+                            .as_str()
+                            .ends_with(suffix))
+                    .then_some(handle)
+                })
+                .collect::<Vec<_>>();
+            assert!(!scratch_handles.is_empty());
+            assert!(scratch_handles.iter().all(|handle| {
+                handle.descriptor().common().lifetime()
+                    == crate::plugins::gpu::GpuResourceLifetime::Transient
+                    && handle.descriptor().initialization() == &GpuBufferInitialization::Zeroed
+            }));
+        }
 
         let prepared = compiled
             .structural_work()
