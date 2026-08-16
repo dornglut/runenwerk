@@ -445,6 +445,24 @@ impl RenderResourceDeclaration {
         element_count: u64,
         lifetime: GpuResourceLifetime,
     ) -> Result<Self, RenderGpuResourceAdapterError> {
+        Self::declare_storage_array_with_lifetime_and_initialization::<Params>(
+            allocator,
+            label,
+            element_count,
+            lifetime,
+            GpuBufferInitialization::Uninitialized,
+        )
+    }
+
+    pub(crate) fn declare_storage_array_with_lifetime_and_initialization<
+        Params: GpuParams + 'static,
+    >(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        label: impl Into<String>,
+        element_count: u64,
+        lifetime: GpuResourceLifetime,
+        initialization: GpuBufferInitialization,
+    ) -> Result<Self, RenderGpuResourceAdapterError> {
         let label = label.into();
         let layout = RenderGpuParamsLayout::storage::<Params>(&label, element_count)?;
         let common = owned_common(&label, lifetime)?;
@@ -463,10 +481,7 @@ impl RenderResourceDeclaration {
             common,
             layout.gpu_layout().byte_len(),
             usages,
-            match lifetime {
-                GpuResourceLifetime::Transient => GpuBufferInitialization::Zeroed,
-                GpuResourceLifetime::Retained => GpuBufferInitialization::Uninitialized,
-            },
+            initialization,
         )?;
         let handle = allocator.allocate_buffer_handle(descriptor)?;
         Ok(Self::Storage(RenderStorageDeclaration { handle, layout }))

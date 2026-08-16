@@ -1,9 +1,10 @@
 use engine::plugins::gpu::{
-    GpuResourceDescriptor, GpuTextureFormat, GpuWorkResourceId, GpuWorkResourceIdAllocator,
+    GpuBufferInitialization, GpuResourceDescriptor, GpuResourceLifetime, GpuTextureFormat,
+    GpuWorkResourceId, GpuWorkResourceIdAllocator,
 };
 use engine::plugins::render::api::RenderPassId;
 use engine::plugins::render::{
-    CompiledPassExecutionPlan, CompiledResourceRef, GpuParams, GpuUniform, RenderFlow,
+    CompiledPassExecutionPlan, CompiledResourceRef, GpuParams, GpuStorage, GpuUniform, RenderFlow,
     RenderGpuParamsLayout, RenderGpuResourceAdapterError, RenderGpuResourceLowering,
     RenderImportedBufferSemantic, RenderImportedTextureSemantic, RenderResourceDeclaration,
     RenderTargetAliasKind, compile_flow_plan, detect_duplicate_resource_ids,
@@ -16,6 +17,11 @@ struct ResourceTestParams {
 
 #[derive(Debug, Clone, Copy, GpuUniform)]
 struct AlternateResourceTestParams {
+    value: u32,
+}
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct StorageResourceTestParams {
     value: u32,
 }
 
@@ -60,6 +66,32 @@ fn descriptor_construction_tracks_resource_kind_and_type_metadata() {
         }
         other => panic!("unexpected descriptor variant: {other:?}"),
     }
+}
+
+#[test]
+fn transient_storage_declarations_do_not_claim_descriptor_initialization() {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let declaration = RenderResourceDeclaration::declare_storage_array_with_lifetime::<
+        StorageResourceTestParams,
+    >(
+        &mut allocator,
+        "transient storage",
+        4,
+        GpuResourceLifetime::Transient,
+    )
+    .expect("transient storage declaration should be valid");
+
+    let RenderResourceDeclaration::Storage(storage) = declaration else {
+        panic!("expected storage declaration");
+    };
+    assert_eq!(
+        storage.handle().descriptor().common().lifetime(),
+        GpuResourceLifetime::Transient
+    );
+    assert_eq!(
+        storage.handle().descriptor().initialization(),
+        &GpuBufferInitialization::Uninitialized
+    );
 }
 
 #[test]
