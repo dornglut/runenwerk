@@ -955,6 +955,7 @@ impl FullscreenPassOperation<'_> {
             depth_stencil_attachment: None,
             timestamp_writes,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         pass.set_pipeline(self.pipeline);
         if let Some(bind_group) = self.bind_group {
@@ -1167,6 +1168,7 @@ impl GraphicsPassOperation<'_> {
             depth_stencil_attachment: depth_attachment,
             timestamp_writes,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         pass.set_pipeline(self.pipeline);
         if let Some(bind_group) = self.bind_group

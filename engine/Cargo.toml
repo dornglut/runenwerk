@@ -19,12 +19,12 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
 tracing-appender = "0.2.3"
 tracing-tracy = { version = "0.11.4", optional = true }
-wgpu = "27.0.1"
+wgpu = "30.0.0"
 winit = "0.30.9"
 rusttype = "0.9.3"
 image = { version = "0.25.8", default-features = false, features = ["png"] }
 ktx2.workspace = true
-naga = { version = "27.0.3", features = ["wgsl-in"] }
+naga = { version = "30.0.0", features = ["wgsl-in"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 ron = "0.8.1"

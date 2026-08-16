@@ -650,6 +650,7 @@ impl Renderer {
             depth_stencil_attachment: None,
             timestamp_writes,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         for command in &prepared.draw_plan {

@@ -476,7 +476,7 @@ impl GpuContext {
                     address_mode_w: lowering::map_address_mode(address_w),
                     mag_filter: lowering::map_filter_mode(mag_filter),
                     min_filter: lowering::map_filter_mode(min_filter),
-                    mipmap_filter: lowering::map_filter_mode(mipmap_filter),
+                    mipmap_filter: lowering::map_mipmap_filter_mode(mipmap_filter),
                     lod_min_clamp,
                     lod_max_clamp,
                     compare: descriptor.compare().map(lowering::map_compare_function),

@@ -8,6 +8,7 @@ use crate::plugins::inspect::{
     submit_render_frame_report_to_diagnostics, validate_selector_terminal_invariant,
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
+use crate::plugins::render::backend::RenderSurfaceAcquireError;
 use crate::plugins::render::backend::{RenderSurfaceDiagnostic, RenderSurfaceRegistryResource};
 use crate::plugins::render::runtime::debug_eval::{evaluate_pixel_probes, evaluate_texture_diffs};
 use crate::plugins::render::*;
@@ -17,7 +18,6 @@ use crate::runtime::{Res, ResMut, WorldMut};
 use crate::state::{DebugMetricsState, StartupState};
 use anyhow::anyhow;
 use scheduler::set_slow_node_logging_enabled;
-use wgpu::SurfaceError;
 
 const FRAME_TIMING_LOG_THRESHOLD_MS: f32 = 20.0;
 const MESH_HOT_PATH_LOG_THRESHOLD_MS: f32 = 8.0;
@@ -423,15 +423,15 @@ pub(crate) fn frame_render_submit_system(
             Ok(())
         }
         Err(err) => {
-            if let Some(surface_error) = err.downcast_ref::<SurfaceError>() {
+            if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                 match surface_error {
-                    SurfaceError::Lost | SurfaceError::Outdated => {
+                    RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
                         gfx.resize(render_surface_id, target_w, target_h);
                         Ok(())
                     }
-                    SurfaceError::Timeout => Ok(()),
-                    SurfaceError::OutOfMemory => anyhow::bail!("surface out of memory"),
-                    SurfaceError::Other => Ok(()),
+                    RenderSurfaceAcquireError::Timeout | RenderSurfaceAcquireError::Validation => {
+                        Ok(())
+                    }
                 }
             } else {
                 Err(anyhow!("render backend execution failed: {err:#}"))
@@ -517,16 +517,12 @@ fn render_additional_surfaces(
             debug_config,
         );
         if let Err(err) = render_result {
-            if let Some(surface_error) = err.downcast_ref::<SurfaceError>() {
+            if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                 match surface_error {
-                    SurfaceError::Lost | SurfaceError::Outdated => {
+                    RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
                         gfx.resize(render_surface_id, target_w, target_h);
                     }
-                    SurfaceError::Timeout | SurfaceError::Other => {}
-                    SurfaceError::OutOfMemory => anyhow::bail!(
-                        "render surface {} is out of memory",
-                        render_surface_id.raw()
-                    ),
+                    RenderSurfaceAcquireError::Timeout | RenderSurfaceAcquireError::Validation => {}
                 }
             } else {
                 return Err(anyhow!(

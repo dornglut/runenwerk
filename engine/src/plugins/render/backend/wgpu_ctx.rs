@@ -8,7 +8,7 @@ use anyhow::Result;
 use pollster::block_on;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use wgpu::{Surface, SurfaceConfiguration, SurfaceError, SurfaceTexture};
+use wgpu::{CurrentSurfaceTexture, Surface, SurfaceConfiguration, SurfaceTexture};
 use winit::window::Window;
 
 use super::RenderSurfaceId;
@@ -23,6 +23,19 @@ struct WgpuSurfaceState<'window> {
 pub struct WgpuCtx<'window> {
     context: GpuContext,
     surfaces: BTreeMap<RenderSurfaceId, WgpuSurfaceState<'window>>,
+}
+
+/// Stable renderer-facing acquisition categories across the WGPU 30 surface-result cutover.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum RenderSurfaceAcquireError {
+    #[error("render surface was lost")]
+    Lost,
+    #[error("render surface configuration is outdated")]
+    Outdated,
+    #[error("render surface acquisition timed out or was occluded")]
+    Timeout,
+    #[error("render surface acquisition failed validation")]
+    Validation,
 }
 
 impl<'window> WgpuCtx<'window> {
@@ -205,12 +218,30 @@ impl<'window> WgpuCtx<'window> {
     pub fn get_current_texture(
         &self,
         render_surface_id: RenderSurfaceId,
-    ) -> Result<SurfaceTexture, SurfaceError> {
-        self.surfaces
+    ) -> Result<SurfaceTexture, RenderSurfaceAcquireError> {
+        let outcome = self
+            .surfaces
             .get(&render_surface_id)
-            .ok_or(SurfaceError::Lost)?
+            .ok_or(RenderSurfaceAcquireError::Lost)?
             .surface
-            .get_current_texture()
+            .get_current_texture();
+        match outcome {
+            CurrentSurfaceTexture::Success(texture)
+            | CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
+            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
+                Err(RenderSurfaceAcquireError::Timeout)
+            }
+            CurrentSurfaceTexture::Outdated => Err(RenderSurfaceAcquireError::Outdated),
+            CurrentSurfaceTexture::Lost => Err(RenderSurfaceAcquireError::Lost),
+            CurrentSurfaceTexture::Validation => Err(RenderSurfaceAcquireError::Validation),
+        }
+    }
+
+    pub fn present(&self, frame: SurfaceTexture) {
+        self.context
+            .current_render_device_queue()
+            .queue
+            .present(frame);
     }
 
     pub(crate) fn context(&self) -> &GpuContext {

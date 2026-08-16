@@ -346,7 +346,21 @@ fn read_gpu_timing_buffer(
         }
     }
 
-    let data = slice.get_mapped_range();
+    let data = match slice.get_mapped_range() {
+        Ok(data) => data,
+        Err(err) => {
+            readback_buffer.unmap();
+            return entries
+                .into_iter()
+                .map(|entry| {
+                    gpu_timing_unavailable_evidence(
+                        entry,
+                        format!("failed to access mapped GPU timestamp bytes: {err}"),
+                    )
+                })
+                .collect();
+        }
+    };
     let evidence = entries
         .into_iter()
         .map(|entry| gpu_timing_evidence_from_bytes(&data, timestamp_period_ns, entry))

@@ -33,7 +33,7 @@ pub(crate) async fn request_headless(
     realization_policies: GpuRealizationPolicies,
 ) -> Result<GpuContext, GpuContextRequestError> {
     request_with_instance(
-        Instance::new(&InstanceDescriptor::default().with_env()),
+        Instance::new(InstanceDescriptor::new_without_display_handle_from_env()),
         descriptor,
         None,
         realization_policies,
@@ -151,6 +151,7 @@ async fn select_backend_adapter(
     }
     let candidates = instance
         .enumerate_adapters(Backends::all())
+        .await
         .into_iter()
         .map(|adapter| -> Result<_, GpuContextRequestError> {
             // Absence of a surface is not surface compatibility evidence.
@@ -260,6 +261,7 @@ async fn select_backend_selected_adapter(
             power_preference: map_power_preference(descriptor.power_preference()),
             force_fallback_adapter,
             compatible_surface,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(map_request_adapter_error)?;
@@ -372,10 +374,8 @@ fn requested_limits(
     let contract = candidate.contract();
     let budget = contract.workload_budget().limits();
     let mut limits = profile_limits(contract.device_request_profile());
-    limits.max_uniform_buffer_binding_size =
-        u32::try_from(budget.max_uniform_buffer_binding_size()).map_err(limit_cast_error)?;
-    limits.max_storage_buffer_binding_size =
-        u32::try_from(budget.max_storage_buffer_binding_size()).map_err(limit_cast_error)?;
+    limits.max_uniform_buffer_binding_size = budget.max_uniform_buffer_binding_size();
+    limits.max_storage_buffer_binding_size = budget.max_storage_buffer_binding_size();
     limits.max_color_attachments = budget.max_color_attachments();
     limits.max_vertex_buffers = budget.max_vertex_buffers();
     limits.max_bindings_per_bind_group = budget.max_bindings_per_group();
@@ -385,13 +385,6 @@ fn requested_limits(
     limits.min_storage_buffer_offset_alignment =
         requested_alignment(alignments.storage_dynamic_offset, "storage dynamic offset")?;
     Ok(limits)
-}
-
-fn limit_cast_error(_: std::num::TryFromIntError) -> GpuContextRequestError {
-    GpuContextRequestError::new(
-        GpuContextRequestErrorCategory::DeviceRequestProfileUnsupported,
-        "admitted normalized limit cannot be represented by pinned WGPU",
-    )
 }
 
 fn requested_alignment(
@@ -415,8 +408,8 @@ fn requested_alignment(
 fn map_device_limits(native: &Limits) -> GpuDeviceLimits {
     GpuDeviceLimits::new(
         GpuLimits::from_validated_adapter_facts(
-            u64::from(native.max_uniform_buffer_binding_size),
-            u64::from(native.max_storage_buffer_binding_size),
+            native.max_uniform_buffer_binding_size,
+            native.max_storage_buffer_binding_size,
             native.max_color_attachments,
             native.max_vertex_buffers,
             native.max_bindings_per_bind_group,
@@ -530,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn binding_array_capabilities_request_their_exact_wgpu_27_feature_bits() {
+    fn binding_array_capabilities_request_their_exact_backend_feature_bits() {
         let candidate = candidate_with_enabled_features([
             GpuCapabilityFeature::TextureBindingArray,
             GpuCapabilityFeature::BufferBindingArray,

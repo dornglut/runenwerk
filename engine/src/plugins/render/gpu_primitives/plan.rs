@@ -1560,7 +1560,9 @@ mod tests {
                 .recv()
                 .expect("primitive readback channel should receive")
                 .expect("primitive readback mapping should succeed");
-            let data = slice.get_mapped_range();
+            let data = slice
+                .get_mapped_range()
+                .expect("primitive readback mapped range should be accessible");
             let values = crate::plugins::render::bytemuck::cast_slice::<u8, u32>(&data).to_vec();
             drop(data);
             buffer.unmap();
