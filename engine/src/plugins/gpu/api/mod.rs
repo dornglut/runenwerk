@@ -12,6 +12,7 @@ mod pipeline_realization;
 mod program;
 mod realization;
 mod render_execution;
+mod render_pass;
 mod resource;
 mod work;
 mod work_resource_id;
@@ -29,6 +30,7 @@ pub use pipeline_realization::*;
 pub use program::*;
 pub use realization::*;
 pub use render_execution::*;
+pub use render_pass::*;
 pub use resource::*;
 pub use work::*;
 pub use work_resource_id::{
