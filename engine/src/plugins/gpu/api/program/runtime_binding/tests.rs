@@ -36,7 +36,7 @@ fn declaration(array_count: Option<NonZeroU32>) -> GpuBindingDeclaration {
 
 fn storage_declaration(binding: u32, array_count: Option<NonZeroU32>) -> GpuBindingDeclaration {
     GpuBindingDeclaration::new(
-        GpuBindingKey::try_new(0, binding).unwrap(),
+        GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
         GpuShaderStages::one(GpuShaderStage::Compute),
         GpuBindingKind::storage_buffer(
             GpuStorageBufferAccess::ReadWrite,
@@ -79,7 +79,7 @@ fn runtime_buffer_value(
     dynamic_offset: u64,
 ) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
-        GpuBindingKey::try_new(0, binding).unwrap(),
+        GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
         [GpuRuntimeBindingResource::Buffer(
             GpuRuntimeBufferBinding::new(
                 buffer,
