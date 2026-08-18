@@ -355,22 +355,15 @@ impl RenderFlow {
         validate_flow_graph(&self.graph)
     }
 
-    pub fn prepared_pass_order(&self) -> Result<Vec<RenderPassId>, RenderFlowValidationError> {
+    /// Returns the render-owned lexical pass order after flow validation and compilation.
+    /// Executable GPU ordering is established later by RunenGPU from resolved operations.
+    pub fn lexical_pass_order(&self) -> Result<Vec<RenderPassId>, RenderFlowValidationError> {
         let plan = compile_flow_plan(self)?;
-        let Some(work) = plan.structural_work() else {
-            return Err(RenderFlowValidationError::from(vec![
-                crate::plugins::render::RenderFlowValidationIssue::GpuWorkLoweringFailed {
-                    message: "compiled flow is missing structural prepared GPU work".to_string(),
-                },
-            ]));
-        };
-        work.ordered_render_pass_ids().map_err(|error| {
-            RenderFlowValidationError::from(vec![
-                crate::plugins::render::RenderFlowValidationIssue::GpuWorkLoweringFailed {
-                    message: error.to_string(),
-                },
-            ])
-        })
+        Ok(plan
+            .render_passes
+            .iter()
+            .map(|pass| pass.pass_id())
+            .collect())
     }
 
     pub fn id(&self) -> RenderFlowId {
@@ -1722,7 +1715,6 @@ mod tests {
             .graphics_pass("test.draw")
             .write_color_target("test.a")
             .write_color_target("test.b")
-            .draw(3, 1)
             .finish()
             .validation_report()
             .expect_err("graphics pass with multiple color outputs should be rejected");
