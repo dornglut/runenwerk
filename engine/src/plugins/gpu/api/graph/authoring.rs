@@ -1,9 +1,9 @@
 use super::super::{
     GpuAccessError, GpuBufferAccess, GpuBufferAccessKind, GpuCapabilityRequirementError,
-    GpuCapabilityRequirements, GpuComputeOperation, GpuDrawIntent, GpuExportKey,
-    GpuExportRelationship, GpuResourceAccess, GpuResourceAccessIntent, GpuResourceDescriptorError,
-    GpuResourceLabel, GpuResourceProvenance, GpuResourceRef, GpuTextureAccess,
-    GpuTextureAccessKind, GpuTextureAccessResource, GpuWorkAuthoringCause, GpuWorkAuthoringError,
+    GpuCapabilityRequirements, GpuComputeOperation, GpuExportKey, GpuExportRelationship,
+    GpuResourceAccess, GpuResourceAccessIntent, GpuResourceDescriptorError, GpuResourceLabel,
+    GpuResourceProvenance, GpuResourceRef, GpuTextureAccess, GpuTextureAccessKind,
+    GpuTextureAccessResource, GpuWorkAuthoringCause, GpuWorkAuthoringError,
     GpuWorkAuthoringErrorContext, GpuWorkAuthoringErrorSource, GpuWorkNodeKind, GpuWorkOperation,
     GpuWorkResourceId,
 };
@@ -904,7 +904,7 @@ fn validate_indexed_draw_access(
     let GpuWorkOperation::Render(render) = operation else {
         return Ok(());
     };
-    if render.draws().iter().any(GpuDrawIntent::is_indexed)
+    if render.draws().iter().any(|draw| draw.draw().is_indexed())
         && !accesses.iter().any(|access| {
             matches!(
                 access,
