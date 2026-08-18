@@ -152,11 +152,8 @@ pub(super) fn compute_operation_with_dispatch(dispatch: GpuDispatchSize) -> GpuW
     )
     .unwrap();
     let layout = GpuPipelineLayoutDescriptor::new([]).unwrap();
-    let specialization = GpuSpecializationValueSet::new(
-        GpuSpecializationSchema::new([]).unwrap(),
-        [],
-    )
-    .unwrap();
+    let specialization =
+        GpuSpecializationValueSet::new(GpuSpecializationSchema::new([]).unwrap(), []).unwrap();
     let pipeline = GpuComputePipelineDescriptor::new(
         program,
         entry_point,
