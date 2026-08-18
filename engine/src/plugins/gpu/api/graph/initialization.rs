@@ -794,6 +794,14 @@ fn operation_initialization(
         GpuWorkOperation::Present(present) => {
             require(&GpuResourceAccess::Texture(present.source_access().clone()));
         }
+        GpuWorkOperation::Upload(upload) => {
+            if upload.establishes_initialization_effect() {
+                effect(upload.destination_access());
+            }
+        }
+        GpuWorkOperation::Readback(readback) => {
+            require(readback.source_access());
+        }
     }
     let derived = operation.derived_accesses().map_err(|_| {
         graph_error(
