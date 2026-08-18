@@ -1,6 +1,6 @@
 //! Fixed legacy-renderer capability lowering. These facts preserve the current
-//! Runenwerk contract; they do not query a backend. G4 deletes this adapter when
-//! backend admission constructs normalized capability facts directly.
+//! Runenwerk contract; they do not query a backend. G5 deletes this adapter when
+//! generic execution consumes admitted RunenGPU facts directly.
 
 use crate::plugins::gpu::{
     GpuCapabilities, GpuCapabilityFeature, GpuCapabilityRequirement, GpuLimits,
@@ -21,13 +21,25 @@ pub fn current_runtime_gpu_capabilities() -> GpuCapabilities {
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
-        GpuCapabilityFeature::IndirectDraw,
+        GpuCapabilityFeature::IndirectExecution,
         GpuCapabilityFeature::StorageTexture,
         GpuCapabilityFeature::DepthAttachment,
         GpuCapabilityFeature::Presentation,
     ]
     .into_iter();
-    let limits = GpuLimits::from_validated_adapter_facts(64 * 1024, 128 * 1024 * 1024, 1, 8, 16);
+    let limits = GpuLimits::from_validated_adapter_facts(
+        64 * 1024,
+        128 * 1024 * 1024,
+        1,
+        8,
+        16,
+        8192,
+        4,
+        24,
+        8,
+        4,
+        65_535,
+    );
     GpuCapabilities::from_normalized_facts(features, limits, current_format_facts())
 }
 
