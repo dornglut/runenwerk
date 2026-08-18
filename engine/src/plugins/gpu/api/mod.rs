@@ -8,6 +8,7 @@ mod dispatch;
 mod errors;
 mod graph;
 mod handles;
+mod operation;
 mod pipeline_realization;
 mod program;
 mod readback_id;
