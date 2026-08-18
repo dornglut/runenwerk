@@ -1,11 +1,11 @@
 use super::super::{
-    GpuAccessError, GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange,
-    GpuCapabilityRequirementError, GpuCapabilityRequirements, GpuComputeOperation, GpuDispatchSize,
-    GpuDrawIntent, GpuExportKey, GpuExportRelationship, GpuResourceAccess, GpuResourceAccessIntent,
-    GpuResourceDescriptorError, GpuResourceLabel, GpuResourceProvenance, GpuResourceRef,
-    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource, GpuWorkAuthoringCause,
-    GpuWorkAuthoringError, GpuWorkAuthoringErrorContext, GpuWorkAuthoringErrorSource,
-    GpuWorkNodeKind, GpuWorkOperation, GpuWorkResourceId,
+    GpuAccessError, GpuBufferAccess, GpuBufferAccessKind, GpuCapabilityRequirementError,
+    GpuCapabilityRequirements, GpuComputeOperation, GpuDrawIntent, GpuExportKey,
+    GpuExportRelationship, GpuResourceAccess, GpuResourceAccessIntent, GpuResourceDescriptorError,
+    GpuResourceLabel, GpuResourceProvenance, GpuResourceRef, GpuTextureAccess,
+    GpuTextureAccessKind, GpuTextureAccessResource, GpuWorkAuthoringCause, GpuWorkAuthoringError,
+    GpuWorkAuthoringErrorContext, GpuWorkAuthoringErrorSource, GpuWorkNodeKind,
+    GpuWorkOperation, GpuWorkResourceId,
 };
 use super::{
     coverage::{GpuInitialCoverage, GpuWorkResourceInput},
@@ -244,25 +244,15 @@ pub struct GpuWorkFragment {
 }
 
 impl GpuWorkFragment {
-    /// Authors an immutable fragment through lexical operation builders.
+    /// Authors an immutable fragment from complete typed operations.
     ///
     /// ```
     /// use engine::plugins::gpu::*;
     /// # fn author_simulation(
-    /// #     positions: &GpuBufferHandle,
-    /// #     next_positions: &GpuBufferHandle,
-    /// #     groups: u32,
+    /// #     compute: GpuComputeOperation,
     /// # ) -> Result<GpuWorkFragment, GpuWorkAuthoringError> {
     /// let simulation = GpuWorkFragment::build("simulation.update", |work| {
-    ///     work.compute("integrate", |node| {
-    ///         node.storage_read(positions, GpuBufferRange::whole(positions)?)?;
-    ///         node.storage_write(
-    ///             next_positions,
-    ///             GpuBufferRange::whole(next_positions)?,
-    ///         )?;
-    ///         node.dispatch([groups, 1, 1])?;
-    ///         Ok(())
-    ///     })?;
+    ///     work.compute("integrate", compute)?;
     ///     Ok(())
     /// })?;
     /// # Ok(simulation)
@@ -321,158 +311,6 @@ impl GpuWorkFragment {
 
     pub fn provenance(&self) -> &GpuResourceProvenance {
         &self.provenance
-    }
-}
-
-#[derive(Debug)]
-pub struct GpuComputeNodeBuilder {
-    fragment_label: GpuResourceLabel,
-    node_label: GpuResourceLabel,
-    provenance: GpuResourceProvenance,
-    resources: BTreeMap<GpuWorkResourceId, GpuResourceRef>,
-    accesses: Vec<GpuResourceAccess>,
-    dispatch: Option<GpuDispatchSize>,
-}
-
-struct GpuComputeNodeParts {
-    operation: GpuWorkOperation,
-    accesses: Vec<GpuResourceAccess>,
-    resources: BTreeMap<GpuWorkResourceId, GpuResourceRef>,
-    provenance: GpuResourceProvenance,
-}
-
-impl GpuComputeNodeBuilder {
-    fn new(
-        fragment_label: GpuResourceLabel,
-        node_label: GpuResourceLabel,
-        provenance: GpuResourceProvenance,
-    ) -> Self {
-        Self {
-            fragment_label,
-            node_label,
-            provenance,
-            resources: BTreeMap::new(),
-            accesses: Vec::new(),
-            dispatch: None,
-        }
-    }
-
-    pub fn storage_read(
-        &mut self,
-        buffer: &GpuBufferHandle,
-        range: GpuBufferRange,
-    ) -> Result<(), GpuWorkAuthoringError> {
-        self.storage_access(buffer, range, GpuBufferAccessKind::StorageRead)
-    }
-
-    pub fn storage_write(
-        &mut self,
-        buffer: &GpuBufferHandle,
-        range: GpuBufferRange,
-    ) -> Result<(), GpuWorkAuthoringError> {
-        self.storage_access(buffer, range, GpuBufferAccessKind::StorageWrite)
-    }
-
-    pub fn dispatch(&mut self, workgroups: [u32; 3]) -> Result<(), GpuWorkAuthoringError> {
-        if self.dispatch.is_some() {
-            return Err(self.error(
-                "set lexical GPU compute dispatch",
-                None,
-                GpuWorkAuthoringCause::OperationAccessContradiction,
-                "set exactly one dispatch shape per compute node",
-                None,
-            ));
-        }
-        let dispatch = GpuDispatchSize::new(workgroups[0], workgroups[1], workgroups[2]).map_err(
-            |source| {
-                self.error(
-                    "set lexical GPU compute dispatch",
-                    source.resource(),
-                    GpuWorkAuthoringCause::OperationAccessContradiction,
-                    "provide nonzero x, y, and z workgroup counts",
-                    Some(GpuWorkAuthoringErrorSource::Operation(source)),
-                )
-            },
-        )?;
-        self.dispatch = Some(dispatch);
-        Ok(())
-    }
-
-    fn storage_access(
-        &mut self,
-        buffer: &GpuBufferHandle,
-        range: GpuBufferRange,
-        kind: GpuBufferAccessKind,
-    ) -> Result<(), GpuWorkAuthoringError> {
-        let access = GpuBufferAccess::new(buffer, range, kind).map_err(|source| {
-            self.error(
-                "declare lexical GPU compute storage access",
-                source.resource(),
-                GpuWorkAuthoringCause::OperationAccessContradiction,
-                "use a checked storage range on a buffer with the matching usage",
-                Some(GpuWorkAuthoringErrorSource::Access(source)),
-            )
-        })?;
-        let resource = GpuResourceRef::Buffer(buffer.clone());
-        let identity = resource.diagnostic_identity();
-        match self.resources.entry(identity) {
-            Entry::Vacant(entry) => {
-                entry.insert(resource);
-            }
-            Entry::Occupied(entry) if entry.get() == &resource => {}
-            Entry::Occupied(_) => {
-                return Err(self.error(
-                    "declare lexical GPU compute storage resource",
-                    Some(identity),
-                    GpuWorkAuthoringCause::InvalidResourceKind,
-                    "use one kind-preserving handle for each resource identity",
-                    None,
-                ));
-            }
-        }
-        self.accesses.push(GpuResourceAccess::Buffer(access));
-        Ok(())
-    }
-
-    fn finish(self) -> Result<GpuComputeNodeParts, GpuWorkAuthoringError> {
-        let dispatch = self.dispatch.ok_or_else(|| {
-            self.error(
-                "finish lexical GPU compute node",
-                None,
-                GpuWorkAuthoringCause::OperationAccessContradiction,
-                "set exactly one checked dispatch shape",
-                None,
-            )
-        })?;
-        Ok(GpuComputeNodeParts {
-            operation: GpuWorkOperation::Compute(GpuComputeOperation::new(dispatch)),
-            accesses: self.accesses,
-            resources: self.resources,
-            provenance: self.provenance,
-        })
-    }
-
-    fn error(
-        &self,
-        operation: &'static str,
-        resource: Option<GpuWorkResourceId>,
-        cause: GpuWorkAuthoringCause,
-        correction: &'static str,
-        source: Option<GpuWorkAuthoringErrorSource>,
-    ) -> GpuWorkAuthoringError {
-        let context = GpuWorkAuthoringErrorContext::new(
-            Some(self.fragment_label.as_str().to_string()),
-            Some(self.node_label.as_str().to_string()),
-            None,
-            resource,
-            Some(self.provenance.clone()),
-        );
-        match source {
-            Some(source) => {
-                GpuWorkAuthoringError::with_source(operation, context, cause, correction, source)
-            }
-            None => GpuWorkAuthoringError::invalid(operation, context, cause, correction),
-        }
     }
 }
 
@@ -593,35 +431,45 @@ impl GpuWorkFragmentBuilder {
         Ok(())
     }
 
-    pub fn compute<L, F>(
+    pub fn compute<L>(
         &mut self,
         label: L,
-        author: F,
+        compute: GpuComputeOperation,
     ) -> Result<GpuWorkNodeId, GpuWorkAuthoringError>
     where
         L: AsRef<str>,
-        F: FnOnce(&mut GpuComputeNodeBuilder) -> Result<(), GpuWorkAuthoringError>,
     {
         let label = checked_node_label(&self.label, label.as_ref())?;
         let provenance = GpuResourceProvenance::new(label.clone(), None, None);
-        let mut node =
-            GpuComputeNodeBuilder::new(self.label.clone(), label.clone(), provenance.clone());
-        author(&mut node)?;
-        let GpuComputeNodeParts {
-            operation,
-            accesses,
-            resources,
-            provenance,
-        } = node.finish()?;
+        let operation = GpuWorkOperation::Compute(compute);
+        let derived = operation.derived_accesses().map_err(|source| {
+            GpuWorkAuthoringError::with_source(
+                "derive lexical GPU compute resources",
+                GpuWorkAuthoringErrorContext::new(
+                    Some(self.label.as_str().to_string()),
+                    Some(label.as_str().to_string()),
+                    None,
+                    source.resource(),
+                    Some(provenance.clone()),
+                ),
+                GpuWorkAuthoringCause::OperationAccessContradiction,
+                "use one internally consistent checked compute operation",
+                GpuWorkAuthoringErrorSource::Operation(source),
+            )
+        })?;
 
         let mut staged = self.transaction_snapshot();
-        for resource in resources.into_values() {
-            staged.declare_lexical_resource(resource, &label, &provenance)?;
+        for access in &derived {
+            staged.declare_lexical_resource(
+                declared_resource_for_access(access),
+                &label,
+                &provenance,
+            )?;
         }
         let id = staged.add_node(
             label,
             operation,
-            accesses,
+            [],
             GpuCapabilityRequirements::new(),
             GpuExecutionPreference::Automatic,
             provenance,
@@ -866,6 +714,18 @@ impl GpuWorkFragmentBuilder {
             cause,
             correction,
         )
+    }
+}
+
+fn declared_resource_for_access(access: &GpuResourceAccess) -> GpuResourceRef {
+    match access {
+        GpuResourceAccess::Buffer(access) => access.buffer().clone().into(),
+        GpuResourceAccess::Texture(access) => match access.resource() {
+            GpuTextureAccessResource::Texture(texture) => texture.clone().into(),
+            GpuTextureAccessResource::TextureView(view) => view.clone().into(),
+        },
+        GpuResourceAccess::Query(access) => access.query_set().clone().into(),
+        GpuResourceAccess::Sampler(access) => access.sampler().clone().into(),
     }
 }
 
