@@ -224,9 +224,7 @@ fn render_extent(texture: &GpuTextureHandle, mip_level: u32) -> GpuRenderExtent 
     let width = (extent.width() >> mip_level).max(1);
     let height = match texture.descriptor().dimension() {
         GpuTextureDimension::D1 => 1,
-        GpuTextureDimension::D2 | GpuTextureDimension::D3 => {
-            (extent.height() >> mip_level).max(1)
-        }
+        GpuTextureDimension::D2 | GpuTextureDimension::D3 => (extent.height() >> mip_level).max(1),
     };
     GpuRenderExtent::new(width, height)
 }
@@ -296,11 +294,8 @@ mod tests {
                     mip_levels,
                     sample_count,
                     GpuTextureFormat::Rgba8Unorm,
-                    GpuTextureUsages::new(
-                        &resource_label,
-                        [GpuTextureUsage::ColorAttachment],
-                    )
-                    .unwrap(),
+                    GpuTextureUsages::new(&resource_label, [GpuTextureUsage::ColorAttachment])
+                        .unwrap(),
                     GpuTextureInitialization::Uninitialized,
                 )
                 .unwrap(),
@@ -308,10 +303,7 @@ mod tests {
             .unwrap()
     }
 
-    fn color_attachment(
-        texture: GpuTextureHandle,
-        mip_level: u32,
-    ) -> GpuRenderColorAttachment {
+    fn color_attachment(texture: GpuTextureHandle, mip_level: u32) -> GpuRenderColorAttachment {
         let subresources = GpuTextureSubresourceRange::new(
             texture.descriptor().common().label(),
             mip_level,
@@ -324,9 +316,7 @@ mod tests {
         GpuRenderColorAttachment::new(
             GpuTextureAccessResource::Texture(texture),
             subresources,
-            GpuColorAttachmentLoad::Clear(
-                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-            ),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
             GpuAttachmentStore::Store,
             None,
         )
@@ -337,14 +327,8 @@ mod tests {
     fn signature_uses_effective_mip_extent_and_rejects_attachment_mismatch() {
         let mut allocator =
             GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(91).unwrap());
-        let first = color_attachment(
-            color_texture(&mut allocator, "first", 32, 16, 2, 1),
-            1,
-        );
-        let second = color_attachment(
-            color_texture(&mut allocator, "second", 16, 8, 1, 1),
-            0,
-        );
+        let first = color_attachment(color_texture(&mut allocator, "first", 32, 16, 2, 1), 1);
+        let second = color_attachment(color_texture(&mut allocator, "second", 16, 8, 1, 1), 0);
         let signature = GpuRenderPassSignature::from_attachments(&[first, second], None).unwrap();
         assert_eq!(signature.extent(), GpuRenderExtent::new(16, 8));
         assert_eq!(signature.sample_count(), 1);
@@ -353,35 +337,40 @@ mod tests {
             &[GpuTextureFormat::Rgba8Unorm, GpuTextureFormat::Rgba8Unorm]
         );
 
-        let mismatch = color_attachment(
-            color_texture(&mut allocator, "mismatch", 17, 8, 1, 1),
-            0,
+        let mismatch = color_attachment(color_texture(&mut allocator, "mismatch", 17, 8, 1, 1), 0);
+        assert!(
+            GpuRenderPassSignature::from_attachments(
+                &[
+                    mismatch,
+                    color_attachment(color_texture(&mut allocator, "reference", 16, 8, 1, 1), 0),
+                ],
+                None,
+            )
+            .is_err()
         );
-        assert!(GpuRenderPassSignature::from_attachments(&[mismatch, color_attachment(
-            color_texture(&mut allocator, "reference", 16, 8, 1, 1),
-            0,
-        )], None)
-        .is_err());
     }
 
     #[test]
     fn scissor_is_checked_against_effective_extent_and_zero_area_is_valid() {
         let mut allocator =
             GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(92).unwrap());
-        let attachment = color_attachment(
-            color_texture(&mut allocator, "target", 16, 8, 1, 1),
-            0,
-        );
+        let attachment = color_attachment(color_texture(&mut allocator, "target", 16, 8, 1, 1), 0);
         let signature = GpuRenderPassSignature::from_attachments(&[attachment], None).unwrap();
 
-        assert!(signature
-            .validate_scissor(GpuScissorRect::new(15, 7, 1, 1).unwrap())
-            .is_ok());
-        assert!(signature
-            .validate_scissor(GpuScissorRect::new(16, 8, 0, 0).unwrap())
-            .is_ok());
-        assert!(signature
-            .validate_scissor(GpuScissorRect::new(16, 0, 1, 1).unwrap())
-            .is_err());
+        assert!(
+            signature
+                .validate_scissor(GpuScissorRect::new(15, 7, 1, 1).unwrap())
+                .is_ok()
+        );
+        assert!(
+            signature
+                .validate_scissor(GpuScissorRect::new(16, 8, 0, 0).unwrap())
+                .is_ok()
+        );
+        assert!(
+            signature
+                .validate_scissor(GpuScissorRect::new(16, 0, 1, 1).unwrap())
+                .is_err()
+        );
     }
 }
