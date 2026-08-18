@@ -798,7 +798,7 @@ mod tests {
             InFlightOutcome::Complete(Ok(record)) => {
                 assert!(Arc::ptr_eq(&record, &second));
             }
-            InFlightOutcome::Complete(Err(_)
+            InFlightOutcome::Complete(Err(_))
             | InFlightOutcome::Abandoned
             | InFlightOutcome::Pending => {
                 panic!("completed success must retain the shared authoritative Arc")
