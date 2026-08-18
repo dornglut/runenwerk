@@ -48,7 +48,9 @@ fn runengpu_instance_descriptor() -> InstanceDescriptor {
 fn enforce_runengpu_instance_flags(mut descriptor: InstanceDescriptor) -> InstanceDescriptor {
     // IndirectExecution has defined portable runtime-invalid no-op semantics. Environment/debug
     // configuration may not weaken that RunenGPU contract on the private WGPU backend.
-    descriptor.flags.insert(InstanceFlags::VALIDATION_INDIRECT_CALL);
+    descriptor
+        .flags
+        .insert(InstanceFlags::VALIDATION_INDIRECT_CALL);
     descriptor
 }
 
@@ -513,9 +515,15 @@ mod tests {
     #[test]
     fn runengpu_instance_flags_restore_indirect_runtime_validity() {
         let mut descriptor = InstanceDescriptor::default();
-        descriptor.flags.remove(InstanceFlags::VALIDATION_INDIRECT_CALL);
+        descriptor
+            .flags
+            .remove(InstanceFlags::VALIDATION_INDIRECT_CALL);
         let descriptor = enforce_runengpu_instance_flags(descriptor);
-        assert!(descriptor.flags.contains(InstanceFlags::VALIDATION_INDIRECT_CALL));
+        assert!(
+            descriptor
+                .flags
+                .contains(InstanceFlags::VALIDATION_INDIRECT_CALL)
+        );
     }
 
     #[test]
@@ -543,7 +551,10 @@ mod tests {
         assert_eq!(requested.max_color_attachments, 1);
         assert_eq!(requested.max_vertex_buffers, 8);
         assert_eq!(requested.max_bindings_per_bind_group, 16);
-        assert_eq!(requested.max_texture_dimension_2d, budget.max_texture_dimension_2d());
+        assert_eq!(
+            requested.max_texture_dimension_2d,
+            budget.max_texture_dimension_2d()
+        );
         assert_eq!(requested.max_bind_groups, budget.max_bind_groups());
         assert_eq!(
             requested.max_bind_groups_plus_vertex_buffers,
@@ -573,7 +584,10 @@ mod tests {
         native.min_uniform_buffer_offset_alignment = 512;
         let facts = map_device_limits(&native);
         assert_eq!(facts.values().max_vertex_buffers(), 12);
-        assert_eq!(facts.values().max_compute_workgroups_per_dimension(), 1234);
+        assert_eq!(
+            facts.values().max_compute_workgroups_per_dimension(),
+            1234
+        );
         assert_eq!(facts.alignments().uniform_dynamic_offset, Some(512));
     }
 
