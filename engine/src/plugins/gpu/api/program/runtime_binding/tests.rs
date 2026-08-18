@@ -31,8 +31,12 @@ fn storage_buffer(size: u64) -> GpuBufferHandle {
 }
 
 fn declaration(array_count: Option<NonZeroU32>) -> GpuBindingDeclaration {
+    storage_declaration(0, array_count)
+}
+
+fn storage_declaration(binding: u32, array_count: Option<NonZeroU32>) -> GpuBindingDeclaration {
     GpuBindingDeclaration::new(
-        GpuBindingKey::try_new(0, 0).unwrap(),
+        GpuBindingKey::try_new(0, binding).unwrap(),
         GpuShaderStages::one(GpuShaderStage::Compute),
         GpuBindingKind::storage_buffer(
             GpuStorageBufferAccess::ReadWrite,
@@ -40,7 +44,7 @@ fn declaration(array_count: Option<NonZeroU32>) -> GpuBindingDeclaration {
             NonZeroU64::new(16),
         ),
         array_count,
-        "storage",
+        format!("storage-{binding}"),
         GpuBindingProvenance::new("runtime-binding-test", None).unwrap(),
     )
     .unwrap()
@@ -64,13 +68,23 @@ fn device_facts_with_dynamic_limits(
 }
 
 fn runtime_value(dynamic_offset: u64) -> GpuRuntimeBindingValue {
+    runtime_buffer_value(0, storage_buffer(64), 0, 32, dynamic_offset)
+}
+
+fn runtime_buffer_value(
+    binding: u32,
+    buffer: GpuBufferHandle,
+    static_offset: u64,
+    size: u64,
+    dynamic_offset: u64,
+) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
-        GpuBindingKey::try_new(0, 0).unwrap(),
+        GpuBindingKey::try_new(0, binding).unwrap(),
         [GpuRuntimeBindingResource::Buffer(
             GpuRuntimeBufferBinding::new(
-                storage_buffer(64),
-                0,
-                NonZeroU64::new(32).unwrap(),
+                buffer,
+                static_offset,
+                NonZeroU64::new(size).unwrap(),
                 Some(dynamic_offset),
             ),
         )],
@@ -166,4 +180,53 @@ fn runtime_binding_set_rejects_dynamic_storage_when_admitted_limit_is_zero() {
         GpuProgramContractCause::RuntimeBindingIncompatible
     );
     assert_eq!(error.label(), "dynamic storage buffers");
+}
+
+#[test]
+fn runtime_binding_set_rejects_overlapping_writable_ranges_with_exact_evidence() {
+    let buffer = storage_buffer(96);
+    let group = GpuBindGroupLayoutDescriptor::new(
+        0,
+        [storage_declaration(0, None), storage_declaration(1, None)],
+    )
+    .unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
+    let error = GpuRuntimeBindingSet::new(
+        layout,
+        [
+            runtime_buffer_value(0, buffer.clone(), 0, 32, 0),
+            runtime_buffer_value(1, buffer, 16, 32, 0),
+        ],
+        &device_facts(),
+    )
+    .expect_err("one binding use cannot contain overlapping writable effective ranges");
+
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
+    assert!(error.label().contains("[0..32)"));
+    assert!(error.label().contains("[16..48)"));
+}
+
+#[test]
+fn runtime_binding_set_accepts_disjoint_writable_ranges() {
+    let buffer = storage_buffer(96);
+    let group = GpuBindGroupLayoutDescriptor::new(
+        0,
+        [storage_declaration(0, None), storage_declaration(1, None)],
+    )
+    .unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
+    let bindings = GpuRuntimeBindingSet::new(
+        layout,
+        [
+            runtime_buffer_value(0, buffer.clone(), 0, 32, 0),
+            runtime_buffer_value(1, buffer, 32, 32, 0),
+        ],
+        &device_facts(),
+    )
+    .expect("disjoint writable binding ranges are valid");
+
+    assert_eq!(bindings.accesses().len(), 2);
 }
