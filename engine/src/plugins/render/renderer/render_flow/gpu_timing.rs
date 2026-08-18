@@ -49,9 +49,11 @@ impl GpuPassTimingFrame {
         resolve_buffer_handle: &GpuBufferHandle,
         readback_buffer_handle: &GpuBufferHandle,
         query_capacity: u32,
-    ) -> Result<Option<Self>> {
+    ) -> Result<Self> {
         if query_capacity == 0 {
-            return Ok(None);
+            anyhow::bail!(
+                "physical GPU timing frame requires nonzero query capacity after logical timing admission"
+            );
         }
         let readback_size = u64::from(query_capacity) * u64::from(QUERY_SIZE);
         if query_set_handle.descriptor().count() != query_capacity
@@ -65,7 +67,7 @@ impl GpuPassTimingFrame {
         let query_set = context.realize_query_set(query_set_handle)?;
         let resolve_buffer = context.realize_buffer(resolve_buffer_handle)?;
         let readback_buffer = context.realize_buffer(readback_buffer_handle)?;
-        Ok(Some(Self {
+        Ok(Self {
             _query_set_handle: query_set_handle.clone(),
             query_set,
             _resolve_buffer_handle: resolve_buffer_handle.clone(),
@@ -78,7 +80,7 @@ impl GpuPassTimingFrame {
             timestamp_period_ns: 0.0,
             entries: Vec::new(),
             resolve_encoded: false,
-        }))
+        })
     }
 
     /// Timestamp-period observation is a G5 queue operation, so it is populated only after the
@@ -500,8 +502,7 @@ mod tests {
             .expect("readback handle");
         let mut frame =
             GpuPassTimingFrame::new(&context, &query_set, &resolve_buffer, &readback_buffer, 2)
-                .expect("timestamp resources should realize")
-                .expect("timestamp frame should allocate");
+                .expect("timestamp resources should realize");
         let evidence = {
             let loan = context.current_render_device_queue();
             assert!(frame.activate(loan.queue));
