@@ -29,16 +29,7 @@ impl GpuColorClearValue {
                     format!("component {index}"),
                     None,
                     GpuWorkOperationCause::NonFiniteClearValue,
-                    "provide four finite normalized components",
-                ));
-            }
-            if !(0.0..=1.0).contains(&component) {
-                return Err(GpuWorkOperationError::invalid(
-                    "construct GPU color clear value",
-                    format!("component {index}"),
-                    None,
-                    GpuWorkOperationCause::OutOfRangeClearValue,
-                    "keep every color component inside 0.0 through 1.0",
+                    "provide four finite components",
                 ));
             }
             bits[index] = canonical_f64_bits(component);
@@ -492,16 +483,7 @@ pub struct GpuDispatchSize {
 }
 
 impl GpuDispatchSize {
-    pub fn new(x: u32, y: u32, z: u32) -> Result<Self, GpuWorkOperationError> {
-        if x == 0 || y == 0 || z == 0 {
-            return Err(GpuWorkOperationError::invalid(
-                "construct GPU dispatch size",
-                "dispatch",
-                None,
-                GpuWorkOperationCause::ZeroDispatch,
-                "provide nonzero x, y, and z workgroup counts",
-            ));
-        }
+    pub const fn new(x: u32, y: u32, z: u32) -> Result<Self, GpuWorkOperationError> {
         Ok(Self { x, y, z })
     }
 
@@ -1772,7 +1754,7 @@ impl GpuWorkOperation {
                     .any(|draw| matches!(draw, GpuDrawIntent::Indirect { .. }))
                 {
                     requirements.insert(GpuCapabilityRequirement::Required(
-                        GpuCapabilityFeature::IndirectDraw,
+                        GpuCapabilityFeature::IndirectExecution,
                     ))?;
                 }
                 if operation.depth_stencil_attachment().is_some() {
@@ -1955,12 +1937,18 @@ mod tests {
     }
 
     #[test]
-    fn clear_values_are_finite_normalized_and_canonical() {
+    fn clear_values_keep_color_generic_depth_normalized_and_signed_zero_canonical() {
         let negative_zero = GpuColorClearValue::new(-0.0, 0.0, 1.0, 1.0).unwrap();
         let positive_zero = GpuColorClearValue::new(0.0, -0.0, 1.0, 1.0).unwrap();
         assert_eq!(negative_zero, positive_zero);
         assert_eq!(semantic_hash(negative_zero), semantic_hash(positive_zero));
         assert_eq!(negative_zero.components()[0].to_bits(), 0.0_f64.to_bits());
+        assert_eq!(
+            GpuColorClearValue::new(-2.0, 3.5, 1.1, 7.0)
+                .unwrap()
+                .components(),
+            [-2.0, 3.5, 1.1, 7.0]
+        );
         let negative_zero = GpuDepthClearValue::new(-0.0).unwrap();
         let positive_zero = GpuDepthClearValue::new(0.0).unwrap();
         assert_eq!(negative_zero, positive_zero);
@@ -1968,14 +1956,13 @@ mod tests {
         assert_eq!(negative_zero.value().to_bits(), 0.0_f32.to_bits());
         assert!(GpuColorClearValue::new(f64::NAN, 0.0, 0.0, 1.0).is_err());
         assert!(GpuColorClearValue::new(f64::INFINITY, 0.0, 0.0, 1.0).is_err());
-        assert!(GpuColorClearValue::new(1.1, 0.0, 0.0, 1.0).is_err());
         assert!(GpuDepthClearValue::new(f32::INFINITY).is_err());
         assert!(GpuDepthClearValue::new(-0.1).is_err());
     }
 
     #[test]
     fn dispatch_draw_and_indirect_access_are_checked() {
-        assert!(GpuDispatchSize::new(0, 1, 1).is_err());
+        assert_eq!(GpuDispatchSize::new(0, 1, 1).unwrap().as_array(), [0, 1, 1]);
         assert_eq!(GpuDispatchSize::new(2, 3, 4).unwrap().as_array(), [2, 3, 4]);
         assert!(GpuDrawRange::new(0, 0).is_err());
         let mut allocator = allocator();
@@ -2633,7 +2620,7 @@ mod tests {
         );
         assert!(
             requirements
-                .get(GpuCapabilityFeature::IndirectDraw)
+                .get(GpuCapabilityFeature::IndirectExecution)
                 .is_some()
         );
 
