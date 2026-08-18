@@ -1685,7 +1685,6 @@ mod tests {
             [-2.0, 3.5, 1.1, 7.0]
         );
         let negative_zero = GpuDepthClearValue::new(-0.0).unwrap();
-        let positive_zero = GpuDepthClearValue::new(0.0, -0.0, 1.0, 1.0).err();
         let positive_zero = GpuDepthClearValue::new(0.0).unwrap();
         assert_eq!(negative_zero, positive_zero);
         assert_eq!(semantic_hash(negative_zero), semantic_hash(positive_zero));
