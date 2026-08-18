@@ -4,19 +4,26 @@ use crate::plugins::gpu::{
     GpuTextureCopyRegion, GpuTextureHandle, GpuTextureOrigin, GpuWorkOperation,
 };
 
-/// Projects one resolved renderer copy into canonical RunenGPU work.
-///
-/// `None` has exactly two meanings:
-/// - source and destination resolve to the same runtime resource, so no GPU work exists; or
-/// - at least one texture endpoint still lacks durable logical GPU identity before G7A
-///   (surface/dynamic texture compatibility paths).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ProjectedCopyOperation {
+    /// Source and destination resolve to the same runtime resource, so no GPU operation exists.
+    NoWork,
+    /// Fully logical surface-independent transfer semantics owned by RunenGPU.
+    Canonical(GpuWorkOperation),
+    /// At least one endpoint still lacks durable logical GPU identity before G7A.
+    PreG7Residual,
+}
+
+/// Projects one resolved renderer copy into canonical RunenGPU work or an explicit pre-G7 residual.
 ///
 /// Buffer/texture class mismatches remain invalid. The current renderer does not implement
-/// buffer-texture copies, so G5A does not invent that execution meaning here.
+/// buffer-texture copies, so G5A does not invent that execution meaning here. Surface/dynamic
+/// texture endpoints remain explicitly residual rather than sharing the same result as a true
+/// no-work copy.
 pub(super) fn project_copy_operation(
     runtime_resources: &FlowRuntimeResources,
     pass: &CompiledCopyExecutionPlan,
-) -> Result<Option<GpuWorkOperation>> {
+) -> Result<ProjectedCopyOperation> {
     let source = pass.source.as_ref().ok_or_else(|| {
         anyhow::anyhow!(
             "copy pass '{}' is missing source resource in execution plan",
@@ -33,7 +40,7 @@ pub(super) fn project_copy_operation(
     let destination_key =
         runtime_resources.resolve_resource_key(pass.pass_id, destination, "copy_destination")?;
     if source_key == destination_key {
-        return Ok(None);
+        return Ok(ProjectedCopyOperation::NoWork);
     }
 
     let source_kind = runtime_resources
@@ -88,10 +95,10 @@ pub(super) fn project_copy_operation(
         }
         (RuntimeResourceKind::TextureLike, RuntimeResourceKind::TextureLike) => {
             let Some(source) = logical_texture(runtime_resources, &source_key) else {
-                return Ok(None);
+                return Ok(ProjectedCopyOperation::PreG7Residual);
             };
             let Some(destination) = logical_texture(runtime_resources, &destination_key) else {
-                return Ok(None);
+                return Ok(ProjectedCopyOperation::PreG7Residual);
             };
             if source.is_depth || destination.is_depth {
                 anyhow::bail!(
@@ -130,7 +137,9 @@ pub(super) fn project_copy_operation(
             )?
         }
     };
-    Ok(Some(GpuWorkOperation::Copy(operation)))
+    Ok(ProjectedCopyOperation::Canonical(GpuWorkOperation::Copy(
+        operation,
+    )))
 }
 
 struct LogicalCopyTexture<'a> {
