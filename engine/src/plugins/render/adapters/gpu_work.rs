@@ -397,7 +397,9 @@ pub(crate) fn prepare_render_gpu_work(
     })
 }
 
-fn validate_occurrences(nodes: &[ResolvedRenderGpuWorkNode]) -> Result<(), RenderGpuWorkAdapterError> {
+fn validate_occurrences(
+    nodes: &[ResolvedRenderGpuWorkNode],
+) -> Result<(), RenderGpuWorkAdapterError> {
     let occurrences = nodes
         .iter()
         .map(|node| node.occurrence)
@@ -530,12 +532,9 @@ fn map_prepared_occurrences(
         .iter()
         .map(|(occurrence, node_id)| {
             let local = node_id.diagnostic_local();
-            let prepared = prepared_by_local
-                .get(&local)
-                .copied()
-                .ok_or(RenderGpuWorkAdapterError::MissingPreparedNodeMapping {
-                    local_node: local,
-                })?;
+            let prepared = prepared_by_local.get(&local).copied().ok_or(
+                RenderGpuWorkAdapterError::MissingPreparedNodeMapping { local_node: local },
+            )?;
             Ok((*occurrence, prepared))
         })
         .collect()
