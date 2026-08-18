@@ -120,10 +120,7 @@ fn validate_dynamic_binding_counts(
     Ok(())
 }
 
-fn incompatible(
-    label: impl Into<String>,
-    correction: &'static str,
-) -> GpuProgramContractError {
+fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgramContractError {
     GpuProgramContractError::invalid(
         "construct runtime GPU binding set",
         label,
