@@ -9,7 +9,7 @@ pub enum GpuCapabilityFeature {
     Compute,
     RenderPipeline,
     Copy,
-    IndirectDraw,
+    IndirectExecution,
     StorageTexture,
     TextureBindingArray,
     BufferBindingArray,
@@ -274,6 +274,7 @@ impl GpuTextureFormatCapabilities {
     }
 }
 
+/// Closed normalized limit vocabulary required through G5A.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GpuLimits {
     max_uniform_buffer_binding_size: u64,
@@ -281,27 +282,48 @@ pub struct GpuLimits {
     max_color_attachments: u32,
     max_vertex_buffers: u32,
     max_bindings_per_group: u32,
+    max_texture_dimension_2d: u32,
+    max_bind_groups: u32,
+    max_bind_groups_plus_vertex_buffers: u32,
+    max_dynamic_uniform_buffers_per_pipeline_layout: u32,
+    max_dynamic_storage_buffers_per_pipeline_layout: u32,
+    max_compute_workgroups_per_dimension: u32,
 }
 
 impl GpuLimits {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         max_uniform_buffer_binding_size: u64,
         max_storage_buffer_binding_size: u64,
         max_color_attachments: u32,
         max_vertex_buffers: u32,
         max_bindings_per_group: u32,
+        max_texture_dimension_2d: u32,
+        max_bind_groups: u32,
+        max_bind_groups_plus_vertex_buffers: u32,
+        max_dynamic_uniform_buffers_per_pipeline_layout: u32,
+        max_dynamic_storage_buffers_per_pipeline_layout: u32,
+        max_compute_workgroups_per_dimension: u32,
     ) -> Result<Self, GpuCapabilityAdmissionError> {
         if max_uniform_buffer_binding_size == 0
             || max_storage_buffer_binding_size == 0
             || max_color_attachments == 0
             || max_vertex_buffers == 0
             || max_bindings_per_group == 0
+            || max_texture_dimension_2d == 0
+            || max_bind_groups == 0
+            || max_bind_groups_plus_vertex_buffers == 0
+            || max_dynamic_uniform_buffers_per_pipeline_layout == 0
+            || max_dynamic_storage_buffers_per_pipeline_layout == 0
+            || max_compute_workgroups_per_dimension == 0
+            || max_bind_groups_plus_vertex_buffers < max_bind_groups
+            || max_bind_groups_plus_vertex_buffers < max_vertex_buffers
         {
             return Err(GpuCapabilityAdmissionError::Rejected {
                 operation: "construct normalized GPU limits",
                 label: "GPU limits".to_string(),
                 cause: GpuCapabilityAdmissionCause::InvalidLimit,
-                correction: "provide nonzero normalized limits",
+                correction: "provide nonzero internally consistent normalized limits",
             });
         }
         Ok(Self {
@@ -310,6 +332,12 @@ impl GpuLimits {
             max_color_attachments,
             max_vertex_buffers,
             max_bindings_per_group,
+            max_texture_dimension_2d,
+            max_bind_groups,
+            max_bind_groups_plus_vertex_buffers,
+            max_dynamic_uniform_buffers_per_pipeline_layout,
+            max_dynamic_storage_buffers_per_pipeline_layout,
+            max_compute_workgroups_per_dimension,
         })
     }
 
@@ -328,13 +356,38 @@ impl GpuLimits {
     pub const fn max_bindings_per_group(self) -> u32 {
         self.max_bindings_per_group
     }
+    pub const fn max_texture_dimension_2d(self) -> u32 {
+        self.max_texture_dimension_2d
+    }
+    pub const fn max_bind_groups(self) -> u32 {
+        self.max_bind_groups
+    }
+    pub const fn max_bind_groups_plus_vertex_buffers(self) -> u32 {
+        self.max_bind_groups_plus_vertex_buffers
+    }
+    pub const fn max_dynamic_uniform_buffers_per_pipeline_layout(self) -> u32 {
+        self.max_dynamic_uniform_buffers_per_pipeline_layout
+    }
+    pub const fn max_dynamic_storage_buffers_per_pipeline_layout(self) -> u32 {
+        self.max_dynamic_storage_buffers_per_pipeline_layout
+    }
+    pub const fn max_compute_workgroups_per_dimension(self) -> u32 {
+        self.max_compute_workgroups_per_dimension
+    }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) const fn from_validated_adapter_facts(
         max_uniform_buffer_binding_size: u64,
         max_storage_buffer_binding_size: u64,
         max_color_attachments: u32,
         max_vertex_buffers: u32,
         max_bindings_per_group: u32,
+        max_texture_dimension_2d: u32,
+        max_bind_groups: u32,
+        max_bind_groups_plus_vertex_buffers: u32,
+        max_dynamic_uniform_buffers_per_pipeline_layout: u32,
+        max_dynamic_storage_buffers_per_pipeline_layout: u32,
+        max_compute_workgroups_per_dimension: u32,
     ) -> Self {
         Self {
             max_uniform_buffer_binding_size,
@@ -342,6 +395,12 @@ impl GpuLimits {
             max_color_attachments,
             max_vertex_buffers,
             max_bindings_per_group,
+            max_texture_dimension_2d,
+            max_bind_groups,
+            max_bind_groups_plus_vertex_buffers,
+            max_dynamic_uniform_buffers_per_pipeline_layout,
+            max_dynamic_storage_buffers_per_pipeline_layout,
+            max_compute_workgroups_per_dimension,
         }
     }
 }
@@ -520,6 +579,10 @@ impl GpuCapabilityAdmission {
 mod tests {
     use super::*;
 
+    fn test_limits() -> GpuLimits {
+        GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).unwrap()
+    }
+
     #[test]
     fn insertion_lookup_iteration_and_merge_are_deterministic() {
         let mut left = GpuCapabilityRequirements::new();
@@ -664,10 +727,22 @@ mod tests {
     }
 
     #[test]
+    fn normalized_execution_limits_are_complete_and_consistent() {
+        let limits = GpuLimits::new(1, 2, 3, 4, 5, 8192, 4, 24, 8, 4, 65535).unwrap();
+        assert_eq!(limits.max_texture_dimension_2d(), 8192);
+        assert_eq!(limits.max_bind_groups(), 4);
+        assert_eq!(limits.max_bind_groups_plus_vertex_buffers(), 24);
+        assert_eq!(limits.max_dynamic_uniform_buffers_per_pipeline_layout(), 8);
+        assert_eq!(limits.max_dynamic_storage_buffers_per_pipeline_layout(), 4);
+        assert_eq!(limits.max_compute_workgroups_per_dimension(), 65535);
+        assert!(GpuLimits::new(1, 2, 3, 8, 5, 8192, 4, 4, 8, 4, 65535).is_err());
+    }
+
+    #[test]
     fn array_features_remain_unavailable_without_context_enablement() {
         let capabilities = GpuCapabilities::from_normalized_facts(
             [GpuCapabilityFeature::TextureBindingArray],
-            GpuLimits::new(1, 1, 1, 1, 1).unwrap(),
+            test_limits(),
             [],
         );
         let mut requirements = GpuCapabilityRequirements::new();
@@ -693,7 +768,7 @@ mod tests {
                 GpuCapabilityFeature::Compute,
                 GpuCapabilityFeature::TimestampQuery,
             ],
-            GpuLimits::new(1, 1, 1, 1, 1).unwrap(),
+            test_limits(),
             [],
         );
         let mut requirements = GpuCapabilityRequirements::new();
