@@ -70,9 +70,8 @@ pub(super) fn project_render_operation(
     timing: Option<(&LogicalGpuPassTiming, usize)>,
 ) -> Result<Option<GpuWorkOperation>> {
     let raster = match pass {
-        CompiledPassExecutionPlan::Fullscreen(value) | CompiledPassExecutionPlan::Graphics(value) => {
-            value
-        }
+        CompiledPassExecutionPlan::Fullscreen(value)
+        | CompiledPassExecutionPlan::Graphics(value) => value,
         _ => bail!(
             "pass '{}' is not a raster pass for G5A render-operation projection",
             execution_pass_id(pass)
@@ -95,11 +94,8 @@ pub(super) fn project_render_operation(
             raster.targets.color_outputs.len()
         );
     }
-    let color_key = runtime_resources.resolve_resource_key(
-        raster.pass_id,
-        color_target_ref,
-        "color_output",
-    )?;
+    let color_key =
+        runtime_resources.resolve_resource_key(raster.pass_id, color_target_ref, "color_output")?;
     let Some(color_target) = logical_texture_target(runtime_resources, &color_key) else {
         return Ok(None);
     };
@@ -111,9 +107,9 @@ pub(super) fn project_render_operation(
     }
 
     let color_load = match raster.clear_color {
-        Some(color) => GpuColorAttachmentLoad::Clear(GpuColorClearValue::from_array(
-            color.map(f64::from),
-        )?),
+        Some(color) => {
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::from_array(color.map(f64::from))?)
+        }
         None => GpuColorAttachmentLoad::Load,
     };
     let color_attachment = GpuRenderColorAttachment::new(
@@ -124,8 +120,10 @@ pub(super) fn project_render_operation(
         None,
     )?;
 
-    let depth_attachment = if matches!(raster.raster_state.state.depth_policy, RenderDepthPolicy::Disabled)
-    {
+    let depth_attachment = if matches!(
+        raster.raster_state.state.depth_policy,
+        RenderDepthPolicy::Disabled
+    ) {
         None
     } else if let Some(depth_ref) = raster.targets.depth_output.as_ref() {
         let depth_key =
@@ -295,15 +293,7 @@ fn project_render_draw(
         vertex_buffers,
         index_buffer,
         draw,
-        GpuViewport::new(
-            0.0,
-            0.0,
-            width as f32,
-            height as f32,
-            0.0,
-            1.0,
-            limits,
-        )?,
+        GpuViewport::new(0.0, 0.0, width as f32, height as f32, 0.0, 1.0, limits)?,
         GpuScissorRect::new(0, 0, width, height)?,
         GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0)?,
         0,
