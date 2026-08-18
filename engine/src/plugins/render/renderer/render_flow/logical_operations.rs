@@ -1,5 +1,5 @@
-use super::*;
 use super::logical_timing::LogicalGpuPassTiming;
+use super::*;
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuBufferRange, GpuBufferRegion, GpuComputeOperation, GpuDispatchIntent,
     GpuDispatchSize, GpuQueryAccess, GpuQueryAccessKind, GpuQueryRange, GpuUploadOperation,
