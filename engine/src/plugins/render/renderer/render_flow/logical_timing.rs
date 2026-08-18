@@ -7,7 +7,73 @@ use crate::plugins::render::renderer::resource_descriptors::{buffer_descriptor, 
 
 const QUERY_SIZE_BYTES: u64 = 8;
 
-/// Logical timestamp resources and occurrence-local query ranges prepared before G3 work.
+/// Per-occurrence timestamp allocation for one already-expanded renderer invocation.
+///
+/// Only render/compute operations can carry timestamp writes in the current G5A operation model.
+/// Copy and present occurrences therefore retain an explicit `None` slot rather than consuming a
+/// query pair that no operation can initialize.
+#[derive(Debug, Clone)]
+pub(super) struct LogicalGpuPassTimingPlan {
+    timing: Option<LogicalGpuPassTiming>,
+    occurrence_ranges: Vec<Option<GpuPassTimestampIndices>>,
+}
+
+impl LogicalGpuPassTimingPlan {
+    pub(super) fn new<'a>(
+        passes: impl IntoIterator<Item = &'a CompiledPassExecutionPlan>,
+    ) -> Result<Self> {
+        let timestampable = passes
+            .into_iter()
+            .map(pass_supports_timestamp_write)
+            .collect::<Vec<_>>();
+        let timing = LogicalGpuPassTiming::new(
+            timestampable
+                .iter()
+                .filter(|timestampable| **timestampable)
+                .count(),
+        )?;
+        let mut next_timestamp_ordinal = 0usize;
+        let mut occurrence_ranges = Vec::with_capacity(timestampable.len());
+        for timestampable in timestampable {
+            if !timestampable {
+                occurrence_ranges.push(None);
+                continue;
+            }
+            let range = timing
+                .as_ref()
+                .expect("a timestampable occurrence guarantees logical timing resources")
+                .range_for_timestamp_ordinal(next_timestamp_ordinal)?;
+            next_timestamp_ordinal = next_timestamp_ordinal
+                .checked_add(1)
+                .ok_or_else(|| anyhow::anyhow!("render GPU timestamp ordinal overflow"))?;
+            occurrence_ranges.push(Some(range));
+        }
+        Ok(Self {
+            timing,
+            occurrence_ranges,
+        })
+    }
+
+    pub(super) fn timing(&self) -> Option<&LogicalGpuPassTiming> {
+        self.timing.as_ref()
+    }
+
+    pub(super) fn range_for_occurrence(
+        &self,
+        occurrence_ordinal: usize,
+    ) -> Result<Option<GpuPassTimestampIndices>> {
+        self.occurrence_ranges
+            .get(occurrence_ordinal)
+            .copied()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "render GPU timestamp occurrence {occurrence_ordinal} is outside the expanded invocation"
+                )
+            })
+    }
+}
+
+/// Logical timestamp resources and timestamp-local query ranges prepared before G3 work.
 ///
 /// This value contains only backend-neutral RunenGPU handles. Physical query/buffer realization
 /// remains in `GpuPassTimingFrame`, and resolve/readback operation construction remains part of the
@@ -21,7 +87,7 @@ pub(super) struct LogicalGpuPassTiming {
 }
 
 impl LogicalGpuPassTiming {
-    pub(super) fn new(timestampable_occurrences: usize) -> Result<Option<Self>> {
+    fn new(timestampable_occurrences: usize) -> Result<Option<Self>> {
         if timestampable_occurrences == 0 {
             return Ok(None);
         }
@@ -82,8 +148,11 @@ impl LogicalGpuPassTiming {
         self.query_capacity
     }
 
-    pub(super) fn range_for_occurrence(&self, ordinal: usize) -> Result<GpuPassTimestampIndices> {
-        let begin = ordinal
+    fn range_for_timestamp_ordinal(
+        &self,
+        timestamp_ordinal: usize,
+    ) -> Result<GpuPassTimestampIndices> {
+        let begin = timestamp_ordinal
             .checked_mul(2)
             .and_then(|value| u32::try_from(value).ok())
             .ok_or_else(|| anyhow::anyhow!("render GPU timestamp occurrence index exceeds u32"))?;
@@ -92,7 +161,7 @@ impl LogicalGpuPassTiming {
             .ok_or_else(|| anyhow::anyhow!("render GPU timestamp query index overflow"))?;
         if end >= self.query_capacity {
             anyhow::bail!(
-                "render GPU timestamp occurrence {ordinal} exceeds query capacity {}",
+                "render GPU timestamp occurrence {timestamp_ordinal} exceeds query capacity {}",
                 self.query_capacity
             );
         }
@@ -108,30 +177,40 @@ impl LogicalGpuPassTiming {
     }
 }
 
+const fn pass_supports_timestamp_write(pass: &CompiledPassExecutionPlan) -> bool {
+    matches!(
+        pass,
+        CompiledPassExecutionPlan::Compute(_)
+            | CompiledPassExecutionPlan::Fullscreen(_)
+            | CompiledPassExecutionPlan::Graphics(_)
+            | CompiledPassExecutionPlan::BuiltinUiComposite(_)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn logical_timing_uses_two_queries_per_actual_occurrence() {
+    fn logical_timing_uses_two_queries_per_timestampable_occurrence() {
         let timing = LogicalGpuPassTiming::new(3)
             .expect("logical timing should construct")
-            .expect("nonzero occurrence count should allocate timing");
+            .expect("nonzero timestampable occurrence count should allocate timing");
 
         assert_eq!(timing.query_capacity(), 6);
         assert_eq!(
-            timing.range_for_occurrence(0).unwrap(),
+            timing.range_for_timestamp_ordinal(0).unwrap(),
             GpuPassTimestampIndices { begin: 0, end: 1 }
         );
         assert_eq!(
-            timing.range_for_occurrence(2).unwrap(),
+            timing.range_for_timestamp_ordinal(2).unwrap(),
             GpuPassTimestampIndices { begin: 4, end: 5 }
         );
         assert_eq!(timing.query_range().unwrap().count(), 6);
     }
 
     #[test]
-    fn logical_timing_omits_zero_occurrence_resources() {
+    fn logical_timing_omits_zero_timestampable_resources() {
         assert!(LogicalGpuPassTiming::new(0).unwrap().is_none());
     }
 }
