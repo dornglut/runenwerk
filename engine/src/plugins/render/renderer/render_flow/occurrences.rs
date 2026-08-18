@@ -1,5 +1,5 @@
 use super::*;
-use crate::plugins::render::RenderGpuWorkOccurrenceId;
+use crate::plugins::render::{RenderGpuWorkOccurrenceId, RenderPassId};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy)]
