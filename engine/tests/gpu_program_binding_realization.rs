@@ -267,7 +267,7 @@ fn representative_compute_render_layout_and_bind_group_realization_reuse_records
         pollster::block_on(context.realize_bind_group(&realized_layout, [binding_value(buffer)]))
             .expect("identical typed runtime binding should reuse its bind group");
     assert!(realized_bind_group.is_same_record(&repeated_bind_group));
-    assert_eq!(realized_bind_group.values().len(), 1);
+    assert_eq!(realized_bind_group.layout_descriptor(), &layout);
     assert_eq!(realized_pipeline_layout.descriptor(), &pipeline_layout);
 
     let stats = context.program_binding_realization_stats();
