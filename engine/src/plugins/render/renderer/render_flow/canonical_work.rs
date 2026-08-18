@@ -1,9 +1,9 @@
-use super::*;
 use super::logical_copy::{ProjectedCopyOperation, project_copy_operation};
 use super::logical_operations::{
     project_buffer_upload, project_compute_operation, project_render_operation, project_timing_tail,
 };
 use super::logical_timing::LogicalGpuPassTiming;
+use super::*;
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuExecutionPreference, GpuResourceLabel, GpuWorkOperation,
 };
@@ -119,12 +119,14 @@ pub(super) fn prepare_canonical_invocation(
                 };
                 operation
             }
-            CompiledPassExecutionPlan::Copy(pass) => match project_copy_operation(runtime_resources, pass)? {
-                ProjectedCopyOperation::Canonical(operation) => operation,
-                ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
-                    return Ok(CanonicalInvocationPreparation::PreG7Residual);
+            CompiledPassExecutionPlan::Copy(pass) => {
+                match project_copy_operation(runtime_resources, pass)? {
+                    ProjectedCopyOperation::Canonical(operation) => operation,
+                    ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
+                        return Ok(CanonicalInvocationPreparation::PreG7Residual);
+                    }
                 }
-            },
+            }
             CompiledPassExecutionPlan::Present(_)
             | CompiledPassExecutionPlan::BuiltinUiComposite(_) => {
                 return Ok(CanonicalInvocationPreparation::PreG7Residual);
@@ -208,7 +210,7 @@ fn occurrence_label(
     ))?)
 }
 
-fn allocate_aux_occurrence(
+pub(super) fn allocate_aux_occurrence(
     maximum_occurrence: &mut u64,
 ) -> Result<RenderGpuWorkOccurrenceId> {
     *maximum_occurrence = maximum_occurrence
