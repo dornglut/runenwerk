@@ -45,7 +45,9 @@ fn runengpu_instance_descriptor() -> InstanceDescriptor {
     enforce_runengpu_instance_flags(InstanceDescriptor::new_without_display_handle_from_env())
 }
 
-fn enforce_runengpu_instance_flags(mut descriptor: InstanceDescriptor) -> InstanceDescriptor {
+pub(super) fn enforce_runengpu_instance_flags(
+    mut descriptor: InstanceDescriptor,
+) -> InstanceDescriptor {
     // IndirectExecution has defined portable runtime-invalid no-op semantics. Environment/debug
     // configuration may not weaken that RunenGPU contract on the private WGPU backend.
     descriptor
@@ -514,7 +516,7 @@ mod tests {
 
     #[test]
     fn runengpu_instance_flags_restore_indirect_runtime_validity() {
-        let mut descriptor = InstanceDescriptor::default();
+        let mut descriptor = InstanceDescriptor::new_without_display_handle();
         descriptor
             .flags
             .remove(InstanceFlags::VALIDATION_INDIRECT_CALL);
