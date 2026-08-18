@@ -34,6 +34,7 @@ mod capture;
 mod execute;
 mod execute_passes;
 mod gpu_timing;
+mod logical_copy;
 mod logical_operations;
 mod logical_timing;
 mod occurrences;
