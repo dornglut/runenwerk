@@ -1,0 +1,213 @@
+// Bounded implementation handoff for the first RunenGPU G5 implementation slice.
+// GitHub issue state owns activation. This file does not authorize implementation by itself.
+
+PhaseImplementationSpec(
+    phase_id: "PT-RUNENGPU-G5A",
+    title: "Executable Logical Work Closure",
+    lifecycle_state: "planned-after-fresh-g5-review",
+    implementation_authorization_status: "requires-explicit-g5a-issue-after-accepted-g5-planning",
+    owner: "RunenGPU logical GPU execution semantics owner",
+    source_baseline: "d7afaba20a27901e7a6bc4d6d75e6c761c7cbf86",
+    planning_issue: "dornglut/runenwerk#284",
+    implementation_issue: "pending-after-accepted-g5-planning",
+    parent_issue: "dornglut/runenwerk#167",
+    blocking_predecessor: "accepted G3R #286 + accepted G4R #287 + accepted fresh #284 planning",
+    successor: "G5B surface-independent execution lifecycle",
+
+    authority_docs: [
+        "AGENTS.md",
+        "TESTING.md",
+        "docs-site/src/content/docs/adr/accepted/0015-separate-gpu-execution-from-rendering.md",
+        "docs-site/src/content/docs/design/active/runengpu-architecture-design.md",
+        "docs-site/src/content/docs/design/active/runengpu-g3-access-work-graph-design.md",
+        "docs-site/src/content/docs/design/active/runengpu-g3r-definite-initialization-correction.md",
+        "docs-site/src/content/docs/design/active/runengpu-g4-context-program-realization-design.md",
+        "docs-site/src/content/docs/design/active/runengpu-g4c2-presentation-surface-binding-boundary.md",
+        "docs-site/src/content/docs/design/active/runengpu-g5-execution-lifecycle-design.md",
+        "docs-site/src/content/docs/reports/investigations/runengpu-g5-execution-lifecycle-investigation.md",
+        "docs-site/src/content/docs/workspace/planning/roadmap.md",
+    ],
+
+    goal: "Make accepted G3/G3R compute/render/transfer work logically execution-complete using accepted G4 program/resource/pipeline contracts, correct indirect-execution capability naming, zero-dispatch semantics, render usage scopes, color clear semantics, normalized execution limits, and static-versus-dynamic binding ownership, while preserving one work-graph authority and without implementing submission/progress/surfaces or exposing WGPU.",
+
+    ownership: [
+        "GpuWorkOperation/GpuPreparedWorkGraph remain the sole logical operation/order/access/initialization authority.",
+        "G5A owns complete logical GPU execution intent but does not own queue submission, progress, readback materialization, shutdown, surfaces, or product policy.",
+        "Accepted G4 remains the sole private resource/program/layout/bind-group/pipeline realization owner.",
+        "RunenRender may retain image-formation planning/provenance but not a second GPU pipeline/binding/draw/access authority once the corresponding G5A operation is complete.",
+        "WGPU remains private implementation detail; no raw backend public or renderer-stable escape hatch is introduced.",
+    ],
+
+    capability_cutover: [
+        "Replace GpuCapabilityFeature::IndirectDraw with GpuCapabilityFeature::IndirectExecution in one clean cutover.",
+        "Map the existing WGPU DownlevelFlags::INDIRECT_EXECUTION evidence to IndirectExecution.",
+        "Require IndirectExecution for both indirect draw and indirect compute dispatch.",
+        "Delete the old enum variant and every compatibility translation; do not add a parallel IndirectDispatch capability.",
+    ],
+
+    compute_contract: [
+        "GpuComputeOperation contains an accepted compute-pipeline contract, complete typed runtime bindings, one GpuDispatchIntent, and explicit operation-owned timestamp state.",
+        "GpuDispatchIntent supports Direct{x,y,z} and Indirect{buffer,offset}.",
+        "Direct dimensions are u32 and each is admitted against normalized max-compute-workgroups-per-dimension.",
+        "A zero direct dimension is valid and means zero shader invocations; it produces no shader binding access/effect and no shader initialization effect.",
+        "Operation-owned timestamp semantics remain valid for an otherwise empty direct dispatch.",
+        "Private later encoding may elide an empty dispatch but must preserve explicit non-shader operation semantics.",
+        "Indirect dispatch reads exactly 12 bytes containing three packed u32 counts from a checked indirect buffer range and derives the matching indirect read access.",
+        "Indirect dispatch offset/alignment are validated structurally; host planning does not inspect runtime GPU argument values as semantic truth.",
+    ],
+
+    render_contract: [
+        "One GpuRenderOperation is one logical render pass and owns attachments, ordered GpuRenderDraw values, and explicit timestamp state.",
+        "Each GpuRenderDraw owns its accepted render-pipeline contract, complete runtime bindings, vertex-buffer bindings, optional index-buffer binding, draw intent, viewport, scissor, blend constant, and stencil reference.",
+        "Preparation derives one pass signature: effective extent, sample count, ordered color formats, optional depth/stencil format.",
+        "Every draw pipeline must match the pass signature before backend encoding.",
+        "Vertex binding owns slot + logical buffer + checked range; pipeline stride/step/attributes remain G4 pipeline state.",
+        "Index binding reuses accepted GpuIndexFormat and owns logical buffer + checked range; no duplicate index-format type is introduced.",
+        "Dynamic render state has canonical value semantics and is explicit per draw rather than inherited accidentally from prior backend state.",
+        "Zero-area viewport/scissor are valid; device-dependent limits are admitted through normalized execution facts rather than raw backend validation.",
+    ],
+
+    render_usage_scope_contract: [
+        "Model pass-wide usage compatibility separately from draw-local writable binding alias validation.",
+        "One render pass is one usage scope for binding/vertex/index/indirect/attachment usage compatibility.",
+        "Compatible storage/storage usage may occur across different draws; do not reject it merely because one or both accesses are writable.",
+        "Attachment usage remains pass-wide and cannot alias an incompatible sampled/storage use in the same pass.",
+        "For each draw effective binding set, overlapping buffer ranges are rejected if either effective binding is writable.",
+        "For each draw effective binding set, overlapping texture subresources are rejected if either effective binding is writable.",
+        "Dynamic offsets are applied before effective binding-range alias validation.",
+        "Keep exact resource-range/subresource evidence in diagnostics; do not collapse the rule to whole-resource booleans.",
+    ],
+
+    clear_contract: [
+        "Remove the generic 0..1 restriction from GpuColorClearValue.",
+        "Color clear stores four finite canonical f64 components; NaN/non-finite input is rejected and signed zero is normalized consistently.",
+        "The effective color attachment format owns numeric conversion/admission; G5A does not assume all color targets are normalized floating formats.",
+        "Depth clear remains separately constrained to the depth semantic domain.",
+        "Do not add speculative texture formats solely for this correction.",
+    ],
+
+    runtime_binding_contract: [
+        "Introduce/use one GpuRuntimeBindingSet as the complete logical binding use for one compute invocation or render draw.",
+        "Logical buffer bindings retain static offset/size plus optional u64 dynamic offset.",
+        "Effective access ranges use static offset + dynamic offset + binding size with checked arithmetic.",
+        "Texture/view/sampler/buffer resources and interface-derived access remain typed G4 facts rather than renderer labels.",
+        "Logical binding values participate in semantic equality where appropriate; physical realized bind groups do not claim one invocation's dynamic state.",
+    ],
+
+    physical_bind_group_cutover: [
+        "Change the private bind-group request/cache key from complete GpuRuntimeBindingValue values to a static physical projection.",
+        "Static physical projection contains layout/resource identity and static buffer offset/size plus texture/view/sampler facts, but excludes dynamic offsets.",
+        "Requests differing only by dynamic offset reuse the same GpuRealizedBindGroup record.",
+        "Full typed equality follows any hash candidate; no naked hash is correctness authority.",
+        "Remove GpuRealizedBindGroup/record introspection that exposes complete per-use runtime values as physical record state.",
+        "Keep logical values inspectable from the logical operation/binding set.",
+        "Do not add a compatibility accessor returning first-request, zeroed, synthetic, or otherwise misleading dynamic values.",
+    ],
+
+    operation_access_contract: [
+        "Compute derives interface/runtime-binding accesses, indirect argument access and timestamp accesses.",
+        "Render derives attachment/resolve accesses, runtime-binding accesses, vertex/index/indirect accesses and timestamp accesses.",
+        "Copy/Clear/Resolve/Present preserve accepted G3/G3R access and initialization semantics unless a concrete G5A defect requires the directly corresponding correction.",
+        "Upload derives one exact destination write and exact initialization effect from transfer semantics.",
+        "Readback derives one exact source read requirement and no initialization effect.",
+        "Remove renderer-authored duplicate generic GPU access truth when the generic operation owns it; renderer/domain provenance may remain non-authoritative metadata.",
+    ],
+
+    transfer_contract: [
+        "Add graph-visible immutable GpuUploadOperation with exact destination coverage and checked immutable payload value.",
+        "Upload payload record/correlation identity, if present, is process-local and distinct from semantic payload equality/content identity.",
+        "Add graph-visible GpuReadbackOperation with exact source coverage and opaque process-local GpuReadbackId.",
+        "CPU readback result cannot affect a later node in the same submission; cross-submission CPU feedback is explicit host/application behavior.",
+        "G5A defines logical transfer meaning only; G5B owns staging, mapping, result materialization and submission coupling.",
+    ],
+
+    normalized_execution_limits: [
+        "Extend GpuLimits/device/workload facts with only execution limits required by accepted G5A semantics.",
+        "At minimum normalize max compute workgroups per dimension, max bind groups, and max bind groups plus vertex buffers where required by execution admission.",
+        "Preserve existing max vertex buffers, color attachments, binding counts/sizes and dynamic alignment facts.",
+        "Any device-dependent condition knowable before encoding that can reject an accepted G5A operation must be normalized/admitted at its owner rather than deferred to WGPU validation.",
+        "Do not mechanically mirror unrelated WGPU limits.",
+    ],
+
+    renderer_transition: [
+        "Current renderer planning/provenance structures may remain where they own RunenRender semantics.",
+        "Once a generic G5A operation becomes execution-complete, no renderer sidecar may retain an independent pipeline/binding/draw/access description for that operation.",
+        "Temporary pre-G5B raw execution may look up/reference generic prepared operations but must not reconcile parallel old/new GPU semantics.",
+        "Do not delete CurrentRenderDeviceQueue or CurrentRenderExecutionBridge in G5A unless the accepted G5A implementation genuinely eliminates every current operation consumer; their guaranteed deletion owner remains G5C after G7A.",
+        "Do not broaden either residual seam while G5A is implemented.",
+    ],
+
+    invariants: [
+        "No second public command graph or backend command IR becomes semantic authority.",
+        "No G3R access-to-initialization inference returns.",
+        "Direct zero dispatch is no shader work and fabricates no shader initialization.",
+        "Indirect draw and dispatch share one normalized IndirectExecution capability fact.",
+        "Render pass-wide usage compatibility and draw-local writable aliasing are both enforced at their correct scope.",
+        "Color clear semantics are target-format aware and not globally normalized-color-only.",
+        "Dynamic offset is logical/per-use execution state, never physical bind-group object identity.",
+        "All device-dependent execution rejection knowable before encoding is normalized/admitted before backend access.",
+        "Upload/Readback are graph-visible so transfer ordering cannot bypass G3/G3R.",
+        "No WGPU type, device, queue, command encoder, submission index, poll object, mapped range or surface object enters public RunenGPU authority.",
+        "No G5B submission/progress/shutdown implementation, no G7A surface implementation, no G5C final cutover and no GX extraction enters this slice.",
+    ],
+
+    required_proofs: [
+        "Direct compute operation is execution-complete from pipeline + bindings + direct dispatch and derives exact runtime-binding accesses.",
+        "Direct dispatch with one zero dimension is accepted, produces no shader binding access/effect, preserves explicit timestamps, and is deterministic.",
+        "Indirect compute derives exact 12-byte indirect read coverage and requires IndirectExecution.",
+        "Existing indirect draw uses IndirectExecution after clean enum cutover; IndirectDraw no longer exists.",
+        "Render operation with multiple compatible draws/pipelines validates one pass signature and retains draw order.",
+        "Storage/storage use across distinct draws remains pass-compatible when no incompatible usage exists.",
+        "One draw with overlapping writable/read-or-write effective bindings rejects with exact alias evidence.",
+        "Attachment versus incompatible sampled/storage use in the same render pass rejects.",
+        "Dynamic buffer offsets alter effective access coverage but two otherwise identical uses reuse one physical bind-group realization record.",
+        "Physical bind-group key/record excludes dynamic offset and old per-use values introspection is absent.",
+        "Color clear accepts finite non-normalized values when the target format contract permits them and continues to reject non-finite values.",
+        "Depth clear retains its normalized constraints.",
+        "Execution limits reject oversized direct dispatch and invalid bind-group/vertex-buffer combinations before private encoding.",
+        "Upload participates in exact G3R destination initialization/hazards; Readback participates in exact source read hazards.",
+        "Renderer timing and representative compute/render/copy plans still prepare through the corrected generic operation model.",
+        "Repeated preparation produces deterministic logical results/diagnostics.",
+    ],
+
+    expected_source_scope: [
+        "engine/src/plugins/gpu/api/work.rs and directly required decomposed modules",
+        "engine/src/plugins/gpu/api/capability.rs and context limit/admission facts",
+        "engine/src/plugins/gpu/api/program/runtime_binding/**",
+        "engine/src/plugins/gpu/backend/wgpu/adapter_mapping.rs and device_request.rs for normalized fact mapping only",
+        "engine/src/plugins/gpu/backend/wgpu/program_binding_realization/** for static/dynamic physical identity correction",
+        "focused renderer adapters/plans only where duplicate GPU execution/access authority must be removed or mechanically adapted",
+        "focused tests/structural guards/documentation required by the accepted design",
+    ],
+
+    explicit_non_scope: [
+        "No queue submission, GpuSubmissionId lifecycle, progress or completion implementation.",
+        "No staging-buffer upload implementation or mapped readback result implementation.",
+        "No graceful shutdown or last-context Drop execution lifecycle implementation.",
+        "No reusable surface identity/acquire/present implementation.",
+        "No final renderer raw execution seam deletion unless it becomes genuinely unused as a direct consequence; G5C remains the named deletion gate.",
+        "No mesh/ray/sparse/multi-queue/native-passthrough feature expansion.",
+        "No external dornglut/runen-gpu repository creation or source transfer.",
+        "No compatibility aliases for superseded capability/bind-group semantics.",
+    ],
+
+    validation: [
+        "Run focused unit/integration tests for every changed GPU semantic owner and renderer adapter.",
+        "Run cargo fmt --all --check.",
+        "Run cargo validate.",
+        "Run git diff --check.",
+        "Run CI=true pnpm --dir docs-site build when documentation changes.",
+        "Require repository-owned exact-feature-head CI and Documentation Build success.",
+        "Perform complete diff review at the unchanged final feature head.",
+        "Require zero unresolved blocking review findings before merge.",
+    ],
+
+    acceptance: [
+        "All required proofs pass on one unchanged reviewed feature head.",
+        "G5A contains no G5B/G7A/G5C/extraction implementation or accidental backend API expansion.",
+        "The old IndirectDraw capability and dynamic-offset-in-physical-key authority are cleanly absent.",
+        "Generic compute/render/Upload/Readback work is semantically execution-complete enough that G5B can implement backend execution without inventing operation meaning.",
+        "Accepted-main push validation succeeds after guarded merge.",
+        "Only after accepted G5A may one bounded G5B planning/implementation handoff activate from fresh accepted main.",
+    ],
+)
