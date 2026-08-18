@@ -1,6 +1,4 @@
-use super::{
-    GpuRuntimeBindingDeviceFacts, GpuRuntimeBindingValue, GpuValidatedBindGroupBindings,
-};
+use super::{GpuRuntimeBindingDeviceFacts, GpuRuntimeBindingValue, GpuValidatedBindGroupBindings};
 use crate::plugins::gpu::{
     GpuBindingClass, GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
 };
@@ -70,7 +68,9 @@ impl GpuRuntimeBindingSet {
     }
 
     pub fn values(&self) -> impl Iterator<Item = &GpuRuntimeBindingValue> {
-        self.groups.iter().flat_map(GpuValidatedBindGroupBindings::values)
+        self.groups
+            .iter()
+            .flat_map(GpuValidatedBindGroupBindings::values)
     }
 }
 
