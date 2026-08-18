@@ -3,7 +3,7 @@ title: Investigations
 status: active
 owner: workspace
 layer: reports
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-18
 ---
 
 # Investigations
@@ -47,6 +47,7 @@ Investigations do not authorize implementation by themselves.
 - [RunenGPU G4 Context, Program, and WGPU Realization Investigation](runengpu-g4-context-program-realization-investigation.md)
 - [RunenGPU G4 Critical Review](2026-07-31-runengpu-g4-critical-review.md)
 - [RunenGPU G4B Contract and G4C Delivery Finalization](2026-08-03-runengpu-g4b-g4c-finalization.md)
+- [RunenGPU G5 Execution Lifecycle Replanning Investigation](runengpu-g5-execution-lifecycle-investigation.md)
 - [Runen Family Operational Hardening Investigation](runen-family-operational-hardening-investigation.md)
 
 ## RunenRender and application pressure
