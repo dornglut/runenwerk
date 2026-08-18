@@ -290,19 +290,19 @@ mod tests {
         let plan = fixed_step_test_plan(false);
         let region = &plan.execution.fixed_step_regions[0];
 
-        let zero =
-            expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 0), |_| Ok(true))
-                .expect("zero-substep expansion should succeed");
+        let zero_inputs = inputs_for_substeps(&plan, 0);
+        let zero = expand_render_pass_occurrences(&plan, &zero_inputs, |_| Ok(true))
+            .expect("zero-substep expansion should succeed");
         assert!(zero.is_empty());
 
-        let one =
-            expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 1), |_| Ok(true))
-                .expect("one-substep expansion should succeed");
+        let one_inputs = inputs_for_substeps(&plan, 1);
+        let one = expand_render_pass_occurrences(&plan, &one_inputs, |_| Ok(true))
+            .expect("one-substep expansion should succeed");
         assert_eq!(pass_ids(&one), region.pass_ids);
 
-        let many =
-            expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 3), |_| Ok(true))
-                .expect("many-substep expansion should succeed");
+        let many_inputs = inputs_for_substeps(&plan, 3);
+        let many = expand_render_pass_occurrences(&plan, &many_inputs, |_| Ok(true))
+            .expect("many-substep expansion should succeed");
         assert_eq!(many.len(), region.pass_ids.len() * 3);
         assert_eq!(&pass_ids(&many)[0..2], region.pass_ids.as_slice());
         assert_eq!(&pass_ids(&many)[2..4], region.pass_ids.as_slice());
@@ -320,9 +320,9 @@ mod tests {
     fn fixed_step_expansion_clamps_to_region_max_substeps() {
         let plan = fixed_step_test_plan(false);
         let region = &plan.execution.fixed_step_regions[0];
-        let occurrences =
-            expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 99), |_| Ok(true))
-                .expect("clamped expansion should succeed");
+        let inputs = inputs_for_substeps(&plan, 99);
+        let occurrences = expand_render_pass_occurrences(&plan, &inputs, |_| Ok(true))
+            .expect("clamped expansion should succeed");
         assert_eq!(
             occurrences.len(),
             region.pass_ids.len() * region.max_substeps as usize
@@ -334,11 +334,11 @@ mod tests {
         let plan = fixed_step_test_plan(false);
         let region = &plan.execution.fixed_step_regions[0];
         let omitted = region.pass_ids[1];
-        let occurrences =
-            expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 3), |pass| {
-                Ok(execution_pass_id(pass) != omitted)
-            })
-            .expect("filtered expansion should succeed");
+        let inputs = inputs_for_substeps(&plan, 3);
+        let occurrences = expand_render_pass_occurrences(&plan, &inputs, |pass| {
+            Ok(execution_pass_id(pass) != omitted)
+        })
+        .expect("filtered expansion should succeed");
 
         assert_eq!(occurrences.len(), 3);
         assert!(
