@@ -29,8 +29,7 @@ pub(super) fn project_copy_operation(
             pass.pass_id
         )
     })?;
-    let source_key =
-        runtime_resources.resolve_resource_key(pass.pass_id, source, "copy_source")?;
+    let source_key = runtime_resources.resolve_resource_key(pass.pass_id, source, "copy_source")?;
     let destination_key =
         runtime_resources.resolve_resource_key(pass.pass_id, destination, "copy_destination")?;
     if source_key == destination_key {
@@ -71,10 +70,7 @@ pub(super) fn project_copy_operation(
                 );
             }
             GpuCopyOperation::buffer_to_buffer(
-                GpuBufferRegion::new(
-                    source.handle,
-                    GpuBufferRange::new(source.handle, 0, size)?,
-                )?,
+                GpuBufferRegion::new(source.handle, GpuBufferRange::new(source.handle, 0, size)?)?,
                 GpuBufferRegion::new(
                     destination.handle,
                     GpuBufferRange::new(destination.handle, 0, size)?,
