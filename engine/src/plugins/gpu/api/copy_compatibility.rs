@@ -15,19 +15,16 @@ pub const fn gpu_texture_formats_copy_compatible(
             (
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureFormat::Rgba8UnormSrgb
+            ) | (
+                GpuTextureFormat::Rgba8UnormSrgb,
+                GpuTextureFormat::Rgba8Unorm
+            ) | (
+                GpuTextureFormat::Bgra8Unorm,
+                GpuTextureFormat::Bgra8UnormSrgb
+            ) | (
+                GpuTextureFormat::Bgra8UnormSrgb,
+                GpuTextureFormat::Bgra8Unorm
             )
-                | (
-                    GpuTextureFormat::Rgba8UnormSrgb,
-                    GpuTextureFormat::Rgba8Unorm
-                )
-                | (
-                    GpuTextureFormat::Bgra8Unorm,
-                    GpuTextureFormat::Bgra8UnormSrgb
-                )
-                | (
-                    GpuTextureFormat::Bgra8UnormSrgb,
-                    GpuTextureFormat::Bgra8Unorm
-                )
         )
 }
 
