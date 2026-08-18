@@ -1,6 +1,6 @@
 use super::{
-    GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange, GpuDispatchSize, GpuLimits,
-    GpuWorkOperationCause, GpuWorkOperationError,
+    GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange, GpuDispatchSize,
+    GpuLimits, GpuWorkOperationCause, GpuWorkOperationError,
 };
 
 const INDIRECT_DISPATCH_ARGUMENT_BYTES: u64 = 12;
@@ -94,8 +94,20 @@ mod tests {
     use core::num::NonZeroU64;
 
     fn limits(max_compute_workgroups_per_dimension: u32) -> GpuLimits {
-        GpuLimits::new(1, 1, 1, 1, 1, 8192, 4, 24, 0, 0, max_compute_workgroups_per_dimension)
-            .unwrap()
+        GpuLimits::new(
+            1,
+            1,
+            1,
+            1,
+            1,
+            8192,
+            4,
+            24,
+            0,
+            0,
+            max_compute_workgroups_per_dimension,
+        )
+        .unwrap()
     }
 
     fn indirect_buffer(size: u64) -> GpuBufferHandle {
