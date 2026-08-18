@@ -17,7 +17,7 @@ use std::sync::Arc;
 use wgpu::Backends;
 use wgpu::{
     Adapter, DeviceDescriptor, ExperimentalFeatures, Features, Instance, InstanceDescriptor,
-    Limits, MemoryHints, RequestAdapterError, RequestAdapterOptions, Surface, Trace,
+    InstanceFlags, Limits, MemoryHints, RequestAdapterError, RequestAdapterOptions, Surface, Trace,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -33,12 +33,23 @@ pub(crate) async fn request_headless(
     realization_policies: GpuRealizationPolicies,
 ) -> Result<GpuContext, GpuContextRequestError> {
     request_with_instance(
-        Instance::new(InstanceDescriptor::new_without_display_handle_from_env()),
+        Instance::new(runengpu_instance_descriptor()),
         descriptor,
         None,
         realization_policies,
     )
     .await
+}
+
+fn runengpu_instance_descriptor() -> InstanceDescriptor {
+    enforce_runengpu_instance_flags(InstanceDescriptor::new_without_display_handle_from_env())
+}
+
+fn enforce_runengpu_instance_flags(mut descriptor: InstanceDescriptor) -> InstanceDescriptor {
+    // IndirectExecution has defined portable runtime-invalid no-op semantics. Environment/debug
+    // configuration may not weaken that RunenGPU contract on the private WGPU backend.
+    descriptor.flags.insert(InstanceFlags::VALIDATION_INDIRECT_CALL);
+    descriptor
 }
 
 pub(super) async fn request_with_instance(
@@ -154,7 +165,6 @@ async fn select_backend_adapter(
         .await
         .into_iter()
         .map(|adapter| -> Result<_, GpuContextRequestError> {
-            // Absence of a surface is not surface compatibility evidence.
             let surface_supported =
                 compatible_surface.is_some_and(|surface| adapter.is_surface_supported(surface));
             let environment = if compatible_surface.is_some() {
@@ -200,8 +210,6 @@ const fn native_selection_route(policy: GpuSoftwareFallbackPolicy) -> NativeAdap
     }
 }
 
-/// Native enumeration does not prove that an adapter is non-fallback. Only the forced WGPU
-/// fallback path has evidence strong enough to publish `ConfirmedFallback`.
 const fn ordinary_enumeration_fallback_status() -> GpuFallbackStatus {
     GpuFallbackStatus::Unknown
 }
@@ -357,7 +365,6 @@ fn verify_requested_features(
     }
 }
 
-/// Returns a fully initialized pinned-WGPU profile; no struct-update defaults hide a limit.
 pub(super) const fn profile_limits(profile: GpuDeviceRequestProfile) -> Limits {
     match profile {
         GpuDeviceRequestProfile::ModernPortable | GpuDeviceRequestProfile::BrowserWebGpu => {
@@ -379,6 +386,14 @@ fn requested_limits(
     limits.max_color_attachments = budget.max_color_attachments();
     limits.max_vertex_buffers = budget.max_vertex_buffers();
     limits.max_bindings_per_bind_group = budget.max_bindings_per_group();
+    limits.max_texture_dimension_2d = budget.max_texture_dimension_2d();
+    limits.max_bind_groups = budget.max_bind_groups();
+    limits.max_bind_groups_plus_vertex_buffers = budget.max_bind_groups_plus_vertex_buffers();
+    limits.max_dynamic_uniform_buffers_per_pipeline_layout =
+        budget.max_dynamic_uniform_buffers_per_pipeline_layout();
+    limits.max_dynamic_storage_buffers_per_pipeline_layout =
+        budget.max_dynamic_storage_buffers_per_pipeline_layout();
+    limits.max_compute_workgroups_per_dimension = budget.max_compute_workgroups_per_dimension();
     let alignments = contract.selected_alignments();
     limits.min_uniform_buffer_offset_alignment =
         requested_alignment(alignments.uniform_dynamic_offset, "uniform dynamic offset")?;
@@ -413,6 +428,12 @@ fn map_device_limits(native: &Limits) -> GpuDeviceLimits {
             native.max_color_attachments,
             native.max_vertex_buffers,
             native.max_bindings_per_bind_group,
+            native.max_texture_dimension_2d,
+            native.max_bind_groups,
+            native.max_bind_groups_plus_vertex_buffers,
+            native.max_dynamic_uniform_buffers_per_pipeline_layout,
+            native.max_dynamic_storage_buffers_per_pipeline_layout,
+            native.max_compute_workgroups_per_dimension,
         ),
         GpuAlignmentFacts {
             uniform_dynamic_offset: Some(u64::from(native.min_uniform_buffer_offset_alignment)),
@@ -437,23 +458,36 @@ mod tests {
         candidate_with_enabled_features([])
     }
 
+    fn test_gpu_limits() -> GpuLimits {
+        let native = Limits::defaults();
+        GpuLimits::new(
+            256 * 1024,
+            512 * 1024 * 1024,
+            8,
+            16,
+            128,
+            native.max_texture_dimension_2d,
+            native.max_bind_groups,
+            native.max_bind_groups_plus_vertex_buffers,
+            native.max_dynamic_uniform_buffers_per_pipeline_layout,
+            native.max_dynamic_storage_buffers_per_pipeline_layout,
+            native.max_compute_workgroups_per_dimension,
+        )
+        .unwrap()
+    }
+
     fn candidate_with_enabled_features(
         enabled_features: impl IntoIterator<Item = GpuCapabilityFeature>,
     ) -> crate::plugins::gpu::GpuCandidateAdmissionReport {
         let enabled_features = enabled_features.into_iter().collect::<Vec<_>>();
+        let limits = test_gpu_limits();
         let facts = GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
             GpuFallbackStatus::ConfirmedNotFallback,
-            GpuCapabilities::from_normalized_facts(
-                enabled_features.iter().copied(),
-                GpuLimits::new(256 * 1024, 512 * 1024 * 1024, 8, 16, 128).unwrap(),
-                [],
-            ),
-            GpuAdapterLimits::new(
-                GpuLimits::new(256 * 1024, 512 * 1024 * 1024, 8, 16, 128).unwrap(),
-            ),
+            GpuCapabilities::from_normalized_facts(enabled_features.iter().copied(), limits, []),
+            GpuAdapterLimits::new(limits),
             GpuAlignmentFacts {
                 uniform_dynamic_offset: Some(256),
                 storage_dynamic_offset: Some(256),
@@ -477,7 +511,15 @@ mod tests {
     }
 
     #[test]
-    fn every_profile_is_complete_and_minimal_g4a_budget_does_not_request_adapter_maxima() {
+    fn runengpu_instance_flags_restore_indirect_runtime_validity() {
+        let mut descriptor = InstanceDescriptor::default();
+        descriptor.flags.remove(InstanceFlags::VALIDATION_INDIRECT_CALL);
+        let descriptor = enforce_runengpu_instance_flags(descriptor);
+        assert!(descriptor.flags.contains(InstanceFlags::VALIDATION_INDIRECT_CALL));
+    }
+
+    #[test]
+    fn every_profile_is_complete_and_minimal_budget_does_not_request_adapter_maxima() {
         assert_eq!(
             profile_limits(GpuDeviceRequestProfile::ModernPortable),
             Limits::defaults()
@@ -495,11 +537,30 @@ mod tests {
             Limits::downlevel_webgl2_defaults()
         );
         let requested = requested_limits(&candidate()).unwrap();
+        let budget = candidate().contract().workload_budget().limits();
         assert_eq!(requested.max_uniform_buffer_binding_size, 64 * 1024);
         assert_eq!(requested.max_storage_buffer_binding_size, 128 * 1024 * 1024);
         assert_eq!(requested.max_color_attachments, 1);
         assert_eq!(requested.max_vertex_buffers, 8);
         assert_eq!(requested.max_bindings_per_bind_group, 16);
+        assert_eq!(requested.max_texture_dimension_2d, budget.max_texture_dimension_2d());
+        assert_eq!(requested.max_bind_groups, budget.max_bind_groups());
+        assert_eq!(
+            requested.max_bind_groups_plus_vertex_buffers,
+            budget.max_bind_groups_plus_vertex_buffers()
+        );
+        assert_eq!(
+            requested.max_dynamic_uniform_buffers_per_pipeline_layout,
+            budget.max_dynamic_uniform_buffers_per_pipeline_layout()
+        );
+        assert_eq!(
+            requested.max_dynamic_storage_buffers_per_pipeline_layout,
+            budget.max_dynamic_storage_buffers_per_pipeline_layout()
+        );
+        assert_eq!(
+            requested.max_compute_workgroups_per_dimension,
+            budget.max_compute_workgroups_per_dimension()
+        );
         assert_eq!(requested.min_uniform_buffer_offset_alignment, 256);
         assert_eq!(requested.min_storage_buffer_offset_alignment, 256);
     }
@@ -508,9 +569,11 @@ mod tests {
     fn actual_device_mapping_records_only_actual_native_facts() {
         let mut native = Limits::defaults();
         native.max_vertex_buffers = 12;
+        native.max_compute_workgroups_per_dimension = 1234;
         native.min_uniform_buffer_offset_alignment = 512;
         let facts = map_device_limits(&native);
         assert_eq!(facts.values().max_vertex_buffers(), 12);
+        assert_eq!(facts.values().max_compute_workgroups_per_dimension(), 1234);
         assert_eq!(facts.alignments().uniform_dynamic_offset, Some(512));
     }
 
