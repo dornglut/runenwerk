@@ -584,10 +584,7 @@ mod tests {
         native.min_uniform_buffer_offset_alignment = 512;
         let facts = map_device_limits(&native);
         assert_eq!(facts.values().max_vertex_buffers(), 12);
-        assert_eq!(
-            facts.values().max_compute_workgroups_per_dimension(),
-            1234
-        );
+        assert_eq!(facts.values().max_compute_workgroups_per_dimension(), 1234);
         assert_eq!(facts.alignments().uniform_dynamic_offset, Some(512));
     }
 
