@@ -1,5 +1,7 @@
 use super::*;
-use super::{logical_timing::LogicalGpuPassTiming, occurrences::expand_render_pass_occurrences};
+use super::{
+    logical_timing::LogicalGpuPassTimingPlan, occurrences::expand_render_pass_occurrences,
+};
 use crate::plugins::render::RenderPassId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -271,13 +273,18 @@ impl Renderer {
                                 Ok(true)
                             })?;
 
-                        let logical_timing =
+                        let logical_timing_plan =
                             if gpu_timing_capability == RenderGpuTimingCapability::Supported {
-                                LogicalGpuPassTiming::new(occurrences.len())?
+                                Some(LogicalGpuPassTimingPlan::new(
+                                    occurrences.iter().map(|occurrence| occurrence.pass),
+                                )?)
                             } else {
                                 None
                             };
-                        let timing_frame = match logical_timing.as_ref() {
+                        let timing_frame = match logical_timing_plan
+                            .as_ref()
+                            .and_then(LogicalGpuPassTimingPlan::timing)
+                        {
                             Some(timing) => Some(GpuPassTimingFrame::new(
                                 context,
                                 timing.query_set(),
@@ -344,10 +351,11 @@ impl Renderer {
                                     &mut after_captures,
                                 )?;
                             }
-                            let timestamp_indices = logical_timing
+                            let timestamp_indices = logical_timing_plan
                                 .as_ref()
-                                .map(|timing| timing.range_for_occurrence(ordinal))
-                                .transpose()?;
+                                .map(|plan| plan.range_for_occurrence(ordinal))
+                                .transpose()?
+                                .flatten();
                             realized_passes.push(RealizedScheduledPass {
                                 fixed_step_upload,
                                 execution: RealizedPassExecution {
