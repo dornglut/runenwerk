@@ -6,7 +6,7 @@ use crate::plugins::gpu::{
     GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
     GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
     GpuResourceAccess, GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
+    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect,
 };
 use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
@@ -15,9 +15,9 @@ use std::collections::BTreeMap;
 ///
 /// This owner is pipeline-layout shaped. Per-group resource compatibility remains owned by
 /// [`GpuValidatedBindGroupBindings`]; this type owns complete group coverage, admitted pipeline-wide
-/// dynamic-buffer counts, and the exact G3 resource accesses after per-use dynamic offsets are
-/// applied. Dynamic offsets remain in the retained runtime values and therefore stay per-use logical
-/// state rather than physical bind-group identity.
+/// dynamic-buffer counts, exact G3 resource accesses after per-use dynamic offsets are applied, and
+/// binding-set-local writable-alias validity. Dynamic offsets remain in the retained runtime values
+/// and therefore stay per-use logical state rather than physical bind-group identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuRuntimeBindingSet {
     layout: GpuPipelineLayoutDescriptor,
@@ -59,6 +59,7 @@ impl GpuRuntimeBindingSet {
         }
 
         let accesses = derive_effective_accesses(&groups)?;
+        validate_writable_aliases(&accesses)?;
         Ok(Self {
             layout,
             groups,
@@ -182,6 +183,78 @@ fn derive_texture_access(
     )
     .map_err(|_| effective_access_error(declaration))?;
     Ok(GpuResourceAccess::Texture(access))
+}
+
+fn validate_writable_aliases(accesses: &[GpuResourceAccess]) -> Result<(), GpuProgramContractError> {
+    for left_index in 0..accesses.len() {
+        let left = &accesses[left_index];
+        for right in &accesses[(left_index + 1)..] {
+            if left.resource_identity() != right.resource_identity()
+                || (!left.writes() && !right.writes())
+                || !binding_accesses_overlap(left, right)
+            {
+                continue;
+            }
+            return Err(incompatible(
+                format!("{} overlaps {}", access_evidence(left), access_evidence(right)),
+                "bind disjoint effective ranges/subresources whenever either binding is writable",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn binding_accesses_overlap(left: &GpuResourceAccess, right: &GpuResourceAccess) -> bool {
+    match (left, right) {
+        (GpuResourceAccess::Buffer(left), GpuResourceAccess::Buffer(right)) => {
+            left.range().overlaps(right.range())
+        }
+        (GpuResourceAccess::Texture(left), GpuResourceAccess::Texture(right)) => {
+            let parent_aspect = if left.normalized_texture().descriptor().format().is_depth() {
+                GpuTextureAspect::DepthOnly
+            } else {
+                GpuTextureAspect::Color
+            };
+            left.normalized_subresources()
+                .overlaps(right.normalized_subresources(), parent_aspect)
+        }
+        _ => false,
+    }
+}
+
+fn access_evidence(access: &GpuResourceAccess) -> String {
+    match access {
+        GpuResourceAccess::Buffer(access) => format!(
+            "buffer {:?} {:?} [{}..{})",
+            access.resource_identity(),
+            access.kind(),
+            access.range().offset(),
+            access.range().end()
+        ),
+        GpuResourceAccess::Texture(access) => {
+            let range = access.normalized_subresources();
+            format!(
+                "texture {:?} {:?} mips=[{}..{}) layers=[{}..{}) aspect={:?}",
+                access.resource_identity(),
+                access.kind(),
+                range.base_mip_level(),
+                range.mip_end(),
+                range.base_array_layer(),
+                range.layer_end(),
+                range.aspect()
+            )
+        }
+        GpuResourceAccess::Query(access) => format!(
+            "query {:?} {:?} [{}..{})",
+            access.resource_identity(),
+            access.kind(),
+            access.range().first(),
+            access.range().end()
+        ),
+        GpuResourceAccess::Sampler(access) => {
+            format!("sampler {:?}", access.resource_identity())
+        }
+    }
 }
 
 fn effective_access_error(declaration: &GpuBindingDeclaration) -> GpuProgramContractError {
