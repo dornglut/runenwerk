@@ -1,13 +1,14 @@
 use super::{
-    GpuRuntimeBindingDeviceFacts, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
-    GpuRuntimeBufferBinding, GpuValidatedBindGroupBindings,
+    GpuRuntimeBindingDeviceFacts, GpuRuntimeBindingResource, GpuRuntimeBindingSet,
+    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuValidatedBindGroupBindings,
 };
 use crate::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
     GpuBindingProvenance, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
-    GpuBufferUsage, GpuBufferUsages, GpuMemoryIntent, GpuProgramContractCause, GpuReconstruction,
-    GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
-    GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess, GpuWorkResourceIdAllocator,
+    GpuBufferUsage, GpuBufferUsages, GpuMemoryIntent, GpuPipelineLayoutDescriptor,
+    GpuProgramContractCause, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+    GpuResourceLifetime, GpuResourceProvenance, GpuShaderStage, GpuShaderStages,
+    GpuStorageBufferAccess, GpuWorkResourceIdAllocator,
 };
 use core::num::{NonZeroU32, NonZeroU64};
 
@@ -46,9 +47,18 @@ fn declaration(array_count: Option<NonZeroU32>) -> GpuBindingDeclaration {
 }
 
 fn device_facts() -> GpuRuntimeBindingDeviceFacts {
+    device_facts_with_dynamic_limits(8, 4)
+}
+
+fn device_facts_with_dynamic_limits(
+    max_dynamic_uniform_buffers: u32,
+    max_dynamic_storage_buffers: u32,
+) -> GpuRuntimeBindingDeviceFacts {
     GpuRuntimeBindingDeviceFacts::new(
         NonZeroU64::new(16).unwrap(),
         NonZeroU64::new(16).unwrap(),
+        max_dynamic_uniform_buffers,
+        max_dynamic_storage_buffers,
         [],
     )
 }
@@ -118,4 +128,35 @@ fn runtime_bindings_reject_wrong_fixed_array_cardinality_before_backend_realizat
         error.cause(),
         GpuProgramContractCause::RuntimeBindingIncompatible
     );
+}
+
+#[test]
+fn runtime_binding_set_is_complete_pipeline_shaped_logical_use() {
+    let group = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
+    let bindings = GpuRuntimeBindingSet::new(layout.clone(), [runtime_value(16)], &device_facts())
+        .expect("one complete dynamic storage binding should validate");
+
+    assert_eq!(bindings.layout(), &layout);
+    assert_eq!(bindings.groups().len(), 1);
+    assert!(bindings.group(0).is_some());
+    assert_eq!(bindings.values().count(), 1);
+}
+
+#[test]
+fn runtime_binding_set_rejects_dynamic_storage_when_admitted_limit_is_zero() {
+    let group = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
+    let error = GpuRuntimeBindingSet::new(
+        layout,
+        [runtime_value(16)],
+        &device_facts_with_dynamic_limits(8, 0),
+    )
+    .expect_err("zero admitted dynamic-storage capacity must reject the declaration");
+
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
+    assert_eq!(error.label(), "dynamic storage buffers");
 }
