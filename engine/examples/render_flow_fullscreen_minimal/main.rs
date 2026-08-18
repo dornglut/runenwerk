@@ -11,11 +11,11 @@ fn main() -> Result<()> {
         .finish()
         .validate()?;
 
-    let order = flow.prepared_pass_order()?;
+    let order = flow.lexical_pass_order()?;
     let order = order
         .into_iter()
         .map(|pass_id| pass_id.to_string())
         .collect::<Vec<_>>();
-    println!("minimal flow order: {}", order.join(" -> "));
+    println!("minimal flow lexical order: {}", order.join(" -> "));
     Ok(())
 }
