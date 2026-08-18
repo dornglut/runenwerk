@@ -1,11 +1,12 @@
 use super::{
     GpuAttachmentLoadKind, GpuAttachmentStore, GpuBufferAccess, GpuBufferAccessKind,
     GpuBufferHandle, GpuBufferRange, GpuCapabilityFeature, GpuCapabilityRequirement,
-    GpuCapabilityRequirementError, GpuCapabilityRequirements, GpuDepthStencilAccess,
-    GpuQueryAccess, GpuQueryAccessKind, GpuQueryKind, GpuQueryRange, GpuQuerySetHandle,
-    GpuResourceAccess, GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
-    GpuTextureAspect, GpuTextureDimension, GpuTextureFormat, GpuTextureHandle,
-    GpuTextureSubresourceRange, GpuWorkOperationCause, GpuWorkOperationError, GpuWorkResourceId,
+    GpuCapabilityRequirementError, GpuCapabilityRequirements, GpuComputePipelineDescriptor,
+    GpuDepthStencilAccess, GpuDispatchIntent, GpuQueryAccess, GpuQueryAccessKind, GpuQueryKind,
+    GpuQueryRange, GpuQuerySetHandle, GpuResourceAccess, GpuRuntimeBindingSet, GpuTextureAccess,
+    GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureDimension,
+    GpuTextureFormat, GpuTextureHandle, GpuTextureSubresourceRange, GpuWorkOperationCause,
+    GpuWorkOperationError, GpuWorkResourceId,
 };
 use core::fmt;
 use core::hash::{Hash, Hasher};
@@ -637,18 +638,35 @@ impl GpuDrawIntent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GpuComputeOperation {
-    dispatch: GpuDispatchSize,
+    pipeline: GpuComputePipelineDescriptor,
+    bindings: GpuRuntimeBindingSet,
+    dispatch: GpuDispatchIntent,
     timestamp_writes: Vec<GpuQueryAccess>,
 }
 
 impl GpuComputeOperation {
-    pub const fn new(dispatch: GpuDispatchSize) -> Self {
-        Self {
+    pub fn new(
+        pipeline: GpuComputePipelineDescriptor,
+        bindings: GpuRuntimeBindingSet,
+        dispatch: GpuDispatchIntent,
+    ) -> Result<Self, GpuWorkOperationError> {
+        if pipeline.layout() != bindings.layout() {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU compute operation",
+                "pipeline bindings",
+                None,
+                GpuWorkOperationCause::OperationAccessContradiction,
+                "use a runtime binding set constructed for the exact compute pipeline layout",
+            ));
+        }
+        Ok(Self {
+            pipeline,
+            bindings,
             dispatch,
             timestamp_writes: Vec::new(),
-        }
+        })
     }
 
     pub fn with_timestamp_writes(
@@ -674,8 +692,16 @@ impl GpuComputeOperation {
         Ok(self)
     }
 
-    pub const fn dispatch(&self) -> GpuDispatchSize {
-        self.dispatch
+    pub fn pipeline(&self) -> &GpuComputePipelineDescriptor {
+        &self.pipeline
+    }
+
+    pub fn bindings(&self) -> &GpuRuntimeBindingSet {
+        &self.bindings
+    }
+
+    pub fn dispatch(&self) -> &GpuDispatchIntent {
+        &self.dispatch
     }
 
     pub fn timestamp_writes(&self) -> &[GpuQueryAccess] {
@@ -1647,7 +1673,7 @@ pub enum GpuWorkNodeKind {
     Present,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GpuWorkOperation {
     Compute(GpuComputeOperation),
     Render(GpuRenderOperation),
@@ -1671,12 +1697,20 @@ impl GpuWorkOperation {
 
     pub fn derived_accesses(&self) -> Result<Vec<GpuResourceAccess>, GpuWorkOperationError> {
         match self {
-            Self::Compute(operation) => Ok(operation
-                .timestamp_writes()
-                .iter()
-                .cloned()
-                .map(GpuResourceAccess::Query)
-                .collect()),
+            Self::Compute(operation) => {
+                let mut accesses = operation.bindings().accesses().to_vec();
+                if let Some(access) = operation.dispatch().indirect_access() {
+                    accesses.push(GpuResourceAccess::Buffer(access.clone()));
+                }
+                accesses.extend(
+                    operation
+                        .timestamp_writes()
+                        .iter()
+                        .cloned()
+                        .map(GpuResourceAccess::Query),
+                );
+                Ok(accesses)
+            }
             Self::Render(operation) => operation.derived_accesses(),
             Self::Copy(operation) => operation.derived_accesses(),
             Self::Clear(operation) => operation.derived_accesses(),
@@ -1742,10 +1776,18 @@ impl GpuWorkOperation {
         };
         requirements.insert(GpuCapabilityRequirement::Required(primary))?;
         match self {
-            Self::Compute(operation) if !operation.timestamp_writes().is_empty() => {
-                requirements.insert(GpuCapabilityRequirement::Required(
-                    GpuCapabilityFeature::TimestampQuery,
-                ))?;
+            Self::Compute(operation) => {
+                requirements = requirements.merge(operation.pipeline().requirements())?;
+                if operation.dispatch().is_indirect() {
+                    requirements.insert(GpuCapabilityRequirement::Required(
+                        GpuCapabilityFeature::IndirectExecution,
+                    ))?;
+                }
+                if !operation.timestamp_writes().is_empty() {
+                    requirements.insert(GpuCapabilityRequirement::Required(
+                        GpuCapabilityFeature::TimestampQuery,
+                    ))?;
+                }
             }
             Self::Render(operation) => {
                 if operation
