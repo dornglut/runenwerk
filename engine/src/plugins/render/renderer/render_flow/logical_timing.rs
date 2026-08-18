@@ -53,7 +53,7 @@ impl LogicalGpuPassTiming {
         let readback_buffer = allocator.allocate_buffer_handle(buffer_descriptor(
             "render.flow.timestamp_readback",
             byte_len,
-            [GpuBufferUsage::CopyDestination, GpuBufferUsage::Readback],
+            [GpuBufferUsage::CopyDestination],
             GpuResourceLifetime::Transient,
             GpuMemoryIntent::Readback,
         )?)?;
