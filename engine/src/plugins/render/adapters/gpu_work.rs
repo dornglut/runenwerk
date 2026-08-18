@@ -7,6 +7,11 @@
 //! The prepared graph remains the only access, initialization, hazard, capability, dependency,
 //! and topological-order authority. The private sidecar contains only later-phase render
 //! execution payload.
+//!
+//! A compiled render pass is not an execution identity: fixed-step regions may execute one pass
+//! repeatedly and feature gates may omit an occurrence. RunenRender therefore supplies distinct
+//! occurrence identities plus only render-owned control/non-data edges. RunenGPU continues to
+//! derive every resource dependency and hazard from the canonical operations.
 
 use crate::plugins::gpu::*;
 use crate::plugins::render::RenderPassId;
@@ -27,12 +32,12 @@ pub enum RenderGpuWorkAdapterError {
         "resolved render GPU work reuses logical resource identity '{resource_id}' for incompatible kind-preserving handles"
     )]
     ResourceIdentityConflict { resource_id: GpuWorkResourceId },
-    #[error("resolved render GPU work contains duplicate execution payload for pass '{pass_id}'")]
-    DuplicatePass { pass_id: RenderPassId },
+    #[error("resolved render GPU work contains duplicate execution occurrence '{occurrence}'")]
+    DuplicateOccurrence { occurrence: RenderGpuWorkOccurrenceId },
     #[error(
-        "resolved render non-data order references pass '{pass_id}' that is absent from this invocation's GPU work"
+        "resolved render control order references occurrence '{occurrence}' that is absent from this invocation's GPU work"
     )]
-    MissingOrderedPass { pass_id: RenderPassId },
+    MissingOrderedOccurrence { occurrence: RenderGpuWorkOccurrenceId },
     #[error("prepared render node '{node_id}' has no execution sidecar payload")]
     MissingSidecarPayload { node_id: GpuPreparedWorkNodeId },
     #[error("prepared render node '{node_id}' received duplicate execution sidecar payload")]
@@ -49,6 +54,30 @@ pub enum RenderGpuWorkAdapterError {
     },
     #[error("render GPU-work sidecar could not map fragment-local node {local_node}")]
     MissingPreparedNodeMapping { local_node: u64 },
+}
+
+/// Process-local identity for one actual renderer GPU execution occurrence.
+///
+/// This is deliberately not `RenderPassId`: one compiled pass can occur more than once in an
+/// invocation. It is sidecar/control-flow identity only and must not be persisted, serialized, or
+/// treated as a resource/dependency identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct RenderGpuWorkOccurrenceId(u64);
+
+impl RenderGpuWorkOccurrenceId {
+    pub(crate) const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub(crate) const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+impl core::fmt::Display for RenderGpuWorkOccurrenceId {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(formatter)
+    }
 }
 
 /// Execution-only payload associated with one prepared RunenGPU node.
@@ -83,61 +112,77 @@ impl RenderGpuWorkPayload {
     }
 }
 
-/// One execution-complete renderer node ready for G3 graph preparation.
+/// One execution-complete renderer occurrence ready for G3 graph preparation.
 ///
 /// The operation is already the semantic authority for accesses and mechanical capability
 /// requirements. `preference` is scheduling preference only; it cannot weaken operation facts.
+/// `control_order_after` carries only render-owned non-data/control semantics. It must never be
+/// populated from reconstructed resource dependencies.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedRenderGpuWorkNode {
+    occurrence: RenderGpuWorkOccurrenceId,
     label: GpuResourceLabel,
     operation: GpuWorkOperation,
     preference: GpuExecutionPreference,
     provenance: GpuResourceProvenance,
     payload: RenderGpuWorkPayload,
+    control_order_after: Vec<RenderGpuWorkOccurrenceId>,
 }
 
 impl ResolvedRenderGpuWorkNode {
     pub(crate) fn pass(
+        occurrence: RenderGpuWorkOccurrenceId,
         label: GpuResourceLabel,
         pass: CompiledPassExecutionPlan,
         operation: GpuWorkOperation,
         preference: GpuExecutionPreference,
+        control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
     ) -> Self {
         let provenance = GpuResourceProvenance::new(label.clone(), None, None);
         Self {
+            occurrence,
             label,
             operation,
             preference,
             provenance,
             payload: RenderGpuWorkPayload::Pass(Box::new(pass)),
+            control_order_after: control_order_after.into_iter().collect(),
         }
     }
 
     pub(crate) fn timing_resolve(
+        occurrence: RenderGpuWorkOccurrenceId,
         label: GpuResourceLabel,
         operation: GpuQueryResolveOperation,
+        control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
     ) -> Self {
         let provenance = GpuResourceProvenance::new(label.clone(), None, None);
         Self {
+            occurrence,
             label,
             operation: GpuWorkOperation::Resolve(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
             payload: RenderGpuWorkPayload::TimingResolve,
+            control_order_after: control_order_after.into_iter().collect(),
         }
     }
 
     pub(crate) fn timing_readback_copy(
+        occurrence: RenderGpuWorkOccurrenceId,
         label: GpuResourceLabel,
         operation: GpuCopyOperation,
+        control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
     ) -> Self {
         let provenance = GpuResourceProvenance::new(label.clone(), None, None);
         Self {
+            occurrence,
             label,
             operation: GpuWorkOperation::Copy(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
             payload: RenderGpuWorkPayload::TimingReadbackCopy,
+            control_order_after: control_order_after.into_iter().collect(),
         }
     }
 }
@@ -253,7 +298,7 @@ impl PreparedRenderWorkPlan {
     }
 }
 
-/// Prepares one renderer invocation from execution-complete logical GPU operations.
+/// Prepares one renderer invocation from execution-complete logical GPU occurrences.
 ///
 /// All kind-preserving resources are discovered from operation-derived accesses. Every non-query
 /// resource is supplied to G3R with descriptor initialization coverage, so an uninitialized
@@ -265,12 +310,21 @@ pub(crate) fn prepare_render_gpu_work(
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
 ) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
-    let mut seen_passes = BTreeMap::<RenderPassId, ()>::new();
+    let mut occurrence_indices = BTreeMap::<RenderGpuWorkOccurrenceId, usize>::new();
+    for (index, node) in nodes.iter().enumerate() {
+        if occurrence_indices.insert(node.occurrence, index).is_some() {
+            return Err(RenderGpuWorkAdapterError::DuplicateOccurrence {
+                occurrence: node.occurrence,
+            });
+        }
+    }
     for node in &nodes {
-        if let Some(pass_id) = node.payload.pass_id()
-            && seen_passes.insert(pass_id, ()).is_some()
-        {
-            return Err(RenderGpuWorkAdapterError::DuplicatePass { pass_id });
+        for occurrence in &node.control_order_after {
+            if !occurrence_indices.contains_key(occurrence) {
+                return Err(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
+                    occurrence: *occurrence,
+                });
+            }
         }
     }
 
@@ -301,7 +355,7 @@ pub(crate) fn prepare_render_gpu_work(
                 builder.add_input(input.clone())?;
             }
 
-            let mut pass_nodes = BTreeMap::<RenderPassId, GpuWorkNodeId>::new();
+            let mut occurrence_nodes = BTreeMap::<RenderGpuWorkOccurrenceId, GpuWorkNodeId>::new();
             for node in &nodes {
                 let node_id = builder.add_node(
                     node.label.clone(),
@@ -311,36 +365,33 @@ pub(crate) fn prepare_render_gpu_work(
                     node.preference,
                     node.provenance.clone(),
                 )?;
-                if let Some(pass_id) = node.payload.pass_id() {
-                    pass_nodes.insert(pass_id, node_id.clone());
-                }
+                occurrence_nodes.insert(node.occurrence, node_id.clone());
                 pending.push((node_id, node.payload.clone()));
             }
 
-            for pass in &plan.render_passes {
-                let after_id = pass.pass_id();
-                let Some(after) = pass_nodes.get(&after_id) else {
-                    continue;
-                };
-                for before_id in &pass.node().non_data_order_after {
-                    let before = pass_nodes.get(before_id).ok_or_else(|| {
+            for node in &nodes {
+                let after = occurrence_nodes
+                    .get(&node.occurrence)
+                    .expect("validated occurrence must have a prepared fragment node");
+                for before_occurrence in &node.control_order_after {
+                    let before = occurrence_nodes.get(before_occurrence).ok_or_else(|| {
                         GpuWorkAuthoringError::invalid(
-                            "author resolved render non-data order",
+                            "author resolved render occurrence order",
                             GpuWorkAuthoringErrorContext::new(
                                 Some(graph_label.as_str().to_string()),
-                                Some(pass.pass_label().to_string()),
+                                Some(node.label.as_str().to_string()),
                                 Some(after.clone()),
                                 None,
                                 Some(graph_provenance.clone()),
                             ),
                             GpuWorkAuthoringCause::UnknownIdentity,
-                            "include every pass referenced by a non-data order in this invocation's resolved GPU work",
+                            "include every render control predecessor as an execution occurrence in this invocation",
                         )
                     })?;
                     builder.add_explicit_order(GpuExplicitOrder::new(
                         before,
                         after,
-                        "render-owned non-data order",
+                        "render-owned occurrence control order",
                     )?)?;
                 }
             }
