@@ -185,7 +185,9 @@ fn derive_texture_access(
     Ok(GpuResourceAccess::Texture(access))
 }
 
-fn validate_writable_aliases(accesses: &[GpuResourceAccess]) -> Result<(), GpuProgramContractError> {
+fn validate_writable_aliases(
+    accesses: &[GpuResourceAccess],
+) -> Result<(), GpuProgramContractError> {
     for left_index in 0..accesses.len() {
         let left = &accesses[left_index];
         for right in &accesses[(left_index + 1)..] {
@@ -196,7 +198,11 @@ fn validate_writable_aliases(accesses: &[GpuResourceAccess]) -> Result<(), GpuPr
                 continue;
             }
             return Err(incompatible(
-                format!("{} overlaps {}", access_evidence(left), access_evidence(right)),
+                format!(
+                    "{} overlaps {}",
+                    access_evidence(left),
+                    access_evidence(right)
+                ),
                 "bind disjoint effective ranges/subresources whenever either binding is writable",
             ));
         }
