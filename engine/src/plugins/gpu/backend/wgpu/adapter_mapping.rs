@@ -53,6 +53,12 @@ pub(super) fn adapter_facts(
         native_limits.max_color_attachments,
         native_limits.max_vertex_buffers,
         native_limits.max_bindings_per_bind_group,
+        native_limits.max_texture_dimension_2d,
+        native_limits.max_bind_groups,
+        native_limits.max_bind_groups_plus_vertex_buffers,
+        native_limits.max_dynamic_uniform_buffers_per_pipeline_layout,
+        native_limits.max_dynamic_storage_buffers_per_pipeline_layout,
+        native_limits.max_compute_workgroups_per_dimension,
     );
     GpuAdapterFacts::new(
         map_backend(info.backend),
@@ -108,7 +114,7 @@ pub(super) fn normalized_features(
         && flags.contains(DownlevelFlags::COMPUTE_SHADERS)
         && flags.contains(DownlevelFlags::INDIRECT_EXECUTION)
     {
-        supported.push(GpuCapabilityFeature::IndirectDraw);
+        supported.push(GpuCapabilityFeature::IndirectExecution);
     }
     if features.contains(Features::TIMESTAMP_QUERY) {
         supported.push(GpuCapabilityFeature::TimestampQuery);
@@ -122,8 +128,6 @@ pub(super) fn normalized_features(
     if features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY) {
         supported.push(GpuCapabilityFeature::StorageResourceBindingArray);
     }
-    // G4R preserves the accepted RunenGPU capability mapping. Do not expand the public
-    // capability vocabulary merely because the refreshed private backend exposes this bit.
     if surface_compatible {
         supported.push(GpuCapabilityFeature::Presentation);
     }
@@ -237,6 +241,10 @@ mod tests {
         GpuCapabilityRequirement, GpuCapabilityRequirements, GpuLimits,
     };
 
+    fn test_limits() -> GpuLimits {
+        GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).unwrap()
+    }
+
     #[test]
     fn downlevel_mapping_claims_only_explicitly_proven_operations() {
         let full = normalized_features(
@@ -246,7 +254,7 @@ mod tests {
             false,
         );
         assert!(full.contains(&GpuCapabilityFeature::Compute));
-        assert!(full.contains(&GpuCapabilityFeature::IndirectDraw));
+        assert!(full.contains(&GpuCapabilityFeature::IndirectExecution));
         assert!(full.contains(&GpuCapabilityFeature::RenderPipeline));
         assert!(full.contains(&GpuCapabilityFeature::Copy));
         assert!(!full.contains(&GpuCapabilityFeature::Presentation));
@@ -254,7 +262,7 @@ mod tests {
         let missing_compute =
             normalized_features(Features::empty(), DownlevelFlags::empty(), false, false);
         assert!(!missing_compute.contains(&GpuCapabilityFeature::Compute));
-        assert!(!missing_compute.contains(&GpuCapabilityFeature::IndirectDraw));
+        assert!(!missing_compute.contains(&GpuCapabilityFeature::IndirectExecution));
         assert!(!missing_compute.contains(&GpuCapabilityFeature::RenderPipeline));
         assert!(!missing_compute.contains(&GpuCapabilityFeature::Copy));
 
@@ -265,7 +273,7 @@ mod tests {
             true,
         );
         assert!(!unknown.contains(&GpuCapabilityFeature::Compute));
-        assert!(!unknown.contains(&GpuCapabilityFeature::IndirectDraw));
+        assert!(!unknown.contains(&GpuCapabilityFeature::IndirectExecution));
         assert!(!unknown.contains(&GpuCapabilityFeature::RenderPipeline));
         assert!(!unknown.contains(&GpuCapabilityFeature::Copy));
         assert!(unknown.contains(&GpuCapabilityFeature::Presentation));
@@ -288,7 +296,7 @@ mod tests {
         assert!(normalized.contains(&GpuCapabilityFeature::StorageResourceBindingArray));
         assert!(
             !normalized.contains(&GpuCapabilityFeature::UniformBufferBindingArray),
-            "the G4R backend refresh must not expand the accepted capability profile"
+            "the backend refresh must not expand the normalized profile without RunenGPU authority"
         );
     }
 
@@ -301,7 +309,7 @@ mod tests {
                 false,
                 false,
             ),
-            GpuLimits::new(1, 1, 1, 1, 1).unwrap(),
+            test_limits(),
             [],
         );
         let mut requirements = GpuCapabilityRequirements::new();
