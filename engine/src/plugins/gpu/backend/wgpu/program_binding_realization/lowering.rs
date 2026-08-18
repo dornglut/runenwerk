@@ -39,7 +39,9 @@ pub(super) fn layout_entries(
 pub(super) fn runtime_device_facts(
     context: &GpuContext,
 ) -> Result<GpuRuntimeBindingDeviceFacts, GpuProgramBindingRealizationError> {
-    let alignments = context.device_facts().device_limits().alignments();
+    let device_limits = context.device_facts().device_limits();
+    let alignments = device_limits.alignments();
+    let limits = device_limits.values();
     let uniform = NonZeroU64::new(alignments.uniform_dynamic_offset.ok_or_else(|| {
         GpuProgramBindingRealizationError::new(
             GpuProgramBindingRealizationErrorCategory::LayoutDescriptorInvalid,
@@ -59,6 +61,8 @@ pub(super) fn runtime_device_facts(
     Ok(GpuRuntimeBindingDeviceFacts::new(
         uniform,
         storage,
+        limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
+        limits.max_dynamic_storage_buffers_per_pipeline_layout(),
         context.adapter_facts().supported().formats(),
     ))
 }
