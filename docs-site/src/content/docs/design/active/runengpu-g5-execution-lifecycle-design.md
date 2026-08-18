@@ -213,10 +213,36 @@ Indirect rules:
 
 - the argument buffer contributes one exact 12-byte read beginning at the checked offset;
 - offset/alignment are structurally validated;
-- runtime GPU argument values are not host planning truth;
-- the operation requires `GpuCapabilityFeature::IndirectExecution`.
+- runtime GPU argument values are queue-timeline data and are not host planning truth;
+- the operation requires `GpuCapabilityFeature::IndirectExecution`;
+- runtime arguments invalid under the portable indirect-execution contract make the indirect
+  dispatch non-executing rather than turning runtime GPU data into a host-side planning error;
+- a non-executing indirect dispatch retains its argument-buffer read and conservative
+  interface-derived usage/hazard scope, but establishes no shader execution or definite shader
+  initialization effect;
+- boundary validity is defined by the accepted portable/WebGPU contract for the admitted device, not
+  by an independently invented RunenGPU off-by-one rule.
 
-## 2.2 One indirect-execution capability
+### Compute usage scope and writable aliasing
+
+Each direct or indirect compute dispatch is one logical usage scope.
+
+For that dispatch's effective pipeline/binding set:
+
+- every binding potentially accessible through the active pipeline layout participates in usage
+  validation even when a direct dispatch has a zero dimension or an indirect dispatch later becomes
+  non-executing from runtime arguments;
+- overlapping effective buffer ranges reject if either binding is writable;
+- overlapping effective texture subresources reject if either binding is writable;
+- disjoint ranges/subresources remain valid;
+- dynamic offsets are applied before effective-range alias validation;
+- diagnostics retain exact range/subresource evidence rather than collapsing to whole-resource
+  booleans.
+
+This is the compute analogue of draw-local writable-binding validation. It is distinct from G3's
+coarser inter-node hazard ordering.
+
+## 2.2 One indirect-execution capability and one semantic guarantee
 
 Clean-cut:
 
@@ -231,6 +257,26 @@ fact.
 
 Do not keep `IndirectDraw` as a deprecated alias and do not create a parallel `IndirectDispatch`
 capability.
+
+The public capability additionally means RunenGPU can preserve the portable runtime-validity
+semantics of indirect execution. An implementation/debug/environment switch may not weaken those
+semantics after `IndirectExecution` has been admitted.
+
+For the WGPU 30 backend specifically:
+
+- `InstanceFlags::VALIDATION_INDIRECT_CALL` (or a future proven-equivalent mechanism) is a required
+  private realization invariant for indirect execution;
+- RunenGPU-owned instance construction must restore/force that invariant after environment-derived
+  WGPU options are resolved, so `WGPU_VALIDATION_INDIRECT_CALL=0` cannot silently weaken public
+  RunenGPU behavior;
+- if a backend cannot prove equivalent invalid-indirect-call behavior, it must not admit
+  `IndirectExecution`;
+- the validation mechanism remains private and is not promoted into RunenGPU capability vocabulary or
+  user configuration.
+
+The same invariant applies to accepted indirect draw semantics: invalid runtime indirect arguments
+become non-executing according to the portable contract rather than entering undefined backend
+behavior.
 
 ## 2.3 Render operation and draws
 
@@ -325,12 +371,15 @@ Each draw carries complete effective state rather than inheriting semantic meani
 commands:
 
 - viewport with finite canonical values and `0 <= min_depth <= max_depth <= 1`;
+- viewport coordinate/extent validity against the portable bounds derived from the admitted
+  `max_texture_dimension_2d` fact;
 - scissor checked against effective render extent;
 - finite canonical blend constant;
 - stencil reference `u32`.
 
 Zero-area viewport/scissor are valid no-rasterization cases. Private encoding may elide redundant
-state setters; the logical value remains explicit.
+state setters; the logical value remains explicit. RunenGPU rejects invalid viewport state before
+private command encoding rather than relying on backend validation as ordinary control flow.
 
 ## 2.7 Color clear semantics
 
@@ -395,8 +444,8 @@ to the backend domain.
 After G5A:
 
 - Compute derives runtime-binding accesses, indirect argument access, and timestamps. Zero direct
-  dispatch retains conservative interface-derived access/hazard evidence while producing no shader
-  execution/definite initialization effect.
+  dispatch and runtime-invalid indirect dispatch retain conservative interface-derived
+  access/hazard evidence while producing no shader execution/definite initialization effect.
 - Render derives attachment/resolve/binding/vertex/index/indirect/timestamp accesses.
 - Copy/Clear/Resolve/Present retain accepted G3/G3R semantics unless a directly proven defect requires
   correction.
@@ -443,20 +492,38 @@ It:
 
 ## 2.13 Execution-required normalized limits
 
-G5A extends normalized device/workload limit vocabulary only where accepted execution semantics need
-it. Initial required additions include at least:
+G5A closes the limit vocabulary required by the operations it introduces or materially corrects. The
+exact new normalized device/workload fields authorized by this slice are:
 
-- maximum compute workgroups per dimension;
-- maximum bind-group count;
-- combined bind-group + vertex-buffer limit where required by the portable execution contract.
+```text
+max_texture_dimension_2d
+max_bind_groups
+max_bind_groups_plus_vertex_buffers
+max_dynamic_uniform_buffers_per_pipeline_layout
+max_dynamic_storage_buffers_per_pipeline_layout
+max_compute_workgroups_per_dimension
+```
 
-Existing binding-size/count, vertex-buffer, attachment, and alignment facts remain authoritative.
+Ownership/use is explicit:
 
-Rule:
+- `max_texture_dimension_2d` supplies the portable bound needed by explicit viewport admission and
+  closes the already-adjacent 2D resource/device fact gap;
+- `max_bind_groups` admits complete runtime binding-set/pipeline-layout use;
+- `max_bind_groups_plus_vertex_buffers` admits simultaneous render bind-group + vertex-buffer slots;
+- the two dynamic-buffer limits admit the dynamic declarations that G5A makes executable per use;
+- `max_compute_workgroups_per_dimension` admits direct dispatch and defines the device bound used by
+  portable indirect-dispatch runtime validity.
 
-> If a device-dependent constraint is knowable before private encoding and can reject an accepted
-> RunenGPU operation, normalize/admit it at the owning semantic boundary rather than treating backend
-> validation failure as ordinary control flow.
+Existing binding-size/count, vertex-buffer, color-attachment and dynamic-alignment facts remain
+authoritative. G5A does not add the other WGPU `Limits` fields: shader workgroup shape/storage,
+per-stage resource counts, vertex attributes/stride, texture dimensions other than the newly required
+2D fact, buffer-size ceilings, and specialized feature limits remain with their existing
+resource/program/pipeline owners or future evidence gates.
+
+If implementation evidence proves that one of G5A's accepted new public operations can still be
+rejected before encoding by a device-dependent limit absent from this closed set, that is a planning
+defect: stop and amend the owning design rather than silently mirror another WGPU field or defer
+normal validation to backend failure.
 
 Do not mirror the entire WGPU limits structure mechanically.
 
@@ -589,6 +656,10 @@ Logical offsets remain `u64`; backend narrowing is checked privately before enco
 
 No raw backend object becomes public or renderer-owned.
 
+Indirect execution uses only a backend path whose private realization proves the accepted runtime
+validity/no-op semantics. WGPU instance/debug/environment configuration is never allowed to downgrade
+that guarantee after `IndirectExecution` admission.
+
 ## 3.7 Transactional Upload baseline
 
 Initial Upload lowering uses encoded staging copies.
@@ -676,6 +747,9 @@ Required consequences:
 - nonterminal accepted submission/readback observations terminalize with a structured context-drop
   failure exactly once;
 - no public claim that issued hardware work was synchronously cancelled;
+- Drop does not block waiting for GPU completion;
+- private backend/driver lifetime rules remain responsible for already-issued physical work after
+  RunenGPU execution authority is gone;
 - detached terminal observations may survive without device/queue/G4 realization authority.
 
 ## 3.13 G4 retention
@@ -857,8 +931,8 @@ G5 uses:
 - normalized readback data;
 - explicit unsupported capability rejection.
 
-Do not expose native-only transition/barrier APIs, raw HAL objects, backend fences, or browser promise
-objects through G5.
+Do not expose native-only transition/barrier APIs, raw HAL objects, backend fences, browser promise
+objects, WGPU instance flags, or backend validation toggles through G5.
 
 Specialized/native interoperability requires separate accepted evidence and cannot be a generic raw
 escape hatch.
@@ -872,11 +946,17 @@ At one unchanged reviewed head require:
 - complete executable compute/render/Upload/Readback operation tests;
 - zero-dispatch proof preserving binding access/hazard evidence while producing no shader execution/
   definite initialization effect;
+- compute-dispatch usage-scope and writable-alias proofs with dynamic effective ranges;
 - indirect compute/draw capability/access proofs;
+- invalid runtime indirect arguments proven non-executing without losing conservative usage/hazard
+  evidence;
+- a WGPU proof that environment/debug configuration cannot disable the accepted indirect-call
+  validity guarantee;
 - pass-wide render usage versus draw-local alias proofs;
 - target-format-aware color clear proofs;
 - dynamic-offset effective-range and static-realization-key proofs;
-- normalized execution-limit proofs;
+- exact normalized execution-limit mapping/admission proofs for the six newly authorized fields;
+- viewport admission proof derived from normalized `max_texture_dimension_2d`;
 - renderer duplicate GPU-semantic deletion guards;
 - deterministic preparation/diagnostics;
 - `cargo validate`;
