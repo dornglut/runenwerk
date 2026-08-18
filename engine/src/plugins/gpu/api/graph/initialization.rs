@@ -716,6 +716,11 @@ fn operation_initialization(
                     GpuDepthAttachmentLoad::Clear(_) => effect(&access),
                 }
             }
+            for draw in render.draws() {
+                for access in draw.accesses().iter().filter(|access| access.reads()) {
+                    require(access);
+                }
+            }
             for timestamp in render.timestamp_writes() {
                 effect(&GpuResourceAccess::Query(timestamp.clone()));
             }
