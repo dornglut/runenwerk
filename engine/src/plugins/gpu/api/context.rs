@@ -104,10 +104,8 @@ impl GpuContext {
     pub fn runtime_binding_device_facts(&self) -> Option<GpuRuntimeBindingDeviceFacts> {
         let device_limits = self.device.device_limits();
         let alignments = device_limits.alignments();
-        let uniform_buffer_offset_alignment =
-            NonZeroU64::new(alignments.uniform_dynamic_offset?)?;
-        let storage_buffer_offset_alignment =
-            NonZeroU64::new(alignments.storage_dynamic_offset?)?;
+        let uniform_buffer_offset_alignment = NonZeroU64::new(alignments.uniform_dynamic_offset?)?;
+        let storage_buffer_offset_alignment = NonZeroU64::new(alignments.storage_dynamic_offset?)?;
         let limits = device_limits.values();
         Some(GpuRuntimeBindingDeviceFacts::new(
             uniform_buffer_offset_alignment,
