@@ -7,10 +7,10 @@ use super::work::{
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuCapabilityFeature,
     GpuCapabilityRequirement, GpuCapabilityRequirementError, GpuCapabilityRequirements,
-    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryAccessKind, GpuReadbackOperation,
-    GpuRenderDraw, GpuRenderPassSignature, GpuResourceAccess, GpuTextureAccess,
-    GpuTextureAccessKind, GpuTextureAccessResource, GpuUploadOperation, GpuWorkOperationCause,
-    GpuWorkOperationError, render_pass_usage::validate_render_pass_usage_scope,
+    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryAccessKind, GpuReadbackOperation, GpuRenderDraw,
+    GpuRenderPassSignature, GpuResourceAccess, GpuTextureAccess, GpuTextureAccessKind,
+    GpuTextureAccessResource, GpuUploadOperation, GpuWorkOperationCause, GpuWorkOperationError,
+    render_pass_usage::validate_render_pass_usage_scope,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -542,15 +542,16 @@ fn copy_buffer_layout_access(
         .checked_add(preceding_rows)
         .and_then(|value| value.checked_add(u64::from(logical_row)))
         .ok_or_else(|| copy_layout_error(layout, "reduce the logical copy byte coverage"))?;
-    let range = GpuBufferRange::new(layout.buffer(), layout.byte_offset(), size).map_err(|source| {
-        GpuWorkOperationError::from_access(
-            "derive GPU buffer-texture layout access",
-            layout.buffer().descriptor().common().label().as_str(),
-            GpuWorkOperationCause::InvalidCopyLayout,
-            "keep the complete logical row and image coverage inside the buffer",
-            source,
-        )
-    })?;
+    let range =
+        GpuBufferRange::new(layout.buffer(), layout.byte_offset(), size).map_err(|source| {
+            GpuWorkOperationError::from_access(
+                "derive GPU buffer-texture layout access",
+                layout.buffer().descriptor().common().label().as_str(),
+                GpuWorkOperationCause::InvalidCopyLayout,
+                "keep the complete logical row and image coverage inside the buffer",
+                source,
+            )
+        })?;
     copy_buffer_access(
         layout.buffer(),
         range,
