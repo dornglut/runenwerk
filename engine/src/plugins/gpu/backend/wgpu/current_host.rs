@@ -1,4 +1,4 @@
-use super::device_request::request_with_instance;
+use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
 use super::{CurrentRenderDeviceQueue, WgpuContextState};
 use crate::plugins::gpu::{
     GpuContext, GpuContextDescriptor, GpuContextRequestError, GpuContextRequestErrorCategory,
@@ -50,9 +50,10 @@ impl GpuContext {
             + Sync
             + 'static,
     {
-        let instance = Instance::new(InstanceDescriptor::new_with_display_handle_from_env(
-            Box::new(target.clone()),
-        ));
+        let instance_descriptor = enforce_runengpu_instance_flags(
+            InstanceDescriptor::new_with_display_handle_from_env(Box::new(target.clone())),
+        );
+        let instance = Instance::new(instance_descriptor);
         let surface = instance.create_surface(target).map_err(|error| {
             GpuContextRequestError::new(
                 GpuContextRequestErrorCategory::TemporaryHostCompatibilityFailure,
