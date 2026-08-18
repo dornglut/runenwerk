@@ -265,6 +265,15 @@ pub(crate) fn prepare_render_gpu_work(
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
 ) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
+    let mut seen_passes = BTreeMap::<RenderPassId, ()>::new();
+    for node in &nodes {
+        if let Some(pass_id) = node.payload.pass_id()
+            && seen_passes.insert(pass_id, ()).is_some()
+        {
+            return Err(RenderGpuWorkAdapterError::DuplicatePass { pass_id });
+        }
+    }
+
     let graph_label = GpuResourceLabel::new(format!("render.flow.{}.work", plan.flow_id))?;
     let graph_provenance = GpuResourceProvenance::new(graph_label.clone(), None, None);
     let resources = collect_operation_resources(&nodes)?;
@@ -302,21 +311,8 @@ pub(crate) fn prepare_render_gpu_work(
                     node.preference,
                     node.provenance.clone(),
                 )?;
-                if let Some(pass_id) = node.payload.pass_id()
-                    && pass_nodes.insert(pass_id, node_id.clone()).is_some()
-                {
-                    return Err(GpuWorkAuthoringError::invalid(
-                        "author resolved render GPU work",
-                        GpuWorkAuthoringErrorContext::new(
-                            Some(graph_label.as_str().to_string()),
-                            Some(node.label.as_str().to_string()),
-                            Some(node_id),
-                            None,
-                            Some(node.provenance.clone()),
-                        ),
-                        GpuWorkAuthoringCause::DuplicateNodeIdentity,
-                        "provide exactly one execution-complete GPU operation per render pass",
-                    ));
+                if let Some(pass_id) = node.payload.pass_id() {
+                    pass_nodes.insert(pass_id, node_id.clone());
                 }
                 pending.push((node_id, node.payload.clone()));
             }
