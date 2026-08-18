@@ -6,9 +6,7 @@ use crate::plugins::render::graph::{
     RenderExecutionGraphDiagnosticKind, RenderPassKind, RenderPassNode, ResourceGraph,
     compile_execution_plan, diagnose_compiled_pass_shapes,
 };
-use crate::plugins::render::{
-    RenderFlowId, RenderPassId, validate_compiled_flow_capabilities,
-};
+use crate::plugins::render::{RenderFlowId, RenderPassId, validate_compiled_flow_capabilities};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
