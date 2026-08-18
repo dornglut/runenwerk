@@ -5,7 +5,7 @@ use super::GpuTextureFormat;
 /// Linear and sRGB variants of the same normalized storage format are copy-compatible because the
 /// copy preserves raw texel storage rather than performing color-space conversion. Unrelated color
 /// formats and every depth/color pairing remain incompatible.
-pub const fn gpu_texture_formats_copy_compatible(
+pub fn gpu_texture_formats_copy_compatible(
     source: GpuTextureFormat,
     destination: GpuTextureFormat,
 ) -> bool {
