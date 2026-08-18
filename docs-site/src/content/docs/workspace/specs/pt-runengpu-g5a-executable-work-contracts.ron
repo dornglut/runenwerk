@@ -28,12 +28,12 @@ PhaseImplementationSpec(
         "docs-site/src/content/docs/workspace/planning/roadmap.md",
     ],
 
-    goal: "Make accepted G3/G3R compute/render/transfer work logically execution-complete using accepted G4 program/resource/pipeline contracts, correct indirect-execution capability naming, zero-dispatch semantics, render usage scopes, color clear semantics, normalized execution limits, and static-versus-dynamic binding ownership, while preserving one work-graph authority and without implementing submission/progress/surfaces or exposing WGPU.",
+    goal: "Make accepted G3/G3R compute/render/transfer work logically execution-complete using accepted G4 program/resource/pipeline contracts; close direct/indirect compute semantics, compute and render usage scopes, color clear semantics, the exact execution-limit vocabulary, indirect-runtime validity, and static-versus-dynamic binding ownership; preserve one work-graph authority without implementing submission/progress/surfaces or exposing WGPU.",
 
     ownership: [
         "GpuWorkOperation/GpuPreparedWorkGraph remain the sole logical operation/order/access/initialization authority.",
         "G5A owns complete logical GPU execution intent but does not own queue submission, progress, readback materialization, shutdown, surfaces, or product policy.",
-        "Accepted G4 remains the sole private resource/program/layout/bind-group/pipeline realization owner.",
+        "Accepted G4 remains the sole private resource/program/layout/bind-group/pipeline realization owner, with only the corrections directly required to make accepted G5A execution semantics truthful.",
         "RunenRender may retain image-formation planning/provenance but not a second GPU pipeline/binding/draw/access authority once the corresponding G5A operation is complete.",
         "WGPU remains private implementation detail; no raw backend public or renderer-stable escape hatch is introduced.",
     ],
@@ -43,6 +43,9 @@ PhaseImplementationSpec(
         "Map the existing WGPU DownlevelFlags::INDIRECT_EXECUTION evidence to IndirectExecution.",
         "Require IndirectExecution for both indirect draw and indirect compute dispatch.",
         "Delete the old enum variant and every compatibility translation; do not add a parallel IndirectDispatch capability.",
+        "IndirectExecution additionally requires a backend proof that runtime-invalid indirect calls have the accepted portable non-executing semantics rather than undefined behavior.",
+        "For WGPU 30, force/restore InstanceFlags::VALIDATION_INDIRECT_CALL after environment-derived instance options are resolved, or use a proven-equivalent private mechanism; WGPU_VALIDATION_INDIRECT_CALL=0 must not weaken RunenGPU semantics.",
+        "A backend that cannot prove the equivalent runtime-validity guarantee must not admit IndirectExecution.",
     ],
 
     compute_contract: [
@@ -53,7 +56,18 @@ PhaseImplementationSpec(
         "Operation-owned timestamp semantics remain valid for an otherwise empty direct dispatch.",
         "Private later encoding may elide an empty dispatch only when doing so preserves RunenGPU validation and diagnostics; logical binding access/hazard semantics remain unchanged.",
         "Indirect dispatch reads exactly 12 bytes containing three packed u32 counts from a checked indirect buffer range and derives the matching indirect read access.",
-        "Indirect dispatch offset/alignment are validated structurally; host planning does not inspect runtime GPU argument values as semantic truth.",
+        "Indirect dispatch offset/alignment are validated structurally; runtime argument values are queue-timeline data and host planning does not inspect them as semantic truth.",
+        "Runtime indirect arguments invalid under the accepted portable contract make the dispatch non-executing while retaining the indirect-argument read and conservative binding usage/hazard scope; they establish no shader execution or definite shader initialization effect.",
+        "Boundary validity follows the accepted portable/WebGPU contract for the admitted device; do not invent a separate RunenGPU off-by-one rule.",
+    ],
+
+    compute_usage_scope_contract: [
+        "Treat every direct or indirect compute dispatch as one logical usage scope.",
+        "Every binding potentially accessible through the effective pipeline layout participates even for zero direct dispatch or runtime-invalid non-executing indirect dispatch.",
+        "For one dispatch, overlapping effective buffer ranges reject if either binding is writable.",
+        "For one dispatch, overlapping effective texture subresources reject if either binding is writable.",
+        "Disjoint ranges/subresources remain valid and dynamic offsets are applied before alias analysis.",
+        "Keep exact resource-range/subresource evidence in diagnostics; this dispatch-local alias validation is distinct from G3 inter-node hazards.",
     ],
 
     render_contract: [
@@ -64,7 +78,7 @@ PhaseImplementationSpec(
         "Vertex binding owns slot + logical buffer + checked range; pipeline stride/step/attributes remain G4 pipeline state.",
         "Index binding reuses accepted GpuIndexFormat and owns logical buffer + checked range; no duplicate index-format type is introduced.",
         "Dynamic render state has canonical value semantics and is explicit per draw rather than inherited accidentally from prior backend state.",
-        "Zero-area viewport/scissor are valid; device-dependent limits are admitted through normalized execution facts rather than raw backend validation.",
+        "Zero-area viewport/scissor are valid; viewport coordinates/extents are admitted against portable bounds derived from normalized max_texture_dimension_2d, and invalid state rejects before private encoding.",
     ],
 
     render_usage_scope_contract: [
@@ -105,7 +119,7 @@ PhaseImplementationSpec(
     ],
 
     operation_access_contract: [
-        "Compute derives interface/runtime-binding accesses, indirect argument access and timestamp accesses, including for a zero direct dispatch; zero invocations change execution/effect semantics, not the conservative logical usage scope.",
+        "Compute derives interface/runtime-binding accesses, indirect argument access and timestamp accesses, including for zero direct and runtime-invalid non-executing indirect dispatch; non-execution changes execution/effect semantics, not the conservative logical usage scope.",
         "Render derives attachment/resolve accesses, runtime-binding accesses, vertex/index/indirect accesses and timestamp accesses.",
         "Copy/Clear/Resolve/Present preserve accepted G3/G3R access and initialization semantics unless a concrete G5A defect requires the directly corresponding correction.",
         "Upload derives one exact destination write and exact initialization effect from transfer semantics.",
@@ -122,11 +136,13 @@ PhaseImplementationSpec(
     ],
 
     normalized_execution_limits: [
-        "Extend GpuLimits/device/workload facts with only execution limits required by accepted G5A semantics.",
-        "At minimum normalize max compute workgroups per dimension, max bind groups, and max bind groups plus vertex buffers where required by execution admission.",
+        "Extend GpuLimits/device/workload facts by exactly six newly authorized normalized fields: max_texture_dimension_2d, max_bind_groups, max_bind_groups_plus_vertex_buffers, max_dynamic_uniform_buffers_per_pipeline_layout, max_dynamic_storage_buffers_per_pipeline_layout, and max_compute_workgroups_per_dimension.",
+        "Use max_texture_dimension_2d for the portable explicit-viewport bounds and the adjacent 2D resource/device fact gap.",
+        "Use max_bind_groups and max_bind_groups_plus_vertex_buffers for complete runtime binding/pipeline-layout and simultaneous render binding+vertex-slot admission.",
+        "Use the dynamic uniform/storage counts for the dynamic declarations made executable by G5A.",
+        "Use max_compute_workgroups_per_dimension for direct dispatch admission and indirect runtime-validity device bounds.",
         "Preserve existing max vertex buffers, color attachments, binding counts/sizes and dynamic alignment facts.",
-        "Any device-dependent condition knowable before encoding that can reject an accepted G5A operation must be normalized/admitted at its owner rather than deferred to WGPU validation.",
-        "Do not mechanically mirror unrelated WGPU limits.",
+        "Do not add other WGPU Limits fields in this slice; if accepted G5A operations prove another pre-encoding device limit is required, stop and amend planning rather than silently expanding vocabulary or relying on backend validation.",
     ],
 
     renderer_transition: [
@@ -141,21 +157,26 @@ PhaseImplementationSpec(
         "No second public command graph or backend command IR becomes semantic authority.",
         "No G3R access-to-initialization inference returns.",
         "Direct zero dispatch is zero shader execution but retains conservative interface-derived resource accesses/hazards and fabricates no definite shader initialization.",
-        "Indirect draw and dispatch share one normalized IndirectExecution capability fact.",
+        "Compute-dispatch usage/writable-alias validation remains active for zero and runtime-invalid non-executing dispatches.",
+        "Indirect draw and dispatch share one normalized IndirectExecution capability fact and one portable runtime-validity guarantee.",
+        "Environment/debug/backend configuration cannot weaken accepted indirect execution semantics; WGPU_VALIDATION_INDIRECT_CALL=0 is not authoritative RunenGPU policy.",
         "Render pass-wide usage compatibility and draw-local writable aliasing are both enforced at their correct scope.",
         "Color clear semantics are target-format aware and not globally normalized-color-only.",
         "Dynamic offset is logical/per-use execution state, never physical bind-group object identity.",
-        "All device-dependent execution rejection knowable before encoding is normalized/admitted before backend access.",
+        "The G5A normalized-limit addition is the closed six-field set named above; implementation may not opportunistically mirror WGPU Limits.",
         "Upload/Readback are graph-visible so transfer ordering cannot bypass G3/G3R.",
-        "No WGPU type, device, queue, command encoder, submission index, poll object, mapped range or surface object enters public RunenGPU authority.",
+        "No WGPU type, device, queue, command encoder, submission index, poll object, instance flag, mapped range or surface object enters public RunenGPU authority.",
         "No G5B submission/progress/shutdown implementation, no G7A surface implementation, no G5C final cutover and no GX extraction enters this slice.",
     ],
 
     required_proofs: [
         "Direct compute operation is execution-complete from pipeline + bindings + direct dispatch and derives exact runtime-binding accesses.",
         "Direct dispatch with one zero dimension is accepted, retains interface-derived binding access/hazard evidence, produces no shader execution or definite shader initialization effect, preserves explicit timestamps, and is deterministic.",
+        "One compute dispatch with overlapping writable/read-or-write effective bindings rejects with exact alias evidence; disjoint effective ranges remain valid.",
         "Indirect compute derives exact 12-byte indirect read coverage and requires IndirectExecution.",
-        "Existing indirect draw uses IndirectExecution after clean enum cutover; IndirectDraw no longer exists.",
+        "Runtime-invalid indirect dispatch becomes non-executing while retaining argument/binding usage evidence and produces no definite shader initialization; boundary-value tests follow the accepted portable contract.",
+        "Existing indirect draw uses IndirectExecution after clean enum cutover; IndirectDraw no longer exists and runtime-invalid accepted indirect draw paths have defined non-executing semantics.",
+        "WGPU instance construction proves WGPU_VALIDATION_INDIRECT_CALL=0 cannot disable the required private indirect-validation mechanism; a backend without equivalent proof cannot admit IndirectExecution.",
         "Render operation with multiple compatible draws/pipelines validates one pass signature and retains draw order.",
         "Storage/storage use across distinct draws remains pass-compatible when no incompatible usage exists.",
         "One draw with overlapping writable/read-or-write effective bindings rejects with exact alias evidence.",
@@ -164,17 +185,18 @@ PhaseImplementationSpec(
         "Physical bind-group key/record excludes dynamic offset and old per-use values introspection is absent.",
         "Color clear accepts finite non-normalized values when the target format contract permits them and continues to reject non-finite values.",
         "Depth clear retains its normalized constraints.",
-        "Execution limits reject oversized direct dispatch and invalid bind-group/vertex-buffer combinations before private encoding.",
+        "The exact six new normalized fields are mapped through adapter/device/workload facts and requested limits as appropriate; no seventh G5A limit appears without planning amendment.",
+        "Execution limits reject oversized direct dispatch, invalid viewport state, and invalid bind-group/vertex-buffer or dynamic-buffer-count combinations before private command encoding.",
         "Upload participates in exact G3R destination initialization/hazards; Readback participates in exact source read hazards.",
         "Renderer timing and representative compute/render/copy plans still prepare through the corrected generic operation model.",
         "Repeated preparation produces deterministic logical results/diagnostics.",
     ],
 
     expected_source_scope: [
-        "engine/src/plugins/gpu/api/work.rs and directly required decomposed modules",
+        "engine/src/plugins/gpu/api/work.rs and directly required decomposed modules; decompose before approaching repository file-size or human-review bounds rather than adding forwarding compatibility wrappers",
         "engine/src/plugins/gpu/api/capability.rs and context limit/admission facts",
         "engine/src/plugins/gpu/api/program/runtime_binding/**",
-        "engine/src/plugins/gpu/backend/wgpu/adapter_mapping.rs and device_request.rs for normalized fact mapping only",
+        "engine/src/plugins/gpu/backend/wgpu/adapter_mapping.rs and device_request.rs for exact normalized fact mapping/request plus the narrow RunenGPU-owned indirect-validation instance invariant",
         "engine/src/plugins/gpu/backend/wgpu/program_binding_realization/** for static/dynamic physical identity correction",
         "focused renderer adapters/plans only where duplicate GPU execution/access authority must be removed or mechanically adapted",
         "focused tests/structural guards/documentation required by the accepted design",
@@ -188,7 +210,7 @@ PhaseImplementationSpec(
         "No final renderer raw execution seam deletion unless it becomes genuinely unused as a direct consequence; G5C remains the named deletion gate.",
         "No mesh/ray/sparse/multi-queue/native-passthrough feature expansion.",
         "No external dornglut/runen-gpu repository creation or source transfer.",
-        "No compatibility aliases for superseded capability/bind-group semantics.",
+        "No public WGPU instance/debug/validation toggle API and no compatibility aliases for superseded capability/bind-group semantics.",
     ],
 
     validation: [
@@ -204,8 +226,8 @@ PhaseImplementationSpec(
 
     acceptance: [
         "All required proofs pass on one unchanged reviewed feature head.",
-        "G5A contains no G5B/G7A/G5C/extraction implementation or accidental backend API expansion.",
-        "The old IndirectDraw capability and dynamic-offset-in-physical-key authority are cleanly absent.",
+        "G5A contains no G5B/G7A/G5C/extraction implementation or accidental public backend API expansion.",
+        "The old IndirectDraw capability, environment-weakenable indirect semantics, open-ended G5A limit list, and dynamic-offset-in-physical-key authority are cleanly absent.",
         "Generic compute/render/Upload/Readback work is semantically execution-complete enough that G5B can implement backend execution without inventing operation meaning.",
         "Accepted-main push validation succeeds after guarded merge.",
         "Only after accepted G5A may one bounded G5B planning/implementation handoff activate from fresh accepted main.",
