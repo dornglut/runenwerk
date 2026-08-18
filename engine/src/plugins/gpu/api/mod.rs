@@ -13,6 +13,7 @@ mod program;
 mod realization;
 mod render_execution;
 mod render_pass;
+mod render_pass_usage;
 mod resource;
 mod work;
 mod work_resource_id;
