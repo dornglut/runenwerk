@@ -626,7 +626,7 @@ mod tests {
     }
 
     #[test]
-    fn gpu_primitives_4097_scan_lowers_typed_temporaries_and_inferred_stage_order() {
+    fn gpu_primitives_4097_scan_lowers_typed_temporaries_and_compute_recipes() {
         let (flow, input) = RenderFlow::new("test.primitive.4097")
             .storage_array::<U32ScanElement>("scan.input", 4097)
             .expect("scan input should be valid");
@@ -691,45 +691,27 @@ mod tests {
             }));
         }
 
-        let prepared = compiled
-            .structural_work()
-            .expect("compiled primitive flow should retain G3 work")
-            .graph();
-        assert_eq!(prepared.nodes().len(), 5);
-        assert!(prepared.nodes().iter().all(|prepared_node| {
-            matches!(
-                prepared_node.node().operation(),
-                crate::plugins::gpu::GpuWorkOperation::Compute(_)
-            )
-        }));
-        let accessed_temporary_ids = prepared
-            .nodes()
+        let compute_passes = compiled
+            .execution
+            .passes
             .iter()
-            .flat_map(|prepared_node| prepared_node.node().accesses())
-            .filter_map(|access| match access {
-                crate::plugins::gpu::GpuResourceAccess::Buffer(access)
-                    if temporary_ids.contains(&access.resource_identity()) =>
-                {
-                    Some(access.resource_identity())
-                }
+            .filter_map(|pass| match pass {
+                CompiledPassExecutionPlan::Compute(value) => Some(value),
                 _ => None,
             })
-            .collect::<BTreeSet<_>>();
-        assert_eq!(accessed_temporary_ids, temporary_ids);
-        assert!(prepared.dependencies().iter().all(|dependency| {
-            dependency.reasons().iter().all(|reason| {
-                !matches!(
-                    reason,
-                    crate::plugins::gpu::GpuDependencyReason::ExplicitNonData { .. }
-                )
-            })
-        }));
-        assert!(prepared.topological_order().windows(2).all(|pair| {
-            prepared
-                .dependencies()
+            .collect::<Vec<_>>();
+        assert_eq!(compute_passes.len(), 5);
+        assert!(
+            compute_passes
+                .windows(2)
+                .all(|pair| pair[0].authoring_index < pair[1].authoring_index)
+        );
+        assert!(
+            compiled
+                .render_passes
                 .iter()
-                .any(|dependency| dependency.before() == pair[0] && dependency.after() == pair[1])
-        }));
+                .all(|pass| pass.node().non_data_order_after.is_empty())
+        );
     }
 
     #[test]
@@ -867,18 +849,6 @@ mod tests {
             .validate()
             .expect("primitive flow should validate");
         let compiled = compile_flow_plan(&flow).expect("primitive flow should compile");
-        let prepared = compiled
-            .structural_work()
-            .expect("compiled primitive flow should retain G3 work")
-            .graph();
-        assert!(prepared.dependencies().iter().all(|dependency| {
-            dependency.reasons().iter().all(|reason| {
-                !matches!(
-                    reason,
-                    crate::plugins::gpu::GpuDependencyReason::ExplicitNonData { .. }
-                )
-            })
-        }));
 
         let compute_passes = compiled
             .execution
@@ -900,6 +870,12 @@ mod tests {
                     && constant.value == GpuSpecializationValue::U32(130)
             })
         }));
+        assert!(
+            compiled
+                .render_passes
+                .iter()
+                .all(|pass| pass.node().non_data_order_after.is_empty())
+        );
 
         let draw = compiled
             .execution
