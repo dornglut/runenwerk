@@ -217,6 +217,7 @@ impl GpuPrimitiveDispatchPlanBuilder {
     ) -> Result<(), E>
     where
         F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
+        E: From<GpuPrimitiveValidationError>,
     {
         match step {
             GpuPrimitiveStep::CounterReset(step) => self.push_counter_reset(step_index, step),
@@ -259,6 +260,7 @@ impl GpuPrimitiveDispatchPlanBuilder {
     ) -> Result<(), E>
     where
         F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
+        E: From<GpuPrimitiveValidationError>,
     {
         let mut levels = Vec::<PrefixScanLevel>::new();
         let mut input = step.input.clone();
@@ -457,6 +459,7 @@ impl GpuPrimitiveDispatchPlanBuilder {
     ) -> Result<GpuBufferHandle, E>
     where
         F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
+        E: From<GpuPrimitiveValidationError>,
     {
         let label = self.temporary_label(step_index, step_label, level_index, suffix);
         if let Some(existing) = self
@@ -943,7 +946,7 @@ mod tests {
         let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
         requirements
             .insert(GpuCapabilityRequirement::Required(
-                GpuCapabilityFeature::IndirectDraw,
+                GpuCapabilityFeature::IndirectExecution,
             ))
             .expect("primitive runtime requirements should remain coherent");
         let context = match pollster::block_on(GpuContext::request(GpuContextDescriptor::new(
@@ -960,7 +963,7 @@ mod tests {
             .is_enabled(GpuCapabilityFeature::Compute)
             || !context
                 .device_facts()
-                .is_enabled(GpuCapabilityFeature::IndirectDraw)
+                .is_enabled(GpuCapabilityFeature::IndirectExecution)
         {
             return;
         }
