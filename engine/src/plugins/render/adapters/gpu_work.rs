@@ -33,11 +33,15 @@ pub enum RenderGpuWorkAdapterError {
     )]
     ResourceIdentityConflict { resource_id: GpuWorkResourceId },
     #[error("resolved render GPU work contains duplicate execution occurrence '{occurrence}'")]
-    DuplicateOccurrence { occurrence: RenderGpuWorkOccurrenceId },
+    DuplicateOccurrence {
+        occurrence: RenderGpuWorkOccurrenceId,
+    },
     #[error(
         "resolved render control order references occurrence '{occurrence}' that is absent from this invocation's GPU work"
     )]
-    MissingOrderedOccurrence { occurrence: RenderGpuWorkOccurrenceId },
+    MissingOrderedOccurrence {
+        occurrence: RenderGpuWorkOccurrenceId,
+    },
     #[error("prepared render node '{node_id}' has no execution sidecar payload")]
     MissingSidecarPayload { node_id: GpuPreparedWorkNodeId },
     #[error("prepared render node '{node_id}' received duplicate execution sidecar payload")]
