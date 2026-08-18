@@ -1,14 +1,16 @@
 use super::work::{
-    GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation, GpuCopyOperation,
-    GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation, GpuQueryResolveOperation,
-    GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+    GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
+    GpuCopyOperation, GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation,
+    GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+    GpuTextureCopyRegion,
 };
 use super::{
-    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirementError,
-    GpuCapabilityRequirements, GpuDepthStencilAccess, GpuQueryAccess, GpuQueryAccessKind,
-    GpuReadbackOperation, GpuRenderDraw, GpuRenderPassSignature, GpuResourceAccess,
-    GpuUploadOperation, GpuWorkOperationCause, GpuWorkOperationError,
-    render_pass_usage::validate_render_pass_usage_scope,
+    GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuCapabilityFeature,
+    GpuCapabilityRequirement, GpuCapabilityRequirementError, GpuCapabilityRequirements,
+    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryAccessKind, GpuReadbackOperation,
+    GpuRenderDraw, GpuRenderPassSignature, GpuResourceAccess, GpuTextureAccess,
+    GpuTextureAccessKind, GpuTextureAccessResource, GpuUploadOperation, GpuWorkOperationCause,
+    GpuWorkOperationError, render_pass_usage::validate_render_pass_usage_scope,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -255,8 +257,8 @@ impl GpuWorkOperation {
                 Ok(accesses)
             }
             Self::Render(operation) => Ok(operation.accesses().to_vec()),
-            Self::Copy(operation) => operation.derived_accesses(),
-            Self::Clear(operation) => operation.derived_accesses(),
+            Self::Copy(operation) => copy_derived_accesses(operation),
+            Self::Clear(operation) => clear_derived_accesses(operation),
             Self::Resolve(operation) => Ok(vec![
                 GpuResourceAccess::Query(operation.source_access().clone()),
                 GpuResourceAccess::Buffer(operation.destination_access().clone()),
@@ -374,4 +376,198 @@ impl GpuWorkOperation {
         }
         Ok(requirements)
     }
+}
+
+fn copy_derived_accesses(
+    operation: &GpuCopyOperation,
+) -> Result<Vec<GpuResourceAccess>, GpuWorkOperationError> {
+    match operation {
+        GpuCopyOperation::BufferToBuffer {
+            source,
+            destination,
+        } => Ok(vec![
+            GpuResourceAccess::Buffer(copy_buffer_access(
+                source.buffer(),
+                source.range(),
+                GpuBufferAccessKind::CopySource,
+                "derive GPU buffer copy source access",
+            )?),
+            GpuResourceAccess::Buffer(copy_buffer_access(
+                destination.buffer(),
+                destination.range(),
+                GpuBufferAccessKind::CopyDestination,
+                "derive GPU buffer copy destination access",
+            )?),
+        ]),
+        GpuCopyOperation::BufferToTexture {
+            source,
+            destination,
+        } => Ok(vec![
+            GpuResourceAccess::Buffer(copy_buffer_layout_access(
+                source,
+                destination,
+                GpuBufferAccessKind::CopySource,
+            )?),
+            GpuResourceAccess::Texture(copy_texture_access(
+                destination,
+                GpuTextureAccessKind::CopyDestination,
+            )?),
+        ]),
+        GpuCopyOperation::TextureToBuffer {
+            source,
+            destination,
+        } => Ok(vec![
+            GpuResourceAccess::Texture(copy_texture_access(
+                source,
+                GpuTextureAccessKind::CopySource,
+            )?),
+            GpuResourceAccess::Buffer(copy_buffer_layout_access(
+                destination,
+                source,
+                GpuBufferAccessKind::CopyDestination,
+            )?),
+        ]),
+        GpuCopyOperation::TextureToTexture {
+            source,
+            destination,
+        } => Ok(vec![
+            GpuResourceAccess::Texture(copy_texture_access(
+                source,
+                GpuTextureAccessKind::CopySource,
+            )?),
+            GpuResourceAccess::Texture(copy_texture_access(
+                destination,
+                GpuTextureAccessKind::CopyDestination,
+            )?),
+        ]),
+    }
+}
+
+fn clear_derived_accesses(
+    operation: &GpuClearOperation,
+) -> Result<Vec<GpuResourceAccess>, GpuWorkOperationError> {
+    match operation {
+        GpuClearOperation::BufferZero(region) => Ok(vec![GpuResourceAccess::Buffer(
+            GpuBufferAccess::new(
+                region.buffer(),
+                region.range(),
+                GpuBufferAccessKind::CopyDestination,
+            )
+            .map_err(|source| {
+                GpuWorkOperationError::from_access(
+                    "derive GPU buffer-zero access",
+                    region.buffer().descriptor().common().label().as_str(),
+                    GpuWorkOperationCause::OperationAccessContradiction,
+                    "construct buffer-zero work through the checked constructor",
+                    source,
+                )
+            })?,
+        )]),
+    }
+}
+
+fn copy_buffer_access(
+    buffer: &super::GpuBufferHandle,
+    range: GpuBufferRange,
+    kind: GpuBufferAccessKind,
+    operation: &'static str,
+) -> Result<GpuBufferAccess, GpuWorkOperationError> {
+    GpuBufferAccess::new(buffer, range, kind).map_err(|source| {
+        GpuWorkOperationError::from_access(
+            operation,
+            buffer.descriptor().common().label().as_str(),
+            GpuWorkOperationCause::InvalidCopyRegion,
+            "declare matching copy usage and checked coverage",
+            source,
+        )
+    })
+}
+
+fn copy_texture_access(
+    region: &GpuTextureCopyRegion,
+    kind: GpuTextureAccessKind,
+) -> Result<GpuTextureAccess, GpuWorkOperationError> {
+    GpuTextureAccess::new(
+        GpuTextureAccessResource::Texture(region.texture().clone()),
+        region.subresources(),
+        kind,
+    )
+    .map_err(|source| {
+        GpuWorkOperationError::from_access(
+            "derive GPU texture copy access",
+            region.texture().descriptor().common().label().as_str(),
+            GpuWorkOperationCause::InvalidCopyRegion,
+            "declare matching texture copy usage and checked coverage",
+            source,
+        )
+    })
+}
+
+fn copy_buffer_layout_access(
+    layout: &GpuBufferTextureLayout,
+    texture: &GpuTextureCopyRegion,
+    kind: GpuBufferAccessKind,
+) -> Result<GpuBufferAccess, GpuWorkOperationError> {
+    let extent = texture.extent();
+    let logical_row = extent
+        .width()
+        .checked_mul(texture.texture().descriptor().format().bytes_per_texel())
+        .ok_or_else(|| copy_layout_error(layout, "reduce the copy width"))?;
+    if layout.bytes_per_row() < logical_row
+        || (extent.depth_or_layers() > 1 && layout.rows_per_image() < extent.height())
+        || (extent.depth_or_layers() == 1
+            && layout.rows_per_image() != 0
+            && layout.rows_per_image() < extent.height())
+    {
+        return Err(copy_layout_error(
+            layout,
+            "provide bytes-per-row and rows-per-image covering the complete logical copy",
+        ));
+    }
+    let image_rows = if extent.depth_or_layers() > 1 {
+        layout.rows_per_image()
+    } else {
+        0
+    };
+    let image_stride = u64::from(layout.bytes_per_row())
+        .checked_mul(u64::from(image_rows))
+        .ok_or_else(|| copy_layout_error(layout, "reduce the logical image stride"))?;
+    let preceding_images = u64::from(extent.depth_or_layers() - 1)
+        .checked_mul(image_stride)
+        .ok_or_else(|| copy_layout_error(layout, "reduce the copy depth or layer count"))?;
+    let preceding_rows = u64::from(extent.height() - 1)
+        .checked_mul(u64::from(layout.bytes_per_row()))
+        .ok_or_else(|| copy_layout_error(layout, "reduce the copy height"))?;
+    let size = preceding_images
+        .checked_add(preceding_rows)
+        .and_then(|value| value.checked_add(u64::from(logical_row)))
+        .ok_or_else(|| copy_layout_error(layout, "reduce the logical copy byte coverage"))?;
+    let range = GpuBufferRange::new(layout.buffer(), layout.byte_offset(), size).map_err(|source| {
+        GpuWorkOperationError::from_access(
+            "derive GPU buffer-texture layout access",
+            layout.buffer().descriptor().common().label().as_str(),
+            GpuWorkOperationCause::InvalidCopyLayout,
+            "keep the complete logical row and image coverage inside the buffer",
+            source,
+        )
+    })?;
+    copy_buffer_access(
+        layout.buffer(),
+        range,
+        kind,
+        "derive GPU buffer-texture copy access",
+    )
+}
+
+fn copy_layout_error(
+    layout: &GpuBufferTextureLayout,
+    correction: &'static str,
+) -> GpuWorkOperationError {
+    GpuWorkOperationError::invalid(
+        "derive GPU buffer-texture layout access",
+        layout.buffer().descriptor().common().label().as_str(),
+        Some(layout.buffer().diagnostic_identity()),
+        GpuWorkOperationCause::InvalidCopyLayout,
+        correction,
+    )
 }
