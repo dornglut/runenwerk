@@ -11,6 +11,7 @@ mod handles;
 mod pipeline_realization;
 mod program;
 mod realization;
+mod render_execution;
 mod resource;
 mod work;
 mod work_resource_id;
@@ -27,6 +28,7 @@ pub use handles::*;
 pub use pipeline_realization::*;
 pub use program::*;
 pub use realization::*;
+pub use render_execution::*;
 pub use resource::*;
 pub use work::*;
 pub use work_resource_id::{
