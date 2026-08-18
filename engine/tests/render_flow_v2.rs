@@ -298,12 +298,12 @@ fn render_flow_compiler_requires_indirect_draw_capability() {
 
     let error = compile_flow_plan_checked(
         &flow,
-        &capabilities_without(GpuCapabilityFeature::IndirectDraw),
+        &capabilities_without(GpuCapabilityFeature::IndirectExecution),
     )
     .expect_err("indirect draw must require normalized capability support");
     assert!(error.diagnostics.iter().any(|diagnostic| {
         diagnostic.kind == RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch
-            && diagnostic.capability.as_deref() == Some("feature::IndirectDraw")
+            && diagnostic.capability.as_deref() == Some("feature::IndirectExecution")
     }));
 }
 
