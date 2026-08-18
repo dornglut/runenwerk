@@ -677,6 +677,17 @@ fn operation_initialization(
         |access: &GpuResourceAccess| effects.push(initialization_region_for_access(access));
     match operation {
         GpuWorkOperation::Compute(compute) => {
+            let shader_may_execute = compute.dispatch().direct_size().is_none_or(|size| {
+                size.as_array().into_iter().all(|dimension| dimension != 0)
+            });
+            if shader_may_execute {
+                for access in compute.bindings().accesses().iter().filter(|access| access.reads()) {
+                    require(access);
+                }
+            }
+            if let Some(arguments) = compute.dispatch().indirect_access() {
+                require(&GpuResourceAccess::Buffer(arguments.clone()));
+            }
             for timestamp in compute.timestamp_writes() {
                 effect(&GpuResourceAccess::Query(timestamp.clone()));
             }
@@ -923,7 +934,6 @@ fn texture_copy_is_complete(region: &GpuTextureCopyRegion) -> bool {
     }
     match descriptor.dimension() {
         GpuTextureDimension::D1 => origin.z() == 0 && extent.depth_or_layers() == 1,
-        // The checked subresource range carries the exact selected array layers.
         GpuTextureDimension::D2 => true,
         GpuTextureDimension::D3 => {
             origin.z() == 0
