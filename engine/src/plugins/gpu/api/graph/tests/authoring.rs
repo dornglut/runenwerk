@@ -456,127 +456,27 @@ fn duplicate_resource_declaration_is_transactional_and_authoring_can_continue() 
 }
 
 #[test]
-fn lexical_compute_authors_checked_storage_accesses_and_dispatch() {
-    let mut allocator = allocator();
-    let positions = buffer(
-        &mut allocator,
-        "positions",
-        GpuBufferInitialization::Zeroed,
-        [GpuBufferUsage::Storage],
-    );
-    let next_positions = buffer(
-        &mut allocator,
-        "next positions",
-        GpuBufferInitialization::Zeroed,
-        [GpuBufferUsage::Storage],
-    );
-    let fragment = GpuWorkFragment::build("simulation.update", |work| {
-        work.compute("integrate", |node| {
-            node.storage_read(&positions, GpuBufferRange::whole(&positions)?)?;
-            node.storage_write(&next_positions, GpuBufferRange::whole(&next_positions)?)?;
-            node.dispatch([4, 1, 1])?;
-            Ok(())
-        })?;
-        Ok(())
-    })
-    .unwrap();
+fn canonical_compute_builder_accepts_only_execution_complete_operation_state() {
+    let operation = compute_operation_with_dispatch(GpuDispatchSize::new(4, 1, 1).unwrap());
+    let GpuWorkOperation::Compute(compute) = operation.clone() else {
+        panic!("test fixture must create compute work");
+    };
+    let mut fragment = builder("canonical compute");
+    let node_id = fragment.compute("integrate", compute).unwrap();
+    assert_eq!(node_id.diagnostic_local(), 1);
 
-    assert_eq!(fragment.resources().len(), 2);
+    let fragment = fragment.finish().unwrap();
     let node = &fragment.nodes()[0];
+    assert_eq!(node.operation(), &operation);
     assert!(matches!(
         node.operation(),
-        GpuWorkOperation::Compute(operation) if operation.dispatch().as_array() == [4, 1, 1]
+        GpuWorkOperation::Compute(operation)
+            if operation.dispatch().direct_size().is_some_and(|size| size.as_array() == [4, 1, 1])
     ));
-    assert_eq!(node.accesses().len(), 2);
-    assert!(node.accesses().iter().any(|access| matches!(
-        access,
-        GpuResourceAccess::Buffer(access)
-            if access.buffer() == &positions
-                && access.kind() == GpuBufferAccessKind::StorageRead
-    )));
-    assert!(node.accesses().iter().any(|access| matches!(
-        access,
-        GpuResourceAccess::Buffer(access)
-            if access.buffer() == &next_positions
-                && access.kind() == GpuBufferAccessKind::StorageWrite
-    )));
-}
-
-#[test]
-fn lexical_compute_failure_is_structured_transactional_and_does_not_consume_identity() {
-    let mut fragment = builder("lexical failure");
-    let error = fragment
-        .compute("invalid dispatch", |node| {
-            node.dispatch([1, 1, 1])?;
-            node.dispatch([2, 1, 1])?;
-            Ok(())
-        })
-        .unwrap_err();
-    assert_eq!(
-        error.cause(),
-        GpuWorkAuthoringCause::OperationAccessContradiction
-    );
-
-    let node = fragment
-        .compute("valid dispatch", |node| {
-            node.dispatch([2, 1, 1])?;
-            Ok(())
-        })
-        .unwrap();
-    assert_eq!(node.diagnostic_local(), 1);
-    assert_eq!(fragment.finish().unwrap().nodes().len(), 1);
-}
-
-#[test]
-fn lexical_and_advanced_compute_share_operation_access_and_requirement_authority() {
-    let mut allocator = allocator();
-    let buffer = buffer(
-        &mut allocator,
-        "shared compute storage",
-        GpuBufferInitialization::Zeroed,
-        [GpuBufferUsage::Storage],
-    );
-    let range = GpuBufferRange::whole(&buffer).unwrap();
-    let mut lexical = builder("lexical compute");
-    lexical
-        .compute("integrate", |node| {
-            node.storage_read(&buffer, range)?;
-            node.dispatch([3, 2, 1])?;
-            Ok(())
-        })
-        .unwrap();
-
-    let mut advanced = builder("advanced compute");
-    advanced
-        .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
-        .unwrap();
-    advanced
-        .add_node(
-            label("integrate"),
-            GpuWorkOperation::Compute(GpuComputeOperation::new(
-                GpuDispatchSize::new(3, 2, 1).unwrap(),
-            )),
-            [buffer_access(
-                &buffer,
-                range,
-                GpuBufferAccessKind::StorageRead,
-            )],
-            GpuCapabilityRequirements::new(),
-            GpuExecutionPreference::Automatic,
-            provenance("integrate"),
-        )
-        .unwrap();
-
-    let lexical = lexical.finish().unwrap();
-    let advanced = advanced.finish().unwrap();
-    let lexical = &lexical.nodes()[0];
-    let advanced = &advanced.nodes()[0];
-    assert_eq!(lexical.operation(), advanced.operation());
-    assert_eq!(lexical.accesses(), advanced.accesses());
-    assert_eq!(lexical.requirements(), advanced.requirements());
-    assert_eq!(
-        lexical.execution_preference(),
-        advanced.execution_preference()
+    assert!(
+        node.requirements()
+            .get(GpuCapabilityFeature::Compute)
+            .is_some()
     );
 }
 
