@@ -82,11 +82,15 @@ engine/src/plugins/render/renderer/render_flow/execute_passes.rs
 engine/src/plugins/render/renderer/render_flow/gpu_timing.rs
 ```
 
+The exact current `GpuContext` is non-`Clone` and owns one private `WgpuContextState`. Any future
+caller-clonable execution observation/prepared handles therefore need explicit detached/shared state;
+they must not accidentally extend `GpuContext` ownership merely because they are observable.
+
 ### WGPU/WebGPU 30 behavior
 
 Primary-source review covered WGPU 30 `Queue`, `ComputePass`, `RenderPass`, `Limits`,
-`DownlevelFlags`, dynamic-offset behavior, mapping/progress behavior, and the current WebGPU usage
-scope and dispatch rules.
+`DownlevelFlags`, `InstanceDescriptor`/`InstanceFlags`, dynamic-offset behavior, mapping/progress
+behavior, and the current WebGPU usage-scope and dispatch rules.
 
 External behavior is evidence only. RunenGPU owns the public contract.
 
@@ -128,6 +132,10 @@ from zero through the admitted per-dimension maximum; a zero dimension produces 
 invocations. The RunenGPU rejection is therefore an accidental policy ceiling rather than a required
 portable semantic rule.
 
+Each compute dispatch is also one WebGPU usage scope. Effective bound resources participate in that
+scope even when the invocation grid is empty. G5 therefore needs per-dispatch writable-binding alias
+validation in addition to G3 inter-node hazards; zero work cannot bypass that validation.
+
 ### Render work is not executable yet
 
 `GpuRenderOperation` owns attachments, draw intents and timestamps, but a draw does not yet own its
@@ -150,6 +158,25 @@ If G5 accepts indirect compute, keeping the public capability name `IndirectDraw
 backend-neutral fact falsely render-specific. The clean semantic correction is one normalized
 `IndirectExecution` capability used by both indirect draw and indirect dispatch; no compatibility
 alias should survive the cutover.
+
+### Indirect runtime validity is currently vulnerable to backend configuration
+
+WGPU 30's `InstanceFlags::VALIDATION_INDIRECT_CALL` validates indirect argument-buffer contents and
+turns invalid indirect draw/dispatch calls into no-ops. Its own documentation states that behavior is
+undefined for invalid indirect arguments if that validation is disabled.
+
+The accepted RunenGPU context path currently creates the WGPU instance with
+`InstanceDescriptor::new_without_display_handle_from_env()`. WGPU environment processing can unset
+`VALIDATION_INDIRECT_CALL` through `WGPU_VALIDATION_INDIRECT_CALL=0`.
+
+That means merely renaming the public capability to `IndirectExecution` is insufficient: without a
+private invariant, the same admitted RunenGPU program could have defined no-op semantics in one
+process environment and undefined backend behavior in another.
+
+G5A must therefore make portable invalid-indirect-call behavior part of the normalized capability
+contract and force/prove the required private WGPU mechanism after environment options are resolved.
+Environment/debug configuration may tune diagnostics but may not weaken accepted RunenGPU semantics.
+A backend unable to provide an equivalent guarantee cannot admit `IndirectExecution`.
 
 ### Color clear semantics are accidentally normalized-color-only
 
@@ -194,10 +221,29 @@ max_vertex_buffers
 max_bindings_per_group
 ```
 
-WGPU 30 has device-dependent execution constraints that G5 can know before encoding, including at
-least compute workgroups per dimension, bind-group count, and the combined bind-group/vertex-buffer
-limit. G5 must add only the normalized limits required by accepted RunenGPU semantics; it must not
-mirror the entire WGPU `Limits` struct mechanically.
+The first planning draft said G5 needed "at least" compute workgroups per dimension, bind-group count,
+and the combined bind-group/vertex-buffer limit. Acceptance review rejected that wording as
+non-decision-complete: implementation would still have to choose public/admitted limit vocabulary.
+
+For the G5A operations actually accepted by this plan, the exact additional normalized set is:
+
+```text
+max_texture_dimension_2d
+max_bind_groups
+max_bind_groups_plus_vertex_buffers
+max_dynamic_uniform_buffers_per_pipeline_layout
+max_dynamic_storage_buffers_per_pipeline_layout
+max_compute_workgroups_per_dimension
+```
+
+These cover explicit viewport bounds, complete runtime binding/pipeline-layout use, simultaneous
+render bind-group + vertex-buffer slots, dynamic buffer declarations, and compute dispatch. Existing
+binding-size/count, vertex-buffer, color-attachment, and dynamic-alignment facts remain owners of
+their already-normalized constraints.
+
+Other WGPU limits are not implicitly authorized. If implementation proves one of G5A's accepted new
+public operations still has a pre-encoding device-limit rejection absent from this closed set, that
+is a planning defect requiring amendment, not permission to mirror WGPU opportunistically.
 
 ### The renderer still owns the final raw operation interval
 
@@ -245,11 +291,18 @@ submission can strand writes for a later submit.
 
 ### Direct and indirect dispatch
 
-WebGPU direct dispatch validates each dimension only against the device's
+WebGPU direct dispatch validates each dimension against the device's
 `maxComputeWorkgroupsPerDimension`; zero is valid and means an empty invocation grid.
 
 Indirect dispatch reads exactly three tightly packed `u32` workgroup counts (12 bytes) from an
-indirect buffer. WGPU's downlevel `INDIRECT_EXECUTION` fact covers both indirect draws and dispatches.
+indirect buffer. Runtime validity is evaluated on GPU/backend execution data rather than by host
+planning. Invalid runtime indirect arguments are a non-executing indirect operation under the
+portable contract; they are not permission for undefined native behavior.
+
+WGPU's downlevel `INDIRECT_EXECUTION` fact covers both indirect draws and dispatches, while WGPU's
+private `VALIDATION_INDIRECT_CALL` mechanism is what preserves defined no-op behavior for invalid
+runtime argument contents on its native backends. Because WGPU allows that mechanism to be changed by
+environment configuration, RunenGPU must restore/force it privately or reject the capability.
 
 Therefore a backend-neutral G5 compute intent can support:
 
@@ -258,9 +311,9 @@ Direct { x, y, z }
 Indirect { buffer, offset }
 ```
 
-with one normalized indirect-execution capability.
+with one normalized indirect-execution capability and one portable runtime-validity guarantee.
 
-### Render usage scopes
+### Compute and render usage scopes
 
 WebGPU defines:
 
@@ -270,13 +323,18 @@ WebGPU defines:
 - attachment/attachment combinations as pass-compatible where subresources themselves are valid;
 - overlapping writable bindings in one effective draw/dispatch as an aliasing error.
 
-RunenGPU therefore needs both:
+RunenGPU therefore needs both compute-dispatch-local writable alias validation and the render split:
 
 ```text
-pass-wide usage compatibility
+compute dispatch usage/alias validation
+
+render pass-wide usage compatibility
 !=
 draw-local writable-binding alias validation
 ```
+
+Zero direct dispatch and runtime-invalid indirect dispatch still retain the conservative binding usage
+scope even though they perform no shader invocations.
 
 ### Dynamic offsets
 
@@ -366,9 +424,10 @@ cancellation or abandonment.
 - leaves already accepted submissions observable/progressable until terminal;
 - never depends on callers dropping prepared handles.
 
-Last-`GpuContext` Drop is distinct from graceful shutdown. It is an abrupt owner loss: nonterminal
-accepted observations terminalize with a structured context-drop failure and no public promise is
-made that the hardware work was synchronously cancelled. Detached terminal observation data may
+Last-`GpuContext` Drop is distinct from graceful shutdown. It is an abrupt, nonblocking owner loss:
+nonterminal accepted observations terminalize with a structured context-drop failure, no public
+promise is made that hardware work was synchronously cancelled, and private backend/driver lifetime
+rules remain responsible for already-issued physical work. Detached terminal observation data may
 outlive the backend, but it cannot retain device/queue execution authority.
 
 ## Submission acceptance finding
@@ -404,15 +463,17 @@ This keeps Rust ownership, pressure handling and observation truth aligned.
 G5A should be the only first implementation slice activated from accepted planning. It owns:
 
 - executable compute pipeline/binding/dispatch intent;
+- compute-dispatch usage/writable-alias validation;
 - executable render draws with pipeline, bindings, vertex/index state and explicit dynamic state;
 - graph-visible Upload and Readback logical operations;
 - exact access derivation from runtime bindings and transfer operations;
 - pass-wide versus draw-local render usage validation;
 - direct zero-dispatch semantics;
-- indirect dispatch and the clean `IndirectExecution` capability correction;
+- indirect dispatch plus the clean `IndirectExecution` capability and private runtime-validity
+  enforcement correction;
 - target-format-aware color clear semantics;
 - static physical bind-group identity separated from dynamic per-use offsets;
-- execution-required normalized limit vocabulary;
+- the closed six-field execution-required normalized limit addition;
 - deletion of duplicate renderer GPU execution semantics where G5A becomes authoritative.
 
 G5A does **not** submit work.
@@ -480,6 +541,18 @@ WebGPU/native progress differences consumer policy.
 Rejected. It would duplicate operation/order/resource truth. Private backend encoding may build local
 command structures, but they are derived implementation state only.
 
+### Let environment/debug flags weaken indirect semantics
+
+Rejected. WGPU's indirect-call validation setting is a private implementation mechanism whose absence
+can make invalid indirect arguments undefined. A public `IndirectExecution` capability cannot change
+meaning because `WGPU_VALIDATION_INDIRECT_CALL=0` was present in the process environment.
+
+### Keep an open-ended G5A limit list
+
+Rejected. "At least" leaves API/admission design to implementation. The six newly required normalized
+fields are closed in planning; another required execution limit is evidence that planning must be
+amended.
+
 ### Keep dynamic offsets in realized bind-group identity
 
 Rejected. The backend object does not encode the dynamic offset; retaining it in the physical key
@@ -529,6 +602,7 @@ implementation slice after owner review:
 G5A executable logical work closure
 ```
 
-G5A must complete operation meaning and the static/dynamic binding cutover before G5B takes ownership
-of backend execution. G5B must prove reusable headless execution before G7A surface foundation and
-G5C renderer cutover. The durable roadmap sequence remains unchanged.
+G5A must complete operation meaning, compute/draw usage validation, indirect runtime-validity
+semantics, the closed execution-limit vocabulary, and the static/dynamic binding cutover before G5B
+takes ownership of backend execution. G5B must prove reusable headless execution before G7A surface
+foundation and G5C renderer cutover. The durable roadmap sequence remains unchanged.
