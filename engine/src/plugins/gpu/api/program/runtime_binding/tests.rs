@@ -4,11 +4,11 @@ use super::{
 };
 use crate::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingProvenance, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
-    GpuBufferUsage, GpuBufferUsages, GpuMemoryIntent, GpuPipelineLayoutDescriptor,
-    GpuProgramContractCause, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
-    GpuResourceLifetime, GpuResourceProvenance, GpuShaderStage, GpuShaderStages,
-    GpuStorageBufferAccess, GpuWorkResourceIdAllocator,
+    GpuBindingProvenance, GpuBufferAccessKind, GpuBufferDescriptor, GpuBufferHandle,
+    GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuMemoryIntent,
+    GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuReconstruction, GpuResourceAccess,
+    GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
+    GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess, GpuWorkResourceIdAllocator,
 };
 use core::num::{NonZeroU32, NonZeroU64};
 
@@ -141,6 +141,13 @@ fn runtime_binding_set_is_complete_pipeline_shaped_logical_use() {
     assert_eq!(bindings.groups().len(), 1);
     assert!(bindings.group(0).is_some());
     assert_eq!(bindings.values().count(), 1);
+    assert_eq!(bindings.accesses().len(), 1);
+    let GpuResourceAccess::Buffer(access) = &bindings.accesses()[0] else {
+        panic!("storage runtime binding must derive one buffer access");
+    };
+    assert_eq!(access.kind(), GpuBufferAccessKind::StorageReadWrite);
+    assert_eq!(access.range().offset(), 16);
+    assert_eq!(access.range().size(), 32);
 }
 
 #[test]
