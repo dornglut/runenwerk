@@ -1,8 +1,9 @@
 use super::*;
 use super::logical_timing::LogicalGpuPassTiming;
 use crate::plugins::gpu::{
-    GpuComputeOperation, GpuDispatchIntent, GpuDispatchSize, GpuQueryAccess, GpuQueryAccessKind,
-    GpuQueryRange, GpuWorkOperation,
+    GpuBufferHandle, GpuBufferRange, GpuBufferRegion, GpuComputeOperation, GpuDispatchIntent,
+    GpuDispatchSize, GpuQueryAccess, GpuQueryAccessKind, GpuQueryRange, GpuUploadOperation,
+    GpuWorkOperation, PreparedGpuData, TransferData,
 };
 
 /// Projects one already-realized compute pass into its execution-complete RunenGPU operation.
@@ -46,6 +47,27 @@ pub(super) fn project_compute_operation(
         operation = operation.with_timestamp_writes([timestamp_access(timing, ordinal)?])?;
     }
     Ok(GpuWorkOperation::Compute(operation))
+}
+
+/// Projects an immutable renderer-prepared byte sequence into exact logical CPU→GPU buffer work.
+/// Physical `queue.write_buffer` remains a temporary G5B/G5C realization detail.
+pub(super) fn project_buffer_upload(
+    buffer: &GpuBufferHandle,
+    bytes: &[u8],
+) -> Result<GpuUploadOperation> {
+    let size = u64::try_from(bytes.len())
+        .map_err(|_| anyhow::anyhow!("render GPU upload length exceeds u64"))?;
+    let range = GpuBufferRange::new(buffer, 0, size)?;
+    let region = GpuBufferRegion::new(buffer, range)?;
+    let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
+        format!(
+            "{}.render-upload",
+            buffer.descriptor().common().label().as_str()
+        ),
+        bytes,
+        buffer.descriptor().common().provenance().clone(),
+    )?;
+    Ok(GpuUploadOperation::new(region.into(), payload)?)
 }
 
 pub(super) fn timestamp_access(
