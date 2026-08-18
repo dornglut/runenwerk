@@ -59,13 +59,14 @@ where
             let mut previous_region_occurrence = None;
             for substep_index in 0..schedule.submitted_substeps {
                 for region_pass_id in &region.pass_ids {
-                    let region_pass = passes_by_id.get(region_pass_id).copied().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "fixed-step region '{}' references missing compiled pass '{}'",
-                            region.region_label,
-                            region_pass_id
-                        )
-                    })?;
+                    let region_pass =
+                        passes_by_id.get(region_pass_id).copied().ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "fixed-step region '{}' references missing compiled pass '{}'",
+                                region.region_label,
+                                region_pass_id
+                            )
+                        })?;
                     if !included.get(region_pass_id).copied().unwrap_or(false) {
                         continue;
                     }
@@ -120,7 +121,11 @@ fn lift_explicit_non_data_orders(
         .map(|pass| {
             (
                 pass.pass_id(),
-                pass.node().non_data_order_after.iter().copied().collect::<Vec<_>>(),
+                pass.node()
+                    .non_data_order_after
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
             )
         })
         .collect::<BTreeMap<_, _>>();
@@ -148,7 +153,10 @@ fn lift_explicit_non_data_orders(
                 // occurrence to order after. The authored requirement is vacuously satisfied.
                 continue;
             };
-            if !occurrences[index].control_order_after.contains(&predecessor) {
+            if !occurrences[index]
+                .control_order_after
+                .contains(&predecessor)
+            {
                 occurrences[index].control_order_after.push(predecessor);
             }
         }
@@ -282,22 +290,19 @@ mod tests {
         let plan = fixed_step_test_plan(false);
         let region = &plan.execution.fixed_step_regions[0];
 
-        let zero = expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 0), |_| {
-            Ok(true)
-        })
-        .expect("zero-substep expansion should succeed");
+        let zero =
+            expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 0), |_| Ok(true))
+                .expect("zero-substep expansion should succeed");
         assert!(zero.is_empty());
 
-        let one = expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 1), |_| {
-            Ok(true)
-        })
-        .expect("one-substep expansion should succeed");
+        let one =
+            expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 1), |_| Ok(true))
+                .expect("one-substep expansion should succeed");
         assert_eq!(pass_ids(&one), region.pass_ids);
 
-        let many = expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 3), |_| {
-            Ok(true)
-        })
-        .expect("many-substep expansion should succeed");
+        let many =
+            expand_render_pass_occurrences(&plan, &inputs_for_substeps(&plan, 3), |_| Ok(true))
+                .expect("many-substep expansion should succeed");
         assert_eq!(many.len(), region.pass_ids.len() * 3);
         assert_eq!(&pass_ids(&many)[0..2], region.pass_ids.as_slice());
         assert_eq!(&pass_ids(&many)[2..4], region.pass_ids.as_slice());
@@ -336,7 +341,11 @@ mod tests {
             .expect("filtered expansion should succeed");
 
         assert_eq!(occurrences.len(), 3);
-        assert!(pass_ids(&occurrences).iter().all(|pass| *pass == region.pass_ids[0]));
+        assert!(
+            pass_ids(&occurrences)
+                .iter()
+                .all(|pass| *pass == region.pass_ids[0])
+        );
         assert!(occurrences[0].control_order_after.is_empty());
         assert_eq!(
             occurrences[1].control_order_after,
@@ -355,7 +364,10 @@ mod tests {
         let occurrences = expand_render_pass_occurrences(&plan, &inputs, |_| Ok(true))
             .expect("ordered expansion should succeed");
         let tail = occurrences.last().expect("tail occurrence should exist");
-        assert_eq!(execution_pass_id(tail.pass), plan.execution.passes.last().map(execution_pass_id).unwrap());
+        assert_eq!(
+            execution_pass_id(tail.pass),
+            plan.execution.passes.last().map(execution_pass_id).unwrap()
+        );
         let predecessor = &occurrences[occurrences.len() - 2];
         assert_eq!(
             tail.control_order_after,
