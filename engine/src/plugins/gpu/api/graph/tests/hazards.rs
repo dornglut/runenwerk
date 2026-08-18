@@ -278,19 +278,21 @@ fn partially_overlapping_query_ranges_retain_the_exact_intersection() {
             .unwrap(),
         )
         .unwrap();
+    let GpuWorkOperation::Compute(compute) = compute_operation() else {
+        panic!("test fixture must create compute work");
+    };
+    let compute = compute
+        .with_timestamp_writes([GpuQueryAccess::new(
+            &queries,
+            GpuQueryRange::new(&queries, 0, 6).unwrap(),
+            GpuQueryAccessKind::WriteTimestamp,
+        )
+        .unwrap()])
+        .unwrap();
     fragment
         .add_node(
             label("write queries"),
-            GpuWorkOperation::Compute(
-                GpuComputeOperation::new(GpuDispatchSize::new(1, 1, 1).unwrap())
-                    .with_timestamp_writes([GpuQueryAccess::new(
-                        &queries,
-                        GpuQueryRange::new(&queries, 0, 6).unwrap(),
-                        GpuQueryAccessKind::WriteTimestamp,
-                    )
-                    .unwrap()])
-                    .unwrap(),
-            ),
+            GpuWorkOperation::Compute(compute),
             [],
             GpuCapabilityRequirements::new(),
             GpuExecutionPreference::ComputePreferred,
