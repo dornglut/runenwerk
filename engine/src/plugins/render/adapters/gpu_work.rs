@@ -9,8 +9,8 @@
 //! execution payload.
 
 use crate::plugins::gpu::*;
-use crate::plugins::render::graph::{CompiledPassExecutionPlan, CompiledRenderFlowPlan};
 use crate::plugins::render::RenderPassId;
+use crate::plugins::render::graph::{CompiledPassExecutionPlan, CompiledRenderFlowPlan};
 use std::collections::BTreeMap;
 
 #[derive(Debug, thiserror::Error)]
@@ -179,7 +179,9 @@ impl RenderGpuWorkSidecar {
     fn finish(self, graph: &GpuPreparedWorkGraph) -> Result<Self, RenderGpuWorkAdapterError> {
         for node in graph.nodes() {
             if !self.entries.contains_key(&node.id()) {
-                return Err(RenderGpuWorkAdapterError::MissingSidecarPayload { node_id: node.id() });
+                return Err(RenderGpuWorkAdapterError::MissingSidecarPayload {
+                    node_id: node.id(),
+                });
             }
         }
         if let Some(node_id) = self
