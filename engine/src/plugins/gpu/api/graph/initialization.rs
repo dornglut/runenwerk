@@ -677,11 +677,17 @@ fn operation_initialization(
         |access: &GpuResourceAccess| effects.push(initialization_region_for_access(access));
     match operation {
         GpuWorkOperation::Compute(compute) => {
-            let shader_may_execute = compute.dispatch().direct_size().is_none_or(|size| {
-                size.as_array().into_iter().all(|dimension| dimension != 0)
-            });
+            let shader_may_execute = compute
+                .dispatch()
+                .direct_size()
+                .is_none_or(|size| size.as_array().into_iter().all(|dimension| dimension != 0));
             if shader_may_execute {
-                for access in compute.bindings().accesses().iter().filter(|access| access.reads()) {
+                for access in compute
+                    .bindings()
+                    .accesses()
+                    .iter()
+                    .filter(|access| access.reads())
+                {
                     require(access);
                 }
             }
