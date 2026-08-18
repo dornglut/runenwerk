@@ -1,10 +1,66 @@
 use crate::plugins::gpu::{
-    GpuBindGroupLayoutDescriptor, GpuContextAffinity, GpuObservedFragmentOutputSignature,
-    GpuObservedProgramInterface, GpuObservedVertexInputSignature, GpuPipelineLayoutDescriptor,
-    GpuProgramDescriptor, GpuRuntimeBindingValue,
+    GpuBindGroupLayoutDescriptor, GpuBindingKey, GpuBufferHandle, GpuContextAffinity,
+    GpuObservedFragmentOutputSignature, GpuObservedProgramInterface,
+    GpuObservedVertexInputSignature, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
+    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding,
+    GpuSamplerHandle,
 };
+use core::num::NonZeroU64;
 use std::sync::Arc;
 use wgpu::{BindGroup, BindGroupLayout, PipelineLayout, ShaderModule};
+
+/// Private physical bind-group resource identity. Dynamic offsets are deliberately absent because
+/// WGPU applies them at bind time rather than storing them in the bind-group object.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) enum StaticBindGroupResource {
+    Buffer {
+        handle: GpuBufferHandle,
+        offset: u64,
+        size: NonZeroU64,
+    },
+    TextureView(GpuRuntimeTextureViewBinding),
+    Sampler(GpuSamplerHandle),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) struct StaticBindGroupValue {
+    key: GpuBindingKey,
+    resources: Vec<StaticBindGroupResource>,
+}
+
+impl StaticBindGroupValue {
+    pub(super) fn from_runtime(value: &GpuRuntimeBindingValue) -> Self {
+        let resources = value
+            .resources()
+            .map(|resource| match resource {
+                GpuRuntimeBindingResource::Buffer(buffer) => StaticBindGroupResource::Buffer {
+                    handle: buffer.handle().clone(),
+                    offset: buffer.offset(),
+                    size: buffer.size(),
+                },
+                GpuRuntimeBindingResource::TextureView(view) => {
+                    StaticBindGroupResource::TextureView(view.clone())
+                }
+                GpuRuntimeBindingResource::Sampler(sampler) => {
+                    StaticBindGroupResource::Sampler(sampler.clone())
+                }
+            })
+            .collect();
+        Self {
+            key: value.key(),
+            resources,
+        }
+    }
+}
+
+pub(super) fn static_bind_group_values(
+    values: impl IntoIterator<Item = GpuRuntimeBindingValue>,
+) -> Vec<StaticBindGroupValue> {
+    values
+        .into_iter()
+        .map(|value| StaticBindGroupValue::from_runtime(&value))
+        .collect()
+}
 
 /// One accepted canonical WGSL module plus the normalized evidence required by G4C3.
 pub(crate) struct ProgramRealizationRecord {
@@ -121,11 +177,12 @@ pub(super) enum BindGroupResourceDependency {
     Sampler(Arc<super::super::resource_realization::SamplerRealizationRecord>),
 }
 
-/// One accepted runtime bind-group request and its exact G4C1/G4C2 dependencies.
+/// One physical bind group and its exact G4C1/G4C2 dependencies. Per-use dynamic offsets are not
+/// record state; they remain logical execution-use state above this physical object.
 pub(crate) struct BindGroupRealizationRecord {
     pub(super) affinity: GpuContextAffinity,
     pub(super) layout: Arc<BindGroupLayoutRealizationRecord>,
-    pub(super) values: Vec<GpuRuntimeBindingValue>,
+    pub(super) static_values: Vec<StaticBindGroupValue>,
     pub(super) object: BindGroup,
     #[allow(
         dead_code,
@@ -143,7 +200,7 @@ impl BindGroupRealizationRecord {
         self.layout.descriptor()
     }
 
-    pub(crate) fn values(&self) -> impl ExactSizeIterator<Item = &GpuRuntimeBindingValue> {
-        self.values.iter()
+    pub(super) fn static_values(&self) -> &[StaticBindGroupValue] {
+        &self.static_values
     }
 }
