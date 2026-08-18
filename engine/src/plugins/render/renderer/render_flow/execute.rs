@@ -1,7 +1,5 @@
 use super::*;
-use super::{
-    logical_timing::LogicalGpuPassTiming, occurrences::expand_render_pass_occurrences,
-};
+use super::{logical_timing::LogicalGpuPassTiming, occurrences::expand_render_pass_occurrences};
 use crate::plugins::render::RenderPassId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -250,10 +248,8 @@ impl Renderer {
                         // Resolve render-domain runtime control before any canonical G3 work is
                         // constructed. A skipped pass has no GPU occurrence and therefore no
                         // hidden fixed-step mutation or timestamp slot.
-                        let occurrences = expand_render_pass_occurrences(
-                            flow,
-                            &invocation.inputs,
-                            |pass| {
+                        let occurrences =
+                            expand_render_pass_occurrences(flow, &invocation.inputs, |pass| {
                                 if !self.pass_targets_active_view(
                                     pass,
                                     view.view_id.as_str(),
@@ -273,8 +269,7 @@ impl Renderer {
                                 }
                                 ensure_compiled_pass_is_supported(pass)?;
                                 Ok(true)
-                            },
-                        )?;
+                            })?;
 
                         let logical_timing =
                             if gpu_timing_capability == RenderGpuTimingCapability::Supported {
