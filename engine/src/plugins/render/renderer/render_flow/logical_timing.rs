@@ -82,10 +82,7 @@ impl LogicalGpuPassTiming {
         self.query_capacity
     }
 
-    pub(super) fn range_for_occurrence(
-        &self,
-        ordinal: usize,
-    ) -> Result<GpuPassTimestampIndices> {
+    pub(super) fn range_for_occurrence(&self, ordinal: usize) -> Result<GpuPassTimestampIndices> {
         let begin = ordinal
             .checked_mul(2)
             .and_then(|value| u32::try_from(value).ok())
