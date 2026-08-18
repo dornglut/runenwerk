@@ -39,7 +39,7 @@ impl Renderer {
                 );
                 let specialization =
                     compute_specialization_from_constants(&value.shader_constants)?;
-                let dispatch = flow_inputs
+                flow_inputs
                     .projected_dispatch_workgroups
                     .get(&value.pass_id)
                     .copied()
@@ -50,15 +50,6 @@ impl Renderer {
                             flow.flow_id
                         )
                     })?;
-                if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
-                    bail!(
-                        "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
-                        value.pass_id,
-                        dispatch[0],
-                        dispatch[1],
-                        dispatch[2]
-                    );
-                }
                 let admitted_source = admit_resolved_program_source(
                     &mut self.flow_pipeline_cache,
                     &shader,
@@ -299,15 +290,6 @@ impl Renderer {
                             flow.flow_id
                         )
                     })?;
-                if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
-                    bail!(
-                        "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
-                        value.pass_id,
-                        dispatch[0],
-                        dispatch[1],
-                        dispatch[2]
-                    );
-                }
                 self.encode_compute_pass(
                     context,
                     encoder,
