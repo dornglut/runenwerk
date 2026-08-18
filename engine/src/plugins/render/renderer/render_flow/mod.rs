@@ -34,6 +34,7 @@ mod capture;
 mod execute;
 mod execute_passes;
 mod gpu_timing;
+mod occurrences;
 mod preflight_cache;
 mod program_sources;
 mod provenance;
