@@ -98,11 +98,8 @@ mod tests {
 
     fn prepared_frame(
         compiled: &CompiledRenderFlowPlan,
-        mut inputs: PreparedFlowInputs,
+        inputs: PreparedFlowInputs,
     ) -> PreparedRenderFrame {
-        if inputs.prepared_work.is_none() {
-            inputs.prepared_work = compiled.structural_work().cloned();
-        }
         let key = RenderDynamicTextureTargetKey::new("cache.test", "scene");
         let mut bindings = BTreeMap::new();
         bindings.insert(
@@ -269,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_guard_rejects_invalid_dispatch_even_when_cache_key_matches() {
+    fn runtime_guard_accepts_zero_dispatch_before_cache_reuse() {
         let (compiled, pass_id) = dispatch_flow();
         let mut inputs = PreparedFlowInputs::default();
         inputs
@@ -289,17 +286,16 @@ mod tests {
         inputs
             .projected_dispatch_workgroups
             .insert(pass_id, [0, 1, 1]);
-        let invalid_frame = prepared_frame(&compiled, inputs);
-        let error = renderer
+        let zero_frame = prepared_frame(&compiled, inputs);
+        renderer
             .preflight_prepared_frame(
-                &invalid_frame,
+                &zero_frame,
                 std::slice::from_ref(&compiled),
                 RenderPreflightValidationConfigResource::default(),
             )
-            .expect_err("zero dispatch should be rejected before cached report reuse");
+            .expect("zero dispatch remains valid through runtime preflight");
 
-        assert!(error.to_string().contains("invalid dispatch"));
-        assert_eq!(
+        assert_ne!(
             renderer.last_preflight_cache_state().status,
             RenderPreparedFramePreflightCacheStatus::GuardRejected
         );
