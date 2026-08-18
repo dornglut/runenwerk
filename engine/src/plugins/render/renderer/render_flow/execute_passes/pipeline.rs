@@ -39,7 +39,7 @@ impl Renderer {
                 );
                 let specialization =
                     compute_specialization_from_constants(&value.shader_constants)?;
-                let _dispatch = flow_inputs
+                let dispatch = flow_inputs
                     .projected_dispatch_workgroups
                     .get(&value.pass_id)
                     .copied()
@@ -50,6 +50,15 @@ impl Renderer {
                             flow.flow_id
                         )
                     })?;
+                if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
+                    bail!(
+                        "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
+                        value.pass_id,
+                        dispatch[0],
+                        dispatch[1],
+                        dispatch[2]
+                    );
+                }
                 let admitted_source = admit_resolved_program_source(
                     &mut self.flow_pipeline_cache,
                     &shader,
@@ -290,6 +299,15 @@ impl Renderer {
                             flow.flow_id
                         )
                     })?;
+                if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
+                    bail!(
+                        "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
+                        value.pass_id,
+                        dispatch[0],
+                        dispatch[1],
+                        dispatch[2]
+                    );
+                }
                 self.encode_compute_pass(
                     context,
                     encoder,
@@ -791,16 +809,21 @@ struct EncodeTimestampedComputePass<'a> {
 }
 impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedComputePass<'_> {
     fn write_timestamps(self, query_set: &QuerySet) {
-        *self.result = self.operation.encode(Some((query_set, self.indices));
+        *self.result = self.operation.encode(Some((query_set, self.indices)));
     }
 }
+
 struct SetComputeBindGroup<'a, 'pass> {
     pass: &'a mut ComputePass<'pass>,
     index: u32,
 }
 impl CurrentRenderPipelineBindGroupsTerminal for SetComputeBindGroup<'_, '_> {
     fn bind_groups(self, groups: &[&BindGroup]) {
-        debug_assert_eq!(groups.len(), 1, "each current render terminal binds one group");
+        debug_assert_eq!(
+            groups.len(),
+            1,
+            "each current render terminal binds one group"
+        );
         self.pass.set_bind_group(self.index, groups[0], &[]);
     }
 }
@@ -810,9 +833,624 @@ struct SetRenderBindGroup<'a, 'pass> {
 }
 impl CurrentRenderPipelineBindGroupsTerminal for SetRenderBindGroup<'_, '_> {
     fn bind_groups(self, groups: &[&BindGroup]) {
-        debug_assert_eq!(groups.len(), 1, "each current render terminal binds one group");
+        debug_assert_eq!(
+            groups.len(),
+            1,
+            "each current render terminal binds one group"
+        );
         self.pass.set_bind_group(self.index, groups[0], &[]);
     }
 }
 
-// Remaining render encode terminals and helpers are unchanged by this semantic cutover.
+struct EncodeFullscreenPipeline<'a> {
+    context: &'a GpuContext,
+    encoder: &'a mut CommandEncoder,
+    surface_view: Option<&'a TextureView>,
+    realized_views: &'a [&'a GpuRealizedTextureView],
+    bind_group: Option<&'a GpuRealizedBindGroup>,
+    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    load: LoadOp<Color>,
+    gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
+    result: &'a mut Result<()>,
+}
+impl CurrentRenderRenderPipelineTerminal for EncodeFullscreenPipeline<'_> {
+    fn use_render_pipeline(self, pipeline: &RenderPipeline) {
+        let bridge_result = self
+            .context
+            .current_render_execution_bridge()
+            .for_pass_attachments(
+                self.realized_views,
+                EncodeFullscreenPass {
+                    context: self.context,
+                    encoder: self.encoder,
+                    surface_view: self.surface_view,
+                    pipeline,
+                    bind_group: self.bind_group,
+                    material_resources: self.material_resources,
+                    load: self.load,
+                    gpu_timestamp_writes: self.gpu_timestamp_writes,
+                    result: self.result,
+                },
+            );
+        if let Err(error) = bridge_result {
+            *self.result = Err(error.into());
+        }
+    }
+}
+
+struct EncodeFullscreenPass<'a> {
+    context: &'a GpuContext,
+    encoder: &'a mut CommandEncoder,
+    surface_view: Option<&'a TextureView>,
+    pipeline: &'a RenderPipeline,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
+    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    load: LoadOp<Color>,
+    gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
+    result: &'a mut Result<()>,
+}
+impl CurrentRenderAttachmentsTerminal for EncodeFullscreenPass<'_> {
+    fn encode_with_attachments(self, views: &[&TextureView]) {
+        let view = self.surface_view.unwrap_or_else(|| views[0]);
+        let operation = FullscreenPassOperation {
+            context: self.context,
+            encoder: self.encoder,
+            view,
+            pipeline: self.pipeline,
+            bind_group: self.bind_group,
+            material_resources: self.material_resources,
+            load: self.load,
+        };
+        if let Some(writes) = self.gpu_timestamp_writes {
+            let mut nested_result = Ok(());
+            let bridge_result = self
+                .context
+                .current_render_execution_bridge()
+                .for_timestamp_writes(
+                    &writes.query_set,
+                    EncodeTimestampedFullscreenPass {
+                        operation,
+                        indices: writes.indices,
+                        result: &mut nested_result,
+                    },
+                );
+            *self.result = match bridge_result {
+                Ok(()) => nested_result,
+                Err(error) => Err(error.into()),
+            };
+        } else {
+            *self.result = operation.encode(None);
+        }
+    }
+}
+
+struct FullscreenPassOperation<'a> {
+    context: &'a GpuContext,
+    encoder: &'a mut CommandEncoder,
+    view: &'a TextureView,
+    pipeline: &'a RenderPipeline,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
+    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    load: LoadOp<Color>,
+}
+impl FullscreenPassOperation<'_> {
+    fn encode(self, timestamp: Option<(&QuerySet, GpuPassTimestampIndices)>) -> Result<()> {
+        let color_attachment = Some(RenderPassColorAttachment {
+            view: self.view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: Operations {
+                load: self.load,
+                store: StoreOp::Store,
+            },
+        });
+        let timestamp_writes = timestamp.map(|(query_set, indices)| RenderPassTimestampWrites {
+            query_set,
+            beginning_of_pass_write_index: Some(indices.begin),
+            end_of_pass_write_index: Some(indices.end),
+        });
+        let mut pass = self.encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("engine_compiled_fullscreen_pass"),
+            color_attachments: &[color_attachment],
+            depth_stencil_attachment: None,
+            timestamp_writes,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(self.pipeline);
+        if let Some(bind_group) = self.bind_group {
+            self.context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[bind_group],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 0,
+                    },
+                )?;
+        }
+        if let Some(resources) = self.material_resources {
+            self.context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[resources.bind_group()],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 1,
+                    },
+                )?;
+        }
+        pass.draw(0..3, 0..1);
+        Ok(())
+    }
+}
+
+struct EncodeTimestampedFullscreenPass<'a> {
+    operation: FullscreenPassOperation<'a>,
+    indices: GpuPassTimestampIndices,
+    result: &'a mut Result<()>,
+}
+impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedFullscreenPass<'_> {
+    fn write_timestamps(self, query_set: &QuerySet) {
+        *self.result = self.operation.encode(Some((query_set, self.indices)));
+    }
+}
+
+enum GraphicsDraw<'a> {
+    Direct {
+        indexed: bool,
+        vertex_range: std::ops::Range<u32>,
+        instance_range: std::ops::Range<u32>,
+    },
+    Indirect {
+        buffer: &'a GpuRealizedBuffer,
+        byte_offset: u64,
+        indexed: bool,
+    },
+}
+
+struct EncodeGraphicsPipeline<'a> {
+    context: &'a GpuContext,
+    encoder: &'a mut CommandEncoder,
+    surface_color_view: Option<&'a TextureView>,
+    color_is_realized: bool,
+    has_depth: bool,
+    attachment_views: &'a [&'a GpuRealizedTextureView],
+    bind_group: Option<&'a GpuRealizedBindGroup>,
+    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    load: LoadOp<Color>,
+    gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
+    vertex_buffers: &'a [(u32, &'a GpuRealizedBuffer)],
+    index_buffer: Option<&'a GpuRealizedBuffer>,
+    draw: GraphicsDraw<'a>,
+    result: &'a mut Result<()>,
+}
+impl CurrentRenderRenderPipelineTerminal for EncodeGraphicsPipeline<'_> {
+    fn use_render_pipeline(self, pipeline: &RenderPipeline) {
+        let bridge_result = self
+            .context
+            .current_render_execution_bridge()
+            .for_pass_attachments(
+                self.attachment_views,
+                EncodeGraphicsPass {
+                    context: self.context,
+                    encoder: self.encoder,
+                    surface_color_view: self.surface_color_view,
+                    color_is_realized: self.color_is_realized,
+                    has_depth: self.has_depth,
+                    pipeline,
+                    bind_group: self.bind_group,
+                    material_resources: self.material_resources,
+                    load: self.load,
+                    gpu_timestamp_writes: self.gpu_timestamp_writes,
+                    vertex_buffers: self.vertex_buffers,
+                    index_buffer: self.index_buffer,
+                    draw: self.draw,
+                    result: self.result,
+                },
+            );
+        if let Err(error) = bridge_result {
+            *self.result = Err(error.into());
+        }
+    }
+}
+
+struct EncodeGraphicsPass<'a> {
+    context: &'a GpuContext,
+    encoder: &'a mut CommandEncoder,
+    surface_color_view: Option<&'a TextureView>,
+    color_is_realized: bool,
+    has_depth: bool,
+    pipeline: &'a RenderPipeline,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
+    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    load: LoadOp<Color>,
+    gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
+    vertex_buffers: &'a [(u32, &'a GpuRealizedBuffer)],
+    index_buffer: Option<&'a GpuRealizedBuffer>,
+    draw: GraphicsDraw<'a>,
+    result: &'a mut Result<()>,
+}
+impl CurrentRenderAttachmentsTerminal for EncodeGraphicsPass<'_> {
+    fn encode_with_attachments(self, views: &[&TextureView]) {
+        let mut realized_index = 0;
+        let color_view = if self.color_is_realized {
+            let view = views[realized_index];
+            realized_index += 1;
+            view
+        } else {
+            self.surface_color_view
+                .expect("surface color marker retains its lexical view")
+        };
+        let depth_view = self.has_depth.then(|| views[realized_index]);
+        let operation = GraphicsPassOperation {
+            encoder: self.encoder,
+            color_view,
+            depth_view,
+            pipeline: self.pipeline,
+            bind_group: self.bind_group,
+            material_resources: self.material_resources,
+            load: self.load,
+            vertex_buffers: self.vertex_buffers,
+            index_buffer: self.index_buffer,
+            draw: self.draw,
+        };
+        if let Some(writes) = self.gpu_timestamp_writes {
+            let mut nested_result = Ok(());
+            let bridge_result = self
+                .context
+                .current_render_execution_bridge()
+                .for_timestamp_writes(
+                    &writes.query_set,
+                    EncodeTimestampedGraphicsPass {
+                        context: self.context,
+                        operation,
+                        indices: writes.indices,
+                        result: &mut nested_result,
+                    },
+                );
+            *self.result = match bridge_result {
+                Ok(()) => nested_result,
+                Err(error) => Err(error.into()),
+            };
+        } else {
+            operation.encode(self.context, None, self.result);
+        }
+    }
+}
+
+struct GraphicsPassOperation<'a> {
+    encoder: &'a mut CommandEncoder,
+    color_view: &'a TextureView,
+    depth_view: Option<&'a TextureView>,
+    pipeline: &'a RenderPipeline,
+    bind_group: Option<&'a GpuRealizedBindGroup>,
+    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    load: LoadOp<Color>,
+    vertex_buffers: &'a [(u32, &'a GpuRealizedBuffer)],
+    index_buffer: Option<&'a GpuRealizedBuffer>,
+    draw: GraphicsDraw<'a>,
+}
+impl GraphicsPassOperation<'_> {
+    fn encode(
+        self,
+        context: &GpuContext,
+        timestamp: Option<(&QuerySet, GpuPassTimestampIndices)>,
+        result: &mut Result<()>,
+    ) {
+        let depth_attachment = self
+            .depth_view
+            .map(|view| RenderPassDepthStencilAttachment {
+                view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            });
+        let color_attachment = Some(RenderPassColorAttachment {
+            view: self.color_view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: Operations {
+                load: self.load,
+                store: StoreOp::Store,
+            },
+        });
+        let timestamp_writes = timestamp.map(|(query_set, indices)| RenderPassTimestampWrites {
+            query_set,
+            beginning_of_pass_write_index: Some(indices.begin),
+            end_of_pass_write_index: Some(indices.end),
+        });
+        let mut pass = self.encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("engine_compiled_graphics_pass"),
+            color_attachments: &[color_attachment],
+            depth_stencil_attachment: depth_attachment,
+            timestamp_writes,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(self.pipeline);
+        if let Some(bind_group) = self.bind_group
+            && let Err(error) = context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[bind_group],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 0,
+                    },
+                )
+        {
+            *result = Err(error.into());
+            return;
+        }
+        if let Some(resources) = self.material_resources
+            && let Err(error) = context
+                .current_render_execution_bridge()
+                .for_pipeline_bind_groups(
+                    &[resources.bind_group()],
+                    SetRenderBindGroup {
+                        pass: &mut pass,
+                        index: 1,
+                    },
+                )
+        {
+            *result = Err(error.into());
+            return;
+        }
+        for &(slot, buffer) in self.vertex_buffers {
+            if let Err(error) = context.current_render_execution_bridge().for_vertex_buffer(
+                buffer,
+                SetVertexBuffer {
+                    pass: &mut pass,
+                    slot,
+                },
+            ) {
+                *result = Err(error.into());
+                return;
+            }
+        }
+        if let Some(index) = self.index_buffer
+            && let Err(error) = context
+                .current_render_execution_bridge()
+                .for_index_buffer(index, SetIndexBuffer { pass: &mut pass })
+        {
+            *result = Err(error.into());
+            return;
+        }
+        match self.draw {
+            GraphicsDraw::Direct {
+                indexed,
+                vertex_range,
+                instance_range,
+            } => {
+                if indexed {
+                    pass.draw_indexed(vertex_range, 0, instance_range);
+                } else {
+                    pass.draw(vertex_range, instance_range);
+                }
+            }
+            GraphicsDraw::Indirect {
+                buffer,
+                byte_offset,
+                indexed,
+            } => {
+                if let Err(error) = context
+                    .current_render_execution_bridge()
+                    .for_indirect_buffer(
+                        buffer,
+                        DrawIndirect {
+                            pass: &mut pass,
+                            byte_offset,
+                            indexed,
+                        },
+                    )
+                {
+                    *result = Err(error.into());
+                }
+            }
+        }
+    }
+}
+
+struct EncodeTimestampedGraphicsPass<'a> {
+    context: &'a GpuContext,
+    operation: GraphicsPassOperation<'a>,
+    indices: GpuPassTimestampIndices,
+    result: &'a mut Result<()>,
+}
+impl CurrentRenderTimestampWritesTerminal for EncodeTimestampedGraphicsPass<'_> {
+    fn write_timestamps(self, query_set: &QuerySet) {
+        self.operation
+            .encode(self.context, Some((query_set, self.indices)), self.result);
+    }
+}
+
+struct SetVertexBuffer<'a, 'pass> {
+    pass: &'a mut RenderPass<'pass>,
+    slot: u32,
+}
+impl CurrentRenderVertexBufferTerminal for SetVertexBuffer<'_, '_> {
+    fn use_vertex_buffer(self, buffer: &Buffer) {
+        self.pass.set_vertex_buffer(self.slot, buffer.slice(..));
+    }
+}
+struct SetIndexBuffer<'a, 'pass> {
+    pass: &'a mut RenderPass<'pass>,
+}
+impl CurrentRenderIndexBufferTerminal for SetIndexBuffer<'_, '_> {
+    fn use_index_buffer(self, buffer: &Buffer) {
+        self.pass
+            .set_index_buffer(buffer.slice(..), IndexFormat::Uint32);
+    }
+}
+struct DrawIndirect<'a, 'pass> {
+    pass: &'a mut RenderPass<'pass>,
+    byte_offset: u64,
+    indexed: bool,
+}
+impl CurrentRenderIndirectBufferTerminal for DrawIndirect<'_, '_> {
+    fn use_indirect_buffer(self, buffer: &Buffer) {
+        if self.indexed {
+            self.pass.draw_indexed_indirect(buffer, self.byte_offset);
+        } else {
+            self.pass.draw_indirect(buffer, self.byte_offset);
+        }
+    }
+}
+
+fn admit_resolved_program_source(
+    cache: &mut FlowPipelineArtifactCache,
+    shader: &super::super::provenance::ResolvedShaderMaterial<'_>,
+    provenance_detail: impl Into<String>,
+) -> Result<GpuAdmittedProgramSource> {
+    Ok(cache.admit_program_source(
+        GpuProgramSourceKey::new(shader.pipeline_identity.as_str())?,
+        shader.revision,
+        shader.source,
+        GpuProgramSourceProvenance::new(
+            "render-flow-resolved-program",
+            Some(provenance_detail.into()),
+        )?,
+    )?)
+}
+
+fn reject_material_shader_fallback(
+    feature_id: Option<crate::plugins::render::RenderFeatureId>,
+    shader_reference: Option<&RenderShaderReference>,
+    pass_id: crate::plugins::render::RenderPassId,
+    shader: &super::super::provenance::ResolvedShaderMaterial<'_>,
+) -> Result<()> {
+    if pass_consumes_material_resources(feature_id, shader_reference) && shader.fallback_used {
+        bail!(
+            "material feature pass '{}' requires the exact generated shader '{}' to be loaded; builtin or scene-bundle fallback is forbidden",
+            pass_id,
+            shader.shader_id
+        );
+    }
+    Ok(())
+}
+
+fn reject_unresident_material_textures(
+    packet: &RendererPreparedPacket,
+    feature_id: Option<crate::plugins::render::RenderFeatureId>,
+    shader: Option<&RenderShaderReference>,
+    pass_id: crate::plugins::render::RenderPassId,
+) -> Result<()> {
+    if !pass_consumes_material_resources(feature_id, shader) {
+        return Ok(());
+    }
+    let Some(material) = &packet.prepared_material else {
+        return Ok(());
+    };
+    let texture_count = material
+        .instances
+        .iter()
+        .map(|instance| instance.texture_bindings.len())
+        .sum::<usize>();
+    if texture_count == 0 || packet.prepared_material_gpu_resources.is_some() {
+        return Ok(());
+    }
+    bail!(
+        "material feature pass '{}' requires {} GPU-resident material texture bindings, but render-flow material resource bind groups are not prepared; refusing shader execution instead of using pseudo texture sampling",
+        pass_id,
+        texture_count
+    );
+}
+
+fn material_resources_for_pass<'a>(
+    packet: &'a RendererPreparedPacket,
+    feature_id: Option<crate::plugins::render::RenderFeatureId>,
+    shader: Option<&RenderShaderReference>,
+) -> Option<&'a PreparedMaterialGpuResources> {
+    if pass_consumes_material_resources(feature_id, shader) {
+        packet.prepared_material_gpu_resources.as_ref()
+    } else {
+        None
+    }
+}
+
+fn empty_specialization_value_set() -> Result<GpuSpecializationValueSet> {
+    Ok(GpuSpecializationValueSet::new(
+        GpuSpecializationSchema::new([])?,
+        [],
+    )?)
+}
+
+fn compute_specialization_from_constants(
+    constants: &[RenderShaderConstant],
+) -> Result<GpuSpecializationValueSet> {
+    if constants.is_empty() {
+        return empty_specialization_value_set();
+    }
+    let mut declarations = Vec::with_capacity(constants.len());
+    let mut entries = Vec::with_capacity(constants.len());
+    for constant in constants {
+        let key = GpuSpecializationKey::new(constant.name.clone())?;
+        declarations.push(GpuSpecializationDeclaration::new(
+            key.clone(),
+            constant.value.value_type(),
+            None,
+            GpuCapabilityRequirements::new(),
+        )?);
+        entries.push(GpuSpecializationEntry::new(key, constant.value));
+    }
+    Ok(GpuSpecializationValueSet::new(
+        GpuSpecializationSchema::new(declarations)?,
+        entries,
+    )?)
+}
+
+fn compiled_resource_ref_matches_id(
+    resource: &CompiledResourceRef,
+    expected: GpuWorkResourceId,
+) -> bool {
+    match resource {
+        CompiledResourceRef::FlowOwned(id) | CompiledResourceRef::Imported(id) => *id == expected,
+        CompiledResourceRef::TargetAlias(alias) => alias.resource_id == expected,
+        CompiledResourceRef::ImportedBuiltin(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn typed_compute_specialization_normalizes_order_and_preserves_types() {
+        let first = compute_specialization_from_constants(&[
+            RenderShaderConstant::u32("COUNT", 4),
+            RenderShaderConstant::i32("OFFSET", -1),
+        ])
+        .unwrap();
+        let reordered = compute_specialization_from_constants(&[
+            RenderShaderConstant::i32("OFFSET", -1),
+            RenderShaderConstant::u32("COUNT", 4),
+        ])
+        .unwrap();
+        let signed_count = compute_specialization_from_constants(&[
+            RenderShaderConstant::i32("COUNT", 4),
+            RenderShaderConstant::i32("OFFSET", -1),
+        ])
+        .unwrap();
+
+        assert_eq!(first, reordered);
+        assert_ne!(first, signed_count);
+    }
+
+    #[test]
+    fn typed_compute_specialization_rejects_invalid_or_duplicate_keys() {
+        assert!(
+            compute_specialization_from_constants(&[RenderShaderConstant::u32("a=1,b", 2)])
+                .is_err()
+        );
+        assert!(
+            compute_specialization_from_constants(&[
+                RenderShaderConstant::u32("COUNT", 1),
+                RenderShaderConstant::u32("COUNT", 2),
+            ])
+            .is_err()
+        );
+    }
+}
