@@ -4,7 +4,7 @@ use super::{
     GpuRenderPipelineDescriptor, GpuResourceAccess, GpuRuntimeBindingSet, GpuVertexStepMode,
     GpuWorkOperationCause, GpuWorkOperationError,
 };
-use core::hash::{Hash, Hasher};
+use core::hash::Hash;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuVertexBufferBinding {
