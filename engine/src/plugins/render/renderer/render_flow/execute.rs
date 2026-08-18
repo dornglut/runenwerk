@@ -1,8 +1,13 @@
 use super::*;
 use super::{
-    logical_timing::LogicalGpuPassTimingPlan, occurrences::expand_render_pass_occurrences,
+    canonical_work::{
+        CanonicalInvocationPreparation, CanonicalPassProjection, RealizedLogicalBufferUpload,
+        allocate_aux_occurrence, prepare_canonical_invocation,
+    },
+    logical_timing::LogicalGpuPassTimingPlan,
+    occurrences::expand_render_pass_occurrences,
 };
-use crate::plugins::render::RenderPassId;
+use crate::plugins::render::{PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, RenderPassId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FeaturePassAction {
@@ -23,13 +28,16 @@ struct RealizedFlowInvocation<'a> {
     flow: &'a CompiledRenderFlowPlan,
     invocation: &'a crate::plugins::render::PreparedFlowInvocation,
     packet: RendererPreparedPacket,
-    projected_uploads: Vec<RendererPendingBufferUpload>,
+    projected_uploads: Vec<RealizedLogicalBufferUpload>,
     scheduled_passes: Vec<RealizedScheduledPass<'a>>,
     timing_frame: Option<GpuPassTimingFrame>,
+    canonical_work: Option<PreparedRenderWorkPlan>,
 }
 
 struct RealizedScheduledPass<'a> {
-    fixed_step_upload: Option<RendererPendingBufferUpload>,
+    occurrence: RenderGpuWorkOccurrenceId,
+    control_order_after: Vec<RenderGpuWorkOccurrenceId>,
+    fixed_step_upload: Option<RealizedLogicalBufferUpload>,
     execution: RealizedPassExecution<'a>,
 }
 
@@ -240,12 +248,6 @@ impl Renderer {
                             invocation_packet.surface_format,
                             effective_history_signature,
                         )?;
-                        let projected_uploads = self.realize_projected_uniform_uploads(
-                            context,
-                            invocation.invocation_id.0.as_str(),
-                            &invocation.inputs,
-                            runtime_resources,
-                        )?;
 
                         // Resolve render-domain runtime control before any canonical G3 work is
                         // constructed. A skipped pass has no GPU occurrence and therefore no
@@ -272,6 +274,18 @@ impl Renderer {
                                 ensure_compiled_pass_is_supported(pass)?;
                                 Ok(true)
                             })?;
+                        let mut maximum_occurrence = occurrences
+                            .iter()
+                            .map(|occurrence| occurrence.occurrence_id.raw())
+                            .max()
+                            .unwrap_or(0);
+                        let projected_uploads = self.realize_projected_uniform_uploads(
+                            context,
+                            invocation.invocation_id.0.as_str(),
+                            &invocation.inputs,
+                            runtime_resources,
+                            &mut maximum_occurrence,
+                        )?;
 
                         let logical_timing_plan =
                             if gpu_timing_capability == RenderGpuTimingCapability::Supported {
@@ -308,6 +322,8 @@ impl Renderer {
                                         iteration
                                             .schedule
                                             .with_substep_index(iteration.substep_index),
+                                        &mut maximum_occurrence,
+                                        occurrence.control_order_after.clone(),
                                     )
                                 })
                                 .transpose()?;
@@ -357,6 +373,8 @@ impl Renderer {
                                 .transpose()?
                                 .flatten();
                             realized_passes.push(RealizedScheduledPass {
+                                occurrence: occurrence.occurrence_id,
+                                control_order_after: occurrence.control_order_after,
                                 fixed_step_upload,
                                 execution: RealizedPassExecution {
                                     pass,
@@ -367,6 +385,33 @@ impl Renderer {
                                 },
                             });
                         }
+                        let canonical_projections = realized_passes
+                            .iter()
+                            .map(|scheduled| CanonicalPassProjection {
+                                occurrence: scheduled.occurrence,
+                                control_order_after: &scheduled.control_order_after,
+                                pass: scheduled.execution.pass,
+                                pipeline: scheduled.execution.pipeline.as_ref(),
+                                timestamp_indices: scheduled.execution.timestamp_indices,
+                                fixed_step_upload: scheduled.fixed_step_upload.as_ref(),
+                                has_capture_work: !scheduled.execution.before_captures.is_empty()
+                                    || !scheduled.execution.after_captures.is_empty(),
+                            })
+                            .collect::<Vec<_>>();
+                        let canonical_work = match prepare_canonical_invocation(
+                            context,
+                            flow,
+                            &invocation.inputs,
+                            runtime_resources,
+                            &projected_uploads,
+                            &canonical_projections,
+                            logical_timing_plan
+                                .as_ref()
+                                .and_then(LogicalGpuPassTimingPlan::timing),
+                        )? {
+                            CanonicalInvocationPreparation::Prepared(work) => Some(work),
+                            CanonicalInvocationPreparation::PreG7Residual => None,
+                        };
                         Ok(RealizedFlowInvocation {
                             flow,
                             invocation,
@@ -374,6 +419,7 @@ impl Renderer {
                             projected_uploads,
                             scheduled_passes: realized_passes,
                             timing_frame,
+                            canonical_work,
                         })
                     })();
                     runtime_resources.clear_active_invocation_uniform_scope();
@@ -385,7 +431,7 @@ impl Renderer {
             Ok(invocations)
         })();
         self.flow_runtime_cache = flow_runtime_cache;
-        let invocations = realization_result?;
+        let mut invocations = realization_result?;
         let mut final_captures = Vec::new();
         if capture_runtime.should_attempt_stage(CaptureStage::Final) {
             self.prepare_final_surface_capture(
@@ -395,6 +441,11 @@ impl Renderer {
                 &mut capture_runtime,
                 &mut final_captures,
             )?;
+        }
+        if !final_captures.is_empty() {
+            for invocation in &mut invocations {
+                invocation.canonical_work = None;
+            }
         }
         Ok(RendererRealizationBatch {
             packet,
@@ -440,9 +491,19 @@ impl Renderer {
                 runtime_resources.set_active_invocation_uniform_scope(
                     invocation.invocation.invocation_id.0.clone(),
                 );
+                tracing::trace!(
+                    flow_id = %invocation.flow.flow_id,
+                    invocation_id = %invocation.invocation.invocation_id.0,
+                    canonical_work_prepared = invocation.canonical_work.is_some(),
+                    "renderer G5A invocation execution authority"
+                );
                 let invocation_result = (|| -> Result<()> {
                     for upload in &invocation.projected_uploads {
-                        RendererPendingOperations::apply_buffer_upload(context, queue, upload)?;
+                        RendererPendingOperations::apply_buffer_upload(
+                            context,
+                            queue,
+                            &upload.pending,
+                        )?;
                     }
                     let timestamp_active = invocation
                         .timing_frame
@@ -451,7 +512,11 @@ impl Renderer {
                         .unwrap_or(false);
                     for scheduled_pass in &mut invocation.scheduled_passes {
                         if let Some(upload) = scheduled_pass.fixed_step_upload.as_ref() {
-                            RendererPendingOperations::apply_buffer_upload(context, queue, upload)?;
+                            RendererPendingOperations::apply_buffer_upload(
+                                context,
+                                queue,
+                                &upload.pending,
+                            )?;
                         }
                         let execution = &mut scheduled_pass.execution;
                         self.encode_prepared_capture_copies(
@@ -691,7 +756,8 @@ impl Renderer {
         invocation_id: &str,
         flow_inputs: &PreparedFlowInputs,
         runtime_resources: &mut FlowRuntimeResources,
-    ) -> Result<Vec<RendererPendingBufferUpload>> {
+        maximum_occurrence: &mut u64,
+    ) -> Result<Vec<RealizedLogicalBufferUpload>> {
         let mut uploads = Vec::new();
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
             let prepared = runtime_resources.prepare_uniform_upload(*buffer_id, bytes)?;
@@ -710,15 +776,21 @@ impl Renderer {
                     runtime_buffer.size
                 );
             }
-            uploads.push(RendererPendingBufferUpload {
-                buffer: runtime_buffer.realized.clone(),
-                bytes: prepared.as_bytes().to_vec(),
+            uploads.push(RealizedLogicalBufferUpload {
+                occurrence: allocate_aux_occurrence(maximum_occurrence)?,
+                buffer: runtime_buffer.handle.clone(),
+                pending: RendererPendingBufferUpload {
+                    buffer: runtime_buffer.realized.clone(),
+                    bytes: prepared.as_bytes().to_vec(),
+                },
+                control_order_after: Vec::new(),
             });
         }
 
         Ok(uploads)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn realize_fixed_step_iteration_upload(
         &self,
         context: &GpuContext,
@@ -726,7 +798,9 @@ impl Renderer {
         runtime_resources: &mut FlowRuntimeResources,
         region: &CompiledFixedStepRegion,
         uniform: RenderFixedStepIterationUniform,
-    ) -> Result<RendererPendingBufferUpload> {
+        maximum_occurrence: &mut u64,
+        control_order_after: Vec<RenderGpuWorkOccurrenceId>,
+    ) -> Result<RealizedLogicalBufferUpload> {
         let bytes = uniform.to_uniform_bytes();
         let prepared =
             runtime_resources.prepare_uniform_upload(region.iteration_uniform, &bytes)?;
@@ -745,9 +819,14 @@ impl Renderer {
                 runtime_buffer.size
             );
         }
-        Ok(RendererPendingBufferUpload {
-            buffer: runtime_buffer.realized.clone(),
-            bytes: prepared.as_bytes().to_vec(),
+        Ok(RealizedLogicalBufferUpload {
+            occurrence: allocate_aux_occurrence(maximum_occurrence)?,
+            buffer: runtime_buffer.handle.clone(),
+            pending: RendererPendingBufferUpload {
+                buffer: runtime_buffer.realized.clone(),
+                bytes: prepared.as_bytes().to_vec(),
+            },
+            control_order_after,
         })
     }
 
