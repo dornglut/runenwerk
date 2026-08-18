@@ -39,7 +39,14 @@ pub use render_execution::*;
 pub use render_pass::*;
 pub use resource::*;
 pub use transfer::*;
-pub use work::*;
+pub use work::{
+    GpuBufferRegion, GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad,
+    GpuColorClearValue, GpuComputeOperation, GpuCopyExtent, GpuCopyOperation,
+    GpuDepthAttachmentLoad, GpuDepthClearValue, GpuDispatchSize, GpuDrawIntent, GpuDrawRange,
+    GpuMultisampleResolveTarget, GpuPresentOperation, GpuQueryResolveOperation,
+    GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuTextureCopyRegion,
+    GpuTextureOrigin,
+};
 pub use work_resource_id::{
     GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
