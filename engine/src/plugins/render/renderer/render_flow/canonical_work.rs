@@ -114,7 +114,8 @@ pub(super) fn prepare_canonical_invocation(
                     projected.pass,
                     pipeline,
                     timing,
-                )? else {
+                )?
+                else {
                     return Ok(CanonicalInvocationPreparation::PreG7Residual);
                 };
                 operation
@@ -213,8 +214,8 @@ fn occurrence_label(
 pub(super) fn allocate_aux_occurrence(
     maximum_occurrence: &mut u64,
 ) -> Result<RenderGpuWorkOccurrenceId> {
-    *maximum_occurrence = maximum_occurrence
-        .checked_add(1)
-        .ok_or_else(|| anyhow::anyhow!("render GPU execution occurrence identity space is exhausted"))?;
+    *maximum_occurrence = maximum_occurrence.checked_add(1).ok_or_else(|| {
+        anyhow::anyhow!("render GPU execution occurrence identity space is exhausted")
+    })?;
     Ok(RenderGpuWorkOccurrenceId::new(*maximum_occurrence))
 }
