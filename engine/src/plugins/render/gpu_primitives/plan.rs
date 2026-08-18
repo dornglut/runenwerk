@@ -217,7 +217,6 @@ impl GpuPrimitiveDispatchPlanBuilder {
     ) -> Result<(), E>
     where
         F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
-        E: From<GpuPrimitiveValidationError>,
     {
         match step {
             GpuPrimitiveStep::CounterReset(step) => self.push_counter_reset(step_index, step),
@@ -260,7 +259,6 @@ impl GpuPrimitiveDispatchPlanBuilder {
     ) -> Result<(), E>
     where
         F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
-        E: From<GpuPrimitiveValidationError>,
     {
         let mut levels = Vec::<PrefixScanLevel>::new();
         let mut input = step.input.clone();
@@ -459,7 +457,6 @@ impl GpuPrimitiveDispatchPlanBuilder {
     ) -> Result<GpuBufferHandle, E>
     where
         F: FnMut(String, u64, GpuBufferInitialization) -> Result<GpuBufferHandle, E>,
-        E: From<GpuPrimitiveValidationError>,
     {
         let label = self.temporary_label(step_index, step_label, level_index, suffix);
         if let Some(existing) = self
