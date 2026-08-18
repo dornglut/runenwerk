@@ -146,8 +146,7 @@ mod tests {
         GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
         GpuResourceProvenance, GpuTextureAccess, GpuTextureAccessResource, GpuTextureDescriptor,
         GpuTextureDimension, GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization,
-        GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
-        GpuWorkResourceIdAllocator,
+        GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages, GpuWorkResourceIdAllocator,
     };
     use std::num::NonZeroU64;
 
@@ -202,14 +201,8 @@ mod tests {
                 GpuTextureDescriptor::new(
                     common(name),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &resource_label,
-                        GpuTextureDimension::D2,
-                        16,
-                        16,
-                        1,
-                    )
-                    .unwrap(),
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 16, 16, 1)
+                        .unwrap(),
                     1,
                     1,
                     format,
@@ -238,11 +231,13 @@ mod tests {
         )
         .unwrap();
 
-        assert!(validate_render_pass_usage_scope(&[
-            GpuResourceAccess::Buffer(first),
-            GpuResourceAccess::Buffer(second),
-        ])
-        .is_ok());
+        assert!(
+            validate_render_pass_usage_scope(&[
+                GpuResourceAccess::Buffer(first),
+                GpuResourceAccess::Buffer(second),
+            ])
+            .is_ok()
+        );
     }
 
     #[test]
@@ -266,11 +261,13 @@ mod tests {
         )
         .unwrap();
 
-        assert!(validate_render_pass_usage_scope(&[
-            GpuResourceAccess::Buffer(storage),
-            GpuResourceAccess::Buffer(vertex),
-        ])
-        .is_err());
+        assert!(
+            validate_render_pass_usage_scope(&[
+                GpuResourceAccess::Buffer(storage),
+                GpuResourceAccess::Buffer(vertex),
+            ])
+            .is_err()
+        );
     }
 
     #[test]
@@ -299,11 +296,13 @@ mod tests {
         )
         .unwrap();
 
-        assert!(validate_render_pass_usage_scope(&[
-            GpuResourceAccess::Texture(attachment),
-            GpuResourceAccess::Texture(sampled),
-        ])
-        .is_err());
+        assert!(
+            validate_render_pass_usage_scope(&[
+                GpuResourceAccess::Texture(attachment),
+                GpuResourceAccess::Texture(sampled),
+            ])
+            .is_err()
+        );
     }
 
     #[test]
@@ -336,11 +335,13 @@ mod tests {
         )
         .unwrap();
 
-        assert!(validate_render_pass_usage_scope(&[
-            GpuResourceAccess::Texture(attachment),
-            GpuResourceAccess::Texture(sampled),
-        ])
-        .is_ok());
+        assert!(
+            validate_render_pass_usage_scope(&[
+                GpuResourceAccess::Texture(attachment),
+                GpuResourceAccess::Texture(sampled),
+            ])
+            .is_ok()
+        );
     }
 
     #[test]
@@ -372,10 +373,12 @@ mod tests {
         )
         .unwrap();
 
-        assert!(validate_render_pass_usage_scope(&[
-            GpuResourceAccess::Texture(first),
-            GpuResourceAccess::Texture(second),
-        ])
-        .is_err());
+        assert!(
+            validate_render_pass_usage_scope(&[
+                GpuResourceAccess::Texture(first),
+                GpuResourceAccess::Texture(second),
+            ])
+            .is_err()
+        );
     }
 }
