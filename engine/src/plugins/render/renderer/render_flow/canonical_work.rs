@@ -4,9 +4,7 @@ use super::logical_operations::{
 };
 use super::logical_timing::LogicalGpuPassTiming;
 use super::*;
-use crate::plugins::gpu::{
-    GpuBufferHandle, GpuExecutionPreference, GpuResourceLabel, GpuWorkOperation,
-};
+use crate::plugins::gpu::{GpuBufferHandle, GpuExecutionPreference, GpuResourceLabel};
 use crate::plugins::render::{
     PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, ResolvedRenderGpuWorkNode,
     prepare_render_gpu_work,
