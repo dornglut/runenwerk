@@ -23,7 +23,7 @@ pub(super) fn project_compute_operation(
     pass: &CompiledComputeExecutionPlan,
     flow_inputs: &PreparedFlowInputs,
     pipeline: &PreparedPipelinePass,
-    timing: Option<(&LogicalGpuPassTiming, usize)>,
+    timing: Option<(&LogicalGpuPassTiming, GpuPassTimestampIndices)>,
 ) -> Result<GpuWorkOperation> {
     let PreparedFlowPipeline::Compute(realized_pipeline) = &pipeline.pipeline else {
         bail!(
@@ -50,8 +50,8 @@ pub(super) fn project_compute_operation(
         pipeline.bindings.runtime_bindings.clone(),
         dispatch,
     )?;
-    if let Some((timing, ordinal)) = timing {
-        operation = operation.with_timestamp_writes([timestamp_access(timing, ordinal)?])?;
+    if let Some((timing, indices)) = timing {
+        operation = operation.with_timestamp_writes([timestamp_access(timing, indices)?])?;
     }
     Ok(GpuWorkOperation::Compute(operation))
 }
@@ -66,7 +66,7 @@ pub(super) fn project_render_operation(
     runtime_resources: &FlowRuntimeResources,
     pass: &CompiledPassExecutionPlan,
     pipeline: &PreparedPipelinePass,
-    timing: Option<(&LogicalGpuPassTiming, usize)>,
+    timing: Option<(&LogicalGpuPassTiming, GpuPassTimestampIndices)>,
 ) -> Result<Option<GpuWorkOperation>> {
     let raster = match pass {
         CompiledPassExecutionPlan::Fullscreen(value)
@@ -169,7 +169,7 @@ pub(super) fn project_render_operation(
         limits,
     )?;
     let timestamp_writes = match timing {
-        Some((timing, ordinal)) => vec![timestamp_access(timing, ordinal)?],
+        Some((timing, indices)) => vec![timestamp_access(timing, indices)?],
         None => Vec::new(),
     };
     Ok(Some(GpuWorkOperation::Render(GpuRenderOperation::new(
@@ -389,9 +389,8 @@ pub(super) fn project_timing_tail(
 
 pub(super) fn timestamp_access(
     timing: &LogicalGpuPassTiming,
-    ordinal: usize,
+    indices: GpuPassTimestampIndices,
 ) -> Result<GpuQueryAccess> {
-    let indices = timing.range_for_occurrence(ordinal)?;
     let range = GpuQueryRange::new(timing.query_set(), indices.begin, 2)?;
     Ok(GpuQueryAccess::new(
         timing.query_set(),
