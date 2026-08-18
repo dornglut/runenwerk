@@ -19,7 +19,7 @@ fn render_gpu_timing_admission_tracks_enabled_timestamp_query_feature() {
         .unwrap();
     let capabilities = GpuCapabilities::from_normalized_facts(
         [GpuCapabilityFeature::TimestampQuery],
-        GpuLimits::new(1, 1, 1, 1, 1).unwrap(),
+        GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1).unwrap(),
         [],
     );
     assert!(
