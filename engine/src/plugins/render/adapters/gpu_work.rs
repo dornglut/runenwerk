@@ -10,13 +10,13 @@
 //!
 //! A compiled render pass is not an execution identity: fixed-step regions may execute one pass
 //! repeatedly and feature gates may omit an occurrence. RunenRender therefore supplies distinct
-//! occurrence identities plus only render-owned control/non-data edges. RunenGPU continues to
-//! derive every resource dependency and hazard from the canonical operations.
+//! occurrence identities plus only render-owned control/non-data requirements. RunenGPU continues
+//! to derive every resource dependency and hazard from the canonical operations.
 
 use crate::plugins::gpu::*;
 use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::{CompiledPassExecutionPlan, CompiledRenderFlowPlan};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RenderGpuWorkAdapterError {
@@ -302,6 +302,12 @@ impl PreparedRenderWorkPlan {
     }
 }
 
+struct AuthoredRenderFragment {
+    fragment: GpuWorkFragment,
+    occurrence_nodes: BTreeMap<RenderGpuWorkOccurrenceId, GpuWorkNodeId>,
+    pending: Vec<(GpuWorkNodeId, RenderGpuWorkPayload)>,
+}
+
 /// Prepares one renderer invocation from execution-complete logical GPU occurrences.
 ///
 /// All kind-preserving resources are discovered from operation-derived accesses. Every non-query
@@ -309,28 +315,17 @@ impl PreparedRenderWorkPlan {
 /// descriptor remains uninitialized and a Prepared/Zeroed descriptor contributes only the
 /// coverage already owned by RunenGPU. Caller-declared duplicate access truth is intentionally
 /// absent.
+///
+/// G3 intentionally rejects explicit order already guaranteed by typed data dependencies. The
+/// adapter therefore performs one provisional preparation without control edges, consumes G3's
+/// own dependency result, and retains only unsatisfied render-control requirements for the final
+/// preparation. No access intersection or hazard rule is duplicated in RunenRender.
 pub(crate) fn prepare_render_gpu_work(
     plan: &CompiledRenderFlowPlan,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
 ) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
-    let mut occurrence_indices = BTreeMap::<RenderGpuWorkOccurrenceId, usize>::new();
-    for (index, node) in nodes.iter().enumerate() {
-        if occurrence_indices.insert(node.occurrence, index).is_some() {
-            return Err(RenderGpuWorkAdapterError::DuplicateOccurrence {
-                occurrence: node.occurrence,
-            });
-        }
-    }
-    for node in &nodes {
-        for occurrence in &node.control_order_after {
-            if !occurrence_indices.contains_key(occurrence) {
-                return Err(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
-                    occurrence: *occurrence,
-                });
-            }
-        }
-    }
+    validate_occurrences(&nodes)?;
 
     let graph_label = GpuResourceLabel::new(format!("render.flow.{}.work", plan.flow_id))?;
     let graph_provenance = GpuResourceProvenance::new(graph_label.clone(), None, None);
@@ -346,64 +341,41 @@ pub(crate) fn prepare_render_gpu_work(
             )?)
         })
         .collect::<Result<Vec<_>, RenderGpuWorkAdapterError>>()?;
+    let desired_control_orders = collect_desired_control_orders(&nodes);
 
-    let mut pending = Vec::<(GpuWorkNodeId, RenderGpuWorkPayload)>::new();
-    let fragment = GpuWorkFragment::build_with_provenance(
-        graph_label.clone(),
-        graph_provenance.clone(),
-        |builder| {
-            for resource in resources.values() {
-                builder.declare_resource(resource.clone())?;
-            }
-            for input in &inputs {
-                builder.add_input(input.clone())?;
-            }
-
-            let mut occurrence_nodes = BTreeMap::<RenderGpuWorkOccurrenceId, GpuWorkNodeId>::new();
-            for node in &nodes {
-                let node_id = builder.add_node(
-                    node.label.clone(),
-                    node.operation.clone(),
-                    [],
-                    GpuCapabilityRequirements::new(),
-                    node.preference,
-                    node.provenance.clone(),
-                )?;
-                occurrence_nodes.insert(node.occurrence, node_id.clone());
-                pending.push((node_id, node.payload.clone()));
-            }
-
-            for node in &nodes {
-                let after = occurrence_nodes
-                    .get(&node.occurrence)
-                    .expect("validated occurrence must have a prepared fragment node");
-                for before_occurrence in &node.control_order_after {
-                    let before = occurrence_nodes.get(before_occurrence).ok_or_else(|| {
-                        GpuWorkAuthoringError::invalid(
-                            "author resolved render occurrence order",
-                            GpuWorkAuthoringErrorContext::new(
-                                Some(graph_label.as_str().to_string()),
-                                Some(node.label.as_str().to_string()),
-                                Some(after.clone()),
-                                None,
-                                Some(graph_provenance.clone()),
-                            ),
-                            GpuWorkAuthoringCause::UnknownIdentity,
-                            "include every render control predecessor as an execution occurrence in this invocation",
-                        )
-                    })?;
-                    builder.add_explicit_order(GpuExplicitOrder::new(
-                        before,
-                        after,
-                        "render-owned occurrence control order",
-                    )?)?;
-                }
-            }
-            Ok(())
-        },
+    let provisional = author_render_fragment(
+        &nodes,
+        &resources,
+        &inputs,
+        &graph_label,
+        &graph_provenance,
+        &BTreeSet::new(),
     )?;
+    let provisional_graph =
+        GpuPreparedWorkGraph::prepare(graph_label.clone(), [provisional.fragment])?;
+    let provisional_occurrences =
+        map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
+    let required_explicit_orders = normalize_control_orders(
+        &provisional_graph,
+        &provisional_occurrences,
+        &desired_control_orders,
+    );
 
-    let graph = GpuPreparedWorkGraph::prepare(graph_label, [fragment])?;
+    let (graph, pending) = if required_explicit_orders.is_empty() {
+        (provisional_graph, provisional.pending)
+    } else {
+        let final_fragment = author_render_fragment(
+            &nodes,
+            &resources,
+            &inputs,
+            &graph_label,
+            &graph_provenance,
+            &required_explicit_orders,
+        )?;
+        let graph = GpuPreparedWorkGraph::prepare(graph_label, [final_fragment.fragment])?;
+        (graph, final_fragment.pending)
+    };
+
     let prepared_by_local = graph
         .nodes()
         .iter()
@@ -423,6 +395,201 @@ pub(crate) fn prepare_render_gpu_work(
         sidecar: sidecar.finish(&graph)?,
         graph,
     })
+}
+
+fn validate_occurrences(nodes: &[ResolvedRenderGpuWorkNode]) -> Result<(), RenderGpuWorkAdapterError> {
+    let occurrences = nodes
+        .iter()
+        .map(|node| node.occurrence)
+        .collect::<BTreeSet<_>>();
+    if occurrences.len() != nodes.len() {
+        let mut seen = BTreeSet::new();
+        let occurrence = nodes
+            .iter()
+            .map(|node| node.occurrence)
+            .find(|occurrence| !seen.insert(*occurrence))
+            .expect("duplicate occurrence count guarantees one repeated identity");
+        return Err(RenderGpuWorkAdapterError::DuplicateOccurrence { occurrence });
+    }
+    for node in nodes {
+        for occurrence in &node.control_order_after {
+            if !occurrences.contains(occurrence) {
+                return Err(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
+                    occurrence: *occurrence,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn collect_desired_control_orders(
+    nodes: &[ResolvedRenderGpuWorkNode],
+) -> Vec<(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)> {
+    nodes
+        .iter()
+        .flat_map(|node| {
+            node.control_order_after
+                .iter()
+                .copied()
+                .map(move |before| (before, node.occurrence))
+        })
+        .collect()
+}
+
+fn author_render_fragment(
+    nodes: &[ResolvedRenderGpuWorkNode],
+    resources: &BTreeMap<GpuWorkResourceId, GpuResourceRef>,
+    inputs: &[GpuWorkResourceInput],
+    graph_label: &GpuResourceLabel,
+    graph_provenance: &GpuResourceProvenance,
+    explicit_orders: &BTreeSet<(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)>,
+) -> Result<AuthoredRenderFragment, RenderGpuWorkAdapterError> {
+    let mut occurrence_nodes = BTreeMap::<RenderGpuWorkOccurrenceId, GpuWorkNodeId>::new();
+    let mut pending = Vec::<(GpuWorkNodeId, RenderGpuWorkPayload)>::new();
+    let fragment = GpuWorkFragment::build_with_provenance(
+        graph_label.clone(),
+        graph_provenance.clone(),
+        |builder| {
+            for resource in resources.values() {
+                builder.declare_resource(resource.clone())?;
+            }
+            for input in inputs {
+                builder.add_input(input.clone())?;
+            }
+
+            for node in nodes {
+                let node_id = builder.add_node(
+                    node.label.clone(),
+                    node.operation.clone(),
+                    [],
+                    GpuCapabilityRequirements::new(),
+                    node.preference,
+                    node.provenance.clone(),
+                )?;
+                occurrence_nodes.insert(node.occurrence, node_id.clone());
+                pending.push((node_id, node.payload.clone()));
+            }
+
+            for (before_occurrence, after_occurrence) in explicit_orders {
+                let before = occurrence_nodes.get(before_occurrence).ok_or_else(|| {
+                    GpuWorkAuthoringError::invalid(
+                        "author resolved render occurrence order",
+                        GpuWorkAuthoringErrorContext::new(
+                            Some(graph_label.as_str().to_string()),
+                            None,
+                            None,
+                            None,
+                            Some(graph_provenance.clone()),
+                        ),
+                        GpuWorkAuthoringCause::UnknownIdentity,
+                        "include every render control predecessor as an execution occurrence in this invocation",
+                    )
+                })?;
+                let after = occurrence_nodes.get(after_occurrence).ok_or_else(|| {
+                    GpuWorkAuthoringError::invalid(
+                        "author resolved render occurrence order",
+                        GpuWorkAuthoringErrorContext::new(
+                            Some(graph_label.as_str().to_string()),
+                            None,
+                            None,
+                            None,
+                            Some(graph_provenance.clone()),
+                        ),
+                        GpuWorkAuthoringCause::UnknownIdentity,
+                        "include every render control successor as an execution occurrence in this invocation",
+                    )
+                })?;
+                builder.add_explicit_order(GpuExplicitOrder::new(
+                    before,
+                    after,
+                    "render-owned occurrence control order",
+                )?)?;
+            }
+            Ok(())
+        },
+    )?;
+
+    Ok(AuthoredRenderFragment {
+        fragment,
+        occurrence_nodes,
+        pending,
+    })
+}
+
+fn map_prepared_occurrences(
+    graph: &GpuPreparedWorkGraph,
+    occurrence_nodes: &BTreeMap<RenderGpuWorkOccurrenceId, GpuWorkNodeId>,
+) -> Result<BTreeMap<RenderGpuWorkOccurrenceId, GpuPreparedWorkNodeId>, RenderGpuWorkAdapterError> {
+    let prepared_by_local = graph
+        .nodes()
+        .iter()
+        .map(|node| (node.id().local_node(), node.id()))
+        .collect::<BTreeMap<_, _>>();
+    occurrence_nodes
+        .iter()
+        .map(|(occurrence, node_id)| {
+            let local = node_id.diagnostic_local();
+            let prepared = prepared_by_local
+                .get(&local)
+                .copied()
+                .ok_or(RenderGpuWorkAdapterError::MissingPreparedNodeMapping {
+                    local_node: local,
+                })?;
+            Ok((*occurrence, prepared))
+        })
+        .collect()
+}
+
+fn normalize_control_orders(
+    provisional_graph: &GpuPreparedWorkGraph,
+    occurrence_nodes: &BTreeMap<RenderGpuWorkOccurrenceId, GpuPreparedWorkNodeId>,
+    desired: &[(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)],
+) -> BTreeSet<(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)> {
+    // This graph comes only from a G3 preparation with zero explicit orders. These edges are
+    // therefore G3-derived data dependencies, not renderer-reconstructed access semantics.
+    let mut satisfied_edges = provisional_graph
+        .dependencies()
+        .iter()
+        .map(|dependency| (dependency.before(), dependency.after()))
+        .collect::<BTreeSet<_>>();
+    let mut retained = BTreeSet::new();
+
+    for &(before_occurrence, after_occurrence) in desired {
+        let before = occurrence_nodes[&before_occurrence];
+        let after = occurrence_nodes[&after_occurrence];
+        if dependency_path_exists(&satisfied_edges, before, after) {
+            continue;
+        }
+        retained.insert((before_occurrence, after_occurrence));
+        satisfied_edges.insert((before, after));
+    }
+
+    retained
+}
+
+fn dependency_path_exists(
+    edges: &BTreeSet<(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId)>,
+    start: GpuPreparedWorkNodeId,
+    target: GpuPreparedWorkNodeId,
+) -> bool {
+    let mut ready = vec![start];
+    let mut visited = BTreeSet::new();
+    while let Some(node) = ready.pop() {
+        if !visited.insert(node) {
+            continue;
+        }
+        for &(before, after) in edges {
+            if before != node {
+                continue;
+            }
+            if after == target {
+                return true;
+            }
+            ready.push(after);
+        }
+    }
+    false
 }
 
 fn collect_operation_resources(
