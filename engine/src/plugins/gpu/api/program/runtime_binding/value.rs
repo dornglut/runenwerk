@@ -43,8 +43,7 @@ impl GpuRuntimeBufferBinding {
     }
 
     pub fn checked_effective_offset(&self) -> Option<u64> {
-        self.offset
-            .checked_add(self.dynamic_offset.unwrap_or(0))
+        self.offset.checked_add(self.dynamic_offset.unwrap_or(0))
     }
 }
 
