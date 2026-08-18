@@ -4,9 +4,9 @@ use super::{
 };
 use crate::plugins::gpu::{
     GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
-    GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError, GpuResourceAccess,
-    GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureAccess,
-    GpuTextureAccessKind, GpuTextureAccessResource,
+    GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
+    GpuResourceAccess, GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess,
+    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
 use std::collections::BTreeMap;
 
