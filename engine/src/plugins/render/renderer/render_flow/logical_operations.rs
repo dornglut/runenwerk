@@ -7,9 +7,8 @@ use crate::plugins::gpu::{
     GpuDispatchSize, GpuDrawIntent, GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat,
     GpuQueryAccess, GpuQueryAccessKind, GpuQueryRange, GpuQueryResolveOperation,
     GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuRenderDraw, GpuRenderOperation,
-    GpuScissorRect, GpuTextureAccessResource, GpuTextureSubresourceRange, GpuTextureViewHandle,
-    GpuUploadOperation, GpuVertexBufferBinding, GpuViewport, GpuWorkOperation, PreparedGpuData,
-    TransferData,
+    GpuScissorRect, GpuTextureAccessResource, GpuTextureViewHandle, GpuUploadOperation,
+    GpuVertexBufferBinding, GpuViewport, GpuWorkOperation, PreparedGpuData, TransferData,
 };
 use crate::plugins::render::graph::CompiledDrawSource;
 use crate::plugins::render::{RenderDepthPolicy, RenderIndirectDrawArgsKind};
