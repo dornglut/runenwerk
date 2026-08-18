@@ -49,9 +49,9 @@ PhaseImplementationSpec(
         "GpuComputeOperation contains an accepted compute-pipeline contract, complete typed runtime bindings, one GpuDispatchIntent, and explicit operation-owned timestamp state.",
         "GpuDispatchIntent supports Direct{x,y,z} and Indirect{buffer,offset}.",
         "Direct dimensions are u32 and each is admitted against normalized max-compute-workgroups-per-dimension.",
-        "A zero direct dimension is valid and means zero shader invocations; it produces no shader binding access/effect and no shader initialization effect.",
+        "A zero direct dimension is valid and means zero shader invocations; the dispatch retains its interface-derived binding accesses and hazards because dispatch usage validation is defined from the active pipeline/bind groups, but zero invocations establish no shader execution effect or definite shader initialization effect.",
         "Operation-owned timestamp semantics remain valid for an otherwise empty direct dispatch.",
-        "Private later encoding may elide an empty dispatch but must preserve explicit non-shader operation semantics.",
+        "Private later encoding may elide an empty dispatch only when doing so preserves RunenGPU validation and diagnostics; logical binding access/hazard semantics remain unchanged.",
         "Indirect dispatch reads exactly 12 bytes containing three packed u32 counts from a checked indirect buffer range and derives the matching indirect read access.",
         "Indirect dispatch offset/alignment are validated structurally; host planning does not inspect runtime GPU argument values as semantic truth.",
     ],
@@ -105,7 +105,7 @@ PhaseImplementationSpec(
     ],
 
     operation_access_contract: [
-        "Compute derives interface/runtime-binding accesses, indirect argument access and timestamp accesses.",
+        "Compute derives interface/runtime-binding accesses, indirect argument access and timestamp accesses, including for a zero direct dispatch; zero invocations change execution/effect semantics, not the conservative logical usage scope.",
         "Render derives attachment/resolve accesses, runtime-binding accesses, vertex/index/indirect accesses and timestamp accesses.",
         "Copy/Clear/Resolve/Present preserve accepted G3/G3R access and initialization semantics unless a concrete G5A defect requires the directly corresponding correction.",
         "Upload derives one exact destination write and exact initialization effect from transfer semantics.",
@@ -140,7 +140,7 @@ PhaseImplementationSpec(
     invariants: [
         "No second public command graph or backend command IR becomes semantic authority.",
         "No G3R access-to-initialization inference returns.",
-        "Direct zero dispatch is no shader work and fabricates no shader initialization.",
+        "Direct zero dispatch is zero shader execution but retains conservative interface-derived resource accesses/hazards and fabricates no definite shader initialization.",
         "Indirect draw and dispatch share one normalized IndirectExecution capability fact.",
         "Render pass-wide usage compatibility and draw-local writable aliasing are both enforced at their correct scope.",
         "Color clear semantics are target-format aware and not globally normalized-color-only.",
@@ -153,7 +153,7 @@ PhaseImplementationSpec(
 
     required_proofs: [
         "Direct compute operation is execution-complete from pipeline + bindings + direct dispatch and derives exact runtime-binding accesses.",
-        "Direct dispatch with one zero dimension is accepted, produces no shader binding access/effect, preserves explicit timestamps, and is deterministic.",
+        "Direct dispatch with one zero dimension is accepted, retains interface-derived binding access/hazard evidence, produces no shader execution or definite shader initialization effect, preserves explicit timestamps, and is deterministic.",
         "Indirect compute derives exact 12-byte indirect read coverage and requires IndirectExecution.",
         "Existing indirect draw uses IndirectExecution after clean enum cutover; IndirectDraw no longer exists.",
         "Render operation with multiple compatible draws/pipelines validates one pass signature and retains draw order.",
