@@ -131,9 +131,9 @@ impl RenderGpuWorkPayload {
     fn pass_id(&self) -> Option<RenderPassId> {
         match self {
             Self::Pass { pass, .. } => Some(execution_pass_id(pass.as_ref())),
-            Self::Upload { .. }
-            | Self::TimingResolve { .. }
-            | Self::TimingReadbackCopy { .. } => None,
+            Self::Upload { .. } | Self::TimingResolve { .. } | Self::TimingReadbackCopy { .. } => {
+                None
+            }
         }
     }
 }
