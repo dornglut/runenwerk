@@ -3,6 +3,7 @@
 mod access;
 mod capability;
 mod context;
+mod copy_compatibility;
 mod data;
 mod dispatch;
 mod errors;
@@ -24,6 +25,7 @@ mod work_resource_id;
 pub use access::*;
 pub use capability::*;
 pub use context::*;
+pub use copy_compatibility::*;
 pub use data::*;
 pub use dispatch::*;
 pub use errors::*;
