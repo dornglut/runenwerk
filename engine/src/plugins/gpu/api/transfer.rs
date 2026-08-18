@@ -1,7 +1,8 @@
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRegion, GpuReadbackId, GpuResourceAccess,
     GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureCopyRegion,
-    GpuTextureDimension, GpuWorkOperationCause, GpuWorkOperationError, PreparedGpuData, TransferData,
+    GpuTextureDimension, GpuWorkOperationCause, GpuWorkOperationError, PreparedGpuData,
+    TransferData,
 };
 
 /// Exact logical source/destination region for CPU/GPU transfer work.
@@ -46,17 +47,19 @@ impl GpuTransferRegion {
         operation: &'static str,
     ) -> Result<GpuResourceAccess, GpuWorkOperationError> {
         match self {
-            Self::Buffer(region) => GpuBufferAccess::new(region.buffer(), region.range(), buffer_kind)
-                .map(GpuResourceAccess::Buffer)
-                .map_err(|source| {
-                    GpuWorkOperationError::from_access(
-                        operation,
-                        region.buffer().descriptor().common().label().as_str(),
-                        GpuWorkOperationCause::InvalidCopyRegion,
-                        "use a checked transfer range with matching copy usage",
-                        source,
-                    )
-                }),
+            Self::Buffer(region) => {
+                GpuBufferAccess::new(region.buffer(), region.range(), buffer_kind)
+                    .map(GpuResourceAccess::Buffer)
+                    .map_err(|source| {
+                        GpuWorkOperationError::from_access(
+                            operation,
+                            region.buffer().descriptor().common().label().as_str(),
+                            GpuWorkOperationCause::InvalidCopyRegion,
+                            "use a checked transfer range with matching copy usage",
+                            source,
+                        )
+                    })
+            }
             Self::Texture(region) => GpuTextureAccess::new(
                 GpuTextureAccessResource::Texture(region.texture().clone()),
                 region.subresources(),
@@ -161,7 +164,10 @@ pub struct GpuReadbackOperation {
 }
 
 impl GpuReadbackOperation {
-    pub fn new(source: GpuTransferRegion, id: GpuReadbackId) -> Result<Self, GpuWorkOperationError> {
+    pub fn new(
+        source: GpuTransferRegion,
+        id: GpuReadbackId,
+    ) -> Result<Self, GpuWorkOperationError> {
         let source_access = source.access(
             GpuBufferAccessKind::CopySource,
             GpuTextureAccessKind::CopySource,
@@ -290,14 +296,12 @@ mod tests {
                 .unwrap(),
             )
             .unwrap();
-        let region = GpuBufferRegion::new(
-            &buffer,
-            GpuBufferRange::new(&buffer, 8, 16).unwrap(),
-        )
-        .unwrap();
+        let region =
+            GpuBufferRegion::new(&buffer, GpuBufferRange::new(&buffer, 8, 16).unwrap()).unwrap();
 
-        let upload = GpuUploadOperation::new(region.clone().into(), transfer_payload("payload", 16))
-            .unwrap();
+        let upload =
+            GpuUploadOperation::new(region.clone().into(), transfer_payload("payload", 16))
+                .unwrap();
         assert_eq!(upload.payload().layout().byte_len(), 16);
         assert!(upload.destination_access().writes());
         assert!(upload.establishes_initialization_effect());
@@ -314,20 +318,17 @@ mod tests {
                 GpuTextureDescriptor::new(
                     common("texture"),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &resource_label,
-                        GpuTextureDimension::D2,
-                        8,
-                        8,
-                        1,
-                    )
-                    .unwrap(),
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
                     1,
                     1,
                     GpuTextureFormat::Rgba8Unorm,
                     GpuTextureUsages::new(
                         &resource_label,
-                        [GpuTextureUsage::CopyDestination, GpuTextureUsage::CopySource],
+                        [
+                            GpuTextureUsage::CopyDestination,
+                            GpuTextureUsage::CopySource,
+                        ],
                     )
                     .unwrap(),
                     GpuTextureInitialization::Uninitialized,
@@ -351,8 +352,8 @@ mod tests {
         assert_eq!(upload.destination().logical_byte_len().unwrap(), 128);
         assert!(!upload.establishes_initialization_effect());
 
-        let readback = GpuReadbackOperation::new(region.into(), GpuReadbackId::allocate().unwrap())
-            .unwrap();
+        let readback =
+            GpuReadbackOperation::new(region.into(), GpuReadbackId::allocate().unwrap()).unwrap();
         assert_eq!(readback.logical_byte_len().unwrap(), 128);
         assert!(readback.source_access().reads());
         assert!(!readback.source_access().writes());
