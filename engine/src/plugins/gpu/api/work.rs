@@ -1063,18 +1063,20 @@ impl GpuCopyOperation {
         source: GpuTextureCopyRegion,
         destination: GpuTextureCopyRegion,
     ) -> Result<Self, GpuWorkOperationError> {
-        let same_format =
-            source.texture().descriptor().format() == destination.texture().descriptor().format();
+        let copy_compatible = super::gpu_texture_formats_copy_compatible(
+            source.texture().descriptor().format(),
+            destination.texture().descriptor().format(),
+        );
         let same_extent = source.extent() == destination.extent();
         let aliases = source.texture() == destination.texture()
             && source
                 .subresources()
                 .overlaps(destination.subresources(), source.aspect());
-        if !same_format || !same_extent || source.aspect() != destination.aspect() || aliases {
+        if !copy_compatible || !same_extent || source.aspect() != destination.aspect() || aliases {
             return Err(copy_error(
                 "construct GPU texture-to-texture copy",
                 source.texture().diagnostic_identity(),
-                "use matching formats, aspects, extents, and non-overlapping source/destination storage",
+                "use copy-compatible formats, matching aspects/extents, and non-overlapping source/destination storage",
             ));
         }
         texture_copy_access(&source, GpuTextureAccessKind::CopySource)?;
@@ -1545,8 +1547,8 @@ impl GpuResourceAccess {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::operation::{GpuRenderOperation, GpuWorkOperation};
+    use super::*;
     use crate::plugins::gpu::{
         GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
         GpuMemoryIntent, GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon,
@@ -1683,6 +1685,7 @@ mod tests {
             [-2.0, 3.5, 1.1, 7.0]
         );
         let negative_zero = GpuDepthClearValue::new(-0.0).unwrap();
+        let positive_zero = GpuDepthClearValue::new(0.0, -0.0, 1.0, 1.0).err();
         let positive_zero = GpuDepthClearValue::new(0.0).unwrap();
         assert_eq!(negative_zero, positive_zero);
         assert_eq!(semantic_hash(negative_zero), semantic_hash(positive_zero));
