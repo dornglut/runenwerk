@@ -4,8 +4,8 @@ use super::super::{
     GpuExportRelationship, GpuResourceAccess, GpuResourceAccessIntent, GpuResourceDescriptorError,
     GpuResourceLabel, GpuResourceProvenance, GpuResourceRef, GpuTextureAccess,
     GpuTextureAccessKind, GpuTextureAccessResource, GpuWorkAuthoringCause, GpuWorkAuthoringError,
-    GpuWorkAuthoringErrorContext, GpuWorkAuthoringErrorSource, GpuWorkNodeKind,
-    GpuWorkOperation, GpuWorkResourceId,
+    GpuWorkAuthoringErrorContext, GpuWorkAuthoringErrorSource, GpuWorkNodeKind, GpuWorkOperation,
+    GpuWorkResourceId,
 };
 use super::{
     coverage::{GpuInitialCoverage, GpuWorkResourceInput},
