@@ -19,17 +19,22 @@ enum RenderPassUsageClass {
 pub(crate) fn validate_render_pass_usage_scope(
     accesses: &[GpuResourceAccess],
 ) -> Result<(), GpuWorkOperationError> {
+    let classes = accesses
+        .iter()
+        .map(render_pass_usage_class)
+        .collect::<Result<Vec<_>, _>>()?;
+
     for left_index in 0..accesses.len() {
-        for right in &accesses[(left_index + 1)..] {
+        for (right_offset, right) in accesses[(left_index + 1)..].iter().enumerate() {
             let left = &accesses[left_index];
             if !same_render_pass_subresource(left, right) {
                 continue;
             }
 
-            let Some(left_class) = render_pass_usage_class(left)? else {
+            let Some(left_class) = classes[left_index] else {
                 continue;
             };
-            let Some(right_class) = render_pass_usage_class(right)? else {
+            let Some(right_class) = classes[left_index + 1 + right_offset] else {
                 continue;
             };
 
@@ -268,6 +273,20 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn lone_copy_role_rejects_before_pairwise_usage_validation() {
+        let mut allocator = allocator(106);
+        let buffer = buffer(&mut allocator, "copy", [GpuBufferUsage::CopySource]);
+        let copy = GpuBufferAccess::new(
+            &buffer,
+            GpuBufferRange::new(&buffer, 0, 16).unwrap(),
+            GpuBufferAccessKind::CopySource,
+        )
+        .unwrap();
+
+        assert!(validate_render_pass_usage_scope(&[GpuResourceAccess::Buffer(copy)]).is_err());
     }
 
     #[test]
