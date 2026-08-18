@@ -24,56 +24,54 @@ related_docs:
 
 ## Authority
 
-This design is the fresh G5 planning candidate owned by issue `#284` and derived from exact accepted
+This is the fresh G5 planning candidate owned by issue `#284`, derived from exact accepted
 post-G3R/G4R main:
 
 ```text
 d7afaba20a27901e7a6bc4d6d75e6c761c7cbf86
 ```
 
-The earlier WGPU-27 G5 planning PR `#285` is superseded historical evidence. It is not a predecessor,
-merge base or implementation authority.
+The earlier WGPU-27 planning PR `#285` is superseded historical evidence. It is not a predecessor,
+merge base, or implementation authority.
 
-This document binds durable G5 architecture. The owning GitHub issue owns activation and current
-state. The companion G5A RON file is subordinate handoff detail for the first bounded implementation
-slice only.
-
-No G5 Rust implementation is authorized by this document alone.
+This document owns durable G5 architecture. GitHub issues own activation/current state. The G5A RON
+file is subordinate implementation-handoff detail only. This document does not authorize G5 Rust by
+itself.
 
 ## Mission
 
-RunenGPU is the backend-neutral logical semantics layer for GPU resources and execution. G5 extends
-that boundary from validated/realized work through observable execution while keeping physical WGPU
-realization private.
-
-The target stack is:
+RunenGPU is the backend-neutral logical-semantics layer for GPU resources and execution. G5 extends
+that boundary from validated/realized work through observable execution while WGPU remains private
+physical realization.
 
 ```text
 Runenwerk / domain adapters
         |
-        v
-RunenRender image-formation semantics          independent non-render consumers
-        |                                             |
-        +--------------------+------------------------+
-                             v
-                  RunenGPU logical GPU semantics
-                  resources / programs / work
-                  access / initialization / execution
-                             |
-                             v
-                  private physical realization
-                             |
-                             v
-                           WGPU 30
-                             |
-                Vulkan / Metal / D3D12 / WebGPU / ...
+        +------------------------------+
+        |                              |
+        v                              v
+RunenRender image semantics     non-render consumers
+        |                              |
+        +---------------+--------------+
+                        v
+              RunenGPU logical GPU semantics
+              resources / programs / work
+              access / initialization / execution
+                        |
+                        v
+              private physical realization
+                        |
+                        v
+                      WGPU 30
+                        |
+             Vulkan / Metal / D3D12 / WebGPU / ...
 ```
 
 G5 must not turn RunenGPU into a public WGPU command wrapper.
 
 ## Ordered delivery
 
-The durable roadmap remains:
+The accepted durable sequence remains:
 
 ```text
 accepted G4R
@@ -87,30 +85,30 @@ accepted G4R
     -> GX standalone transfer
 ```
 
-Only G5A may be activated directly after this planning design is accepted.
+Only G5A may activate directly after this planning result is accepted.
 
-# 1. Governing semantic laws
+# 1. Governing laws
 
 ## 1.1 One logical work authority
 
-`GpuWorkOperation`, `GpuWorkFragment` and `GpuPreparedWorkGraph` remain the sole authority for:
+`GpuWorkOperation`, `GpuWorkFragment`, and `GpuPreparedWorkGraph` remain the sole RunenGPU authority
+for:
 
-- logical GPU operations;
-- logical resources;
+- logical GPU operations and resources;
 - exact G3R initialization requirements/effects;
-- access and hazard intent;
+- access/hazard intent;
 - dependencies and deterministic prepared order;
 - operation-derived capability requirements.
 
-G5 adds execution-complete operation payloads. It does not create another public command graph,
-backend command buffer IR, execution DAG or renderer sidecar with duplicate GPU semantics.
+G5 completes operation payloads and adds execution lifecycle. It does not create another public
+command graph, execution DAG, backend command-buffer IR, or permanent renderer sidecar with duplicate
+GPU semantics.
 
-Private WGPU command encoders and implementation-local encode plans are derived realization state and
-never semantic authority.
+Private backend encode plans are derived implementation state only.
 
-## 1.2 Logical semantics stay above physical realization
+## 1.2 Logical semantics stay above realization
 
-Public RunenGPU types may describe:
+Public RunenGPU may expose semantic concepts such as:
 
 ```text
 GpuComputeOperation
@@ -124,7 +122,7 @@ GpuReadbackId
 GpuReadbackStatus
 ```
 
-They must not expose or make correctness depend on:
+Public correctness must not depend on:
 
 ```text
 wgpu::Device
@@ -135,12 +133,12 @@ wgpu::SubmissionIndex
 wgpu::PollType
 wgpu::BufferView
 wgpu::Surface
-Vk*/MTL*/D3D12* synchronization handles
+native backend synchronization handles
 ```
 
 ## 1.3 G3R remains initialization authority
 
-G5 does not reintroduce `write access => initialized` inference.
+G5 must preserve:
 
 ```text
 access/hazard envelope
@@ -150,12 +148,12 @@ exact initialization requirement
 operation-guaranteed initialization effect
 ```
 
-Uploads, readbacks, copies, clears, query resolve and attachment semantics participate in the same
-G3R preparation model. Execution convenience may not bypass it.
+Upload/readback/copy/clear/resolve/attachment work participates in the same G3R model. No execution
+convenience may bypass it.
 
-## 1.4 Accepted is not physically submitted
+## 1.4 Accepted is a RunenGPU fact
 
-The public submission fact is RunenGPU admission:
+The portable submission lifecycle is:
 
 ```text
 Accepted
@@ -163,20 +161,20 @@ Accepted
     -> Failed
 ```
 
-`Accepted` does **not** mean a backend queue submission call has already succeeded. Internal physical
-states may exist for diagnostics, but they are not portable public lifecycle states.
+`Accepted` means RunenGPU irreversibly admitted the submission. It does not claim that the private
+backend queue has already completed—or even necessarily begun—the physical submit operation.
 
-A `GpuSubmissionId` is allocated only at the irreversible RunenGPU acceptance point. After that ID is
-published, every later synchronous or asynchronous failure terminalizes that accepted submission
-exactly once.
+A `GpuSubmissionId` is allocated only at this irreversible acceptance point. Once published, every
+later synchronous/asynchronous failure terminalizes that accepted ID exactly once.
 
 # 2. G5A — executable logical work closure
 
-G5A completes logical operation meaning but does not own queue submission or progress.
+G5A completes logical operation meaning. It does not submit work, map results, own progress, or own
+surfaces.
 
 ## 2.1 Compute operation
 
-The target semantic shape is directionally:
+Directionally:
 
 ```text
 GpuComputeOperation
@@ -186,12 +184,10 @@ GpuComputeOperation
   timestamp_writes
 ```
 
-Exact field names may follow current API decomposition, but every compute operation must contain all
-information required for backend-neutral execution after private realization.
+Exact type decomposition may follow current source, but the operation must contain all backend-neutral
+meaning required for later private execution.
 
-### Dispatch intent
-
-Replace the direct-only/nonzero-only dispatch shape with:
+### Direct and indirect dispatch
 
 ```text
 GpuDispatchIntent
@@ -199,27 +195,28 @@ GpuDispatchIntent
   Indirect { arguments: GpuBufferHandle, offset: u64 }
 ```
 
-Direct dispatch rules:
+Direct rules:
 
-- each dimension is checked against the admitted execution limit;
+- each dimension is admitted against the normalized maximum compute-workgroups-per-dimension;
 - zero is valid;
-- if any dimension is zero, the shader invocation grid is empty;
-- empty direct dispatch produces no shader resource access and no shader initialization effect;
-- explicit operation-owned timestamp commands remain meaningful even when the shader dispatch is
-  empty;
-- private encoding may elide an empty dispatch while preserving explicit non-shader command
-  semantics.
+- any zero dimension means an empty shader invocation grid;
+- the dispatch still retains interface-derived binding accesses/hazards because portable dispatch
+  usage validation is defined from the active pipeline/bind groups rather than actual invocation
+  count;
+- zero invocations establish no shader execution effect and no definite shader initialization
+  effect;
+- explicit operation-owned timestamp semantics remain valid;
+- private encoding may elide an empty shader dispatch only when validation/diagnostic equivalence is
+  preserved; logical access/hazard semantics remain unchanged.
 
-Indirect dispatch rules:
+Indirect rules:
 
-- the argument buffer has an exact 12-byte read range beginning at the checked offset;
-- the offset obeys accepted indirect-buffer alignment semantics;
-- the operation derives an indirect read access;
-- the operation requires `GpuCapabilityFeature::IndirectExecution`;
-- runtime argument values are backend/GPU data and are not inspected by host planning as semantic
-  truth.
+- the argument buffer contributes one exact 12-byte read beginning at the checked offset;
+- offset/alignment are structurally validated;
+- runtime GPU argument values are not host planning truth;
+- the operation requires `GpuCapabilityFeature::IndirectExecution`.
 
-## 2.2 One normalized indirect-execution capability
+## 2.2 One indirect-execution capability
 
 Clean-cut:
 
@@ -228,12 +225,12 @@ GpuCapabilityFeature::IndirectDraw
     -> GpuCapabilityFeature::IndirectExecution
 ```
 
-The accepted backend admission fact already comes from WGPU `INDIRECT_EXECUTION`, which covers both
-indirect drawing and dispatching. Keeping draw-only naming or adding a parallel dispatch capability
-would misrepresent one physical capability as two independent facts.
+The admitted WGPU fact already represents indirect draw and indirect dispatch capability together.
+Existing indirect draw requirements migrate to `IndirectExecution`; indirect compute uses the same
+fact.
 
-All existing indirect draw requirements migrate to `IndirectExecution`. No deprecated alias,
-forwarding enum variant or compatibility translation survives G5A.
+Do not keep `IndirectDraw` as a deprecated alias and do not create a parallel `IndirectDispatch`
+capability.
 
 ## 2.3 Render operation and draws
 
@@ -247,7 +244,7 @@ GpuRenderOperation
   timestamp writes
 ```
 
-Each `GpuRenderDraw` owns complete effective draw execution state:
+Each draw owns complete effective execution state:
 
 ```text
 GpuRenderDraw
@@ -262,154 +259,154 @@ GpuRenderDraw
   stencil reference
 ```
 
-This supports multiple compatible pipelines/bindings/draws inside one pass without fabricating
-extra attachment load/store boundaries.
+This permits multiple compatible pipelines/bindings/draws inside one pass without fabricating extra
+attachment load/store boundaries.
 
 ### Pass signature
 
-Preparation derives one render-pass signature from attachments:
+Preparation derives:
 
 - effective extent;
 - sample count;
 - ordered color formats;
 - optional depth/stencil format.
 
-Every draw pipeline must be compatible with that pass signature before backend encoding. Pipeline
-blend/primitive/write state remains pipeline/draw state and may differ between draws where the pass
-signature allows it.
+Every draw pipeline must match the pass signature before backend encoding. Pipeline blend/primitive/
+write state remains draw-pipeline state and may differ where the pass signature permits.
 
-## 2.4 Render usage compatibility versus draw-local aliasing
+## 2.4 Render usage scope versus draw-local aliasing
 
-G5A must model the WebGPU-portable semantic distinction explicitly.
+G5A explicitly separates two rules.
 
 ### Pass-wide usage compatibility
 
-One render pass is one usage scope. Across all draws/state uses in the pass:
+One render pass is one usage scope. Across all relevant pass commands:
 
-- read/input/constant/storage-read/attachment-read combinations must remain compatible;
-- storage/storage use may coexist across different draws;
-- attachment/attachment use may coexist only where accepted attachment-region rules permit it;
-- a resource cannot be both incompatible read-like and write-like usages in the same pass;
-- writable attachment usage cannot alias an incompatible sampled/storage use in the pass.
+- compatible storage/storage usage may coexist across distinct draws;
+- attachment/attachment combinations remain subject to accepted attachment-region rules;
+- incompatible read-like/write-like combinations reject;
+- writable attachment usage cannot alias an incompatible sampled/storage use in the pass;
+- vertex/index/indirect/bind-group state participates at the pass scope according to the portable
+  execution contract.
 
 ### Draw-local writable binding aliasing
 
-For each draw's effective pipeline/bindings:
+For each draw's effective pipeline/binding set:
 
-- overlapping buffer bindings are rejected when either effective binding is writable;
-- overlapping texture subresources are rejected when either effective binding is writable;
+- overlapping buffer ranges reject if either effective binding is writable;
+- overlapping texture subresources reject if either effective binding is writable;
 - disjoint ranges/subresources remain valid;
-- dynamic offsets participate in the effective range before this check.
+- dynamic offsets are applied before overlap analysis.
 
-This replaces the current broader rule that effectively rejects any overlapping write-capable
-access across the render operation.
+This replaces the current broader model that can reject any overlapping write-capable render access
+without distinguishing pass compatibility from one draw's writable aliasing.
 
-## 2.5 Vertex and index binding semantics
+## 2.5 Vertex/index bindings
 
 `GpuVertexBufferBinding` owns:
 
 - vertex slot;
-- logical buffer handle;
+- logical buffer;
 - checked byte range.
 
-Pipeline stride, step mode and attributes remain accepted G4 pipeline state.
+Pipeline stride/step/attributes remain G4 pipeline authority.
 
 `GpuIndexBufferBinding` owns:
 
-- logical buffer handle;
+- logical buffer;
 - checked byte range;
 - accepted `GpuIndexFormat`.
 
-No second index-format vocabulary is added.
+No duplicate index-format type is introduced.
 
 ## 2.6 Dynamic render state
 
-Each draw carries complete effective dynamic state so semantics do not depend on hidden backend state
-inheritance.
-
-Required initial state:
+Each draw carries complete effective state rather than inheriting semantic meaning from prior backend
+commands:
 
 - viewport with finite canonical values and `0 <= min_depth <= max_depth <= 1`;
-- scissor rectangle checked against effective render extent;
+- scissor checked against effective render extent;
 - finite canonical blend constant;
 - stencil reference `u32`.
 
-Zero-area viewport/scissor are valid no-rasterization cases. Private realization may elide redundant
-state setters, but the logical value remains explicit.
+Zero-area viewport/scissor are valid no-rasterization cases. Private encoding may elide redundant
+state setters; the logical value remains explicit.
 
-## 2.7 Color clear values
+## 2.7 Color clear semantics
 
-Clean-cut `GpuColorClearValue` from normalized-color policy to generic attachment clear semantics:
+Clean-cut `GpuColorClearValue` from a normalized-color-only policy to generic color-attachment clear
+semantics:
 
-- four finite `f64` components;
-- canonicalize signed zero/NaN rejection consistently with other semantic floating values;
+- four finite canonical `f64` components;
+- reject non-finite values;
+- canonicalize signed zero consistently;
 - no generic `[0, 1]` restriction;
-- the selected attachment format owns target-format conversion/admission;
-- depth clear remains separately constrained to its depth semantic domain.
+- target attachment format owns conversion/admission;
+- depth clear remains a separate depth-domain value with its own normalized constraint.
 
-This does not add speculative texture formats. It removes an invalid semantic ceiling from an
-existing generic value.
+This removes an invalid ceiling from an existing generic concept. It does not authorize speculative
+new texture formats.
 
-## 2.8 Runtime binding set
+## 2.8 One runtime binding-use model
 
-`GpuRuntimeBindingSet` is the complete logical binding-use aggregate for one compute invocation or
-render draw. It preserves accepted G4 typed runtime binding values and provides deterministic
-pipeline-layout slot ordering.
+`GpuRuntimeBindingSet` is the complete logical binding use for one compute invocation or render draw.
+It preserves accepted G4 typed runtime binding values and deterministic pipeline-layout slot order.
 
-It owns semantic values such as:
+It owns semantic facts including:
 
 - logical resource identity;
 - static buffer offset/size;
 - optional logical `u64` dynamic offset;
 - texture/view/sampler identity;
-- effective access intent derived from the accepted interface.
+- interface-derived access intent.
 
-## 2.9 Dynamic offsets are per-use execution state
+## 2.9 Dynamic offsets are execution-use state
 
-The physical bind group does not own dynamic offsets.
-
-Target decomposition:
+Physical bind-group identity must exclude dynamic offsets.
 
 ```text
 GpuRuntimeBindingSet
       |
-      +--> logical effective access range
+      +--> effective logical access range
       |       static offset + dynamic offset + size
       |
       +--> static physical binding projection
               layout
               resource identities
               static buffer offsets/sizes
-              texture/sampler/view facts
+              texture/view/sampler facts
               NO dynamic offset
                       |
                       v
               GpuRealizedBindGroup
 ```
 
-G5A changes the private G4C2 bind-group key and record to use the static projection. Requests that
-differ only by dynamic offsets reuse one physical bind group.
+G5A changes the private G4C2 key/record accordingly. Uses differing only by dynamic offsets reuse one
+physical bind-group realization.
 
-Remove physical-record APIs that claim one invocation's complete runtime values are properties of the
-realized bind group. Logical binding values remain inspectable from the logical use.
+Remove physical-record APIs that claim a single invocation's complete runtime values are properties
+of the realized bind group. Logical values remain inspectable from logical work.
 
-G5B later prepares ordered backend dynamic offsets per bind-group use and performs private narrowing
-to the WGPU offset domain.
+G5B later owns ordered backend dynamic-offset slices and checked private narrowing from logical `u64`
+to the backend domain.
 
-## 2.10 Complete operation-derived accesses
+## 2.10 Complete operation-derived access truth
 
-After G5A the generic work operation derives all GPU accesses needed for correctness:
+After G5A:
 
-- Compute: runtime binding accesses + indirect arguments + timestamps;
-- Render: attachments/resolves + runtime bindings + vertex/index/indirect buffers + timestamps;
-- Copy/Clear/Resolve/Present: accepted G3/G3R semantics;
-- Upload: exact destination write;
-- Readback: exact source read.
+- Compute derives runtime-binding accesses, indirect argument access, and timestamps. Zero direct
+  dispatch retains conservative interface-derived access/hazard evidence while producing no shader
+  execution/definite initialization effect.
+- Render derives attachment/resolve/binding/vertex/index/indirect/timestamp accesses.
+- Copy/Clear/Resolve/Present retain accepted G3/G3R semantics unless a directly proven defect requires
+  correction.
+- Upload derives one exact destination write and initialization effect.
+- Readback derives one exact source read and no initialization effect.
 
-Renderer-authored duplicate generic GPU access declarations are removed as each operation becomes
-complete. Domain/renderer semantic provenance may remain, but not duplicate GPU access truth.
+Renderer-authored duplicate generic GPU access truth is deleted as generic operations become complete.
+Renderer/domain provenance may remain as non-authoritative metadata.
 
-## 2.11 Upload operation
+## 2.11 Upload
 
 Add graph-visible immutable Upload work:
 
@@ -419,14 +416,15 @@ GpuUploadOperation
   immutable checked payload
 ```
 
-Properties:
+It:
 
 - participates in G3 hazards and exact initialization effects;
-- payload lifetime/value is owned independently of WGPU staging;
-- payload diagnostic record identity is not content identity, cache identity or persistence identity;
-- physical upload strategy is private G5B realization.
+- owns payload value independently of physical staging;
+- may have process-local correlation/record identity distinct from semantic payload equality;
+- does not define persistence/content/cache identity;
+- leaves physical transfer strategy to G5B.
 
-## 2.12 Readback operation
+## 2.12 Readback
 
 Add graph-visible Readback work:
 
@@ -436,48 +434,51 @@ GpuReadbackOperation
   GpuReadbackId
 ```
 
-Properties:
+It:
 
-- participates in G3 read hazards/requirements;
-- CPU-visible result is asynchronous and cannot feed a later node in the same logical submission;
-- result bytes are normalized to logical/tight data rather than exposing mapped backend ranges;
-- submission completion and readback materialization remain distinct facts.
+- participates in exact read hazards/requirements;
+- cannot feed CPU data into a later node in the same submission;
+- exposes normalized logical result data, never mapped backend ranges;
+- keeps submission completion and readback materialization distinct.
 
 ## 2.13 Execution-required normalized limits
 
-G5A extends normalized limit vocabulary only where accepted logical execution needs device facts.
-The first required additions include at least:
+G5A extends normalized device/workload limit vocabulary only where accepted execution semantics need
+it. Initial required additions include at least:
 
 - maximum compute workgroups per dimension;
 - maximum bind-group count;
-- maximum combined bind-group + vertex-buffer count where required by the backend-neutral contract.
+- combined bind-group + vertex-buffer limit where required by the portable execution contract.
 
-Existing vertex-buffer, attachment, binding and dynamic-alignment facts remain authoritative.
+Existing binding-size/count, vertex-buffer, attachment, and alignment facts remain authoritative.
 
 Rule:
 
-> if a device-dependent constraint is knowable before private encoding and can affect acceptance of an
-> accepted RunenGPU operation, normalize/admit it at the owning semantic boundary instead of waiting
-> for a backend validation failure.
+> If a device-dependent constraint is knowable before private encoding and can reject an accepted
+> RunenGPU operation, normalize/admit it at the owning semantic boundary rather than treating backend
+> validation failure as ordinary control flow.
 
-Do not mirror unrelated WGPU limits merely for completeness.
+Do not mirror the entire WGPU limits structure mechanically.
 
 ## 2.14 G5A renderer transition
 
-G5A makes generic GPU work execution-complete. Current renderer planning structures may remain for
-RunenRender semantics/provenance, but they must stop being independent GPU execution authority.
+Current renderer structures may retain RunenRender planning/provenance. Once a generic operation is
+execution-complete, the renderer must not retain an independent pipeline/binding/draw/access
+representation for the same GPU operation.
 
-Temporary raw execution before G5C may reference the generic operation values by prepared node
-identity. It may not preserve a second pipeline/binding/draw/access description and reconcile them at
-runtime.
+Temporary pre-G5B raw execution may consume/reference generic prepared operations. It may not
+reconcile parallel old/new GPU semantics.
+
+G5A does not broaden `CurrentRenderDeviceQueue` or `CurrentRenderExecutionBridge`; their guaranteed
+final deletion owner remains G5C after G7A.
 
 # 3. G5B — reusable surface-independent execution lifecycle
 
 G5B consumes accepted G5A and gives `GpuContext` bounded execution ownership.
 
-## 3.1 Execution policy and capacities
+## 3.1 Independent capacities
 
-One context-local execution policy owns finite independent capacities. Initial categories:
+One context-local execution policy initially distinguishes:
 
 ```text
 max_prepared_submissions
@@ -487,16 +488,16 @@ max_readback_bytes_in_flight
 max_pending_readbacks
 ```
 
-These are distinct from:
+These remain distinct from:
 
 - G4 realization-record capacity;
 - logical resource byte size;
-- physical GPU memory/residency;
+- physical GPU allocation/residency;
 - renderer/product budgets.
 
-Pressure is structured and inspectable. No hidden unbounded queue is introduced.
+Pressure is structured and inspectable. There is no hidden unbounded submission queue.
 
-## 3.2 Execution preparation
+## 3.2 Preparation
 
 Directionally:
 
@@ -512,32 +513,30 @@ GpuPreparedSubmission
 
 Preparation:
 
-1. reserves one prepared slot through cancellation-safe RAII;
+1. reserves prepared capacity through cancellation-safe RAII;
 2. validates context/device-generation affinity;
-3. validates all G5A execution limits and dynamic offsets;
-4. obtains/retains required G4 resource/program/binding/pipeline realizations;
-5. plans immutable upload/readback staging requirements;
-6. creates ordered private dynamic-offset slices;
+3. validates G5A execution limits/dynamic offsets;
+4. obtains/retains required G4 realizations;
+5. plans immutable upload/readback staging;
+6. builds ordered private dynamic-offset slices;
 7. publishes one single-use prepared ticket only after the record is complete.
 
 No submission ID exists during preparation.
 
 ## 3.3 Prepared ownership and revocation
 
-Caller-held `GpuPreparedSubmission` is a single-use ticket, not the owner of context execution state.
-The context owns the prepared record and its G4/staging reservations.
+A caller-held `GpuPreparedSubmission` is a single-use ticket, not the owner of context execution
+state. The context owns the prepared record and its G4/staging reservations.
 
-The ticket may hold only weak/revocable context linkage needed for drop notification/diagnostics.
-Holding a prepared value alone must not keep the context/device/queue or prepared capacity alive.
+Holding a ticket alone must not keep the context/device/queue or prepared capacity alive forever.
 
-Dropping an active ticket releases its record when the context still exists.
+- Dropping an active ticket releases its record while the context exists.
+- `begin_shutdown()` can revoke every still-prepared record even if callers retain ticket values.
+- A revoked ticket remains diagnosable but cannot execute.
 
-`begin_shutdown()` can revoke every still-prepared record and release its capacity even if callers
-continue holding ticket values.
+## 3.4 Submit rejection preserves ownership
 
-## 3.4 Submit result and Rust ownership
-
-Pre-acceptance rejection must return ownership of the prepared value:
+Pre-acceptance rejection returns ownership of the prepared value:
 
 ```text
 submit_prepared(prepared)
@@ -545,18 +544,18 @@ submit_prepared(prepared)
   -> Rejected(GpuSubmitRejection { prepared, reason })
 ```
 
-Exact Rust spelling may use `Result`, but the ownership law is mandatory.
+Exact Rust spelling may differ; ownership semantics may not.
 
-Retryable pressure rejection does not force reconstruction/re-realization of prepared work.
-Nonretryable stale/revoked reasons remain explicit on the returned value.
+Retryable pressure rejection does not force reconstruction/re-realization. Stale/revoked reasons are
+explicit on the returned prepared value.
 
-## 3.5 Irreversible acceptance sequence
+## 3.5 Irreversible acceptance
 
 Submit admission is ordered:
 
 ```text
-validate prepared ticket/context/generation/state
- -> reserve/convert finite in-flight + staging capacity
+validate ticket/context/generation/state
+ -> reserve/convert in-flight + staging capacity
  -> remove prepared record from retryable prepared authority
  -> allocate/publish GpuSubmissionId
  -> state = Accepted
@@ -569,46 +568,41 @@ Before ID publication:
 - no logical Upload side effect;
 - no accepted submission record.
 
-After ID publication:
+After publication:
 
-- the call cannot return a pre-acceptance rejection;
-- encode, queue, device-health or callback failure terminalizes that ID as `Failed` exactly once;
+- the call cannot report a pre-acceptance rejection;
+- encode/queue/device-health/callback failure terminalizes the accepted ID as `Failed` exactly once;
 - success eventually terminalizes as `Completed` exactly once.
 
 ## 3.6 Private encoding
 
-G5B privately encodes accepted G5A operations with accepted G4 realizations.
+G5B privately encodes accepted G5A operations through accepted G4 realizations.
 
-For each compute/render binding use it provides:
+Each compute/render binding use supplies:
 
 ```text
 GpuRealizedBindGroup
 + exact ordered checked dynamic-offset slice
 ```
 
-Logical offsets remain `u64`; private backend narrowing is checked before encoding.
+Logical offsets remain `u64`; backend narrowing is checked privately before encoding.
 
 No raw backend object becomes public or renderer-owned.
 
-## 3.7 Transactional Upload lowering
+## 3.7 Transactional Upload baseline
 
-Initial accepted implementation uses encoded staging copies for Upload.
+Initial Upload lowering uses encoded staging copies.
 
-Reason:
+WGPU queue writes are staged for a later queue submit. If they were used as the default logical Upload
+path, a later failure before the intended submission could leave physical writes to be flushed by
+subsequent logical work. That would break one-submission ownership and G3R initialization/hazard
+truth.
 
-- WGPU queue writes are staged before the next queue submit;
-- a failure can otherwise leave physical writes to be flushed by later logical work;
-- that would violate exactly-one logical submission ownership and G3R initialization/hazard truth.
-
-A future private queue-write optimization is allowed only if a separate proof demonstrates that all
-staged writes are transactionally coupled to the same accepted submission and cannot survive its
-failure/rejection boundary.
-
-The public Upload contract does not change if the private strategy changes.
+A later private queue-write optimization is allowed only when evidence proves all staged writes are
+transactionally coupled to the same accepted submission and cannot survive its failure/rejection
+boundary. Public Upload semantics remain unchanged.
 
 ## 3.8 Submission observation
-
-Public state:
 
 ```text
 GpuSubmissionStatus
@@ -617,14 +611,12 @@ GpuSubmissionStatus
   Failed(structured failure)
 ```
 
-No public `Submitted`, fence, backend queue index or native poll state.
+There is no public backend `Submitted`, fence, queue index, or poll state.
 
-Observation handles may outlive context cleanup after terminal state, but detached terminal state
-must not hold backend execution capacity or G4 realization retention.
+Terminal observation handles may outlive context cleanup after execution-owned capacity/G4 retention
+has been detached.
 
 ## 3.9 Readback observation
-
-Readback state is independent:
 
 ```text
 GpuReadbackStatus
@@ -633,32 +625,29 @@ GpuReadbackStatus
   Failed(structured failure)
 ```
 
-A submission can be `Completed` while a readback mapping/result callback is still `Pending`.
-Submission failure terminalizes dependent readbacks as failed.
+Submission completion and readback materialization are separate facts. A submission can be
+`Completed` while mapping/result materialization is still `Pending`. Submission failure fails its
+dependent readbacks.
 
-Mapped WGPU ranges never escape. Texture readback removes physical row padding and exposes the exact
-logical bytes/metadata requested by the operation.
+Mapped WGPU ranges never escape. Texture results remove physical row padding and expose requested
+logical data/metadata.
 
 ## 3.10 Progress
 
-`GpuContext::progress()` is nonblocking and backend-neutral.
-
-It may:
+`GpuContext::progress()` is nonblocking and backend-neutral. It may:
 
 - privately poll native WGPU where useful;
-- drain/observe completion and map callbacks;
+- drain/observe completion/map callbacks;
 - terminalize submission/readback state;
-- release staging and retained G4 references that are now safe;
-- advance graceful shutdown toward `Closed`.
+- release safe staging/G4 retention;
+- advance graceful shutdown.
 
-On browser WebGPU, callbacks are event-loop driven. `progress()` must not claim to synchronously wait
-for GPU completion there.
+Browser WebGPU callback progress is event-loop driven; `progress()` must not promise a native-style
+blocking wait there.
 
-RunenGPU owns no mandatory Tokio/Futures runtime, worker thread or immortal polling service.
+RunenGPU owns no mandatory Tokio/Futures runtime, worker thread, or immortal polling service.
 
 ## 3.11 Graceful shutdown
-
-Context execution state:
 
 ```text
 Running
@@ -669,100 +658,92 @@ Running
 `begin_shutdown()`:
 
 - is idempotent;
-- rejects new preparation and new submission acceptance;
+- rejects new preparation/acceptance;
 - revokes all unaccepted prepared records;
-- keeps accepted submissions/readbacks progressable and observable;
-- reaches `Closed` after accepted work is terminal and execution-owned resources are detached.
+- leaves accepted submissions/readbacks progressable/observable;
+- reaches `Closed` only after accepted work is terminal and execution-owned resources detach.
 
-Shutdown does not transfer product recovery policy into RunenGPU.
+Product recovery remains outside RunenGPU.
 
 ## 3.12 Last-context Drop
 
 Last `GpuContext` Drop is abrupt owner loss, not implicit graceful shutdown.
 
-Required public consequences:
+Required consequences:
 
-- no new execution can occur;
-- prepared records are revoked/released;
-- every still-nonterminal accepted submission/readback observation becomes a structured
-  `ContextDropped`/equivalent terminal failure exactly once;
-- no public claim is made that already issued hardware work was synchronously cancelled;
-- detached terminal observations may remain alive without device/queue or G4 realization authority.
+- no new execution;
+- prepared records revoked/released;
+- nonterminal accepted submission/readback observations terminalize with a structured context-drop
+  failure exactly once;
+- no public claim that issued hardware work was synchronously cancelled;
+- detached terminal observations may survive without device/queue/G4 realization authority.
 
-This makes resource ownership deterministic even when callers skip `begin_shutdown()`.
+## 3.13 G4 retention
 
-## 3.13 G4 realization retention
+Prepared/in-flight state retains exact accepted G4 realization records only while required. G5 does
+not create a second resource/program/pipeline retirement registry. Safe release drops existing `Arc`
+retention and returns reclamation authority to existing G4 bounded registries.
 
-Prepared/in-flight state retains exact accepted G4 realization records only while required.
+## 3.14 G5B proof
 
-G5 does not create a second resource/program/pipeline retirement registry. When execution no longer
-needs a record, it releases its existing `Arc` retention and existing G4 bounded registries regain
-reclamation authority.
-
-## 3.14 G5B proof workload
-
-Acceptance requires a genuine non-render, headless proof using the same public logical model:
+Acceptance requires a genuine non-render headless proof:
 
 ```text
 Upload input
  -> compute
- -> compute using a second dynamic offset but the same physical bind group
+ -> compute using a second dynamic offset but same physical bind group
  -> Readback
  -> progress to terminal submission/readback
  -> verify result
 ```
 
-The proof must demonstrate:
+It must prove:
 
 - two valid dynamic offsets reuse one physical bind-group record;
-- no renderer API is involved;
-- G3R initialization/hazard semantics remain authoritative;
+- no renderer API participates;
+- G3R remains initialization/hazard authority;
 - pressure rejection preserves prepared ownership;
 - cancellation/drop releases prepared capacity;
 - exactly-once terminal outcomes;
 - readback completion distinct from submission completion.
 
-Native exact-head proof is required. Wasm compilation/conformance is mandatory. A real browser
-WebGPU lifecycle smoke is required where repository infrastructure can execute it; if infrastructure
-cannot, that limitation is recorded and no stronger browser-runtime claim is made.
+Native exact-head runtime proof is required. Wasm compilation/conformance is mandatory. Real browser
+WebGPU lifecycle evidence is required where repository infrastructure can execute it; otherwise the
+limitation is recorded and no stronger runtime claim is made.
 
 # 4. G7A — minimal durable surface foundation
 
-G7A is deliberately between G5B and G5C.
+G7A remains deliberately between G5B and G5C.
 
-## 4.1 Why G7A exists here
+## 4.1 Purpose
 
-Current Runenwerk owns raw WGPU `Surface` objects and a `CurrentHostSurfaceBridge`. Migrating renderer
-execution before defining reusable surface identity/acquisition/presentation would force either:
-
-- a disposable G5-only surface API;
-- a broad raw-surface escape hatch;
-- or current Winit/product policy into RunenGPU.
-
+Current Runenwerk still owns raw WGPU surfaces/current-host integration. Migrating final renderer
+execution before reusable surface identity/acquire/present semantics exist would require either a
+disposable G5-only surface API, raw-surface escape hatch, or Winit/product policy inside RunenGPU.
 All are rejected.
 
 ## 4.2 Minimum G7A facts
 
-G7A owns only the generic facts required for reusable presentation execution:
+G7A owns only generic facts needed for reusable presentation execution:
 
 - opaque `GpuSurfaceId`;
 - context/device-generation affinity;
-- surface generation/lease identity sufficient to reject stale acquired images;
+- surface/acquired-image generation or lease identity sufficient to reject stale use;
 - normalized capabilities and admitted configuration;
-- acquisition result categories;
-- acquired-image identity/role facts;
-- presentation acceptance/result facts.
+- acquisition outcomes;
+- acquired-image identity/allowed role facts;
+- presentation acceptance/outcomes.
 
-It keeps physical surface objects private.
+Physical WGPU surface objects remain private.
 
-## 4.3 G7A exclusions
+## 4.3 Exclusions
 
 G7A does not own:
 
 - Winit windows/event loops;
 - application resize/minimize/visibility policy;
 - product retry/fallback/recovery choice;
-- full device replacement/reconstruction;
+- complete device replacement/reconstruction;
 - renderer image-formation semantics;
 - persisted surface identity.
 
@@ -770,14 +751,13 @@ Full loss/generation/reconstruction conformance remains G7B.
 
 # 5. G5C — final renderer execution cutover
 
-G5C consumes accepted G5B and G7A.
+G5C consumes accepted G5B + G7A.
 
 ## 5.1 Migration
 
-Migrate current renderer/UI/timing/capture paths so all generic GPU operations lower into the same
-G5 logical/execution model.
+Migrate renderer/UI/timing/capture paths so generic GPU work uses the same G5 logical/execution model.
 
-Current renderer structures may still own:
+Renderer/Runenwerk may retain:
 
 - scene/view/material/image-formation decisions;
 - render-plan provenance;
@@ -794,9 +774,9 @@ They no longer own:
 - mapped readback mechanics;
 - generic surface acquire/present mechanics.
 
-## 5.2 Required deletion
+## 5.2 Required clean deletion
 
-The final G5C accepted tree contains zero definitions/call sites for:
+Final G5C accepted source has zero definitions/call sites for:
 
 ```text
 CurrentRenderDeviceQueue
@@ -805,102 +785,100 @@ CurrentRenderExecutionBridge
 current_render_execution_bridge()
 ```
 
-All purpose-typed terminals that exist solely to lend G4 realized WGPU objects into renderer
-execution are deleted with the bridge.
+Purpose-typed terminals existing only to lend G4 realized WGPU objects into renderer execution are
+deleted with the bridge.
 
-No replacement compatibility alias, broad closure bridge, `raw_device()`, `raw_queue()`,
-`as_wgpu_*`, forwarding module or second backend path is allowed.
+No compatibility alias, broad closure bridge, `raw_device()`, `raw_queue()`, `as_wgpu_*`, forwarding
+module, or parallel backend path replaces them.
 
 ## 5.3 Surface cutover
 
-Current-host WGPU surface ownership/configuration/acquire/present moves behind accepted G7A generic
-surface contracts. Runenwerk keeps the Winit/window/event-loop and product recovery side.
+Current-host surface physical ownership/configuration/acquire/present moves behind accepted G7A
+generic contracts. Runenwerk retains Winit/window/event-loop/product recovery policy. G5C does not
+create a renderer-private second surface model.
 
-G5C does not reopen G7A or add a renderer-private second surface model.
+# 6. Failure ownership
 
-# 6. Failure taxonomy
-
-Failures are structured by owner and lifecycle stage.
-
-Initial categories include:
+Failures are structured by semantic owner/lifecycle stage. Initial categories include:
 
 ```text
 logical work invalid
 context/generation mismatch
-execution limit rejected
+execution-limit rejection
 prepared revoked/consumed
 pre-acceptance pressure
 shutdown/closed
-backend encode/validation contract failure
+backend encode/validation-contract failure
 backend queue/device failure
-device/context lost
+device/context loss
 readback mapping/result failure
-surface binding/acquisition/present failure (after G7A)
+surface acquisition/present failure (after G7A)
 context dropped
 ```
 
-Diagnostic backend strings may accompany a category but never determine semantic category, retry
-policy, persistence identity or equality.
+Backend strings may accompany diagnostics but never determine semantic category, retry policy,
+persistence identity, or equality.
 
-# 7. Determinism and identity
+# 7. Identity and determinism
 
 - G3 prepared order remains deterministic for identical logical input.
-- Physical realization/cache order is not promoted into semantic order.
-- `GpuSubmissionId`, `GpuReadbackId`, prepared-ticket IDs and transfer-record IDs are process-local
-  opaque operational identities.
-- None are wire, persistence, replay, content, cache or cross-process identity.
-- Submission acceptance order is explicit owner-local execution order, not a universal Runenwerk
-  logical clock.
+- Physical realization/cache order is not semantic order.
+- `GpuSubmissionId`, `GpuReadbackId`, prepared-ticket IDs, and transfer-record IDs are process-local
+  operational identities.
+- They are not wire/persistence/replay/content/cache/cross-process identity.
+- Submission acceptance order is owner-local execution order, not a universal Runenwerk logical clock.
 
-# 8. Pressure and memory semantics
+# 8. Pressure and memory dimensions
 
-Keep these dimensions separate:
+Keep separate:
 
 ```text
 logical resource size
 G4 realization-record count
 G5 prepared count
-G5 in-flight submission count
+G5 in-flight count
 G5 upload staging bytes
 G5 readback staging bytes
 physical backend allocation/residency
 ```
 
-RunenGPU may observe/report each where it owns the fact. It must not claim exact physical GPU memory
-residency from logical or staging counts.
+RunenGPU may report facts it owns. It must not infer exact physical GPU residency from logical or
+staging counts.
 
 # 9. Portability
 
-WGPU is the first private backend, not RunenGPU's public ceiling.
+WGPU is the first private backend, not the public capability ceiling.
 
-G5 contracts therefore use:
+G5 uses:
 
 - normalized capability/limit facts;
-- backend-neutral execution lifecycle;
+- backend-neutral lifecycle;
 - backend-neutral progress/observation;
-- backend-neutral readback bytes;
+- normalized readback data;
 - explicit unsupported capability rejection.
 
-Do not expose WGPU native-only transition/barrier APIs, raw HAL access, backend fences or browser
-promise objects through G5.
+Do not expose native-only transition/barrier APIs, raw HAL objects, backend fences, or browser promise
+objects through G5.
 
-A future specialized/native interoperability contract requires separate accepted evidence and cannot
-be a generic raw escape hatch.
+Specialized/native interoperability requires separate accepted evidence and cannot be a generic raw
+escape hatch.
 
 # 10. Validation and conformance
 
 ## G5A
 
-At one unchanged reviewed feature head require:
+At one unchanged reviewed head require:
 
-- focused logical operation/access/initialization tests;
-- direct zero-dispatch proof;
-- indirect compute/draw capability and access proof;
-- render pass-wide usage versus draw-local alias proofs;
-- color clear format-admission proofs;
+- complete executable compute/render/Upload/Readback operation tests;
+- zero-dispatch proof preserving binding access/hazard evidence while producing no shader execution/
+  definite initialization effect;
+- indirect compute/draw capability/access proofs;
+- pass-wide render usage versus draw-local alias proofs;
+- target-format-aware color clear proofs;
 - dynamic-offset effective-range and static-realization-key proofs;
-- normalized execution-limit admission proofs;
+- normalized execution-limit proofs;
 - renderer duplicate GPU-semantic deletion guards;
+- deterministic preparation/diagnostics;
 - `cargo validate`;
 - `git diff --check`;
 - Documentation Build;
@@ -910,16 +888,16 @@ At one unchanged reviewed feature head require:
 
 Require:
 
-- headless non-render compute/upload/readback proof;
-- cancellation-safe prepared reservation tests;
+- headless non-render compute/upload/readback runtime proof;
+- cancellation-safe preparation tests;
 - retryable submit rejection returning prepared ownership;
-- exact acceptance/terminalization tests;
+- acceptance/exactly-once terminalization tests;
 - shutdown/revocation/last-context-drop tests;
 - staging/readback pressure tests;
-- native progress/runtime proof;
-- wasm/conformance evidence and browser runtime evidence where infrastructure permits;
+- native progress/runtime evidence;
+- wasm/conformance and browser runtime evidence where infrastructure permits;
 - no raw backend public API;
-- `cargo validate`, `git diff --check`, Documentation Build, exact-head CI and complete diff review.
+- canonical exact-head validation/review.
 
 ## G7A
 
@@ -928,20 +906,20 @@ G5C activation.
 
 ## G5C
 
-Require representative renderer, UI, timing and capture paths through G5/G7A plus structural zero
+Require representative renderer/UI/timing/capture paths through accepted G5/G7A plus structural zero
 counts for every deleted raw execution seam.
 
 # 11. Explicit non-goals
 
 G5 does not authorize:
 
-- mesh shaders/tasks;
+- mesh/task shaders;
 - ray tracing/query APIs;
 - sparse resource APIs;
-- multi-queue or queue-family public policy;
+- multi-queue/queue-family public policy;
 - raw native backend passthrough;
-- broad resource aliasing/placed heaps;
-- persisted pipeline/backend caches;
+- broad placed-resource aliasing;
+- persisted backend/pipeline caches;
 - video/tensor/distributed-GPU systems;
 - RunenRender image-formation semantics;
 - ECS/world/SDF semantics;
@@ -951,11 +929,11 @@ G5 does not authorize:
 
 Those require their own evidence gates.
 
-# 12. Acceptance and next activation
+# 12. Next activation
 
-This planning design is decision-complete only if owner review confirms that implementation does not
-need to invent execution ownership, lifecycle, pressure, progress, transfer, surface sequencing or
-portability policy mid-slice.
+This planning result is decision-complete only if owner review confirms G5A implementation need not
+invent operation, execution ownership, lifecycle, pressure, progress, transfer, surface-sequencing,
+or portability policy mid-slice.
 
 After planning acceptance, activate exactly one bounded implementation issue:
 
@@ -963,5 +941,5 @@ After planning acceptance, activate exactly one bounded implementation issue:
 G5A — executable logical work closure
 ```
 
-Do not activate G5B, G7A, G5C or GX simultaneously. Each consumes accepted predecessor authority and
-must use a fresh exact-main census before implementation.
+Do not activate G5B, G7A, G5C, or GX simultaneously. Each consumes accepted predecessor authority
+and begins from a fresh exact-main census.
