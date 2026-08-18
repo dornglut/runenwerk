@@ -700,16 +700,16 @@ fn build_prepared_flow_inputs(
                 }
 
                 let state = extracted_state
-					.get(&binding.state_type_id())
-					.copied()
-					.ok_or_else(|| {
-						anyhow::anyhow!(
+                    .get(&binding.state_type_id())
+                    .copied()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
                             "uniform projection for flow '{:?}' pass '{:?}' requires missing ecs state '{}'",
                             flow.flow_id,
                             pass.pass_id(),
                             binding.state_type_name()
                         )
-					})?;
+                    })?;
 
                 let bytes = binding.project_bytes(state, surface_size).ok_or_else(|| {
                     anyhow::anyhow!(
@@ -754,26 +754,12 @@ fn build_prepared_flow_inputs(
             })
             .collect::<Vec<_>>();
 
-        let prepared_work = prepare_render_gpu_work(
-            flow,
-            &projected_dispatch_workgroups,
-            surface_size,
-            RenderGpuWorkInstrumentation::Disabled,
-        )?;
-        let timestamped_work = prepare_render_gpu_work(
-            flow,
-            &projected_dispatch_workgroups,
-            surface_size,
-            RenderGpuWorkInstrumentation::TimestampQueries,
-        )?;
         outputs.insert(
             flow.flow_id,
             PreparedFlowInputs {
                 projected_uniform_bytes,
                 projected_dispatch_workgroups,
                 required_state_types,
-                prepared_work: Some(prepared_work),
-                timestamped_work: Some(timestamped_work),
             },
         );
     }
@@ -873,16 +859,6 @@ fn project_dispatch_for_pass(
             );
         }
     };
-
-    if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
-        anyhow::bail!(
-            "compute pass '{:?}' resolved invalid dispatch dimensions ({}, {}, {})",
-            node.id,
-            dispatch[0],
-            dispatch[1],
-            dispatch[2]
-        );
-    }
 
     Ok(dispatch)
 }
