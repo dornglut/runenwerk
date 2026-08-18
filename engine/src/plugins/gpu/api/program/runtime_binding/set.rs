@@ -8,6 +8,7 @@ use crate::plugins::gpu::{
     GpuResourceAccess, GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess,
     GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
+use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
 
 /// Complete logical runtime binding use for one pipeline invocation.
@@ -88,6 +89,16 @@ impl GpuRuntimeBindingSet {
 
     pub fn accesses(&self) -> &[GpuResourceAccess] {
         &self.accesses
+    }
+}
+
+impl Hash for GpuRuntimeBindingSet {
+    fn hash<State: Hasher>(&self, state: &mut State) {
+        self.layout.hash(state);
+        for group in &self.groups {
+            group.layout().hash(state);
+            group.values().for_each(|value| value.hash(state));
+        }
     }
 }
 
