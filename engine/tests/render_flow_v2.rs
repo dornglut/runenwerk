@@ -191,7 +191,8 @@ fn v2_flow_keeps_planning_contract_inspectable() {
         .collect::<Vec<_>>();
     assert_eq!(ordered_labels, vec!["simulate", "compose", "ui"]);
 
-    let compiled = compile_flow_plan(&flow).expect("flow should compile into render execution recipes");
+    let compiled =
+        compile_flow_plan(&flow).expect("flow should compile into render execution recipes");
     let simulate = compiled
         .execution
         .passes
