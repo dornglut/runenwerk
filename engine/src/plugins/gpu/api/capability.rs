@@ -313,8 +313,6 @@ impl GpuLimits {
             || max_texture_dimension_2d == 0
             || max_bind_groups == 0
             || max_bind_groups_plus_vertex_buffers == 0
-            || max_dynamic_uniform_buffers_per_pipeline_layout == 0
-            || max_dynamic_storage_buffers_per_pipeline_layout == 0
             || max_compute_workgroups_per_dimension == 0
             || max_bind_groups_plus_vertex_buffers < max_bind_groups
             || max_bind_groups_plus_vertex_buffers < max_vertex_buffers
@@ -323,7 +321,7 @@ impl GpuLimits {
                 operation: "construct normalized GPU limits",
                 label: "GPU limits".to_string(),
                 cause: GpuCapabilityAdmissionCause::InvalidLimit,
-                correction: "provide nonzero internally consistent normalized limits",
+                correction: "provide internally consistent normalized limits; dynamic-buffer maxima may be zero when unsupported",
             });
         }
         Ok(Self {
@@ -735,6 +733,15 @@ mod tests {
         assert_eq!(limits.max_dynamic_uniform_buffers_per_pipeline_layout(), 8);
         assert_eq!(limits.max_dynamic_storage_buffers_per_pipeline_layout(), 4);
         assert_eq!(limits.max_compute_workgroups_per_dimension(), 65535);
+        let no_dynamic_buffers = GpuLimits::new(1, 2, 3, 4, 5, 8192, 4, 24, 0, 0, 65535).unwrap();
+        assert_eq!(
+            no_dynamic_buffers.max_dynamic_uniform_buffers_per_pipeline_layout(),
+            0
+        );
+        assert_eq!(
+            no_dynamic_buffers.max_dynamic_storage_buffers_per_pipeline_layout(),
+            0
+        );
         assert!(GpuLimits::new(1, 2, 3, 8, 5, 8192, 4, 4, 8, 4, 65535).is_err());
     }
 
