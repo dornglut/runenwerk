@@ -47,7 +47,7 @@ impl<'window> WgpuCtx<'window> {
         })?;
         for feature in [
             GpuCapabilityFeature::Compute,
-            GpuCapabilityFeature::IndirectDraw,
+            GpuCapabilityFeature::IndirectExecution,
             GpuCapabilityFeature::StorageTexture,
             GpuCapabilityFeature::DepthAttachment,
         ] {
