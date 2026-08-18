@@ -1,7 +1,8 @@
 use super::{
-    GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange, GpuCapabilityRequirements,
-    GpuDrawIntent, GpuIndexFormat, GpuLimits, GpuRenderPipelineDescriptor, GpuResourceAccess,
-    GpuRuntimeBindingSet, GpuVertexStepMode, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange,
+    GpuCapabilityRequirements, GpuDrawIntent, GpuIndexFormat, GpuLimits,
+    GpuRenderPipelineDescriptor, GpuResourceAccess, GpuRuntimeBindingSet, GpuVertexStepMode,
+    GpuWorkOperationCause, GpuWorkOperationError,
 };
 use core::hash::{Hash, Hasher};
 
@@ -166,7 +167,10 @@ impl GpuViewport {
 
 impl core::fmt::Debug for GpuViewport {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        formatter.debug_tuple("GpuViewport").field(&self.values()).finish()
+        formatter
+            .debug_tuple("GpuViewport")
+            .field(&self.values())
+            .finish()
     }
 }
 
@@ -299,7 +303,11 @@ impl GpuRenderDraw {
             ));
         }
 
-        let vertex_layouts = pipeline.state().vertex_input().layouts().collect::<Vec<_>>();
+        let vertex_layouts = pipeline
+            .state()
+            .vertex_input()
+            .layouts()
+            .collect::<Vec<_>>();
         if vertex_layouts.len() != vertex_buffers.len()
             || vertex_layouts
                 .iter()
@@ -326,19 +334,28 @@ impl GpuRenderDraw {
                 validate_indexed_range(*indices, binding)?;
             }
             (GpuDrawIntent::Indirect { indexed: true, .. }, Some(_)) => {}
-            (GpuDrawIntent::Indexed { .. } | GpuDrawIntent::Indirect { indexed: true, .. }, None) => {
+            (
+                GpuDrawIntent::Indexed { .. } | GpuDrawIntent::Indirect { indexed: true, .. },
+                None,
+            ) => {
                 return Err(invalid_draw(
                     "index buffer",
                     "bind an index buffer for indexed direct or indirect draws",
                 ));
             }
-            (GpuDrawIntent::Direct { .. } | GpuDrawIntent::Indirect { indexed: false, .. }, Some(_)) => {
+            (
+                GpuDrawIntent::Direct { .. } | GpuDrawIntent::Indirect { indexed: false, .. },
+                Some(_),
+            ) => {
                 return Err(invalid_draw(
                     "index buffer",
                     "omit the index buffer for non-indexed draws",
                 ));
             }
-            (GpuDrawIntent::Direct { .. } | GpuDrawIntent::Indirect { indexed: false, .. }, None) => {}
+            (
+                GpuDrawIntent::Direct { .. } | GpuDrawIntent::Indirect { indexed: false, .. },
+                None,
+            ) => {}
         }
         validate_direct_vertex_ranges(&draw, &pipeline, &vertex_buffers)?;
 
@@ -496,10 +513,7 @@ fn validate_stepped_range(
     Ok(())
 }
 
-fn invalid_dynamic_state(
-    label: &'static str,
-    correction: &'static str,
-) -> GpuWorkOperationError {
+fn invalid_dynamic_state(label: &'static str, correction: &'static str) -> GpuWorkOperationError {
     GpuWorkOperationError::invalid(
         "construct GPU render dynamic state",
         label,
