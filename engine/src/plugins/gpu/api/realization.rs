@@ -2,9 +2,8 @@
 
 use super::{
     GpuBindGroupLayoutDescriptor, GpuBufferDescriptor, GpuContextAffinity,
-    GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuQuerySetDescriptor,
-    GpuRuntimeBindingValue, GpuSamplerDescriptor, GpuTextureDescriptor, GpuTextureViewDescriptor,
-    GpuWorkResourceId, sanitized_diagnostic,
+    GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuQuerySetDescriptor, GpuSamplerDescriptor,
+    GpuTextureDescriptor, GpuTextureViewDescriptor, GpuWorkResourceId, sanitized_diagnostic,
 };
 use core::fmt;
 use core::num::NonZeroUsize;
@@ -840,10 +839,6 @@ impl GpuRealizedBindGroup {
 
     pub fn layout_descriptor(&self) -> &GpuBindGroupLayoutDescriptor {
         self.record.layout_descriptor()
-    }
-
-    pub fn values(&self) -> impl ExactSizeIterator<Item = &GpuRuntimeBindingValue> {
-        self.record.values()
     }
 
     pub fn is_same_record(&self, other: &Self) -> bool {
