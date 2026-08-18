@@ -30,6 +30,7 @@ pub use errors::*;
 pub(crate) use errors::{GpuWorkAuthoringErrorContext, GpuWorkGraphErrorContext};
 pub use graph::*;
 pub use handles::*;
+pub use operation::{GpuRenderOperation, GpuWorkNodeKind, GpuWorkOperation};
 pub use pipeline_realization::*;
 pub use program::*;
 pub use readback_id::*;
