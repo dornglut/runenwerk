@@ -78,8 +78,8 @@ fn validate_dynamic_binding_counts(
     layout: &GpuPipelineLayoutDescriptor,
     device_facts: &GpuRuntimeBindingDeviceFacts,
 ) -> Result<(), GpuProgramContractError> {
-    let mut dynamic_uniform_buffers = 0_u32;
-    let mut dynamic_storage_buffers = 0_u32;
+    let mut dynamic_uniform_buffers = 0_u64;
+    let mut dynamic_storage_buffers = 0_u64;
 
     for group in layout.groups() {
         for declaration in group.bindings() {
@@ -87,12 +87,8 @@ fn validate_dynamic_binding_counts(
                 continue;
             }
             match declaration.kind().class() {
-                GpuBindingClass::UniformBuffer => {
-                    dynamic_uniform_buffers = dynamic_uniform_buffers.saturating_add(1);
-                }
-                GpuBindingClass::StorageBuffer => {
-                    dynamic_storage_buffers = dynamic_storage_buffers.saturating_add(1);
-                }
+                GpuBindingClass::UniformBuffer => dynamic_uniform_buffers += 1,
+                GpuBindingClass::StorageBuffer => dynamic_storage_buffers += 1,
                 GpuBindingClass::SampledTexture
                 | GpuBindingClass::StorageTexture
                 | GpuBindingClass::Sampler => {
@@ -105,13 +101,17 @@ fn validate_dynamic_binding_counts(
         }
     }
 
-    if dynamic_uniform_buffers > device_facts.max_dynamic_uniform_buffers_per_pipeline_layout() {
+    if dynamic_uniform_buffers
+        > u64::from(device_facts.max_dynamic_uniform_buffers_per_pipeline_layout())
+    {
         return Err(incompatible(
             "dynamic uniform buffers",
             "reduce dynamic uniform-buffer declarations to the admitted pipeline-layout limit",
         ));
     }
-    if dynamic_storage_buffers > device_facts.max_dynamic_storage_buffers_per_pipeline_layout() {
+    if dynamic_storage_buffers
+        > u64::from(device_facts.max_dynamic_storage_buffers_per_pipeline_layout())
+    {
         return Err(incompatible(
             "dynamic storage buffers",
             "reduce dynamic storage-buffer declarations to the admitted pipeline-layout limit",
