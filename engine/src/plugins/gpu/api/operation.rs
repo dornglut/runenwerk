@@ -1,14 +1,14 @@
-use super::{
-    render_pass_usage::validate_render_pass_usage_scope, GpuCapabilityFeature,
-    GpuCapabilityRequirement, GpuCapabilityRequirementError, GpuCapabilityRequirements,
-    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryAccessKind, GpuReadbackOperation, GpuRenderDraw,
-    GpuRenderPassSignature, GpuResourceAccess, GpuUploadOperation, GpuWorkOperationCause,
-    GpuWorkOperationError,
-};
 use super::work::{
     GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation, GpuCopyOperation,
     GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation, GpuQueryResolveOperation,
     GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+};
+use super::{
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirementError,
+    GpuCapabilityRequirements, GpuDepthStencilAccess, GpuQueryAccess, GpuQueryAccessKind,
+    GpuReadbackOperation, GpuRenderDraw, GpuRenderPassSignature, GpuResourceAccess,
+    GpuUploadOperation, GpuWorkOperationCause, GpuWorkOperationError,
+    render_pass_usage::validate_render_pass_usage_scope,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -165,7 +165,9 @@ fn validate_timestamp_writes(accesses: &[GpuQueryAccess]) -> Result<(), GpuWorkO
     Ok(())
 }
 
-fn validate_timestamp_write_aliases(accesses: &[GpuQueryAccess]) -> Result<(), GpuWorkOperationError> {
+fn validate_timestamp_write_aliases(
+    accesses: &[GpuQueryAccess],
+) -> Result<(), GpuWorkOperationError> {
     for left_index in 0..accesses.len() {
         let left = &accesses[left_index];
         for right in &accesses[(left_index + 1)..] {
