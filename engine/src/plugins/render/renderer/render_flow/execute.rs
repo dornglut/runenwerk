@@ -317,7 +317,6 @@ impl Renderer {
                             )?),
                             None => None,
                         };
-
                         let mut realized_passes = Vec::new();
                         for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
                             let fixed_step_upload = occurrence
@@ -606,8 +605,8 @@ impl Renderer {
                                             gpu_timestamp_writes,
                                         )?
                                     }
-                                    GpuWorkOperation::Render(_) | GpuWorkOperation::Copy(_) => {
-                                        self.encode_compiled_pass(
+                                    GpuWorkOperation::Render(_) | GpuWorkOperation::Copy(_) => self
+                                        .encode_compiled_pass(
                                             context,
                                             encoder,
                                             frame_texture,
@@ -619,8 +618,7 @@ impl Renderer {
                                             runtime_resources,
                                             execution.pipeline.as_ref(),
                                             gpu_timestamp_writes,
-                                        )?
-                                    }
+                                        )?,
                                     other => {
                                         bail!(
                                             "canonical render-pass occurrence '{}' carries unsupported operation kind {:?}",
