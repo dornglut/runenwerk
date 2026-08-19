@@ -91,20 +91,18 @@ impl Renderer {
             attachment_views.push(depth_view);
         }
         let vertex_buffers = realized_vertex_buffers(runtime_resources, draw)?;
-        let index_buffer = draw
-            .index_buffer()
-            .map(|binding| {
-                Ok(CanonicalIndexBuffer {
-                    buffer: realized_buffer_for_handle(
-                        "render",
-                        runtime_resources,
-                        binding.buffer(),
-                    )?,
-                    range: binding.range(),
-                    format: binding.format(),
-                })
-            })
-            .transpose()?;
+        let index_buffer = match draw.index_buffer() {
+            Some(binding) => Some(CanonicalIndexBuffer {
+                buffer: realized_buffer_for_handle(
+                    "render",
+                    runtime_resources,
+                    binding.buffer(),
+                )?,
+                range: binding.range(),
+                format: binding.format(),
+            }),
+            None => None,
+        };
         let indirect_buffer = match draw.draw() {
             GpuDrawIntent::Indirect {
                 arguments,
