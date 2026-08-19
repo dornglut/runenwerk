@@ -44,7 +44,7 @@ pub(crate) fn validate_render_pass_usage_scope(
                     format!("left={left:?}, right={right:?}"),
                     Some(left.resource_identity()),
                     GpuWorkOperationCause::OperationAccessContradiction,
-                    "keep each render-pass buffer or overlapping texture subresource within one compatible usage class: read-only, writable storage, or attachment",
+                    "keep each render-pass buffer or overlapping texture subresource within one compatible usage class: read-only, storage, or attachment",
                 ));
             }
 
@@ -89,13 +89,12 @@ fn render_pass_usage_class(
     match access {
         GpuResourceAccess::Buffer(access) => match access.kind() {
             GpuBufferAccessKind::UniformRead
-            | GpuBufferAccessKind::StorageRead
             | GpuBufferAccessKind::VertexRead
             | GpuBufferAccessKind::IndexRead
             | GpuBufferAccessKind::IndirectRead => Ok(Some(RenderPassUsageClass::ReadOnly)),
-            GpuBufferAccessKind::StorageWrite | GpuBufferAccessKind::StorageReadWrite => {
-                Ok(Some(RenderPassUsageClass::Storage))
-            }
+            GpuBufferAccessKind::StorageRead
+            | GpuBufferAccessKind::StorageWrite
+            | GpuBufferAccessKind::StorageReadWrite => Ok(Some(RenderPassUsageClass::Storage)),
             GpuBufferAccessKind::CopySource
             | GpuBufferAccessKind::CopyDestination
             | GpuBufferAccessKind::QueryResolveDestination => Err(invalid_render_pass_access(
@@ -104,12 +103,10 @@ fn render_pass_usage_class(
             )),
         },
         GpuResourceAccess::Texture(access) => match access.kind() {
-            GpuTextureAccessKind::SampledRead | GpuTextureAccessKind::StorageRead => {
-                Ok(Some(RenderPassUsageClass::ReadOnly))
-            }
-            GpuTextureAccessKind::StorageWrite | GpuTextureAccessKind::StorageReadWrite => {
-                Ok(Some(RenderPassUsageClass::Storage))
-            }
+            GpuTextureAccessKind::SampledRead => Ok(Some(RenderPassUsageClass::ReadOnly)),
+            GpuTextureAccessKind::StorageRead
+            | GpuTextureAccessKind::StorageWrite
+            | GpuTextureAccessKind::StorageReadWrite => Ok(Some(RenderPassUsageClass::Storage)),
             GpuTextureAccessKind::ColorAttachment { .. }
             | GpuTextureAccessKind::MultisampleResolveDestination => {
                 Ok(Some(RenderPassUsageClass::Attachment))
@@ -240,6 +237,58 @@ mod tests {
             validate_render_pass_usage_scope(&[
                 GpuResourceAccess::Buffer(first),
                 GpuResourceAccess::Buffer(second),
+            ])
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn read_only_and_writable_storage_uses_share_one_pass() {
+        let mut allocator = allocator(107);
+        let buffer = buffer(&mut allocator, "mixed storage", [GpuBufferUsage::Storage]);
+        let read = GpuBufferAccess::new(
+            &buffer,
+            GpuBufferRange::new(&buffer, 0, 32).unwrap(),
+            GpuBufferAccessKind::StorageRead,
+        )
+        .unwrap();
+        let write = GpuBufferAccess::new(
+            &buffer,
+            GpuBufferRange::new(&buffer, 16, 32).unwrap(),
+            GpuBufferAccessKind::StorageWrite,
+        )
+        .unwrap();
+        assert!(
+            validate_render_pass_usage_scope(&[
+                GpuResourceAccess::Buffer(read),
+                GpuResourceAccess::Buffer(write),
+            ])
+            .is_ok()
+        );
+
+        let texture = texture(
+            &mut allocator,
+            "mixed storage texture",
+            GpuTextureFormat::Rgba8Unorm,
+            [GpuTextureUsage::StorageRead, GpuTextureUsage::StorageWrite],
+        );
+        let subresources = GpuTextureSubresourceRange::whole(&texture).unwrap();
+        let read = GpuTextureAccess::new(
+            GpuTextureAccessResource::Texture(texture.clone()),
+            subresources,
+            GpuTextureAccessKind::StorageRead,
+        )
+        .unwrap();
+        let write = GpuTextureAccess::new(
+            GpuTextureAccessResource::Texture(texture),
+            subresources,
+            GpuTextureAccessKind::StorageWrite,
+        )
+        .unwrap();
+        assert!(
+            validate_render_pass_usage_scope(&[
+                GpuResourceAccess::Texture(read),
+                GpuResourceAccess::Texture(write),
             ])
             .is_ok()
         );
