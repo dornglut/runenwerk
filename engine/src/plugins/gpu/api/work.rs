@@ -4,6 +4,14 @@ use super::{
     GpuTextureDimension, GpuTextureHandle,
 };
 
+#[cfg(test)]
+use crate::plugins::gpu::{
+    GpuAttachmentStore, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange,
+    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryKind, GpuQueryRange,
+    GpuTextureAccessResource, GpuTextureAspect, GpuTextureFormat, GpuTextureSubresourceRange,
+    GpuWorkOperationCause,
+};
+
 mod attachment;
 mod clear;
 mod compute;
