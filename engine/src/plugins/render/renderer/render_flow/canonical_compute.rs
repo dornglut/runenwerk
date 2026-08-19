@@ -26,9 +26,7 @@ impl Renderer {
             }
         };
         if realized_pipeline.descriptor() != operation.pipeline() {
-            bail!(
-                "canonical compute operation pipeline disagrees with its G4C3 realized pipeline"
-            );
+            bail!("canonical compute operation pipeline disagrees with its G4C3 realized pipeline");
         }
         if &prepared.bindings.runtime_bindings != operation.bindings() {
             bail!(
