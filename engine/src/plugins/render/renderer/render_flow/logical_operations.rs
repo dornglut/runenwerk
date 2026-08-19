@@ -5,9 +5,9 @@ use crate::plugins::gpu::{
     GpuColorAttachmentLoad, GpuColorClearValue, GpuComputeOperation, GpuCopyOperation,
     GpuDepthAttachmentLoad, GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchIntent,
     GpuDispatchSize, GpuDrawIntent, GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat,
-    GpuQueryAccess, GpuQueryAccessKind, GpuQueryRange, GpuQueryResolveOperation,
-    GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuRenderDraw, GpuRenderOperation,
-    GpuScissorRect, GpuTextureAccessResource, GpuTextureViewHandle, GpuUploadOperation,
+    GpuQueryRange, GpuQueryResolveOperation, GpuRenderColorAttachment,
+    GpuRenderDepthStencilAttachment, GpuRenderDraw, GpuRenderOperation, GpuScissorRect,
+    GpuTextureAccessResource, GpuTextureViewHandle, GpuTimestampWrites, GpuUploadOperation,
     GpuVertexBufferBinding, GpuViewport, GpuWorkOperation, PreparedGpuData, TransferData,
 };
 use crate::plugins::render::graph::CompiledDrawSource;
@@ -51,7 +51,7 @@ pub(super) fn project_compute_operation(
         dispatch,
     )?;
     if let Some((timing, indices)) = timing {
-        operation = operation.with_timestamp_writes([timestamp_access(timing, indices)?])?;
+        operation = operation.with_timestamp_writes(timestamp_writes(timing, indices)?);
     }
     Ok(GpuWorkOperation::Compute(operation))
 }
@@ -168,10 +168,9 @@ pub(super) fn project_render_operation(
         color_target.size,
         limits,
     )?;
-    let timestamp_writes = match timing {
-        Some((timing, indices)) => vec![timestamp_access(timing, indices)?],
-        None => Vec::new(),
-    };
+    let timestamp_writes = timing
+        .map(|(timing, indices)| timestamp_writes(timing, indices))
+        .transpose()?;
     Ok(Some(GpuWorkOperation::Render(GpuRenderOperation::new(
         [color_attachment],
         depth_attachment,
@@ -418,14 +417,13 @@ pub(super) fn project_timing_tail(
     ProjectedTimingTail::new(query_set, query_range, resolve_buffer, readback_buffer)
 }
 
-pub(super) fn timestamp_access(
+pub(super) fn timestamp_writes(
     timing: &LogicalGpuPassTiming,
     indices: GpuPassTimestampIndices,
-) -> Result<GpuQueryAccess> {
-    let range = GpuQueryRange::new(timing.query_set(), indices.begin, 2)?;
-    Ok(GpuQueryAccess::new(
+) -> Result<GpuTimestampWrites> {
+    Ok(GpuTimestampWrites::new(
         timing.query_set(),
-        range,
-        GpuQueryAccessKind::WriteTimestamp,
+        Some(indices.begin),
+        Some(indices.end),
     )?)
 }
