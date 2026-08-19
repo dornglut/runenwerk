@@ -62,8 +62,7 @@ impl Renderer {
                     },
                 )?;
             }
-            GpuCopyOperation::BufferToTexture { .. }
-            | GpuCopyOperation::TextureToBuffer { .. } => {
+            GpuCopyOperation::BufferToTexture { .. } | GpuCopyOperation::TextureToBuffer { .. } => {
                 bail!(
                     "current renderer G5A physical bridge cannot encode canonical buffer-texture copies; renderer lowering does not produce this operation class and G5B owns the generic backend executor"
                 );
