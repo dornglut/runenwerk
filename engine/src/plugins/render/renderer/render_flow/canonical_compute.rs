@@ -3,7 +3,7 @@ use crate::plugins::gpu::{
     CurrentRenderComputePipelineTerminal, CurrentRenderIndirectBufferTerminal,
     CurrentRenderPipelineBindGroupsTerminal, CurrentRenderTimestampWritesTerminal,
     GpuComputeOperation, GpuDispatchIntent, GpuQueryAccessKind, GpuRealizedBindGroup,
-    GpuRealizedBuffer,
+    GpuRealizedBuffer, GpuRuntimeBindingResource,
 };
 
 impl Renderer {
@@ -33,6 +33,7 @@ impl Renderer {
                 "canonical compute operation bindings disagree with its G4C2 realized binding set"
             );
         }
+        validate_pre_g5b_dynamic_offset_boundary(operation)?;
         validate_realized_binding_groups(operation, &prepared.bindings.bind_groups)?;
         validate_renderer_timestamp_projection(operation, gpu_timestamp_writes.as_ref())?;
 
@@ -72,6 +73,27 @@ impl Renderer {
             pipeline_key: Some(pipeline_key),
         })
     }
+}
+
+/// G5A owns logical `u64` dynamic offsets, but the accepted design assigns ordered backend offset
+/// slices and checked narrowing to G5B. The current renderer adapter does not author dynamic buffer
+/// bindings, so its temporary pre-G5B encoder must reject rather than silently drop any future
+/// dynamic-offset use that reaches this boundary.
+fn validate_pre_g5b_dynamic_offset_boundary(operation: &GpuComputeOperation) -> Result<()> {
+    let has_dynamic_offset = operation.bindings().values().any(|value| {
+        value.resources().any(|resource| {
+            matches!(
+                resource,
+                GpuRuntimeBindingResource::Buffer(binding) if binding.dynamic_offset().is_some()
+            )
+        })
+    });
+    if has_dynamic_offset {
+        bail!(
+            "canonical compute operation requires dynamic-offset lowering owned by G5B; the temporary renderer execution bridge cannot discard logical dynamic offsets"
+        );
+    }
+    Ok(())
 }
 
 fn validate_realized_binding_groups(
