@@ -145,19 +145,24 @@ pub(super) fn prepare_canonical_invocation(
     }
 
     if let Some(timing) = timing {
-        let (resolve, readback_copy) = project_timing_tail(timing)?;
+        let tail = project_timing_tail(
+            timing.query_set(),
+            timing.query_range()?,
+            timing.resolve_buffer(),
+            timing.readback_buffer(),
+        )?;
         let resolve_occurrence = allocate_aux_occurrence(&mut maximum_occurrence)?;
         nodes.push(ResolvedRenderGpuWorkNode::timing_resolve(
             resolve_occurrence,
             occurrence_label(flow, "timing-resolve", resolve_occurrence)?,
-            resolve,
+            tail.resolve().clone(),
             [],
         ));
         let readback_occurrence = allocate_aux_occurrence(&mut maximum_occurrence)?;
         nodes.push(ResolvedRenderGpuWorkNode::timing_readback_copy(
             readback_occurrence,
             occurrence_label(flow, "timing-readback-copy", readback_occurrence)?,
-            readback_copy,
+            tail.readback_copy().clone(),
             [],
         ));
     }

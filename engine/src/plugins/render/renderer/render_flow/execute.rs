@@ -658,13 +658,21 @@ impl Renderer {
                                 );
                             }
                             RenderGpuWorkPayload::TimingResolve { occurrence } => {
+                                let GpuWorkOperation::Resolve(operation) = &scheduled.operation
+                                else {
+                                    bail!(
+                                        "prepared timing-resolve occurrence '{}' carries non-resolve operation kind {:?}",
+                                        occurrence,
+                                        scheduled.operation.kind()
+                                    );
+                                };
                                 let frame = invocation.timing_frame.as_mut().ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "prepared timing-resolve occurrence '{}' has no physical timing frame",
                                         occurrence
                                     )
                                 })?;
-                                if !frame.encode_resolve(context, encoder)? {
+                                if !frame.encode_resolve(context, encoder, operation)? {
                                     bail!(
                                         "prepared timing-resolve occurrence '{}' had no registered timestamp queries",
                                         occurrence
@@ -672,6 +680,13 @@ impl Renderer {
                                 }
                             }
                             RenderGpuWorkPayload::TimingReadbackCopy { occurrence } => {
+                                let GpuWorkOperation::Copy(operation) = &scheduled.operation else {
+                                    bail!(
+                                        "prepared timing-readback occurrence '{}' carries non-copy operation kind {:?}",
+                                        occurrence,
+                                        scheduled.operation.kind()
+                                    );
+                                };
                                 let frame = invocation.timing_frame.take().ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "prepared timing-readback occurrence '{}' has no physical timing frame",
@@ -679,7 +694,7 @@ impl Renderer {
                                     )
                                 })?;
                                 if let Some(pending) =
-                                    frame.encode_readback_copy(context, encoder)?
+                                    frame.encode_readback_copy(context, encoder, operation)?
                                 {
                                     pending_gpu_pass_timing_readbacks.push(pending);
                                 }
@@ -1495,10 +1510,12 @@ fn encode_prepared_timing_tail(
     context: &GpuContext,
     encoder: &mut CommandEncoder,
 ) -> Result<Option<PendingGpuPassTimingReadback>> {
-    if !frame.encode_resolve(context, encoder)? {
+    let resolve_operation = frame.resolve_operation().clone();
+    let readback_copy_operation = frame.readback_copy_operation().clone();
+    if !frame.encode_resolve(context, encoder, &resolve_operation)? {
         return Ok(None);
     }
-    frame.encode_readback_copy(context, encoder)
+    frame.encode_readback_copy(context, encoder, &readback_copy_operation)
 }
 
 fn gpu_timing_diagnostic_evidence_for_pass(

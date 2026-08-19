@@ -362,29 +362,60 @@ pub(super) fn project_buffer_upload(
     Ok(GpuUploadOperation::new(region.into(), payload)?)
 }
 
+/// Canonical timestamp tail for one expanded renderer invocation.
+///
+/// Both the prepared G3 graph and the temporary pre-G5B physical timing adapter consume these
+/// same RunenGPU operation values. Renderer timing state may retain physical leases and diagnostic
+/// metadata, but it must not reconstruct resolve/copy ranges independently.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ProjectedTimingTail {
+    resolve: GpuQueryResolveOperation,
+    readback_copy: GpuCopyOperation,
+}
+
+impl ProjectedTimingTail {
+    fn new(
+        query_set: &crate::plugins::gpu::GpuQuerySetHandle,
+        query_range: GpuQueryRange,
+        resolve_buffer: &GpuBufferHandle,
+        readback_buffer: &GpuBufferHandle,
+    ) -> Result<Self> {
+        let resolve = GpuQueryResolveOperation::new(query_set, query_range, resolve_buffer, 0)?;
+        let byte_len = u64::from(resolve.source_range().count())
+            .checked_mul(8)
+            .ok_or_else(|| anyhow::anyhow!("render GPU timestamp byte coverage overflow"))?;
+        let readback_copy = GpuCopyOperation::buffer_to_buffer(
+            GpuBufferRegion::new(
+                resolve_buffer,
+                GpuBufferRange::new(resolve_buffer, 0, byte_len)?,
+            )?,
+            GpuBufferRegion::new(
+                readback_buffer,
+                GpuBufferRange::new(readback_buffer, 0, byte_len)?,
+            )?,
+        )?;
+        Ok(Self {
+            resolve,
+            readback_copy,
+        })
+    }
+
+    pub(super) fn resolve(&self) -> &GpuQueryResolveOperation {
+        &self.resolve
+    }
+
+    pub(super) fn readback_copy(&self) -> &GpuCopyOperation {
+        &self.readback_copy
+    }
+}
+
 pub(super) fn project_timing_tail(
-    timing: &LogicalGpuPassTiming,
-) -> Result<(GpuQueryResolveOperation, GpuCopyOperation)> {
-    let resolve = GpuQueryResolveOperation::new(
-        timing.query_set(),
-        timing.query_range()?,
-        timing.resolve_buffer(),
-        0,
-    )?;
-    let byte_len = u64::from(timing.query_capacity())
-        .checked_mul(8)
-        .ok_or_else(|| anyhow::anyhow!("render GPU timestamp byte coverage overflow"))?;
-    let copy = GpuCopyOperation::buffer_to_buffer(
-        GpuBufferRegion::new(
-            timing.resolve_buffer(),
-            GpuBufferRange::new(timing.resolve_buffer(), 0, byte_len)?,
-        )?,
-        GpuBufferRegion::new(
-            timing.readback_buffer(),
-            GpuBufferRange::new(timing.readback_buffer(), 0, byte_len)?,
-        )?,
-    )?;
-    Ok((resolve, copy))
+    query_set: &crate::plugins::gpu::GpuQuerySetHandle,
+    query_range: GpuQueryRange,
+    resolve_buffer: &GpuBufferHandle,
+    readback_buffer: &GpuBufferHandle,
+) -> Result<ProjectedTimingTail> {
+    ProjectedTimingTail::new(query_set, query_range, resolve_buffer, readback_buffer)
 }
 
 pub(super) fn timestamp_access(
