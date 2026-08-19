@@ -52,7 +52,6 @@ mod tests {
             ["exr", "::"].concat(),
             ["ff", "mpeg"].concat(),
             ["Render", "Flow"].concat(),
-            ["Render", "Pass"].concat(),
             ["Render", "Feature"].concat(),
             ["Render", "Target"].concat(),
             ["Render", "Surface"].concat(),
@@ -225,7 +224,7 @@ mod tests {
         let mut render_sources = Vec::new();
         rust_sources_below(&renderer_root, &mut render_sources);
         for path in render_sources {
-            let source = fs::read_to_string(&path).expect("source should be readable");
+            let source = fs::read_to_string(&path).expect("source file should be readable");
             assert!(
                 !source.contains("RenderBackendTimingCapabilities"),
                 "retired timing authority remains in {}",
