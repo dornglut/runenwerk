@@ -16,9 +16,8 @@ impl GpuReadbackId {
                 (current != 0).then_some(if current == u64::MAX { 0 } else { current + 1 })
             })
             .map_err(|_| GpuReadbackIdAllocationError::Exhausted)?;
-        Ok(Self(
-            NonZeroU64::new(value).expect("readback identity allocator never returns zero"),
-        ))
+        let value = NonZeroU64::new(value).ok_or(GpuReadbackIdAllocationError::Exhausted)?;
+        Ok(Self(value))
     }
 }
 
