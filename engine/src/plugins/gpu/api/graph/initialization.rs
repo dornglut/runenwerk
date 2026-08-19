@@ -694,8 +694,10 @@ fn operation_initialization(
             if let Some(arguments) = compute.dispatch().indirect_access() {
                 require(&GpuResourceAccess::Buffer(arguments.clone()));
             }
-            for timestamp in compute.timestamp_writes() {
-                effect(&GpuResourceAccess::Query(timestamp.clone()));
+            if let Some(timestamp_writes) = compute.timestamp_writes() {
+                for timestamp in timestamp_writes.accesses() {
+                    effect(&GpuResourceAccess::Query(timestamp.clone()));
+                }
             }
         }
         GpuWorkOperation::Render(render) => {
@@ -721,8 +723,10 @@ fn operation_initialization(
                     require(access);
                 }
             }
-            for timestamp in render.timestamp_writes() {
-                effect(&GpuResourceAccess::Query(timestamp.clone()));
+            if let Some(timestamp_writes) = render.timestamp_writes() {
+                for timestamp in timestamp_writes.accesses() {
+                    effect(&GpuResourceAccess::Query(timestamp.clone()));
+                }
             }
         }
         GpuWorkOperation::Copy(copy) => match copy {
