@@ -9,7 +9,7 @@ pub(super) enum ProjectedCopyOperation {
     /// Source and destination resolve to the same runtime resource, so no GPU operation exists.
     NoWork,
     /// Fully logical surface-independent transfer semantics owned by RunenGPU.
-    Canonical(GpuWorkOperation),
+    Canonical(Box<GpuWorkOperation>),
     /// At least one endpoint still lacks durable logical GPU identity before G7A.
     PreG7Residual,
 }
@@ -137,8 +137,8 @@ pub(super) fn project_copy_operation(
             )?
         }
     };
-    Ok(ProjectedCopyOperation::Canonical(GpuWorkOperation::Copy(
-        operation,
+    Ok(ProjectedCopyOperation::Canonical(Box::new(
+        GpuWorkOperation::Copy(operation),
     )))
 }
 
