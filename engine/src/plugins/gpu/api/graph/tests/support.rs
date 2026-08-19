@@ -165,6 +165,7 @@ pub(super) fn compute_operation_with_dispatch(dispatch: GpuDispatchSize) -> GpuW
     let device_facts = GpuRuntimeBindingDeviceFacts::new(
         NonZeroU64::new(1).unwrap(),
         NonZeroU64::new(1).unwrap(),
+        1,
         0,
         0,
         [],
