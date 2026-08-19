@@ -51,16 +51,18 @@ fn storage_declaration(binding: u32, array_count: Option<NonZeroU32>) -> GpuBind
 }
 
 fn device_facts() -> GpuRuntimeBindingDeviceFacts {
-    device_facts_with_dynamic_limits(8, 4)
+    device_facts_with_limits(4, 8, 4)
 }
 
-fn device_facts_with_dynamic_limits(
+fn device_facts_with_limits(
+    max_bind_groups: u32,
     max_dynamic_uniform_buffers: u32,
     max_dynamic_storage_buffers: u32,
 ) -> GpuRuntimeBindingDeviceFacts {
     GpuRuntimeBindingDeviceFacts::new(
         NonZeroU64::new(16).unwrap(),
         NonZeroU64::new(16).unwrap(),
+        max_bind_groups,
         max_dynamic_uniform_buffers,
         max_dynamic_storage_buffers,
         [],
@@ -165,13 +167,28 @@ fn runtime_binding_set_is_complete_pipeline_shaped_logical_use() {
 }
 
 #[test]
+fn runtime_binding_set_rejects_bind_group_count_above_admitted_limit() {
+    let first = GpuBindGroupLayoutDescriptor::new(0, []).unwrap();
+    let second = GpuBindGroupLayoutDescriptor::new(1, []).unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([first, second]).unwrap();
+    let error = GpuRuntimeBindingSet::new(layout, [], &device_facts_with_limits(1, 8, 4))
+        .expect_err("two pipeline bind groups must reject against an admitted limit of one");
+
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::RuntimeBindingIncompatible
+    );
+    assert_eq!(error.label(), "bind groups");
+}
+
+#[test]
 fn runtime_binding_set_rejects_dynamic_storage_when_admitted_limit_is_zero() {
     let group = GpuBindGroupLayoutDescriptor::new(0, [declaration(None)]).unwrap();
     let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
     let error = GpuRuntimeBindingSet::new(
         layout,
         [runtime_value(16)],
-        &device_facts_with_dynamic_limits(8, 0),
+        &device_facts_with_limits(4, 8, 0),
     )
     .expect_err("zero admitted dynamic-storage capacity must reject the declaration");
 
