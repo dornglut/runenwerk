@@ -1373,6 +1373,7 @@ impl Renderer {
                 CaptureTextureSource::Surface,
                 packet.surface_size,
                 packet.surface_format,
+                readback_format,
             ) {
                 Ok(prepared) => prepared_captures.push(prepared),
                 Err(err) => {
