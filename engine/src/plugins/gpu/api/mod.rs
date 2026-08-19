@@ -47,7 +47,7 @@ pub use work::{
     GpuDepthAttachmentLoad, GpuDepthClearValue, GpuDispatchSize, GpuDrawIntent, GpuDrawRange,
     GpuMultisampleResolveTarget, GpuPresentOperation, GpuQueryResolveOperation,
     GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuTextureCopyRegion,
-    GpuTextureOrigin,
+    GpuTextureOrigin, GpuTimestampWrites,
 };
 pub use work_resource_id::{
     GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
