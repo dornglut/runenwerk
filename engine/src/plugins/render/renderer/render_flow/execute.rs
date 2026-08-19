@@ -563,8 +563,8 @@ impl Renderer {
                                 let pass_label = pass_id.to_string();
                                 let pass_encode_start = Instant::now();
                                 let pass_kind = execution_pass_kind_name(pass).to_string();
-                                let gpu_timestamp_indices = execution.timestamp_indices.and_then(
-                                    |indices| {
+                                let gpu_timestamp_indices =
+                                    execution.timestamp_indices.and_then(|indices| {
                                         invocation.timing_frame.as_mut().and_then(|frame| {
                                             frame.register_pass(
                                                 indices,
@@ -575,14 +575,14 @@ impl Renderer {
                                                 pass_kind.clone(),
                                             )
                                         })
-                                    },
-                                );
-                                let gpu_timestamp_writes = gpu_timestamp_indices.and_then(|indices| {
-                                    invocation
-                                        .timing_frame
-                                        .as_ref()
-                                        .map(|frame| frame.timestamp_writes(indices))
-                                });
+                                    });
+                                let gpu_timestamp_writes =
+                                    gpu_timestamp_indices.and_then(|indices| {
+                                        invocation
+                                            .timing_frame
+                                            .as_ref()
+                                            .map(|frame| frame.timestamp_writes(indices))
+                                    });
                                 let has_gpu_timestamp_writes = gpu_timestamp_writes.is_some();
                                 let evidence = self.encode_compiled_pass(
                                     context,
@@ -727,7 +727,9 @@ impl Renderer {
                                         occurrence
                                     )
                                 })?;
-                                if let Some(pending) = frame.encode_readback_copy(context, encoder)? {
+                                if let Some(pending) =
+                                    frame.encode_readback_copy(context, encoder)?
+                                {
                                     pending_gpu_pass_timing_readbacks.push(pending);
                                 }
                             }
@@ -1398,7 +1400,7 @@ impl Renderer {
                     terminal,
                 });
                 continue;
-            };
+            }
 
             match prepare_texture_capture_copy(
                 context,
