@@ -176,7 +176,7 @@ impl GpuPassTimingFrame {
     }
 
     pub fn encode_readback_copy(
-        mut self,
+        self,
         context: &GpuContext,
         encoder: &mut CommandEncoder,
         operation: &GpuCopyOperation,
