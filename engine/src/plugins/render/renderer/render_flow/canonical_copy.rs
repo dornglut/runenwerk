@@ -1,5 +1,5 @@
-use super::*;
 use super::canonical_execution::{realized_buffer_for_handle, realized_texture_for_handle};
+use super::*;
 use crate::plugins::gpu::{
     CurrentRenderBufferCopyTerminal, CurrentRenderTextureCopyTerminal, GpuCopyExtent,
     GpuCopyOperation, GpuTextureAspect as LogicalTextureAspect, GpuTextureOrigin,

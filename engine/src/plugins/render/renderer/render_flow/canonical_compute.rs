@@ -1,8 +1,8 @@
-use super::*;
 use super::canonical_execution::{
     realized_buffer_for_handle, validate_pre_g5b_dynamic_offset_boundary,
     validate_realized_binding_groups, validate_renderer_timestamp_projection,
 };
+use super::*;
 use crate::plugins::gpu::{
     CurrentRenderComputePipelineTerminal, CurrentRenderIndirectBufferTerminal,
     CurrentRenderPipelineBindGroupsTerminal, CurrentRenderTimestampWritesTerminal,
@@ -52,12 +52,8 @@ impl Renderer {
         let dispatch = match operation.dispatch() {
             GpuDispatchIntent::Direct(size) => CanonicalComputeDispatch::Direct(size.as_array()),
             GpuDispatchIntent::Indirect(access) => CanonicalComputeDispatch::Indirect {
-                buffer: realized_buffer_for_handle(
-                    "compute",
-                    runtime_resources,
-                    access.buffer(),
-                )?
-                .clone(),
+                buffer: realized_buffer_for_handle("compute", runtime_resources, access.buffer())?
+                    .clone(),
                 byte_offset: access.range().offset(),
             },
         };

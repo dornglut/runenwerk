@@ -1,9 +1,9 @@
-use super::*;
 use super::canonical_execution::{
     realized_buffer_for_handle, realized_texture_view_for_handle,
     validate_pre_g5b_dynamic_offset_boundary, validate_realized_binding_groups,
     validate_renderer_timestamp_projection,
 };
+use super::*;
 use crate::plugins::gpu::{
     CurrentRenderAttachmentsTerminal, CurrentRenderIndexBufferTerminal,
     CurrentRenderIndirectBufferTerminal, CurrentRenderPipelineBindGroupsTerminal,
@@ -45,13 +45,10 @@ impl Renderer {
                 "canonical render operation requires multisample resolve execution owned by G5B; the current renderer projection does not author a resolve target"
             );
         }
-        if operation
-            .depth_stencil_attachment()
-            .is_some_and(|depth| {
-                depth.access() == GpuDepthStencilAccess::ReadOnly
-                    && depth.store() != GpuAttachmentStore::Store
-            })
-        {
+        if operation.depth_stencil_attachment().is_some_and(|depth| {
+            depth.access() == GpuDepthStencilAccess::ReadOnly
+                && depth.store() != GpuAttachmentStore::Store
+        }) {
             bail!(
                 "canonical read-only depth operation carries discard semantics not representable by the current renderer bridge without writing the attachment"
             );
@@ -65,9 +62,7 @@ impl Renderer {
             }
         };
         if realized_pipeline.descriptor() != draw.pipeline() {
-            bail!(
-                "canonical render operation pipeline disagrees with its G4C3 realized pipeline"
-            );
+            bail!("canonical render operation pipeline disagrees with its G4C3 realized pipeline");
         }
         if &prepared.bindings.runtime_bindings != draw.bindings() {
             bail!(
@@ -124,23 +119,25 @@ impl Renderer {
         };
 
         let mut encode_result = Ok(());
-        context.current_render_execution_bridge().for_render_pipeline(
-            realized_pipeline,
-            EncodeCanonicalRenderPipeline {
-                context,
-                encoder,
-                attachment_views: &attachment_views,
-                bind_groups: &prepared.bindings.bind_groups,
-                operation,
-                draw,
-                color_attachment,
-                vertex_buffers: &vertex_buffers,
-                index_buffer: index_buffer.as_ref(),
-                indirect_buffer: indirect_buffer.as_ref(),
-                gpu_timestamp_writes,
-                result: &mut encode_result,
-            },
-        )?;
+        context
+            .current_render_execution_bridge()
+            .for_render_pipeline(
+                realized_pipeline,
+                EncodeCanonicalRenderPipeline {
+                    context,
+                    encoder,
+                    attachment_views: &attachment_views,
+                    bind_groups: &prepared.bindings.bind_groups,
+                    operation,
+                    draw,
+                    color_attachment,
+                    vertex_buffers: &vertex_buffers,
+                    index_buffer: index_buffer.as_ref(),
+                    indirect_buffer: indirect_buffer.as_ref(),
+                    gpu_timestamp_writes,
+                    result: &mut encode_result,
+                },
+            )?;
         encode_result?;
 
         Ok(EncodedPassEvidence {
@@ -174,11 +171,7 @@ fn realized_vertex_buffers<'a>(
         .map(|binding| {
             Ok(CanonicalVertexBuffer {
                 slot: binding.slot(),
-                buffer: realized_buffer_for_handle(
-                    "render",
-                    runtime_resources,
-                    binding.buffer(),
-                )?,
+                buffer: realized_buffer_for_handle("render", runtime_resources, binding.buffer())?,
                 range: binding.range(),
             })
         })
@@ -276,10 +269,7 @@ impl CurrentRenderAttachmentsTerminal for EncodeCanonicalRenderAttachments<'_> {
             return;
         }
         let color_view = views[0];
-        let depth_view = self
-            .operation
-            .depth_stencil_attachment()
-            .map(|_| views[1]);
+        let depth_view = self.operation.depth_stencil_attachment().map(|_| views[1]);
         let operation = CanonicalRenderPassOperation {
             encoder: self.encoder,
             pipeline: self.pipeline,
@@ -451,14 +441,16 @@ impl CanonicalRenderPassOperation<'_> {
                         "canonical indirect render realization disagrees with logical indexedness"
                     );
                 }
-                context.current_render_execution_bridge().for_indirect_buffer(
-                    indirect.buffer,
-                    DrawCanonicalRenderIndirect {
-                        pass: &mut pass,
-                        byte_offset: indirect.byte_offset,
-                        indexed: indirect.indexed,
-                    },
-                )?;
+                context
+                    .current_render_execution_bridge()
+                    .for_indirect_buffer(
+                        indirect.buffer,
+                        DrawCanonicalRenderIndirect {
+                            pass: &mut pass,
+                            byte_offset: indirect.byte_offset,
+                            indexed: indirect.indexed,
+                        },
+                    )?;
             }
         }
         Ok(())
@@ -500,8 +492,10 @@ struct SetCanonicalVertexBuffer<'a, 'pass> {
 
 impl CurrentRenderVertexBufferTerminal for SetCanonicalVertexBuffer<'_, '_> {
     fn use_vertex_buffer(self, buffer: &Buffer) {
-        self.pass
-            .set_vertex_buffer(self.slot, buffer.slice(self.range.offset()..self.range.end()));
+        self.pass.set_vertex_buffer(
+            self.slot,
+            buffer.slice(self.range.offset()..self.range.end()),
+        );
     }
 }
 

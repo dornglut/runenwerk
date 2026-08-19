@@ -712,7 +712,8 @@ impl Renderer {
                                 let GpuWorkOperation::Copy(operation) = &scheduled.operation else {
                                     bail!(
                                         "prepared timing-readback occurrence '{}' carries non-copy operation kind {:?}",
-                                        occurrence, scheduled.operation.kind()
+                                        occurrence,
+                                        scheduled.operation.kind()
                                     );
                                 };
                                 let frame = invocation.timing_frame.take().ok_or_else(|| {
