@@ -30,6 +30,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::mpsc::channel;
 
 mod bindings;
+mod canonical_compute;
 mod canonical_work;
 mod capture;
 mod execute;
