@@ -583,19 +583,52 @@ impl Renderer {
                                             .map(|frame| frame.timestamp_writes(indices))
                                     });
                                 let has_gpu_timestamp_writes = gpu_timestamp_writes.is_some();
-                                let evidence = self.encode_compiled_pass(
-                                    context,
-                                    encoder,
-                                    frame_texture,
-                                    frame_view,
-                                    &invocation.packet,
-                                    invocation.flow,
-                                    &invocation.invocation.inputs,
-                                    pass,
-                                    runtime_resources,
-                                    execution.pipeline.as_ref(),
-                                    gpu_timestamp_writes,
-                                )?;
+                                let evidence = match &scheduled.operation {
+                                    GpuWorkOperation::Compute(operation) => {
+                                        if !matches!(pass, CompiledPassExecutionPlan::Compute(_)) {
+                                            bail!(
+                                                "canonical compute operation occurrence '{}' is paired with non-compute renderer identity '{}'",
+                                                occurrence,
+                                                pass_label
+                                            );
+                                        }
+                                        let prepared = execution.pipeline.as_ref().ok_or_else(|| {
+                                            anyhow::anyhow!(
+                                                "canonical compute occurrence '{}' has no G4C3 realized pipeline",
+                                                occurrence
+                                            )
+                                        })?;
+                                        self.encode_canonical_compute_operation(
+                                            context,
+                                            encoder,
+                                            operation,
+                                            prepared,
+                                            gpu_timestamp_writes,
+                                        )?
+                                    }
+                                    GpuWorkOperation::Render(_) | GpuWorkOperation::Copy(_) => {
+                                        self.encode_compiled_pass(
+                                            context,
+                                            encoder,
+                                            frame_texture,
+                                            frame_view,
+                                            &invocation.packet,
+                                            invocation.flow,
+                                            &invocation.invocation.inputs,
+                                            pass,
+                                            runtime_resources,
+                                            execution.pipeline.as_ref(),
+                                            gpu_timestamp_writes,
+                                        )?
+                                    }
+                                    other => {
+                                        bail!(
+                                            "canonical render-pass occurrence '{}' carries unsupported operation kind {:?}",
+                                            occurrence,
+                                            other.kind()
+                                        )
+                                    }
+                                };
                                 self.record_encoded_pass(
                                     frame_index,
                                     prepared_frame.surface.render_surface_id.raw(),
