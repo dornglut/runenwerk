@@ -1,11 +1,10 @@
 use super::super::operation::{GpuRenderOperation, GpuWorkOperation};
 use super::*;
 use crate::plugins::gpu::{
-    GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
-    GpuMemoryIntent, GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon,
-    GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor,
-    GpuTextureExtent, GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages,
-    GpuWorkResourceIdAllocator,
+    GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuMemoryIntent,
+    GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+    GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor, GpuTextureExtent,
+    GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages, GpuWorkResourceIdAllocator,
 };
 use std::{
     collections::hash_map::DefaultHasher,
@@ -223,16 +222,16 @@ fn multisample_resolve_rejects_sample_format_and_alias_mismatches() {
         destination_range,
     )
     .unwrap();
-    assert!(GpuRenderColorAttachment::new(
-        GpuTextureAccessResource::Texture(single_source),
-        source_range,
-        GpuColorAttachmentLoad::Clear(
-            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-        ),
-        GpuAttachmentStore::Store,
-        Some(resolve),
-    )
-    .is_err());
+    assert!(
+        GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(single_source),
+            source_range,
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),),
+            GpuAttachmentStore::Store,
+            Some(resolve),
+        )
+        .is_err()
+    );
 
     let multisampled = texture(
         &mut allocator,
@@ -254,16 +253,16 @@ fn multisample_resolve_rejects_sample_format_and_alias_mismatches() {
         GpuTextureSubresourceRange::whole(&wrong_samples).unwrap(),
     )
     .unwrap();
-    assert!(GpuRenderColorAttachment::new(
-        GpuTextureAccessResource::Texture(multisampled.clone()),
-        source_range,
-        GpuColorAttachmentLoad::Clear(
-            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-        ),
-        GpuAttachmentStore::Store,
-        Some(resolve),
-    )
-    .is_err());
+    assert!(
+        GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(multisampled.clone()),
+            source_range,
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),),
+            GpuAttachmentStore::Store,
+            Some(resolve),
+        )
+        .is_err()
+    );
 
     let wrong_format = texture(
         &mut allocator,
@@ -277,32 +276,32 @@ fn multisample_resolve_rejects_sample_format_and_alias_mismatches() {
         GpuTextureSubresourceRange::whole(&wrong_format).unwrap(),
     )
     .unwrap();
-    assert!(GpuRenderColorAttachment::new(
-        GpuTextureAccessResource::Texture(multisampled.clone()),
-        source_range,
-        GpuColorAttachmentLoad::Clear(
-            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-        ),
-        GpuAttachmentStore::Store,
-        Some(resolve),
-    )
-    .is_err());
+    assert!(
+        GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(multisampled.clone()),
+            source_range,
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),),
+            GpuAttachmentStore::Store,
+            Some(resolve),
+        )
+        .is_err()
+    );
 
     let alias = GpuMultisampleResolveTarget::new(
         GpuTextureAccessResource::Texture(multisampled.clone()),
         source_range,
     )
     .unwrap();
-    assert!(GpuRenderColorAttachment::new(
-        GpuTextureAccessResource::Texture(multisampled),
-        source_range,
-        GpuColorAttachmentLoad::Clear(
-            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-        ),
-        GpuAttachmentStore::Store,
-        Some(alias),
-    )
-    .is_err());
+    assert!(
+        GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(multisampled),
+            source_range,
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),),
+            GpuAttachmentStore::Store,
+            Some(alias),
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -334,16 +333,16 @@ fn multisample_resolve_rejects_extent_and_subresource_mismatches() {
         GpuTextureSubresourceRange::whole(&wrong_extent).unwrap(),
     )
     .unwrap();
-    assert!(GpuRenderColorAttachment::new(
-        GpuTextureAccessResource::Texture(source.clone()),
-        source_range,
-        GpuColorAttachmentLoad::Clear(
-            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-        ),
-        GpuAttachmentStore::Discard,
-        Some(wrong_extent_resolve),
-    )
-    .is_err());
+    assert!(
+        GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(source.clone()),
+            source_range,
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),),
+            GpuAttachmentStore::Discard,
+            Some(wrong_extent_resolve),
+        )
+        .is_err()
+    );
 
     let extra_mip = texture_with_shape(
         &mut allocator,
@@ -363,16 +362,16 @@ fn multisample_resolve_rejects_extent_and_subresource_mismatches() {
         GpuTextureSubresourceRange::whole(&extra_mip).unwrap(),
     )
     .unwrap();
-    assert!(GpuRenderColorAttachment::new(
-        GpuTextureAccessResource::Texture(source),
-        source_range,
-        GpuColorAttachmentLoad::Clear(
-            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-        ),
-        GpuAttachmentStore::Discard,
-        Some(mismatched_subresources),
-    )
-    .is_err());
+    assert!(
+        GpuRenderColorAttachment::new(
+            GpuTextureAccessResource::Texture(source),
+            source_range,
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),),
+            GpuAttachmentStore::Discard,
+            Some(mismatched_subresources),
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -506,7 +505,10 @@ fn all_copy_directions_validate_logical_coverage() {
     )
     .unwrap();
     assert_eq!(
-        GpuWorkOperation::Copy(buffer_copy).derived_accesses().unwrap().len(),
+        GpuWorkOperation::Copy(buffer_copy)
+            .derived_accesses()
+            .unwrap()
+            .len(),
         2
     );
     let texture_source = texture(

@@ -19,8 +19,8 @@ pub use attachment::{
 pub use clear::GpuClearOperation;
 pub use compute::{GpuComputeOperation, GpuDispatchSize};
 pub use copy::{
-    GpuBufferRegion, GpuBufferTextureLayout, GpuCopyExtent, GpuCopyOperation,
-    GpuTextureCopyRegion, GpuTextureOrigin,
+    GpuBufferRegion, GpuBufferTextureLayout, GpuCopyExtent, GpuCopyOperation, GpuTextureCopyRegion,
+    GpuTextureOrigin,
 };
 pub use draw::{GpuDrawIntent, GpuDrawRange};
 pub use present::GpuPresentOperation;

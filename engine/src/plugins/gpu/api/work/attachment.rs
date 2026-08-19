@@ -1,9 +1,9 @@
-use super::mip_extent;
 use super::super::{
     GpuAttachmentLoadKind, GpuAttachmentStore, GpuDepthStencilAccess, GpuTextureAccess,
     GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureFormat,
     GpuTextureSubresourceRange, GpuWorkOperationCause, GpuWorkOperationError,
 };
+use super::mip_extent;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 

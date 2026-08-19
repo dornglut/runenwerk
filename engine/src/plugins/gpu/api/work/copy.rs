@@ -1,10 +1,10 @@
-use super::mip_extent;
 use super::super::{
-    gpu_texture_formats_copy_compatible, GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle,
-    GpuBufferRange, GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
-    GpuTextureAspect, GpuTextureDimension, GpuTextureHandle, GpuTextureSubresourceRange,
-    GpuWorkOperationCause, GpuWorkOperationError, GpuWorkResourceId,
+    GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange, GpuTextureAccess,
+    GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureDimension,
+    GpuTextureHandle, GpuTextureSubresourceRange, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuWorkResourceId, gpu_texture_formats_copy_compatible,
 };
+use super::mip_extent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuTextureOrigin {

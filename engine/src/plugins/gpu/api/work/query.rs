@@ -45,7 +45,9 @@ impl GpuQueryResolveOperation {
         let destination_range = GpuBufferRange::new(destination, destination_offset, byte_len)
             .map_err(|source| {
                 let cause = match source.cause() {
-                    GpuAccessCause::ArithmeticOverflow => GpuWorkOperationCause::QueryDestinationOverflow,
+                    GpuAccessCause::ArithmeticOverflow => {
+                        GpuWorkOperationCause::QueryDestinationOverflow
+                    }
                     _ => GpuWorkOperationCause::QueryDestinationOutOfBounds,
                 };
                 GpuWorkOperationError::from_access(
