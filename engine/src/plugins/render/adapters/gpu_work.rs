@@ -419,18 +419,13 @@ pub(crate) fn prepare_render_gpu_work(
 fn validate_occurrences(
     nodes: &[ResolvedRenderGpuWorkNode],
 ) -> Result<(), RenderGpuWorkAdapterError> {
-    let occurrences = nodes
-        .iter()
-        .map(|node| node.occurrence)
-        .collect::<BTreeSet<_>>();
-    if occurrences.len() != nodes.len() {
-        let mut seen = BTreeSet::new();
-        let occurrence = nodes
-            .iter()
-            .map(|node| node.occurrence)
-            .find(|occurrence| !seen.insert(*occurrence))
-            .expect("duplicate occurrence count guarantees one repeated identity");
-        return Err(RenderGpuWorkAdapterError::DuplicateOccurrence { occurrence });
+    let mut occurrences = BTreeSet::new();
+    for node in nodes {
+        if !occurrences.insert(node.occurrence) {
+            return Err(RenderGpuWorkAdapterError::DuplicateOccurrence {
+                occurrence: node.occurrence,
+            });
+        }
     }
     for node in nodes {
         for occurrence in &node.control_order_after {
