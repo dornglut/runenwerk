@@ -4,12 +4,8 @@ use super::resource_descriptors::{
 };
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderBufferUploadTerminal, CurrentRenderTextureUploadTerminal,
-    GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingProvenance, GpuBufferUsage, GpuMemoryIntent, GpuResourceLifetime,
-    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuRuntimeTextureViewBinding,
-    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuTextureDimension, GpuTextureSampleClass,
-    GpuTextureUsage, GpuTextureViewDimension,
+    CurrentRenderBufferUploadTerminal, CurrentRenderTextureUploadTerminal, GpuBufferUsage,
+    GpuMemoryIntent, GpuResourceLifetime, GpuTextureDimension, GpuTextureUsage,
 };
 use crate::plugins::render::features::{
     MATERIAL_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, UiFontAtlasResource,
@@ -588,51 +584,10 @@ impl Renderer {
             );
             return Ok(None);
         }
-        let mut layout_declarations = Vec::with_capacity(bindings.len() * 2);
-        for binding in &bindings {
-            let (texture_binding, sampler_binding) = Self::material_wgpu_binding_indices(binding);
-            let view_dimension = match binding.texture_kind {
-                crate::plugins::render::PreparedMaterialTextureKind::Texture2D => {
-                    GpuTextureViewDimension::D2
-                }
-                crate::plugins::render::PreparedMaterialTextureKind::Texture3D => {
-                    GpuTextureViewDimension::D3
-                }
-            };
-            layout_declarations.push(GpuBindingDeclaration::new(
-                GpuBindingKey::try_new(u64::from(material_group), u64::from(texture_binding))?,
-                GpuShaderStages::one(GpuShaderStage::Fragment),
-                GpuBindingKind::sampled_texture(
-                    GpuTextureSampleClass::FloatFilterable,
-                    view_dimension,
-                    false,
-                )?,
-                None,
-                format!("material-texture-slot-{}", binding.resource_slot_index),
-                GpuBindingProvenance::new(
-                    "renderer-material-binding",
-                    Some(binding.binding_key.clone()),
-                )?,
-            )?);
-            layout_declarations.push(GpuBindingDeclaration::new(
-                GpuBindingKey::try_new(u64::from(material_group), u64::from(sampler_binding))?,
-                GpuShaderStages::one(GpuShaderStage::Fragment),
-                GpuBindingKind::sampler(GpuSamplerClass::Filtering),
-                None,
-                format!("material-sampler-slot-{}", binding.resource_slot_index),
-                GpuBindingProvenance::new(
-                    "renderer-material-binding",
-                    Some(binding.binding_key.clone()),
-                )?,
-            )?);
-        }
-        let layout_descriptor =
-            GpuBindGroupLayoutDescriptor::new(material_group, layout_declarations)?;
 
         let mut textures = Vec::with_capacity(bindings.len());
         let mut texture_views = Vec::with_capacity(bindings.len());
         let mut samplers = Vec::with_capacity(bindings.len());
-        let mut bind_group_bindings = Vec::with_capacity(bindings.len());
         let mut texture_uploads = Vec::with_capacity(bindings.len());
 
         for binding in bindings {
@@ -692,57 +647,15 @@ impl Renderer {
                 _realized: context.realize_sampler(&sampler_handle)?,
                 _handle: sampler_handle,
             };
-            let binding_indices = Self::material_wgpu_binding_indices(binding);
             texture_views.push(view);
             samplers.push(sampler);
-            bind_group_bindings.push(binding_indices);
             texture_uploads.push(upload);
             textures.push(texture);
         }
 
-        let layout = pollster::block_on(context.realize_bind_group_layout(&layout_descriptor))?;
-        let values = texture_views
-            .iter()
-            .zip(&samplers)
-            .zip(&bind_group_bindings)
-            .flat_map(|((view, sampler), (texture_binding, sampler_binding))| {
-                [
-                    GpuRuntimeBindingValue::new(
-                        GpuBindingKey::try_new(
-                            u64::from(material_group),
-                            u64::from(*texture_binding),
-                        )
-                        .expect("material texture binding indices are representable"),
-                        [GpuRuntimeBindingResource::TextureView(
-                            GpuRuntimeTextureViewBinding::new(
-                                view._handle.clone(),
-                                match view._handle.descriptor().dimension() {
-                                    GpuTextureDimension::D2 => GpuTextureViewDimension::D2,
-                                    GpuTextureDimension::D3 => GpuTextureViewDimension::D3,
-                                    dimension => unreachable!(
-                                        "material texture views use only D2/D3, got {dimension:?}"
-                                    ),
-                                },
-                            ),
-                        )],
-                    )
-                    .expect("material texture runtime binding should construct"),
-                    GpuRuntimeBindingValue::new(
-                        GpuBindingKey::try_new(
-                            u64::from(material_group),
-                            u64::from(*sampler_binding),
-                        )
-                        .expect("material sampler binding indices are representable"),
-                        [GpuRuntimeBindingResource::Sampler(sampler._handle.clone())],
-                    )
-                    .expect("material sampler runtime binding should construct"),
-                ]
-            })
-            .collect::<Vec<_>>();
-        let bind_group = pollster::block_on(context.realize_bind_group(&layout, values))?;
-
-        // All G4C1 texture/view/sampler records and the G4C2 material layout/bind group are
-        // complete before the raw interval. Preserve only the later G5 queue writes.
+        // G4C1 texture/view/sampler records are complete before the raw interval. The complete
+        // material binding set and all physical groups are realized once through the canonical
+        // G4C2 `GpuRuntimeBindingSet` path in render-flow binding realization.
         for (texture, upload) in textures.iter().zip(texture_uploads) {
             pending_operations
                 .texture_uploads
@@ -756,20 +669,10 @@ impl Renderer {
         }
 
         Ok(Some(PreparedMaterialGpuResources {
-            bind_group,
             _textures: textures,
             _texture_views: texture_views,
             _samplers: samplers,
         }))
-    }
-
-    // Current WGPU realization is intentionally temporary G4C2 code. It
-    // projects the transported shader ABI indices exactly; it does not
-    // allocate or derive them from a material resource-table slot.
-    fn material_wgpu_binding_indices(
-        binding: &crate::plugins::render::PreparedMaterialTextureBinding,
-    ) -> (u32, u32) {
-        (binding.texture_binding, binding.sampler_binding)
     }
 
     fn resolve_ui_prepared_with_gate(
@@ -1548,21 +1451,6 @@ mod tests {
 
         assert!(glyph_before_later_surface_rect < rect_on_later_surface);
         assert!(rect_on_later_surface < rect_on_later_submission);
-    }
-
-    #[test]
-    fn material_wgpu_realization_projects_transported_shader_binding_indices() {
-        let binding = PreparedMaterialTextureBinding::new(
-            7,
-            "albedo",
-            PreparedMaterialTextureBindingLocation::new(93, 1, 41, 59),
-            "artifact.7",
-            ".runenwerk/artifacts/texture.ktx2",
-            PreparedMaterialTextureKind::Texture2D,
-            "cache",
-        );
-
-        assert_eq!(Renderer::material_wgpu_binding_indices(&binding), (41, 59));
     }
 
     #[test]
