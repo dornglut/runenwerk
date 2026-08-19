@@ -349,7 +349,7 @@ fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
     let wgsl_scene = read(&manifest_dir, MATERIAL_WGSL_SCENE);
     let handoff = read(&manifest_dir, MATERIAL_HANDOFF);
     let g4b = read(&manifest_dir, BINDINGS);
-    let wgpu_realization = read(&manifest_dir, MATERIAL_WGPU_PREPARE);
+    let renderer_prepare = read(&manifest_dir, MATERIAL_WGPU_PREPARE);
 
     let compact = |source: &str| {
         source
@@ -369,13 +369,13 @@ fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
         BINDINGS,
     );
     let g4b_compact = compact(g4b_lowerer);
-    let wgpu_material_realization = section(
-        &wgpu_realization,
+    let material_prepare = section(
+        &renderer_prepare,
         "fn prepare_material_gpu_resources(",
         "fn resolve_ui_prepared_with_gate(",
         MATERIAL_WGPU_PREPARE,
     );
-    let wgpu_compact = compact(wgpu_material_realization);
+    let material_prepare_compact = compact(material_prepare);
 
     for required in [
         "pub bind_group: u32",
@@ -416,16 +416,23 @@ fn material_shader_binding_coordinates_have_one_compiler_allocation_owner() {
         ),
         "G4B group-one declarations must construct typed keys from transported compiler coordinates"
     );
-    assert!(
-        wgpu_realization.contains("Self::material_wgpu_binding_indices(binding)")
-            && wgpu_realization.contains("(binding.texture_binding, binding.sampler_binding)"),
-        "temporary WGPU material realization must project transported shader binding indices"
-    );
+    for forbidden in [
+        "material_wgpu_binding_indices",
+        "GpuBindGroupLayoutDescriptor::new(",
+        "GpuRuntimeBindingValue::",
+        "context.realize_bind_group_layout(",
+        "context.realize_bind_group(",
+    ] {
+        assert!(
+            !material_prepare.contains(forbidden),
+            "renderer material preparation must not restore duplicate G4B/G4C2 binding authority through {forbidden:?}"
+        );
+    }
 
     for (path, source) in [
         (MATERIAL_HANDOFF, handoff_compact.as_str()),
         (BINDINGS, g4b_compact.as_str()),
-        (MATERIAL_WGPU_PREPARE, wgpu_compact.as_str()),
+        (MATERIAL_WGPU_PREPARE, material_prepare_compact.as_str()),
     ] {
         assert_no_resource_slot_coordinate_arithmetic(path, source);
     }
