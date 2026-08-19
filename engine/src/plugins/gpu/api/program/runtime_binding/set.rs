@@ -274,11 +274,7 @@ fn validate_pipeline_binding_limits(
     layout: &GpuPipelineLayoutDescriptor,
     device_facts: &GpuRuntimeBindingDeviceFacts,
 ) -> Result<(), GpuProgramContractError> {
-    let required_bind_group_slots = match layout
-        .groups()
-        .map(GpuBindGroupLayoutDescriptor::group)
-        .max()
-    {
+    let required_bind_group_slots = match layout.groups().map(|group| group.group()).max() {
         Some(highest_group) => highest_group.checked_add(1).ok_or_else(|| {
             incompatible(
                 format!("group {highest_group}"),
