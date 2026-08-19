@@ -91,6 +91,10 @@ impl GpuRuntimeBindingSet {
     pub fn accesses(&self) -> &[GpuResourceAccess] {
         &self.accesses
     }
+
+    pub(crate) fn required_bind_group_slots(&self) -> u64 {
+        required_bind_group_slots(&self.layout)
+    }
 }
 
 impl Hash for GpuRuntimeBindingSet {
@@ -274,16 +278,8 @@ fn validate_pipeline_binding_limits(
     layout: &GpuPipelineLayoutDescriptor,
     device_facts: &GpuRuntimeBindingDeviceFacts,
 ) -> Result<(), GpuProgramContractError> {
-    let required_bind_group_slots = match layout.groups().map(|group| group.group()).max() {
-        Some(highest_group) => highest_group.checked_add(1).ok_or_else(|| {
-            incompatible(
-                format!("group {highest_group}"),
-                "use a bind-group index whose positional slot count fits the normalized u32 domain",
-            )
-        })?,
-        None => 0,
-    };
-    if required_bind_group_slots > device_facts.max_bind_groups() {
+    let required_bind_group_slots = required_bind_group_slots(layout);
+    if required_bind_group_slots > u64::from(device_facts.max_bind_groups()) {
         return Err(incompatible(
             "bind groups",
             "keep the highest pipeline bind-group index inside the admitted positional bind-group limit",
@@ -330,6 +326,14 @@ fn validate_pipeline_binding_limits(
         ));
     }
     Ok(())
+}
+
+fn required_bind_group_slots(layout: &GpuPipelineLayoutDescriptor) -> u64 {
+    layout
+        .groups()
+        .map(|group| u64::from(group.group()) + 1)
+        .max()
+        .unwrap_or(0)
 }
 
 fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgramContractError {
