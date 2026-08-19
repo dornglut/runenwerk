@@ -615,20 +615,34 @@ impl Renderer {
                                             gpu_timestamp_writes,
                                         )?
                                     }
-                                    GpuWorkOperation::Render(_) | GpuWorkOperation::Copy(_) => self
-                                        .encode_compiled_pass(
+                                    GpuWorkOperation::Copy(operation) => {
+                                        if !matches!(pass, CompiledPassExecutionPlan::Copy(_)) {
+                                            bail!(
+                                                "canonical copy operation occurrence '{}' is paired with non-copy renderer identity '{}'",
+                                                occurrence,
+                                                pass_label
+                                            );
+                                        }
+                                        self.encode_canonical_copy_operation(
                                             context,
                                             encoder,
-                                            frame_texture,
-                                            frame_view,
-                                            &invocation.packet,
-                                            invocation.flow,
-                                            &invocation.invocation.inputs,
-                                            pass,
+                                            operation,
                                             runtime_resources,
-                                            execution.pipeline.as_ref(),
-                                            gpu_timestamp_writes,
-                                        )?,
+                                        )?
+                                    }
+                                    GpuWorkOperation::Render(_) => self.encode_compiled_pass(
+                                        context,
+                                        encoder,
+                                        frame_texture,
+                                        frame_view,
+                                        &invocation.packet,
+                                        invocation.flow,
+                                        &invocation.invocation.inputs,
+                                        pass,
+                                        runtime_resources,
+                                        execution.pipeline.as_ref(),
+                                        gpu_timestamp_writes,
+                                    )?,
                                     other => {
                                         bail!(
                                             "canonical render-pass occurrence '{}' carries unsupported operation kind {:?}",
