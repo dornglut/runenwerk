@@ -15,9 +15,9 @@ use std::collections::BTreeMap;
 ///
 /// This owner is pipeline-layout shaped. Per-group resource compatibility remains owned by
 /// [`GpuValidatedBindGroupBindings`]; this type owns complete group coverage, admitted pipeline-wide
-/// dynamic-buffer counts, exact G3 resource accesses after per-use dynamic offsets are applied, and
-/// binding-set-local writable-alias validity. Dynamic offsets remain in the retained runtime values
-/// and therefore stay per-use logical state rather than physical bind-group identity.
+/// bind-group/dynamic-buffer counts, exact G3 resource accesses after per-use dynamic offsets are
+/// applied, and binding-set-local writable-alias validity. Dynamic offsets remain in the retained
+/// runtime values and therefore stay per-use logical state rather than physical bind-group identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuRuntimeBindingSet {
     layout: GpuPipelineLayoutDescriptor,
@@ -31,7 +31,7 @@ impl GpuRuntimeBindingSet {
         values: impl IntoIterator<Item = GpuRuntimeBindingValue>,
         device_facts: &GpuRuntimeBindingDeviceFacts,
     ) -> Result<Self, GpuProgramContractError> {
-        validate_dynamic_binding_counts(&layout, device_facts)?;
+        validate_pipeline_binding_limits(&layout, device_facts)?;
 
         let mut values_by_group = BTreeMap::<u32, Vec<GpuRuntimeBindingValue>>::new();
         for value in values {
@@ -270,10 +270,17 @@ fn effective_access_error(declaration: &GpuBindingDeclaration) -> GpuProgramCont
     )
 }
 
-fn validate_dynamic_binding_counts(
+fn validate_pipeline_binding_limits(
     layout: &GpuPipelineLayoutDescriptor,
     device_facts: &GpuRuntimeBindingDeviceFacts,
 ) -> Result<(), GpuProgramContractError> {
+    if layout.groups().len() > device_facts.max_bind_groups() as usize {
+        return Err(incompatible(
+            "bind groups",
+            "reduce pipeline bind-group declarations to the admitted bind-group limit",
+        ));
+    }
+
     let mut dynamic_uniform_buffers = 0_u64;
     let mut dynamic_storage_buffers = 0_u64;
 
