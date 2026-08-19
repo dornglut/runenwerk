@@ -631,7 +631,7 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
         "context.realize_program(pipeline_key.pipeline_descriptor.program())",
         "context.realize_pipeline_layout(",
         "context.realize_bind_group_layout(&primary_bind_group_layout)",
-        "context.realize_bind_group(&layout, values)",
+        "context.realize_bind_group(&layout, group.values().cloned())",
     ] {
         assert!(
             bindings.contains(required),
