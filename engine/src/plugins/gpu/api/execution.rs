@@ -168,7 +168,7 @@ pub enum GpuSubmissionStatus {
     Failed(GpuSubmissionFailure),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum GpuReadbackStatus {
     Pending,
     Ready(GpuReadbackBytes),
