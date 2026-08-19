@@ -92,6 +92,7 @@ impl Renderer {
         timings.preflight_ms = preflight_start.elapsed().as_secs_f32() * 1000.0;
 
         let flow_encode_start = Instant::now();
+        // Phase one: all G4C1/G4C2/G4C3 realization completes without a raw device/queue loan.
         let mut batch = self.realize_render_batch(
             context,
             frame_texture,
@@ -106,6 +107,8 @@ impl Renderer {
         )?;
 
         let encode_submit_start = Instant::now();
+        // Phase two: one non-reentrant raw loan covers only the temporary pre-G5B physical
+        // realization path. Generic GPU meaning is no longer reconstructed here.
         {
             let _span = tracing::info_span!("renderer.encode_submit").entered();
             let loan = context.current_render_device_queue();
@@ -255,6 +258,9 @@ impl Renderer {
                             effective_history_signature,
                         )?;
 
+                        // Resolve render-domain runtime control before any canonical G3 work is
+                        // constructed. A skipped pass has no GPU occurrence and therefore no
+                        // hidden fixed-step mutation or timestamp slot.
                         let occurrences =
                             expand_render_pass_occurrences(flow, &invocation.inputs, |pass| {
                                 if !self.pass_targets_active_view(
