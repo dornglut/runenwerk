@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 pub struct GpuRuntimeBindingDeviceFacts {
     uniform_buffer_offset_alignment: NonZeroU64,
     storage_buffer_offset_alignment: NonZeroU64,
+    max_bind_groups: u32,
     max_dynamic_uniform_buffers_per_pipeline_layout: u32,
     max_dynamic_storage_buffers_per_pipeline_layout: u32,
     format_capabilities: BTreeMap<GpuTextureFormat, GpuTextureFormatCapabilities>,
@@ -16,6 +17,7 @@ impl GpuRuntimeBindingDeviceFacts {
     pub fn new(
         uniform_buffer_offset_alignment: NonZeroU64,
         storage_buffer_offset_alignment: NonZeroU64,
+        max_bind_groups: u32,
         max_dynamic_uniform_buffers_per_pipeline_layout: u32,
         max_dynamic_storage_buffers_per_pipeline_layout: u32,
         format_capabilities: impl IntoIterator<Item = (GpuTextureFormat, GpuTextureFormatCapabilities)>,
@@ -23,6 +25,7 @@ impl GpuRuntimeBindingDeviceFacts {
         Self {
             uniform_buffer_offset_alignment,
             storage_buffer_offset_alignment,
+            max_bind_groups,
             max_dynamic_uniform_buffers_per_pipeline_layout,
             max_dynamic_storage_buffers_per_pipeline_layout,
             format_capabilities: format_capabilities.into_iter().collect(),
@@ -35,6 +38,10 @@ impl GpuRuntimeBindingDeviceFacts {
 
     pub const fn storage_buffer_offset_alignment(&self) -> NonZeroU64 {
         self.storage_buffer_offset_alignment
+    }
+
+    pub const fn max_bind_groups(&self) -> u32 {
+        self.max_bind_groups
     }
 
     pub const fn max_dynamic_uniform_buffers_per_pipeline_layout(&self) -> u32 {
