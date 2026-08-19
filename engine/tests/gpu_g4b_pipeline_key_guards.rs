@@ -277,9 +277,24 @@ fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
             "material group-1 layout is not normalized through the expected typed G4B vocabulary: {required}"
         );
     }
+    for required in [
+        "for group in runtime_bindings.groups() {",
+        "context.realize_bind_group_layout(group.layout())",
+        "context.realize_bind_group(&layout, group.values().cloned())",
+    ] {
+        assert!(
+            bindings.contains(required),
+            "all canonical bind-group layouts and values must delegate to G4C2 realization: {required}"
+        );
+    }
+    assert_eq!(
+        bindings.matches("context.realize_bind_group_layout(").count(),
+        1,
+        "G4C2 must own one generalized bind-group-layout realization path rather than a parallel group-0 path"
+    );
     assert!(
-        bindings.contains("context.realize_bind_group_layout(&primary_bind_group_layout)"),
-        "current group-0 layout realization must delegate typed G4B declarations to G4C2"
+        !bindings.contains("context.realize_bind_group_layout(&primary_bind_group_layout)"),
+        "the retired group-0-only realization path must not return beside generalized G4C2 realization"
     );
     for forbidden in [
         "layout_ty: BindingType",
@@ -630,7 +645,8 @@ fn wgpu_pipeline_semantics_project_from_complete_g4b_descriptors() {
     for required in [
         "context.realize_program(pipeline_key.pipeline_descriptor.program())",
         "context.realize_pipeline_layout(",
-        "context.realize_bind_group_layout(&primary_bind_group_layout)",
+        "for group in runtime_bindings.groups() {",
+        "context.realize_bind_group_layout(group.layout())",
         "context.realize_bind_group(&layout, group.values().cloned())",
     ] {
         assert!(
