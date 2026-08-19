@@ -118,16 +118,7 @@ fn lift_explicit_non_data_orders(
     let authored_orders = flow
         .render_passes
         .iter()
-        .map(|pass| {
-            (
-                pass.pass_id(),
-                pass.node()
-                    .non_data_order_after
-                    .iter()
-                    .copied()
-                    .collect::<Vec<_>>(),
-            )
-        })
+        .map(|pass| (pass.pass_id(), pass.node().non_data_order_after.to_vec()))
         .collect::<BTreeMap<_, _>>();
     let occurrence_pass_ids = occurrences
         .iter()
