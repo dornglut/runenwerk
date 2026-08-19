@@ -47,7 +47,7 @@ pub(in crate::plugins::render::renderer) struct RealizedFlowProgramBindings {
     pub(super) runtime_bindings: GpuRuntimeBindingSet,
     pub(super) program: GpuRealizedProgram,
     pub(super) pipeline_layout: GpuRealizedPipelineLayout,
-    pub(super) bind_group: Option<GpuRealizedBindGroup>,
+    pub(super) bind_groups: Vec<GpuRealizedBindGroup>,
 }
 
 impl Renderer {
@@ -281,22 +281,20 @@ impl Renderer {
         let realized_pipeline_layout = pollster::block_on(
             context.realize_pipeline_layout(pipeline_key.pipeline_descriptor.layout()),
         )?;
-        let bind_group = if let Some(group) = runtime_bindings.group(0) {
-            let layout =
-                pollster::block_on(context.realize_bind_group_layout(&primary_bind_group_layout))?;
-            Some(pollster::block_on(
+        let mut bind_groups = Vec::with_capacity(runtime_bindings.groups().len());
+        for group in runtime_bindings.groups() {
+            let layout = pollster::block_on(context.realize_bind_group_layout(group.layout()))?;
+            bind_groups.push(pollster::block_on(
                 context.realize_bind_group(&layout, group.values().cloned()),
-            )?)
-        } else {
-            None
-        };
+            )?);
+        }
 
         Ok(RealizedFlowProgramBindings {
             pipeline_key,
             runtime_bindings,
             program,
             pipeline_layout: realized_pipeline_layout,
-            bind_group,
+            bind_groups,
         })
     }
 }
