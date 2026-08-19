@@ -274,10 +274,23 @@ fn validate_pipeline_binding_limits(
     layout: &GpuPipelineLayoutDescriptor,
     device_facts: &GpuRuntimeBindingDeviceFacts,
 ) -> Result<(), GpuProgramContractError> {
-    if layout.groups().len() > device_facts.max_bind_groups() as usize {
+    let required_bind_group_slots = match layout
+        .groups()
+        .map(GpuBindGroupLayoutDescriptor::group)
+        .max()
+    {
+        Some(highest_group) => highest_group.checked_add(1).ok_or_else(|| {
+            incompatible(
+                format!("group {highest_group}"),
+                "use a bind-group index whose positional slot count fits the normalized u32 domain",
+            )
+        })?,
+        None => 0,
+    };
+    if required_bind_group_slots > device_facts.max_bind_groups() {
         return Err(incompatible(
             "bind groups",
-            "reduce pipeline bind-group declarations to the admitted bind-group limit",
+            "keep the highest pipeline bind-group index inside the admitted positional bind-group limit",
         ));
     }
 
