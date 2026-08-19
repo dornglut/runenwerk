@@ -295,7 +295,11 @@ fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar()
         .find("\n}\n\nimpl RenderGpuWorkPayload")
         .expect("render execution payload declaration should precede its implementation");
     let payload = &payload_tail[..payload_end];
-    assert!(payload.contains("pass_id: RenderPassId"));
+    assert!(payload.contains("occurrence: RenderGpuWorkOccurrenceId"));
+    assert!(
+        !payload.contains("pass_id:"),
+        "render execution payload must not duplicate compiled pass identity after occurrence cutover"
+    );
     for forbidden_truth in [
         "CompiledPassExecutionPlan",
         "GpuWorkOperation",
