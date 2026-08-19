@@ -523,7 +523,8 @@ impl Renderer {
                         );
                         match scheduled.payload {
                             RenderGpuWorkPayload::Upload { occurrence } => {
-                                let GpuWorkOperation::Upload(operation) = &scheduled.operation else {
+                                let GpuWorkOperation::Upload(operation) = &scheduled.operation
+                                else {
                                     bail!(
                                         "prepared G3 upload occurrence '{}' carries non-upload operation kind {:?}",
                                         occurrence,
