@@ -4,6 +4,106 @@ use super::super::{
     GpuWorkOperationCause, GpuWorkOperationError,
 };
 
+/// Explicit backend-neutral timestamp writes for one compute or render pass.
+///
+/// Timestamp query access alone is not enough execution meaning: a later executor must know whether
+/// a query slot is written at the beginning or the end of the pass. This value owns that semantic
+/// placement and derives the exact one-slot query accesses used by G3 hazard tracking.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GpuTimestampWrites {
+    query_set: GpuQuerySetHandle,
+    beginning_of_pass: Option<u32>,
+    end_of_pass: Option<u32>,
+    accesses: Vec<GpuQueryAccess>,
+}
+
+impl GpuTimestampWrites {
+    pub fn new(
+        query_set: &GpuQuerySetHandle,
+        beginning_of_pass: Option<u32>,
+        end_of_pass: Option<u32>,
+    ) -> Result<Self, GpuWorkOperationError> {
+        if query_set.descriptor().kind() != GpuQueryKind::Timestamp {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU timestamp writes",
+                query_set.descriptor().common().label().as_str(),
+                Some(query_set.diagnostic_identity()),
+                GpuWorkOperationCause::InvalidQueryRange,
+                "use a timestamp query set for pass timestamp writes",
+            ));
+        }
+        if beginning_of_pass.is_none() && end_of_pass.is_none() {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU timestamp writes",
+                query_set.descriptor().common().label().as_str(),
+                Some(query_set.diagnostic_identity()),
+                GpuWorkOperationCause::ZeroWork,
+                "provide a beginning-of-pass query, an end-of-pass query, or both",
+            ));
+        }
+        if beginning_of_pass.is_some() && beginning_of_pass == end_of_pass {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU timestamp writes",
+                query_set.descriptor().common().label().as_str(),
+                Some(query_set.diagnostic_identity()),
+                GpuWorkOperationCause::OperationAccessContradiction,
+                "use distinct query slots when both beginning-of-pass and end-of-pass timestamps are written",
+            ));
+        }
+
+        let mut accesses = Vec::with_capacity(
+            usize::from(beginning_of_pass.is_some()) + usize::from(end_of_pass.is_some()),
+        );
+        for index in [beginning_of_pass, end_of_pass].into_iter().flatten() {
+            let range = GpuQueryRange::new(query_set, index, 1).map_err(|source| {
+                GpuWorkOperationError::from_access(
+                    "construct GPU timestamp write range",
+                    query_set.descriptor().common().label().as_str(),
+                    GpuWorkOperationCause::InvalidQueryRange,
+                    "keep every timestamp write index inside the timestamp query set",
+                    source,
+                )
+            })?;
+            accesses.push(
+                GpuQueryAccess::new(query_set, range, GpuQueryAccessKind::WriteTimestamp).map_err(
+                    |source| {
+                        GpuWorkOperationError::from_access(
+                            "construct GPU timestamp write access",
+                            query_set.descriptor().common().label().as_str(),
+                            GpuWorkOperationCause::InvalidQueryRange,
+                            "retain a checked one-slot timestamp write access",
+                            source,
+                        )
+                    },
+                )?,
+            );
+        }
+
+        Ok(Self {
+            query_set: query_set.clone(),
+            beginning_of_pass,
+            end_of_pass,
+            accesses,
+        })
+    }
+
+    pub fn query_set(&self) -> &GpuQuerySetHandle {
+        &self.query_set
+    }
+
+    pub const fn beginning_of_pass(&self) -> Option<u32> {
+        self.beginning_of_pass
+    }
+
+    pub const fn end_of_pass(&self) -> Option<u32> {
+        self.end_of_pass
+    }
+
+    pub fn accesses(&self) -> &[GpuQueryAccess] {
+        &self.accesses
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuQueryResolveOperation {
     source: GpuQuerySetHandle,
