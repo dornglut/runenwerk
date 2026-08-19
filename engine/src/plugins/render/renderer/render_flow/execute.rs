@@ -34,7 +34,7 @@ struct RealizedFlowInvocation<'a> {
     projected_uploads: Vec<RealizedLogicalBufferUpload>,
     scheduled_passes: Vec<RealizedScheduledPass<'a>>,
     timing_frame: Option<GpuPassTimingFrame>,
-    canonical_work: Option<PreparedRenderWorkPlan>,
+    canonical_work: Option<Box<PreparedRenderWorkPlan>>,
 }
 
 struct RealizedScheduledPass<'a> {
@@ -1373,7 +1373,6 @@ impl Renderer {
                 CaptureTextureSource::Surface,
                 packet.surface_size,
                 packet.surface_format,
-                readback_format,
             ) {
                 Ok(prepared) => prepared_captures.push(prepared),
                 Err(err) => {
@@ -1451,8 +1450,8 @@ impl Renderer {
     }
 }
 
-fn schedule_invocation_passes<'a>(
-    invocation: &'a RealizedFlowInvocation<'_>,
+fn schedule_invocation_passes(
+    invocation: &RealizedFlowInvocation<'_>,
 ) -> Result<Vec<ScheduledInvocationWork>> {
     let work = invocation.canonical_work.as_ref().ok_or_else(|| {
         anyhow::anyhow!("canonical invocation scheduling requires a prepared G3 work plan")
