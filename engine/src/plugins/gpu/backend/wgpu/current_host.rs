@@ -2,7 +2,7 @@ use super::device_request::{enforce_runengpu_instance_flags, request_with_instan
 use super::{CurrentRenderDeviceQueue, WgpuContextState};
 use crate::plugins::gpu::{
     GpuContext, GpuContextDescriptor, GpuContextRequestError, GpuContextRequestErrorCategory,
-    GpuRealizationPolicies,
+    GpuExecutionPolicy, GpuRealizationPolicies,
 };
 use wgpu::rwh::HasDisplayHandle;
 use wgpu::{
@@ -65,6 +65,7 @@ impl GpuContext {
             descriptor,
             Some(&surface),
             GpuRealizationPolicies::default(),
+            GpuExecutionPolicy::default(),
         )
         .await?;
         Ok((context, surface))
