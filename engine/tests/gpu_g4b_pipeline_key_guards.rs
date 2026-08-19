@@ -288,7 +288,9 @@ fn complete_pipeline_layout_is_typed_before_pipeline_descriptor_publication() {
         );
     }
     assert_eq!(
-        bindings.matches("context.realize_bind_group_layout(").count(),
+        bindings
+            .matches("context.realize_bind_group_layout(")
+            .count(),
         1,
         "G4C2 must own one generalized bind-group-layout realization path rather than a parallel group-0 path"
     );
