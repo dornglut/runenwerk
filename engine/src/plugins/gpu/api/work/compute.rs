@@ -1,6 +1,6 @@
 use super::super::{
-    GpuComputePipelineDescriptor, GpuDispatchIntent, GpuQueryAccess, GpuQueryAccessKind,
-    GpuRuntimeBindingSet, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuComputePipelineDescriptor, GpuDispatchIntent, GpuRuntimeBindingSet, GpuTimestampWrites,
+    GpuWorkOperationCause, GpuWorkOperationError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -34,7 +34,7 @@ pub struct GpuComputeOperation {
     pipeline: GpuComputePipelineDescriptor,
     bindings: GpuRuntimeBindingSet,
     dispatch: GpuDispatchIntent,
-    timestamp_writes: Vec<GpuQueryAccess>,
+    timestamp_writes: Option<GpuTimestampWrites>,
 }
 
 impl GpuComputeOperation {
@@ -56,31 +56,13 @@ impl GpuComputeOperation {
             pipeline,
             bindings,
             dispatch,
-            timestamp_writes: Vec::new(),
+            timestamp_writes: None,
         })
     }
 
-    pub fn with_timestamp_writes(
-        mut self,
-        timestamp_writes: impl IntoIterator<Item = GpuQueryAccess>,
-    ) -> Result<Self, GpuWorkOperationError> {
-        let timestamp_writes = timestamp_writes.into_iter().collect::<Vec<_>>();
-        if timestamp_writes
-            .iter()
-            .any(|access| access.kind() != GpuQueryAccessKind::WriteTimestamp)
-        {
-            return Err(GpuWorkOperationError::invalid(
-                "construct GPU compute operation",
-                "timestamp writes",
-                timestamp_writes
-                    .first()
-                    .map(GpuQueryAccess::resource_identity),
-                GpuWorkOperationCause::OperationAccessContradiction,
-                "provide only WriteTimestamp query accesses as compute-side timestamp writes",
-            ));
-        }
-        self.timestamp_writes = timestamp_writes;
-        Ok(self)
+    pub fn with_timestamp_writes(mut self, timestamp_writes: GpuTimestampWrites) -> Self {
+        self.timestamp_writes = Some(timestamp_writes);
+        self
     }
 
     pub fn pipeline(&self) -> &GpuComputePipelineDescriptor {
@@ -95,7 +77,7 @@ impl GpuComputeOperation {
         &self.dispatch
     }
 
-    pub fn timestamp_writes(&self) -> &[GpuQueryAccess] {
-        &self.timestamp_writes
+    pub fn timestamp_writes(&self) -> Option<&GpuTimestampWrites> {
+        self.timestamp_writes.as_ref()
     }
 }
