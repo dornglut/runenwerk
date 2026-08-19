@@ -194,7 +194,7 @@ fn multisample_resolve_is_an_attachment_relation() {
         Some(resolve),
     )
     .unwrap();
-    let operation = GpuRenderOperation::new([attachment], None, [], []).unwrap();
+    let operation = GpuRenderOperation::new([attachment], None, [], None).unwrap();
     assert_eq!(operation.accesses().len(), 2);
 }
 
@@ -395,7 +395,7 @@ fn load_store_only_render_is_rejected_but_clear_and_timestamp_are_work() {
     .unwrap();
     assert!(load.source_access().kind().reads());
     assert!(load.source_access().kind().writes());
-    assert!(GpuRenderOperation::new([load], None, [], []).is_err());
+    assert!(GpuRenderOperation::new([load], None, [], None).is_err());
     let clear = GpuRenderColorAttachment::new(
         GpuTextureAccessResource::Texture(target),
         range,
@@ -404,7 +404,7 @@ fn load_store_only_render_is_rejected_but_clear_and_timestamp_are_work() {
         None,
     )
     .unwrap();
-    assert!(GpuRenderOperation::new([clear], None, [], []).is_ok());
+    assert!(GpuRenderOperation::new([clear], None, [], None).is_ok());
 
     let queries = allocator
         .allocate_query_set_handle(
@@ -418,13 +418,14 @@ fn load_store_only_render_is_rejected_but_clear_and_timestamp_are_work() {
     )
     .unwrap();
     assert!(
-        GpuResourceAccess::Query(query.clone())
+        GpuResourceAccess::Query(query)
             .derived_requirements()
             .unwrap()
             .get(GpuCapabilityFeature::TimestampQuery)
             .is_some()
     );
-    assert!(GpuRenderOperation::new([], None, [], [query]).is_ok());
+    let timestamp_writes = GpuTimestampWrites::new(&queries, Some(0), None).unwrap();
+    assert!(GpuRenderOperation::new([], None, [], Some(timestamp_writes)).is_ok());
 }
 
 #[test]
@@ -470,7 +471,7 @@ fn depth_attachment_load_clear_store_and_requirements_are_typed() {
     assert!(!clear.source_access().kind().reads());
     assert!(clear.source_access().kind().writes());
     let operation =
-        GpuWorkOperation::Render(GpuRenderOperation::new([], Some(clear), [], []).unwrap());
+        GpuWorkOperation::Render(GpuRenderOperation::new([], Some(clear), [], None).unwrap());
     let requirements = operation.derived_requirements().unwrap();
     assert!(
         requirements
