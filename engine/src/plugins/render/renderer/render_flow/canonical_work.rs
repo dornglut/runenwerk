@@ -135,7 +135,6 @@ pub(super) fn prepare_canonical_invocation(
         nodes.push(ResolvedRenderGpuWorkNode::pass(
             projected.occurrence,
             occurrence_label(flow, "pass", projected.occurrence)?,
-            execution_pass_id(projected.pass),
             operation,
             execution_preference(projected.pass),
             pass_control,
