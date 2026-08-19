@@ -1,18 +1,18 @@
 use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use crate::plugins::gpu::{
-    GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuExecutionPolicy, GpuExecutionStats,
-    GpuPreparedSubmission, GpuPreparedSubmissionRejected, GpuPreparedWorkGraph, GpuReadback,
-    GpuReadbackBytes, GpuReadbackId, GpuReadbackStatus, GpuRealizedBuffer, GpuSubmission,
-    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
-    GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
-    GpuSubmissionStatus, GpuTransferRegion, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData,
-    TransferData,
+    GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuDataLayout, GpuExecutionPolicy,
+    GpuExecutionStats, GpuPreparedSubmission, GpuPreparedSubmissionRejected, GpuPreparedWorkGraph,
+    GpuReadback, GpuReadbackBytes, GpuReadbackId, GpuReadbackStatus, GpuRealizedBuffer,
+    GpuResourceProvenance, GpuSubmission, GpuSubmissionFailure, GpuSubmissionFailureKind,
+    GpuSubmissionId, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
+    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuSubmissionStatus,
+    GpuTransferRegion, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData, TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 use wgpu::{Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, MapMode, PollType};
 
 #[derive(Debug)]
@@ -43,6 +43,13 @@ struct PreparedBufferPlan {
 }
 
 #[derive(Debug, Clone)]
+struct BufferReadbackMetadata {
+    label: String,
+    layout: GpuDataLayout,
+    provenance: GpuResourceProvenance,
+}
+
+#[derive(Debug, Clone)]
 enum PreparedBufferOperation {
     Upload {
         destination: GpuRealizedBuffer,
@@ -61,6 +68,7 @@ enum PreparedBufferOperation {
         source: GpuRealizedBuffer,
         source_offset: u64,
         size: u64,
+        metadata: BufferReadbackMetadata,
     },
 }
 
@@ -71,7 +79,6 @@ struct InFlightSubmission {
     plan: Option<PreparedBufferPlan>,
     upload_staging: Vec<Arc<Buffer>>,
     upload_bytes: u64,
-    readback_bytes: u64,
     submission_terminal: bool,
 }
 
@@ -80,6 +87,7 @@ struct InFlightReadback {
     status: Arc<Mutex<GpuReadbackStatus>>,
     staging: Option<Arc<Buffer>>,
     size: u64,
+    metadata: BufferReadbackMetadata,
     terminal: bool,
 }
 
@@ -321,24 +329,37 @@ impl WgpuExecutionState {
         let id = GpuSubmissionId::from_nonzero(raw_id);
         let status = Arc::new(Mutex::new(GpuSubmissionStatus::Accepted));
         let mut readbacks = BTreeMap::new();
-        let public_readbacks = plan
-            .readback_ids
-            .iter()
-            .copied()
-            .map(|readback_id| {
-                let readback_status = Arc::new(Mutex::new(GpuReadbackStatus::Pending));
-                readbacks.insert(
-                    readback_id,
-                    InFlightReadback {
-                        status: Arc::clone(&readback_status),
-                        staging: None,
-                        size: readback_size(&plan, readback_id),
-                        terminal: false,
-                    },
-                );
-                GpuReadback::new(readback_id, readback_status)
-            })
-            .collect::<Vec<_>>();
+        let mut public_readbacks = Vec::with_capacity(plan.readback_ids.len());
+        for operation in &plan.operations {
+            let PreparedBufferOperation::Readback {
+                id: readback_id,
+                size,
+                metadata,
+                ..
+            } = operation
+            else {
+                continue;
+            };
+            let readback_status = Arc::new(Mutex::new(GpuReadbackStatus::Pending));
+            readbacks.insert(
+                *readback_id,
+                InFlightReadback {
+                    status: Arc::clone(&readback_status),
+                    staging: None,
+                    size: *size,
+                    metadata: metadata.clone(),
+                    terminal: false,
+                },
+            );
+            public_readbacks.push(GpuReadback::new(*readback_id, readback_status));
+        }
+        if readbacks.len() != plan.readback_ids.len() {
+            inner.prepared.insert(prepared.ticket, Some(plan));
+            return Err(GpuSubmissionRejectionReason::new(
+                GpuSubmissionRejectionKind::PreparedRecordUnavailable,
+                "prepared readback metadata is incomplete",
+            ));
+        }
 
         inner.upload_bytes_in_flight = next_upload;
         inner.readback_bytes_in_flight = next_readback;
@@ -351,7 +372,6 @@ impl WgpuExecutionState {
                 plan: Some(plan.clone()),
                 upload_staging: Vec::new(),
                 upload_bytes: plan.upload_bytes,
-                readback_bytes: plan.readback_bytes,
                 submission_terminal: false,
             },
         );
@@ -413,26 +433,31 @@ impl WgpuExecutionState {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(record) = inner.in_flight.get_mut(&id) else {
-            return;
+        let upload_release = {
+            let Some(record) = inner.in_flight.get_mut(&id) else {
+                return;
+            };
+            if record.submission_terminal {
+                return;
+            }
+            let mut status = record
+                .status
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if matches!(*status, GpuSubmissionStatus::Accepted) {
+                *status = GpuSubmissionStatus::Completed;
+            }
+            drop(status);
+            record.submission_terminal = true;
+            record.plan = None;
+            record.upload_staging.clear();
+            let release = record.upload_bytes;
+            record.upload_bytes = 0;
+            release
         };
-        if record.submission_terminal {
-            return;
-        }
-        let mut status = record
-            .status
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if matches!(*status, GpuSubmissionStatus::Accepted) {
-            *status = GpuSubmissionStatus::Completed;
-        }
-        drop(status);
-        record.submission_terminal = true;
-        record.plan = None;
-        record.upload_staging.clear();
         inner.upload_bytes_in_flight = inner
             .upload_bytes_in_flight
-            .saturating_sub(record.upload_bytes);
+            .saturating_sub(upload_release);
         cleanup_submission_if_terminal(&mut inner, id);
     }
 
@@ -442,26 +467,50 @@ impl WgpuExecutionState {
         readback_id: GpuReadbackId,
         result: Result<(), String>,
     ) {
-        let staging = {
+        let (staging, metadata) = {
             let inner = self
                 .inner
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            inner
+            let Some(readback) = inner
                 .in_flight
                 .get(&submission)
                 .and_then(|record| record.readbacks.get(&readback_id))
-                .and_then(|readback| readback.staging.as_ref())
-                .cloned()
+            else {
+                return;
+            };
+            (readback.staging.as_ref().cloned(), readback.metadata.clone())
         };
 
         let materialized = match (result, staging) {
             (Ok(()), Some(staging)) => {
-                let view = staging.slice(..).get_mapped_range();
-                let bytes = view.to_vec();
-                drop(view);
+                let bytes = match staging.slice(..).get_mapped_range() {
+                    Ok(view) => {
+                        let bytes = view.to_vec();
+                        drop(view);
+                        Ok(bytes)
+                    }
+                    Err(error) => Err(GpuSubmissionFailure::new(
+                        GpuSubmissionFailureKind::ReadbackMapping,
+                        format!("obtain mapped readback range: {error}"),
+                    )),
+                };
                 staging.unmap();
-                Ok(GpuReadbackBytes::from_vec(bytes))
+                bytes.and_then(|bytes| {
+                    GpuReadbackBytes::from_normalized_bytes(
+                        &metadata.label,
+                        bytes,
+                        metadata.layout,
+                        None,
+                        metadata.provenance,
+                    )
+                    .map_err(|error| {
+                        GpuSubmissionFailure::new(
+                            GpuSubmissionFailureKind::InternalInvariant,
+                            error.to_string(),
+                        )
+                    })
+                })
             }
             (Err(detail), _) => Err(GpuSubmissionFailure::new(
                 GpuSubmissionFailureKind::ReadbackMapping,
@@ -477,28 +526,32 @@ impl WgpuExecutionState {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(record) = inner.in_flight.get_mut(&submission) else {
-            return;
+        let release = {
+            let Some(record) = inner.in_flight.get_mut(&submission) else {
+                return;
+            };
+            let Some(readback) = record.readbacks.get_mut(&readback_id) else {
+                return;
+            };
+            if readback.terminal {
+                return;
+            }
+            let mut status = readback
+                .status
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *status = match materialized {
+                Ok(bytes) => GpuReadbackStatus::Ready(bytes),
+                Err(failure) => GpuReadbackStatus::Failed(failure),
+            };
+            drop(status);
+            readback.terminal = true;
+            readback.staging = None;
+            let release = readback.size;
+            readback.size = 0;
+            release
         };
-        let Some(readback) = record.readbacks.get_mut(&readback_id) else {
-            return;
-        };
-        if readback.terminal {
-            return;
-        }
-        let mut status = readback
-            .status
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *status = match materialized {
-            Ok(bytes) => GpuReadbackStatus::Ready(bytes),
-            Err(failure) => GpuReadbackStatus::Failed(failure),
-        };
-        drop(status);
-        readback.terminal = true;
-        readback.staging = None;
-        inner.readback_bytes_in_flight =
-            inner.readback_bytes_in_flight.saturating_sub(readback.size);
+        inner.readback_bytes_in_flight = inner.readback_bytes_in_flight.saturating_sub(release);
         inner.pending_readbacks = inner.pending_readbacks.saturating_sub(1);
         cleanup_submission_if_terminal(&mut inner, submission);
     }
@@ -508,40 +561,56 @@ impl WgpuExecutionState {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(record) = inner.in_flight.get_mut(&id) else {
-            return;
+        let (upload_release, readback_release, pending_release) = {
+            let Some(record) = inner.in_flight.get_mut(&id) else {
+                return;
+            };
+            let upload_release = if record.submission_terminal {
+                0
+            } else {
+                let mut status = record
+                    .status
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if matches!(*status, GpuSubmissionStatus::Accepted) {
+                    *status = GpuSubmissionStatus::Failed(failure.clone());
+                }
+                drop(status);
+                record.submission_terminal = true;
+                record.plan = None;
+                record.upload_staging.clear();
+                let release = record.upload_bytes;
+                record.upload_bytes = 0;
+                release
+            };
+
+            let mut readback_release = 0_u64;
+            let mut pending_release = 0_usize;
+            for readback in record.readbacks.values_mut() {
+                if readback.terminal {
+                    continue;
+                }
+                *readback
+                    .status
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    GpuReadbackStatus::Failed(failure.clone());
+                readback.terminal = true;
+                readback.staging = None;
+                readback_release = readback_release.saturating_add(readback.size);
+                pending_release = pending_release.saturating_add(1);
+                readback.size = 0;
+            }
+            (upload_release, readback_release, pending_release)
         };
-        if !record.submission_terminal {
-            let mut status = record
-                .status
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if matches!(*status, GpuSubmissionStatus::Accepted) {
-                *status = GpuSubmissionStatus::Failed(failure.clone());
-            }
-            drop(status);
-            record.submission_terminal = true;
-            record.plan = None;
-            record.upload_staging.clear();
-            inner.upload_bytes_in_flight = inner
-                .upload_bytes_in_flight
-                .saturating_sub(record.upload_bytes);
-        }
-        for readback in record.readbacks.values_mut() {
-            if readback.terminal {
-                continue;
-            }
-            *readback
-                .status
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                GpuReadbackStatus::Failed(failure.clone());
-            readback.terminal = true;
-            readback.staging = None;
-            inner.readback_bytes_in_flight =
-                inner.readback_bytes_in_flight.saturating_sub(readback.size);
-            inner.pending_readbacks = inner.pending_readbacks.saturating_sub(1);
-        }
+
+        inner.upload_bytes_in_flight = inner
+            .upload_bytes_in_flight
+            .saturating_sub(upload_release);
+        inner.readback_bytes_in_flight = inner
+            .readback_bytes_in_flight
+            .saturating_sub(readback_release);
+        inner.pending_readbacks = inner.pending_readbacks.saturating_sub(pending_release);
         cleanup_submission_if_terminal(&mut inner, id);
     }
 
@@ -681,7 +750,7 @@ impl GpuContext {
             accepted.readbacks,
         );
 
-        match encode_and_submit_buffers(&self.backend, accepted.id, &accepted.plan) {
+        match encode_and_submit_buffers(&self.backend, &accepted.plan) {
             Ok(encoded) => {
                 self.backend.execution.attach_staging(accepted.id, &encoded);
                 register_callbacks(
@@ -805,6 +874,19 @@ fn prepare_buffer_plan(
                     ));
                 }
                 let size = source.range().size();
+                let common = source.buffer().descriptor().common();
+                let metadata = BufferReadbackMetadata {
+                    label: common.label().as_str().to_string(),
+                    layout: GpuDataLayout::new(common.label().as_str(), size, 1, size, 1).map_err(
+                        |error| {
+                            GpuSubmissionPreparationError::new(
+                                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                                error.to_string(),
+                            )
+                        },
+                    )?,
+                    provenance: common.provenance().clone(),
+                };
                 readback_bytes = readback_bytes.checked_add(size).ok_or_else(|| {
                     GpuSubmissionPreparationError::new(
                         GpuSubmissionPreparationErrorKind::ReadbackDemandExceedsPolicy,
@@ -817,6 +899,7 @@ fn prepare_buffer_plan(
                     source: realized_buffer(context, &mut cache, source.buffer())?,
                     source_offset: source.range().offset(),
                     size,
+                    metadata,
                 });
             }
             GpuWorkOperation::Copy(_) => {
@@ -920,7 +1003,6 @@ fn unsupported<T>(detail: &'static str) -> Result<T, GpuSubmissionPreparationErr
 
 fn encode_and_submit_buffers(
     backend: &WgpuContextState,
-    id: GpuSubmissionId,
     plan: &PreparedBufferPlan,
 ) -> Result<EncodedSubmission, GpuSubmissionFailure> {
     if let Some(fault) = backend.health.terminal_fault() {
@@ -949,7 +1031,12 @@ fn encode_and_submit_buffers(
                     mapped_at_creation: true,
                 }));
                 {
-                    let mut mapped = staging.slice(..).get_mapped_range_mut();
+                    let mut mapped = staging.slice(..).get_mapped_range_mut().map_err(|error| {
+                        GpuSubmissionFailure::new(
+                            GpuSubmissionFailureKind::BackendValidation,
+                            format!("obtain mapped upload staging range: {error}"),
+                        )
+                    })?;
                     mapped.copy_from_slice(payload.as_bytes());
                 }
                 staging.unmap();
@@ -980,6 +1067,7 @@ fn encode_and_submit_buffers(
                 source,
                 source_offset,
                 size,
+                ..
             } => {
                 let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
                     label: Some("RunenGPU readback staging"),
@@ -1003,7 +1091,6 @@ fn encode_and_submit_buffers(
     if let Some(fault) = backend.health.terminal_fault() {
         return Err(failure_from_device_fault(&fault));
     }
-    let _ = id;
     Ok(EncodedSubmission {
         upload_staging,
         readback_staging,
@@ -1044,20 +1131,6 @@ fn cleanup_submission_if_terminal(inner: &mut ExecutionInner, id: GpuSubmissionI
     if should_remove {
         inner.in_flight.remove(&id);
     }
-}
-
-fn readback_size(plan: &PreparedBufferPlan, id: GpuReadbackId) -> u64 {
-    plan.operations
-        .iter()
-        .find_map(|operation| match operation {
-            PreparedBufferOperation::Readback {
-                id: candidate,
-                size,
-                ..
-            } if *candidate == id => Some(*size),
-            _ => None,
-        })
-        .unwrap_or(0)
 }
 
 fn allocate_nonzero(counter: &AtomicU64) -> Option<NonZeroU64> {
