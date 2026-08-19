@@ -1,21 +1,19 @@
-use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::WgpuContextState;
+use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use crate::plugins::gpu::{
     GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuExecutionPolicy, GpuExecutionStats,
     GpuPreparedSubmission, GpuPreparedSubmissionRejected, GpuPreparedWorkGraph, GpuReadback,
     GpuReadbackBytes, GpuReadbackId, GpuReadbackStatus, GpuRealizedBuffer, GpuSubmission,
-    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId,
-    GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind,
-    GpuSubmissionRejectionReason, GpuSubmissionStatus, GpuTransferRegion, GpuWorkOperation,
-    GpuWorkResourceId, PreparedGpuData, TransferData,
+    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
+    GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
+    GpuSubmissionStatus, GpuTransferRegion, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData,
+    TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
-use wgpu::{
-    Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, MapMode, PollType,
-};
+use wgpu::{Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, MapMode, PollType};
 
 #[derive(Debug)]
 pub(crate) struct WgpuExecutionState {
@@ -102,7 +100,10 @@ struct PreparationReservation {
 }
 
 impl PreparationReservation {
-    fn commit(mut self, plan: PreparedBufferPlan) -> Result<NonZeroU64, GpuSubmissionPreparationError> {
+    fn commit(
+        mut self,
+        plan: PreparedBufferPlan,
+    ) -> Result<NonZeroU64, GpuSubmissionPreparationError> {
         self.execution.commit_prepared(self.ticket, plan)?;
         self.committed = true;
         Ok(self.ticket)
@@ -163,7 +164,9 @@ impl WgpuExecutionState {
         )
     }
 
-    fn reserve_prepared(self: &Arc<Self>) -> Result<PreparationReservation, GpuSubmissionPreparationError> {
+    fn reserve_prepared(
+        self: &Arc<Self>,
+    ) -> Result<PreparationReservation, GpuSubmissionPreparationError> {
         let ticket = allocate_nonzero(&self.next_prepared).ok_or_else(|| {
             GpuSubmissionPreparationError::new(
                 GpuSubmissionPreparationErrorKind::IdentityExhausted,
@@ -494,9 +497,8 @@ impl WgpuExecutionState {
         drop(status);
         readback.terminal = true;
         readback.staging = None;
-        inner.readback_bytes_in_flight = inner
-            .readback_bytes_in_flight
-            .saturating_sub(readback.size);
+        inner.readback_bytes_in_flight =
+            inner.readback_bytes_in_flight.saturating_sub(readback.size);
         inner.pending_readbacks = inner.pending_readbacks.saturating_sub(1);
         cleanup_submission_if_terminal(&mut inner, submission);
     }
@@ -536,9 +538,8 @@ impl WgpuExecutionState {
                 GpuReadbackStatus::Failed(failure.clone());
             readback.terminal = true;
             readback.staging = None;
-            inner.readback_bytes_in_flight = inner
-                .readback_bytes_in_flight
-                .saturating_sub(readback.size);
+            inner.readback_bytes_in_flight =
+                inner.readback_bytes_in_flight.saturating_sub(readback.size);
             inner.pending_readbacks = inner.pending_readbacks.saturating_sub(1);
         }
         cleanup_submission_if_terminal(&mut inner, id);
@@ -626,7 +627,12 @@ impl GpuContext {
 
         let reservation = self.backend.execution.reserve_prepared()?;
         let plan = prepare_buffer_plan(self, &graph)?;
-        validate_plan_policy(plan.upload_bytes, plan.readback_bytes, plan.readback_ids.len(), self.execution_policy())?;
+        validate_plan_policy(
+            plan.upload_bytes,
+            plan.readback_bytes,
+            plan.readback_ids.len(),
+            self.execution_policy(),
+        )?;
         let planned_readbacks = plan.readback_ids.clone();
         let ticket = reservation.commit(plan)?;
         Ok(GpuPreparedSubmission::new(
@@ -678,7 +684,12 @@ impl GpuContext {
         match encode_and_submit_buffers(&self.backend, accepted.id, &accepted.plan) {
             Ok(encoded) => {
                 self.backend.execution.attach_staging(accepted.id, &encoded);
-                register_callbacks(&self.backend.execution, &self.backend, accepted.id, &encoded);
+                register_callbacks(
+                    &self.backend.execution,
+                    &self.backend,
+                    accepted.id,
+                    &encoded,
+                );
             }
             Err(failure) => self.backend.execution.fail_submission(accepted.id, failure),
         }
@@ -722,25 +733,37 @@ fn prepare_buffer_plan(
     let mut seen_readbacks = BTreeSet::new();
 
     for id in graph.topological_order() {
-        let prepared = graph.nodes().iter().find(|prepared| prepared.id() == *id).ok_or_else(|| {
-            GpuSubmissionPreparationError::new(
-                GpuSubmissionPreparationErrorKind::InternalInvariant,
-                "prepared topological order references an absent work node",
-            )
-        })?;
+        let prepared = graph
+            .nodes()
+            .iter()
+            .find(|prepared| prepared.id() == *id)
+            .ok_or_else(|| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                    "prepared topological order references an absent work node",
+                )
+            })?;
         match prepared.node().operation() {
             GpuWorkOperation::Upload(upload) => {
                 let GpuTransferRegion::Buffer(destination) = upload.destination() else {
-                    return unsupported("texture Upload remains outside the first G5B buffer lifecycle slice");
+                    return unsupported(
+                        "texture Upload remains outside the first G5B buffer lifecycle slice",
+                    );
                 };
-                validate_copy_range(destination.range().offset(), destination.range().size(), alignment)?;
+                validate_copy_range(
+                    destination.range().offset(),
+                    destination.range().size(),
+                    alignment,
+                )?;
                 let realized = realized_buffer(context, &mut cache, destination.buffer())?;
-                upload_bytes = upload_bytes.checked_add(destination.range().size()).ok_or_else(|| {
-                    GpuSubmissionPreparationError::new(
-                        GpuSubmissionPreparationErrorKind::UploadDemandExceedsPolicy,
-                        "upload byte demand overflowed the normalized u64 domain",
-                    )
-                })?;
+                upload_bytes = upload_bytes
+                    .checked_add(destination.range().size())
+                    .ok_or_else(|| {
+                        GpuSubmissionPreparationError::new(
+                            GpuSubmissionPreparationErrorKind::UploadDemandExceedsPolicy,
+                            "upload byte demand overflowed the normalized u64 domain",
+                        )
+                    })?;
                 operations.push(PreparedBufferOperation::Upload {
                     destination: realized,
                     offset: destination.range().offset(),
@@ -752,7 +775,11 @@ fn prepare_buffer_plan(
                 destination,
             }) => {
                 validate_copy_range(source.range().offset(), source.range().size(), alignment)?;
-                validate_copy_range(destination.range().offset(), destination.range().size(), alignment)?;
+                validate_copy_range(
+                    destination.range().offset(),
+                    destination.range().size(),
+                    alignment,
+                )?;
                 operations.push(PreparedBufferOperation::Copy {
                     source: realized_buffer(context, &mut cache, source.buffer())?,
                     source_offset: source.range().offset(),
@@ -763,13 +790,18 @@ fn prepare_buffer_plan(
             }
             GpuWorkOperation::Readback(readback) => {
                 let GpuTransferRegion::Buffer(source) = readback.source() else {
-                    return unsupported("texture Readback remains outside the first G5B buffer lifecycle slice");
+                    return unsupported(
+                        "texture Readback remains outside the first G5B buffer lifecycle slice",
+                    );
                 };
                 validate_copy_range(source.range().offset(), source.range().size(), alignment)?;
                 if !seen_readbacks.insert(readback.id()) {
                     return Err(GpuSubmissionPreparationError::new(
                         GpuSubmissionPreparationErrorKind::InternalInvariant,
-                        format!("duplicate readback identity in one prepared graph: {:?}", readback.id()),
+                        format!(
+                            "duplicate readback identity in one prepared graph: {:?}",
+                            readback.id()
+                        ),
                     ));
                 }
                 let size = source.range().size();
@@ -788,10 +820,14 @@ fn prepare_buffer_plan(
                 });
             }
             GpuWorkOperation::Copy(_) => {
-                return unsupported("texture-involving Copy remains outside the first G5B buffer lifecycle slice");
+                return unsupported(
+                    "texture-involving Copy remains outside the first G5B buffer lifecycle slice",
+                );
             }
             _ => {
-                return unsupported("this first G5B lifecycle slice executes only buffer Upload, Copy, and Readback work");
+                return unsupported(
+                    "this first G5B lifecycle slice executes only buffer Upload, Copy, and Readback work",
+                );
             }
         }
     }
