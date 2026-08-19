@@ -455,9 +455,7 @@ impl WgpuExecutionState {
             record.upload_bytes = 0;
             release
         };
-        inner.upload_bytes_in_flight = inner
-            .upload_bytes_in_flight
-            .saturating_sub(upload_release);
+        inner.upload_bytes_in_flight = inner.upload_bytes_in_flight.saturating_sub(upload_release);
         cleanup_submission_if_terminal(&mut inner, id);
     }
 
@@ -479,7 +477,10 @@ impl WgpuExecutionState {
             else {
                 return;
             };
-            (readback.staging.as_ref().cloned(), readback.metadata.clone())
+            (
+                readback.staging.as_ref().cloned(),
+                readback.metadata.clone(),
+            )
         };
 
         let materialized = match (result, staging) {
@@ -604,9 +605,7 @@ impl WgpuExecutionState {
             (upload_release, readback_release, pending_release)
         };
 
-        inner.upload_bytes_in_flight = inner
-            .upload_bytes_in_flight
-            .saturating_sub(upload_release);
+        inner.upload_bytes_in_flight = inner.upload_bytes_in_flight.saturating_sub(upload_release);
         inner.readback_bytes_in_flight = inner
             .readback_bytes_in_flight
             .saturating_sub(readback_release);
