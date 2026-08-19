@@ -1,6 +1,6 @@
 use super::{
     PipelineRealizationState, ProgramBindingRealizationState, ResourceRealizationState,
-    WgpuDeviceHealth, WgpuErrorAttributionGate,
+    WgpuDeviceHealth, WgpuErrorAttributionGate, WgpuExecutionState,
 };
 use std::sync::{Arc, MutexGuard};
 use wgpu::{Adapter, Device, Instance, Queue};
@@ -13,16 +13,13 @@ pub(crate) struct WgpuContextState {
     pub(super) device: Arc<Device>,
     pub(super) queue: Arc<Queue>,
     /// One shared terminal device-fault truth for every current same-device operation.
-    #[allow(
-        dead_code,
-        reason = "WgpuContextState owns the shared health authority; subordinate owners retain exact Arc clones"
-    )]
     pub(super) health: Arc<WgpuDeviceHealth>,
     /// One non-reentrant error-scope serialization authority for this device generation.
     pub(super) error_attribution_gate: Arc<WgpuErrorAttributionGate>,
     pub(super) resource_realization: ResourceRealizationState,
     pub(super) program_binding_realization: ProgramBindingRealizationState,
     pub(super) pipeline_realization: PipelineRealizationState,
+    pub(super) execution: Arc<WgpuExecutionState>,
 }
 
 /// Separate temporary backend-operation loan for current renderer execution.
