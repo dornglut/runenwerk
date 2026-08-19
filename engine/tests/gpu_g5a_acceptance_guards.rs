@@ -62,7 +62,7 @@ fn fixed_step_iteration_uniforms_are_not_generic_gpu_uploads() {
 }
 
 #[test]
-fn execution_limits_consume_positional_bind_group_slots() {
+fn execution_limits_consume_positional_binding_and_vertex_slots() {
     let bindings = read("src/plugins/gpu/api/program/runtime_binding/set.rs");
     assert!(
         bindings.contains("required_bind_group_slots > u64::from(device_facts.max_bind_groups())"),
@@ -75,12 +75,14 @@ fn execution_limits_consume_positional_bind_group_slots() {
 
     let render = read("src/plugins/gpu/api/render_execution.rs");
     assert!(
-        render.contains("bindings.required_bind_group_slots()")
+        render.contains("u64::from(binding.slot()) + 1")
+            && render.contains("limits.max_vertex_buffers()")
+            && render.contains("bindings.required_bind_group_slots()")
             && render.contains("limits.max_bind_groups_plus_vertex_buffers()"),
-        "render combined bind-group/vertex-buffer admission must consume positional bind-group slots rather than only declared-group cardinality"
+        "render limit admission must consume positional vertex-buffer and bind-group slots"
     );
     assert!(
         !render.contains("vertex_buffers.len() + bindings.groups().len()"),
-        "render combined-limit admission must not regress to declared-group cardinality for sparse layouts"
+        "render combined-limit admission must not regress to declared cardinality for sparse slots"
     );
 }
