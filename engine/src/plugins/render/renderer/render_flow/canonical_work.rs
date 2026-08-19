@@ -31,7 +31,7 @@ pub(super) struct CanonicalPassProjection<'a> {
 }
 
 pub(super) enum CanonicalInvocationPreparation {
-    Prepared(PreparedRenderWorkPlan),
+    Prepared(Box<PreparedRenderWorkPlan>),
     /// The invocation contains at least one operation whose durable logical identity/semantics is
     /// intentionally deferred to G7A/G5C. No partial G3 graph is retained in this case.
     PreG7Residual,
@@ -120,7 +120,7 @@ pub(super) fn prepare_canonical_invocation(
             }
             CompiledPassExecutionPlan::Copy(pass) => {
                 match project_copy_operation(runtime_resources, pass)? {
-                    ProjectedCopyOperation::Canonical(operation) => operation,
+                    ProjectedCopyOperation::Canonical(operation) => *operation,
                     ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
                         return Ok(CanonicalInvocationPreparation::PreG7Residual);
                     }
@@ -164,15 +164,15 @@ pub(super) fn prepare_canonical_invocation(
         return Ok(CanonicalInvocationPreparation::PreG7Residual);
     }
 
-    Ok(CanonicalInvocationPreparation::Prepared(
+    Ok(CanonicalInvocationPreparation::Prepared(Box::new(
         prepare_render_gpu_work(flow, nodes)?,
-    ))
+    )))
 }
 
-fn timestamp_projection<'a>(
-    timing: Option<&'a LogicalGpuPassTiming>,
+fn timestamp_projection(
+    timing: Option<&LogicalGpuPassTiming>,
     indices: Option<GpuPassTimestampIndices>,
-) -> Result<Option<(&'a LogicalGpuPassTiming, GpuPassTimestampIndices)>> {
+) -> Result<Option<(&LogicalGpuPassTiming, GpuPassTimestampIndices)>> {
     match (timing, indices) {
         (Some(timing), Some(indices)) => Ok(Some((timing, indices))),
         (None, None) => Ok(None),
