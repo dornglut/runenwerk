@@ -254,9 +254,11 @@ fn validate_execution_pass_capabilities(
                     diagnostics,
                 );
             }
-            if value.draw.as_ref().is_some_and(|draw| {
-                matches!(draw.source, CompiledDrawSource::Indirect { .. })
-            }) {
+            if value
+                .draw
+                .as_ref()
+                .is_some_and(|draw| matches!(draw.source, CompiledDrawSource::Indirect { .. }))
+            {
                 validate_required_feature(
                     flow,
                     value.pass_id,
