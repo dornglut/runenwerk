@@ -1,4 +1,4 @@
-use super::{GpuContextAffinity, GpuReadbackId};
+use super::{GpuContextAffinity, GpuReadbackBytes, GpuReadbackId};
 use core::fmt;
 use core::num::{NonZeroU64, NonZeroUsize};
 use std::sync::{Arc, Mutex, Weak};
@@ -166,36 +166,6 @@ pub enum GpuSubmissionStatus {
     Accepted,
     Completed,
     Failed(GpuSubmissionFailure),
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub struct GpuReadbackBytes(Arc<[u8]>);
-
-impl GpuReadbackBytes {
-    pub(crate) fn from_vec(bytes: Vec<u8>) -> Self {
-        Self(bytes.into())
-    }
-
-    pub fn as_slice(&self) -> &[u8] {
-        &self.0
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl fmt::Debug for GpuReadbackBytes {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("GpuReadbackBytes")
-            .field("len", &self.len())
-            .finish_non_exhaustive()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
