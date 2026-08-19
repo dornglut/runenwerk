@@ -331,7 +331,7 @@ fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar()
     }
 
     let execute = read("src/plugins/render/renderer/render_flow/execute.rs");
-    let schedule = function_body(&execute, "fn schedule_invocation_passes<'a>(");
+    let schedule = function_body(&execute, "fn schedule_invocation_passes(");
     assert!(schedule.contains(".ordered_payloads()?"));
     for alternate_order in ["flow.execution.passes", "topological_sort", "sort_by"] {
         assert!(
