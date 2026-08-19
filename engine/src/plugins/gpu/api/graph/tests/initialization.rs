@@ -258,7 +258,7 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
                 .unwrap()],
                 None,
                 [],
-                [],
+                None,
             )
             .unwrap(),
         )
@@ -352,7 +352,7 @@ fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
                     .unwrap(),
                 ),
                 [],
-                [],
+                None,
             )
             .unwrap(),
         )
@@ -433,10 +433,9 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
         [GpuBufferUsage::CopyDestination],
     );
     let query_range = GpuQueryRange::whole(&queries).unwrap();
-    let timestamp_access =
-        GpuQueryAccess::new(&queries, query_range, GpuQueryAccessKind::WriteTimestamp).unwrap();
+    let timestamp_writes = GpuTimestampWrites::new(&queries, Some(0), Some(1)).unwrap();
     let render = GpuWorkOperation::Render(
-        GpuRenderOperation::new([], None, [], [timestamp_access]).unwrap(),
+        GpuRenderOperation::new([], None, [], Some(timestamp_writes)).unwrap(),
     );
     let query_resolve = GpuQueryResolveOperation::new(&queries, query_range, &resolve, 0).unwrap();
     let resolve_range = query_resolve.destination_range();
@@ -1950,7 +1949,9 @@ fn multisample_resolve_initializes_destination_despite_source_discard() {
     fragment
         .add_node(
             label("render resolve"),
-            GpuWorkOperation::Render(GpuRenderOperation::new([attachment], None, [], []).unwrap()),
+            GpuWorkOperation::Render(
+                GpuRenderOperation::new([attachment], None, [], None).unwrap(),
+            ),
             [],
             GpuCapabilityRequirements::new(),
             GpuExecutionPreference::GraphicsRequired,
