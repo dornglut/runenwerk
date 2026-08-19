@@ -61,6 +61,7 @@ pub(super) fn runtime_device_facts(
     Ok(GpuRuntimeBindingDeviceFacts::new(
         uniform,
         storage,
+        limits.max_bind_groups(),
         limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
         limits.max_dynamic_storage_buffers_per_pipeline_layout(),
         context.adapter_facts().supported().formats(),
