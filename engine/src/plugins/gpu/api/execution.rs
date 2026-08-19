@@ -318,10 +318,7 @@ pub struct GpuSubmissionPreparationError {
 }
 
 impl GpuSubmissionPreparationError {
-    pub(crate) fn new(
-        kind: GpuSubmissionPreparationErrorKind,
-        detail: impl Into<String>,
-    ) -> Self {
+    pub(crate) fn new(kind: GpuSubmissionPreparationErrorKind, detail: impl Into<String>) -> Self {
         Self {
             kind,
             detail: detail.into(),
