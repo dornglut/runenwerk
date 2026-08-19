@@ -110,6 +110,7 @@ impl GpuContext {
         Some(GpuRuntimeBindingDeviceFacts::new(
             uniform_buffer_offset_alignment,
             storage_buffer_offset_alignment,
+            limits.max_bind_groups(),
             limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
             limits.max_dynamic_storage_buffers_per_pipeline_layout(),
             self.adapter.supported().formats(),
