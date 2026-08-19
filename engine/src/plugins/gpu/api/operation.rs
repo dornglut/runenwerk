@@ -2,14 +2,14 @@ use super::work::{
     GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
     GpuCopyOperation, GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation,
     GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
-    GpuTextureCopyRegion,
+    GpuTextureCopyRegion, GpuTimestampWrites,
 };
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuCapabilityFeature,
     GpuCapabilityRequirement, GpuCapabilityRequirementError, GpuCapabilityRequirements,
-    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryAccessKind, GpuReadbackOperation, GpuRenderDraw,
-    GpuRenderPassSignature, GpuResourceAccess, GpuTextureAccess, GpuTextureAccessKind,
-    GpuTextureAccessResource, GpuUploadOperation, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuDepthStencilAccess, GpuReadbackOperation, GpuRenderDraw, GpuRenderPassSignature,
+    GpuResourceAccess, GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
+    GpuUploadOperation, GpuWorkOperationCause, GpuWorkOperationError,
     render_pass_usage::validate_render_pass_usage_scope,
 };
 
@@ -31,7 +31,7 @@ pub struct GpuRenderOperation {
     color_attachments: Vec<GpuRenderColorAttachment>,
     depth_stencil_attachment: Option<GpuRenderDepthStencilAttachment>,
     draws: Vec<GpuRenderDraw>,
-    timestamp_writes: Vec<GpuQueryAccess>,
+    timestamp_writes: Option<GpuTimestampWrites>,
     signature: Option<GpuRenderPassSignature>,
     accesses: Vec<GpuResourceAccess>,
 }
@@ -41,12 +41,10 @@ impl GpuRenderOperation {
         color_attachments: impl IntoIterator<Item = GpuRenderColorAttachment>,
         depth_stencil_attachment: Option<GpuRenderDepthStencilAttachment>,
         draws: impl IntoIterator<Item = GpuRenderDraw>,
-        timestamp_writes: impl IntoIterator<Item = GpuQueryAccess>,
+        timestamp_writes: Option<GpuTimestampWrites>,
     ) -> Result<Self, GpuWorkOperationError> {
         let color_attachments = color_attachments.into_iter().collect::<Vec<_>>();
         let draws = draws.into_iter().collect::<Vec<_>>();
-        let timestamp_writes = timestamp_writes.into_iter().collect::<Vec<_>>();
-        validate_timestamp_writes(&timestamp_writes)?;
 
         let clears_color = color_attachments
             .iter()
@@ -54,7 +52,7 @@ impl GpuRenderOperation {
         let clears_depth = depth_stencil_attachment.as_ref().is_some_and(|attachment| {
             matches!(attachment.load(), GpuDepthAttachmentLoad::Clear(_))
         });
-        if draws.is_empty() && !clears_color && !clears_depth && timestamp_writes.is_empty() {
+        if draws.is_empty() && !clears_color && !clears_depth && timestamp_writes.is_none() {
             return Err(GpuWorkOperationError::invalid(
                 "construct GPU render operation",
                 "render",
@@ -106,15 +104,17 @@ impl GpuRenderOperation {
         for draw in &draws {
             accesses.extend(draw.accesses().iter().cloned());
         }
-        accesses.extend(
-            timestamp_writes
-                .iter()
-                .cloned()
-                .map(GpuResourceAccess::Query),
-        );
+        if let Some(timestamp_writes) = &timestamp_writes {
+            accesses.extend(
+                timestamp_writes
+                    .accesses()
+                    .iter()
+                    .cloned()
+                    .map(GpuResourceAccess::Query),
+            );
+        }
 
         validate_render_pass_usage_scope(&accesses)?;
-        validate_timestamp_write_aliases(&timestamp_writes)?;
 
         Ok(Self {
             color_attachments,
@@ -138,8 +138,8 @@ impl GpuRenderOperation {
         &self.draws
     }
 
-    pub fn timestamp_writes(&self) -> &[GpuQueryAccess] {
-        &self.timestamp_writes
+    pub fn timestamp_writes(&self) -> Option<&GpuTimestampWrites> {
+        self.timestamp_writes.as_ref()
     }
 
     pub fn signature(&self) -> Option<&GpuRenderPassSignature> {
@@ -149,44 +149,6 @@ impl GpuRenderOperation {
     pub fn accesses(&self) -> &[GpuResourceAccess] {
         &self.accesses
     }
-}
-
-fn validate_timestamp_writes(accesses: &[GpuQueryAccess]) -> Result<(), GpuWorkOperationError> {
-    if accesses
-        .iter()
-        .any(|access| access.kind() != GpuQueryAccessKind::WriteTimestamp)
-    {
-        return Err(GpuWorkOperationError::invalid(
-            "construct GPU render operation",
-            "timestamp writes",
-            accesses.first().map(GpuQueryAccess::resource_identity),
-            GpuWorkOperationCause::OperationAccessContradiction,
-            "provide only WriteTimestamp query accesses as render-side timestamp writes",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_timestamp_write_aliases(
-    accesses: &[GpuQueryAccess],
-) -> Result<(), GpuWorkOperationError> {
-    for left_index in 0..accesses.len() {
-        let left = &accesses[left_index];
-        for right in &accesses[(left_index + 1)..] {
-            if left.resource_identity() == right.resource_identity()
-                && left.range().overlaps(right.range())
-            {
-                return Err(GpuWorkOperationError::invalid(
-                    "construct GPU render operation",
-                    "timestamp write overlap",
-                    Some(left.resource_identity()),
-                    GpuWorkOperationCause::OperationAccessContradiction,
-                    "write each query slot at most once in one logical render pass",
-                ));
-            }
-        }
-    }
-    Ok(())
 }
 
 fn validate_depth_access_for_draw(
@@ -247,13 +209,15 @@ impl GpuWorkOperation {
                 if let Some(access) = operation.dispatch().indirect_access() {
                     accesses.push(GpuResourceAccess::Buffer(access.clone()));
                 }
-                accesses.extend(
-                    operation
-                        .timestamp_writes()
-                        .iter()
-                        .cloned()
-                        .map(GpuResourceAccess::Query),
-                );
+                if let Some(timestamp_writes) = operation.timestamp_writes() {
+                    accesses.extend(
+                        timestamp_writes
+                            .accesses()
+                            .iter()
+                            .cloned()
+                            .map(GpuResourceAccess::Query),
+                    );
+                }
                 Ok(accesses)
             }
             Self::Render(operation) => Ok(operation.accesses().to_vec()),
@@ -330,7 +294,7 @@ impl GpuWorkOperation {
                         GpuCapabilityFeature::IndirectExecution,
                     ))?;
                 }
-                if !operation.timestamp_writes().is_empty() {
+                if operation.timestamp_writes().is_some() {
                     requirements.insert(GpuCapabilityRequirement::Required(
                         GpuCapabilityFeature::TimestampQuery,
                     ))?;
@@ -350,7 +314,7 @@ impl GpuWorkOperation {
                         GpuCapabilityFeature::DepthAttachment,
                     ))?;
                 }
-                if !operation.timestamp_writes().is_empty() {
+                if operation.timestamp_writes().is_some() {
                     requirements.insert(GpuCapabilityRequirement::Required(
                         GpuCapabilityFeature::TimestampQuery,
                     ))?;
