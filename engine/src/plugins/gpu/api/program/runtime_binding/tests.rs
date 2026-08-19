@@ -171,7 +171,9 @@ fn runtime_binding_set_rejects_sparse_group_above_admitted_positional_limit() {
     let sparse = GpuBindGroupLayoutDescriptor::new(1, []).unwrap();
     let layout = GpuPipelineLayoutDescriptor::new([sparse]).unwrap();
     let error = GpuRuntimeBindingSet::new(layout, [], &device_facts_with_limits(1, 8, 4))
-        .expect_err("group one requires two positional slots and must reject against a limit of one");
+        .expect_err(
+            "group one requires two positional slots and must reject against a limit of one",
+        );
 
     assert_eq!(
         error.cause(),
