@@ -291,6 +291,7 @@ impl Renderer {
                             .unwrap_or(0);
                         let projected_uploads = self.realize_projected_uniform_uploads(
                             context,
+                            flow,
                             invocation.invocation_id.0.as_str(),
                             &invocation.inputs,
                             runtime_resources,
@@ -1015,6 +1016,7 @@ impl Renderer {
     fn realize_projected_uniform_uploads(
         &self,
         context: &GpuContext,
+        flow: &CompiledRenderFlowPlan,
         invocation_id: &str,
         flow_inputs: &PreparedFlowInputs,
         runtime_resources: &mut FlowRuntimeResources,
@@ -1022,6 +1024,14 @@ impl Renderer {
     ) -> Result<Vec<RealizedLogicalBufferUpload>> {
         let mut uploads = Vec::new();
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
+            if flow
+                .execution
+                .fixed_step_regions
+                .iter()
+                .any(|region| region.iteration_uniform == *buffer_id)
+            {
+                continue;
+            }
             let prepared = runtime_resources.prepare_uniform_upload(*buffer_id, bytes)?;
             let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
                 context,
