@@ -1,0 +1,98 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
+fn engine_path(path: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(path)
+}
+
+fn source(path: &str) -> String {
+    fs::read_to_string(engine_path(path))
+        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+}
+
+#[test]
+fn canonical_renderer_branch_consumes_prepared_work_without_compiled_execution_fallback() {
+    let execute = source("src/plugins/render/renderer/render_flow/execute.rs");
+    let canonical_start = execute
+        .find("if invocation.canonical_work.is_some() {")
+        .expect("canonical invocation branch must remain explicit");
+    let residual_offset = execute[canonical_start..]
+        .find("let invocation_result = (|| -> Result<()> {")
+        .expect("residual renderer branch must remain distinguishable from canonical execution");
+    let canonical = &execute[canonical_start..canonical_start + residual_offset];
+
+    for required in [
+        "schedule_invocation_passes(invocation)?",
+        "encode_canonical_upload_operation(",
+        "encode_canonical_compute_operation(",
+        "encode_canonical_copy_operation(",
+        "encode_canonical_render_operation(",
+        "frame.encode_resolve(context, encoder, operation)?",
+        "frame.encode_readback_copy(context, encoder, operation)?",
+    ] {
+        assert!(
+            canonical.contains(required),
+            "canonical G5A renderer execution must consume prepared generic work through {required}"
+        );
+    }
+    assert!(
+        !canonical.contains("encode_compiled_pass("),
+        "execution-complete canonical work must not fall back to the compiled renderer execution recipe"
+    );
+
+    let schedule_start = execute
+        .find("fn schedule_invocation_passes(")
+        .expect("canonical G3 schedule adapter must exist");
+    let schedule_end = execute[schedule_start..]
+        .find("fn encode_prepared_timing_tail(")
+        .map(|offset| schedule_start + offset)
+        .expect("canonical schedule helper must end before the residual timing-tail helper");
+    assert!(
+        execute[schedule_start..schedule_end].contains(".ordered_payloads()?"),
+        "canonical logical work order must come from PreparedRenderWorkPlan rather than renderer pass order"
+    );
+}
+
+#[test]
+fn canonical_physical_adapters_do_not_reconstruct_compiled_gpu_semantics() {
+    for (path, operation) in [
+        (
+            "src/plugins/render/renderer/render_flow/canonical_compute.rs",
+            "GpuComputeOperation",
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/canonical_copy.rs",
+            "GpuCopyOperation",
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/canonical_render.rs",
+            "GpuRenderOperation",
+        ),
+        (
+            "src/plugins/render/renderer/render_flow/canonical_upload.rs",
+            "GpuUploadOperation",
+        ),
+    ] {
+        let adapter = source(path);
+        assert!(
+            adapter.contains(operation),
+            "{path} must consume the canonical {operation} contract"
+        );
+        for forbidden in [
+            "CompiledPassExecutionPlan",
+            "CompiledComputeExecutionPlan",
+            "CompiledCopyExecutionPlan",
+            "CompiledRasterExecutionPlan",
+            "resolve_texture_from_label",
+            "resolve_buffer_ref",
+            "context.realize_buffer(",
+            "context.realize_texture(",
+            "context.realize_texture_view(",
+        ] {
+            assert!(
+                !adapter.contains(forbidden),
+                "{path} must not recreate renderer-owned or lazy G4 execution authority via {forbidden}"
+            );
+        }
+    }
+}
