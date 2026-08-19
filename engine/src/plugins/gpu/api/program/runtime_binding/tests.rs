@@ -167,12 +167,11 @@ fn runtime_binding_set_is_complete_pipeline_shaped_logical_use() {
 }
 
 #[test]
-fn runtime_binding_set_rejects_bind_group_count_above_admitted_limit() {
-    let first = GpuBindGroupLayoutDescriptor::new(0, []).unwrap();
-    let second = GpuBindGroupLayoutDescriptor::new(1, []).unwrap();
-    let layout = GpuPipelineLayoutDescriptor::new([first, second]).unwrap();
+fn runtime_binding_set_rejects_sparse_group_above_admitted_positional_limit() {
+    let sparse = GpuBindGroupLayoutDescriptor::new(1, []).unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([sparse]).unwrap();
     let error = GpuRuntimeBindingSet::new(layout, [], &device_facts_with_limits(1, 8, 4))
-        .expect_err("two pipeline bind groups must reject against an admitted limit of one");
+        .expect_err("group one requires two positional slots and must reject against a limit of one");
 
     assert_eq!(
         error.cause(),
