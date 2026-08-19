@@ -1,8 +1,8 @@
 use super::*;
 use crate::plugins::gpu::{
-    GpuBufferHandle, GpuQueryAccess, GpuQueryAccessKind, GpuRealizedBindGroup, GpuRealizedBuffer,
-    GpuRealizedTexture, GpuRealizedTextureView, GpuRuntimeBindingResource, GpuRuntimeBindingSet,
-    GpuTextureHandle, GpuTextureViewHandle,
+    GpuBufferHandle, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedTexture,
+    GpuRealizedTextureView, GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuTextureHandle,
+    GpuTextureViewHandle, GpuTimestampWrites,
 };
 
 /// Returns the already-realized G4 buffer matching one canonical logical handle.
@@ -119,37 +119,32 @@ pub(super) fn validate_realized_binding_groups(
     Ok(())
 }
 
-/// The current renderer timing bridge can realize exactly one contiguous two-slot timestamp range:
-/// first query = beginning of pass, second query = end of pass. Broader logical shapes remain G5B
-/// work and are rejected here rather than approximated.
+/// The current renderer timing bridge physically realizes the renderer's existing begin/end pair.
+/// The logical `GpuTimestampWrites` value remains the authority for query-set identity and semantic
+/// placement; this seam only verifies that the retained physical sidecar is the same pair.
 pub(super) fn validate_renderer_timestamp_projection(
     operation_kind: &str,
-    logical: &[GpuQueryAccess],
+    logical: Option<&GpuTimestampWrites>,
     physical: Option<&GpuPassTimestampWrites>,
 ) -> Result<()> {
     match (logical, physical) {
-        ([], None) => Ok(()),
-        ([logical], Some(physical)) => {
-            if logical.kind() != GpuQueryAccessKind::WriteTimestamp
-                || logical.range().count() != 2
-                || physical.query_set.logical_identity() != logical.resource_identity()
-                || physical.indices.begin != logical.range().first()
-                || physical.indices.end != logical.range().first() + 1
+        (None, None) => Ok(()),
+        (Some(logical), Some(physical)) => {
+            if physical.query_set.logical_identity() != logical.query_set().diagnostic_identity()
+                || logical.beginning_of_pass() != Some(physical.indices.begin)
+                || logical.end_of_pass() != Some(physical.indices.end)
             {
                 bail!(
-                    "canonical {operation_kind} timestamp sidecar disagrees with the logical two-slot begin/end timestamp projection"
+                    "canonical {operation_kind} timestamp sidecar disagrees with the explicit logical begin/end timestamp state"
                 );
             }
             Ok(())
         }
-        ([], Some(_)) => bail!(
+        (None, Some(_)) => bail!(
             "canonical {operation_kind} operation has no logical timestamps but retained a physical timestamp sidecar"
         ),
-        (_, None) => bail!(
+        (Some(_), None) => bail!(
             "canonical {operation_kind} operation requires logical timestamps but has no physical timestamp realization"
-        ),
-        (_, Some(_)) => bail!(
-            "canonical {operation_kind} operation carries a timestamp shape whose begin/end meaning is not yet execution-complete for the temporary renderer bridge"
         ),
     }
 }
