@@ -216,12 +216,8 @@ fn disjoint_query_ranges_remain_independent() {
                 None,
                 [],
                 Some(
-                    GpuTimestampWrites::new(
-                        &queries,
-                        Some(beginning_of_pass),
-                        Some(end_of_pass),
-                    )
-                    .unwrap(),
+                    GpuTimestampWrites::new(&queries, Some(beginning_of_pass), Some(end_of_pass))
+                        .unwrap(),
                 ),
             )
             .unwrap(),
@@ -231,10 +227,9 @@ fn disjoint_query_ranges_remain_independent() {
     fragment
         .declare_resource(GpuResourceRef::QuerySet(queries.clone()))
         .unwrap();
-    for (name, beginning_of_pass, end_of_pass) in [
-        ("first queries", 0, 1),
-        ("second queries", 2, 3),
-    ] {
+    for (name, beginning_of_pass, end_of_pass) in
+        [("first queries", 0, 1), ("second queries", 2, 3)]
+    {
         fragment
             .add_node(
                 label(name),
@@ -282,9 +277,8 @@ fn partially_overlapping_query_ranges_retain_the_exact_intersection() {
     let GpuWorkOperation::Compute(compute) = compute_operation() else {
         panic!("test fixture must create compute work");
     };
-    let compute = compute.with_timestamp_writes(
-        GpuTimestampWrites::new(&queries, Some(4), None).unwrap(),
-    );
+    let compute =
+        compute.with_timestamp_writes(GpuTimestampWrites::new(&queries, Some(4), None).unwrap());
     fragment
         .add_node(
             label("write queries"),
