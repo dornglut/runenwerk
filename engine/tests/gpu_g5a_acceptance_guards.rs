@@ -60,3 +60,27 @@ fn fixed_step_iteration_uniforms_are_not_generic_gpu_uploads() {
         "actual fixed-step occurrences must retain their occurrence-local canonical upload path"
     );
 }
+
+#[test]
+fn execution_limits_consume_positional_bind_group_slots() {
+    let bindings = read("src/plugins/gpu/api/program/runtime_binding/set.rs");
+    assert!(
+        bindings.contains("required_bind_group_slots > u64::from(device_facts.max_bind_groups())"),
+        "complete runtime bindings must admit the highest positional bind-group slot before backend realization"
+    );
+    assert!(
+        bindings.contains("u64::from(group.group()) + 1"),
+        "sparse logical group indices must count the positional slots that private realization requires"
+    );
+
+    let render = read("src/plugins/gpu/api/render_execution.rs");
+    assert!(
+        render.contains("bindings.required_bind_group_slots()")
+            && render.contains("limits.max_bind_groups_plus_vertex_buffers()"),
+        "render combined bind-group/vertex-buffer admission must consume positional bind-group slots rather than only declared-group cardinality"
+    );
+    assert!(
+        !render.contains("vertex_buffers.len() + bindings.groups().len()"),
+        "render combined-limit admission must not regress to declared-group cardinality for sparse layouts"
+    );
+}
