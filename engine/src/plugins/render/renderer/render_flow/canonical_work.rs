@@ -1,22 +1,25 @@
 use super::logical_copy::{ProjectedCopyOperation, project_copy_operation};
 use super::logical_operations::{
-    project_buffer_upload, project_compute_operation, project_render_operation, project_timing_tail,
+    project_compute_operation, project_render_operation, project_timing_tail,
 };
 use super::logical_timing::LogicalGpuPassTiming;
 use super::*;
-use crate::plugins::gpu::{GpuBufferHandle, GpuExecutionPreference, GpuResourceLabel};
+use crate::plugins::gpu::{
+    GpuExecutionPreference, GpuRealizedBuffer, GpuResourceLabel, GpuUploadOperation,
+};
 use crate::plugins::render::{
     PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, ResolvedRenderGpuWorkNode,
     prepare_render_gpu_work,
 };
 
-/// One logical upload paired with the existing temporary physical queue-write payload.
+/// One execution-complete logical upload paired only with its already-realized physical buffer.
 ///
-/// The logical handle is semantic identity; `pending` is only the pre-G5B realization mechanism.
+/// `operation` is the sole source of destination coverage and immutable payload meaning. `realized`
+/// is an opaque pre-G5B physical sidecar and may not duplicate or reconstruct those semantics.
 pub(super) struct RealizedLogicalBufferUpload {
     pub(super) occurrence: RenderGpuWorkOccurrenceId,
-    pub(super) buffer: GpuBufferHandle,
-    pub(super) pending: RendererPendingBufferUpload,
+    pub(super) operation: GpuUploadOperation,
+    pub(super) realized: GpuRealizedBuffer,
     pub(super) control_order_after: Vec<RenderGpuWorkOccurrenceId>,
 }
 
@@ -61,7 +64,7 @@ pub(super) fn prepare_canonical_invocation(
         nodes.push(ResolvedRenderGpuWorkNode::upload(
             upload.occurrence,
             occurrence_label(flow, "upload", upload.occurrence)?,
-            project_buffer_upload(&upload.buffer, &upload.pending.bytes)?,
+            upload.operation.clone(),
             upload.control_order_after.iter().copied(),
         ));
     }
@@ -80,7 +83,7 @@ pub(super) fn prepare_canonical_invocation(
             nodes.push(ResolvedRenderGpuWorkNode::upload(
                 upload.occurrence,
                 occurrence_label(flow, "fixed-step-upload", upload.occurrence)?,
-                project_buffer_upload(&upload.buffer, &upload.pending.bytes)?,
+                upload.operation.clone(),
                 upload.control_order_after.iter().copied(),
             ));
             pass_control.clear();

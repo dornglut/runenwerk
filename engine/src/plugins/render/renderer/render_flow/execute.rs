@@ -4,6 +4,7 @@ use super::{
         CanonicalInvocationPreparation, CanonicalPassProjection, RealizedLogicalBufferUpload,
         allocate_aux_occurrence, prepare_canonical_invocation,
     },
+    logical_operations::project_buffer_upload,
     logical_timing::LogicalGpuPassTimingPlan,
     occurrences::expand_render_pass_occurrences,
 };
@@ -522,6 +523,13 @@ impl Renderer {
                         );
                         match scheduled.payload {
                             RenderGpuWorkPayload::Upload { occurrence } => {
+                                let GpuWorkOperation::Upload(operation) = &scheduled.operation else {
+                                    bail!(
+                                        "prepared G3 upload occurrence '{}' carries non-upload operation kind {:?}",
+                                        occurrence,
+                                        scheduled.operation.kind()
+                                    );
+                                };
                                 let projected = invocation
                                     .projected_uploads
                                     .iter()
@@ -539,10 +547,11 @@ impl Renderer {
                                             occurrence
                                         )
                                     })?;
-                                RendererPendingOperations::apply_buffer_upload(
+                                self.encode_canonical_upload_operation(
                                     context,
                                     queue,
-                                    &projected.pending,
+                                    operation,
+                                    &projected.realized,
                                 )?;
                             }
                             RenderGpuWorkPayload::Pass { occurrence, .. } => {
@@ -682,10 +691,11 @@ impl Renderer {
 
                 let invocation_result = (|| -> Result<()> {
                     for upload in &invocation.projected_uploads {
-                        RendererPendingOperations::apply_buffer_upload(
+                        self.encode_canonical_upload_operation(
                             context,
                             queue,
-                            &upload.pending,
+                            &upload.operation,
+                            &upload.realized,
                         )?;
                     }
                     let timestamp_active = invocation
@@ -695,10 +705,11 @@ impl Renderer {
                         .unwrap_or(false);
                     for scheduled_pass in &mut invocation.scheduled_passes {
                         if let Some(upload) = scheduled_pass.fixed_step_upload.as_ref() {
-                            RendererPendingOperations::apply_buffer_upload(
+                            self.encode_canonical_upload_operation(
                                 context,
                                 queue,
-                                &upload.pending,
+                                &upload.operation,
+                                &upload.realized,
                             )?;
                         }
                         let execution = &mut scheduled_pass.execution;
@@ -982,13 +993,11 @@ impl Renderer {
                     runtime_buffer.size
                 );
             }
+            let operation = project_buffer_upload(&runtime_buffer.handle, prepared.as_bytes())?;
             uploads.push(RealizedLogicalBufferUpload {
                 occurrence: allocate_aux_occurrence(maximum_occurrence)?,
-                buffer: runtime_buffer.handle.clone(),
-                pending: RendererPendingBufferUpload {
-                    buffer: runtime_buffer.realized.clone(),
-                    bytes: prepared.as_bytes().to_vec(),
-                },
+                operation,
+                realized: runtime_buffer.realized.clone(),
                 control_order_after: Vec::new(),
             });
         }
@@ -1025,13 +1034,11 @@ impl Renderer {
                 runtime_buffer.size
             );
         }
+        let operation = project_buffer_upload(&runtime_buffer.handle, prepared.as_bytes())?;
         Ok(RealizedLogicalBufferUpload {
             occurrence: allocate_aux_occurrence(maximum_occurrence)?,
-            buffer: runtime_buffer.handle.clone(),
-            pending: RendererPendingBufferUpload {
-                buffer: runtime_buffer.realized.clone(),
-                bytes: prepared.as_bytes().to_vec(),
-            },
+            operation,
+            realized: runtime_buffer.realized.clone(),
             control_order_after,
         })
     }
