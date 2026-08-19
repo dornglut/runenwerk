@@ -559,9 +559,9 @@ impl Renderer {
                                     })?;
                                 let execution = &mut scheduled_pass.execution;
                                 let pass = execution.pass;
+                                let pass_encode_start = Instant::now();
                                 let pass_label = execution_pass_id(pass).to_string();
                                 let pass_kind = execution_pass_kind_name(pass).to_string();
-                                let pass_encode_start = Instant::now();
                                 let gpu_timestamp_indices =
                                     execution.timestamp_indices.and_then(|indices| {
                                         invocation.timing_frame.as_mut().and_then(|frame| {
@@ -680,9 +680,9 @@ impl Renderer {
                             &mut pending_capture_readbacks,
                         )?;
                         let pass = execution.pass;
+                        let pass_encode_start = Instant::now();
                         let pass_label = execution_pass_id(pass).to_string();
                         let pass_kind = execution_pass_kind_name(pass).to_string();
-                        let pass_encode_start = Instant::now();
                         let gpu_timestamp_indices = if timestamp_active {
                             execution.timestamp_indices.and_then(|indices| {
                                 invocation.timing_frame.as_mut().and_then(|frame| {
@@ -798,16 +798,15 @@ impl Renderer {
             dispatch_workgroups: evidence.dispatch_workgroups,
         });
         if !has_gpu_timestamp_writes {
-            self.last_gpu_pass_timing_evidence.push(
-                gpu_timing_diagnostic_evidence_for_pass(
+            self.last_gpu_pass_timing_evidence
+                .push(gpu_timing_diagnostic_evidence_for_pass(
                     timing_capability,
                     frame_index,
                     render_surface_id,
                     flow.flow_id.to_string(),
                     pass_label.clone(),
                     pass_kind.clone(),
-                ),
-            );
+                ));
         }
         if !debug_control.provenance_enabled {
             return;
@@ -841,10 +840,7 @@ impl Renderer {
                 packet,
                 execution_pass_feature_id(pass),
             ),
-            view_signature_hash: hash_view_signature(
-                packet.view_id.as_str(),
-                packet.surface_size,
-            ),
+            view_signature_hash: hash_view_signature(packet.view_id.as_str(), packet.surface_size),
             feature_runtime_version: feature_runtime_version(
                 packet,
                 execution_pass_feature_id(pass),
@@ -854,7 +850,12 @@ impl Renderer {
                 .as_ref()
                 .and_then(FlowPassPipelineKey::render_pipeline_state)
                 .and_then(|state| state.fragment_output())
-                .map(|output| output.color_targets().map(|target| target.format()).collect())
+                .map(|output| {
+                    output
+                        .color_targets()
+                        .map(|target| target.format())
+                        .collect()
+                })
                 .unwrap_or_default(),
             depth_format: evidence
                 .pipeline_key
