@@ -319,19 +319,17 @@ impl GpuRenderDraw {
                 "bind exactly the vertex-buffer slots declared by the render pipeline",
             ));
         }
-        let vertex_buffer_count = u64::try_from(vertex_buffers.len()).map_err(|_| {
-            invalid_draw(
-                "vertex buffers",
-                "keep the vertex-buffer count inside the normalized u64 execution domain",
-            )
-        })?;
-        if vertex_buffer_count > u64::from(limits.max_vertex_buffers())
-            || vertex_buffer_count + bindings.required_bind_group_slots()
+        let vertex_buffer_slots = vertex_buffers
+            .last()
+            .map(|binding| u64::from(binding.slot()) + 1)
+            .unwrap_or(0);
+        if vertex_buffer_slots > u64::from(limits.max_vertex_buffers())
+            || vertex_buffer_slots + bindings.required_bind_group_slots()
                 > u64::from(limits.max_bind_groups_plus_vertex_buffers())
         {
             return Err(invalid_draw(
                 "vertex buffers",
-                "keep vertex-buffer and positional bind-group slots inside the admitted execution limits",
+                "keep positional vertex-buffer and bind-group slots inside the admitted execution limits",
             ));
         }
 
