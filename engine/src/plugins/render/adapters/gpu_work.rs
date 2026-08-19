@@ -14,7 +14,6 @@
 //! to derive every resource dependency and hazard from the canonical operations.
 
 use crate::plugins::gpu::*;
-use crate::plugins::render::RenderPassId;
 use crate::plugins::render::graph::CompiledRenderFlowPlan;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -86,13 +85,12 @@ impl core::fmt::Display for RenderGpuWorkOccurrenceId {
 
 /// Execution-only payload associated with one prepared RunenGPU node.
 ///
-/// Pass payload deliberately retains only renderer identity. Generic GPU operation kind and
-/// execution semantics live exclusively in the prepared node's `GpuWorkOperation`.
+/// Pass payload deliberately retains only renderer occurrence identity. Generic GPU operation kind
+/// and execution semantics live exclusively in the prepared node's `GpuWorkOperation`.
 #[derive(Debug, Clone)]
 pub(crate) enum RenderGpuWorkPayload {
     Pass {
         occurrence: RenderGpuWorkOccurrenceId,
-        pass_id: RenderPassId,
     },
     Upload {
         occurrence: RenderGpuWorkOccurrenceId,
@@ -120,19 +118,10 @@ impl RenderGpuWorkPayload {
 
     pub(crate) const fn occurrence(&self) -> RenderGpuWorkOccurrenceId {
         match self {
-            Self::Pass { occurrence, .. }
+            Self::Pass { occurrence }
             | Self::Upload { occurrence }
             | Self::TimingResolve { occurrence }
             | Self::TimingReadbackCopy { occurrence } => *occurrence,
-        }
-    }
-
-    fn pass_id(&self) -> Option<RenderPassId> {
-        match self {
-            Self::Pass { pass_id, .. } => Some(*pass_id),
-            Self::Upload { .. } | Self::TimingResolve { .. } | Self::TimingReadbackCopy { .. } => {
-                None
-            }
         }
     }
 }
@@ -158,7 +147,6 @@ impl ResolvedRenderGpuWorkNode {
     pub(crate) fn pass(
         occurrence: RenderGpuWorkOccurrenceId,
         label: GpuResourceLabel,
-        pass_id: RenderPassId,
         operation: GpuWorkOperation,
         preference: GpuExecutionPreference,
         control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
@@ -170,10 +158,7 @@ impl ResolvedRenderGpuWorkNode {
             operation,
             preference,
             provenance,
-            payload: RenderGpuWorkPayload::Pass {
-                occurrence,
-                pass_id,
-            },
+            payload: RenderGpuWorkPayload::Pass { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -333,15 +318,6 @@ impl PreparedRenderWorkPlan {
             .copied()
             .map(|node_id| self.payload(node_id).map(|payload| (node_id, payload)))
             .collect()
-    }
-
-    pub fn ordered_render_pass_ids(&self) -> Result<Vec<RenderPassId>, RenderGpuWorkAdapterError> {
-        self.ordered_payloads().map(|entries| {
-            entries
-                .into_iter()
-                .filter_map(|(_, payload)| payload.pass_id())
-                .collect()
-        })
     }
 }
 
