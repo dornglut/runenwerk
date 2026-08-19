@@ -1,9 +1,12 @@
 use super::*;
+use super::canonical_execution::{
+    realized_buffer_for_handle, validate_pre_g5b_dynamic_offset_boundary,
+    validate_realized_binding_groups, validate_renderer_timestamp_projection,
+};
 use crate::plugins::gpu::{
     CurrentRenderComputePipelineTerminal, CurrentRenderIndirectBufferTerminal,
     CurrentRenderPipelineBindGroupsTerminal, CurrentRenderTimestampWritesTerminal,
-    GpuComputeOperation, GpuDispatchIntent, GpuQueryAccessKind, GpuRealizedBindGroup,
-    GpuRealizedBuffer, GpuRuntimeBindingResource,
+    GpuComputeOperation, GpuDispatchIntent, GpuRealizedBindGroup, GpuRealizedBuffer,
 };
 
 impl Renderer {
@@ -17,6 +20,7 @@ impl Renderer {
         operation: &GpuComputeOperation,
         prepared: &PreparedPipelinePass,
         gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
+        runtime_resources: &FlowRuntimeResources,
     ) -> Result<EncodedPassEvidence> {
         let pipeline_key = prepared.bindings.pipeline_key.clone();
         let realized_pipeline = match &prepared.pipeline {
@@ -33,14 +37,27 @@ impl Renderer {
                 "canonical compute operation bindings disagree with its G4C2 realized binding set"
             );
         }
-        validate_pre_g5b_dynamic_offset_boundary(operation)?;
-        validate_realized_binding_groups(operation, &prepared.bindings.bind_groups)?;
-        validate_renderer_timestamp_projection(operation, gpu_timestamp_writes.as_ref())?;
+        validate_pre_g5b_dynamic_offset_boundary("compute", operation.bindings())?;
+        validate_realized_binding_groups(
+            "compute",
+            operation.bindings(),
+            &prepared.bindings.bind_groups,
+        )?;
+        validate_renderer_timestamp_projection(
+            "compute",
+            operation.timestamp_writes(),
+            gpu_timestamp_writes.as_ref(),
+        )?;
 
         let dispatch = match operation.dispatch() {
             GpuDispatchIntent::Direct(size) => CanonicalComputeDispatch::Direct(size.as_array()),
             GpuDispatchIntent::Indirect(access) => CanonicalComputeDispatch::Indirect {
-                buffer: context.realize_buffer(access.buffer())?,
+                buffer: realized_buffer_for_handle(
+                    "compute",
+                    runtime_resources,
+                    access.buffer(),
+                )?
+                .clone(),
                 byte_offset: access.range().offset(),
             },
         };
@@ -72,85 +89,6 @@ impl Renderer {
             fallback_used: prepared.fallback_used,
             pipeline_key: Some(pipeline_key),
         })
-    }
-}
-
-/// G5A owns logical `u64` dynamic offsets, but the accepted design assigns ordered backend offset
-/// slices and checked narrowing to G5B. The current renderer adapter does not author dynamic buffer
-/// bindings, so its temporary pre-G5B encoder must reject rather than silently drop any future
-/// dynamic-offset use that reaches this boundary.
-fn validate_pre_g5b_dynamic_offset_boundary(operation: &GpuComputeOperation) -> Result<()> {
-    let has_dynamic_offset = operation.bindings().values().any(|value| {
-        value.resources().any(|resource| {
-            matches!(
-                resource,
-                GpuRuntimeBindingResource::Buffer(binding) if binding.dynamic_offset().is_some()
-            )
-        })
-    });
-    if has_dynamic_offset {
-        bail!(
-            "canonical compute operation requires dynamic-offset lowering owned by G5B; the temporary renderer execution bridge cannot discard logical dynamic offsets"
-        );
-    }
-    Ok(())
-}
-
-fn validate_realized_binding_groups(
-    operation: &GpuComputeOperation,
-    realized: &[GpuRealizedBindGroup],
-) -> Result<()> {
-    let logical = operation.bindings().groups();
-    if logical.len() != realized.len() {
-        bail!(
-            "canonical compute operation has {} logical binding groups but {} G4C2 realized groups",
-            logical.len(),
-            realized.len()
-        );
-    }
-    for (logical, realized) in logical.iter().zip(realized) {
-        if logical.layout() != realized.layout_descriptor() {
-            bail!(
-                "canonical compute binding group {} disagrees with its G4C2 realized layout",
-                logical.layout().group()
-            );
-        }
-    }
-    Ok(())
-}
-
-/// The current renderer timing bridge projects exactly one contiguous two-slot timestamp range:
-/// first query = beginning of pass, second query = end of pass. Broader logical timestamp shapes
-/// are rejected here rather than guessed. G5A must tighten the public logical timestamp contract
-/// before G5B can execute broader generic work.
-fn validate_renderer_timestamp_projection(
-    operation: &GpuComputeOperation,
-    physical: Option<&GpuPassTimestampWrites>,
-) -> Result<()> {
-    match (operation.timestamp_writes(), physical) {
-        ([], None) => Ok(()),
-        ([logical], Some(physical)) => {
-            if logical.kind() != GpuQueryAccessKind::WriteTimestamp
-                || logical.range().count() != 2
-                || physical.query_set.logical_identity() != logical.resource_identity()
-                || physical.indices.begin != logical.range().first()
-                || physical.indices.end != logical.range().first() + 1
-            {
-                bail!(
-                    "canonical compute timestamp sidecar disagrees with the logical two-slot begin/end timestamp projection"
-                );
-            }
-            Ok(())
-        }
-        ([], Some(_)) => bail!(
-            "canonical compute operation has no logical timestamps but retained a physical timestamp sidecar"
-        ),
-        (_, None) => bail!(
-            "canonical compute operation requires logical timestamps but has no physical timestamp realization"
-        ),
-        (_, Some(_)) => bail!(
-            "canonical compute operation carries a timestamp shape whose begin/end meaning is not yet execution-complete"
-        ),
     }
 }
 

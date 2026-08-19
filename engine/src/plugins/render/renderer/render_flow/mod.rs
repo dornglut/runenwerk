@@ -32,6 +32,8 @@ use std::sync::mpsc::channel;
 mod bindings;
 mod canonical_compute;
 mod canonical_copy;
+mod canonical_execution;
+mod canonical_render;
 mod canonical_upload;
 mod canonical_work;
 mod capture;

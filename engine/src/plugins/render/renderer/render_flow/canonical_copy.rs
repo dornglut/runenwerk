@@ -1,8 +1,8 @@
 use super::*;
+use super::canonical_execution::{realized_buffer_for_handle, realized_texture_for_handle};
 use crate::plugins::gpu::{
-    CurrentRenderBufferCopyTerminal, CurrentRenderTextureCopyTerminal, GpuBufferHandle,
-    GpuCopyExtent, GpuCopyOperation, GpuRealizedBuffer, GpuRealizedTexture,
-    GpuTextureAspect as LogicalTextureAspect, GpuTextureHandle, GpuTextureOrigin,
+    CurrentRenderBufferCopyTerminal, CurrentRenderTextureCopyTerminal, GpuCopyExtent,
+    GpuCopyOperation, GpuTextureAspect as LogicalTextureAspect, GpuTextureOrigin,
 };
 
 impl Renderer {
@@ -25,9 +25,9 @@ impl Renderer {
                 destination,
             } => {
                 let source_realized =
-                    realized_buffer_for_handle(runtime_resources, source.buffer())?;
+                    realized_buffer_for_handle("copy", runtime_resources, source.buffer())?;
                 let destination_realized =
-                    realized_buffer_for_handle(runtime_resources, destination.buffer())?;
+                    realized_buffer_for_handle("copy", runtime_resources, destination.buffer())?;
                 context.current_render_execution_bridge().for_buffer_copy(
                     source_realized,
                     destination_realized,
@@ -44,9 +44,9 @@ impl Renderer {
                 destination,
             } => {
                 let source_realized =
-                    realized_texture_for_handle(runtime_resources, source.texture())?;
+                    realized_texture_for_handle("copy", runtime_resources, source.texture())?;
                 let destination_realized =
-                    realized_texture_for_handle(runtime_resources, destination.texture())?;
+                    realized_texture_for_handle("copy", runtime_resources, destination.texture())?;
                 context.current_render_execution_bridge().for_texture_copy(
                     source_realized,
                     destination_realized,
@@ -77,41 +77,6 @@ impl Renderer {
             pipeline_key: None,
         })
     }
-}
-
-fn realized_buffer_for_handle<'a>(
-    runtime_resources: &'a FlowRuntimeResources,
-    handle: &GpuBufferHandle,
-) -> Result<&'a GpuRealizedBuffer> {
-    runtime_resources
-        .buffers
-        .values()
-        .find(|resource| &resource.handle == handle)
-        .map(|resource| &resource.realized)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "canonical copy references buffer '{}' without an already-realized G4 resource",
-                handle.descriptor().common().label().as_str()
-            )
-        })
-}
-
-fn realized_texture_for_handle<'a>(
-    runtime_resources: &'a FlowRuntimeResources,
-    handle: &GpuTextureHandle,
-) -> Result<&'a GpuRealizedTexture> {
-    runtime_resources
-        .textures
-        .values()
-        .chain(runtime_resources.invocation_history_textures.values())
-        .find(|resource| &resource.handle == handle)
-        .map(|resource| &resource.realized)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "canonical copy references texture '{}' without an already-realized G4 resource",
-                handle.descriptor().common().label().as_str()
-            )
-        })
 }
 
 struct CanonicalBufferCopy<'a> {

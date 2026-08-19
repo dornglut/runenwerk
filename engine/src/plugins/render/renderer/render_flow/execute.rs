@@ -613,6 +613,7 @@ impl Renderer {
                                             operation,
                                             prepared,
                                             gpu_timestamp_writes,
+                                            runtime_resources,
                                         )?
                                     }
                                     GpuWorkOperation::Copy(operation) => {
@@ -630,19 +631,33 @@ impl Renderer {
                                             runtime_resources,
                                         )?
                                     }
-                                    GpuWorkOperation::Render(_) => self.encode_compiled_pass(
-                                        context,
-                                        encoder,
-                                        frame_texture,
-                                        frame_view,
-                                        &invocation.packet,
-                                        invocation.flow,
-                                        &invocation.invocation.inputs,
-                                        pass,
-                                        runtime_resources,
-                                        execution.pipeline.as_ref(),
-                                        gpu_timestamp_writes,
-                                    )?,
+                                    GpuWorkOperation::Render(operation) => {
+                                        if !matches!(
+                                            pass,
+                                            CompiledPassExecutionPlan::Fullscreen(_)
+                                                | CompiledPassExecutionPlan::Graphics(_)
+                                        ) {
+                                            bail!(
+                                                "canonical render operation occurrence '{}' is paired with non-raster renderer identity '{}'",
+                                                occurrence,
+                                                pass_label
+                                            );
+                                        }
+                                        let prepared = execution.pipeline.as_ref().ok_or_else(|| {
+                                            anyhow::anyhow!(
+                                                "canonical render occurrence '{}' has no G4C3 realized pipeline",
+                                                occurrence
+                                            )
+                                        })?;
+                                        self.encode_canonical_render_operation(
+                                            context,
+                                            encoder,
+                                            operation,
+                                            prepared,
+                                            gpu_timestamp_writes,
+                                            runtime_resources,
+                                        )?
+                                    }
                                     other => {
                                         bail!(
                                             "canonical render-pass occurrence '{}' carries unsupported operation kind {:?}",
@@ -697,8 +712,7 @@ impl Renderer {
                                 let GpuWorkOperation::Copy(operation) = &scheduled.operation else {
                                     bail!(
                                         "prepared timing-readback occurrence '{}' carries non-copy operation kind {:?}",
-                                        occurrence,
-                                        scheduled.operation.kind()
+                                        occurrence, scheduled.operation.kind()
                                     );
                                 };
                                 let frame = invocation.timing_frame.take().ok_or_else(|| {
