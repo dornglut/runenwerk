@@ -533,7 +533,7 @@ struct GpuCanonicalAdapterKey {
     software: GpuSoftwareStatus,
     fallback: GpuFallbackStatus,
     supported_features: Vec<GpuCapabilityFeature>,
-    adapter_limits: (u64, u64, u32, u32, u32),
+    adapter_limits: (u64, u64, u32, u32, u32, u32, u32, u32, u32, u32, u32),
     supported_formats: Vec<(GpuTextureFormat, GpuCanonicalFormatCapabilities)>,
     alignments: super::facts::GpuAlignmentFacts,
     vendor: Option<u32>,
@@ -556,6 +556,12 @@ fn canonical_adapter_key(adapter: &GpuAdapterFacts) -> GpuCanonicalAdapterKey {
             limits.max_color_attachments(),
             limits.max_vertex_buffers(),
             limits.max_bindings_per_group(),
+            limits.max_texture_dimension_2d(),
+            limits.max_bind_groups(),
+            limits.max_bind_groups_plus_vertex_buffers(),
+            limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
+            limits.max_dynamic_storage_buffers_per_pipeline_layout(),
+            limits.max_compute_workgroups_per_dimension(),
         ),
         supported_formats: adapter
             .supported()
@@ -688,18 +694,32 @@ mod tests {
         IsolatedRetryRegistry { _serial: serial }
     }
 
+    fn test_limits() -> GpuLimits {
+        GpuLimits::new(
+            64 * 1024,
+            128 * 1024 * 1024,
+            4,
+            8,
+            16,
+            8192,
+            4,
+            24,
+            8,
+            4,
+            65_535,
+        )
+        .expect("complete test limits are valid")
+    }
+
     fn adapter_with(features: impl IntoIterator<Item = GpuCapabilityFeature>) -> GpuAdapterFacts {
+        let limits = test_limits();
         GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
             GpuFallbackStatus::ConfirmedNotFallback,
-            GpuCapabilities::from_normalized_facts(
-                features,
-                GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 4, 8, 16).unwrap(),
-                [],
-            ),
-            GpuAdapterLimits::new(GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 4, 8, 16).unwrap()),
+            GpuCapabilities::from_normalized_facts(features, limits, []),
+            GpuAdapterLimits::new(limits),
             GpuAlignmentFacts {
                 uniform_dynamic_offset: Some(256),
                 storage_dynamic_offset: Some(256),
@@ -982,17 +1002,14 @@ mod tests {
     #[test]
     fn full_disposition_collection_is_invariant_to_input_order() {
         let accepted = with_diagnostics(adapter(), "accepted", "driver", "info");
+        let limits = test_limits();
         let rejected = GpuAdapterFacts::new(
             GpuBackendFamily::UnknownBackend,
             GpuAdapterClass::Unknown,
             GpuSoftwareStatus::Unknown,
             GpuFallbackStatus::Unknown,
-            GpuCapabilities::from_normalized_facts(
-                [],
-                GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 4, 8, 16).unwrap(),
-                [],
-            ),
-            GpuAdapterLimits::new(GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 4, 8, 16).unwrap()),
+            GpuCapabilities::from_normalized_facts([], limits, []),
+            GpuAdapterLimits::new(limits),
             accepted.alignments(),
         )
         .with_diagnostics(

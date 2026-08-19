@@ -287,6 +287,31 @@ fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar()
     assert!(pass_graph.contains("pub non_data_order_after: Vec<RenderPassId>"));
 
     let adapter = read("src/plugins/render/adapters/gpu_work.rs");
+    let payload_start = adapter
+        .find("pub(crate) enum RenderGpuWorkPayload")
+        .expect("render G3 adapter should define its execution-only payload");
+    let payload_tail = &adapter[payload_start..];
+    let payload_end = payload_tail
+        .find("\n}\n\nimpl RenderGpuWorkPayload")
+        .expect("render execution payload declaration should precede its implementation");
+    let payload = &payload_tail[..payload_end];
+    assert!(payload.contains("occurrence: RenderGpuWorkOccurrenceId"));
+    assert!(
+        !payload.contains("pass_id:"),
+        "render execution payload must not duplicate compiled pass identity after occurrence cutover"
+    );
+    for forbidden_truth in [
+        "CompiledPassExecutionPlan",
+        "GpuWorkOperation",
+        "GpuRuntimeBindingSet",
+        "GpuResourceAccess",
+    ] {
+        assert!(
+            !payload.contains(forbidden_truth),
+            "render execution payload must retain renderer identity only, not generic GPU truth '{forbidden_truth}'"
+        );
+    }
+
     let sidecar_start = adapter
         .find("struct RenderGpuWorkSidecar")
         .expect("render G3 adapter should define its private sidecar");
@@ -310,7 +335,7 @@ fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar()
     }
 
     let execute = read("src/plugins/render/renderer/render_flow/execute.rs");
-    let schedule = function_body(&execute, "fn schedule_invocation_passes<'a>(");
+    let schedule = function_body(&execute, "fn schedule_invocation_passes(");
     assert!(schedule.contains(".ordered_payloads()?"));
     for alternate_order in ["flow.execution.passes", "topological_sort", "sort_by"] {
         assert!(

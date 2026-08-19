@@ -258,7 +258,7 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
                 .unwrap()],
                 None,
                 [],
-                [],
+                None,
             )
             .unwrap(),
         )
@@ -318,41 +318,61 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
 fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
     let mut allocator = allocator();
     let depth = depth_texture(&mut allocator, "depth attachment");
-    let range = GpuTextureSubresourceRange::whole(&depth).unwrap();
-    let render = |load, store, draws: Vec<GpuDrawIntent>| {
+    let depth_range = GpuTextureSubresourceRange::whole(&depth).unwrap();
+    let color = texture(
+        &mut allocator,
+        "depth test color action",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [GpuTextureUsage::ColorAttachment],
+    );
+    let color_range = GpuTextureSubresourceRange::whole(&color).unwrap();
+    let render = |load, store| {
         GpuWorkOperation::Render(
             GpuRenderOperation::new(
-                [],
+                [GpuRenderColorAttachment::new(
+                    GpuTextureAccessResource::Texture(color.clone()),
+                    color_range,
+                    GpuColorAttachmentLoad::Clear(
+                        GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+                    ),
+                    GpuAttachmentStore::Store,
+                    None,
+                )
+                .unwrap()],
                 Some(
                     GpuRenderDepthStencilAttachment::new(
                         GpuTextureAccessResource::Texture(depth.clone()),
-                        range,
+                        depth_range,
                         GpuDepthStencilAccess::ReadWrite,
                         load,
                         store,
                     )
                     .unwrap(),
                 ),
-                draws,
                 [],
+                None,
             )
             .unwrap(),
         )
     };
-    let sampled = || texture_access(&depth, range, GpuTextureAccessKind::SampledRead);
+    let sampled = || texture_access(&depth, depth_range, GpuTextureAccessKind::SampledRead);
     let clear = GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap());
     for (name, store, succeeds) in [
         ("stored depth", GpuAttachmentStore::Store, true),
         ("discarded depth", GpuAttachmentStore::Discard, false),
     ] {
         let mut fragment = builder(name);
-        fragment
-            .declare_resource(GpuResourceRef::Texture(depth.clone()))
-            .unwrap();
+        for resource in [&depth, &color] {
+            fragment
+                .declare_resource(GpuResourceRef::Texture(resource.clone()))
+                .unwrap();
+        }
         fragment
             .add_node(
                 label("clear depth"),
-                render(clear, store, Vec::new()),
+                render(clear, store),
                 [],
                 GpuCapabilityRequirements::new(),
                 GpuExecutionPreference::GraphicsRequired,
@@ -371,19 +391,13 @@ fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
     }
 
     let mut load = builder("load depth");
-    load.declare_resource(GpuResourceRef::Texture(depth.clone()))
-        .unwrap();
-    let draw = GpuDrawIntent::direct(
-        GpuDrawRange::new(0, 3).unwrap(),
-        GpuDrawRange::new(0, 1).unwrap(),
-    );
+    for resource in [&depth, &color] {
+        load.declare_resource(GpuResourceRef::Texture(resource.clone()))
+            .unwrap();
+    }
     load.add_node(
         label("load depth"),
-        render(
-            GpuDepthAttachmentLoad::Load,
-            GpuAttachmentStore::Store,
-            vec![draw],
-        ),
+        render(GpuDepthAttachmentLoad::Load, GpuAttachmentStore::Store),
         [],
         GpuCapabilityRequirements::new(),
         GpuExecutionPreference::GraphicsRequired,
@@ -419,10 +433,9 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
         [GpuBufferUsage::CopyDestination],
     );
     let query_range = GpuQueryRange::whole(&queries).unwrap();
-    let timestamp_access =
-        GpuQueryAccess::new(&queries, query_range, GpuQueryAccessKind::WriteTimestamp).unwrap();
+    let timestamp_writes = GpuTimestampWrites::new(&queries, Some(0), Some(1)).unwrap();
     let render = GpuWorkOperation::Render(
-        GpuRenderOperation::new([], None, [], [timestamp_access]).unwrap(),
+        GpuRenderOperation::new([], None, [], Some(timestamp_writes)).unwrap(),
     );
     let query_resolve = GpuQueryResolveOperation::new(&queries, query_range, &resolve, 0).unwrap();
     let resolve_range = query_resolve.destination_range();
@@ -1936,7 +1949,9 @@ fn multisample_resolve_initializes_destination_despite_source_discard() {
     fragment
         .add_node(
             label("render resolve"),
-            GpuWorkOperation::Render(GpuRenderOperation::new([attachment], None, [], []).unwrap()),
+            GpuWorkOperation::Render(
+                GpuRenderOperation::new([attachment], None, [], None).unwrap(),
+            ),
             [],
             GpuCapabilityRequirements::new(),
             GpuExecutionPreference::GraphicsRequired,

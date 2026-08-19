@@ -36,7 +36,7 @@ pub(super) fn lower_buffer(
         require_feature(context, identity, GpuCapabilityFeature::Copy)?;
     }
     if usages.contains(GpuBufferUsage::Indirect) {
-        require_feature(context, identity, GpuCapabilityFeature::IndirectDraw)?;
+        require_feature(context, identity, GpuCapabilityFeature::IndirectExecution)?;
         if !context
             .backend
             .adapter

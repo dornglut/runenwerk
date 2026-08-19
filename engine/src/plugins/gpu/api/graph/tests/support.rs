@@ -122,9 +122,58 @@ pub(super) fn depth_texture(
 }
 
 pub(super) fn compute_operation() -> GpuWorkOperation {
-    GpuWorkOperation::Compute(GpuComputeOperation::new(
-        GpuDispatchSize::new(1, 1, 1).unwrap(),
-    ))
+    compute_operation_with_dispatch(GpuDispatchSize::new(1, 1, 1).unwrap())
+}
+
+pub(super) fn compute_operation_with_dispatch(dispatch: GpuDispatchSize) -> GpuWorkOperation {
+    let mut source_registry = GpuProgramSourceRegistry::new(1, 1024).unwrap();
+    let owner = GpuProgramSourceOwnerId::allocate().unwrap();
+    let source = source_registry
+        .admit_wgsl(
+            GpuProgramSourceIdentity::new(
+                owner,
+                GpuProgramSourceKey::new("graph.test.compute").unwrap(),
+                GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+            ),
+            "@compute @workgroup_size(1) fn main() {}",
+            GpuProgramSourceProvenance::new("graph-test", None).unwrap(),
+        )
+        .unwrap();
+    let interface = GpuProgramInterfaceDescriptor::new([]).unwrap();
+    let entry_point = GpuEntryPointName::new("main").unwrap();
+    let program = GpuProgramDescriptor::new(
+        source,
+        interface.clone(),
+        [GpuEntryPointDescriptor::new(
+            entry_point.clone(),
+            GpuShaderStage::Compute,
+            interface,
+        )],
+    )
+    .unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([]).unwrap();
+    let specialization =
+        GpuSpecializationValueSet::new(GpuSpecializationSchema::new([]).unwrap(), []).unwrap();
+    let pipeline = GpuComputePipelineDescriptor::new(
+        program,
+        entry_point,
+        layout.clone(),
+        specialization,
+        GpuCapabilityRequirements::new(),
+    )
+    .unwrap();
+    let device_facts = GpuRuntimeBindingDeviceFacts::new(
+        NonZeroU64::new(1).unwrap(),
+        NonZeroU64::new(1).unwrap(),
+        1,
+        0,
+        0,
+        [],
+    );
+    let bindings = GpuRuntimeBindingSet::new(layout, [], &device_facts).unwrap();
+    let limits = GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 65_535).unwrap();
+    let dispatch = GpuDispatchIntent::direct(dispatch, limits).unwrap();
+    GpuWorkOperation::Compute(GpuComputeOperation::new(pipeline, bindings, dispatch).unwrap())
 }
 
 pub(super) fn builder(name: &str) -> GpuWorkFragmentBuilder {

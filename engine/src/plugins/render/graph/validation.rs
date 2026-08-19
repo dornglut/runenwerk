@@ -191,14 +191,6 @@ pub enum RenderFlowValidationIssue {
     #[error("compute pass '{pass_label}' cannot declare draw parameters")]
     ComputePassHasDraw { pass_label: String },
 
-    #[error("compute pass '{pass_label}' declares invalid dispatch_workgroups({x}, {y}, {z})")]
-    InvalidComputeDispatch {
-        pass_label: String,
-        x: u32,
-        y: u32,
-        z: u32,
-    },
-
     #[error("fullscreen pass '{pass_label}' cannot declare workgroup_size")]
     FullscreenPassHasWorkgroupSize { pass_label: String },
 
@@ -798,17 +790,6 @@ fn validate_pass_shape(pass: &RenderPassNode, issues: &mut Vec<RenderFlowValidat
             if pass.draw.is_some() {
                 issues.push(RenderFlowValidationIssue::ComputePassHasDraw {
                     pass_label: pass.label.clone(),
-                });
-            }
-            if let Some(crate::plugins::render::api::ComputeDispatchDescriptor::Fixed(dims)) =
-                &pass.compute_dispatch
-                && (dims[0] == 0 || dims[1] == 0 || dims[2] == 0)
-            {
-                issues.push(RenderFlowValidationIssue::InvalidComputeDispatch {
-                    pass_label: pass.label.clone(),
-                    x: dims[0],
-                    y: dims[1],
-                    z: dims[2],
                 });
             }
         }

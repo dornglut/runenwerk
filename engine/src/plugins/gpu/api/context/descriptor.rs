@@ -64,6 +64,12 @@ pub enum GpuLimitKind {
     MaxColorAttachments,
     MaxVertexBuffers,
     MaxBindingsPerGroup,
+    MaxTextureDimension2d,
+    MaxBindGroups,
+    MaxBindGroupsPlusVertexBuffers,
+    MaxDynamicUniformBuffersPerPipelineLayout,
+    MaxDynamicStorageBuffersPerPipelineLayout,
+    MaxComputeWorkgroupsPerDimension,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -504,7 +510,7 @@ pub(crate) const fn preferred_degradation_is_valid(
         GpuCapabilityFeature::Compute
         | GpuCapabilityFeature::RenderPipeline
         | GpuCapabilityFeature::Copy
-        | GpuCapabilityFeature::IndirectDraw
+        | GpuCapabilityFeature::IndirectExecution
         | GpuCapabilityFeature::StorageTexture
         | GpuCapabilityFeature::TextureBindingArray
         | GpuCapabilityFeature::BufferBindingArray
@@ -540,7 +546,7 @@ mod tests {
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
-        GpuCapabilityFeature::IndirectDraw,
+        GpuCapabilityFeature::IndirectExecution,
         GpuCapabilityFeature::StorageTexture,
         GpuCapabilityFeature::TextureBindingArray,
         GpuCapabilityFeature::BufferBindingArray,

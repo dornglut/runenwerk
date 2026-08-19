@@ -11,7 +11,6 @@ use crate::plugins::render::{
     PreparedFlowInvocation, PreparedFlowInvocationId, PreparedRenderFrame, PreparedTargetBinding,
     PreparedViewFrame, RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderResourceDeclaration, RenderTargetAliasKind, validate_compiled_flow_capabilities,
-    validate_prepared_gpu_work_capabilities,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
@@ -354,7 +353,6 @@ pub fn validate_prepared_render_frame(
             view,
             &dynamic_targets,
             frame,
-            capabilities,
             &mut diagnostics,
         );
     }
@@ -473,25 +471,8 @@ fn validate_invocation(
         &RenderDynamicTextureTargetDescriptor,
     >,
     frame: &PreparedRenderFrame,
-    capabilities: &GpuCapabilities,
     diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
 ) {
-    match invocation.inputs.prepared_work.as_ref() {
-        Some(work) => diagnostics.extend(validate_prepared_gpu_work_capabilities(
-            flow,
-            work.graph(),
-            capabilities,
-        )),
-        None => diagnostics.push(
-            RenderExecutionGraphDiagnostic::error(
-                RenderExecutionGraphDiagnosticKind::FlowValidationIssue,
-                "prepared invocation is missing transactionally lowered GPU work",
-            )
-            .with_flow(flow.flow_id, flow.flow_label.clone())
-            .with_invocation(invocation.invocation_id.clone())
-            .with_view(invocation.view_id.clone()),
-        ),
-    }
     for pass in &flow.execution.passes {
         if !pass_targets_view(pass, view) {
             continue;
@@ -574,46 +555,26 @@ fn validate_pass_dispatch(
     if value.dispatch.is_none() {
         return;
     }
-    let Some(dispatch) = invocation
+    if invocation
         .inputs
         .projected_dispatch_workgroups
-        .get(&value.pass_id)
-        .copied()
-    else {
-        diagnostics.push(
-            RenderExecutionGraphDiagnostic::error(
-                RenderExecutionGraphDiagnosticKind::DispatchMissing,
-                format!(
-                    "prepared invocation '{}' is missing dispatch workgroups for compute pass '{}'",
-                    invocation.invocation_id.0, value.pass_id
-                ),
-            )
-            .with_flow(flow.flow_id, flow.flow_label.clone())
-            .with_pass(value.pass_id, value.pass_id.to_string())
-            .with_invocation(invocation.invocation_id.clone())
-            .with_view(invocation.view_id.clone()),
-        );
+        .contains_key(&value.pass_id)
+    {
         return;
-    };
-    if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
-        diagnostics.push(
-            RenderExecutionGraphDiagnostic::error(
-                RenderExecutionGraphDiagnosticKind::DispatchInvalid,
-                format!(
-                    "prepared invocation '{}' resolved invalid dispatch ({}, {}, {}) for compute pass '{}'",
-                    invocation.invocation_id.0,
-                    dispatch[0],
-                    dispatch[1],
-                    dispatch[2],
-                    value.pass_id
-                ),
-            )
-            .with_flow(flow.flow_id, flow.flow_label.clone())
-            .with_pass(value.pass_id, value.pass_id.to_string())
-            .with_invocation(invocation.invocation_id.clone())
-            .with_view(invocation.view_id.clone()),
-        );
     }
+    diagnostics.push(
+        RenderExecutionGraphDiagnostic::error(
+            RenderExecutionGraphDiagnosticKind::DispatchMissing,
+            format!(
+                "prepared invocation '{}' is missing dispatch workgroups for compute pass '{}'",
+                invocation.invocation_id.0, value.pass_id
+            ),
+        )
+        .with_flow(flow.flow_id, flow.flow_label.clone())
+        .with_pass(value.pass_id, value.pass_id.to_string())
+        .with_invocation(invocation.invocation_id.clone())
+        .with_view(invocation.view_id.clone()),
+    );
 }
 
 fn validate_pass_uniforms(
@@ -925,7 +886,10 @@ fn validate_flow_owned_alias_binding(
         .with_flow(flow.flow_id, flow.flow_label.clone())
         .with_pass(pass_id(pass), pass_id(pass).to_string())
         .with_resource(resource_id, flow.resource_label(resource_id))
-        .with_alias(requirement.alias.binding_key.clone(), requirement.alias.kind)
+        .with_alias(
+            requirement.alias.binding_key.clone(),
+            requirement.alias.kind,
+        )
         .with_invocation(invocation.invocation_id.clone())
         .with_view(invocation.view_id.clone()),
     );

@@ -884,13 +884,3 @@ pub fn detect_duplicate_resource_ids(
     }
     duplicates.into_iter().collect()
 }
-
-/// Fixed color-format fact used only to complete pure G2 validation for the
-/// current render-owned `Surface` format policy.
-///
-/// The legacy runtime continues to realize its already-resolved WGPU surface
-/// format directly. G7 deletes this placeholder when surface admission supplies
-/// the actual normalized format without a G2 WGPU mapping.
-pub(crate) const fn legacy_surface_validation_format() -> GpuTextureFormat {
-    GpuTextureFormat::Bgra8UnormSrgb
-}

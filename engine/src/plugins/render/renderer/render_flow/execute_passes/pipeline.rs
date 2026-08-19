@@ -39,7 +39,7 @@ impl Renderer {
                 );
                 let specialization =
                     compute_specialization_from_constants(&value.shader_constants)?;
-                let dispatch = flow_inputs
+                flow_inputs
                     .projected_dispatch_workgroups
                     .get(&value.pass_id)
                     .copied()
@@ -50,15 +50,6 @@ impl Renderer {
                             flow.flow_id
                         )
                     })?;
-                if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
-                    bail!(
-                        "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
-                        value.pass_id,
-                        dispatch[0],
-                        dispatch[1],
-                        dispatch[2]
-                    );
-                }
                 let admitted_source = admit_resolved_program_source(
                     &mut self.flow_pipeline_cache,
                     &shader,
@@ -299,15 +290,6 @@ impl Renderer {
                             flow.flow_id
                         )
                     })?;
-                if dispatch[0] == 0 || dispatch[1] == 0 || dispatch[2] == 0 {
-                    bail!(
-                        "compute pass '{}' resolved invalid dispatch dimensions ({}, {}, {})",
-                        value.pass_id,
-                        dispatch[0],
-                        dispatch[1],
-                        dispatch[2]
-                    );
-                }
                 self.encode_compute_pass(
                     context,
                     encoder,
@@ -453,7 +435,7 @@ impl Renderer {
                 EncodeComputePipeline {
                     context,
                     encoder,
-                    bind_group: prepared.bindings.bind_group.as_ref(),
+                    bind_groups: &prepared.bindings.bind_groups,
                     dispatch,
                     gpu_timestamp_writes,
                     result: &mut encode_result,
@@ -498,8 +480,6 @@ impl Renderer {
                 )
             }
         };
-        let material_resources =
-            material_resources_for_pass(packet, plan.feature_id, plan.shader.as_ref());
         let load = match plan.clear_color {
             Some(color) => LoadOp::Clear(Color {
                 r: color[0] as f64,
@@ -523,8 +503,7 @@ impl Renderer {
                     encoder,
                     surface_view,
                     realized_views: &realized_views,
-                    bind_group: prepared.bindings.bind_group.as_ref(),
-                    material_resources,
+                    bind_groups: &prepared.bindings.bind_groups,
                     load,
                     gpu_timestamp_writes,
                     result: &mut encode_result,
@@ -571,8 +550,6 @@ impl Renderer {
                 )
             }
         };
-        let material_resources =
-            material_resources_for_pass(packet, plan.feature_id, plan.shader.as_ref());
         let load = match plan.clear_color {
             Some(color) => LoadOp::Clear(Color {
                 r: color[0] as f64,
@@ -704,8 +681,7 @@ impl Renderer {
                     color_is_realized: surface_color_view.is_none(),
                     has_depth: depth_target.is_some(),
                     attachment_views: &attachment_views,
-                    bind_group: prepared.bindings.bind_group.as_ref(),
-                    material_resources,
+                    bind_groups: &prepared.bindings.bind_groups,
                     load,
                     gpu_timestamp_writes,
                     vertex_buffers: &vertex_buffers,
@@ -728,7 +704,7 @@ impl Renderer {
 struct EncodeComputePipeline<'a> {
     context: &'a GpuContext,
     encoder: &'a mut CommandEncoder,
-    bind_group: Option<&'a GpuRealizedBindGroup>,
+    bind_groups: &'a [GpuRealizedBindGroup],
     dispatch: [u32; 3],
     gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     result: &'a mut Result<()>,
@@ -740,7 +716,7 @@ impl CurrentRenderComputePipelineTerminal for EncodeComputePipeline<'_> {
             context: self.context,
             encoder: self.encoder,
             pipeline,
-            bind_group: self.bind_group,
+            bind_groups: self.bind_groups,
             dispatch: self.dispatch,
         };
         if let Some(writes) = self.gpu_timestamp_writes {
@@ -770,7 +746,7 @@ struct EncodeComputePass<'a> {
     context: &'a GpuContext,
     encoder: &'a mut CommandEncoder,
     pipeline: &'a ComputePipeline,
-    bind_group: Option<&'a GpuRealizedBindGroup>,
+    bind_groups: &'a [GpuRealizedBindGroup],
     dispatch: [u32; 3],
 }
 
@@ -786,14 +762,15 @@ impl EncodeComputePass<'_> {
             timestamp_writes,
         });
         pass.set_pipeline(self.pipeline);
-        if let Some(bind_group) = self.bind_group {
+        for bind_group in self.bind_groups {
+            let index = bind_group.layout_descriptor().group();
             self.context
                 .current_render_execution_bridge()
                 .for_pipeline_bind_groups(
                     &[bind_group],
                     SetComputeBindGroup {
                         pass: &mut pass,
-                        index: 0,
+                        index,
                     },
                 )?;
         }
@@ -847,8 +824,7 @@ struct EncodeFullscreenPipeline<'a> {
     encoder: &'a mut CommandEncoder,
     surface_view: Option<&'a TextureView>,
     realized_views: &'a [&'a GpuRealizedTextureView],
-    bind_group: Option<&'a GpuRealizedBindGroup>,
-    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    bind_groups: &'a [GpuRealizedBindGroup],
     load: LoadOp<Color>,
     gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     result: &'a mut Result<()>,
@@ -865,8 +841,7 @@ impl CurrentRenderRenderPipelineTerminal for EncodeFullscreenPipeline<'_> {
                     encoder: self.encoder,
                     surface_view: self.surface_view,
                     pipeline,
-                    bind_group: self.bind_group,
-                    material_resources: self.material_resources,
+                    bind_groups: self.bind_groups,
                     load: self.load,
                     gpu_timestamp_writes: self.gpu_timestamp_writes,
                     result: self.result,
@@ -883,8 +858,7 @@ struct EncodeFullscreenPass<'a> {
     encoder: &'a mut CommandEncoder,
     surface_view: Option<&'a TextureView>,
     pipeline: &'a RenderPipeline,
-    bind_group: Option<&'a GpuRealizedBindGroup>,
-    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    bind_groups: &'a [GpuRealizedBindGroup],
     load: LoadOp<Color>,
     gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     result: &'a mut Result<()>,
@@ -897,8 +871,7 @@ impl CurrentRenderAttachmentsTerminal for EncodeFullscreenPass<'_> {
             encoder: self.encoder,
             view,
             pipeline: self.pipeline,
-            bind_group: self.bind_group,
-            material_resources: self.material_resources,
+            bind_groups: self.bind_groups,
             load: self.load,
         };
         if let Some(writes) = self.gpu_timestamp_writes {
@@ -929,8 +902,7 @@ struct FullscreenPassOperation<'a> {
     encoder: &'a mut CommandEncoder,
     view: &'a TextureView,
     pipeline: &'a RenderPipeline,
-    bind_group: Option<&'a GpuRealizedBindGroup>,
-    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    bind_groups: &'a [GpuRealizedBindGroup],
     load: LoadOp<Color>,
 }
 impl FullscreenPassOperation<'_> {
@@ -958,25 +930,15 @@ impl FullscreenPassOperation<'_> {
             multiview_mask: None,
         });
         pass.set_pipeline(self.pipeline);
-        if let Some(bind_group) = self.bind_group {
+        for bind_group in self.bind_groups {
+            let index = bind_group.layout_descriptor().group();
             self.context
                 .current_render_execution_bridge()
                 .for_pipeline_bind_groups(
                     &[bind_group],
                     SetRenderBindGroup {
                         pass: &mut pass,
-                        index: 0,
-                    },
-                )?;
-        }
-        if let Some(resources) = self.material_resources {
-            self.context
-                .current_render_execution_bridge()
-                .for_pipeline_bind_groups(
-                    &[resources.bind_group()],
-                    SetRenderBindGroup {
-                        pass: &mut pass,
-                        index: 1,
+                        index,
                     },
                 )?;
         }
@@ -1016,8 +978,7 @@ struct EncodeGraphicsPipeline<'a> {
     color_is_realized: bool,
     has_depth: bool,
     attachment_views: &'a [&'a GpuRealizedTextureView],
-    bind_group: Option<&'a GpuRealizedBindGroup>,
-    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    bind_groups: &'a [GpuRealizedBindGroup],
     load: LoadOp<Color>,
     gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     vertex_buffers: &'a [(u32, &'a GpuRealizedBuffer)],
@@ -1039,8 +1000,7 @@ impl CurrentRenderRenderPipelineTerminal for EncodeGraphicsPipeline<'_> {
                     color_is_realized: self.color_is_realized,
                     has_depth: self.has_depth,
                     pipeline,
-                    bind_group: self.bind_group,
-                    material_resources: self.material_resources,
+                    bind_groups: self.bind_groups,
                     load: self.load,
                     gpu_timestamp_writes: self.gpu_timestamp_writes,
                     vertex_buffers: self.vertex_buffers,
@@ -1062,8 +1022,7 @@ struct EncodeGraphicsPass<'a> {
     color_is_realized: bool,
     has_depth: bool,
     pipeline: &'a RenderPipeline,
-    bind_group: Option<&'a GpuRealizedBindGroup>,
-    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    bind_groups: &'a [GpuRealizedBindGroup],
     load: LoadOp<Color>,
     gpu_timestamp_writes: Option<GpuPassTimestampWrites>,
     vertex_buffers: &'a [(u32, &'a GpuRealizedBuffer)],
@@ -1088,8 +1047,7 @@ impl CurrentRenderAttachmentsTerminal for EncodeGraphicsPass<'_> {
             color_view,
             depth_view,
             pipeline: self.pipeline,
-            bind_group: self.bind_group,
-            material_resources: self.material_resources,
+            bind_groups: self.bind_groups,
             load: self.load,
             vertex_buffers: self.vertex_buffers,
             index_buffer: self.index_buffer,
@@ -1124,8 +1082,7 @@ struct GraphicsPassOperation<'a> {
     color_view: &'a TextureView,
     depth_view: Option<&'a TextureView>,
     pipeline: &'a RenderPipeline,
-    bind_group: Option<&'a GpuRealizedBindGroup>,
-    material_resources: Option<&'a PreparedMaterialGpuResources>,
+    bind_groups: &'a [GpuRealizedBindGroup],
     load: LoadOp<Color>,
     vertex_buffers: &'a [(u32, &'a GpuRealizedBuffer)],
     index_buffer: Option<&'a GpuRealizedBuffer>,
@@ -1171,33 +1128,21 @@ impl GraphicsPassOperation<'_> {
             multiview_mask: None,
         });
         pass.set_pipeline(self.pipeline);
-        if let Some(bind_group) = self.bind_group
-            && let Err(error) = context
+        for bind_group in self.bind_groups {
+            let index = bind_group.layout_descriptor().group();
+            if let Err(error) = context
                 .current_render_execution_bridge()
                 .for_pipeline_bind_groups(
                     &[bind_group],
                     SetRenderBindGroup {
                         pass: &mut pass,
-                        index: 0,
+                        index,
                     },
                 )
-        {
-            *result = Err(error.into());
-            return;
-        }
-        if let Some(resources) = self.material_resources
-            && let Err(error) = context
-                .current_render_execution_bridge()
-                .for_pipeline_bind_groups(
-                    &[resources.bind_group()],
-                    SetRenderBindGroup {
-                        pass: &mut pass,
-                        index: 1,
-                    },
-                )
-        {
-            *result = Err(error.into());
-            return;
+            {
+                *result = Err(error.into());
+                return;
+            }
         }
         for &(slot, buffer) in self.vertex_buffers {
             if let Err(error) = context.current_render_execution_bridge().for_vertex_buffer(
@@ -1357,18 +1302,6 @@ fn reject_unresident_material_textures(
         pass_id,
         texture_count
     );
-}
-
-fn material_resources_for_pass<'a>(
-    packet: &'a RendererPreparedPacket,
-    feature_id: Option<crate::plugins::render::RenderFeatureId>,
-    shader: Option<&RenderShaderReference>,
-) -> Option<&'a PreparedMaterialGpuResources> {
-    if pass_consumes_material_resources(feature_id, shader) {
-        packet.prepared_material_gpu_resources.as_ref()
-    } else {
-        None
-    }
 }
 
 fn empty_specialization_value_set() -> Result<GpuSpecializationValueSet> {

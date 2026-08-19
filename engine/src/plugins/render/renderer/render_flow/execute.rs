@@ -1,9 +1,17 @@
 use super::*;
-use crate::plugins::gpu::{
-    GpuBufferHandle, GpuBufferRange, GpuCopyOperation, GpuPreparedWorkNodeId, GpuQueryAccessKind,
-    GpuQuerySetHandle, GpuWorkOperation,
+use super::{
+    canonical_work::{
+        CanonicalInvocationPreparation, CanonicalPassProjection, RealizedLogicalBufferUpload,
+        allocate_aux_occurrence, prepare_canonical_invocation,
+    },
+    logical_operations::project_buffer_upload,
+    logical_timing::LogicalGpuPassTimingPlan,
+    occurrences::expand_render_pass_occurrences,
 };
-use crate::plugins::render::{PreparedRenderWorkPlan, RenderGpuWorkPayload, RenderPassId};
+use crate::plugins::gpu::GpuWorkOperation;
+use crate::plugins::render::{
+    PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, RenderGpuWorkPayload, RenderPassId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FeaturePassAction {
@@ -24,26 +32,34 @@ struct RealizedFlowInvocation<'a> {
     flow: &'a CompiledRenderFlowPlan,
     invocation: &'a crate::plugins::render::PreparedFlowInvocation,
     packet: RendererPreparedPacket,
-    projected_uploads: Vec<RendererPendingBufferUpload>,
+    projected_uploads: Vec<RealizedLogicalBufferUpload>,
     scheduled_passes: Vec<RealizedScheduledPass<'a>>,
     timing_frame: Option<GpuPassTimingFrame>,
+    canonical_work: Option<Box<PreparedRenderWorkPlan>>,
 }
 
 struct RealizedScheduledPass<'a> {
-    fixed_step_upload: Option<RendererPendingBufferUpload>,
-    execution: Option<RealizedPassExecution<'a>>,
+    occurrence: RenderGpuWorkOccurrenceId,
+    control_order_after: Vec<RenderGpuWorkOccurrenceId>,
+    fixed_step_upload: Option<RealizedLogicalBufferUpload>,
+    execution: RealizedPassExecution<'a>,
 }
 
-/// The executable portion of a scheduled pass. A fixed-step upload can intentionally exist
-/// without this portion when the scheduled pass is later elided: the old operation path wrote
-/// that iteration uniform before deciding whether the pass encoded, and phase splitting must
-/// preserve that G5 queue-write order.
+/// One actual render-domain execution occurrence after view/feature/fixed-step control has been
+/// resolved. G5A deliberately resolves those decisions before late logical GPU work is formed, so
+/// this value never represents a skipped pass or a ghost fixed-step mutation.
 struct RealizedPassExecution<'a> {
     pass: &'a CompiledPassExecutionPlan,
     timestamp_indices: Option<GpuPassTimestampIndices>,
     pipeline: Option<PreparedPipelinePass>,
     before_captures: Vec<PreparedCaptureReadback>,
     after_captures: Vec<PreparedCaptureReadback>,
+}
+
+#[derive(Debug, Clone)]
+struct ScheduledInvocationWork {
+    operation: GpuWorkOperation,
+    payload: RenderGpuWorkPayload,
 }
 
 impl Renderer {
@@ -92,8 +108,8 @@ impl Renderer {
         )?;
 
         let encode_submit_start = Instant::now();
-        // Phase two: one non-reentrant raw loan covers only unchanged G5 upload, encoding,
-        // submission, and readback operations.
+        // Phase two: one non-reentrant raw loan covers only the temporary pre-G5B physical
+        // realization path. Generic GPU meaning is no longer reconstructed here.
         {
             let _span = tracing::info_span!("renderer.encode_submit").entered();
             let loan = context.current_render_device_queue();
@@ -242,38 +258,70 @@ impl Renderer {
                             invocation_packet.surface_format,
                             effective_history_signature,
                         )?;
+
+                        // Resolve render-domain runtime control before any canonical G3 work is
+                        // constructed. A skipped pass has no GPU occurrence and therefore no
+                        // hidden fixed-step mutation or timestamp slot.
+                        let occurrences =
+                            expand_render_pass_occurrences(flow, &invocation.inputs, |pass| {
+                                if !self.pass_targets_active_view(
+                                    pass,
+                                    view.view_id.as_str(),
+                                    view.kind,
+                                ) {
+                                    return Ok(false);
+                                }
+                                let pass_id = execution_pass_id(pass);
+                                if let Some(feature_id) = execution_pass_feature_id(pass)
+                                    && self.resolve_feature_pass_action(
+                                        feature_id,
+                                        pass_id,
+                                        &invocation_packet,
+                                    )? == FeaturePassAction::Skip
+                                {
+                                    return Ok(false);
+                                }
+                                ensure_compiled_pass_is_supported(pass)?;
+                                Ok(true)
+                            })?;
+                        let mut maximum_occurrence = occurrences
+                            .iter()
+                            .map(|occurrence| occurrence.occurrence_id.raw())
+                            .max()
+                            .unwrap_or(0);
                         let projected_uploads = self.realize_projected_uniform_uploads(
                             context,
+                            flow,
                             invocation.invocation_id.0.as_str(),
                             &invocation.inputs,
                             runtime_resources,
+                            &mut maximum_occurrence,
                         )?;
-                        let prepared_work = invocation_prepared_work(
-                            &invocation.inputs,
-                            gpu_timing_capability,
-                            flow.flow_id,
-                        )?;
-                        let prepared_timing =
+
+                        let logical_timing_plan =
                             if gpu_timing_capability == RenderGpuTimingCapability::Supported {
-                                prepared_timing_intent(prepared_work)?
+                                Some(LogicalGpuPassTimingPlan::new(
+                                    occurrences.iter().map(|occurrence| occurrence.pass),
+                                )?)
                             } else {
                                 None
                             };
-                        let timing_frame = match prepared_timing {
-                            Some(timing) => GpuPassTimingFrame::new(
+                        let timing_frame = match logical_timing_plan
+                            .as_ref()
+                            .and_then(LogicalGpuPassTimingPlan::timing)
+                        {
+                            Some(timing) => Some(GpuPassTimingFrame::new(
                                 context,
-                                &timing.query_set,
-                                &timing.resolve_buffer,
-                                &timing.readback_buffer,
-                                timing.query_capacity,
-                            )?,
+                                timing.query_set(),
+                                timing.resolve_buffer(),
+                                timing.readback_buffer(),
+                                timing.query_capacity(),
+                            )?),
                             None => None,
                         };
-                        let scheduled_passes =
-                            schedule_invocation_passes(flow, &invocation.inputs, prepared_work)?;
                         let mut realized_passes = Vec::new();
-                        for scheduled_pass in scheduled_passes {
-                            let fixed_step_upload = scheduled_pass
+                        for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
+                            let fixed_step_upload = occurrence
                                 .fixed_step_iteration
                                 .map(|iteration| {
                                     self.realize_fixed_step_iteration_upload(
@@ -284,43 +332,12 @@ impl Renderer {
                                         iteration
                                             .schedule
                                             .with_substep_index(iteration.substep_index),
+                                        &mut maximum_occurrence,
+                                        occurrence.control_order_after.clone(),
                                     )
                                 })
                                 .transpose()?;
-                            let pass = scheduled_pass.pass;
-                            if !self.pass_targets_active_view(
-                                pass,
-                                view.view_id.as_str(),
-                                view.kind,
-                            ) {
-                                if let Some(fixed_step_upload) = fixed_step_upload {
-                                    realized_passes.push(RealizedScheduledPass {
-                                        fixed_step_upload: Some(fixed_step_upload),
-                                        execution: None,
-                                    });
-                                }
-                                continue;
-                            }
-                            let pass_id = execution_pass_id(pass);
-                            if let Some(feature_id) = execution_pass_feature_id(pass) {
-                                match self.resolve_feature_pass_action(
-                                    feature_id,
-                                    pass_id,
-                                    &invocation_packet,
-                                )? {
-                                    FeaturePassAction::Execute => {}
-                                    FeaturePassAction::Skip => {
-                                        if let Some(fixed_step_upload) = fixed_step_upload {
-                                            realized_passes.push(RealizedScheduledPass {
-                                                fixed_step_upload: Some(fixed_step_upload),
-                                                execution: None,
-                                            });
-                                        }
-                                        continue;
-                                    }
-                                }
-                            }
-                            ensure_compiled_pass_is_supported(pass)?;
+                            let pass = occurrence.pass;
                             let mut before_captures = Vec::new();
                             if capture_runtime.should_attempt_stage(CaptureStage::Before) {
                                 self.prepare_pass_texture_captures(
@@ -360,17 +377,51 @@ impl Renderer {
                                     &mut after_captures,
                                 )?;
                             }
+                            let timestamp_indices = logical_timing_plan
+                                .as_ref()
+                                .map(|plan| plan.range_for_occurrence(ordinal))
+                                .transpose()?
+                                .flatten();
                             realized_passes.push(RealizedScheduledPass {
+                                occurrence: occurrence.occurrence_id,
+                                control_order_after: occurrence.control_order_after,
                                 fixed_step_upload,
-                                execution: Some(RealizedPassExecution {
+                                execution: RealizedPassExecution {
                                     pass,
-                                    timestamp_indices: scheduled_pass.timestamp_indices,
+                                    timestamp_indices,
                                     pipeline,
                                     before_captures,
                                     after_captures,
-                                }),
+                                },
                             });
                         }
+                        let canonical_projections = realized_passes
+                            .iter()
+                            .map(|scheduled| CanonicalPassProjection {
+                                occurrence: scheduled.occurrence,
+                                control_order_after: &scheduled.control_order_after,
+                                pass: scheduled.execution.pass,
+                                pipeline: scheduled.execution.pipeline.as_ref(),
+                                timestamp_indices: scheduled.execution.timestamp_indices,
+                                fixed_step_upload: scheduled.fixed_step_upload.as_ref(),
+                                has_capture_work: !scheduled.execution.before_captures.is_empty()
+                                    || !scheduled.execution.after_captures.is_empty(),
+                            })
+                            .collect::<Vec<_>>();
+                        let canonical_work = match prepare_canonical_invocation(
+                            context,
+                            flow,
+                            &invocation.inputs,
+                            runtime_resources,
+                            &projected_uploads,
+                            &canonical_projections,
+                            logical_timing_plan
+                                .as_ref()
+                                .and_then(LogicalGpuPassTimingPlan::timing),
+                        )? {
+                            CanonicalInvocationPreparation::Prepared(work) => Some(work),
+                            CanonicalInvocationPreparation::PreG7Residual => None,
+                        };
                         Ok(RealizedFlowInvocation {
                             flow,
                             invocation,
@@ -378,6 +429,7 @@ impl Renderer {
                             projected_uploads,
                             scheduled_passes: realized_passes,
                             timing_frame,
+                            canonical_work,
                         })
                     })();
                     runtime_resources.clear_active_invocation_uniform_scope();
@@ -389,7 +441,7 @@ impl Renderer {
             Ok(invocations)
         })();
         self.flow_runtime_cache = flow_runtime_cache;
-        let invocations = realization_result?;
+        let mut invocations = realization_result?;
         let mut final_captures = Vec::new();
         if capture_runtime.should_attempt_stage(CaptureStage::Final) {
             self.prepare_final_surface_capture(
@@ -399,6 +451,11 @@ impl Renderer {
                 &mut capture_runtime,
                 &mut final_captures,
             )?;
+        }
+        if !final_captures.is_empty() {
+            for invocation in &mut invocations {
+                invocation.canonical_work = None;
+            }
         }
         Ok(RendererRealizationBatch {
             packet,
@@ -444,9 +501,248 @@ impl Renderer {
                 runtime_resources.set_active_invocation_uniform_scope(
                     invocation.invocation.invocation_id.0.clone(),
                 );
+                tracing::trace!(
+                    flow_id = %invocation.flow.flow_id,
+                    invocation_id = %invocation.invocation.invocation_id.0,
+                    canonical_work_prepared = invocation.canonical_work.is_some(),
+                    "renderer G5A invocation execution authority"
+                );
+
+                if invocation.canonical_work.is_some() {
+                    let schedule = schedule_invocation_passes(invocation)?;
+                    let timestamp_period_available = invocation
+                        .timing_frame
+                        .as_mut()
+                        .map(|frame| frame.activate(queue))
+                        .unwrap_or(false);
+
+                    for scheduled in schedule {
+                        tracing::trace!(
+                            operation_kind = ?scheduled.operation.kind(),
+                            occurrence = scheduled.payload.occurrence().raw(),
+                            "encode canonical renderer GPU work in prepared G3 order"
+                        );
+                        match scheduled.payload {
+                            RenderGpuWorkPayload::Upload { occurrence } => {
+                                let GpuWorkOperation::Upload(operation) = &scheduled.operation
+                                else {
+                                    bail!(
+                                        "prepared G3 upload occurrence '{}' carries non-upload operation kind {:?}",
+                                        occurrence,
+                                        scheduled.operation.kind()
+                                    );
+                                };
+                                let projected = invocation
+                                    .projected_uploads
+                                    .iter()
+                                    .find(|upload| upload.occurrence == occurrence)
+                                    .or_else(|| {
+                                        invocation.scheduled_passes.iter().find_map(|pass| {
+                                            pass.fixed_step_upload
+                                                .as_ref()
+                                                .filter(|upload| upload.occurrence == occurrence)
+                                        })
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!(
+                                            "prepared G3 upload occurrence '{}' has no realized physical payload",
+                                            occurrence
+                                        )
+                                    })?;
+                                self.encode_canonical_upload_operation(
+                                    context,
+                                    queue,
+                                    operation,
+                                    &projected.realized,
+                                )?;
+                            }
+                            RenderGpuWorkPayload::Pass { occurrence, .. } => {
+                                let scheduled_pass = invocation
+                                    .scheduled_passes
+                                    .iter_mut()
+                                    .find(|pass| pass.occurrence == occurrence)
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!(
+                                            "prepared G3 pass occurrence '{}' has no realized renderer payload",
+                                            occurrence
+                                        )
+                                    })?;
+                                let execution = &mut scheduled_pass.execution;
+                                let pass = execution.pass;
+                                let pass_encode_start = Instant::now();
+                                let pass_label = execution_pass_id(pass).to_string();
+                                let pass_kind = execution_pass_kind_name(pass).to_string();
+                                let gpu_timestamp_indices =
+                                    execution.timestamp_indices.and_then(|indices| {
+                                        invocation.timing_frame.as_mut().and_then(|frame| {
+                                            frame.register_pass(
+                                                indices,
+                                                frame_index,
+                                                prepared_frame.surface.render_surface_id.raw(),
+                                                invocation.flow.flow_id.to_string(),
+                                                pass_label.clone(),
+                                                pass_kind.clone(),
+                                            )
+                                        })
+                                    });
+                                let gpu_timestamp_writes =
+                                    gpu_timestamp_indices.and_then(|indices| {
+                                        invocation
+                                            .timing_frame
+                                            .as_ref()
+                                            .map(|frame| frame.timestamp_writes(indices))
+                                    });
+                                let has_gpu_timestamp_writes = gpu_timestamp_writes.is_some();
+                                let evidence = match &scheduled.operation {
+                                    GpuWorkOperation::Compute(operation) => {
+                                        if !matches!(pass, CompiledPassExecutionPlan::Compute(_)) {
+                                            bail!(
+                                                "canonical compute operation occurrence '{}' is paired with non-compute renderer identity '{}'",
+                                                occurrence,
+                                                pass_label
+                                            );
+                                        }
+                                        let prepared = execution.pipeline.as_ref().ok_or_else(|| {
+                                            anyhow::anyhow!(
+                                                "canonical compute occurrence '{}' has no G4C3 realized pipeline",
+                                                occurrence
+                                            )
+                                        })?;
+                                        self.encode_canonical_compute_operation(
+                                            context,
+                                            encoder,
+                                            operation,
+                                            prepared,
+                                            gpu_timestamp_writes,
+                                            runtime_resources,
+                                        )?
+                                    }
+                                    GpuWorkOperation::Copy(operation) => {
+                                        if !matches!(pass, CompiledPassExecutionPlan::Copy(_)) {
+                                            bail!(
+                                                "canonical copy operation occurrence '{}' is paired with non-copy renderer identity '{}'",
+                                                occurrence,
+                                                pass_label
+                                            );
+                                        }
+                                        self.encode_canonical_copy_operation(
+                                            context,
+                                            encoder,
+                                            operation,
+                                            runtime_resources,
+                                        )?
+                                    }
+                                    GpuWorkOperation::Render(operation) => {
+                                        if !matches!(
+                                            pass,
+                                            CompiledPassExecutionPlan::Fullscreen(_)
+                                                | CompiledPassExecutionPlan::Graphics(_)
+                                        ) {
+                                            bail!(
+                                                "canonical render operation occurrence '{}' is paired with non-raster renderer identity '{}'",
+                                                occurrence,
+                                                pass_label
+                                            );
+                                        }
+                                        let prepared = execution.pipeline.as_ref().ok_or_else(|| {
+                                            anyhow::anyhow!(
+                                                "canonical render occurrence '{}' has no G4C3 realized pipeline",
+                                                occurrence
+                                            )
+                                        })?;
+                                        self.encode_canonical_render_operation(
+                                            context,
+                                            encoder,
+                                            operation,
+                                            prepared,
+                                            gpu_timestamp_writes,
+                                            runtime_resources,
+                                        )?
+                                    }
+                                    other => {
+                                        bail!(
+                                            "canonical render-pass occurrence '{}' carries unsupported operation kind {:?}",
+                                            occurrence,
+                                            other.kind()
+                                        )
+                                    }
+                                };
+                                self.record_encoded_pass(
+                                    frame_index,
+                                    prepared_frame.surface.render_surface_id.raw(),
+                                    invocation.flow,
+                                    &invocation.packet,
+                                    pass,
+                                    runtime_resources,
+                                    debug_control,
+                                    if timestamp_period_available {
+                                        gpu_timing_capability
+                                    } else {
+                                        RenderGpuTimingCapability::UnavailableThisFrame
+                                    },
+                                    pass_label,
+                                    pass_kind,
+                                    pass_encode_start,
+                                    has_gpu_timestamp_writes,
+                                    &evidence,
+                                );
+                            }
+                            RenderGpuWorkPayload::TimingResolve { occurrence } => {
+                                let GpuWorkOperation::Resolve(operation) = &scheduled.operation
+                                else {
+                                    bail!(
+                                        "prepared timing-resolve occurrence '{}' carries non-resolve operation kind {:?}",
+                                        occurrence,
+                                        scheduled.operation.kind()
+                                    );
+                                };
+                                let frame = invocation.timing_frame.as_mut().ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "prepared timing-resolve occurrence '{}' has no physical timing frame",
+                                        occurrence
+                                    )
+                                })?;
+                                if !frame.encode_resolve(context, encoder, operation)? {
+                                    bail!(
+                                        "prepared timing-resolve occurrence '{}' had no registered timestamp queries",
+                                        occurrence
+                                    );
+                                }
+                            }
+                            RenderGpuWorkPayload::TimingReadbackCopy { occurrence } => {
+                                let GpuWorkOperation::Copy(operation) = &scheduled.operation else {
+                                    bail!(
+                                        "prepared timing-readback occurrence '{}' carries non-copy operation kind {:?}",
+                                        occurrence,
+                                        scheduled.operation.kind()
+                                    );
+                                };
+                                let frame = invocation.timing_frame.take().ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "prepared timing-readback occurrence '{}' has no physical timing frame",
+                                        occurrence
+                                    )
+                                })?;
+                                if let Some(pending) =
+                                    frame.encode_readback_copy(context, encoder, operation)?
+                                {
+                                    pending_gpu_pass_timing_readbacks.push(pending);
+                                }
+                            }
+                        }
+                    }
+                    runtime_resources.clear_active_invocation_uniform_scope();
+                    continue;
+                }
+
                 let invocation_result = (|| -> Result<()> {
                     for upload in &invocation.projected_uploads {
-                        RendererPendingOperations::apply_buffer_upload(context, queue, upload)?;
+                        self.encode_canonical_upload_operation(
+                            context,
+                            queue,
+                            &upload.operation,
+                            &upload.realized,
+                        )?;
                     }
                     let timestamp_active = invocation
                         .timing_frame
@@ -455,11 +751,14 @@ impl Renderer {
                         .unwrap_or(false);
                     for scheduled_pass in &mut invocation.scheduled_passes {
                         if let Some(upload) = scheduled_pass.fixed_step_upload.as_ref() {
-                            RendererPendingOperations::apply_buffer_upload(context, queue, upload)?;
+                            self.encode_canonical_upload_operation(
+                                context,
+                                queue,
+                                &upload.operation,
+                                &upload.realized,
+                            )?;
                         }
-                        let Some(execution) = scheduled_pass.execution.as_mut() else {
-                            continue;
-                        };
+                        let execution = &mut scheduled_pass.execution;
                         self.encode_prepared_capture_copies(
                             context,
                             encoder,
@@ -469,9 +768,8 @@ impl Renderer {
                             &mut pending_capture_readbacks,
                         )?;
                         let pass = execution.pass;
-                        let pass_id = execution_pass_id(pass);
-                        let pass_label = pass_id.to_string();
                         let pass_encode_start = Instant::now();
+                        let pass_label = execution_pass_id(pass).to_string();
                         let pass_kind = execution_pass_kind_name(pass).to_string();
                         let gpu_timestamp_indices = if timestamp_active {
                             execution.timestamp_indices.and_then(|indices| {
@@ -517,111 +815,25 @@ impl Renderer {
                             std::mem::take(&mut execution.after_captures),
                             &mut pending_capture_readbacks,
                         )?;
-                        self.last_pass_timings.push(PassTimingSample {
-                            flow_id: invocation.flow.flow_id.to_string(),
-                            pass_id: pass_label.clone(),
-                            pass_kind: pass_kind.clone(),
-                            millis: pass_encode_start.elapsed().as_secs_f32() * 1000.0,
-                            dispatch_workgroups: evidence.dispatch_workgroups,
-                        });
-                        if !has_gpu_timestamp_writes {
-                            self.last_gpu_pass_timing_evidence.push(
-                                gpu_timing_diagnostic_evidence_for_pass(
-                                    if timestamp_active {
-                                        gpu_timing_capability
-                                    } else {
-                                        RenderGpuTimingCapability::UnavailableThisFrame
-                                    },
-                                    frame_index,
-                                    prepared_frame.surface.render_surface_id.raw(),
-                                    invocation.flow.flow_id.to_string(),
-                                    pass_label.clone(),
-                                    pass_kind.clone(),
-                                ),
-                            );
-                        }
-                        if debug_control.provenance_enabled {
-                            let pass_resource_truth = collect_pass_resource_truth(
-                                invocation.flow.flow_id,
-                                pass,
-                                runtime_resources,
-                            );
-                            let material_binding =
-                                collect_pass_material_binding_evidence(&invocation.packet, pass);
-                            self.last_pass_provenance.push(RenderPassProvenanceRecord {
-                                frame_index,
-                                flow_id: invocation.flow.flow_id.to_string(),
-                                pass_id: pass_label.clone(),
-                                pass_label: pass_label.clone(),
-                                pass_kind: execution_flow_pass_kind(pass),
-                                authoring_index: execution_pass_authoring_index(pass),
-                                feature_id: execution_pass_feature_id(pass).map(|id| id.to_string()),
-                                shader_id: evidence.shader_id,
-                                shader_revision: evidence.shader_revision,
-                                fallback_used: evidence.fallback_used,
-                                pipeline_stats_key: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(FlowPassPipelineKey::stats_key)
-                                    .unwrap_or_default(),
-                                bind_group_layout_signature_hash: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .map(
-                                        FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash,
-                                    )
-                                    .unwrap_or_default(),
-                                material_specialization_fragment_hash:
-                                    material_specialization_fragment_hash(
-                                        &invocation.packet,
-                                        execution_pass_feature_id(pass),
-                                    ),
-                                view_signature_hash: hash_view_signature(
-                                    invocation.packet.view_id.as_str(),
-                                    invocation.packet.surface_size,
-                                ),
-                                feature_runtime_version: feature_runtime_version(
-                                    &invocation.packet,
-                                    execution_pass_feature_id(pass),
-                                ),
-                                color_formats: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .and_then(FlowPassPipelineKey::render_pipeline_state)
-                                    .and_then(|state| state.fragment_output())
-                                    .map(|output| {
-                                        output
-                                            .color_targets()
-                                            .map(|target| target.format())
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
-                                depth_format: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .and_then(FlowPassPipelineKey::render_pipeline_state)
-                                    .and_then(|state| state.depth_stencil())
-                                    .map(|depth| depth.format()),
-                                sample_count: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .and_then(FlowPassPipelineKey::render_pipeline_state)
-                                    .map(|state| state.multisample().sample_count())
-                                    .unwrap_or(1),
-                                primitive_topology: evidence
-                                    .pipeline_key
-                                    .as_ref()
-                                    .and_then(FlowPassPipelineKey::render_pipeline_state)
-                                    .map(|state| state.primitive().topology()),
-                                material_binding,
-                                render_targets: pass_resource_truth.render_targets,
-                                sampled_textures: pass_resource_truth.sampled_textures,
-                                storage_textures: pass_resource_truth.storage_textures,
-                                depth_targets: pass_resource_truth.depth_targets,
-                                capture_points_available: pass_resource_truth
-                                    .capture_points_available,
-                            });
-                        }
+                        self.record_encoded_pass(
+                            frame_index,
+                            prepared_frame.surface.render_surface_id.raw(),
+                            invocation.flow,
+                            &invocation.packet,
+                            pass,
+                            runtime_resources,
+                            debug_control,
+                            if timestamp_active {
+                                gpu_timing_capability
+                            } else {
+                                RenderGpuTimingCapability::UnavailableThisFrame
+                            },
+                            pass_label,
+                            pass_kind,
+                            pass_encode_start,
+                            has_gpu_timestamp_writes,
+                            &evidence,
+                        );
                     }
                     if let Some(frame) = invocation.timing_frame.take()
                         && timestamp_active
@@ -647,6 +859,116 @@ impl Renderer {
         self.flow_runtime_cache = flow_runtime_cache;
         execution_result?;
         Ok((pending_gpu_pass_timing_readbacks, pending_capture_readbacks))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_encoded_pass(
+        &mut self,
+        frame_index: u64,
+        render_surface_id: u64,
+        flow: &CompiledRenderFlowPlan,
+        packet: &RendererPreparedPacket,
+        pass: &CompiledPassExecutionPlan,
+        runtime_resources: &FlowRuntimeResources,
+        debug_control: &RenderDebugControlResource,
+        timing_capability: RenderGpuTimingCapability,
+        pass_label: String,
+        pass_kind: String,
+        pass_encode_start: Instant,
+        has_gpu_timestamp_writes: bool,
+        evidence: &EncodedPassEvidence,
+    ) {
+        self.last_pass_timings.push(PassTimingSample {
+            flow_id: flow.flow_id.to_string(),
+            pass_id: pass_label.clone(),
+            pass_kind: pass_kind.clone(),
+            millis: pass_encode_start.elapsed().as_secs_f32() * 1000.0,
+            dispatch_workgroups: evidence.dispatch_workgroups,
+        });
+        if !has_gpu_timestamp_writes {
+            self.last_gpu_pass_timing_evidence
+                .push(gpu_timing_diagnostic_evidence_for_pass(
+                    timing_capability,
+                    frame_index,
+                    render_surface_id,
+                    flow.flow_id.to_string(),
+                    pass_label.clone(),
+                    pass_kind.clone(),
+                ));
+        }
+        if !debug_control.provenance_enabled {
+            return;
+        }
+
+        let pass_resource_truth =
+            collect_pass_resource_truth(flow.flow_id, pass, runtime_resources);
+        let material_binding = collect_pass_material_binding_evidence(packet, pass);
+        self.last_pass_provenance.push(RenderPassProvenanceRecord {
+            frame_index,
+            flow_id: flow.flow_id.to_string(),
+            pass_id: pass_label.clone(),
+            pass_label,
+            pass_kind: execution_flow_pass_kind(pass),
+            authoring_index: execution_pass_authoring_index(pass),
+            feature_id: execution_pass_feature_id(pass).map(|id| id.to_string()),
+            shader_id: evidence.shader_id.clone(),
+            shader_revision: evidence.shader_revision,
+            fallback_used: evidence.fallback_used,
+            pipeline_stats_key: evidence
+                .pipeline_key
+                .as_ref()
+                .map(FlowPassPipelineKey::stats_key)
+                .unwrap_or_default(),
+            bind_group_layout_signature_hash: evidence
+                .pipeline_key
+                .as_ref()
+                .map(FlowPassPipelineKey::primary_bind_group_layout_diagnostic_hash)
+                .unwrap_or_default(),
+            material_specialization_fragment_hash: material_specialization_fragment_hash(
+                packet,
+                execution_pass_feature_id(pass),
+            ),
+            view_signature_hash: hash_view_signature(packet.view_id.as_str(), packet.surface_size),
+            feature_runtime_version: feature_runtime_version(
+                packet,
+                execution_pass_feature_id(pass),
+            ),
+            color_formats: evidence
+                .pipeline_key
+                .as_ref()
+                .and_then(FlowPassPipelineKey::render_pipeline_state)
+                .and_then(|state| state.fragment_output())
+                .map(|output| {
+                    output
+                        .color_targets()
+                        .map(|target| target.format())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            depth_format: evidence
+                .pipeline_key
+                .as_ref()
+                .and_then(FlowPassPipelineKey::render_pipeline_state)
+                .and_then(|state| state.depth_stencil())
+                .map(|depth| depth.format()),
+            sample_count: evidence
+                .pipeline_key
+                .as_ref()
+                .and_then(FlowPassPipelineKey::render_pipeline_state)
+                .map(|state| state.multisample().sample_count())
+                .unwrap_or(1),
+            primitive_topology: evidence
+                .pipeline_key
+                .as_ref()
+                .and_then(FlowPassPipelineKey::render_pipeline_state)
+                .map(|state| state.primitive().topology()),
+            material_binding,
+            render_targets: pass_resource_truth.render_targets,
+            sampled_textures: pass_resource_truth.sampled_textures,
+            storage_textures: pass_resource_truth.storage_textures,
+            depth_targets: pass_resource_truth.depth_targets,
+            capture_points_available: pass_resource_truth.capture_points_available,
+        });
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -694,12 +1016,22 @@ impl Renderer {
     fn realize_projected_uniform_uploads(
         &self,
         context: &GpuContext,
+        flow: &CompiledRenderFlowPlan,
         invocation_id: &str,
         flow_inputs: &PreparedFlowInputs,
         runtime_resources: &mut FlowRuntimeResources,
-    ) -> Result<Vec<RendererPendingBufferUpload>> {
+        maximum_occurrence: &mut u64,
+    ) -> Result<Vec<RealizedLogicalBufferUpload>> {
         let mut uploads = Vec::new();
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
+            if flow
+                .execution
+                .fixed_step_regions
+                .iter()
+                .any(|region| region.iteration_uniform == *buffer_id)
+            {
+                continue;
+            }
             let prepared = runtime_resources.prepare_uniform_upload(*buffer_id, bytes)?;
             let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
                 context,
@@ -716,15 +1048,19 @@ impl Renderer {
                     runtime_buffer.size
                 );
             }
-            uploads.push(RendererPendingBufferUpload {
-                buffer: runtime_buffer.realized.clone(),
-                bytes: prepared.as_bytes().to_vec(),
+            let operation = project_buffer_upload(&runtime_buffer.handle, prepared.as_bytes())?;
+            uploads.push(RealizedLogicalBufferUpload {
+                occurrence: allocate_aux_occurrence(maximum_occurrence)?,
+                operation,
+                realized: runtime_buffer.realized.clone(),
+                control_order_after: Vec::new(),
             });
         }
 
         Ok(uploads)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn realize_fixed_step_iteration_upload(
         &self,
         context: &GpuContext,
@@ -732,7 +1068,9 @@ impl Renderer {
         runtime_resources: &mut FlowRuntimeResources,
         region: &CompiledFixedStepRegion,
         uniform: RenderFixedStepIterationUniform,
-    ) -> Result<RendererPendingBufferUpload> {
+        maximum_occurrence: &mut u64,
+        control_order_after: Vec<RenderGpuWorkOccurrenceId>,
+    ) -> Result<RealizedLogicalBufferUpload> {
         let bytes = uniform.to_uniform_bytes();
         let prepared =
             runtime_resources.prepare_uniform_upload(region.iteration_uniform, &bytes)?;
@@ -751,9 +1089,12 @@ impl Renderer {
                 runtime_buffer.size
             );
         }
-        Ok(RendererPendingBufferUpload {
-            buffer: runtime_buffer.realized.clone(),
-            bytes: prepared.as_bytes().to_vec(),
+        let operation = project_buffer_upload(&runtime_buffer.handle, prepared.as_bytes())?;
+        Ok(RealizedLogicalBufferUpload {
+            occurrence: allocate_aux_occurrence(maximum_occurrence)?,
+            operation,
+            realized: runtime_buffer.realized.clone(),
+            control_order_after,
         })
     }
 
@@ -1172,177 +1513,35 @@ impl Renderer {
     }
 }
 
-#[derive(Clone, Copy)]
-struct ScheduledFixedStepIteration<'a> {
-    region: &'a CompiledFixedStepRegion,
-    schedule: RenderFixedStepIterationUniform,
-    substep_index: u32,
-}
-
-#[derive(Clone, Copy)]
-struct ScheduledCompiledPass<'a> {
-    pass: &'a CompiledPassExecutionPlan,
-    fixed_step_iteration: Option<ScheduledFixedStepIteration<'a>>,
-    timestamp_indices: Option<GpuPassTimestampIndices>,
-}
-
-fn invocation_prepared_work(
-    inputs: &PreparedFlowInputs,
-    capability: RenderGpuTimingCapability,
-    flow_id: crate::plugins::render::RenderFlowId,
-) -> Result<&PreparedRenderWorkPlan> {
-    let work = match capability {
-        RenderGpuTimingCapability::Supported => inputs.timestamped_work.as_ref(),
-        RenderGpuTimingCapability::Unsupported
-        | RenderGpuTimingCapability::UnavailableThisFrame
-        | RenderGpuTimingCapability::ReadbackPending => inputs.prepared_work.as_ref(),
-    };
-    work.ok_or_else(|| {
-        anyhow::anyhow!(
-            "flow '{}' is missing its transactionally prepared {} G3 work plan",
-            flow_id,
-            if capability == RenderGpuTimingCapability::Supported {
-                "timestamped"
-            } else {
-                "base"
-            }
-        )
-    })
-}
-
-fn prepared_timestamp_indices(
-    work: &PreparedRenderWorkPlan,
-    node_id: GpuPreparedWorkNodeId,
-) -> Option<GpuPassTimestampIndices> {
-    let prepared = work
-        .graph()
-        .nodes()
-        .iter()
-        .find(|prepared| prepared.id() == node_id)?;
-    let timestamp_writes = match prepared.node().operation() {
-        GpuWorkOperation::Compute(operation) => operation.timestamp_writes(),
-        GpuWorkOperation::Render(operation) => operation.timestamp_writes(),
-        _ => return None,
-    };
-    timestamp_writes.iter().find_map(|access| {
-        if access.kind() != GpuQueryAccessKind::WriteTimestamp || access.range().count() != 2 {
-            return None;
-        }
-        Some(GpuPassTimestampIndices {
-            begin: access.range().first(),
-            end: access.range().first().checked_add(1)?,
+fn schedule_invocation_passes(
+    invocation: &RealizedFlowInvocation<'_>,
+) -> Result<Vec<ScheduledInvocationWork>> {
+    let work = invocation.canonical_work.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("canonical invocation scheduling requires a prepared G3 work plan")
+    })?;
+    work.ordered_payloads()?
+        .into_iter()
+        .map(|(node_id, payload)| {
+            let operation = work
+                .graph()
+                .nodes()
+                .iter()
+                .find(|node| node.id() == node_id)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "prepared G3 node '{:?}' is missing from its own canonical work graph",
+                        node_id
+                    )
+                })?
+                .node()
+                .operation()
+                .clone();
+            Ok(ScheduledInvocationWork {
+                operation,
+                payload: payload.clone(),
+            })
         })
-    })
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PreparedTimingIntent {
-    query_set: GpuQuerySetHandle,
-    resolve_buffer: GpuBufferHandle,
-    readback_buffer: GpuBufferHandle,
-    query_capacity: u32,
-}
-
-fn prepared_timing_intent(work: &PreparedRenderWorkPlan) -> Result<Option<PreparedTimingIntent>> {
-    let mut timing_sequence = Vec::<&'static str>::new();
-    let mut resolve_intent = None::<(GpuQuerySetHandle, GpuBufferHandle, GpuBufferRange, u32)>;
-    let mut readback_buffer = None::<GpuBufferHandle>;
-    for (node_id, payload) in work.ordered_payloads()? {
-        let prepared = work
-            .graph()
-            .nodes()
-            .iter()
-            .find(|prepared| prepared.id() == node_id)
-            .ok_or_else(|| anyhow::anyhow!("prepared timing node '{}' is missing", node_id))?;
-        match payload {
-            RenderGpuWorkPayload::Pass(_) => {}
-            RenderGpuWorkPayload::TimingResolve => {
-                timing_sequence.push("resolve");
-                let GpuWorkOperation::Resolve(operation) = prepared.node().operation() else {
-                    anyhow::bail!(
-                        "prepared timing-resolve payload '{}' is not typed resolve work",
-                        node_id
-                    );
-                };
-                if operation.source_range().first() != 0 || operation.destination_offset() != 0 {
-                    anyhow::bail!(
-                        "prepared timing resolve '{}' must cover queries and destination from zero",
-                        node_id
-                    );
-                }
-                resolve_intent = Some((
-                    operation.source().clone(),
-                    operation.destination().clone(),
-                    operation.destination_range(),
-                    operation.source_range().count(),
-                ));
-            }
-            RenderGpuWorkPayload::TimingReadbackCopy => {
-                timing_sequence.push("readback_copy");
-                let Some((_, resolve_buffer, resolve_range, _)) = &resolve_intent else {
-                    anyhow::bail!("prepared timing readback copy precedes its typed query resolve");
-                };
-                let GpuWorkOperation::Copy(GpuCopyOperation::BufferToBuffer {
-                    source,
-                    destination,
-                }) = prepared.node().operation()
-                else {
-                    anyhow::bail!(
-                        "prepared timing-readback payload '{}' is not typed buffer copy work",
-                        node_id
-                    );
-                };
-                if source.buffer() != resolve_buffer
-                    || source.range() != *resolve_range
-                    || destination.range().offset() != 0
-                    || destination.range().size() != resolve_range.size()
-                {
-                    anyhow::bail!(
-                        "prepared timing readback '{}' disagrees with typed resolve destination",
-                        node_id
-                    );
-                }
-                readback_buffer = Some(destination.buffer().clone());
-            }
-        }
-    }
-    match timing_sequence.as_slice() {
-        [] => return Ok(None),
-        ["resolve", "readback_copy"] => {}
-        _ => anyhow::bail!(
-            "prepared timestamp work must order query resolve before readback copy; got {:?}",
-            timing_sequence
-        ),
-    }
-    let Some((query_set, resolve_buffer, _, query_capacity)) = resolve_intent else {
-        anyhow::bail!("prepared timestamp work has no typed query resolve intent");
-    };
-    let Some(readback_buffer) = readback_buffer else {
-        anyhow::bail!("prepared timestamp work has no typed readback destination");
-    };
-    for prepared in work.graph().nodes() {
-        let timestamp_writes = match prepared.node().operation() {
-            GpuWorkOperation::Compute(operation) => operation.timestamp_writes(),
-            GpuWorkOperation::Render(operation) => operation.timestamp_writes(),
-            _ => continue,
-        };
-        for access in timestamp_writes {
-            if access.kind() == GpuQueryAccessKind::WriteTimestamp
-                && (access.query_set() != &query_set || access.range().end() > query_capacity)
-            {
-                anyhow::bail!(
-                    "prepared timestamp write in node '{}' falls outside typed resolve intent",
-                    prepared.id()
-                );
-            }
-        }
-    }
-    Ok(Some(PreparedTimingIntent {
-        query_set,
-        resolve_buffer,
-        readback_buffer,
-        query_capacity,
-    }))
+        .collect()
 }
 
 fn encode_prepared_timing_tail(
@@ -1350,111 +1549,12 @@ fn encode_prepared_timing_tail(
     context: &GpuContext,
     encoder: &mut CommandEncoder,
 ) -> Result<Option<PendingGpuPassTimingReadback>> {
-    if !frame.encode_resolve(context, encoder)? {
+    let resolve_operation = frame.resolve_operation().clone();
+    let readback_copy_operation = frame.readback_copy_operation().clone();
+    if !frame.encode_resolve(context, encoder, &resolve_operation)? {
         return Ok(None);
     }
-    frame.encode_readback_copy(context, encoder)
-}
-
-fn schedule_invocation_passes<'a>(
-    flow: &'a CompiledRenderFlowPlan,
-    flow_inputs: &'a PreparedFlowInputs,
-    prepared_work: &'a PreparedRenderWorkPlan,
-) -> Result<Vec<ScheduledCompiledPass<'a>>> {
-    let ordered_passes = prepared_work
-        .ordered_payloads()?
-        .into_iter()
-        .filter_map(|(node_id, payload)| match payload {
-            RenderGpuWorkPayload::Pass(pass) => Some((node_id, pass)),
-            RenderGpuWorkPayload::TimingResolve | RenderGpuWorkPayload::TimingReadbackCopy => None,
-        })
-        .collect::<Vec<_>>();
-    let mut scheduled = Vec::<ScheduledCompiledPass<'a>>::new();
-    let mut consumed_region_passes = BTreeSet::<RenderPassId>::new();
-
-    for (node_id, pass) in ordered_passes.iter().copied() {
-        let pass_id = execution_pass_id(pass);
-        if consumed_region_passes.contains(&pass_id) {
-            continue;
-        }
-
-        if let Some(region) = fixed_step_region_starting_at(flow, pass_id) {
-            let schedule = fixed_step_schedule_for_region(region, flow_inputs)?;
-            for substep_index in 0..schedule.submitted_substeps {
-                for region_pass_id in &region.pass_ids {
-                    let (region_node_id, region_pass) = ordered_passes
-                        .iter()
-                        .copied()
-                        .find(|(_, pass)| execution_pass_id(pass) == *region_pass_id)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "fixed-step region '{}' references missing compiled pass '{}'",
-                                region.region_label,
-                                region_pass_id
-                            )
-                        })?;
-                    scheduled.push(ScheduledCompiledPass {
-                        pass: region_pass,
-                        fixed_step_iteration: Some(ScheduledFixedStepIteration {
-                            region,
-                            schedule,
-                            substep_index,
-                        }),
-                        timestamp_indices: prepared_timestamp_indices(
-                            prepared_work,
-                            region_node_id,
-                        ),
-                    });
-                }
-            }
-            consumed_region_passes.extend(region.pass_ids.iter().copied());
-        } else {
-            scheduled.push(ScheduledCompiledPass {
-                pass,
-                fixed_step_iteration: None,
-                timestamp_indices: prepared_timestamp_indices(prepared_work, node_id),
-            });
-        }
-    }
-
-    Ok(scheduled)
-}
-
-fn fixed_step_region_starting_at(
-    flow: &CompiledRenderFlowPlan,
-    pass_id: RenderPassId,
-) -> Option<&CompiledFixedStepRegion> {
-    flow.execution
-        .fixed_step_regions
-        .iter()
-        .find(|region| region.pass_ids.first().copied() == Some(pass_id))
-}
-
-fn fixed_step_schedule_for_region(
-    region: &CompiledFixedStepRegion,
-    flow_inputs: &PreparedFlowInputs,
-) -> Result<RenderFixedStepIterationUniform> {
-    let bytes = flow_inputs
-        .projected_uniform_bytes
-        .get(&region.iteration_uniform)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "fixed-step region '{}' is missing prepared iteration uniform '{}'",
-                region.region_label,
-                region.iteration_uniform
-            )
-        })?;
-    let mut schedule =
-        RenderFixedStepIterationUniform::from_uniform_bytes(bytes).ok_or_else(|| {
-            anyhow::anyhow!(
-                "fixed-step region '{}' prepared iteration uniform '{}' has invalid byte shape",
-                region.region_label,
-                region.iteration_uniform
-            )
-        })?;
-    schedule.submitted_substeps = schedule.submitted_substeps.min(region.max_substeps);
-    schedule.max_substeps = region.max_substeps;
-    Ok(schedule)
+    frame.encode_readback_copy(context, encoder, &readback_copy_operation)
 }
 
 fn gpu_timing_diagnostic_evidence_for_pass(
@@ -1489,200 +1589,4 @@ fn gpu_timing_diagnostic_evidence_for_pass(
         pass_kind,
         diagnostic,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::plugins::gpu::GpuBindingKey;
-    use crate::plugins::render::{
-        GpuStorage, GpuUniform, RenderFlow, RenderGpuWorkInstrumentation, compile_flow_plan,
-        prepare_render_gpu_work,
-    };
-
-    #[derive(Debug, Clone, Copy, GpuStorage)]
-    struct TestCell {
-        value: u32,
-    }
-
-    #[derive(Debug, Clone, Copy, GpuUniform)]
-    struct TestParams {
-        value: u32,
-    }
-
-    #[derive(Debug, Clone, ecs::Resource)]
-    struct TestState;
-
-    impl TestState {
-        fn params(&self) -> TestParams {
-            TestParams { value: 1 }
-        }
-
-        fn dispatch(&self) -> [u32; 3] {
-            [1, 1, 1]
-        }
-    }
-
-    fn fixed_step_test_plan() -> CompiledRenderFlowPlan {
-        let (flow, cells) = RenderFlow::new("fixed.step.schedule")
-            .with_state::<TestState>()
-            .storage_array::<TestCell>("cells", 4)
-            .expect("render flow authoring should succeed");
-        let uniform_binding =
-            GpuBindingKey::try_new(0, 0).expect("fixed-step test uniform binding should be valid");
-        let storage_binding =
-            GpuBindingKey::try_new(0, 1).expect("fixed-step test storage binding should be valid");
-        let iteration_binding = GpuBindingKey::try_new(0, 2)
-            .expect("fixed-step test iteration-uniform binding should be valid");
-        let flow = flow
-            .compute_pass("step.a")
-            .uniform_from_state(uniform_binding, TestState::params)
-            .expect("render flow authoring should succeed")
-            .bind_storage(storage_binding, cells.clone())
-            .dispatch_from_state(TestState::dispatch)
-            .finish()
-            .compute_pass("step.b")
-            .uniform_from_state(uniform_binding, TestState::params)
-            .expect("render flow authoring should succeed")
-            .bind_storage(storage_binding, cells)
-            .dispatch_from_state(TestState::dispatch)
-            .finish()
-            .fixed_step_region(
-                "simulation",
-                4,
-                [("step.a", iteration_binding), ("step.b", iteration_binding)],
-            )
-            .expect("render flow authoring should succeed")
-            .validate()
-            .expect("fixed-step test flow should validate");
-        compile_flow_plan(&flow).expect("fixed-step test flow should compile")
-    }
-
-    fn inputs_for_substeps(
-        plan: &CompiledRenderFlowPlan,
-        submitted_substeps: u32,
-    ) -> PreparedFlowInputs {
-        let mut inputs = PreparedFlowInputs::default();
-        for pass in &plan.execution.passes {
-            if let CompiledPassExecutionPlan::Compute(pass) = pass {
-                inputs
-                    .projected_dispatch_workgroups
-                    .insert(pass.pass_id, [1, 1, 1]);
-                for uniform_id in &pass.bindings.uniform_order {
-                    inputs
-                        .projected_uniform_bytes
-                        .entry(*uniform_id)
-                        .or_insert_with(|| vec![0; 16]);
-                }
-            }
-        }
-        let region = plan
-            .execution
-            .fixed_step_regions
-            .first()
-            .expect("test plan should compile fixed-step region");
-        inputs.projected_uniform_bytes.insert(
-            region.iteration_uniform,
-            RenderFixedStepIterationUniform::new(
-                0,
-                submitted_substeps,
-                region.max_substeps,
-                0,
-                1.0 / 60.0,
-                0.0,
-            )
-            .to_uniform_bytes(),
-        );
-        inputs.prepared_work = plan.structural_work().cloned();
-        inputs
-    }
-
-    fn scheduled_pass_ids(
-        plan: &CompiledRenderFlowPlan,
-        submitted_substeps: u32,
-    ) -> Vec<RenderPassId> {
-        let inputs = inputs_for_substeps(plan, submitted_substeps);
-        let work = inputs
-            .prepared_work
-            .as_ref()
-            .expect("test inputs should retain structural G3 work");
-        schedule_invocation_passes(plan, &inputs, work)
-            .expect("fixed-step schedule should expand")
-            .into_iter()
-            .map(|scheduled| execution_pass_id(scheduled.pass))
-            .collect()
-    }
-
-    #[test]
-    fn fixed_step_scheduler_expands_zero_one_and_many_substeps() {
-        let plan = fixed_step_test_plan();
-        let region = &plan.execution.fixed_step_regions[0];
-
-        assert!(scheduled_pass_ids(&plan, 0).is_empty());
-        assert_eq!(scheduled_pass_ids(&plan, 1), region.pass_ids);
-
-        let many = scheduled_pass_ids(&plan, 3);
-        assert_eq!(many.len(), region.pass_ids.len() * 3);
-        assert_eq!(&many[0..2], region.pass_ids.as_slice());
-        assert_eq!(&many[2..4], region.pass_ids.as_slice());
-        assert_eq!(&many[4..6], region.pass_ids.as_slice());
-    }
-
-    #[test]
-    fn fixed_step_scheduler_clamps_to_region_max_substeps() {
-        let plan = fixed_step_test_plan();
-        let region = &plan.execution.fixed_step_regions[0];
-        let scheduled = scheduled_pass_ids(&plan, 99);
-
-        assert_eq!(
-            scheduled.len(),
-            region.pass_ids.len() * region.max_substeps as usize
-        );
-    }
-
-    #[test]
-    fn runtime_selects_instrumented_work_and_schedules_from_prepared_graph_order() {
-        let plan = fixed_step_test_plan();
-        let mut inputs = inputs_for_substeps(&plan, 1);
-        inputs.timestamped_work = Some(
-            prepare_render_gpu_work(
-                &plan,
-                &inputs.projected_dispatch_workgroups,
-                (64, 64),
-                RenderGpuWorkInstrumentation::TimestampQueries,
-            )
-            .expect("timestamped fixed-step work should lower"),
-        );
-
-        let base = invocation_prepared_work(
-            &inputs,
-            RenderGpuTimingCapability::Unsupported,
-            plan.flow_id,
-        )
-        .expect("unsupported timing should select base work");
-        assert_eq!(
-            prepared_timing_intent(base).expect("base timing inspection should succeed"),
-            None
-        );
-
-        let timestamped =
-            invocation_prepared_work(&inputs, RenderGpuTimingCapability::Supported, plan.flow_id)
-                .expect("supported timing should select instrumented work");
-        assert_eq!(
-            prepared_timing_intent(timestamped)
-                .expect("timestamped timing inspection should succeed")
-                .expect("timestamped work should retain timing intent")
-                .query_capacity,
-            4
-        );
-        let expected = timestamped
-            .ordered_render_pass_ids()
-            .expect("prepared G3 order should map to render payloads");
-        let scheduled = schedule_invocation_passes(&plan, &inputs, timestamped)
-            .expect("runtime schedule should consume prepared G3 work")
-            .into_iter()
-            .map(|scheduled| execution_pass_id(scheduled.pass))
-            .collect::<Vec<_>>();
-        assert_eq!(scheduled, expected);
-    }
 }

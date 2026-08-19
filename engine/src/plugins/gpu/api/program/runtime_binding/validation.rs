@@ -165,15 +165,12 @@ fn validate_buffer(
         ));
     }
 
-    let effective_offset = binding
-        .offset()
-        .checked_add(binding.dynamic_offset().unwrap_or(0))
-        .ok_or_else(|| {
-            incompatible(
-                declaration.key().to_string(),
-                "reduce the buffer offsets so their sum does not overflow",
-            )
-        })?;
+    let effective_offset = binding.checked_effective_offset().ok_or_else(|| {
+        incompatible(
+            declaration.key().to_string(),
+            "reduce the buffer offsets so their sum does not overflow",
+        )
+    })?;
     let end = effective_offset
         .checked_add(binding.size().get())
         .ok_or_else(|| {

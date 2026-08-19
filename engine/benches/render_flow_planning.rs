@@ -30,9 +30,6 @@ use engine::plugins::render::inspect::{
     inspect_render_temporal_inputs, inspect_render_temporal_production_evidence,
     inspect_render_temporal_upscaling,
 };
-use engine::plugins::render::resource::{
-    build_transient_alias_assignments, build_transient_windows, find_aliasable_transients,
-};
 use engine::plugins::render::{
     BoundedUniformGrid2dBuildPlan, BoundedUniformGrid2dConfig, BoundedUniformGrid2dStage,
     DrawIndirectArgs, GpuPrimitiveExecutionPlan, GpuPrimitiveStep, GpuStorage, GpuUniform,
@@ -145,19 +142,11 @@ impl BenchState {
 
 fn run_validation_and_planning(flow: &RenderFlow) {
     let report = flow.validation_report().expect("flow should validate");
-    let compiled = compile_flow_plan(flow).expect("flow should compile through prepared G3 work");
-    let prepared = compiled
-        .structural_work()
-        .expect("compiled flow should retain prepared G3 work")
-        .graph();
-    let windows = build_transient_windows(prepared);
-    let alias_candidates = find_aliasable_transients(&windows);
-    let alias_assignments = build_transient_alias_assignments(&windows);
+    let compiled = compile_flow_plan(flow).expect("flow should compile through render planning");
     black_box(report.lexical_pass_ids.len());
-    black_box(prepared.topological_order().len());
-    black_box(windows.len());
-    black_box(alias_candidates.len());
-    black_box(alias_assignments.len());
+    black_box(compiled.render_passes.len());
+    black_box(compiled.execution.passes.len());
+    black_box(compiled.resources.resources.len());
 }
 
 fn prepared_inputs_for_flow(compiled: &CompiledRenderFlowPlan) -> PreparedFlowInputs {

@@ -1,13 +1,13 @@
 //! Fixed legacy-renderer capability lowering. These facts preserve the current
-//! Runenwerk contract; they do not query a backend. G4 deletes this adapter when
-//! backend admission constructs normalized capability facts directly.
+//! Runenwerk contract; they do not query a backend. G5 deletes this adapter when
+//! generic execution consumes admitted RunenGPU facts directly.
 
 use crate::plugins::gpu::{
     GpuCapabilities, GpuCapabilityFeature, GpuCapabilityRequirement, GpuLimits,
     GpuPreparedWorkGraph, GpuTextureFormat, GpuTextureFormatCapabilities,
 };
 use crate::plugins::render::graph::{
-    CompiledBindingEntry, CompiledPassExecutionPlan, CompiledRenderFlowPlan,
+    CompiledBindingEntry, CompiledDrawSource, CompiledPassExecutionPlan, CompiledRenderFlowPlan,
     RenderExecutionGraphDiagnostic, RenderExecutionGraphDiagnosticKind,
 };
 use crate::plugins::render::{
@@ -21,13 +21,25 @@ pub fn current_runtime_gpu_capabilities() -> GpuCapabilities {
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
-        GpuCapabilityFeature::IndirectDraw,
+        GpuCapabilityFeature::IndirectExecution,
         GpuCapabilityFeature::StorageTexture,
         GpuCapabilityFeature::DepthAttachment,
         GpuCapabilityFeature::Presentation,
     ]
     .into_iter();
-    let limits = GpuLimits::from_validated_adapter_facts(64 * 1024, 128 * 1024 * 1024, 1, 8, 16);
+    let limits = GpuLimits::from_validated_adapter_facts(
+        64 * 1024,
+        128 * 1024 * 1024,
+        1,
+        8,
+        16,
+        8192,
+        4,
+        24,
+        8,
+        4,
+        65_535,
+    );
     GpuCapabilities::from_normalized_facts(features, limits, current_format_facts())
 }
 
@@ -194,15 +206,67 @@ fn validate_execution_pass_capabilities(
     diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
 ) {
     match pass {
-        CompiledPassExecutionPlan::Compute(value) => validate_bind_group_limit(
-            flow,
-            value.pass_id,
-            value.bindings.bind_group.entries.len(),
-            capabilities,
-            diagnostics,
-        ),
+        CompiledPassExecutionPlan::Compute(value) => {
+            validate_required_feature(
+                flow,
+                value.pass_id,
+                GpuCapabilityFeature::Compute,
+                capabilities,
+                diagnostics,
+            );
+            validate_binding_features(
+                flow,
+                value.pass_id,
+                &value.bindings.bind_group.entries,
+                capabilities,
+                diagnostics,
+            );
+            validate_bind_group_limit(
+                flow,
+                value.pass_id,
+                value.bindings.bind_group.entries.len(),
+                capabilities,
+                diagnostics,
+            );
+        }
         CompiledPassExecutionPlan::Fullscreen(value)
         | CompiledPassExecutionPlan::Graphics(value) => {
+            validate_required_feature(
+                flow,
+                value.pass_id,
+                GpuCapabilityFeature::RenderPipeline,
+                capabilities,
+                diagnostics,
+            );
+            validate_binding_features(
+                flow,
+                value.pass_id,
+                &value.bindings.bind_group.entries,
+                capabilities,
+                diagnostics,
+            );
+            if value.targets.depth_output.is_some() {
+                validate_required_feature(
+                    flow,
+                    value.pass_id,
+                    GpuCapabilityFeature::DepthAttachment,
+                    capabilities,
+                    diagnostics,
+                );
+            }
+            if value
+                .draw
+                .as_ref()
+                .is_some_and(|draw| matches!(draw.source, CompiledDrawSource::Indirect { .. }))
+            {
+                validate_required_feature(
+                    flow,
+                    value.pass_id,
+                    GpuCapabilityFeature::IndirectExecution,
+                    capabilities,
+                    diagnostics,
+                );
+            }
             validate_bind_group_limit(
                 flow,
                 value.pass_id,
@@ -250,10 +314,73 @@ fn validate_execution_pass_capabilities(
                 );
             }
         }
-        CompiledPassExecutionPlan::Copy(_)
-        | CompiledPassExecutionPlan::Present(_)
-        | CompiledPassExecutionPlan::BuiltinUiComposite(_) => {}
+        CompiledPassExecutionPlan::Copy(value) => validate_required_feature(
+            flow,
+            value.pass_id,
+            GpuCapabilityFeature::Copy,
+            capabilities,
+            diagnostics,
+        ),
+        CompiledPassExecutionPlan::Present(value) => validate_required_feature(
+            flow,
+            value.pass_id,
+            GpuCapabilityFeature::Presentation,
+            capabilities,
+            diagnostics,
+        ),
+        CompiledPassExecutionPlan::BuiltinUiComposite(value) => validate_required_feature(
+            flow,
+            value.pass_id,
+            GpuCapabilityFeature::RenderPipeline,
+            capabilities,
+            diagnostics,
+        ),
     }
+}
+
+fn validate_binding_features(
+    flow: &CompiledRenderFlowPlan,
+    pass_id: crate::plugins::render::RenderPassId,
+    entries: &[CompiledBindingEntry],
+    capabilities: &GpuCapabilities,
+    diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
+) {
+    if entries
+        .iter()
+        .any(|entry| matches!(entry, CompiledBindingEntry::StorageTexture { .. }))
+    {
+        validate_required_feature(
+            flow,
+            pass_id,
+            GpuCapabilityFeature::StorageTexture,
+            capabilities,
+            diagnostics,
+        );
+    }
+}
+
+fn validate_required_feature(
+    flow: &CompiledRenderFlowPlan,
+    pass_id: crate::plugins::render::RenderPassId,
+    feature: GpuCapabilityFeature,
+    capabilities: &GpuCapabilities,
+    diagnostics: &mut Vec<RenderExecutionGraphDiagnostic>,
+) {
+    if capabilities.supports(feature) {
+        return;
+    }
+    diagnostics.push(
+        RenderExecutionGraphDiagnostic::error(
+            RenderExecutionGraphDiagnosticKind::BackendCapabilityMismatch,
+            format!(
+                "pass '{}' requires unavailable normalized GPU capability {feature:?}",
+                pass_id
+            ),
+        )
+        .with_flow(flow.flow_id, flow.flow_label.clone())
+        .with_pass(pass_id, pass_id.to_string())
+        .with_capability(format!("feature::{feature:?}")),
+    );
 }
 
 fn validate_bind_group_limit(

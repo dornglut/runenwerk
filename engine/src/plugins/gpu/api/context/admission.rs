@@ -229,8 +229,6 @@ pub(crate) fn evaluate_validated_candidate(
         ));
     }
 
-    // One evaluator owns Required/Preferred/Disabled strength semantics.  Headless
-    // candidates simply do not contain Presentation in their capability facts.
     let enabled_features = requested_enabled_features(descriptor, &adapter);
     let capability_admission = GpuCapabilityAdmission::evaluate(
         "GPU context candidate",
@@ -392,12 +390,18 @@ pub(crate) fn admitted_device_facts(
     ))
 }
 
-const ALL_LIMIT_KINDS: [GpuLimitKind; 5] = [
+const ALL_LIMIT_KINDS: [GpuLimitKind; 11] = [
     GpuLimitKind::MaxUniformBufferBindingSize,
     GpuLimitKind::MaxStorageBufferBindingSize,
     GpuLimitKind::MaxColorAttachments,
     GpuLimitKind::MaxVertexBuffers,
     GpuLimitKind::MaxBindingsPerGroup,
+    GpuLimitKind::MaxTextureDimension2d,
+    GpuLimitKind::MaxBindGroups,
+    GpuLimitKind::MaxBindGroupsPlusVertexBuffers,
+    GpuLimitKind::MaxDynamicUniformBuffersPerPipelineLayout,
+    GpuLimitKind::MaxDynamicStorageBuffersPerPipelineLayout,
+    GpuLimitKind::MaxComputeWorkgroupsPerDimension,
 ];
 
 const ALL_ALIGNMENT_KINDS: [GpuAlignmentKind; 5] = [
@@ -408,14 +412,26 @@ const ALL_ALIGNMENT_KINDS: [GpuAlignmentKind; 5] = [
     GpuAlignmentKind::QueryResolveDestination,
 ];
 
-pub(crate) const fn g4a_limit_baseline() -> GpuLimits {
-    GpuLimits::from_validated_adapter_facts(64 * 1024, 128 * 1024 * 1024, 1, 8, 16)
+pub(crate) const fn normalized_limit_baseline() -> GpuLimits {
+    GpuLimits::from_validated_adapter_facts(
+        64 * 1024,
+        128 * 1024 * 1024,
+        1,
+        8,
+        16,
+        8192,
+        4,
+        24,
+        8,
+        4,
+        65_535,
+    )
 }
 
 fn effective_workload_budget(
     descriptor: &GpuContextDescriptor,
 ) -> Result<GpuWorkloadBudget, GpuContextRequestError> {
-    let baseline = g4a_limit_baseline();
+    let baseline = normalized_limit_baseline();
     let value = |kind| {
         descriptor
             .limits
@@ -444,6 +460,12 @@ fn effective_workload_budget(
             u32_value(GpuLimitKind::MaxColorAttachments)?,
             u32_value(GpuLimitKind::MaxVertexBuffers)?,
             u32_value(GpuLimitKind::MaxBindingsPerGroup)?,
+            u32_value(GpuLimitKind::MaxTextureDimension2d)?,
+            u32_value(GpuLimitKind::MaxBindGroups)?,
+            u32_value(GpuLimitKind::MaxBindGroupsPlusVertexBuffers)?,
+            u32_value(GpuLimitKind::MaxDynamicUniformBuffersPerPipelineLayout)?,
+            u32_value(GpuLimitKind::MaxDynamicStorageBuffersPerPipelineLayout)?,
+            u32_value(GpuLimitKind::MaxComputeWorkgroupsPerDimension)?,
         ),
         descriptor.alignments.clone(),
     ))
@@ -456,6 +478,20 @@ pub(crate) const fn limit_value(limits: GpuLimits, kind: GpuLimitKind) -> u64 {
         GpuLimitKind::MaxColorAttachments => limits.max_color_attachments() as u64,
         GpuLimitKind::MaxVertexBuffers => limits.max_vertex_buffers() as u64,
         GpuLimitKind::MaxBindingsPerGroup => limits.max_bindings_per_group() as u64,
+        GpuLimitKind::MaxTextureDimension2d => limits.max_texture_dimension_2d() as u64,
+        GpuLimitKind::MaxBindGroups => limits.max_bind_groups() as u64,
+        GpuLimitKind::MaxBindGroupsPlusVertexBuffers => {
+            limits.max_bind_groups_plus_vertex_buffers() as u64
+        }
+        GpuLimitKind::MaxDynamicUniformBuffersPerPipelineLayout => {
+            limits.max_dynamic_uniform_buffers_per_pipeline_layout() as u64
+        }
+        GpuLimitKind::MaxDynamicStorageBuffersPerPipelineLayout => {
+            limits.max_dynamic_storage_buffers_per_pipeline_layout() as u64
+        }
+        GpuLimitKind::MaxComputeWorkgroupsPerDimension => {
+            limits.max_compute_workgroups_per_dimension() as u64
+        }
     }
 }
 
@@ -521,7 +557,7 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
         feature,
         GpuCapabilityFeature::TimestampQuery
             | GpuCapabilityFeature::StorageTexture
-            | GpuCapabilityFeature::IndirectDraw
+            | GpuCapabilityFeature::IndirectExecution
             | GpuCapabilityFeature::TextureBindingArray
             | GpuCapabilityFeature::BufferBindingArray
             | GpuCapabilityFeature::StorageResourceBindingArray
@@ -554,7 +590,20 @@ mod tests {
     };
 
     fn limits() -> GpuLimits {
-        GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 4, 16, 64).unwrap()
+        GpuLimits::new(
+            64 * 1024,
+            128 * 1024 * 1024,
+            4,
+            16,
+            64,
+            8192,
+            4,
+            24,
+            8,
+            4,
+            65_535,
+        )
+        .unwrap()
     }
 
     fn alignments() -> GpuAlignmentFacts {
@@ -677,7 +726,20 @@ mod tests {
         );
         assert_eq!(candidate.workload_budget().limits().max_vertex_buffers(), 4);
         let actual = GpuDeviceLimits::new(
-            GpuLimits::new(128 * 1024, 256 * 1024 * 1024, 4, 8, 32).unwrap(),
+            GpuLimits::new(
+                128 * 1024,
+                256 * 1024 * 1024,
+                4,
+                8,
+                32,
+                8192,
+                4,
+                24,
+                8,
+                4,
+                65_535,
+            )
+            .unwrap(),
             alignments(),
         );
         let facts = admitted_device_facts(&candidate, actual, Vec::new()).unwrap();

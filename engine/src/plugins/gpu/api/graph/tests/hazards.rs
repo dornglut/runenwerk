@@ -209,16 +209,16 @@ fn disjoint_query_ranges_remain_independent() {
                 .unwrap(),
         )
         .unwrap();
-    let operation = |range| {
+    let operation = |beginning_of_pass, end_of_pass| {
         GpuWorkOperation::Render(
             GpuRenderOperation::new(
                 [],
                 None,
                 [],
-                [
-                    GpuQueryAccess::new(&queries, range, GpuQueryAccessKind::WriteTimestamp)
+                Some(
+                    GpuTimestampWrites::new(&queries, Some(beginning_of_pass), Some(end_of_pass))
                         .unwrap(),
-                ],
+                ),
             )
             .unwrap(),
         )
@@ -227,17 +227,13 @@ fn disjoint_query_ranges_remain_independent() {
     fragment
         .declare_resource(GpuResourceRef::QuerySet(queries.clone()))
         .unwrap();
-    for (name, range) in [
-        ("first queries", GpuQueryRange::new(&queries, 0, 2).unwrap()),
-        (
-            "second queries",
-            GpuQueryRange::new(&queries, 2, 2).unwrap(),
-        ),
-    ] {
+    for (name, beginning_of_pass, end_of_pass) in
+        [("first queries", 0, 1), ("second queries", 2, 3)]
+    {
         fragment
             .add_node(
                 label(name),
-                operation(range),
+                operation(beginning_of_pass, end_of_pass),
                 [],
                 GpuCapabilityRequirements::new(),
                 GpuExecutionPreference::GraphicsRequired,
@@ -270,7 +266,7 @@ fn partially_overlapping_query_ranges_retain_the_exact_intersection() {
                 GpuResourceRef::QuerySet(queries.clone()),
                 GpuInitialCoverage::query_ranges(
                     &queries,
-                    [GpuQueryRange::new(&queries, 6, 2).unwrap()],
+                    [GpuQueryRange::new(&queries, 5, 3).unwrap()],
                 )
                 .unwrap(),
                 provenance("partial query input"),
@@ -278,19 +274,15 @@ fn partially_overlapping_query_ranges_retain_the_exact_intersection() {
             .unwrap(),
         )
         .unwrap();
+    let GpuWorkOperation::Compute(compute) = compute_operation() else {
+        panic!("test fixture must create compute work");
+    };
+    let compute =
+        compute.with_timestamp_writes(GpuTimestampWrites::new(&queries, Some(4), None).unwrap());
     fragment
         .add_node(
             label("write queries"),
-            GpuWorkOperation::Compute(
-                GpuComputeOperation::new(GpuDispatchSize::new(1, 1, 1).unwrap())
-                    .with_timestamp_writes([GpuQueryAccess::new(
-                        &queries,
-                        GpuQueryRange::new(&queries, 0, 6).unwrap(),
-                        GpuQueryAccessKind::WriteTimestamp,
-                    )
-                    .unwrap()])
-                    .unwrap(),
-            ),
+            GpuWorkOperation::Compute(compute),
             [],
             GpuCapabilityRequirements::new(),
             GpuExecutionPreference::ComputePreferred,
@@ -316,7 +308,7 @@ fn partially_overlapping_query_ranges_retain_the_exact_intersection() {
         dependency_reasons(&graph, 1, 2),
         [GpuDependencyReason::ReadAfterWrite {
             resource: queries.diagnostic_identity(),
-            region: GpuDependencyRegion::Query(GpuQueryRange::new(&queries, 4, 2).unwrap()),
+            region: GpuDependencyRegion::Query(GpuQueryRange::new(&queries, 4, 1).unwrap()),
         }]
     );
 }

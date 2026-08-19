@@ -49,28 +49,8 @@ pub struct RenderExecutionGraphPlanInspection {
     pub flow_label: String,
     pub pass_count: usize,
     pub resource_count: usize,
-    pub prepared_node_count: usize,
-    pub prepared_topological_order: Vec<String>,
-    pub prepared_dependencies: Vec<RenderGpuWorkDependencyInspection>,
-    pub prepared_initialization: Vec<RenderGpuResourceInitializationInspection>,
-    pub prepared_requirements: Vec<String>,
     pub compiler_diagnostics: Vec<RenderExecutionGraphDiagnosticInspection>,
     pub backend_capabilities: GpuCapabilities,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderGpuWorkDependencyInspection {
-    pub before: String,
-    pub after: String,
-    pub reasons: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderGpuResourceInitializationInspection {
-    pub resource_id: String,
-    pub resource_label: String,
-    pub initial_coverage: Option<String>,
-    pub final_coverage: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,71 +86,11 @@ pub struct RenderExecutionGraphDiagnosticInspection {
 pub fn inspect_compiled_render_flow_plan(
     plan: &CompiledRenderFlowPlan,
 ) -> RenderExecutionGraphPlanInspection {
-    let graph = plan.structural_work().map(|work| work.graph());
     RenderExecutionGraphPlanInspection {
         flow_id: plan.flow_id.to_string(),
         flow_label: plan.flow_label.clone(),
         pass_count: plan.render_passes.len(),
         resource_count: plan.resources.resources.len(),
-        prepared_node_count: graph.map_or(0, |graph| graph.nodes().len()),
-        prepared_topological_order: graph
-            .map(|graph| {
-                graph
-                    .topological_order()
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect()
-            })
-            .unwrap_or_default(),
-        prepared_dependencies: graph
-            .map(|graph| {
-                graph
-                    .dependencies()
-                    .iter()
-                    .map(|dependency| RenderGpuWorkDependencyInspection {
-                        before: dependency.before().to_string(),
-                        after: dependency.after().to_string(),
-                        reasons: dependency
-                            .reasons()
-                            .iter()
-                            .map(|reason| format!("{reason:?}"))
-                            .collect(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        prepared_initialization: graph
-            .map(|graph| {
-                graph
-                    .initialization()
-                    .iter()
-                    .map(|initialization| RenderGpuResourceInitializationInspection {
-                        resource_id: initialization.resource().diagnostic_identity().to_string(),
-                        resource_label: initialization
-                            .resource()
-                            .common()
-                            .label()
-                            .as_str()
-                            .to_string(),
-                        initial_coverage: initialization
-                            .initial()
-                            .map(|coverage| format!("{:?}", coverage.kind())),
-                        final_coverage: initialization
-                            .final_coverage()
-                            .map(|coverage| format!("{:?}", coverage.kind())),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        prepared_requirements: graph
-            .map(|graph| {
-                graph
-                    .requirements()
-                    .iter()
-                    .map(|requirement| format!("{requirement:?}"))
-                    .collect()
-            })
-            .unwrap_or_default(),
         compiler_diagnostics: plan
             .compiler_diagnostics
             .iter()

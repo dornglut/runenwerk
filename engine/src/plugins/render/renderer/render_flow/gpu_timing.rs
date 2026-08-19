@@ -1,7 +1,10 @@
+use super::logical_operations::{ProjectedTimingTail, project_timing_tail};
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderReadbackBufferTerminal, CurrentRenderTimestampResourcesTerminal, GpuBufferHandle,
-    GpuContext, GpuQuerySetHandle, GpuRealizedBuffer, GpuRealizedQuerySet,
+    CurrentRenderBufferCopyTerminal, CurrentRenderReadbackBufferTerminal,
+    CurrentRenderTimestampResourcesTerminal, GpuBufferHandle, GpuContext, GpuCopyOperation,
+    GpuQueryRange, GpuQueryResolveOperation, GpuQuerySetHandle, GpuRealizedBuffer,
+    GpuRealizedQuerySet,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,15 +31,13 @@ struct GpuPassTimingEntry {
 
 #[derive(Debug)]
 pub(in crate::plugins::render::renderer) struct GpuPassTimingFrame {
-    _query_set_handle: GpuQuerySetHandle,
+    timing_tail: ProjectedTimingTail,
     query_set: GpuRealizedQuerySet,
-    _resolve_buffer_handle: GpuBufferHandle,
     resolve_buffer: GpuRealizedBuffer,
     readback_buffer_handle: GpuBufferHandle,
     readback_buffer: GpuRealizedBuffer,
     query_capacity: u32,
     query_count: u32,
-    readback_size: BufferAddress,
     timestamp_period_ns: f32,
     entries: Vec<GpuPassTimingEntry>,
     resolve_encoded: bool,
@@ -49,9 +50,11 @@ impl GpuPassTimingFrame {
         resolve_buffer_handle: &GpuBufferHandle,
         readback_buffer_handle: &GpuBufferHandle,
         query_capacity: u32,
-    ) -> Result<Option<Self>> {
+    ) -> Result<Self> {
         if query_capacity == 0 {
-            return Ok(None);
+            anyhow::bail!(
+                "physical GPU timing frame requires nonzero query capacity after logical timing admission"
+            );
         }
         let readback_size = u64::from(query_capacity) * u64::from(QUERY_SIZE);
         if query_set_handle.descriptor().count() != query_capacity
@@ -62,23 +65,35 @@ impl GpuPassTimingFrame {
                 "prepared timing handles do not cover the declared query capacity {query_capacity}"
             );
         }
+        let timing_tail = project_timing_tail(
+            query_set_handle,
+            GpuQueryRange::new(query_set_handle, 0, query_capacity)?,
+            resolve_buffer_handle,
+            readback_buffer_handle,
+        )?;
         let query_set = context.realize_query_set(query_set_handle)?;
         let resolve_buffer = context.realize_buffer(resolve_buffer_handle)?;
         let readback_buffer = context.realize_buffer(readback_buffer_handle)?;
-        Ok(Some(Self {
-            _query_set_handle: query_set_handle.clone(),
+        Ok(Self {
+            timing_tail,
             query_set,
-            _resolve_buffer_handle: resolve_buffer_handle.clone(),
             resolve_buffer,
             readback_buffer_handle: readback_buffer_handle.clone(),
             readback_buffer,
             query_capacity,
             query_count: 0,
-            readback_size,
             timestamp_period_ns: 0.0,
             entries: Vec::new(),
             resolve_encoded: false,
-        }))
+        })
+    }
+
+    pub(super) fn resolve_operation(&self) -> &GpuQueryResolveOperation {
+        self.timing_tail.resolve()
+    }
+
+    pub(super) fn readback_copy_operation(&self) -> &GpuCopyOperation {
+        self.timing_tail.readback_copy()
     }
 
     /// Timestamp-period observation is a G5 queue operation, so it is populated only after the
@@ -127,9 +142,22 @@ impl GpuPassTimingFrame {
         &mut self,
         context: &GpuContext,
         encoder: &mut CommandEncoder,
+        operation: &GpuQueryResolveOperation,
     ) -> Result<bool> {
         if self.query_count == 0 {
             return Ok(false);
+        }
+        if operation != self.timing_tail.resolve() {
+            anyhow::bail!(
+                "scheduled canonical timing resolve disagrees with the admitted timing tail"
+            );
+        }
+        if operation.source_range().count() != self.query_count {
+            anyhow::bail!(
+                "scheduled canonical timing resolve covers {} queries but {} timestamp queries were registered",
+                operation.source_range().count(),
+                self.query_count
+            );
         }
         context
             .current_render_execution_bridge()
@@ -139,7 +167,8 @@ impl GpuPassTimingFrame {
                 &self.readback_buffer,
                 ResolveTimingQueries {
                     encoder,
-                    query_count: self.query_count,
+                    query_range: operation.source_range(),
+                    destination_offset: operation.destination_offset(),
                 },
             )?;
         self.resolve_encoded = true;
@@ -147,26 +176,51 @@ impl GpuPassTimingFrame {
     }
 
     pub fn encode_readback_copy(
-        mut self,
+        self,
         context: &GpuContext,
         encoder: &mut CommandEncoder,
+        operation: &GpuCopyOperation,
     ) -> Result<Option<PendingGpuPassTimingReadback>> {
         if !self.resolve_encoded || self.query_count == 0 {
             return Ok(None);
         }
-        let readback_size = u64::from(self.query_count) * u64::from(QUERY_SIZE);
-        context
-            .current_render_execution_bridge()
-            .for_timestamp_resources(
-                &self.query_set,
-                &self.resolve_buffer,
-                &self.readback_buffer,
-                CopyTimingReadback {
-                    encoder,
-                    readback_size,
-                },
-            )?;
-        self.readback_size = readback_size;
+        if operation != self.timing_tail.readback_copy() {
+            anyhow::bail!(
+                "scheduled canonical timing readback copy disagrees with the admitted timing tail"
+            );
+        }
+        let GpuCopyOperation::BufferToBuffer {
+            source,
+            destination,
+        } = operation
+        else {
+            anyhow::bail!(
+                "renderer timing readback requires a canonical buffer-to-buffer copy operation"
+            );
+        };
+        if source.buffer().diagnostic_identity() != self.resolve_buffer.logical_identity()
+            || destination.buffer().diagnostic_identity() != self.readback_buffer.logical_identity()
+        {
+            anyhow::bail!(
+                "scheduled canonical timing readback resources disagree with their G4C1 realizations"
+            );
+        }
+        if destination.range().offset() != 0 {
+            anyhow::bail!(
+                "renderer timing readback decoder requires the canonical copy to begin at readback offset zero"
+            );
+        }
+        let readback_size = destination.range().size();
+        context.current_render_execution_bridge().for_buffer_copy(
+            &self.resolve_buffer,
+            &self.readback_buffer,
+            CopyTimingReadback {
+                encoder,
+                source_offset: source.range().offset(),
+                destination_offset: destination.range().offset(),
+                readback_size,
+            },
+        )?;
         Ok(Some(PendingGpuPassTimingReadback {
             _readback_buffer_handle: self.readback_buffer_handle,
             readback_buffer: self.readback_buffer,
@@ -179,7 +233,8 @@ impl GpuPassTimingFrame {
 
 struct ResolveTimingQueries<'a> {
     encoder: &'a mut CommandEncoder,
-    query_count: u32,
+    query_range: GpuQueryRange,
+    destination_offset: BufferAddress,
 }
 
 impl CurrentRenderTimestampResourcesTerminal for ResolveTimingQueries<'_> {
@@ -189,28 +244,31 @@ impl CurrentRenderTimestampResourcesTerminal for ResolveTimingQueries<'_> {
         resolve_buffer: &Buffer,
         _readback_buffer: &Buffer,
     ) {
-        self.encoder
-            .resolve_query_set(query_set, 0..self.query_count, resolve_buffer, 0);
+        let first = self.query_range.first();
+        let end = first + self.query_range.count();
+        self.encoder.resolve_query_set(
+            query_set,
+            first..end,
+            resolve_buffer,
+            self.destination_offset,
+        );
     }
 }
 
 struct CopyTimingReadback<'a> {
     encoder: &'a mut CommandEncoder,
+    source_offset: BufferAddress,
+    destination_offset: BufferAddress,
     readback_size: BufferAddress,
 }
 
-impl CurrentRenderTimestampResourcesTerminal for CopyTimingReadback<'_> {
-    fn use_timestamp_resources(
-        self,
-        _query_set: &QuerySet,
-        resolve_buffer: &Buffer,
-        readback_buffer: &Buffer,
-    ) {
+impl CurrentRenderBufferCopyTerminal for CopyTimingReadback<'_> {
+    fn copy_buffers(self, source: &Buffer, destination: &Buffer) {
         self.encoder.copy_buffer_to_buffer(
-            resolve_buffer,
-            0,
-            readback_buffer,
-            0,
+            source,
+            self.source_offset,
+            destination,
+            self.destination_offset,
             self.readback_size,
         );
     }
@@ -500,8 +558,9 @@ mod tests {
             .expect("readback handle");
         let mut frame =
             GpuPassTimingFrame::new(&context, &query_set, &resolve_buffer, &readback_buffer, 2)
-                .expect("timestamp resources should realize")
-                .expect("timestamp frame should allocate");
+                .expect("timestamp resources should realize");
+        let resolve_operation = frame.resolve_operation().clone();
+        let readback_copy_operation = frame.readback_copy_operation().clone();
         let evidence = {
             let loan = context.current_render_device_queue();
             assert!(frame.activate(loan.queue));
@@ -533,11 +592,11 @@ mod tests {
                 .expect("timestamp query should bridge");
             assert!(
                 frame
-                    .encode_resolve(&context, &mut encoder)
+                    .encode_resolve(&context, &mut encoder, &resolve_operation)
                     .expect("timestamp resolve should encode")
             );
             let pending = frame
-                .encode_readback_copy(&context, &mut encoder)
+                .encode_readback_copy(&context, &mut encoder, &readback_copy_operation)
                 .expect("timestamp readback copy should encode")
                 .expect("timestamp queries should resolve");
             loan.queue.submit(std::iter::once(encoder.finish()));

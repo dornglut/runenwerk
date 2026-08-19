@@ -795,16 +795,9 @@ impl Default for FeatureExecutionGate {
 
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedMaterialGpuResources {
-    bind_group: GpuRealizedBindGroup,
     _textures: Vec<RendererTextureResource>,
     _texture_views: Vec<RendererTextureViewResource>,
     _samplers: Vec<RendererSamplerResource>,
-}
-
-impl PreparedMaterialGpuResources {
-    pub(crate) fn bind_group(&self) -> &GpuRealizedBindGroup {
-        &self.bind_group
-    }
 }
 
 #[derive(Debug, Clone)]

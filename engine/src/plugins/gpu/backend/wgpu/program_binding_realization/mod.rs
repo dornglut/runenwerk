@@ -24,7 +24,7 @@ use crate::plugins::gpu::{
 use records::{
     BindGroupLayoutRealizationRecord as LayoutRecord, BindGroupRealizationRecord as GroupRecord,
     BindGroupResourceDependency, PipelineLayoutRealizationRecord as PipelineRecord,
-    ProgramRealizationRecord as ProgramRecord,
+    ProgramRealizationRecord as ProgramRecord, static_bind_group_values,
 };
 use registry::{
     BindGroupLayoutRequestKey, BindGroupRequestKey, InFlightOutcome, PipelineLayoutRequestKey,
@@ -434,6 +434,7 @@ impl GpuContext {
         values: Vec<GpuRuntimeBindingValue>,
     ) -> Result<Arc<GroupRecord>, GpuProgramBindingRealizationError> {
         let resolved = resolve_binding_resources(self, &validated)?;
+        let static_values = static_bind_group_values(values);
         let object = scoped_create(
             &self.backend.device,
             &self.backend.program_binding_realization,
@@ -452,7 +453,7 @@ impl GpuContext {
         Ok(Arc::new(GroupRecord {
             affinity: self.affinity(),
             layout: Arc::clone(&layout.record),
-            values,
+            static_values,
             object,
             resources: resolved.into_dependencies(),
         }))

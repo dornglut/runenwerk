@@ -35,6 +35,9 @@ fn validate_uniform_binding(buffer: gpu::GpuBufferHandle) {
     let device_facts = gpu::GpuRuntimeBindingDeviceFacts::new(
         NonZeroU64::new(256).expect("uniform alignment should be nonzero"),
         NonZeroU64::new(256).expect("storage alignment should be nonzero"),
+        1,
+        0,
+        0,
         [],
     );
     let validated = gpu::GpuValidatedBindGroupBindings::new(layout, [value], &device_facts)

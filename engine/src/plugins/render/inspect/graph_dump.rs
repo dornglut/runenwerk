@@ -89,53 +89,20 @@ pub fn dump_flow_graph(
         ));
     }
 
-    if let Some(work) = compiled.structural_work() {
-        let graph = work.graph();
-        lines.push("prepared_nodes:".to_string());
-        for prepared in graph.nodes() {
-            lines.push(format!(
-                "  - {} [{} {:?}; accesses={}]",
-                prepared.id(),
-                prepared.node().label().as_str(),
-                prepared.node().kind(),
-                prepared.node().accesses().len()
-            ));
-        }
-        lines.push("prepared_dependencies:".to_string());
-        for dependency in graph.dependencies() {
-            lines.push(format!(
-                "  - {} -> {} {:?}",
-                dependency.before(),
-                dependency.after(),
-                dependency.reasons()
-            ));
-        }
-        lines.push("prepared_initialization:".to_string());
-        for initialization in graph.initialization() {
-            lines.push(format!(
-                "  - {} [{}]: initial={:?}, final={:?}",
-                initialization.resource().diagnostic_identity(),
-                initialization.resource().common().label().as_str(),
-                initialization.initial().map(|coverage| coverage.kind()),
-                initialization
-                    .final_coverage()
-                    .map(|coverage| coverage.kind())
-            ));
-        }
+    lines.push("compiled_passes:".to_string());
+    for pass in &compiled.render_passes {
         lines.push(format!(
-            "prepared_requirements: {:?}",
-            graph.requirements().iter().collect::<Vec<_>>()
-        ));
-        lines.push(format!(
-            "prepared_order: {}",
-            graph
-                .topological_order()
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(" -> ")
+            "  - {} [{} {:?}; authoring_index={}]",
+            pass.pass_id(),
+            pass.pass_label(),
+            pass.node().kind,
+            pass.authoring_index()
         ));
     }
+    lines.push(
+        "runtime_gpu_work: resolved after runtime resources, programs, pipelines, and bindings"
+            .to_string(),
+    );
     lines.push(format!(
         "compiler_diagnostics: {}",
         compiled.compiler_diagnostics.len()

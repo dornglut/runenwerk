@@ -677,8 +677,27 @@ fn operation_initialization(
         |access: &GpuResourceAccess| effects.push(initialization_region_for_access(access));
     match operation {
         GpuWorkOperation::Compute(compute) => {
-            for timestamp in compute.timestamp_writes() {
-                effect(&GpuResourceAccess::Query(timestamp.clone()));
+            let shader_may_execute = compute
+                .dispatch()
+                .direct_size()
+                .is_none_or(|size| size.as_array().into_iter().all(|dimension| dimension != 0));
+            if shader_may_execute {
+                for access in compute
+                    .bindings()
+                    .accesses()
+                    .iter()
+                    .filter(|access| access.reads())
+                {
+                    require(access);
+                }
+            }
+            if let Some(arguments) = compute.dispatch().indirect_access() {
+                require(&GpuResourceAccess::Buffer(arguments.clone()));
+            }
+            if let Some(timestamp_writes) = compute.timestamp_writes() {
+                for timestamp in timestamp_writes.accesses() {
+                    effect(&GpuResourceAccess::Query(timestamp.clone()));
+                }
             }
         }
         GpuWorkOperation::Render(render) => {
@@ -699,8 +718,15 @@ fn operation_initialization(
                     GpuDepthAttachmentLoad::Clear(_) => effect(&access),
                 }
             }
-            for timestamp in render.timestamp_writes() {
-                effect(&GpuResourceAccess::Query(timestamp.clone()));
+            for draw in render.draws() {
+                for access in draw.accesses().iter().filter(|access| access.reads()) {
+                    require(access);
+                }
+            }
+            if let Some(timestamp_writes) = render.timestamp_writes() {
+                for timestamp in timestamp_writes.accesses() {
+                    effect(&GpuResourceAccess::Query(timestamp.clone()));
+                }
             }
         }
         GpuWorkOperation::Copy(copy) => match copy {
@@ -776,6 +802,14 @@ fn operation_initialization(
         }
         GpuWorkOperation::Present(present) => {
             require(&GpuResourceAccess::Texture(present.source_access().clone()));
+        }
+        GpuWorkOperation::Upload(upload) => {
+            if upload.establishes_initialization_effect() {
+                effect(upload.destination_access());
+            }
+        }
+        GpuWorkOperation::Readback(readback) => {
+            require(readback.source_access());
         }
     }
     let derived = operation.derived_accesses().map_err(|_| {
@@ -923,7 +957,6 @@ fn texture_copy_is_complete(region: &GpuTextureCopyRegion) -> bool {
     }
     match descriptor.dimension() {
         GpuTextureDimension::D1 => origin.z() == 0 && extent.depth_or_layers() == 1,
-        // The checked subresource range carries the exact selected array layers.
         GpuTextureDimension::D2 => true,
         GpuTextureDimension::D3 => {
             origin.z() == 0

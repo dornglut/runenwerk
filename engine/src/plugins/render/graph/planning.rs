@@ -1,16 +1,12 @@
 use crate::plugins::gpu::{GpuCapabilities, GpuWorkResourceId};
 use crate::plugins::render::RenderFlowValidationError;
-use crate::plugins::render::api::{ComputeDispatchDescriptor, RenderFlow};
+use crate::plugins::render::api::RenderFlow;
 use crate::plugins::render::graph::{
     CompiledFlowExecutionPlan, RenderExecutionGraphCompileError, RenderExecutionGraphDiagnostic,
     RenderExecutionGraphDiagnosticKind, RenderPassKind, RenderPassNode, ResourceGraph,
     compile_execution_plan, diagnose_compiled_pass_shapes,
 };
-use crate::plugins::render::{
-    PreparedRenderWorkPlan, RenderFlowId, RenderGpuWorkInstrumentation, RenderPassId,
-    prepare_render_gpu_work, validate_compiled_flow_capabilities,
-    validate_prepared_gpu_work_capabilities,
-};
+use crate::plugins::render::{RenderFlowId, RenderPassId, validate_compiled_flow_capabilities};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
@@ -20,11 +16,10 @@ pub struct CompiledRenderFlowPlan {
     pub resource_ids_by_label: BTreeMap<String, GpuWorkResourceId>,
     pub resources: ResourceGraph,
     /// Lexical render-owned pass descriptors and later-phase payload inputs.
-    /// Runtime scheduling comes only from prepared G3 work.
+    /// Executable GPU ordering is established only after runtime resource/program resolution.
     pub render_passes: Vec<CompiledPassDescriptor>,
     pub execution: CompiledFlowExecutionPlan,
     pub compiler_diagnostics: Vec<RenderExecutionGraphDiagnostic>,
-    structural_work: Option<PreparedRenderWorkPlan>,
 }
 
 impl CompiledRenderFlowPlan {
@@ -42,13 +37,6 @@ impl CompiledRenderFlowPlan {
             .resources
             .iter()
             .find(|descriptor| *descriptor.id() == resource_id)
-    }
-
-    /// Structurally prepared G3 authority for compile-time inspection and
-    /// admission. Runtime uses the exact per-invocation prepared work stored in
-    /// `PreparedFlowInputs` after ECS/domain projection.
-    pub fn structural_work(&self) -> Option<&PreparedRenderWorkPlan> {
-        self.structural_work.as_ref()
     }
 }
 
@@ -142,16 +130,11 @@ pub fn compile_flow_plan(
     flow: &RenderFlow,
 ) -> Result<CompiledRenderFlowPlan, RenderFlowValidationError> {
     let report = flow.validation_report()?;
-    let mut plan = build_compiled_flow_plan(flow, report.lexical_pass_ids, Vec::new());
-    let work = prepare_structural_gpu_work(&plan).map_err(|error| {
-        RenderFlowValidationError::from(vec![
-            crate::plugins::render::RenderFlowValidationIssue::GpuWorkLoweringFailed {
-                message: error.to_string(),
-            },
-        ])
-    })?;
-    plan.structural_work = Some(work);
-    Ok(plan)
+    Ok(build_compiled_flow_plan(
+        flow,
+        report.lexical_pass_ids,
+        Vec::new(),
+    ))
 }
 
 pub fn compile_flow_plan_checked(
@@ -179,23 +162,6 @@ pub fn compile_flow_plan_checked(
     let mut diagnostics = Vec::<RenderExecutionGraphDiagnostic>::new();
     diagnostics.extend(diagnose_compiled_pass_shapes(&plan));
     diagnostics.extend(validate_compiled_flow_capabilities(&plan, capabilities));
-    match prepare_structural_gpu_work(&plan) {
-        Ok(work) => {
-            diagnostics.extend(validate_prepared_gpu_work_capabilities(
-                &plan,
-                work.graph(),
-                capabilities,
-            ));
-            plan.structural_work = Some(work);
-        }
-        Err(error) => diagnostics.push(
-            RenderExecutionGraphDiagnostic::error(
-                RenderExecutionGraphDiagnosticKind::FlowValidationIssue,
-                error.to_string(),
-            )
-            .with_flow(plan.flow_id, plan.flow_label.clone()),
-        ),
-    }
     plan.compiler_diagnostics = diagnostics.clone();
     if diagnostics
         .iter()
@@ -270,33 +236,7 @@ fn build_compiled_flow_plan(
         render_passes,
         execution,
         compiler_diagnostics,
-        structural_work: None,
     }
-}
-
-fn prepare_structural_gpu_work(
-    plan: &CompiledRenderFlowPlan,
-) -> Result<PreparedRenderWorkPlan, crate::plugins::render::RenderGpuWorkAdapterError> {
-    let structural_dispatches = plan
-        .render_passes
-        .iter()
-        .filter(|pass| pass.node().kind == RenderPassKind::Compute)
-        .filter_map(|pass| {
-            let dispatch = match pass.node().compute_dispatch.as_ref()? {
-                ComputeDispatchDescriptor::Fixed(value) => *value,
-                // ECS/domain projection occurs before exact per-invocation
-                // preparation. This nonzero value validates invariant shape.
-                ComputeDispatchDescriptor::State(_) => [1, 1, 1],
-            };
-            Some((pass.pass_id(), dispatch))
-        })
-        .collect::<BTreeMap<_, _>>();
-    prepare_render_gpu_work(
-        plan,
-        &structural_dispatches,
-        (1, 1),
-        RenderGpuWorkInstrumentation::Disabled,
-    )
 }
 
 fn validation_issue_kind(

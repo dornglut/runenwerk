@@ -5,7 +5,7 @@ use super::evidence::{
 };
 use super::records::{
     BindGroupLayoutRealizationRecord, BindGroupRealizationRecord, PipelineLayoutRealizationRecord,
-    ProgramRealizationRecord,
+    ProgramRealizationRecord, StaticBindGroupValue, static_bind_group_values,
 };
 use crate::plugins::gpu::{
     GpuBindGroupLayoutDescriptor, GpuContextAffinity, GpuPipelineLayoutDescriptor,
@@ -22,8 +22,6 @@ use tokio::sync::Notify;
 pub(super) struct ProgramRequestKey {
     affinity: GpuContextAffinity,
     descriptor: GpuProgramDescriptor,
-    // The descriptor retains full canonical WGSL equality. This digest only accelerates lookup
-    // and makes the accepted pre-realization request identity explicit.
     source_digest: GpuProgramSourceDigest,
     naga_validation_profile_revision: u32,
     wgpu_realization_compatibility_revision: u32,
@@ -81,7 +79,7 @@ impl PipelineLayoutRequestKey {
 pub(super) struct BindGroupRequestKey {
     affinity: GpuContextAffinity,
     layout: GpuBindGroupLayoutDescriptor,
-    values: Vec<GpuRuntimeBindingValue>,
+    static_values: Vec<StaticBindGroupValue>,
 }
 
 impl BindGroupRequestKey {
@@ -93,7 +91,19 @@ impl BindGroupRequestKey {
         Self {
             affinity,
             layout,
-            values,
+            static_values: static_bind_group_values(values),
+        }
+    }
+
+    pub(super) fn from_static(
+        affinity: GpuContextAffinity,
+        layout: GpuBindGroupLayoutDescriptor,
+        static_values: Vec<StaticBindGroupValue>,
+    ) -> Self {
+        Self {
+            affinity,
+            layout,
+            static_values,
         }
     }
 }
@@ -134,8 +144,6 @@ impl ProgramBindingRegistries {
     }
 
     fn collect_lookup_only(&mut self) {
-        // Dependencies retain their prerequisites. Sweep dependent records first so one pressure
-        // pass can subsequently reclaim the prerequisite records that became lookup-only.
         self.bind_groups.collect_lookup_only();
         self.pipeline_layouts.collect_lookup_only();
         self.bind_group_layouts.collect_lookup_only();
@@ -181,10 +189,10 @@ impl ProgramBindingRegistries {
     }
 
     pub(super) fn contains_bind_group(&self, record: &Arc<BindGroupRealizationRecord>) -> bool {
-        let key = BindGroupRequestKey::new(
+        let key = BindGroupRequestKey::from_static(
             record.affinity(),
             record.layout_descriptor().clone(),
-            record.values().cloned().collect(),
+            record.static_values().to_vec(),
         );
         self.bind_groups
             .ready
@@ -286,8 +294,6 @@ impl<R> InFlight<R> {
     }
 }
 
-/// RAII owner reservation. Dropping it before `finish` removes the in-flight capacity slot and
-/// wakes equal waiters to retry ordinary lookup/reservation.
 pub(super) struct OwnerReservation<K: Clone + Eq + Hash, R> {
     registries: Arc<Mutex<ProgramBindingRegistries>>,
     key: K,

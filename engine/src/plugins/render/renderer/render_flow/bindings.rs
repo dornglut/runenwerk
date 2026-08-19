@@ -10,12 +10,13 @@ use crate::plugins::gpu::{
     GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
     GpuProgramInterfaceDescriptor, GpuRealizedBindGroup, GpuRealizedPipelineLayout,
     GpuRealizedProgram, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
-    GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
-    GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle,
-    GpuShaderStage, GpuShaderStages, GpuSpecializationValueSet, GpuStorageBufferAccess,
-    GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass, GpuTextureViewDimension,
-    GpuTextureViewHandle, GpuVertexAttribute, GpuVertexBufferLayoutDescriptor, GpuVertexFormat,
-    GpuVertexInputStateDescriptor, GpuVertexStepMode,
+    GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource, GpuRuntimeBindingSet,
+    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding, GpuSamplerClass,
+    GpuSamplerHandle, GpuShaderStage, GpuShaderStages, GpuSpecializationValueSet,
+    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureFormat, GpuTextureSampleClass,
+    GpuTextureViewDimension, GpuTextureViewHandle, GpuVertexAttribute,
+    GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
+    GpuVertexStepMode,
 };
 use crate::plugins::render::pipelines::FlowPassPipelineDescriptor;
 use crate::plugins::render::renderer::resource_descriptors::linear_sampler_descriptor;
@@ -43,9 +44,10 @@ struct RuntimeBindingResolved {
 /// interval. The remaining render/compute pipeline object is deliberately G4C3-owned.
 pub(in crate::plugins::render::renderer) struct RealizedFlowProgramBindings {
     pub(super) pipeline_key: FlowPassPipelineKey,
+    pub(super) runtime_bindings: GpuRuntimeBindingSet,
     pub(super) program: GpuRealizedProgram,
     pub(super) pipeline_layout: GpuRealizedPipelineLayout,
-    pub(super) bind_group: Option<GpuRealizedBindGroup>,
+    pub(super) bind_groups: Vec<GpuRealizedBindGroup>,
 }
 
 impl Renderer {
@@ -217,7 +219,6 @@ impl Renderer {
         let primary_bind_group_layout = GpuBindGroupLayoutDescriptor::new(0, binding_declarations)?;
         let pipeline_layout =
             gpu_pipeline_layout_for_pass(packet, flow, pass_id, &primary_bind_group_layout)?;
-        let has_primary_bind_group = pipeline_layout.group(0).is_some();
         let render_pipeline_state =
             gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?;
         let pipeline_descriptor = gpu_pipeline_descriptor_for_pass(
@@ -257,31 +258,43 @@ impl Renderer {
             None
         };
 
+        let primary_values = resolved_entries
+            .iter()
+            .map(|value| runtime_binding_value(value, sampler.as_ref()))
+            .collect::<Result<Vec<_>>>()?;
+        let material_values = gpu_material_runtime_binding_values_for_pass(packet, flow, pass_id)?;
+        let device_facts = context.runtime_binding_device_facts().ok_or_else(|| {
+            anyhow::anyhow!(
+                "pass '{}' cannot validate runtime bindings because admitted device binding facts are incomplete",
+                pass_id
+            )
+        })?;
+        let runtime_bindings = GpuRuntimeBindingSet::new(
+            pipeline_key.pipeline_descriptor.layout().clone(),
+            primary_values.into_iter().chain(material_values),
+            &device_facts,
+        )?;
+
         let program = pollster::block_on(
             context.realize_program(pipeline_key.pipeline_descriptor.program()),
         )?;
         let realized_pipeline_layout = pollster::block_on(
             context.realize_pipeline_layout(pipeline_key.pipeline_descriptor.layout()),
         )?;
-        let bind_group = if !has_primary_bind_group {
-            None
-        } else {
-            let layout =
-                pollster::block_on(context.realize_bind_group_layout(&primary_bind_group_layout))?;
-            let values = resolved_entries
-                .iter()
-                .map(|value| runtime_binding_value(value, sampler.as_ref()))
-                .collect::<Result<Vec<_>>>()?;
-            Some(pollster::block_on(
-                context.realize_bind_group(&layout, values),
-            )?)
-        };
+        let mut bind_groups = Vec::with_capacity(runtime_bindings.groups().len());
+        for group in runtime_bindings.groups() {
+            let layout = pollster::block_on(context.realize_bind_group_layout(group.layout()))?;
+            bind_groups.push(pollster::block_on(
+                context.realize_bind_group(&layout, group.values().cloned()),
+            )?);
+        }
 
         Ok(RealizedFlowProgramBindings {
             pipeline_key,
+            runtime_bindings,
             program,
             pipeline_layout: realized_pipeline_layout,
-            bind_group,
+            bind_groups,
         })
     }
 }
@@ -476,9 +489,9 @@ fn gpu_material_bind_group_layout(
     Ok(Some(GpuBindGroupLayoutDescriptor::new(1, declarations)?))
 }
 
-fn gpu_material_binding_declarations(
+fn sorted_material_texture_bindings(
     material: &crate::plugins::render::PreparedMaterialFeatureContribution,
-) -> Result<Vec<GpuBindingDeclaration>> {
+) -> Vec<&crate::plugins::render::PreparedMaterialTextureBinding> {
     let mut bindings = material
         .instances
         .iter()
@@ -492,6 +505,92 @@ fn gpu_material_binding_declarations(
             binding.resource_slot_index,
         )
     });
+    bindings
+}
+
+fn gpu_material_runtime_binding_values_for_pass(
+    packet: &RendererPreparedPacket,
+    flow: &CompiledRenderFlowPlan,
+    pass_id: RenderPassId,
+) -> Result<Vec<GpuRuntimeBindingValue>> {
+    let pass = flow
+        .execution
+        .passes
+        .iter()
+        .find(|pass| execution_pass_id(pass) == pass_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!("pass '{pass_id}' is missing from compiled execution plan")
+        })?;
+    if !pass_consumes_material_resources(
+        execution_pass_feature_id(pass),
+        execution_pass_shader_reference(pass),
+    ) {
+        return Ok(Vec::new());
+    }
+
+    let Some(material) = packet.prepared_material.as_ref() else {
+        return Ok(Vec::new());
+    };
+    let bindings = sorted_material_texture_bindings(material);
+    if bindings.is_empty() {
+        return Ok(Vec::new());
+    }
+    let resources = packet.prepared_material_gpu_resources.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "pass '{}' requires material runtime bindings but material GPU resources are not resident",
+            pass_id
+        )
+    })?;
+    if bindings.len() != resources._texture_views.len()
+        || bindings.len() != resources._samplers.len()
+    {
+        bail!(
+            "pass '{}' material runtime binding cardinality diverged from prepared material resources: {} bindings, {} views, {} samplers",
+            pass_id,
+            bindings.len(),
+            resources._texture_views.len(),
+            resources._samplers.len()
+        );
+    }
+
+    let mut values = Vec::with_capacity(bindings.len() * 2);
+    for ((binding, view), sampler) in bindings
+        .into_iter()
+        .zip(&resources._texture_views)
+        .zip(&resources._samplers)
+    {
+        let view_dimension = match binding.texture_kind {
+            crate::plugins::render::PreparedMaterialTextureKind::Texture2D => {
+                GpuTextureViewDimension::D2
+            }
+            crate::plugins::render::PreparedMaterialTextureKind::Texture3D => {
+                GpuTextureViewDimension::D3
+            }
+        };
+        values.push(GpuRuntimeBindingValue::new(
+            GpuBindingKey::try_new(
+                u64::from(binding.bind_group),
+                u64::from(binding.texture_binding),
+            )?,
+            [GpuRuntimeBindingResource::TextureView(
+                GpuRuntimeTextureViewBinding::new(view._handle.clone(), view_dimension),
+            )],
+        )?);
+        values.push(GpuRuntimeBindingValue::new(
+            GpuBindingKey::try_new(
+                u64::from(binding.bind_group),
+                u64::from(binding.sampler_binding),
+            )?,
+            [GpuRuntimeBindingResource::Sampler(sampler._handle.clone())],
+        )?);
+    }
+    Ok(values)
+}
+
+fn gpu_material_binding_declarations(
+    material: &crate::plugins::render::PreparedMaterialFeatureContribution,
+) -> Result<Vec<GpuBindingDeclaration>> {
+    let bindings = sorted_material_texture_bindings(material);
 
     let visibility = GpuShaderStages::one(GpuShaderStage::Fragment);
     let mut declarations = Vec::with_capacity(bindings.len() * 2);

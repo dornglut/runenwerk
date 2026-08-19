@@ -262,20 +262,30 @@ mod tests {
             GpuRejectedCandidateReport, GpuSoftwareStatus,
         };
 
+        let limits = || {
+            GpuLimits::new(
+                64 * 1024,
+                128 * 1024 * 1024,
+                1,
+                8,
+                16,
+                8192,
+                4,
+                24,
+                8,
+                4,
+                65_535,
+            )
+            .unwrap()
+        };
         let adapter = || {
             GpuAdapterFacts::new(
                 GpuBackendFamily::Vulkan,
                 GpuAdapterClass::Discrete,
                 GpuSoftwareStatus::Hardware,
                 GpuFallbackStatus::Unknown,
-                GpuCapabilities::from_normalized_facts(
-                    [],
-                    GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 1, 8, 16).unwrap(),
-                    [],
-                ),
-                GpuAdapterLimits::new(
-                    GpuLimits::new(64 * 1024, 128 * 1024 * 1024, 1, 8, 16).unwrap(),
-                ),
+                GpuCapabilities::from_normalized_facts([], limits(), []),
+                GpuAdapterLimits::new(limits()),
                 GpuAlignmentFacts {
                     uniform_dynamic_offset: Some(256),
                     storage_dynamic_offset: Some(256),

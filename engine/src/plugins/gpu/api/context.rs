@@ -3,7 +3,8 @@
 //! This module is the public namespace only.  Each admission concern has one
 //! implementation owner below it; it is not a compatibility layer.
 
-use super::GpuRealizationPolicies;
+use super::{GpuRealizationPolicies, GpuRuntimeBindingDeviceFacts};
+use core::num::NonZeroU64;
 
 mod admission;
 mod descriptor;
@@ -94,6 +95,26 @@ impl GpuContext {
 
     pub fn device_facts(&self) -> &GpuAdmittedDeviceFacts {
         &self.device
+    }
+
+    /// Projects the admitted device facts needed by backend-neutral runtime binding validation.
+    ///
+    /// This is derived entirely from accepted RunenGPU context facts. It does not expose private
+    /// backend objects or re-query mutable backend state.
+    pub fn runtime_binding_device_facts(&self) -> Option<GpuRuntimeBindingDeviceFacts> {
+        let device_limits = self.device.device_limits();
+        let alignments = device_limits.alignments();
+        let uniform_buffer_offset_alignment = NonZeroU64::new(alignments.uniform_dynamic_offset?)?;
+        let storage_buffer_offset_alignment = NonZeroU64::new(alignments.storage_dynamic_offset?)?;
+        let limits = device_limits.values();
+        Some(GpuRuntimeBindingDeviceFacts::new(
+            uniform_buffer_offset_alignment,
+            storage_buffer_offset_alignment,
+            limits.max_bind_groups(),
+            limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
+            limits.max_dynamic_storage_buffers_per_pipeline_layout(),
+            self.adapter.supported().formats(),
+        ))
     }
 
     pub fn admission_report(&self) -> &GpuContextAdmissionReport {
