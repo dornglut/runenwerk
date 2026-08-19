@@ -15,7 +15,7 @@
 
 use crate::plugins::gpu::*;
 use crate::plugins::render::RenderPassId;
-use crate::plugins::render::graph::{CompiledPassExecutionPlan, CompiledRenderFlowPlan};
+use crate::plugins::render::graph::CompiledRenderFlowPlan;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, thiserror::Error)]
@@ -85,11 +85,14 @@ impl core::fmt::Display for RenderGpuWorkOccurrenceId {
 }
 
 /// Execution-only payload associated with one prepared RunenGPU node.
+///
+/// Pass payload deliberately retains only renderer identity. Generic GPU operation kind and
+/// execution semantics live exclusively in the prepared node's `GpuWorkOperation`.
 #[derive(Debug, Clone)]
 pub(crate) enum RenderGpuWorkPayload {
     Pass {
         occurrence: RenderGpuWorkOccurrenceId,
-        pass: Box<CompiledPassExecutionPlan>,
+        pass_id: RenderPassId,
     },
     Upload {
         occurrence: RenderGpuWorkOccurrenceId,
@@ -103,19 +106,15 @@ pub(crate) enum RenderGpuWorkPayload {
 }
 
 impl RenderGpuWorkPayload {
-    fn operation_kind(&self) -> GpuWorkNodeKind {
+    /// Non-pass payloads denote one fixed generic operation class. Pass payloads intentionally do
+    /// not duplicate the prepared operation kind: one render-domain pass occurrence may lower to
+    /// compute, render, or copy work, and the canonical `GpuWorkOperation` remains that authority.
+    fn fixed_operation_kind(&self) -> Option<GpuWorkNodeKind> {
         match self {
-            Self::Pass { pass, .. } => match pass.as_ref() {
-                CompiledPassExecutionPlan::Compute(_) => GpuWorkNodeKind::Compute,
-                CompiledPassExecutionPlan::Fullscreen(_)
-                | CompiledPassExecutionPlan::Graphics(_)
-                | CompiledPassExecutionPlan::BuiltinUiComposite(_) => GpuWorkNodeKind::Render,
-                CompiledPassExecutionPlan::Copy(_) => GpuWorkNodeKind::Copy,
-                CompiledPassExecutionPlan::Present(_) => GpuWorkNodeKind::Present,
-            },
-            Self::Upload { .. } => GpuWorkNodeKind::Upload,
-            Self::TimingResolve { .. } => GpuWorkNodeKind::Resolve,
-            Self::TimingReadbackCopy { .. } => GpuWorkNodeKind::Copy,
+            Self::Pass { .. } => None,
+            Self::Upload { .. } => Some(GpuWorkNodeKind::Upload),
+            Self::TimingResolve { .. } => Some(GpuWorkNodeKind::Resolve),
+            Self::TimingReadbackCopy { .. } => Some(GpuWorkNodeKind::Copy),
         }
     }
 
@@ -130,7 +129,7 @@ impl RenderGpuWorkPayload {
 
     fn pass_id(&self) -> Option<RenderPassId> {
         match self {
-            Self::Pass { pass, .. } => Some(execution_pass_id(pass.as_ref())),
+            Self::Pass { pass_id, .. } => Some(*pass_id),
             Self::Upload { .. } | Self::TimingResolve { .. } | Self::TimingReadbackCopy { .. } => {
                 None
             }
@@ -159,7 +158,7 @@ impl ResolvedRenderGpuWorkNode {
     pub(crate) fn pass(
         occurrence: RenderGpuWorkOccurrenceId,
         label: GpuResourceLabel,
-        pass: CompiledPassExecutionPlan,
+        pass_id: RenderPassId,
         operation: GpuWorkOperation,
         preference: GpuExecutionPreference,
         control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
@@ -173,7 +172,7 @@ impl ResolvedRenderGpuWorkNode {
             provenance,
             payload: RenderGpuWorkPayload::Pass {
                 occurrence,
-                pass: Box::new(pass),
+                pass_id,
             },
             control_order_after: control_order_after.into_iter().collect(),
         }
@@ -252,14 +251,15 @@ impl RenderGpuWorkSidecar {
         let Some(node) = graph.nodes().iter().find(|node| node.id() == node_id) else {
             return Err(RenderGpuWorkAdapterError::ForeignPreparedNode { node_id });
         };
-        let expected = payload.operation_kind();
-        let actual = node.node().kind();
-        if expected != actual {
-            return Err(RenderGpuWorkAdapterError::SidecarOperationKindMismatch {
-                node_id,
-                expected,
-                actual,
-            });
+        if let Some(expected) = payload.fixed_operation_kind() {
+            let actual = node.node().kind();
+            if expected != actual {
+                return Err(RenderGpuWorkAdapterError::SidecarOperationKindMismatch {
+                    node_id,
+                    expected,
+                    actual,
+                });
+            }
         }
         if self.entries.contains_key(&node_id) {
             return Err(RenderGpuWorkAdapterError::DuplicateSidecarPayload { node_id });
@@ -669,16 +669,5 @@ fn declared_resource_for_access(access: &GpuResourceAccess) -> GpuResourceRef {
         },
         GpuResourceAccess::Query(access) => GpuResourceRef::QuerySet(access.query_set().clone()),
         GpuResourceAccess::Sampler(access) => GpuResourceRef::Sampler(access.sampler().clone()),
-    }
-}
-
-fn execution_pass_id(pass: &CompiledPassExecutionPlan) -> RenderPassId {
-    match pass {
-        CompiledPassExecutionPlan::Compute(value) => value.pass_id,
-        CompiledPassExecutionPlan::Fullscreen(value) => value.pass_id,
-        CompiledPassExecutionPlan::Graphics(value) => value.pass_id,
-        CompiledPassExecutionPlan::Copy(value) => value.pass_id,
-        CompiledPassExecutionPlan::Present(value) => value.pass_id,
-        CompiledPassExecutionPlan::BuiltinUiComposite(value) => value.pass_id,
     }
 }
