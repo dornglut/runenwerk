@@ -3,7 +3,7 @@ mod pipeline;
 use super::*;
 use crate::plugins::gpu::{
     CurrentRenderBufferCopyTerminal, CurrentRenderTextureCopyTerminal,
-    CurrentSurfaceTextureCopyTerminal,
+    CurrentSurfaceTextureCopyTerminal, GpuTextureFormat, gpu_texture_formats_copy_compatible,
 };
 use crate::plugins::render::RenderPassId;
 
@@ -427,15 +427,25 @@ impl CurrentRenderTextureCopyTerminal for CopyTextures<'_> {
 }
 
 fn copy_formats_are_raw_compatible(source: TextureFormat, destination: TextureFormat) -> bool {
-    if texture_format_is_depth_or_stencil(source) || texture_format_is_depth_or_stencil(destination)
-    {
+    let Some(source) = canonical_copy_texture_format(source) else {
         return false;
-    }
-    source.remove_srgb_suffix() == destination.remove_srgb_suffix()
+    };
+    let Some(destination) = canonical_copy_texture_format(destination) else {
+        return false;
+    };
+    gpu_texture_formats_copy_compatible(source, destination)
 }
 
-fn texture_format_is_depth_or_stencil(format: TextureFormat) -> bool {
-    format.is_depth_stencil_format()
+fn canonical_copy_texture_format(format: TextureFormat) -> Option<GpuTextureFormat> {
+    match format {
+        TextureFormat::R8Unorm => Some(GpuTextureFormat::R8Unorm),
+        TextureFormat::Rgba8Unorm => Some(GpuTextureFormat::Rgba8Unorm),
+        TextureFormat::Rgba8UnormSrgb => Some(GpuTextureFormat::Rgba8UnormSrgb),
+        TextureFormat::Bgra8Unorm => Some(GpuTextureFormat::Bgra8Unorm),
+        TextureFormat::Bgra8UnormSrgb => Some(GpuTextureFormat::Bgra8UnormSrgb),
+        TextureFormat::R32Uint => Some(GpuTextureFormat::R32Uint),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -443,7 +453,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn raw_copy_formats_accept_srgb_suffix_pairs() {
+    fn raw_copy_formats_accept_canonical_exact_and_srgb_pairs() {
         assert!(copy_formats_are_raw_compatible(
             TextureFormat::Rgba8Unorm,
             TextureFormat::Rgba8UnormSrgb
@@ -460,16 +470,24 @@ mod tests {
             TextureFormat::Bgra8UnormSrgb,
             TextureFormat::Bgra8Unorm
         ));
+        assert!(copy_formats_are_raw_compatible(
+            TextureFormat::R32Uint,
+            TextureFormat::R32Uint
+        ));
     }
 
     #[test]
-    fn raw_copy_formats_reject_unrelated_color_formats() {
+    fn raw_copy_formats_reject_unrelated_or_unsupported_color_formats() {
         assert!(!copy_formats_are_raw_compatible(
             TextureFormat::Rgba8Unorm,
             TextureFormat::Bgra8Unorm
         ));
         assert!(!copy_formats_are_raw_compatible(
             TextureFormat::Rgba8Unorm,
+            TextureFormat::Rgba16Float
+        ));
+        assert!(!copy_formats_are_raw_compatible(
+            TextureFormat::Rgba16Float,
             TextureFormat::Rgba16Float
         ));
     }
