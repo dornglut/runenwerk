@@ -495,8 +495,10 @@ fn caller_cannot_repeat_an_operation_derived_access() {
         GpuQueryAccessKind::WriteTimestamp,
     )
     .unwrap();
-    let operation =
-        GpuWorkOperation::Render(GpuRenderOperation::new([], None, [], [access.clone()]).unwrap());
+    let timestamp_writes = GpuTimestampWrites::new(&queries, Some(0), None).unwrap();
+    let operation = GpuWorkOperation::Render(
+        GpuRenderOperation::new([], None, [], Some(timestamp_writes)).unwrap(),
+    );
     let mut fragment = builder("derived access");
     fragment
         .declare_resource(GpuResourceRef::QuerySet(queries))
