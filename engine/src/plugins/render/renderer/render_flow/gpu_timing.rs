@@ -211,18 +211,16 @@ impl GpuPassTimingFrame {
             );
         }
         let readback_size = destination.range().size();
-        context
-            .current_render_execution_bridge()
-            .for_buffer_copy(
-                &self.resolve_buffer,
-                &self.readback_buffer,
-                CopyTimingReadback {
-                    encoder,
-                    source_offset: source.range().offset(),
-                    destination_offset: destination.range().offset(),
-                    readback_size,
-                },
-            )?;
+        context.current_render_execution_bridge().for_buffer_copy(
+            &self.resolve_buffer,
+            &self.readback_buffer,
+            CopyTimingReadback {
+                encoder,
+                source_offset: source.range().offset(),
+                destination_offset: destination.range().offset(),
+                readback_size,
+            },
+        )?;
         Ok(Some(PendingGpuPassTimingReadback {
             _readback_buffer_handle: self.readback_buffer_handle,
             readback_buffer: self.readback_buffer,
