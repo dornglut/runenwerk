@@ -43,7 +43,8 @@ fn g5b_completion_registration_stays_in_one_serialized_queue_interval() {
     let direct_submit_paths = paths
         .into_iter()
         .filter_map(|path| {
-            let source = compact(&fs::read_to_string(&path).expect("WGPU source should be readable"));
+            let source =
+                compact(&fs::read_to_string(&path).expect("WGPU source should be readable"));
             source.contains(".queue.submit(").then(|| {
                 path.strip_prefix(&manifest)
                     .expect("WGPU source stays in engine")
@@ -70,7 +71,9 @@ fn g5b_completion_registration_stays_in_one_serialized_queue_interval() {
         .expect("accepted staging must be published before callbacks can observe it");
     let callbacks = execution
         .find("register_callbacks(execution,backend,submission,&encoded);")
-        .expect("submission and readback callbacks must be registered before the gate interval ends");
+        .expect(
+            "submission and readback callbacks must be registered before the gate interval ends",
+        );
     assert!(
         gate < submit && submit < attach && attach < callbacks,
         "one shared gate interval must own submit -> staging publication -> callback registration"
@@ -81,9 +84,8 @@ fn g5b_completion_registration_stays_in_one_serialized_queue_interval() {
         "src/plugins/gpu/backend/wgpu/current_host.rs",
     ));
     assert!(
-        current_host.contains(
-            "_error_attribution_gate:self.backend.error_attribution_gate.acquire()"
-        ),
+        current_host
+            .contains("_error_attribution_gate:self.backend.error_attribution_gate.acquire()"),
         "the residual renderer queue loan must serialize against G5B through the same gate"
     );
 }
