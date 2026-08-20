@@ -809,10 +809,10 @@ impl GpuContext {
                 .health
                 .mark_scoped_internal(format!("nonblocking WGPU progress poll failed: {error}"));
         }
-        self.backend.execution.drain_events();
         if let Some(fault) = self.backend.health.terminal_fault() {
             self.backend.execution.fail_active_for_fault(fault);
         }
+        self.backend.execution.drain_events();
         self.backend.execution.stats()
     }
 }
