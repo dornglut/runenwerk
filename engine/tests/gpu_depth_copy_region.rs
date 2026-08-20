@@ -27,14 +27,16 @@ fn texture(
             GpuTextureDescriptor::new(
                 common(name),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 16, 8, 2)
-                    .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 16, 8, 2).unwrap(),
                 2,
                 1,
                 format,
                 GpuTextureUsages::new(
                     &resource_label,
-                    [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                    [
+                        GpuTextureUsage::CopySource,
+                        GpuTextureUsage::CopyDestination,
+                    ],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
