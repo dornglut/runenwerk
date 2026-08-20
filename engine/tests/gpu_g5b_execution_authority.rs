@@ -132,7 +132,11 @@ fn g5b_rejection_identity_and_owner_local_execution_order_preserve_acceptance() 
         .find("encode_submit_and_register_buffers(")
         .expect("accepted physical execution must remain in the same submit entrypoint");
     assert!(
-        foreign < stale && stale < owner && owner < order_gate && order_gate < accept && accept < encode_submit,
+        foreign < stale
+            && stale < owner
+            && owner < order_gate
+            && order_gate < accept
+            && accept < encode_submit,
         "classification must precede one owner-local interval spanning irreversible acceptance through physical execution"
     );
     assert!(
