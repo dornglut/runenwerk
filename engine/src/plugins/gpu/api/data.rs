@@ -426,7 +426,7 @@ where
     )
 }
 
-/// Immutable, normalized bytes returned by a future G5 readback operation.
+/// Immutable, normalized bytes returned by an accepted GPU readback operation.
 #[derive(Debug, Clone)]
 pub struct GpuReadbackBytes {
     bytes: Arc<[u8]>,
@@ -436,7 +436,6 @@ pub struct GpuReadbackBytes {
 }
 
 impl GpuReadbackBytes {
-    #[allow(dead_code, reason = "G5 will construct normalized readback results")]
     pub(crate) fn from_normalized_bytes(
         label: &str,
         bytes: Vec<u8>,
