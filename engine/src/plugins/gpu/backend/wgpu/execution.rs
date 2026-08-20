@@ -2,7 +2,7 @@ use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use crate::plugins::gpu::{
     GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuDataLayout, GpuDispatchSize,
-    GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
+    GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
     GpuPipelineRealizationErrorCategory, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
     GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
@@ -33,13 +33,27 @@ pub(crate) struct WgpuExecutionState {
     events: Mutex<VecDeque<ExecutionEvent>>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ExecutionInner {
+    lifecycle: GpuExecutionLifecycleState,
     prepared: BTreeMap<NonZeroU64, Option<PreparedExecutionPlan>>,
     in_flight: BTreeMap<GpuSubmissionId, InFlightSubmission>,
     upload_bytes_in_flight: u64,
     readback_bytes_in_flight: u64,
     pending_readbacks: usize,
+}
+
+impl Default for ExecutionInner {
+    fn default() -> Self {
+        Self {
+            lifecycle: GpuExecutionLifecycleState::Running,
+            prepared: BTreeMap::new(),
+            in_flight: BTreeMap::new(),
+            upload_bytes_in_flight: 0,
+            readback_bytes_in_flight: 0,
+            pending_readbacks: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -175,6 +189,26 @@ impl WgpuExecutionState {
         self.policy
     }
 
+    pub(crate) fn lifecycle_state(&self) -> GpuExecutionLifecycleState {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .lifecycle
+    }
+
+    pub(crate) fn begin_shutdown(&self) -> GpuExecutionLifecycleState {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if inner.lifecycle == GpuExecutionLifecycleState::Running {
+            inner.lifecycle = GpuExecutionLifecycleState::ShuttingDown;
+            inner.prepared.clear();
+        }
+        advance_shutdown_if_drained(&mut inner);
+        inner.lifecycle
+    }
+
     pub(crate) fn stats(&self) -> GpuExecutionStats {
         let inner = self
             .inner
@@ -196,18 +230,15 @@ impl WgpuExecutionState {
     fn reserve_prepared(
         self: &Arc<Self>,
     ) -> Result<PreparationReservation, GpuSubmissionPreparationError> {
-        let ticket = allocate_nonzero(&self.next_prepared).ok_or_else(|| {
-            GpuSubmissionPreparationError::new(
-                GpuSubmissionPreparationErrorKind::IdentityExhausted,
-                "prepared-submission identity space is exhausted",
-            )
-        })?;
         let mut inner = self.inner.lock().map_err(|_| {
             GpuSubmissionPreparationError::new(
                 GpuSubmissionPreparationErrorKind::ContextOrDeviceUnavailableOrLost,
                 "execution preparation authority is unavailable",
             )
         })?;
+        if inner.lifecycle != GpuExecutionLifecycleState::Running {
+            return Err(preparation_not_running(inner.lifecycle));
+        }
         if inner.prepared.len() >= self.policy.max_prepared_submissions().get() {
             return Err(GpuSubmissionPreparationError::new(
                 GpuSubmissionPreparationErrorKind::PreparedCapacityExceeded,
@@ -218,6 +249,12 @@ impl WgpuExecutionState {
                 ),
             ));
         }
+        let ticket = allocate_nonzero(&self.next_prepared).ok_or_else(|| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::IdentityExhausted,
+                "prepared-submission identity space is exhausted",
+            )
+        })?;
         inner.prepared.insert(ticket, None);
         drop(inner);
         Ok(PreparationReservation {
@@ -238,6 +275,9 @@ impl WgpuExecutionState {
                 "execution preparation authority is unavailable",
             )
         })?;
+        if inner.lifecycle != GpuExecutionLifecycleState::Running {
+            return Err(preparation_not_running(inner.lifecycle));
+        }
         let Some(slot) = inner.prepared.get_mut(&ticket) else {
             return Err(GpuSubmissionPreparationError::new(
                 GpuSubmissionPreparationErrorKind::InternalInvariant,
@@ -285,6 +325,9 @@ impl WgpuExecutionState {
                 "execution acceptance authority is unavailable",
             )
         })?;
+        if inner.lifecycle != GpuExecutionLifecycleState::Running {
+            return Err(rejection_not_running(inner.lifecycle));
+        }
         let Some(Some(plan)) = inner.prepared.get(&prepared.ticket) else {
             return Err(GpuSubmissionRejectionReason::new(
                 GpuSubmissionRejectionKind::PreparedRecordUnavailable,
@@ -490,6 +533,7 @@ impl WgpuExecutionState {
         };
         inner.upload_bytes_in_flight = inner.upload_bytes_in_flight.saturating_sub(upload_release);
         cleanup_submission_if_terminal(&mut inner, id);
+        advance_shutdown_if_drained(&mut inner);
     }
 
     fn complete_readback_mapping(
@@ -588,6 +632,7 @@ impl WgpuExecutionState {
         inner.readback_bytes_in_flight = inner.readback_bytes_in_flight.saturating_sub(release);
         inner.pending_readbacks = inner.pending_readbacks.saturating_sub(1);
         cleanup_submission_if_terminal(&mut inner, submission);
+        advance_shutdown_if_drained(&mut inner);
     }
 
     fn fail_submission(&self, id: GpuSubmissionId, failure: GpuSubmissionFailure) {
@@ -644,6 +689,7 @@ impl WgpuExecutionState {
             .saturating_sub(readback_release);
         inner.pending_readbacks = inner.pending_readbacks.saturating_sub(pending_release);
         cleanup_submission_if_terminal(&mut inner, id);
+        advance_shutdown_if_drained(&mut inner);
     }
 
     fn fail_active_for_fault(&self, fault: WgpuDeviceFaultEvidence) {
@@ -701,6 +747,14 @@ impl GpuContext {
 
     pub fn execution_stats(&self) -> GpuExecutionStats {
         self.backend.execution.stats()
+    }
+
+    pub fn execution_lifecycle_state(&self) -> GpuExecutionLifecycleState {
+        self.backend.execution.lifecycle_state()
+    }
+
+    pub fn begin_shutdown(&self) -> GpuExecutionLifecycleState {
+        self.backend.execution.begin_shutdown()
     }
 
     pub async fn prepare_submission(
@@ -1417,6 +1471,29 @@ fn cleanup_submission_if_terminal(inner: &mut ExecutionInner, id: GpuSubmissionI
     if should_remove {
         inner.in_flight.remove(&id);
     }
+}
+
+fn advance_shutdown_if_drained(inner: &mut ExecutionInner) {
+    if inner.lifecycle == GpuExecutionLifecycleState::ShuttingDown
+        && inner.prepared.is_empty()
+        && inner.in_flight.is_empty()
+    {
+        inner.lifecycle = GpuExecutionLifecycleState::Closed;
+    }
+}
+
+fn preparation_not_running(state: GpuExecutionLifecycleState) -> GpuSubmissionPreparationError {
+    GpuSubmissionPreparationError::new(
+        GpuSubmissionPreparationErrorKind::ExecutionNotRunning,
+        format!("GPU execution lifecycle is {state:?}; preparation requires Running"),
+    )
+}
+
+fn rejection_not_running(state: GpuExecutionLifecycleState) -> GpuSubmissionRejectionReason {
+    GpuSubmissionRejectionReason::new(
+        GpuSubmissionRejectionKind::ExecutionNotRunning,
+        format!("GPU execution lifecycle is {state:?}; acceptance requires Running"),
+    )
 }
 
 fn allocate_nonzero(counter: &AtomicU64) -> Option<NonZeroU64> {
