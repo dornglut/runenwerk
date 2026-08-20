@@ -1036,9 +1036,9 @@ fn encode_submit_and_register_buffers(
     if let Some(fault) = backend.health.terminal_fault() {
         return Err(failure_from_device_fault(&fault));
     }
-    // This one gate interval owns the physical queue association. In particular,
-    // `Queue::on_submitted_work_done` observes the immediately preceding submit, so another G5B
-    // submission or the residual renderer queue path must not interleave before registration.
+    // Keep this short synchronous backend interval serialized with the residual renderer path for
+    // accepted shared error attribution. Completion/mapping ownership is command-buffer-local and
+    // therefore does not depend on queue-relative callback registration.
     let _attribution_gate = backend.error_attribution_gate.acquire();
     let mut encoder = backend
         .device
@@ -1118,7 +1118,7 @@ fn encode_submit_and_register_buffers(
         }
     }
 
-    backend.queue.submit([encoder.finish()]);
+    let command_buffer = encoder.finish();
     if let Some(fault) = backend.health.terminal_fault() {
         return Err(failure_from_device_fault(&fault));
     }
@@ -1126,10 +1126,11 @@ fn encode_submit_and_register_buffers(
         upload_staging,
         readback_staging,
     };
-    // Staging must be reachable from accepted execution state before callback registration because
-    // another thread may call nonblocking progress as soon as the callbacks become visible.
+    // Accepted staging is published before the command buffer can be submitted or any deferred
+    // mapping/completion callback can become runnable.
     execution.attach_staging(submission, &encoded)?;
-    register_callbacks(execution, backend, submission, &encoded);
+    register_callbacks(execution, submission, &encoded, &command_buffer);
+    backend.queue.submit([command_buffer]);
     if let Some(fault) = backend.health.terminal_fault() {
         return Err(failure_from_device_fault(&fault));
     }
@@ -1138,14 +1139,14 @@ fn encode_submit_and_register_buffers(
 
 fn register_callbacks(
     execution: &Arc<WgpuExecutionState>,
-    backend: &WgpuContextState,
     submission: GpuSubmissionId,
     encoded: &EncodedSubmission,
+    command_buffer: &wgpu::CommandBuffer,
 ) {
     for (readback, staging) in &encoded.readback_staging {
         let weak = Arc::downgrade(execution);
         let readback = *readback;
-        staging.slice(..).map_async(MapMode::Read, move |result| {
+        command_buffer.map_buffer_on_submit(staging, MapMode::Read, .., move |result| {
             if let Some(execution) = weak.upgrade() {
                 execution.push_event(ExecutionEvent::ReadbackMapped {
                     submission,
@@ -1156,7 +1157,7 @@ fn register_callbacks(
         });
     }
     let weak = Arc::downgrade(execution);
-    backend.queue.on_submitted_work_done(move || {
+    command_buffer.on_submitted_work_done(move || {
         if let Some(execution) = weak.upgrade() {
             execution.push_event(ExecutionEvent::SubmissionCompleted(submission));
         }
