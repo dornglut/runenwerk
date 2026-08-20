@@ -229,11 +229,7 @@ fn dynamic_compute_pipeline() -> GpuComputePipelineDescriptor {
     let binding = GpuBindingDeclaration::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
         GpuShaderStages::one(GpuShaderStage::Compute),
-        GpuBindingKind::storage_buffer(
-            GpuStorageBufferAccess::ReadWrite,
-            true,
-            NonZeroU64::new(4),
-        ),
+        GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadWrite, true, NonZeroU64::new(4)),
         None,
         "values",
         GpuBindingProvenance::new("g5b-noop-direct-compute", None).unwrap(),
@@ -276,12 +272,14 @@ fn dynamic_compute_operation(
 ) -> GpuComputeOperation {
     let binding = GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
-        [GpuRuntimeBindingResource::Buffer(GpuRuntimeBufferBinding::new(
-            buffer.clone(),
-            0,
-            NonZeroU64::new(4).unwrap(),
-            Some(dynamic_offset),
-        ))],
+        [GpuRuntimeBindingResource::Buffer(
+            GpuRuntimeBufferBinding::new(
+                buffer.clone(),
+                0,
+                NonZeroU64::new(4).unwrap(),
+                Some(dynamic_offset),
+            ),
+        )],
     )
     .unwrap();
     let facts = context
@@ -296,9 +294,7 @@ fn dynamic_compute_operation(
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
 
-fn dynamic_compute_graph(
-    context: &GpuContext,
-) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
+fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
     let storage_alignment = context
         .device_facts()
         .device_limits()
@@ -365,8 +361,12 @@ fn dynamic_compute_graph(
         .unwrap();
     builder
         .add_explicit_order(
-            GpuExplicitOrder::new(&second_id, &zero_id, "prove zero-dispatch execution semantics")
-                .unwrap(),
+            GpuExplicitOrder::new(
+                &second_id,
+                &zero_id,
+                "prove zero-dispatch execution semantics",
+            )
+            .unwrap(),
         )
         .unwrap();
     add_operation(
@@ -376,9 +376,10 @@ fn dynamic_compute_graph(
     );
 
     (
-        GpuPreparedWorkGraph::prepare(label("noop dynamic compute graph"), [
-            builder.finish().unwrap(),
-        ])
+        GpuPreparedWorkGraph::prepare(
+            label("noop dynamic compute graph"),
+            [builder.finish().unwrap()],
+        )
         .unwrap(),
         readback_id,
         values,
@@ -401,7 +402,10 @@ fn progress_to_readback(
         if let GpuSubmissionStatus::Failed(failure) = submission.status() {
             panic!("G5B submission failed before readback: {failure:?}");
         }
-        assert!(Instant::now() < deadline, "G5B readback did not materialize");
+        assert!(
+            Instant::now() < deadline,
+            "G5B readback did not materialize"
+        );
         std::thread::yield_now();
     };
 
@@ -412,7 +416,10 @@ fn progress_to_readback(
             GpuSubmissionStatus::Failed(failure) => panic!("G5B submission failed: {failure:?}"),
             GpuSubmissionStatus::Accepted => {}
         }
-        assert!(Instant::now() < deadline, "G5B submission did not terminalize");
+        assert!(
+            Instant::now() < deadline,
+            "G5B submission did not terminalize"
+        );
         std::thread::yield_now();
     }
     bytes
