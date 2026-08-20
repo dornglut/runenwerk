@@ -111,21 +111,34 @@ fn noop_context() -> GpuContext {
             GpuCapabilityFeature::Copy,
         ))
         .unwrap();
-    let descriptor = GpuContextDescriptor::new(requirements).with_label("G5B noop buffer proof");
+    let descriptor = GpuContextDescriptor::new(requirements)
+        .with_allowed_backends([GpuBackendFamily::UnknownBackend])
+        .with_label("G5B noop buffer proof");
 
     let mut instance_descriptor = InstanceDescriptor::new_without_display_handle();
     instance_descriptor.backends = Backends::NOOP;
     instance_descriptor.backend_options.noop = NoopBackendOptions::enabled();
     let instance = Instance::new(enforce_runengpu_instance_flags(instance_descriptor));
 
-    pollster::block_on(request_with_instance(
+    let context = pollster::block_on(request_with_instance(
         instance,
         descriptor,
         None,
         GpuRealizationPolicies::default(),
         GpuExecutionPolicy::default(),
     ))
-    .expect("explicitly enabled WGPU noop backend must admit the buffer-only G5B test context")
+    .expect("explicitly enabled WGPU noop backend must admit the buffer-only G5B test context");
+    assert_eq!(
+        context.adapter_facts().backend(),
+        GpuBackendFamily::UnknownBackend,
+        "the deterministic runtime proof must not masquerade WGPU noop as a production backend"
+    );
+    assert_eq!(
+        context.admission_report().candidate().portability(),
+        GpuPortabilityClass::Unsupported,
+        "the test-only seam must preserve production portability truth"
+    );
+    context
 }
 
 #[test]
