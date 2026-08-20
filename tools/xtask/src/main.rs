@@ -237,6 +237,7 @@ fn validate_workflow_inventory(root: &Path) -> Result<(), String> {
     let expected = BTreeSet::from([
         ".github/workflows/ci.yml".to_owned(),
         ".github/workflows/docs-validation.yml".to_owned(),
+        ".github/workflows/runengpu-native-conformance.yml".to_owned(),
     ]);
     if found == expected {
         Ok(())
