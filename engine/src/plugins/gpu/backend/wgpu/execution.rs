@@ -789,8 +789,8 @@ fn prepare_buffer_plan(
         .copy_buffer_offset
         .ok_or_else(|| {
             GpuSubmissionPreparationError::new(
-                GpuSubmissionPreparationErrorKind::UnsupportedOperation,
-                "created device did not publish a buffer-copy alignment fact",
+                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                "created device did not publish its required buffer-copy alignment fact",
             )
         })?;
     let mut cache = BTreeMap::<GpuWorkResourceId, GpuRealizedBuffer>::new();
@@ -948,7 +948,7 @@ fn validate_copy_range(
 ) -> Result<(), GpuSubmissionPreparationError> {
     if alignment == 0 || !offset.is_multiple_of(alignment) || !size.is_multiple_of(alignment) {
         return Err(GpuSubmissionPreparationError::new(
-            GpuSubmissionPreparationErrorKind::UnsupportedOperation,
+            GpuSubmissionPreparationErrorKind::TransferAlignmentNotAdmitted,
             format!(
                 "buffer transfer range offset={offset} size={size} is not encodable at admitted copy alignment {alignment}"
             ),
