@@ -6,6 +6,9 @@
 mod adapter_mapping;
 mod current_host;
 mod device_request;
+mod execution;
+#[cfg(test)]
+mod execution_tests;
 mod health;
 mod pipeline_realization;
 mod program_binding_realization;
@@ -13,6 +16,7 @@ mod resource_realization;
 mod state;
 
 pub(crate) use device_request::request_headless;
+pub(crate) use execution::WgpuExecutionState;
 pub(crate) use health::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 pub(crate) use pipeline_realization::{
     ComputePipelineRealizationRecord, PipelineRealizationState, RenderPipelineRealizationRecord,

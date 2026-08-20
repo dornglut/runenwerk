@@ -108,15 +108,17 @@ fn terminal_impl_blocks(source: &str) -> Vec<String> {
 }
 
 #[test]
-fn g4c1_generic_resource_creation_has_one_private_owner_and_one_surface_view_exception() {
+fn g4c1_logical_resource_creation_stays_private_while_g5b_staging_is_isolated() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let owner = "src/plugins/gpu/backend/wgpu/resource_realization/mod.rs";
-    for token in [
-        ".create_buffer(",
-        ".create_texture(",
-        ".create_sampler(",
-        ".create_query_set(",
-    ] {
+    let execution = "src/plugins/gpu/backend/wgpu/execution.rs";
+
+    assert_eq!(
+        token_paths(&manifest, ".create_buffer("),
+        BTreeSet::from([owner.to_owned(), execution.to_owned()]),
+        "buffer creation must remain either G4C1 logical realization or the one private G5B staging owner"
+    );
+    for token in [".create_texture(", ".create_sampler(", ".create_query_set("] {
         assert_eq!(
             token_paths(&manifest, token),
             BTreeSet::from([owner.to_owned()]),
@@ -133,8 +135,21 @@ fn g4c1_generic_resource_creation_has_one_private_owner_and_one_surface_view_exc
     );
     assert!(
         token_paths(&manifest, ".create_buffer_init(").is_empty(),
-        "G4C1 must not retain a second buffer-creation path"
+        "G4C1/G5B must not retain a second buffer-creation helper path"
     );
+
+    let execution_source = compact(&read(&manifest, execution));
+    assert_eq!(
+        execution_source.matches(".create_buffer(").count(),
+        2,
+        "the first G5B checkpoint permits exactly upload and readback staging buffer creation"
+    );
+    assert!(execution_source.contains(
+        "label:Some(\"RunenGPUuploadstaging\"),size:payload.layout().byte_len(),usage:BufferUsages::COPY_SRC,mapped_at_creation:true"
+    ));
+    assert!(execution_source.contains(
+        "label:Some(\"RunenGPUreadbackstaging\"),size:*size,usage:BufferUsages::COPY_DST|BufferUsages::MAP_READ,mapped_at_creation:false"
+    ));
 }
 
 #[test]

@@ -13,5 +13,6 @@ pub(crate) use wgpu::{
     CurrentRenderVertexBufferTerminal, CurrentSurfaceReadbackCopyTerminal,
     CurrentSurfaceTextureCopyTerminal, PipelineLayoutRealizationRecord, ProgramRealizationRecord,
     QuerySetRealizationRecord, RenderPipelineRealizationRecord, SamplerRealizationRecord,
-    TextureRealizationRecord, TextureViewRealizationRecord, WgpuContextState, request_headless,
+    TextureRealizationRecord, TextureViewRealizationRecord, WgpuContextState, WgpuExecutionState,
+    request_headless,
 };

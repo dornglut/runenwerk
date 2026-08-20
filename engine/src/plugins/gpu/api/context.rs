@@ -3,7 +3,7 @@
 //! This module is the public namespace only.  Each admission concern has one
 //! implementation owner below it; it is not a compatibility layer.
 
-use super::{GpuRealizationPolicies, GpuRuntimeBindingDeviceFacts};
+use super::{GpuExecutionPolicy, GpuRealizationPolicies, GpuRuntimeBindingDeviceFacts};
 use core::num::NonZeroU64;
 
 mod admission;
@@ -61,7 +61,12 @@ pub struct GpuContext {
 impl GpuContext {
     /// Requests an asynchronous, headless-first context admission.
     pub async fn request(descriptor: GpuContextDescriptor) -> Result<Self, GpuContextRequestError> {
-        Self::request_with_realization_policies(descriptor, GpuRealizationPolicies::default()).await
+        Self::request_with_policies(
+            descriptor,
+            GpuRealizationPolicies::default(),
+            GpuExecutionPolicy::default(),
+        )
+        .await
     }
 
     /// Requests a context with explicit G4C1 and G4C2 realization-record bounds.
@@ -71,7 +76,29 @@ impl GpuContext {
         descriptor: GpuContextDescriptor,
         realization_policies: GpuRealizationPolicies,
     ) -> Result<Self, GpuContextRequestError> {
-        crate::plugins::gpu::backend::request_headless(descriptor, realization_policies).await
+        Self::request_with_policies(
+            descriptor,
+            realization_policies,
+            GpuExecutionPolicy::default(),
+        )
+        .await
+    }
+
+    /// Requests a context with explicit independent realization and execution pressure policies.
+    ///
+    /// Execution capacities govern prepared/in-flight submissions and transfer staging only; they
+    /// do not become resource-realization, logical resource-size, or physical residency budgets.
+    pub async fn request_with_policies(
+        descriptor: GpuContextDescriptor,
+        realization_policies: GpuRealizationPolicies,
+        execution_policy: GpuExecutionPolicy,
+    ) -> Result<Self, GpuContextRequestError> {
+        crate::plugins::gpu::backend::request_headless(
+            descriptor,
+            realization_policies,
+            execution_policy,
+        )
+        .await
     }
 
     pub const fn id(&self) -> GpuContextId {

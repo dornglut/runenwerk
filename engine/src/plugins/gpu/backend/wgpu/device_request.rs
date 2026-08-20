@@ -1,16 +1,16 @@
 use super::adapter_mapping::adapter_facts;
 use super::{
     PipelineRealizationState, ProgramBindingRealizationState, ResourceRealizationState,
-    WgpuContextState, WgpuDeviceHealth, WgpuErrorAttributionGate,
+    WgpuContextState, WgpuDeviceHealth, WgpuErrorAttributionGate, WgpuExecutionState,
 };
 use crate::plugins::gpu::{
     GpuAdapterFacts, GpuAlignmentFacts, GpuCandidateEnvironmentEvidence, GpuCandidateId,
     GpuCandidateInput, GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature,
     GpuContext, GpuContextAdmissionReport, GpuContextDescriptor, GpuContextRequestError,
     GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuDeviceLimits, GpuDeviceRequestProfile,
-    GpuFallbackStatus, GpuLimits, GpuRealizationPolicies, GpuSoftwareFallbackPolicy,
-    admitted_device_facts, allocate_context_id, canonical_candidate_input_key,
-    select_candidate_inputs,
+    GpuExecutionPolicy, GpuFallbackStatus, GpuLimits, GpuRealizationPolicies,
+    GpuSoftwareFallbackPolicy, admitted_device_facts, allocate_context_id,
+    canonical_candidate_input_key, select_candidate_inputs,
 };
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
@@ -31,12 +31,14 @@ struct NativeAdapterCandidate<T> {
 pub(crate) async fn request_headless(
     descriptor: GpuContextDescriptor,
     realization_policies: GpuRealizationPolicies,
+    execution_policy: GpuExecutionPolicy,
 ) -> Result<GpuContext, GpuContextRequestError> {
     request_with_instance(
         Instance::new(runengpu_instance_descriptor()),
         descriptor,
         None,
         realization_policies,
+        execution_policy,
     )
     .await
 }
@@ -61,6 +63,7 @@ pub(super) async fn request_with_instance(
     descriptor: GpuContextDescriptor,
     compatible_surface: Option<&Surface<'_>>,
     realization_policies: GpuRealizationPolicies,
+    execution_policy: GpuExecutionPolicy,
 ) -> Result<GpuContext, GpuContextRequestError> {
     crate::plugins::gpu::validate_descriptor(&descriptor)?;
     let (adapter, selection, selection_kind) =
@@ -126,6 +129,7 @@ pub(super) async fn request_with_instance(
         Arc::clone(&health),
         Arc::clone(&error_attribution_gate),
     );
+    let execution = Arc::new(WgpuExecutionState::new(affinity, execution_policy));
     let adapter_facts = candidate.adapter().clone();
     Ok(GpuContext {
         id,
@@ -148,6 +152,7 @@ pub(super) async fn request_with_instance(
             resource_realization,
             program_binding_realization,
             pipeline_realization,
+            execution,
         },
     })
 }
