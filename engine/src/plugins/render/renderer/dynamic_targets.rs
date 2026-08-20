@@ -359,7 +359,7 @@ fn dynamic_format_to_gpu(format: RenderTextureTargetFormat) -> GpuTextureFormat 
     }
 }
 
-fn dynamic_usage_to_gpu(usage: RenderDynamicTextureTargetUsage) -> Vec<GpuTextureUsage> {
+fn dynamic_usage_to_gpu(usage: RenderTextureTargetUsage) -> Vec<GpuTextureUsage> {
     let mut out = Vec::new();
     if usage.sampled {
         out.push(GpuTextureUsage::Sampled);
