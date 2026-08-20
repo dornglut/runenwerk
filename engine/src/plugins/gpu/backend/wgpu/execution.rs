@@ -21,6 +21,7 @@ pub(crate) struct WgpuExecutionState {
     policy: GpuExecutionPolicy,
     next_prepared: AtomicU64,
     next_submission: AtomicU64,
+    submission_order: Mutex<()>,
     inner: Mutex<ExecutionInner>,
     events: Mutex<VecDeque<ExecutionEvent>>,
 }
@@ -145,6 +146,7 @@ impl WgpuExecutionState {
             policy,
             next_prepared: AtomicU64::new(1),
             next_submission: AtomicU64::new(1),
+            submission_order: Mutex::new(()),
             inner: Mutex::new(ExecutionInner::default()),
             events: Mutex::new(VecDeque::new()),
         }
@@ -758,6 +760,16 @@ impl GpuContext {
                 ),
             ));
         }
+
+        // Submission IDs define this context owner's execution order. Keep irreversible acceptance
+        // and the corresponding physical encode/submit in one owner-local interval so concurrent
+        // callers cannot publish IDs in one order and queue the work in another.
+        let _submission_order = self
+            .backend
+            .execution
+            .submission_order
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(fault) = self.backend.health.terminal_fault() {
             return Err(GpuPreparedSubmissionRejected::new(
                 prepared,
