@@ -47,7 +47,7 @@ fn texture(
 }
 
 #[test]
-fn depth_copy_region_requires_complete_mip_extent_from_zero_origin() {
+fn depth_copy_region_requires_complete_plane_but_allows_layer_subset() {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let depth = texture(&mut allocator, "depth copy", GpuTextureFormat::Depth32Float);
 
@@ -57,24 +57,37 @@ fn depth_copy_region_requires_complete_mip_extent_from_zero_origin() {
             1,
             GpuTextureOrigin::new(0, 0, 0),
             GpuTextureAspect::DepthOnly,
-            GpuCopyExtent::new(7, 4, 2).unwrap(),
+            GpuCopyExtent::new(7, 4, 1).unwrap(),
         )
         .is_err(),
-        "partial depth width must not survive into private buffer/texture or texture/texture encoding"
+        "partial depth width must not survive into private encoding"
     );
     assert!(
         GpuTextureCopyRegion::new(
             &depth,
             1,
-            GpuTextureOrigin::new(0, 0, 1),
+            GpuTextureOrigin::new(0, 0, 0),
             GpuTextureAspect::DepthOnly,
-            GpuCopyExtent::new(8, 4, 1).unwrap(),
+            GpuCopyExtent::new(8, 3, 1).unwrap(),
         )
         .is_err(),
-        "partial depth array-layer coverage must not survive into private encoding"
+        "partial depth height must not survive into private encoding"
     );
 
-    let full = GpuTextureCopyRegion::new(
+    let layer = GpuTextureCopyRegion::new(
+        &depth,
+        1,
+        GpuTextureOrigin::new(0, 0, 1),
+        GpuTextureAspect::DepthOnly,
+        GpuCopyExtent::new(8, 4, 1).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(layer.origin(), GpuTextureOrigin::new(0, 0, 1));
+    assert_eq!(layer.extent(), GpuCopyExtent::new(8, 4, 1).unwrap());
+    assert_eq!(layer.subresources().base_array_layer(), 1);
+    assert_eq!(layer.subresources().array_layer_count(), 1);
+
+    let all_layers = GpuTextureCopyRegion::new(
         &depth,
         1,
         GpuTextureOrigin::new(0, 0, 0),
@@ -82,9 +95,7 @@ fn depth_copy_region_requires_complete_mip_extent_from_zero_origin() {
         GpuCopyExtent::new(8, 4, 2).unwrap(),
     )
     .unwrap();
-    assert_eq!(full.origin(), GpuTextureOrigin::new(0, 0, 0));
-    assert_eq!(full.extent(), GpuCopyExtent::new(8, 4, 2).unwrap());
-    assert_eq!(full.aspect(), GpuTextureAspect::DepthOnly);
+    assert_eq!(all_layers.aspect(), GpuTextureAspect::DepthOnly);
 }
 
 #[test]
