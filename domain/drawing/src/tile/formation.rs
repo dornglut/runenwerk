@@ -136,7 +136,9 @@ impl DrawingInkTilePayload {
 
     pub fn non_transparent_sample_count(&self) -> usize {
         self.rgba8_premultiplied
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|pixel| pixel[3] != 0)
             .count()
     }
