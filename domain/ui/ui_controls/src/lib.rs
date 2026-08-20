@@ -32,7 +32,6 @@ pub use accessibility::*;
 pub use action_prompt::ACTION_PROMPT_CONTROL_KIND_ID;
 pub use base_control::*;
 pub use button::BUTTON_CONTROL_KIND_ID;
-pub use catalog::*;
 pub use color_picker::COLOR_PICKER_CONTROL_KIND_ID;
 pub use diagnostics::*;
 pub use editable_text::*;
