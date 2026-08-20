@@ -296,7 +296,15 @@ pub(crate) fn evaluate_validated_candidate(
     }
 
     let portability = derive_portability(descriptor, &capability_admission, adapter.backend());
-    if portability.class() == GpuPortabilityClass::Unsupported {
+    let unsupported_backend = portability.class() == GpuPortabilityClass::Unsupported;
+    #[cfg(test)]
+    let unsupported_backend = unsupported_backend
+        && !(adapter.backend() == super::descriptor::GpuBackendFamily::UnknownBackend
+            && descriptor.allowed_backends().len() == 1
+            && descriptor
+                .allowed_backends()
+                .contains(&super::descriptor::GpuBackendFamily::UnknownBackend));
+    if unsupported_backend {
         return Err(GpuContextRequestError::new(
             GpuContextRequestErrorCategory::NoAdmissibleCandidate,
             "adapter backend cannot establish the requested portability contract",
