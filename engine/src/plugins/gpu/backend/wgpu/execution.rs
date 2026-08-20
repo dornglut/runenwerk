@@ -18,8 +18,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use wgpu::{
-    Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor, MapMode,
-    PollType,
+    Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
+    MapMode, PollType,
 };
 
 #[derive(Debug)]
@@ -1263,15 +1263,17 @@ fn encode_submit_and_register(
                         pipeline,
                         &backend.program_binding_realization,
                         |pipeline_object| {
-                            backend.program_binding_realization.with_execution_bind_groups(
-                                &realized_groups,
-                                |group_objects| {
-                                    let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor {
-                                        label: Some("RunenGPU G5B compute"),
-                                        timestamp_writes: None,
-                                    });
+                            backend
+                                .program_binding_realization
+                                .with_execution_bind_groups(&realized_groups, |group_objects| {
+                                    let mut pass =
+                                        encoder.begin_compute_pass(&ComputePassDescriptor {
+                                            label: Some("RunenGPU G5B compute"),
+                                            timestamp_writes: None,
+                                        });
                                     pass.set_pipeline(pipeline_object);
-                                    for (prepared, object) in bind_groups.iter().zip(group_objects) {
+                                    for (prepared, object) in bind_groups.iter().zip(group_objects)
+                                    {
                                         pass.set_bind_group(
                                             prepared.index,
                                             *object,
@@ -1280,8 +1282,7 @@ fn encode_submit_and_register(
                                     }
                                     let [x, y, z] = dispatch.as_array();
                                     pass.dispatch_workgroups(x, y, z);
-                                },
-                            )
+                                })
                         },
                     )
                     .map_err(submission_pipeline_failure)?
