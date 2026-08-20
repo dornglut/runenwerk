@@ -164,6 +164,20 @@ impl GpuTextureCopyRegion {
                 "keep origin, extent, and aspect inside the selected mip",
             ));
         }
+        if descriptor.format().is_depth()
+            && (origin.x() != 0
+                || origin.y() != 0
+                || extent.width() != mip_width
+                || extent.height() != mip_height)
+        {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU texture copy region",
+                label,
+                Some(texture.diagnostic_identity()),
+                GpuWorkOperationCause::InvalidCopyRegion,
+                "copy the complete depth mip plane from zero x/y origin",
+            ));
+        }
         let (base_array_layer, array_layer_count) = match descriptor.dimension() {
             GpuTextureDimension::D2 => (origin.z(), extent.depth_or_layers()),
             GpuTextureDimension::D1 | GpuTextureDimension::D3 => (0, 1),
