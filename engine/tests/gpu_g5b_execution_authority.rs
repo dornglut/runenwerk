@@ -93,12 +93,17 @@ fn g5b_mapping_and_completion_are_command_buffer_local_before_submit() {
 }
 
 #[test]
-fn g5b_rejection_categories_and_submission_identity_preserve_acceptance_order() {
+fn g5b_rejection_identity_and_owner_local_execution_order_preserve_acceptance() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let execution = compact(&read(
         &manifest,
         "src/plugins/gpu/backend/wgpu/execution.rs",
     ));
+
+    assert!(
+        execution.contains("submission_order:Mutex<()>"),
+        "G5B execution state must retain a context-local acceptance/execution ordering gate"
+    );
 
     let submit_start = execution
         .find("pubfnsubmit_prepared(")
@@ -117,9 +122,22 @@ fn g5b_rejection_categories_and_submission_identity_preserve_acceptance_order() 
     let owner = submit
         .find(".ptr_eq(&Arc::downgrade(&self.backend.execution))")
         .expect("same-affinity prepared ownership must still be checked");
+    let order_gate = submit
+        .find("let_submission_order=self.backend.execution.submission_order.lock().unwrap_or_else(std::sync::PoisonError::into_inner);")
+        .expect("owner-local submission ordering must begin before irreversible acceptance");
+    let accept = submit
+        .find("self.backend.execution.accept_prepared(&prepared)")
+        .expect("irreversible acceptance must remain explicit");
+    let encode_submit = submit
+        .find("encode_submit_and_register_buffers(")
+        .expect("accepted physical execution must remain in the same submit entrypoint");
     assert!(
-        foreign < stale && stale < owner,
-        "context and generation classification must precede private execution-owner identity"
+        foreign < stale && stale < owner && owner < order_gate && order_gate < accept && accept < encode_submit,
+        "classification must precede one owner-local interval spanning irreversible acceptance through physical execution"
+    );
+    assert!(
+        !submit.contains("drop(_submission_order)"),
+        "the owner-local execution-order gate must remain held through physical encode/submit"
     );
 
     let accept_start = execution
