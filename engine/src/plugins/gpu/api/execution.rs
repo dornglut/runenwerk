@@ -109,6 +109,13 @@ impl GpuExecutionStats {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GpuExecutionLifecycleState {
+    Running,
+    ShuttingDown,
+    Closed,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuSubmissionId(NonZeroU64);
 
@@ -288,6 +295,7 @@ pub enum GpuSubmissionPreparationErrorKind {
     ProgramBindingRealizationFailed,
     PipelineRealizationFailed,
     DynamicOffsetNotEncodable,
+    ExecutionNotRunning,
     ContextOrDeviceUnavailableOrLost,
     IdentityExhausted,
     InternalInvariant,
@@ -345,6 +353,7 @@ pub enum GpuSubmissionRejectionKind {
     UploadBytesInFlightExceeded,
     ReadbackBytesInFlightExceeded,
     PendingReadbacksExceeded,
+    ExecutionNotRunning,
     ContextOrDeviceUnavailableOrLost,
     IdentityExhausted,
 }
