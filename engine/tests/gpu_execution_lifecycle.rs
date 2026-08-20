@@ -34,10 +34,7 @@ fn buffer(
                 byte_len,
                 GpuBufferUsages::new(
                     &resource_label,
-                    [
-                        GpuBufferUsage::CopySource,
-                        GpuBufferUsage::CopyDestination,
-                    ],
+                    [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
                 )
                 .unwrap(),
                 GpuBufferInitialization::Uninitialized,
@@ -47,11 +44,7 @@ fn buffer(
         .unwrap()
 }
 
-fn add_operation(
-    builder: &mut GpuWorkFragmentBuilder,
-    name: &str,
-    operation: GpuWorkOperation,
-) {
+fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: GpuWorkOperation) {
     builder
         .add_node(
             label(name),
@@ -68,7 +61,8 @@ fn upload_graph(name: &str, values: &[u32]) -> GpuPreparedWorkGraph {
     let byte_len = u64::try_from(std::mem::size_of_val(values)).unwrap();
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let target = buffer(&mut allocator, &format!("{name} target"), byte_len);
-    let target_region = GpuBufferRegion::new(&target, GpuBufferRange::whole(&target).unwrap()).unwrap();
+    let target_region =
+        GpuBufferRegion::new(&target, GpuBufferRange::whole(&target).unwrap()).unwrap();
     let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
         format!("{name} payload"),
         values,
@@ -104,7 +98,8 @@ fn round_trip_graph(name: &str, values: &[u32]) -> (GpuPreparedWorkGraph, GpuRea
     )
     .unwrap();
     let upload = GpuUploadOperation::new(source_region.clone().into(), payload).unwrap();
-    let copy = GpuCopyOperation::buffer_to_buffer(source_region, destination_region.clone()).unwrap();
+    let copy =
+        GpuCopyOperation::buffer_to_buffer(source_region, destination_region.clone()).unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
     let readback = GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
 
@@ -127,11 +122,8 @@ fn round_trip_graph(name: &str, values: &[u32]) -> (GpuPreparedWorkGraph, GpuRea
         GpuWorkOperation::Readback(readback),
     );
     (
-        GpuPreparedWorkGraph::prepare(
-            label(&format!("{name} graph")),
-            [builder.finish().unwrap()],
-        )
-        .unwrap(),
+        GpuPreparedWorkGraph::prepare(label(&format!("{name} graph")), [builder.finish().unwrap()])
+            .unwrap(),
         readback_id,
     )
 }
@@ -139,7 +131,9 @@ fn round_trip_graph(name: &str, values: &[u32]) -> (GpuPreparedWorkGraph, GpuRea
 fn request_context(policy: GpuExecutionPolicy, test_name: &str) -> Option<GpuContext> {
     let mut requirements = GpuCapabilityRequirements::new();
     requirements
-        .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements).with_label(test_name);
     match pollster::block_on(GpuContext::request_with_policies(
@@ -183,17 +177,19 @@ fn drive_submission_to_completion(context: &GpuContext, submission: &GpuSubmissi
             }
             GpuSubmissionStatus::Accepted => {}
         }
-        assert!(Instant::now() < deadline, "G5B submission did not terminalize");
+        assert!(
+            Instant::now() < deadline,
+            "G5B submission did not terminalize"
+        );
         std::thread::yield_now();
     }
 }
 
 #[test]
 fn headless_upload_copy_readback_round_trip_uses_public_runengpu_lifecycle() {
-    let Some(context) = request_context(
-        policy(4, 2, 1024, 1024, 4),
-        "G5B public buffer round trip",
-    ) else {
+    let Some(context) =
+        request_context(policy(4, 2, 1024, 1024, 4), "G5B public buffer round trip")
+    else {
         return;
     };
     let values = [0x0102_0304_u32, 17, 29, u32::MAX];
@@ -225,7 +221,10 @@ fn headless_upload_copy_readback_round_trip_uses_public_runengpu_lifecycle() {
         if let GpuSubmissionStatus::Failed(failure) = submission.status() {
             panic!("accepted G5B submission failed before readback: {failure:?}");
         }
-        assert!(Instant::now() < deadline, "G5B readback did not materialize");
+        assert!(
+            Instant::now() < deadline,
+            "G5B readback did not materialize"
+        );
         std::thread::yield_now();
     };
     drive_submission_to_completion(&context, &submission);
@@ -247,14 +246,12 @@ fn headless_upload_copy_readback_round_trip_uses_public_runengpu_lifecycle() {
 
 #[test]
 fn prepared_capacity_is_bounded_and_drop_releases_the_record() {
-    let Some(context) = request_context(
-        policy(1, 1, 1024, 0, 0),
-        "G5B prepared capacity and drop",
-    ) else {
+    let Some(context) = request_context(policy(1, 1, 1024, 0, 0), "G5B prepared capacity and drop")
+    else {
         return;
     };
-    let first = pollster::block_on(context.prepare_submission(upload_graph("first", &[1_u32])))
-        .unwrap();
+    let first =
+        pollster::block_on(context.prepare_submission(upload_graph("first", &[1_u32]))).unwrap();
     assert_eq!(context.execution_stats().prepared_submissions(), 1);
 
     let error = pollster::block_on(context.prepare_submission(upload_graph("second", &[2_u32])))
@@ -267,10 +264,9 @@ fn prepared_capacity_is_bounded_and_drop_releases_the_record() {
 
     drop(first);
     assert_eq!(context.execution_stats().prepared_submissions(), 0);
-    let replacement = pollster::block_on(
-        context.prepare_submission(upload_graph("replacement", &[3_u32])),
-    )
-    .unwrap();
+    let replacement =
+        pollster::block_on(context.prepare_submission(upload_graph("replacement", &[3_u32])))
+            .unwrap();
     assert_eq!(context.execution_stats().prepared_submissions(), 1);
     drop(replacement);
     assert_eq!(context.execution_stats().prepared_submissions(), 0);
@@ -284,10 +280,10 @@ fn pre_acceptance_pressure_rejection_preserves_prepared_ownership_for_retry() {
     ) else {
         return;
     };
-    let first = pollster::block_on(context.prepare_submission(upload_graph("first", &[1_u32])))
-        .unwrap();
-    let second = pollster::block_on(context.prepare_submission(upload_graph("second", &[2_u32])))
-        .unwrap();
+    let first =
+        pollster::block_on(context.prepare_submission(upload_graph("first", &[1_u32]))).unwrap();
+    let second =
+        pollster::block_on(context.prepare_submission(upload_graph("second", &[2_u32]))).unwrap();
     let first_submission = context.submit_prepared(first).unwrap();
 
     let rejected = context
@@ -321,8 +317,8 @@ fn last_context_drop_terminalizes_detached_accepted_observation_without_waiting(
     ) else {
         return;
     };
-    let prepared = pollster::block_on(context.prepare_submission(upload_graph("drop", &[7_u32])))
-        .unwrap();
+    let prepared =
+        pollster::block_on(context.prepare_submission(upload_graph("drop", &[7_u32]))).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
     assert!(matches!(submission.status(), GpuSubmissionStatus::Accepted));
 
