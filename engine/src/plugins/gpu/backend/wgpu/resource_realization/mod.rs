@@ -14,8 +14,8 @@ use crate::plugins::gpu::{
     GpuBufferHandle, GpuContext, GpuContextAffinity, GpuContextAffinityError, GpuQuerySetHandle,
     GpuRealizedBuffer, GpuRealizedQuerySet, GpuRealizedSampler, GpuRealizedTexture,
     GpuRealizedTextureView, GpuResourceRealizationError, GpuResourceRealizationErrorCategory,
-    GpuResourceRealizationPolicy, GpuResourceRealizationStats, GpuSamplerHandle, GpuTextureHandle,
-    GpuTextureViewHandle, GpuWorkResourceId,
+    GpuResourceRealizationPolicy, GpuResourceRealizationStats, GpuSamplerHandle, GpuTextureAspect,
+    GpuTextureHandle, GpuTextureViewHandle, GpuWorkResourceId,
 };
 use registry::{ResourceKind, ResourceRegistries};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -23,6 +23,10 @@ use wgpu::{
     BufferDescriptor, QuerySetDescriptor, SamplerDescriptor, TextureDescriptor,
     TextureViewDescriptor,
 };
+
+pub(super) const fn map_texture_aspect(aspect: GpuTextureAspect) -> wgpu::TextureAspect {
+    lowering::map_texture_aspect(aspect)
+}
 
 /// The sole authoritative owner of G4C1 lookup state for one context/device generation.
 pub(crate) struct ResourceRealizationState {
@@ -413,7 +417,7 @@ impl GpuContext {
                         format: descriptor.format().map(lowering::map_texture_format),
                         dimension: Some(lowering::map_texture_view_dimension(&descriptor)),
                         usage: None,
-                        aspect: lowering::map_texture_aspect(subresources.aspect()),
+                        aspect: map_texture_aspect(subresources.aspect()),
                         base_mip_level: subresources.base_mip_level(),
                         mip_level_count: Some(subresources.mip_level_count()),
                         base_array_layer: subresources.base_array_layer(),
