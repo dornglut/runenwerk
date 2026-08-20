@@ -1,0 +1,121 @@
+name: RunenGPU Native Conformance
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'engine/src/plugins/gpu/**'
+      - 'engine/tests/gpu_*.rs'
+      - 'engine/Cargo.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/runengpu-native-conformance.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'engine/src/plugins/gpu/**'
+      - 'engine/tests/gpu_*.rs'
+      - 'engine/Cargo.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/runengpu-native-conformance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runengpu-native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headless-compute:
+    name: Vulkan fallback headless compute
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+          echo "pull_request_base_revision=$PULL_REQUEST_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual checked-out revision: $actual_revision"
+          if [ -n "$PULL_REQUEST_BASE_REVISION" ]; then
+            echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"
+          fi
+          test "$actual_revision" = "$EXPECTED_REVISION"
+          echo "Conclusion: PASS"
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install Mesa Vulkan fallback
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools
+          icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$icd"
+          echo "Lavapipe ICD: $icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenwerk-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runenwerk-xdg"
+          chmod 700 "${RUNNER_TEMP}/runenwerk-xdg"
+
+      - name: Prove Vulkan software adapter
+        run: |
+          set -euo pipefail
+          vulkaninfo --summary
+
+      - name: Run native G5B headless proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --test gpu_g5b_native_runtime --locked -- --ignored --nocapture
+
+      - name: Check diff hygiene
+        run: git diff --check
+
+      - name: Prove native proof leaves tracked state clean
+        run: |
+          status="$(git status --short)"
+          if [ -n "$status" ]; then
+            printf 'Native conformance changed tracked state:\n%s\n' "$status" >&2
+            exit 1
+          fi
