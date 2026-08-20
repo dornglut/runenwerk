@@ -72,6 +72,15 @@ struct PreparedComputeBindGroup {
 }
 
 #[derive(Debug, Clone)]
+enum PreparedComputeDispatch {
+    Direct(GpuDispatchSize),
+    Indirect {
+        arguments: GpuRealizedBuffer,
+        offset: u64,
+    },
+}
+
+#[derive(Debug, Clone)]
 struct BufferReadbackMetadata {
     label: String,
     layout: GpuDataLayout,
@@ -88,7 +97,7 @@ enum PreparedExecutionOperation {
     Compute {
         pipeline: GpuRealizedComputePipeline,
         bind_groups: Vec<PreparedComputeBindGroup>,
-        dispatch: GpuDispatchSize,
+        dispatch: PreparedComputeDispatch,
     },
     Copy {
         source: GpuRealizedBuffer,
@@ -941,7 +950,7 @@ async fn prepare_execution_plan(
                 });
             }
             GpuWorkOperation::Compute(compute) => {
-                operations.push(prepare_compute_operation(context, compute).await?);
+                operations.push(prepare_compute_operation(context, &mut cache, compute).await?);
             }
             GpuWorkOperation::Copy(crate::plugins::gpu::GpuCopyOperation::BufferToBuffer {
                 source,
@@ -1015,7 +1024,7 @@ async fn prepare_execution_plan(
             }
             _ => {
                 return unsupported(
-                    "the current G5B checkpoint executes buffer Upload/Copy/Readback and direct compute only",
+                    "the current G5B checkpoint executes buffer Upload/Copy/Readback and compute dispatch only",
                 );
             }
         }
@@ -1031,13 +1040,24 @@ async fn prepare_execution_plan(
 
 async fn prepare_compute_operation(
     context: &GpuContext,
+    cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedBuffer>,
     compute: &crate::plugins::gpu::GpuComputeOperation,
 ) -> Result<PreparedExecutionOperation, GpuSubmissionPreparationError> {
     if compute.timestamp_writes().is_some() {
         return unsupported("compute timestamp writes remain outside this G5B checkpoint");
     }
-    let Some(dispatch) = compute.dispatch().direct_size() else {
-        return unsupported("indirect compute dispatch remains outside this G5B checkpoint");
+    let dispatch = if let Some(dispatch) = compute.dispatch().direct_size() {
+        PreparedComputeDispatch::Direct(dispatch)
+    } else if let Some(arguments) = compute.dispatch().indirect_access() {
+        PreparedComputeDispatch::Indirect {
+            arguments: realized_buffer(context, cache, arguments.buffer())?,
+            offset: arguments.range().offset(),
+        }
+    } else {
+        return Err(GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "validated compute dispatch lost both direct and indirect execution intent",
+        ));
     };
 
     let descriptor = compute.pipeline();
@@ -1304,7 +1324,8 @@ fn encode_submit_and_register(
                 bind_groups,
                 dispatch,
             } => {
-                if dispatch.as_array().contains(&0) {
+                if matches!(dispatch, PreparedComputeDispatch::Direct(size) if size.as_array().contains(&0))
+                {
                     continue;
                 }
                 let realized_groups = bind_groups
@@ -1334,8 +1355,18 @@ fn encode_submit_and_register(
                                             &prepared.dynamic_offsets,
                                         );
                                     }
-                                    let [x, y, z] = dispatch.as_array();
-                                    pass.dispatch_workgroups(x, y, z);
+                                    match dispatch {
+                                        PreparedComputeDispatch::Direct(size) => {
+                                            let [x, y, z] = size.as_array();
+                                            pass.dispatch_workgroups(x, y, z);
+                                        }
+                                        PreparedComputeDispatch::Indirect { arguments, offset } => {
+                                            pass.dispatch_workgroups_indirect(
+                                                &arguments.record.object,
+                                                *offset,
+                                            );
+                                        }
+                                    }
                                 })
                         },
                     )

@@ -190,8 +190,25 @@ fn g5b_compute_preparation_owns_checked_offsets_and_retained_g4_realizations() {
         "prepared compute work must retain exact G4 pipeline and bind-group records"
     );
     assert!(
-        execution.contains("ifdispatch.as_array().contains(&0){continue;}"),
-        "zero direct dispatch must remain a no-shader-execution case at private encoding"
+        execution.contains("Indirect{arguments:GpuRealizedBuffer,offset:u64"),
+        "prepared indirect compute must retain the exact realized G4 argument buffer and accepted byte offset"
+    );
+    assert!(
+        execution.contains(
+            "ifmatches!(dispatch,PreparedComputeDispatch::Direct(size)ifsize.as_array().contains(&0)){continue;}"
+        ),
+        "zero direct dispatch must remain a no-shader-execution case without suppressing indirect dispatch"
+    );
+    assert!(
+        execution.contains("arguments:realized_buffer(context,cache,arguments.buffer())?")
+            && execution.contains("offset:arguments.range().offset()"),
+        "indirect compute preparation must reuse the execution plan's G4 buffer cache and preserve the accepted offset"
+    );
+    assert!(
+        execution.contains("pass.dispatch_workgroups_indirect(")
+            && execution.contains("&arguments.record.object")
+            && execution.contains("*offset"),
+        "private execution must encode indirect dispatch from the retained G4 buffer and accepted offset without host-reading runtime arguments"
     );
     assert!(
         execution.contains("backend.program_binding_realization.with_execution_bind_groups("),

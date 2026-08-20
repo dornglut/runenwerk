@@ -83,6 +83,29 @@ fn compute_buffer(
         .unwrap()
 }
 
+fn indirect_buffer(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+    byte_len: u64,
+) -> GpuBufferHandle {
+    let resource_label = label(name);
+    allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common(name),
+                byte_len,
+                GpuBufferUsages::new(
+                    &resource_label,
+                    [GpuBufferUsage::Indirect, GpuBufferUsage::CopyDestination],
+                )
+                .unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
 fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: GpuWorkOperation) {
     builder
         .add_node(
@@ -208,6 +231,34 @@ fn noop_compute_context() -> GpuContext {
     context
 }
 
+fn noop_indirect_compute_context() -> GpuContext {
+    let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
+        .unwrap();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::IndirectExecution,
+        ))
+        .unwrap();
+    let descriptor = GpuContextDescriptor::new(requirements)
+        .with_allowed_backends([GpuBackendFamily::UnknownBackend])
+        .with_label("G5B noop indirect compute proof");
+
+    let context = pollster::block_on(request_with_instance(
+        noop_instance(),
+        descriptor,
+        None,
+        GpuRealizationPolicies::default(),
+        GpuExecutionPolicy::default(),
+    ))
+    .expect("explicitly enabled WGPU noop backend must prove indirect-compute admission");
+    assert_noop_test_context_truth(&context);
+    context
+}
+
 fn admitted_compute_source() -> GpuAdmittedProgramSource {
     let owner = GpuProgramSourceOwnerId::allocate().expect("test source owner should allocate");
     let identity = GpuProgramSourceIdentity::new(
@@ -263,13 +314,12 @@ fn dynamic_compute_pipeline() -> GpuComputePipelineDescriptor {
     .unwrap()
 }
 
-fn dynamic_compute_operation(
+fn dynamic_compute_bindings(
     context: &GpuContext,
     pipeline: &GpuComputePipelineDescriptor,
     buffer: &GpuBufferHandle,
     dynamic_offset: u64,
-    x: u32,
-) -> GpuComputeOperation {
+) -> GpuRuntimeBindingSet {
     let binding = GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
         [GpuRuntimeBindingResource::Buffer(
@@ -285,12 +335,35 @@ fn dynamic_compute_operation(
     let facts = context
         .runtime_binding_device_facts()
         .expect("admitted compute context must publish dynamic binding facts");
-    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding], &facts).unwrap();
+    GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding], &facts).unwrap()
+}
+
+fn dynamic_compute_operation(
+    context: &GpuContext,
+    pipeline: &GpuComputePipelineDescriptor,
+    buffer: &GpuBufferHandle,
+    dynamic_offset: u64,
+    x: u32,
+) -> GpuComputeOperation {
+    let bindings = dynamic_compute_bindings(context, pipeline, buffer, dynamic_offset);
     let dispatch = GpuDispatchIntent::direct(
         GpuDispatchSize::new(x, 1, 1).unwrap(),
         context.device_facts().workload_budget().limits(),
     )
     .unwrap();
+    GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
+}
+
+fn indirect_compute_operation(
+    context: &GpuContext,
+    pipeline: &GpuComputePipelineDescriptor,
+    buffer: &GpuBufferHandle,
+    dynamic_offset: u64,
+    arguments: &GpuBufferHandle,
+    indirect_offset: u64,
+) -> GpuComputeOperation {
+    let bindings = dynamic_compute_bindings(context, pipeline, buffer, dynamic_offset);
+    let dispatch = GpuDispatchIntent::indirect(arguments, indirect_offset).unwrap();
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
 
@@ -403,6 +476,82 @@ fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRead
     )
 }
 
+fn indirect_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId, [u32; 1]) {
+    let values = [41_u32];
+    let arguments = [1_u32, 1, 1];
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let values_buffer = compute_buffer(&mut allocator, "indirect compute values", 4);
+    let arguments_buffer = indirect_buffer(&mut allocator, "indirect compute arguments", 12);
+    let values_region = GpuBufferRegion::new(
+        &values_buffer,
+        GpuBufferRange::whole(&values_buffer).unwrap(),
+    )
+    .unwrap();
+    let arguments_region = GpuBufferRegion::new(
+        &arguments_buffer,
+        GpuBufferRange::whole(&arguments_buffer).unwrap(),
+    )
+    .unwrap();
+    let values_upload = GpuUploadOperation::new(
+        values_region.clone().into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer(
+            "indirect compute values payload",
+            &values,
+            provenance("indirect compute values payload"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let arguments_upload = GpuUploadOperation::new(
+        arguments_region.into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer(
+            "indirect compute arguments payload",
+            &arguments,
+            provenance("indirect compute arguments payload"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(values_region.into(), readback_id).unwrap();
+    let pipeline = dynamic_compute_pipeline();
+    let compute =
+        indirect_compute_operation(context, &pipeline, &values_buffer, 0, &arguments_buffer, 0);
+
+    let name = "noop indirect compute";
+    let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
+    builder.declare_resource(values_buffer.into()).unwrap();
+    builder.declare_resource(arguments_buffer.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "indirect compute values upload",
+        GpuWorkOperation::Upload(values_upload),
+    );
+    add_operation(
+        &mut builder,
+        "indirect compute arguments upload",
+        GpuWorkOperation::Upload(arguments_upload),
+    );
+    builder
+        .compute("indirect compute dispatch", compute)
+        .unwrap();
+    add_operation(
+        &mut builder,
+        "indirect compute readback",
+        GpuWorkOperation::Readback(readback),
+    );
+
+    (
+        GpuPreparedWorkGraph::prepare(
+            label("noop indirect compute graph"),
+            [builder.finish().unwrap()],
+        )
+        .unwrap(),
+        readback_id,
+        values,
+    )
+}
+
 fn progress_to_readback(
     context: &GpuContext,
     submission: &GpuSubmission,
@@ -498,6 +647,38 @@ fn noop_backend_proves_direct_compute_encoding_and_dynamic_bind_group_reuse() {
         bytes.as_bytes(),
         expected_bytes.as_slice(),
         "WGPU Noop performs no computation; unchanged bytes prove only the real G5B preparation/encoding/submission/readback path, not shader execution"
+    );
+
+    let stats = context.execution_stats();
+    assert_eq!(stats.prepared_submissions(), 0);
+    assert_eq!(stats.in_flight_submissions(), 0);
+    assert_eq!(stats.upload_bytes_in_flight(), 0);
+    assert_eq!(stats.readback_bytes_in_flight(), 0);
+    assert_eq!(stats.pending_readbacks(), 0);
+}
+
+#[test]
+fn noop_backend_proves_indirect_compute_preparation_encoding_and_lifecycle() {
+    let context = noop_indirect_compute_context();
+    let (graph, readback_id, expected) = indirect_compute_graph(&context);
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    assert_eq!(context.execution_stats().prepared_submissions(), 1);
+    let submission = context.submit_prepared(prepared).unwrap();
+    let readback = submission
+        .readback(readback_id)
+        .expect("accepted indirect-compute readback must remain observable")
+        .clone();
+    let bytes = progress_to_readback(&context, &submission, &readback);
+
+    let expected_bytes = expected
+        .iter()
+        .flat_map(|value| value.to_ne_bytes())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        bytes.as_bytes(),
+        expected_bytes.as_slice(),
+        "WGPU Noop performs no computation; unchanged bytes prove indirect preparation/encoding/submission/readback without claiming shader execution"
     );
 
     let stats = context.execution_stats();
