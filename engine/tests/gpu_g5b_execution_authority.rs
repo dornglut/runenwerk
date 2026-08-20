@@ -61,6 +61,10 @@ fn g5b_mapping_and_completion_are_command_buffer_local_before_submit() {
 
     let execution = compact(&read(&manifest, execution_path));
     assert!(
+        !execution.contains("current_render_execution_bridge("),
+        "reusable G5B execution must consume private G4 authority directly, not the residual renderer bridge"
+    );
+    assert!(
         !execution.contains("backend.queue.on_submitted_work_done("),
         "G5B completion must not regress to queue-relative previous-submit ownership"
     );
@@ -129,7 +133,7 @@ fn g5b_rejection_identity_and_owner_local_execution_order_preserve_acceptance() 
         .find("self.backend.execution.accept_prepared(&prepared)")
         .expect("irreversible acceptance must remain explicit");
     let encode_submit = submit
-        .find("encode_submit_and_register_buffers(")
+        .find("encode_submit_and_register(")
         .expect("accepted physical execution must remain in the same submit entrypoint");
     assert!(
         foreign < stale
@@ -164,5 +168,33 @@ fn g5b_rejection_identity_and_owner_local_execution_order_preserve_acceptance() 
     assert!(
         metadata < remove_prepared && remove_prepared < allocate_id,
         "all rollback-capable metadata validation must precede prepared removal and submission-ID publication"
+    );
+}
+
+#[test]
+fn g5b_compute_preparation_owns_checked_offsets_and_retained_g4_realizations() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let execution = compact(&read(
+        &manifest,
+        "src/plugins/gpu/backend/wgpu/execution.rs",
+    ));
+
+    assert!(execution.contains("dynamic_offsets:Vec<u32>"));
+    assert!(
+        execution.contains("u32::try_from(offset)"),
+        "logical u64 dynamic offsets must narrow exactly once during preparation"
+    );
+    assert!(
+        execution.contains("pipeline:GpuRealizedComputePipeline")
+            && execution.contains("realization:GpuRealizedBindGroup"),
+        "prepared compute work must retain exact G4 pipeline and bind-group records"
+    );
+    assert!(
+        execution.contains("ifdispatch.as_array().contains(&0){continue;}"),
+        "zero direct dispatch must remain a no-shader-execution case at private encoding"
+    );
+    assert!(
+        execution.contains("backend.program_binding_realization.with_execution_bind_groups("),
+        "G5B compute must consume the generic private G4 lexical lending owner"
     );
 }

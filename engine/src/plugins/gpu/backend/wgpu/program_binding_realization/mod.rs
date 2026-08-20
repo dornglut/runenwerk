@@ -107,6 +107,23 @@ impl ProgramBindingRealizationState {
         })
     }
 
+    /// Validates and lexically lends exact authoritative bind-group records to private execution.
+    /// The backend objects cannot escape this crate-private call boundary as public RunenGPU API.
+    pub(crate) fn with_execution_bind_groups<R>(
+        &self,
+        groups: &[&GpuRealizedBindGroup],
+        operation: impl FnOnce(&[&wgpu::BindGroup]) -> R,
+    ) -> Result<R, GpuProgramBindingRealizationError> {
+        for group in groups {
+            self.validate_execution_bridge_bind_group(&group.record)?;
+        }
+        let objects = groups
+            .iter()
+            .map(|group| &group.record.object)
+            .collect::<Vec<_>>();
+        Ok(operation(&objects))
+    }
+
     fn validate_execution_bridge_record(
         &self,
         request: &'static str,

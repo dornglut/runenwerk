@@ -1,19 +1,26 @@
 use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use crate::plugins::gpu::{
-    GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuDataLayout, GpuExecutionPolicy,
-    GpuExecutionStats, GpuPreparedSubmission, GpuPreparedSubmissionRejected, GpuPreparedWorkGraph,
-    GpuReadback, GpuReadbackBytes, GpuReadbackId, GpuReadbackStatus, GpuRealizedBuffer,
-    GpuResourceProvenance, GpuSubmission, GpuSubmissionFailure, GpuSubmissionFailureKind,
-    GpuSubmissionId, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
-    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuSubmissionStatus,
-    GpuTransferRegion, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData, TransferData,
+    GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuDataLayout, GpuDispatchSize,
+    GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
+    GpuPipelineRealizationErrorCategory, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
+    GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
+    GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
+    GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
+    GpuResourceProvenance, GpuRuntimeBindingResource, GpuSubmission, GpuSubmissionFailure,
+    GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
+    GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
+    GpuSubmissionStatus, GpuTransferRegion, GpuValidatedBindGroupBindings, GpuWorkOperation,
+    GpuWorkResourceId, PreparedGpuData, TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use wgpu::{Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, MapMode, PollType};
+use wgpu::{
+    Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
+    MapMode, PollType,
+};
 
 #[derive(Debug)]
 pub(crate) struct WgpuExecutionState {
@@ -28,7 +35,7 @@ pub(crate) struct WgpuExecutionState {
 
 #[derive(Debug, Default)]
 struct ExecutionInner {
-    prepared: BTreeMap<NonZeroU64, Option<PreparedBufferPlan>>,
+    prepared: BTreeMap<NonZeroU64, Option<PreparedExecutionPlan>>,
     in_flight: BTreeMap<GpuSubmissionId, InFlightSubmission>,
     upload_bytes_in_flight: u64,
     readback_bytes_in_flight: u64,
@@ -36,11 +43,18 @@ struct ExecutionInner {
 }
 
 #[derive(Debug, Clone)]
-struct PreparedBufferPlan {
-    operations: Vec<PreparedBufferOperation>,
+struct PreparedExecutionPlan {
+    operations: Vec<PreparedExecutionOperation>,
     upload_bytes: u64,
     readback_bytes: u64,
     readback_ids: Vec<GpuReadbackId>,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedComputeBindGroup {
+    index: u32,
+    realization: GpuRealizedBindGroup,
+    dynamic_offsets: Vec<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -51,11 +65,16 @@ struct BufferReadbackMetadata {
 }
 
 #[derive(Debug, Clone)]
-enum PreparedBufferOperation {
+enum PreparedExecutionOperation {
     Upload {
         destination: GpuRealizedBuffer,
         offset: u64,
         payload: PreparedGpuData<TransferData>,
+    },
+    Compute {
+        pipeline: GpuRealizedComputePipeline,
+        bind_groups: Vec<PreparedComputeBindGroup>,
+        dispatch: GpuDispatchSize,
     },
     Copy {
         source: GpuRealizedBuffer,
@@ -77,7 +96,7 @@ enum PreparedBufferOperation {
 struct InFlightSubmission {
     status: Arc<Mutex<GpuSubmissionStatus>>,
     readbacks: BTreeMap<GpuReadbackId, InFlightReadback>,
-    plan: Option<PreparedBufferPlan>,
+    plan: Option<PreparedExecutionPlan>,
     upload_staging: Vec<Arc<Buffer>>,
     upload_bytes: u64,
     submission_terminal: bool,
@@ -111,7 +130,7 @@ struct PreparationReservation {
 impl PreparationReservation {
     fn commit(
         mut self,
-        plan: PreparedBufferPlan,
+        plan: PreparedExecutionPlan,
     ) -> Result<NonZeroU64, GpuSubmissionPreparationError> {
         self.execution.commit_prepared(self.ticket, plan)?;
         self.committed = true;
@@ -129,7 +148,7 @@ impl Drop for PreparationReservation {
 
 struct AcceptedPlan {
     id: GpuSubmissionId,
-    plan: PreparedBufferPlan,
+    plan: PreparedExecutionPlan,
     status: Arc<Mutex<GpuSubmissionStatus>>,
     readbacks: Vec<GpuReadback>,
 }
@@ -211,7 +230,7 @@ impl WgpuExecutionState {
     fn commit_prepared(
         &self,
         ticket: NonZeroU64,
-        plan: PreparedBufferPlan,
+        plan: PreparedExecutionPlan,
     ) -> Result<(), GpuSubmissionPreparationError> {
         let mut inner = self.inner.lock().map_err(|_| {
             GpuSubmissionPreparationError::new(
@@ -318,7 +337,7 @@ impl WgpuExecutionState {
         let mut readbacks = BTreeMap::new();
         let mut public_readbacks = Vec::with_capacity(plan.readback_ids.len());
         for operation in &plan.operations {
-            let PreparedBufferOperation::Readback {
+            let PreparedExecutionOperation::Readback {
                 id: readback_id,
                 size,
                 metadata,
@@ -708,7 +727,7 @@ impl GpuContext {
         })?;
 
         let reservation = self.backend.execution.reserve_prepared()?;
-        let plan = prepare_buffer_plan(self, &graph)?;
+        let plan = prepare_execution_plan(self, &graph).await?;
         validate_plan_policy(
             plan.upload_bytes,
             plan.readback_bytes,
@@ -792,7 +811,7 @@ impl GpuContext {
             accepted.readbacks,
         );
 
-        if let Err(failure) = encode_submit_and_register_buffers(
+        if let Err(failure) = encode_submit_and_register(
             &self.backend,
             &self.backend.execution,
             accepted.id,
@@ -817,21 +836,10 @@ impl GpuContext {
     }
 }
 
-fn prepare_buffer_plan(
+async fn prepare_execution_plan(
     context: &GpuContext,
     graph: &GpuPreparedWorkGraph,
-) -> Result<PreparedBufferPlan, GpuSubmissionPreparationError> {
-    let alignment = context
-        .device_facts()
-        .device_limits()
-        .alignments()
-        .copy_buffer_offset
-        .ok_or_else(|| {
-            GpuSubmissionPreparationError::new(
-                GpuSubmissionPreparationErrorKind::InternalInvariant,
-                "created device did not publish its required buffer-copy alignment fact",
-            )
-        })?;
+) -> Result<PreparedExecutionPlan, GpuSubmissionPreparationError> {
     let mut cache = BTreeMap::<GpuWorkResourceId, GpuRealizedBuffer>::new();
     let mut operations = Vec::with_capacity(graph.topological_order().len());
     let mut upload_bytes = 0_u64;
@@ -854,9 +862,10 @@ fn prepare_buffer_plan(
             GpuWorkOperation::Upload(upload) => {
                 let GpuTransferRegion::Buffer(destination) = upload.destination() else {
                     return unsupported(
-                        "texture Upload remains outside the first G5B buffer lifecycle slice",
+                        "texture Upload remains outside the current G5B execution checkpoint",
                     );
                 };
+                let alignment = copy_alignment(context)?;
                 validate_copy_range(
                     destination.range().offset(),
                     destination.range().size(),
@@ -871,23 +880,27 @@ fn prepare_buffer_plan(
                             "upload byte demand overflowed the normalized u64 domain",
                         )
                     })?;
-                operations.push(PreparedBufferOperation::Upload {
+                operations.push(PreparedExecutionOperation::Upload {
                     destination: realized,
                     offset: destination.range().offset(),
                     payload: upload.payload().clone(),
                 });
             }
+            GpuWorkOperation::Compute(compute) => {
+                operations.push(prepare_compute_operation(context, compute).await?);
+            }
             GpuWorkOperation::Copy(crate::plugins::gpu::GpuCopyOperation::BufferToBuffer {
                 source,
                 destination,
             }) => {
+                let alignment = copy_alignment(context)?;
                 validate_copy_range(source.range().offset(), source.range().size(), alignment)?;
                 validate_copy_range(
                     destination.range().offset(),
                     destination.range().size(),
                     alignment,
                 )?;
-                operations.push(PreparedBufferOperation::Copy {
+                operations.push(PreparedExecutionOperation::Copy {
                     source: realized_buffer(context, &mut cache, source.buffer())?,
                     source_offset: source.range().offset(),
                     destination: realized_buffer(context, &mut cache, destination.buffer())?,
@@ -898,9 +911,10 @@ fn prepare_buffer_plan(
             GpuWorkOperation::Readback(readback) => {
                 let GpuTransferRegion::Buffer(source) = readback.source() else {
                     return unsupported(
-                        "texture Readback remains outside the first G5B buffer lifecycle slice",
+                        "texture Readback remains outside the current G5B execution checkpoint",
                     );
                 };
+                let alignment = copy_alignment(context)?;
                 validate_copy_range(source.range().offset(), source.range().size(), alignment)?;
                 if !seen_readbacks.insert(readback.id()) {
                     return Err(GpuSubmissionPreparationError::new(
@@ -932,7 +946,7 @@ fn prepare_buffer_plan(
                     )
                 })?;
                 readback_ids.push(readback.id());
-                operations.push(PreparedBufferOperation::Readback {
+                operations.push(PreparedExecutionOperation::Readback {
                     id: readback.id(),
                     source: realized_buffer(context, &mut cache, source.buffer())?,
                     source_offset: source.range().offset(),
@@ -942,23 +956,136 @@ fn prepare_buffer_plan(
             }
             GpuWorkOperation::Copy(_) => {
                 return unsupported(
-                    "texture-involving Copy remains outside the first G5B buffer lifecycle slice",
+                    "texture-involving Copy remains outside the current G5B execution checkpoint",
                 );
             }
             _ => {
                 return unsupported(
-                    "this first G5B lifecycle slice executes only buffer Upload, Copy, and Readback work",
+                    "the current G5B checkpoint executes buffer Upload/Copy/Readback and direct compute only",
                 );
             }
         }
     }
 
-    Ok(PreparedBufferPlan {
+    Ok(PreparedExecutionPlan {
         operations,
         upload_bytes,
         readback_bytes,
         readback_ids,
     })
+}
+
+async fn prepare_compute_operation(
+    context: &GpuContext,
+    compute: &crate::plugins::gpu::GpuComputeOperation,
+) -> Result<PreparedExecutionOperation, GpuSubmissionPreparationError> {
+    if compute.timestamp_writes().is_some() {
+        return unsupported("compute timestamp writes remain outside this G5B checkpoint");
+    }
+    let Some(dispatch) = compute.dispatch().direct_size() else {
+        return unsupported("indirect compute dispatch remains outside this G5B checkpoint");
+    };
+
+    let descriptor = compute.pipeline();
+    let program = context
+        .realize_program(descriptor.program())
+        .await
+        .map_err(preparation_program_binding_failure)?;
+    let pipeline_layout = context
+        .realize_pipeline_layout(descriptor.layout())
+        .await
+        .map_err(preparation_program_binding_failure)?;
+    let pipeline = context
+        .realize_compute_pipeline(descriptor, &program, &pipeline_layout)
+        .await
+        .map_err(preparation_pipeline_failure)?;
+
+    let mut bind_groups = Vec::with_capacity(compute.bindings().groups().len());
+    for group in compute.bindings().groups() {
+        let layout = context
+            .realize_bind_group_layout(group.layout())
+            .await
+            .map_err(preparation_program_binding_failure)?;
+        let realization = context
+            .realize_bind_group(&layout, group.values().cloned())
+            .await
+            .map_err(preparation_program_binding_failure)?;
+        bind_groups.push(PreparedComputeBindGroup {
+            index: group.layout().group(),
+            realization,
+            dynamic_offsets: checked_dynamic_offsets(group)?,
+        });
+    }
+
+    Ok(PreparedExecutionOperation::Compute {
+        pipeline,
+        bind_groups,
+        dispatch,
+    })
+}
+
+fn checked_dynamic_offsets(
+    group: &GpuValidatedBindGroupBindings,
+) -> Result<Vec<u32>, GpuSubmissionPreparationError> {
+    let mut offsets = Vec::new();
+    for declaration in group.layout().bindings() {
+        if !declaration.kind().uses_dynamic_offset() {
+            continue;
+        }
+        let value = group.value(declaration.key().binding()).ok_or_else(|| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                format!(
+                    "validated dynamic binding {} disappeared before execution preparation",
+                    declaration.key()
+                ),
+            )
+        })?;
+        for resource in value.resources() {
+            let GpuRuntimeBindingResource::Buffer(binding) = resource else {
+                return Err(GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                    format!(
+                        "validated dynamic binding {} no longer contains a buffer",
+                        declaration.key()
+                    ),
+                ));
+            };
+            let offset = binding.dynamic_offset().ok_or_else(|| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                    format!(
+                        "validated dynamic binding {} lost its per-use offset",
+                        declaration.key()
+                    ),
+                )
+            })?;
+            offsets.push(u32::try_from(offset).map_err(|_| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::DynamicOffsetNotEncodable,
+                    format!(
+                        "logical dynamic offset {offset} for {} exceeds the private WGPU u32 domain",
+                        declaration.key()
+                    ),
+                )
+            })?);
+        }
+    }
+    Ok(offsets)
+}
+
+fn copy_alignment(context: &GpuContext) -> Result<u64, GpuSubmissionPreparationError> {
+    context
+        .device_facts()
+        .device_limits()
+        .alignments()
+        .copy_buffer_offset
+        .ok_or_else(|| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                "created device did not publish its required buffer-copy alignment fact",
+            )
+        })
 }
 
 fn realized_buffer(
@@ -978,6 +1105,32 @@ fn realized_buffer(
     })?;
     cache.insert(identity, realized.clone());
     Ok(realized)
+}
+
+fn preparation_program_binding_failure(
+    error: GpuProgramBindingRealizationError,
+) -> GpuSubmissionPreparationError {
+    let kind = if error.category()
+        == GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
+    {
+        GpuSubmissionPreparationErrorKind::ContextOrDeviceUnavailableOrLost
+    } else {
+        GpuSubmissionPreparationErrorKind::ProgramBindingRealizationFailed
+    };
+    GpuSubmissionPreparationError::new(kind, error.to_string())
+}
+
+fn preparation_pipeline_failure(
+    error: GpuPipelineRealizationError,
+) -> GpuSubmissionPreparationError {
+    let kind = if error.category()
+        == GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
+    {
+        GpuSubmissionPreparationErrorKind::ContextOrDeviceUnavailableOrLost
+    } else {
+        GpuSubmissionPreparationErrorKind::PipelineRealizationFailed
+    };
+    GpuSubmissionPreparationError::new(kind, error.to_string())
 }
 
 fn validate_copy_range(
@@ -1039,11 +1192,11 @@ fn unsupported<T>(detail: &'static str) -> Result<T, GpuSubmissionPreparationErr
     ))
 }
 
-fn encode_submit_and_register_buffers(
+fn encode_submit_and_register(
     backend: &WgpuContextState,
     execution: &Arc<WgpuExecutionState>,
     submission: GpuSubmissionId,
-    plan: &PreparedBufferPlan,
+    plan: &PreparedExecutionPlan,
 ) -> Result<(), GpuSubmissionFailure> {
     if let Some(fault) = backend.health.terminal_fault() {
         return Err(failure_from_device_fault(&fault));
@@ -1055,14 +1208,14 @@ fn encode_submit_and_register_buffers(
     let mut encoder = backend
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("RunenGPU G5B buffer submission"),
+            label: Some("RunenGPU G5B submission"),
         });
     let mut upload_staging = Vec::new();
     let mut readback_staging = Vec::new();
 
     for operation in &plan.operations {
         match operation {
-            PreparedBufferOperation::Upload {
+            PreparedExecutionOperation::Upload {
                 destination,
                 offset,
                 payload,
@@ -1092,7 +1245,50 @@ fn encode_submit_and_register_buffers(
                 );
                 upload_staging.push(staging);
             }
-            PreparedBufferOperation::Copy {
+            PreparedExecutionOperation::Compute {
+                pipeline,
+                bind_groups,
+                dispatch,
+            } => {
+                if dispatch.as_array().contains(&0) {
+                    continue;
+                }
+                let realized_groups = bind_groups
+                    .iter()
+                    .map(|group| &group.realization)
+                    .collect::<Vec<_>>();
+                backend
+                    .pipeline_realization
+                    .with_execution_compute_pipeline(
+                        pipeline,
+                        &backend.program_binding_realization,
+                        |pipeline_object| {
+                            backend
+                                .program_binding_realization
+                                .with_execution_bind_groups(&realized_groups, |group_objects| {
+                                    let mut pass =
+                                        encoder.begin_compute_pass(&ComputePassDescriptor {
+                                            label: Some("RunenGPU G5B compute"),
+                                            timestamp_writes: None,
+                                        });
+                                    pass.set_pipeline(pipeline_object);
+                                    for (prepared, object) in bind_groups.iter().zip(group_objects)
+                                    {
+                                        pass.set_bind_group(
+                                            prepared.index,
+                                            *object,
+                                            &prepared.dynamic_offsets,
+                                        );
+                                    }
+                                    let [x, y, z] = dispatch.as_array();
+                                    pass.dispatch_workgroups(x, y, z);
+                                })
+                        },
+                    )
+                    .map_err(submission_pipeline_failure)?
+                    .map_err(submission_program_binding_failure)?;
+            }
+            PreparedExecutionOperation::Copy {
                 source,
                 source_offset,
                 destination,
@@ -1105,7 +1301,7 @@ fn encode_submit_and_register_buffers(
                 *destination_offset,
                 *size,
             ),
-            PreparedBufferOperation::Readback {
+            PreparedExecutionOperation::Readback {
                 id: readback_id,
                 source,
                 source_offset,
@@ -1147,6 +1343,44 @@ fn encode_submit_and_register_buffers(
         return Err(failure_from_device_fault(&fault));
     }
     Ok(())
+}
+
+fn submission_program_binding_failure(
+    error: GpuProgramBindingRealizationError,
+) -> GpuSubmissionFailure {
+    let kind = match error.category() {
+        GpuProgramBindingRealizationErrorCategory::BackendResourceExhaustion => {
+            GpuSubmissionFailureKind::BackendResourceExhaustion
+        }
+        GpuProgramBindingRealizationErrorCategory::ContextOrDeviceUnavailableOrLost => {
+            GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost
+        }
+        GpuProgramBindingRealizationErrorCategory::ForeignContext
+        | GpuProgramBindingRealizationErrorCategory::StaleDeviceGeneration
+        | GpuProgramBindingRealizationErrorCategory::CurrentRenderExecutionBridgeViolation => {
+            GpuSubmissionFailureKind::InternalInvariant
+        }
+        _ => GpuSubmissionFailureKind::BackendValidation,
+    };
+    GpuSubmissionFailure::new(kind, error.to_string())
+}
+
+fn submission_pipeline_failure(error: GpuPipelineRealizationError) -> GpuSubmissionFailure {
+    let kind = match error.category() {
+        GpuPipelineRealizationErrorCategory::BackendResourceExhaustion => {
+            GpuSubmissionFailureKind::BackendResourceExhaustion
+        }
+        GpuPipelineRealizationErrorCategory::ContextOrDeviceUnavailableOrLost => {
+            GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost
+        }
+        GpuPipelineRealizationErrorCategory::ForeignContext
+        | GpuPipelineRealizationErrorCategory::StaleDeviceGeneration
+        | GpuPipelineRealizationErrorCategory::CurrentRenderExecutionBridgeViolation => {
+            GpuSubmissionFailureKind::InternalInvariant
+        }
+        _ => GpuSubmissionFailureKind::BackendValidation,
+    };
+    GpuSubmissionFailure::new(kind, error.to_string())
 }
 
 fn register_callbacks(
