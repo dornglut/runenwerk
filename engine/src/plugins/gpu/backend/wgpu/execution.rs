@@ -313,21 +313,6 @@ impl WgpuExecutionState {
                 )
             })?;
 
-        let Some(plan) = inner.prepared.remove(&prepared.ticket).flatten() else {
-            return Err(GpuSubmissionRejectionReason::new(
-                GpuSubmissionRejectionKind::PreparedRecordUnavailable,
-                "prepared submission disappeared before acceptance",
-            ));
-        };
-        let Some(raw_id) = allocate_nonzero(&self.next_submission) else {
-            inner.prepared.insert(prepared.ticket, Some(plan));
-            return Err(GpuSubmissionRejectionReason::new(
-                GpuSubmissionRejectionKind::IdentityExhausted,
-                "submission identity space is exhausted",
-            ));
-        };
-        let id = GpuSubmissionId::from_nonzero(raw_id);
-        let status = Arc::new(Mutex::new(GpuSubmissionStatus::Accepted));
         let mut readbacks = BTreeMap::new();
         let mut public_readbacks = Vec::with_capacity(plan.readback_ids.len());
         for operation in &plan.operations {
@@ -354,12 +339,27 @@ impl WgpuExecutionState {
             public_readbacks.push(GpuReadback::new(*readback_id, readback_status));
         }
         if readbacks.len() != plan.readback_ids.len() {
-            inner.prepared.insert(prepared.ticket, Some(plan));
             return Err(GpuSubmissionRejectionReason::new(
                 GpuSubmissionRejectionKind::PreparedRecordUnavailable,
                 "prepared readback metadata is incomplete",
             ));
         }
+
+        let Some(plan) = inner.prepared.remove(&prepared.ticket).flatten() else {
+            return Err(GpuSubmissionRejectionReason::new(
+                GpuSubmissionRejectionKind::PreparedRecordUnavailable,
+                "prepared submission disappeared before acceptance",
+            ));
+        };
+        let Some(raw_id) = allocate_nonzero(&self.next_submission) else {
+            inner.prepared.insert(prepared.ticket, Some(plan));
+            return Err(GpuSubmissionRejectionReason::new(
+                GpuSubmissionRejectionKind::IdentityExhausted,
+                "submission identity space is exhausted",
+            ));
+        };
+        let id = GpuSubmissionId::from_nonzero(raw_id);
+        let status = Arc::new(Mutex::new(GpuSubmissionStatus::Accepted));
 
         inner.upload_bytes_in_flight = next_upload;
         inner.readback_bytes_in_flight = next_readback;
@@ -384,20 +384,32 @@ impl WgpuExecutionState {
         })
     }
 
-    fn attach_staging(&self, id: GpuSubmissionId, encoded: &EncodedSubmission) {
+    fn attach_staging(
+        &self,
+        id: GpuSubmissionId,
+        encoded: &EncodedSubmission,
+    ) -> Result<(), GpuSubmissionFailure> {
         let mut inner = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let Some(record) = inner.in_flight.get_mut(&id) else {
-            return;
+            return Err(GpuSubmissionFailure::new(
+                GpuSubmissionFailureKind::InternalInvariant,
+                "accepted submission disappeared before staging attachment",
+            ));
         };
         record.upload_staging = encoded.upload_staging.clone();
         for (readback_id, staging) in &encoded.readback_staging {
-            if let Some(readback) = record.readbacks.get_mut(readback_id) {
-                readback.staging = Some(Arc::clone(staging));
-            }
+            let Some(readback) = record.readbacks.get_mut(readback_id) else {
+                return Err(GpuSubmissionFailure::new(
+                    GpuSubmissionFailureKind::InternalInvariant,
+                    "accepted readback disappeared before staging attachment",
+                ));
+            };
+            readback.staging = Some(Arc::clone(staging));
         }
+        Ok(())
     }
 
     fn push_event(&self, event: ExecutionEvent) {
@@ -715,6 +727,25 @@ impl GpuContext {
         &self,
         mut prepared: GpuPreparedSubmission,
     ) -> Result<GpuSubmission, GpuPreparedSubmissionRejected> {
+        let expected_affinity = self.affinity();
+        if prepared.affinity.context() != expected_affinity.context() {
+            return Err(GpuPreparedSubmissionRejected::new(
+                prepared,
+                GpuSubmissionRejectionReason::new(
+                    GpuSubmissionRejectionKind::ForeignContext,
+                    "prepared submission belongs to another GPU context",
+                ),
+            ));
+        }
+        if prepared.affinity.generation() != expected_affinity.generation() {
+            return Err(GpuPreparedSubmissionRejected::new(
+                prepared,
+                GpuSubmissionRejectionReason::new(
+                    GpuSubmissionRejectionKind::StaleDeviceGeneration,
+                    "prepared submission belongs to a stale device generation",
+                ),
+            ));
+        }
         if !prepared
             .execution
             .ptr_eq(&Arc::downgrade(&self.backend.execution))
@@ -722,8 +753,8 @@ impl GpuContext {
             return Err(GpuPreparedSubmissionRejected::new(
                 prepared,
                 GpuSubmissionRejectionReason::new(
-                    GpuSubmissionRejectionKind::ForeignContext,
-                    "prepared submission belongs to another execution owner",
+                    GpuSubmissionRejectionKind::PreparedRecordUnavailable,
+                    "prepared submission belongs to a different execution owner for this context generation",
                 ),
             ));
         }
@@ -749,17 +780,13 @@ impl GpuContext {
             accepted.readbacks,
         );
 
-        match encode_and_submit_buffers(&self.backend, &accepted.plan) {
-            Ok(encoded) => {
-                self.backend.execution.attach_staging(accepted.id, &encoded);
-                register_callbacks(
-                    &self.backend.execution,
-                    &self.backend,
-                    accepted.id,
-                    &encoded,
-                );
-            }
-            Err(failure) => self.backend.execution.fail_submission(accepted.id, failure),
+        if let Err(failure) = encode_submit_and_register_buffers(
+            &self.backend,
+            &self.backend.execution,
+            accepted.id,
+            &accepted.plan,
+        ) {
+            self.backend.execution.fail_submission(accepted.id, failure);
         }
         Ok(submission)
     }
@@ -1000,13 +1027,18 @@ fn unsupported<T>(detail: &'static str) -> Result<T, GpuSubmissionPreparationErr
     ))
 }
 
-fn encode_and_submit_buffers(
+fn encode_submit_and_register_buffers(
     backend: &WgpuContextState,
+    execution: &Arc<WgpuExecutionState>,
+    submission: GpuSubmissionId,
     plan: &PreparedBufferPlan,
-) -> Result<EncodedSubmission, GpuSubmissionFailure> {
+) -> Result<(), GpuSubmissionFailure> {
     if let Some(fault) = backend.health.terminal_fault() {
         return Err(failure_from_device_fault(&fault));
     }
+    // This one gate interval owns the physical queue association. In particular,
+    // `Queue::on_submitted_work_done` observes the immediately preceding submit, so another G5B
+    // submission or the residual renderer queue path must not interleave before registration.
     let _attribution_gate = backend.error_attribution_gate.acquire();
     let mut encoder = backend
         .device
@@ -1090,10 +1122,18 @@ fn encode_and_submit_buffers(
     if let Some(fault) = backend.health.terminal_fault() {
         return Err(failure_from_device_fault(&fault));
     }
-    Ok(EncodedSubmission {
+    let encoded = EncodedSubmission {
         upload_staging,
         readback_staging,
-    })
+    };
+    // Staging must be reachable from accepted execution state before callback registration because
+    // another thread may call nonblocking progress as soon as the callbacks become visible.
+    execution.attach_staging(submission, &encoded)?;
+    register_callbacks(execution, backend, submission, &encoded);
+    if let Some(fault) = backend.health.terminal_fault() {
+        return Err(failure_from_device_fault(&fault));
+    }
+    Ok(())
 }
 
 fn register_callbacks(
