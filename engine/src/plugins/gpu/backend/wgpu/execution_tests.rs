@@ -507,3 +507,73 @@ fn noop_backend_proves_direct_compute_encoding_and_dynamic_bind_group_reuse() {
     assert_eq!(stats.readback_bytes_in_flight(), 0);
     assert_eq!(stats.pending_readbacks(), 0);
 }
+
+#[test]
+fn noop_backend_graceful_shutdown_revokes_prepared_and_drains_accepted_work() {
+    let context = noop_context();
+    assert_eq!(
+        context.execution_lifecycle_state(),
+        GpuExecutionLifecycleState::Running
+    );
+
+    let accepted_values = [3_u32, 5, 8, 13];
+    let (accepted_graph, readback_id) =
+        round_trip_graph("noop shutdown accepted", &accepted_values);
+    let (revoked_graph, _) = round_trip_graph("noop shutdown revoked", &[21_u32, 34, 55, 89]);
+    let accepted_prepared = pollster::block_on(context.prepare_submission(accepted_graph)).unwrap();
+    let revoked_prepared = pollster::block_on(context.prepare_submission(revoked_graph)).unwrap();
+    assert_eq!(context.execution_stats().prepared_submissions(), 2);
+
+    let submission = context.submit_prepared(accepted_prepared).unwrap();
+    let readback = submission
+        .readback(readback_id)
+        .expect("accepted shutdown readback must remain observable")
+        .clone();
+    assert_eq!(context.execution_stats().prepared_submissions(), 1);
+
+    assert_eq!(
+        context.begin_shutdown(),
+        GpuExecutionLifecycleState::ShuttingDown
+    );
+    assert_eq!(
+        context.execution_lifecycle_state(),
+        GpuExecutionLifecycleState::ShuttingDown
+    );
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+
+    let rejected = context
+        .submit_prepared(revoked_prepared)
+        .expect_err("shutdown must reject acceptance of a revoked prepared ticket");
+    assert_eq!(
+        rejected.reason().kind(),
+        GpuSubmissionRejectionKind::ExecutionNotRunning
+    );
+    drop(rejected);
+
+    let (new_graph, _) = round_trip_graph("noop shutdown new preparation", &[1_u32, 2, 3, 4]);
+    let error = pollster::block_on(context.prepare_submission(new_graph))
+        .expect_err("shutdown must reject new preparation");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::ExecutionNotRunning
+    );
+
+    let bytes = progress_to_readback(&context, &submission, &readback);
+    let expected = accepted_values
+        .iter()
+        .flat_map(|value| value.to_ne_bytes())
+        .collect::<Vec<_>>();
+    assert_eq!(bytes.as_bytes(), expected.as_slice());
+    assert_eq!(
+        context.execution_lifecycle_state(),
+        GpuExecutionLifecycleState::Closed
+    );
+    assert_eq!(context.begin_shutdown(), GpuExecutionLifecycleState::Closed);
+
+    let stats = context.execution_stats();
+    assert_eq!(stats.prepared_submissions(), 0);
+    assert_eq!(stats.in_flight_submissions(), 0);
+    assert_eq!(stats.upload_bytes_in_flight(), 0);
+    assert_eq!(stats.readback_bytes_in_flight(), 0);
+    assert_eq!(stats.pending_readbacks(), 0);
+}
