@@ -275,6 +275,7 @@ pub enum GpuSubmissionPreparationErrorKind {
     ReadbackDemandExceedsPolicy,
     PendingReadbacksExceedPolicy,
     UnsupportedOperation,
+    TransferAlignmentNotAdmitted,
     ResourceRealizationFailed,
     ContextOrDeviceUnavailableOrLost,
     IdentityExhausted,
