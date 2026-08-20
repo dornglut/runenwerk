@@ -135,7 +135,7 @@ fn slice_rgba8_preview(
                 TexturePreviewChannelMode::A => 3,
                 TexturePreviewChannelMode::All => unreachable!(),
             };
-            for pixel in out.chunks_exact_mut(4) {
+            for pixel in out.as_chunks_mut::<4>().0 {
                 let value = pixel[index];
                 pixel[0] = value;
                 pixel[1] = value;
@@ -252,7 +252,7 @@ mod tests {
             .copy_from_slice(&dfd_block_bytes);
         let data = &mut bytes[level_data_offset..level_data_offset + level_data_size];
         let texels_per_slice = width as usize * height as usize;
-        for (index, pixel) in data.chunks_exact_mut(4).enumerate() {
+        for (index, pixel) in data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let texel = if index / texels_per_slice == 0 {
                 slice0_texel
             } else {

@@ -231,7 +231,7 @@ impl AuthoritativeServerRuntime {
     }
 
     pub fn take_lane_trace(&mut self) -> Vec<LaneRouteTrace> {
-        self.lane_trace.drain(..).collect()
+        std::mem::take(&mut self.lane_trace)
     }
 
     pub fn stats(&self) -> ReplicationStats {

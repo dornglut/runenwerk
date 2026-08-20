@@ -92,7 +92,7 @@ fn benchmark_fixture(
         let mut depth = 0;
         while level.len() > 1 {
             let mut next = Vec::new();
-            for pair in level.chunks_exact(2) {
+            for pair in level.as_chunks::<2>().0 {
                 let region_id = RegionId::new(next_region);
                 next_region += 1;
                 regions.push(RegionDefinition::new(

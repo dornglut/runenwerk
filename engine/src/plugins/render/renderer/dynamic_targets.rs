@@ -404,7 +404,7 @@ fn upload_bytes_for_gpu(upload: &RenderDynamicTextureUploadDescriptor) -> Vec<u8
 
 fn unpremultiply_rgba8(bytes: &[u8]) -> Vec<u8> {
     let mut out = bytes.to_vec();
-    for pixel in out.chunks_exact_mut(4) {
+    for pixel in out.as_chunks_mut::<4>().0 {
         let alpha = pixel[3];
         if alpha == 0 {
             pixel[0] = 0;

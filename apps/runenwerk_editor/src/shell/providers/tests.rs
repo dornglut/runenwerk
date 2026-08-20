@@ -678,7 +678,7 @@ fn build_rgba8_ktx2(
     bytes[dfd_offset + 4..dfd_offset + 4 + dfd_block_bytes.len()].copy_from_slice(&dfd_block_bytes);
     let data = &mut bytes[level_data_offset..level_data_offset + level_data_size];
     let texels_per_slice = width as usize * height as usize;
-    for (index, pixel) in data.chunks_exact_mut(4).enumerate() {
+    for (index, pixel) in data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let texel = if index / texels_per_slice == 0 {
             slice0_texel
         } else {
