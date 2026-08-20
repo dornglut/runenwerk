@@ -167,17 +167,15 @@ impl GpuTextureCopyRegion {
         if descriptor.format().is_depth()
             && (origin.x() != 0
                 || origin.y() != 0
-                || origin.z() != 0
                 || extent.width() != mip_width
-                || extent.height() != mip_height
-                || extent.depth_or_layers() != mip_depth_or_layers)
+                || extent.height() != mip_height)
         {
             return Err(GpuWorkOperationError::invalid(
                 "construct GPU texture copy region",
                 label,
                 Some(texture.diagnostic_identity()),
                 GpuWorkOperationCause::InvalidCopyRegion,
-                "copy the complete depth mip extent from zero origin",
+                "copy the complete depth mip plane from zero x/y origin",
             ));
         }
         let (base_array_layer, array_layer_count) = match descriptor.dimension() {
