@@ -72,7 +72,8 @@ fn compute_buffer(
 }
 
 fn admitted_compute_source() -> GpuAdmittedProgramSource {
-    let owner = GpuProgramSourceOwnerId::allocate().expect("native proof source owner should allocate");
+    let owner =
+        GpuProgramSourceOwnerId::allocate().expect("native proof source owner should allocate");
     let identity = GpuProgramSourceIdentity::new(
         owner,
         GpuProgramSourceKey::new("g5b.native.dynamic-compute").unwrap(),
@@ -184,10 +185,11 @@ fn checked_least_common_multiple(left: u64, right: u64) -> Option<u64> {
 }
 
 fn native_context() -> GpuContext {
-    let descriptor = GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
-        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
-        .with_allowed_backends([GpuBackendFamily::Vulkan])
-        .with_label("G5B native headless compute proof");
+    let descriptor =
+        GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+            .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+            .with_allowed_backends([GpuBackendFamily::Vulkan])
+            .with_label("G5B native headless compute proof");
     let context = pollster::block_on(GpuContext::request(descriptor))
         .expect("native conformance environment must provide a Vulkan fallback adapter");
     assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
