@@ -7,6 +7,8 @@ mod adapter_mapping;
 mod current_host;
 mod device_request;
 mod execution;
+#[cfg(test)]
+mod execution_tests;
 mod health;
 mod pipeline_realization;
 mod program_binding_realization;
