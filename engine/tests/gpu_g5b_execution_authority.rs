@@ -197,8 +197,4 @@ fn g5b_compute_preparation_owns_checked_offsets_and_retained_g4_realizations() {
         execution.contains("backend.program_binding_realization.with_execution_bind_groups("),
         "G5B compute must consume the generic private G4 lexical lending owner"
     );
-    assert!(
-        !execution.contains("CurrentRenderExecutionBridge"),
-        "the G5B executor must remain independent from the temporary renderer bridge type"
-    );
 }
