@@ -294,6 +294,23 @@ fn dynamic_compute_operation(
     GpuComputeOperation::new(pipeline.clone(), bindings, dispatch).unwrap()
 }
 
+fn greatest_common_divisor(mut left: u64, mut right: u64) -> u64 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left
+}
+
+fn checked_least_common_multiple(left: u64, right: u64) -> Option<u64> {
+    if left == 0 || right == 0 {
+        return None;
+    }
+    left.checked_div(greatest_common_divisor(left, right))?
+        .checked_mul(right)
+}
+
 fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u32>) {
     let storage_alignment = context
         .device_facts()
@@ -307,14 +324,15 @@ fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRead
         .alignments()
         .copy_buffer_offset
         .expect("compute context must publish buffer-copy alignment");
-    assert!(storage_alignment.is_multiple_of(4));
-    assert!(storage_alignment.is_multiple_of(copy_alignment));
+    let dynamic_stride = checked_least_common_multiple(storage_alignment, copy_alignment)
+        .and_then(|stride| checked_least_common_multiple(stride, 4))
+        .expect("test dynamic stride must satisfy storage, copy, and u32 alignment");
 
-    let byte_len = storage_alignment
+    let byte_len = dynamic_stride
         .checked_mul(2)
         .expect("test buffer size must fit u64");
     let value_count = usize::try_from(byte_len / 4).unwrap();
-    let second_index = usize::try_from(storage_alignment / 4).unwrap();
+    let second_index = usize::try_from(dynamic_stride / 4).unwrap();
     let mut values = vec![0_u32; value_count];
     values[0] = 10;
     values[second_index] = 20;
@@ -338,8 +356,7 @@ fn dynamic_compute_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuRead
 
     let pipeline = dynamic_compute_pipeline();
     let first = dynamic_compute_operation(context, &pipeline, &values_buffer, 0, 1);
-    let second =
-        dynamic_compute_operation(context, &pipeline, &values_buffer, storage_alignment, 1);
+    let second = dynamic_compute_operation(context, &pipeline, &values_buffer, dynamic_stride, 1);
     let zero = dynamic_compute_operation(context, &pipeline, &values_buffer, 0, 0);
 
     let name = "noop dynamic compute";
