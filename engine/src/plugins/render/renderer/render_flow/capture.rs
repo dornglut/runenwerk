@@ -618,7 +618,7 @@ fn read_capture_buffer(
         match readback_format.mode {
             TextureReadbackMode::Rgba8 => destination_row.copy_from_slice(source_row),
             TextureReadbackMode::Bgra8 => {
-                for (pixel_index, chunk) in source_row.chunks_exact(4).enumerate() {
+                for (pixel_index, chunk) in source_row.as_chunks::<4>().0.iter().enumerate() {
                     let destination_index = pixel_index * 4;
                     destination_row[destination_index] = chunk[2];
                     destination_row[destination_index + 1] = chunk[1];
