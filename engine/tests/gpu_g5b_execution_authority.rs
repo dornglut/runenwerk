@@ -33,7 +33,7 @@ fn read(manifest: &Path, relative: &str) -> String {
 }
 
 #[test]
-fn g5b_completion_registration_stays_in_one_serialized_queue_interval() {
+fn g5b_mapping_and_completion_are_command_buffer_local_before_submit() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let backend_root = manifest.join("src/plugins/gpu/backend/wgpu");
     let execution_path = "src/plugins/gpu/backend/wgpu/execution.rs";
@@ -60,33 +60,35 @@ fn g5b_completion_registration_stays_in_one_serialized_queue_interval() {
     );
 
     let execution = compact(&read(&manifest, execution_path));
+    assert!(
+        !execution.contains("backend.queue.on_submitted_work_done("),
+        "G5B completion must not regress to queue-relative previous-submit ownership"
+    );
+    assert!(
+        !execution.contains(".slice(..).map_async("),
+        "G5B readback mapping must be deferred on the command buffer before submission"
+    );
+    assert!(execution.contains("command_buffer.map_buffer_on_submit("));
+    assert!(execution.contains("command_buffer.on_submitted_work_done("));
+
     let gate = execution
         .find("let_attribution_gate=backend.error_attribution_gate.acquire();")
-        .expect("G5B physical submission must acquire the shared backend-operation gate");
-    let submit = execution
-        .find("backend.queue.submit([encoder.finish()]);")
-        .expect("G5B physical submission must submit the encoded command buffer");
+        .expect("G5B physical submission must retain the accepted backend-operation gate");
+    let finish = execution
+        .find("letcommand_buffer=encoder.finish();")
+        .expect("G5B execution must finish one owned command buffer");
     let attach = execution
         .find("execution.attach_staging(submission,&encoded)?;")
-        .expect("accepted staging must be published before callbacks can observe it");
+        .expect("accepted staging must be published before submission");
     let callbacks = execution
-        .find("register_callbacks(execution,backend,submission,&encoded);")
-        .expect(
-            "submission and readback callbacks must be registered before the gate interval ends",
-        );
+        .find("register_callbacks(execution,submission,&encoded,&command_buffer);")
+        .expect("mapping and completion callbacks must be command-buffer-local before submission");
+    let submit = execution
+        .find("backend.queue.submit([command_buffer]);")
+        .expect("G5B physical submission must submit that exact command buffer");
     assert!(
-        gate < submit && submit < attach && attach < callbacks,
-        "one shared gate interval must own submit -> staging publication -> callback registration"
-    );
-
-    let current_host = compact(&read(
-        &manifest,
-        "src/plugins/gpu/backend/wgpu/current_host.rs",
-    ));
-    assert!(
-        current_host
-            .contains("_error_attribution_gate:self.backend.error_attribution_gate.acquire()"),
-        "the residual renderer queue loan must serialize against G5B through the same gate"
+        gate < finish && finish < attach && attach < callbacks && callbacks < submit,
+        "one accepted command buffer must own staging publication and deferred callbacks before physical submit"
     );
 }
 
