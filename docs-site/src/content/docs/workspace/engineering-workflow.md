@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-07-22
+last_reviewed: 2026-08-21
 related_docs:
   - ./start-here.md
   - ./authority-model.md
@@ -78,7 +78,9 @@ git diff --check
 
 Documentation changes additionally run the Astro/Starlight production build through the path-scoped documentation workflow. It is supplemental evidence, not a second Rust baseline. Success output is compact; failures preserve status, print bounded diagnostics, retain a short-lived complete artifact, and clean temporary state.
 
-Broader tools such as cargo-deny, cargo-machete, Lychee, ast-grep, benchmarks, or platform matrices are run directly when the affected change or release needs them. They are not a second named gate.
+RunenGPU implementation and conformance changes additionally run the path-scoped `RunenGPU Native Conformance` workflow when native execution evidence is required by the active RunenGPU slice. It independently selects and proves the reviewed revision, uses the repository's public RunenGPU API, and executes the bounded native proof on the explicitly configured Mesa Vulkan software adapter. It is supplemental runtime evidence, not a second Rust baseline, and it does not establish unexecuted browser or hardware-backend claims.
+
+Broader tools such as cargo-deny, cargo-machete, Lychee, ast-grep, benchmarks, or platform matrices are run directly when the affected change or release needs them. They are not a second named Rust gate.
 
 ## Pull-request review
 
