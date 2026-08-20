@@ -76,7 +76,7 @@ pub fn decode_lower_hex(value: &str) -> Result<Vec<u8>, PreviewHexError> {
         return Err(PreviewHexError::OddLength);
     }
     let mut bytes = Vec::with_capacity(value.len() / 2);
-    for pair in value.as_bytes().chunks_exact(2) {
+    for pair in value.as_bytes().as_chunks::<2>().0 {
         let high = hex_value(pair[0])?;
         let low = hex_value(pair[1])?;
         bytes.push((high << 4) | low);
