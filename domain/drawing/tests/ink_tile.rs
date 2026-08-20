@@ -496,7 +496,9 @@ fn oversized_tile_sets_reject_with_diagnostics() {
 fn alpha_sum(payload: &DrawingInkTilePayload) -> u64 {
     payload
         .rgba8_premultiplied
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|pixel| u64::from(pixel[3]))
         .sum()
 }
@@ -505,7 +507,9 @@ fn max_transparent_gap_in_row(payload: &DrawingInkTilePayload, row: u32) -> usiz
     let row_start = row as usize * payload.width as usize * 4;
     let row_end = row_start + payload.width as usize * 4;
     let alphas = payload.rgba8_premultiplied[row_start..row_end]
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|pixel| pixel[3])
         .collect::<Vec<_>>();
     let Some(first) = alphas.iter().position(|alpha| *alpha > 0) else {
