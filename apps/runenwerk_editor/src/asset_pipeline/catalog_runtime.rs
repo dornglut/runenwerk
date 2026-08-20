@@ -149,7 +149,7 @@ impl AssetCatalogRuntime {
     }
 
     pub fn drain_reload_statuses(&mut self) -> Vec<ReloadStatus> {
-        self.reload_statuses.drain(..).collect()
+        std::mem::take(&mut self.reload_statuses)
     }
 
     pub fn select_asset(&mut self, asset_id: Option<AssetId>) {
