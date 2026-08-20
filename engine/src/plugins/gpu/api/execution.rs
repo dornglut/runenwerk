@@ -402,10 +402,10 @@ impl fmt::Debug for GpuPreparedSubmission {
 
 impl Drop for GpuPreparedSubmission {
     fn drop(&mut self) {
-        if self.armed {
-            if let Some(execution) = self.execution.upgrade() {
-                execution.release_prepared(self.ticket);
-            }
+        if self.armed
+            && let Some(execution) = self.execution.upgrade()
+        {
+            execution.release_prepared(self.ticket);
         }
     }
 }
