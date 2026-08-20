@@ -138,7 +138,7 @@ pub enum GpuSubmissionFailureKind {
     InternalInvariant,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct GpuSubmissionFailure {
     kind: GpuSubmissionFailureKind,
     detail: String,
@@ -160,6 +160,14 @@ impl GpuSubmissionFailure {
         &self.detail
     }
 }
+
+impl PartialEq for GpuSubmissionFailure {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+}
+
+impl Eq for GpuSubmissionFailure {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GpuSubmissionStatus {
@@ -282,7 +290,7 @@ pub enum GpuSubmissionPreparationErrorKind {
     InternalInvariant,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct GpuSubmissionPreparationError {
     kind: GpuSubmissionPreparationErrorKind,
     detail: String,
@@ -304,6 +312,14 @@ impl GpuSubmissionPreparationError {
         &self.detail
     }
 }
+
+impl PartialEq for GpuSubmissionPreparationError {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+}
+
+impl Eq for GpuSubmissionPreparationError {}
 
 impl fmt::Display for GpuSubmissionPreparationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -330,7 +346,7 @@ pub enum GpuSubmissionRejectionKind {
     IdentityExhausted,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct GpuSubmissionRejectionReason {
     kind: GpuSubmissionRejectionKind,
     detail: String,
@@ -352,6 +368,14 @@ impl GpuSubmissionRejectionReason {
         &self.detail
     }
 }
+
+impl PartialEq for GpuSubmissionRejectionReason {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+}
+
+impl Eq for GpuSubmissionRejectionReason {}
 
 pub struct GpuPreparedSubmission {
     pub(crate) ticket: NonZeroU64,
@@ -443,5 +467,53 @@ impl fmt::Debug for GpuPreparedSubmissionRejected {
             .field("prepared", &self.prepared)
             .field("reason", &self.reason)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostic_detail_does_not_define_execution_error_equality() {
+        let failure_a = GpuSubmissionFailure::new(
+            GpuSubmissionFailureKind::BackendValidation,
+            "backend diagnostic A",
+        );
+        let failure_b = GpuSubmissionFailure::new(
+            GpuSubmissionFailureKind::BackendValidation,
+            "backend diagnostic B",
+        );
+        let failure_other = GpuSubmissionFailure::new(
+            GpuSubmissionFailureKind::BackendResourceExhaustion,
+            "backend diagnostic A",
+        );
+        assert_eq!(failure_a, failure_b);
+        assert_ne!(failure_a, failure_other);
+
+        let preparation_a = GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::ContextOrDeviceUnavailableOrLost,
+            "backend diagnostic A",
+        );
+        let preparation_b = GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::ContextOrDeviceUnavailableOrLost,
+            "backend diagnostic B",
+        );
+        assert_eq!(preparation_a, preparation_b);
+
+        let rejection_a = GpuSubmissionRejectionReason::new(
+            GpuSubmissionRejectionKind::ContextOrDeviceUnavailableOrLost,
+            "backend diagnostic A",
+        );
+        let rejection_b = GpuSubmissionRejectionReason::new(
+            GpuSubmissionRejectionKind::ContextOrDeviceUnavailableOrLost,
+            "backend diagnostic B",
+        );
+        assert_eq!(rejection_a, rejection_b);
+
+        assert_eq!(
+            GpuSubmissionStatus::Failed(failure_a),
+            GpuSubmissionStatus::Failed(failure_b)
+        );
     }
 }
