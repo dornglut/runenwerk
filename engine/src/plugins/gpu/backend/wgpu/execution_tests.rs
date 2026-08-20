@@ -62,11 +62,7 @@ fn round_trip_graph(name: &str, values: &[u32]) -> (GpuPreparedWorkGraph, GpuRea
     let byte_len = u64::try_from(std::mem::size_of_val(values)).unwrap();
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let source = buffer(&mut allocator, &format!("{name} source"), byte_len);
-    let destination = buffer(
-        &mut allocator,
-        &format!("{name} destination"),
-        byte_len,
-    );
+    let destination = buffer(&mut allocator, &format!("{name} destination"), byte_len);
     let source_region =
         GpuBufferRegion::new(&source, GpuBufferRange::whole(&source).unwrap()).unwrap();
     let destination_region =
