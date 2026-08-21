@@ -453,9 +453,7 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
         GpuRenderOperation::new(
             [GpuRenderColorAttachment::new(
                 target_view,
-                GpuColorAttachmentLoad::Clear(
-                    GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-                ),
+                GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
                 GpuAttachmentStore::Store,
                 None,
             )
