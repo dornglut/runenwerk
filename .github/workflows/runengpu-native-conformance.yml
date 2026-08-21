@@ -1,4 +1,4 @@
-name: RunenGPU Native Conformance
+name: RunenGPU Conformance
 
 on:
   pull_request:
@@ -27,7 +27,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: runengpu-native-${{ github.workflow }}-${{ github.ref }}
+  group: runengpu-conformance-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -118,5 +118,73 @@ jobs:
           status="$(git status --short)"
           if [ -n "$status" ]; then
             printf 'Native conformance changed tracked state:\n%s\n' "$status" >&2
+            exit 1
+          fi
+
+  wasm-compile:
+    name: Wasm WebGPU compilation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+          echo "pull_request_base_revision=$PULL_REQUEST_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual checked-out revision: $actual_revision"
+          if [ -n "$PULL_REQUEST_BASE_REVISION" ]; then
+            echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"
+          fi
+          test "$actual_revision" = "$EXPECTED_REVISION"
+          echo "Conclusion: PASS"
+
+      - name: Install stable Rust and Wasm target
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup target add --toolchain stable wasm32-unknown-unknown
+
+      - name: Check RunenGPU-containing engine library for Wasm WebGPU
+        run: cargo +stable check -p engine --lib --target wasm32-unknown-unknown --locked
+
+      - name: Check diff hygiene
+        run: git diff --check
+
+      - name: Prove Wasm check leaves tracked state clean
+        run: |
+          status="$(git status --short)"
+          if [ -n "$status" ]; then
+            printf 'Wasm conformance changed tracked state:\n%s\n' "$status" >&2
             exit 1
           fi

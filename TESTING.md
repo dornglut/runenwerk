@@ -31,11 +31,11 @@ Rust CI resolves, explicitly checks out, and validates the reviewed feature head
 
 Documentation changes also run the Astro/Starlight production build through the path-scoped documentation workflow. It independently selects and proves the same event-derived repository revision; its workflow-definition ref may be a synthetic merge ref, distinct from the checked-out contents.
 
-## RunenGPU native conformance
+## RunenGPU conformance
 
-RunenGPU implementation and conformance changes additionally run the path-scoped `RunenGPU Native Conformance` workflow. It independently selects and proves the reviewed repository revision, restricts Vulkan loading to the installed Mesa software Vulkan implementation, and executes the ignored public `gpu_g5b_native_runtime` integration proof.
+RunenGPU implementation and conformance changes additionally run the path-scoped `RunenGPU Conformance` workflow. It independently selects and proves the reviewed repository revision. The native job restricts Vulkan loading to the installed Mesa software Vulkan implementation and executes the ignored public G5B runtime and offscreen-render integration proofs. The Wasm job checks the RunenGPU-containing engine library for `wasm32-unknown-unknown` with the locked dependency graph.
 
-This is supplemental runtime evidence required by the affected RunenGPU slice, not a second Rust baseline and not general hardware certification. Its claims are limited to the exact test and Vulkan software adapter actually executed; `cargo validate` remains the repository-owned merge baseline.
+This is supplemental evidence required by the affected RunenGPU slice, not a second Rust baseline or general hardware/browser certification. Native claims are limited to the exact tests and Vulkan software adapter actually executed; Wasm compilation proves target compatibility only and does not claim browser runtime behavior. `cargo validate` remains the repository-owned merge baseline.
 
 ## Evidence
 

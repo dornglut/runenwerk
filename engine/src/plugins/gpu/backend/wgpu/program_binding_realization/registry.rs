@@ -426,8 +426,8 @@ fn reserve<K, R>(
     select: fn(&mut ProgramBindingRegistries) -> &mut SingleFlightRegistry<K, R>,
 ) -> Result<Reservation<K, R>, GpuProgramBindingRealizationError>
 where
-    K: Clone + Eq + Hash + Send + 'static,
-    R: Send + Sync + 'static,
+    K: Clone + Eq + Hash + 'static,
+    R: 'static,
 {
     let mut all = registries
         .lock()
