@@ -202,13 +202,13 @@ fn g5b_compute_preparation_owns_checked_offsets_and_retained_g4_realizations() {
         "zero direct dispatch must emit no shader work while preserving an otherwise observable timestamped pass"
     );
     assert!(
-        execution.contains(
-            "arguments:realized_buffer(context,buffer_cache,arguments.buffer())?"
-        ) && execution.contains("offset:arguments.range().offset()"),
+        execution.contains("arguments:realized_buffer(context,buffer_cache,arguments.buffer())?")
+            && execution.contains("offset:arguments.range().offset()"),
         "indirect compute preparation must reuse the execution plan's G4 buffer cache and preserve the accepted offset"
     );
     assert!(
-        execution.contains("query_set:realized_query_set(context,query_set_cache,writes.query_set())?"),
+        execution
+            .contains("query_set:realized_query_set(context,query_set_cache,writes.query_set())?"),
         "timestamped compute preparation must retain the exact G4 query-set realization"
     );
     assert!(
