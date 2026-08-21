@@ -357,7 +357,7 @@ pub(super) fn encode_render_operation(
                 });
 
                 for (draw, pipeline_object) in render.draws.iter().zip(pipeline_objects) {
-                    pass.set_pipeline(*pipeline_object);
+                    pass.set_pipeline(pipeline_object);
                     let realized_groups = draw
                         .bind_groups
                         .iter()
