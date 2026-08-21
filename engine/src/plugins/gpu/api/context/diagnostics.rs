@@ -23,6 +23,8 @@ pub enum GpuContextRequestErrorCategory {
     ContradictoryRequest,
     BackendAdapterRequestFailure,
     BackendDeviceRequestFailure,
+    SurfaceCreationFailure,
+    SurfaceCompatibilityFailure,
     TemporaryHostCompatibilityFailure,
     IdentityExhausted,
     InvalidDegradation,
@@ -73,6 +75,12 @@ impl GpuContextRequestErrorCategory {
             Self::BackendDeviceRequestFailure => {
                 "inspect the bounded backend detail and admitted profile"
             }
+            Self::SurfaceCreationFailure => {
+                "provide a valid safe host target supported by the current platform"
+            }
+            Self::SurfaceCompatibilityFailure => {
+                "select a surface-compatible adapter or use a compatible presentation target"
+            }
             Self::TemporaryHostCompatibilityFailure => {
                 "use a surface-compatible adapter for the current host"
             }
@@ -99,9 +107,11 @@ impl GpuContextRequestErrorCategory {
             Self::ContradictoryRequest => 13,
             Self::BackendAdapterRequestFailure => 14,
             Self::BackendDeviceRequestFailure => 15,
-            Self::TemporaryHostCompatibilityFailure => 16,
-            Self::IdentityExhausted => 17,
-            Self::InvalidDegradation => 18,
+            Self::SurfaceCreationFailure => 16,
+            Self::SurfaceCompatibilityFailure => 17,
+            Self::TemporaryHostCompatibilityFailure => 18,
+            Self::IdentityExhausted => 19,
+            Self::InvalidDegradation => 20,
         }
     }
 }
