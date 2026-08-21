@@ -313,9 +313,11 @@ fn native_offscreen_render_executes_shader_and_reads_back_color() {
         bytes.as_bytes().len(),
         usize::try_from(WIDTH * HEIGHT * 4).unwrap()
     );
-    for pixel in bytes.as_bytes().chunks_exact(4) {
+    let (pixels, remainder) = bytes.as_bytes().as_chunks::<4>();
+    assert!(remainder.is_empty());
+    for pixel in pixels {
         assert_eq!(
-            pixel, OPAQUE_RED,
+            *pixel, OPAQUE_RED,
             "real Vulkan Render execution must replace the black clear with the shader's opaque red output"
         );
     }
