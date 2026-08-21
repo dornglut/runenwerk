@@ -1,5 +1,6 @@
 use super::{GpuContextAffinity, GpuTextureFormat, GpuTextureUsage};
 use core::fmt;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::collections::BTreeSet;
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,18 +12,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// own target conversion.
 #[cfg(not(target_arch = "wasm32"))]
 pub trait GpuSurfaceTarget:
-    wgpu::rwh::HasDisplayHandle + wgpu::rwh::HasWindowHandle + fmt::Debug + Send + Sync + 'static
+    HasDisplayHandle + HasWindowHandle + fmt::Debug + Send + Sync + 'static
 {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl<T> GpuSurfaceTarget for T where
-    T: wgpu::rwh::HasDisplayHandle
-        + wgpu::rwh::HasWindowHandle
-        + fmt::Debug
-        + Send
-        + Sync
-        + 'static
+    T: HasDisplayHandle + HasWindowHandle + fmt::Debug + Send + Sync + 'static
 {
 }
 
@@ -30,14 +26,11 @@ impl<T> GpuSurfaceTarget for T where
 ///
 /// Web targets deliberately do not inherit native-only thread-safety requirements.
 #[cfg(target_arch = "wasm32")]
-pub trait GpuSurfaceTarget:
-    wgpu::rwh::HasDisplayHandle + wgpu::rwh::HasWindowHandle + fmt::Debug + 'static
-{
-}
+pub trait GpuSurfaceTarget: HasDisplayHandle + HasWindowHandle + fmt::Debug + 'static {}
 
 #[cfg(target_arch = "wasm32")]
 impl<T> GpuSurfaceTarget for T where
-    T: wgpu::rwh::HasDisplayHandle + wgpu::rwh::HasWindowHandle + fmt::Debug + 'static
+    T: HasDisplayHandle + HasWindowHandle + fmt::Debug + 'static
 {
 }
 
