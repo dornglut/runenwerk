@@ -14,6 +14,8 @@ mod pipeline_realization;
 mod program_binding_realization;
 mod resource_realization;
 mod state;
+#[cfg(test)]
+mod texture_transfer_tests;
 
 pub(crate) use device_request::request_headless;
 pub(crate) use execution::WgpuExecutionState;
