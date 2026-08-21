@@ -243,12 +243,12 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
         ],
     );
     let range = GpuTextureSubresourceRange::whole(&texture).unwrap();
+    let view = texture_view(&mut allocator, &texture, "attachment view", range);
     let render = |store| {
         GpuWorkOperation::Render(
             GpuRenderOperation::new(
                 [GpuRenderColorAttachment::new(
-                    GpuTextureAccessResource::Texture(texture.clone()),
-                    range,
+                    view.clone(),
                     GpuColorAttachmentLoad::Clear(
                         GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
                     ),
@@ -319,6 +319,7 @@ fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
     let mut allocator = allocator();
     let depth = depth_texture(&mut allocator, "depth attachment");
     let depth_range = GpuTextureSubresourceRange::whole(&depth).unwrap();
+    let depth_view = texture_view(&mut allocator, &depth, "depth attachment view", depth_range);
     let color = texture(
         &mut allocator,
         "depth test color action",
@@ -328,12 +329,12 @@ fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
         [GpuTextureUsage::ColorAttachment],
     );
     let color_range = GpuTextureSubresourceRange::whole(&color).unwrap();
+    let color_view = texture_view(&mut allocator, &color, "depth test color view", color_range);
     let render = |load, store| {
         GpuWorkOperation::Render(
             GpuRenderOperation::new(
                 [GpuRenderColorAttachment::new(
-                    GpuTextureAccessResource::Texture(color.clone()),
-                    color_range,
+                    color_view.clone(),
                     GpuColorAttachmentLoad::Clear(
                         GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
                     ),
@@ -343,8 +344,7 @@ fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
                 .unwrap()],
                 Some(
                     GpuRenderDepthStencilAttachment::new(
-                        GpuTextureAccessResource::Texture(depth.clone()),
-                        depth_range,
+                        depth_view.clone(),
                         GpuDepthStencilAccess::ReadWrite,
                         load,
                         store,
@@ -432,10 +432,39 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
         GpuBufferInitialization::Uninitialized,
         [GpuBufferUsage::CopyDestination],
     );
+    let target = texture(
+        &mut allocator,
+        "timestamp render target",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [GpuTextureUsage::ColorAttachment],
+    );
+    let target_range = GpuTextureSubresourceRange::whole(&target).unwrap();
+    let target_view = texture_view(
+        &mut allocator,
+        &target,
+        "timestamp render target view",
+        target_range,
+    );
     let query_range = GpuQueryRange::whole(&queries).unwrap();
     let timestamp_writes = GpuTimestampWrites::new(&queries, Some(0), Some(1)).unwrap();
     let render = GpuWorkOperation::Render(
-        GpuRenderOperation::new([], None, [], Some(timestamp_writes)).unwrap(),
+        GpuRenderOperation::new(
+            [GpuRenderColorAttachment::new(
+                target_view,
+                GpuColorAttachmentLoad::Clear(
+                    GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+                ),
+                GpuAttachmentStore::Store,
+                None,
+            )
+            .unwrap()],
+            None,
+            [],
+            Some(timestamp_writes),
+        )
+        .unwrap(),
     );
     let query_resolve = GpuQueryResolveOperation::new(&queries, query_range, &resolve, 0).unwrap();
     let resolve_range = query_resolve.destination_range();
@@ -480,6 +509,7 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
         GpuResourceRef::QuerySet(queries),
         GpuResourceRef::Buffer(resolve),
         GpuResourceRef::Buffer(readback),
+        GpuResourceRef::Texture(target),
     ] {
         fragment.declare_resource(resource).unwrap();
     }
@@ -1926,14 +1956,16 @@ fn multisample_resolve_initializes_destination_despite_source_discard() {
     );
     let source_range = GpuTextureSubresourceRange::whole(&source).unwrap();
     let destination_range = GpuTextureSubresourceRange::whole(&destination).unwrap();
-    let resolve_target = GpuMultisampleResolveTarget::new(
-        GpuTextureAccessResource::Texture(destination.clone()),
+    let source_view = texture_view(&mut allocator, &source, "msaa view", source_range);
+    let destination_view = texture_view(
+        &mut allocator,
+        &destination,
+        "resolved view",
         destination_range,
-    )
-    .unwrap();
+    );
+    let resolve_target = GpuMultisampleResolveTarget::new(destination_view).unwrap();
     let attachment = GpuRenderColorAttachment::new(
-        GpuTextureAccessResource::Texture(source.clone()),
-        source_range,
+        source_view,
         GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
         GpuAttachmentStore::Discard,
         Some(resolve_target),
