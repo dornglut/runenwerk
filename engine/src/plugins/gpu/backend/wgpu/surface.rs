@@ -2,11 +2,13 @@ use super::adapter_mapping::known_formats;
 use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::plugins::gpu::{
-    GpuContext, GpuContextAffinity, GpuContextDescriptor, GpuContextRequestError,
-    GpuContextRequestErrorCategory, GpuExecutionPolicy, GpuRealizationPolicies, GpuSurfaceAlphaMode,
-    GpuSurfaceCapabilities, GpuSurfaceConfiguration, GpuSurfaceError, GpuSurfaceErrorCategory,
-    GpuSurfaceGeneration, GpuSurfaceHandle, GpuSurfaceId, GpuSurfacePresentMode, GpuSurfaceTarget,
-    GpuTextureFormat, GpuTextureUsage, SealedSurfaceTarget, allocate_surface_id,
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements, GpuContext,
+    GpuContextAffinity, GpuContextDescriptor, GpuContextRequestError,
+    GpuContextRequestErrorCategory, GpuExecutionPolicy, GpuRealizationPolicies,
+    GpuSurfaceAlphaMode, GpuSurfaceCapabilities, GpuSurfaceConfiguration, GpuSurfaceError,
+    GpuSurfaceErrorCategory, GpuSurfaceGeneration, GpuSurfaceHandle, GpuSurfaceId,
+    GpuSurfacePresentMode, GpuSurfaceTarget, GpuTextureFormat, GpuTextureUsage,
+    allocate_surface_id,
 };
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
@@ -276,12 +278,7 @@ fn normalize_surface_capabilities(native: &wgpu::SurfaceCapabilities) -> GpuSurf
         }
     }
 
-    GpuSurfaceCapabilities::from_normalized_facts(
-        formats,
-        usages,
-        present_modes,
-        alpha_modes,
-    )
+    GpuSurfaceCapabilities::from_normalized_facts(formats, usages, present_modes, alpha_modes)
 }
 
 fn validate_configuration(
@@ -421,6 +418,35 @@ const fn map_alpha_mode(mode: GpuSurfaceAlphaMode) -> CompositeAlphaMode {
     }
 }
 
+fn descriptor_with_required_presentation(
+    descriptor: GpuContextDescriptor,
+) -> Result<GpuContextDescriptor, GpuContextRequestError> {
+    let label = descriptor.label().map(str::to_owned);
+    let provenance = descriptor.provenance().map(str::to_owned);
+
+    let mut requirements = GpuCapabilityRequirements::new();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Presentation,
+        ))
+        .map_err(|error| {
+            GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::ContradictoryRequest,
+                error.to_string(),
+            )
+        })?;
+    let surface_constraint = GpuContextDescriptor::new(requirements);
+    let mut merged = descriptor.merge(&surface_constraint)?;
+
+    if let Some(label) = label {
+        merged = merged.with_label(label);
+    }
+    if let Some(provenance) = provenance {
+        merged = merged.with_provenance(provenance);
+    }
+    Ok(merged)
+}
+
 pub(crate) async fn request_for_surface<T>(
     descriptor: GpuContextDescriptor,
     realization_policies: GpuRealizationPolicies,
@@ -430,15 +456,14 @@ pub(crate) async fn request_for_surface<T>(
 where
     T: GpuSurfaceTarget,
 {
+    let descriptor = descriptor_with_required_presentation(descriptor)?;
     let instance = Instance::new(surface_instance_descriptor(&target));
-    let surface = instance
-        .create_surface(target.into_wgpu_surface_target())
-        .map_err(|error| {
-            GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::SurfaceCreationFailure,
-                error.to_string(),
-            )
-        })?;
+    let surface = instance.create_surface(target).map_err(|error| {
+        GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::SurfaceCreationFailure,
+            error.to_string(),
+        )
+    })?;
     let context = request_with_instance(
         instance,
         descriptor,
@@ -459,7 +484,7 @@ fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &T) -> InstanceDescr
     #[cfg(not(target_arch = "wasm32"))]
     {
         enforce_runengpu_instance_flags(InstanceDescriptor::new_with_display_handle_from_env(
-            target.cloned_wgpu_display_handle(),
+            Box::new(target.clone()),
         ))
     }
     #[cfg(target_arch = "wasm32")]
@@ -516,17 +541,13 @@ impl GpuContext {
         T: GpuSurfaceTarget,
     {
         ensure_surface_health(&self.backend.health, None)?;
-        let surface = self
-            .backend
-            .instance
-            .create_surface(target.into_wgpu_surface_target())
-            .map_err(|error| {
-                GpuSurfaceError::new(
-                    GpuSurfaceErrorCategory::BackendCreationFailure,
-                    None,
-                    error.to_string(),
-                )
-            })?;
+        let surface = self.backend.instance.create_surface(target).map_err(|error| {
+            GpuSurfaceError::new(
+                GpuSurfaceErrorCategory::BackendCreationFailure,
+                None,
+                error.to_string(),
+            )
+        })?;
         self.backend
             .surfaces
             .register_surface(&self.backend.adapter, surface)
@@ -566,7 +587,9 @@ impl GpuContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::gpu::{GpuContextId, GpuDeviceGeneration};
+    use crate::plugins::gpu::{
+        GpuContextId, GpuDeviceGeneration, GpuPreferredFallback,
+    };
     use std::num::NonZeroU64;
 
     fn capabilities() -> GpuSurfaceCapabilities {
@@ -596,10 +619,7 @@ mod tests {
                 | TextureUsages::TEXTURE_BINDING,
         };
         let normalized = normalize_surface_capabilities(&native);
-        assert_eq!(
-            normalized.formats(),
-            &[GpuTextureFormat::Bgra8UnormSrgb]
-        );
+        assert_eq!(normalized.formats(), &[GpuTextureFormat::Bgra8UnormSrgb]);
         assert_eq!(
             normalized.usages(),
             &[
@@ -607,10 +627,7 @@ mod tests {
                 GpuTextureUsage::CopySource
             ]
         );
-        assert_eq!(
-            normalized.present_modes(),
-            &[GpuSurfacePresentMode::Fifo]
-        );
+        assert_eq!(normalized.present_modes(), &[GpuSurfacePresentMode::Fifo]);
         assert_eq!(normalized.alpha_modes(), &[GpuSurfaceAlphaMode::Opaque]);
     }
 
@@ -651,6 +668,58 @@ mod tests {
             validate_configuration(surface, &capabilities(), &unsupported),
             Err(error) if error.category() == GpuSurfaceErrorCategory::UnsupportedUsage
         ));
+    }
+
+    #[test]
+    fn presentation_first_descriptor_contributes_required_presentation_and_keeps_diagnostics() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_label("surface-first")
+            .with_provenance("g7a1-test");
+        let descriptor = descriptor_with_required_presentation(descriptor).unwrap();
+        assert_eq!(
+            descriptor
+                .requirements()
+                .get(GpuCapabilityFeature::Presentation),
+            Some(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Presentation
+            ))
+        );
+        assert_eq!(descriptor.label(), Some("surface-first"));
+        assert_eq!(descriptor.provenance(), Some("g7a1-test"));
+
+        let mut preferred = GpuCapabilityRequirements::new();
+        preferred
+            .insert(GpuCapabilityRequirement::Preferred {
+                feature: GpuCapabilityFeature::Presentation,
+                fallback: GpuPreferredFallback::ContinueWithoutFeature,
+            })
+            .unwrap();
+        let descriptor =
+            descriptor_with_required_presentation(GpuContextDescriptor::new(preferred)).unwrap();
+        assert_eq!(
+            descriptor
+                .requirements()
+                .get(GpuCapabilityFeature::Presentation),
+            Some(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Presentation
+            ))
+        );
+    }
+
+    #[test]
+    fn presentation_first_descriptor_rejects_disabled_presentation_before_backend_action() {
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Disabled(
+                GpuCapabilityFeature::Presentation,
+            ))
+            .unwrap();
+        let error = descriptor_with_required_presentation(GpuContextDescriptor::new(requirements))
+            .unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::ContradictoryRequest
+        );
     }
 
     #[test]
