@@ -393,10 +393,7 @@ fn native_copy_context() -> GpuContext {
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
-        .require_format_role(
-            GpuTextureFormat::Rgba8Unorm,
-            GpuFormatRole::CopyDestination,
-        )
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopyDestination)
         .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
         .with_allowed_backends([GpuBackendFamily::Vulkan])
         .with_label("G5B native texture transfer proof");
