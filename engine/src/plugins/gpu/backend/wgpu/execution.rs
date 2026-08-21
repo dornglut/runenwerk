@@ -171,8 +171,8 @@ impl TextureStagingLayout {
         })
     }
 
-    const fn row_count(self) -> u64 {
-        u64::from(self.rows_per_image) * u64::from(self.image_count)
+    fn row_count(self) -> u64 {
+        self.rows_per_image as u64 * self.image_count as u64
     }
 
     const fn buffer_layout(self) -> TexelCopyBufferLayout {
