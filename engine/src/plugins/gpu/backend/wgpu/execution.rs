@@ -1857,8 +1857,7 @@ fn encode_submit_and_register(
                 dispatch,
                 timestamp_writes,
             } => {
-                let zero_direct =
-                    matches!(dispatch, PreparedComputeDispatch::Direct(size) if size.as_array().contains(&0));
+                let zero_direct = matches!(dispatch, PreparedComputeDispatch::Direct(size) if size.as_array().contains(&0));
                 if zero_direct && timestamp_writes.is_none() {
                     continue;
                 }
@@ -1875,13 +1874,15 @@ fn encode_submit_and_register(
                             backend
                                 .program_binding_realization
                                 .with_execution_bind_groups(&realized_groups, |group_objects| {
-                                    let timestamp_writes = timestamp_writes.as_ref().map(|writes| {
-                                        ComputePassTimestampWrites {
-                                            query_set: &writes.query_set.record.object,
-                                            beginning_of_pass_write_index: writes.beginning_of_pass,
-                                            end_of_pass_write_index: writes.end_of_pass,
-                                        }
-                                    });
+                                    let timestamp_writes =
+                                        timestamp_writes.as_ref().map(|writes| {
+                                            ComputePassTimestampWrites {
+                                                query_set: &writes.query_set.record.object,
+                                                beginning_of_pass_write_index: writes
+                                                    .beginning_of_pass,
+                                                end_of_pass_write_index: writes.end_of_pass,
+                                            }
+                                        });
                                     let mut pass =
                                         encoder.begin_compute_pass(&ComputePassDescriptor {
                                             label: Some("RunenGPU G5B compute"),
