@@ -8,8 +8,7 @@ const WIDTH: u32 = 3;
 const HEIGHT: u32 = 2;
 const LAYERS: u32 = 2;
 const BYTES_PER_TEXEL: u32 = 4;
-const LOGICAL_BYTE_LEN: u64 =
-    WIDTH as u64 * HEIGHT as u64 * LAYERS as u64 * BYTES_PER_TEXEL as u64;
+const LOGICAL_BYTE_LEN: u64 = WIDTH as u64 * HEIGHT as u64 * LAYERS as u64 * BYTES_PER_TEXEL as u64;
 
 fn label(value: &str) -> GpuResourceLabel {
     GpuResourceLabel::new(value).unwrap()
@@ -50,7 +49,10 @@ fn texture(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> GpuTexture
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureUsages::new(
                     &resource_label,
-                    [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                    [
+                        GpuTextureUsage::CopySource,
+                        GpuTextureUsage::CopyDestination,
+                    ],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
@@ -150,7 +152,10 @@ fn context(policy: GpuExecutionPolicy, name: &str) -> GpuContext {
         policy,
     ))
     .expect("explicit WGPU Noop must admit the texture-transfer proof context");
-    assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::UnknownBackend);
+    assert_eq!(
+        context.adapter_facts().backend(),
+        GpuBackendFamily::UnknownBackend
+    );
     assert_eq!(
         context.admission_report().candidate().portability(),
         GpuPortabilityClass::Unsupported,
@@ -187,7 +192,10 @@ fn progress_to_readback(
         if let GpuSubmissionStatus::Failed(failure) = submission.status() {
             panic!("texture submission failed before readback: {failure:?}");
         }
-        assert!(Instant::now() < deadline, "texture readback did not materialize");
+        assert!(
+            Instant::now() < deadline,
+            "texture readback did not materialize"
+        );
         std::thread::yield_now();
     };
 
