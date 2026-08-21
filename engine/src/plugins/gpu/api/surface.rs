@@ -11,7 +11,9 @@ mod target {
         fn into_wgpu_surface_target(self) -> wgpu::SurfaceTarget<'static>;
 
         #[cfg(not(target_arch = "wasm32"))]
-        fn cloned_wgpu_display_handle(&self) -> Box<dyn wgpu::WgpuHasDisplayHandle>;
+        fn cloned_wgpu_display_handle(
+            &self,
+        ) -> Box<dyn wgpu::wgt::instance::WgpuHasDisplayHandle>;
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -29,7 +31,9 @@ mod target {
             wgpu::SurfaceTarget::DisplayAndWindow(Box::new(self))
         }
 
-        fn cloned_wgpu_display_handle(&self) -> Box<dyn wgpu::WgpuHasDisplayHandle> {
+        fn cloned_wgpu_display_handle(
+            &self,
+        ) -> Box<dyn wgpu::wgt::instance::WgpuHasDisplayHandle> {
             Box::new(self.clone())
         }
     }
@@ -54,6 +58,7 @@ mod target {
 /// This trait is implemented automatically for owned, cloneable producers of the standardized
 /// raw-window-handle display and window traits. WGPU and window-system types remain private to the
 /// implementation boundary.
+#[allow(private_bounds)]
 pub trait GpuSurfaceTarget: target::SealedSurfaceTarget {}
 
 impl<T> GpuSurfaceTarget for T where T: target::SealedSurfaceTarget {}
