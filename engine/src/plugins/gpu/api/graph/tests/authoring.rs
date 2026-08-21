@@ -489,6 +489,21 @@ fn caller_cannot_repeat_an_operation_derived_access() {
                 .unwrap(),
         )
         .unwrap();
+    let target = texture(
+        &mut allocator,
+        "derived timestamp target",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [GpuTextureUsage::ColorAttachment],
+    );
+    let target_range = GpuTextureSubresourceRange::whole(&target).unwrap();
+    let target_view = texture_view(
+        &mut allocator,
+        &target,
+        "derived timestamp target view",
+        target_range,
+    );
     let access = GpuQueryAccess::new(
         &queries,
         GpuQueryRange::new(&queries, 0, 1).unwrap(),
@@ -496,13 +511,24 @@ fn caller_cannot_repeat_an_operation_derived_access() {
     )
     .unwrap();
     let timestamp_writes = GpuTimestampWrites::new(&queries, Some(0), None).unwrap();
+    let attachment = GpuRenderColorAttachment::new(
+        target_view.clone(),
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+        GpuAttachmentStore::Store,
+        None,
+    )
+    .unwrap();
     let operation = GpuWorkOperation::Render(
-        GpuRenderOperation::new([], None, [], Some(timestamp_writes)).unwrap(),
+        GpuRenderOperation::new([attachment], None, [], Some(timestamp_writes)).unwrap(),
     );
     let mut fragment = builder("derived access");
-    fragment
-        .declare_resource(GpuResourceRef::QuerySet(queries))
-        .unwrap();
+    for resource in [
+        GpuResourceRef::QuerySet(queries),
+        GpuResourceRef::Texture(target),
+        GpuResourceRef::TextureView(target_view),
+    ] {
+        fragment.declare_resource(resource).unwrap();
+    }
     let error = fragment
         .add_node(
             label("timestamp"),
