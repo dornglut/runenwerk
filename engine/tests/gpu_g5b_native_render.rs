@@ -84,16 +84,8 @@ fn render_pipeline() -> GpuRenderPipelineDescriptor {
         admitted_render_source(),
         interface.clone(),
         [
-            GpuEntryPointDescriptor::new(
-                vertex.clone(),
-                GpuShaderStage::Vertex,
-                interface.clone(),
-            ),
-            GpuEntryPointDescriptor::new(
-                fragment.clone(),
-                GpuShaderStage::Fragment,
-                interface,
-            ),
+            GpuEntryPointDescriptor::new(vertex.clone(), GpuShaderStage::Vertex, interface.clone()),
+            GpuEntryPointDescriptor::new(fragment.clone(), GpuShaderStage::Fragment, interface),
         ],
     )
     .unwrap();
@@ -137,14 +129,8 @@ fn render_target(
             GpuTextureDescriptor::new(
                 common("native offscreen render target"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -213,9 +199,7 @@ fn render_graph(context: &GpuContext) -> (GpuPreparedWorkGraph, GpuReadbackId) {
     .unwrap();
     let attachment = GpuRenderColorAttachment::new(
         view.clone(),
-        GpuColorAttachmentLoad::Clear(
-            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-        ),
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
         GpuAttachmentStore::Store,
         None,
     )
