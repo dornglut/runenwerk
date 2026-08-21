@@ -2,8 +2,9 @@ use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::resource_realization::map_texture_aspect;
 use crate::plugins::gpu::{
-    GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuDataLayout, GpuDispatchSize,
-    GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
+    GpuBufferTextureLayout, GpuCapabilityAdmission, GpuContext, GpuContextAffinity,
+    GpuCopyOperation, GpuDataLayout, GpuDispatchSize, GpuExecutionLifecycleState,
+    GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
     GpuPipelineRealizationErrorCategory, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
     GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
@@ -313,6 +314,24 @@ enum PreparedExecutionOperation {
         destination: GpuRealizedBuffer,
         destination_offset: u64,
         size: u64,
+    },
+    BufferToTextureCopy {
+        source: GpuRealizedBuffer,
+        layout: GpuBufferTextureLayout,
+        destination: GpuRealizedTexture,
+        region: GpuTextureCopyRegion,
+    },
+    TextureToBufferCopy {
+        source: GpuRealizedTexture,
+        region: GpuTextureCopyRegion,
+        destination: GpuRealizedBuffer,
+        layout: GpuBufferTextureLayout,
+    },
+    TextureToTextureCopy {
+        source: GpuRealizedTexture,
+        source_region: GpuTextureCopyRegion,
+        destination: GpuRealizedTexture,
+        destination_region: GpuTextureCopyRegion,
     },
     Readback {
         id: GpuReadbackId,
@@ -1181,25 +1200,78 @@ async fn prepare_execution_plan(
                 operations
                     .push(prepare_compute_operation(context, &mut buffer_cache, compute).await?);
             }
-            GpuWorkOperation::Copy(crate::plugins::gpu::GpuCopyOperation::BufferToBuffer {
-                source,
-                destination,
-            }) => {
-                let alignment = copy_alignment(context)?;
-                validate_copy_range(source.range().offset(), source.range().size(), alignment)?;
-                validate_copy_range(
-                    destination.range().offset(),
-                    destination.range().size(),
-                    alignment,
-                )?;
-                operations.push(PreparedExecutionOperation::Copy {
-                    source: realized_buffer(context, &mut buffer_cache, source.buffer())?,
-                    source_offset: source.range().offset(),
-                    destination: realized_buffer(context, &mut buffer_cache, destination.buffer())?,
-                    destination_offset: destination.range().offset(),
-                    size: source.range().size(),
-                });
-            }
+            GpuWorkOperation::Copy(copy) => match copy {
+                GpuCopyOperation::BufferToBuffer {
+                    source,
+                    destination,
+                } => {
+                    let alignment = copy_alignment(context)?;
+                    validate_copy_range(source.range().offset(), source.range().size(), alignment)?;
+                    validate_copy_range(
+                        destination.range().offset(),
+                        destination.range().size(),
+                        alignment,
+                    )?;
+                    operations.push(PreparedExecutionOperation::Copy {
+                        source: realized_buffer(context, &mut buffer_cache, source.buffer())?,
+                        source_offset: source.range().offset(),
+                        destination: realized_buffer(
+                            context,
+                            &mut buffer_cache,
+                            destination.buffer(),
+                        )?,
+                        destination_offset: destination.range().offset(),
+                        size: source.range().size(),
+                    });
+                }
+                GpuCopyOperation::BufferToTexture {
+                    source,
+                    destination,
+                } => {
+                    let realized_source =
+                        realized_buffer(context, &mut buffer_cache, source.buffer())?;
+                    let realized_destination =
+                        realized_texture(context, &mut texture_cache, destination.texture())?;
+                    validate_buffer_texture_copy_layout(source, destination)?;
+                    operations.push(PreparedExecutionOperation::BufferToTextureCopy {
+                        source: realized_source,
+                        layout: source.clone(),
+                        destination: realized_destination,
+                        region: destination.clone(),
+                    });
+                }
+                GpuCopyOperation::TextureToBuffer {
+                    source,
+                    destination,
+                } => {
+                    let realized_source =
+                        realized_texture(context, &mut texture_cache, source.texture())?;
+                    let realized_destination =
+                        realized_buffer(context, &mut buffer_cache, destination.buffer())?;
+                    validate_buffer_texture_copy_layout(destination, source)?;
+                    operations.push(PreparedExecutionOperation::TextureToBufferCopy {
+                        source: realized_source,
+                        region: source.clone(),
+                        destination: realized_destination,
+                        layout: destination.clone(),
+                    });
+                }
+                GpuCopyOperation::TextureToTexture {
+                    source,
+                    destination,
+                } => {
+                    operations.push(PreparedExecutionOperation::TextureToTextureCopy {
+                        source: realized_texture(context, &mut texture_cache, source.texture())?,
+                        source_region: source.clone(),
+                        destination: realized_texture(
+                            context,
+                            &mut texture_cache,
+                            destination.texture(),
+                        )?,
+                        destination_region: destination.clone(),
+                    });
+                }
+            },
             GpuWorkOperation::Readback(readback) => {
                 if !seen_readbacks.insert(readback.id()) {
                     return Err(GpuSubmissionPreparationError::new(
@@ -1288,14 +1360,9 @@ async fn prepare_execution_plan(
                     }
                 }
             }
-            GpuWorkOperation::Copy(_) => {
-                return unsupported(
-                    "texture-involving Copy remains outside the current G5B execution checkpoint",
-                );
-            }
             _ => {
                 return unsupported(
-                    "the current G5B checkpoint executes buffer/texture Upload and Readback, buffer Copy, and compute dispatch only",
+                    "the current G5B checkpoint executes buffer/texture Upload, Copy, and Readback plus compute dispatch only",
                 );
             }
         }
@@ -1513,6 +1580,41 @@ fn validate_copy_range(
     Ok(())
 }
 
+fn validate_buffer_texture_copy_layout(
+    layout: &GpuBufferTextureLayout,
+    region: &GpuTextureCopyRegion,
+) -> Result<(), GpuSubmissionPreparationError> {
+    let extent = region.extent();
+    if (extent.height() > 1 || extent.depth_or_layers() > 1)
+        && !layout
+            .bytes_per_row()
+            .is_multiple_of(COPY_BYTES_PER_ROW_ALIGNMENT)
+    {
+        return Err(GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::TransferAlignmentNotAdmitted,
+            format!(
+                "buffer-texture copy bytes_per_row {} is not encodable at WGPU command-copy row alignment {}",
+                layout.bytes_per_row(),
+                COPY_BYTES_PER_ROW_ALIGNMENT
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn wgpu_buffer_texture_copy_layout(
+    layout: &GpuBufferTextureLayout,
+    region: &GpuTextureCopyRegion,
+) -> TexelCopyBufferLayout {
+    let extent = region.extent();
+    let requires_bytes_per_row = extent.height() > 1 || extent.depth_or_layers() > 1;
+    TexelCopyBufferLayout {
+        offset: layout.byte_offset(),
+        bytes_per_row: requires_bytes_per_row.then_some(layout.bytes_per_row()),
+        rows_per_image: (extent.depth_or_layers() > 1).then_some(layout.rows_per_image()),
+    }
+}
+
 fn checked_staging_demand(
     current: u64,
     additional: u64,
@@ -1721,6 +1823,42 @@ fn encode_submit_and_register(
                 &destination.record.object,
                 *destination_offset,
                 *size,
+            ),
+            PreparedExecutionOperation::BufferToTextureCopy {
+                source,
+                layout,
+                destination,
+                region,
+            } => encoder.copy_buffer_to_texture(
+                TexelCopyBufferInfo {
+                    buffer: &source.record.object,
+                    layout: wgpu_buffer_texture_copy_layout(layout, region),
+                },
+                texture_copy_info(destination, region),
+                texture_copy_extent(region),
+            ),
+            PreparedExecutionOperation::TextureToBufferCopy {
+                source,
+                region,
+                destination,
+                layout,
+            } => encoder.copy_texture_to_buffer(
+                texture_copy_info(source, region),
+                TexelCopyBufferInfo {
+                    buffer: &destination.record.object,
+                    layout: wgpu_buffer_texture_copy_layout(layout, region),
+                },
+                texture_copy_extent(region),
+            ),
+            PreparedExecutionOperation::TextureToTextureCopy {
+                source,
+                source_region,
+                destination,
+                destination_region,
+            } => encoder.copy_texture_to_texture(
+                texture_copy_info(source, source_region),
+                texture_copy_info(destination, destination_region),
+                texture_copy_extent(source_region),
             ),
             PreparedExecutionOperation::Readback {
                 id: readback_id,
