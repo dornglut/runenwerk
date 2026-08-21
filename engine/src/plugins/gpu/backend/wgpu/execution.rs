@@ -1316,16 +1316,12 @@ async fn prepare_execution_plan(
             GpuWorkOperation::Resolve(resolve) => {
                 validate_query_resolve_offset(resolve.destination_offset())?;
                 operations.push(PreparedExecutionOperation::Resolve {
-                    source: realized_query_set(
-                        context,
-                        &mut query_set_cache,
-                        resolve.source_query_set(),
-                    )?,
+                    source: realized_query_set(context, &mut query_set_cache, resolve.source())?,
                     query_range: resolve.source_range().first()..resolve.source_range().end(),
                     destination: realized_buffer(
                         context,
                         &mut buffer_cache,
-                        resolve.destination_buffer(),
+                        resolve.destination(),
                     )?,
                     destination_offset: resolve.destination_offset(),
                 });
