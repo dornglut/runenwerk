@@ -4,66 +4,52 @@ use std::collections::BTreeSet;
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-mod target {
-    use core::fmt;
+/// Safe host target accepted by the backend-neutral RunenGPU surface API.
+///
+/// The contract is intentionally the standardized raw-window-handle display/window pair rather
+/// than a WGPU or window-system object. The private backend performs its own target conversion.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait GpuSurfaceTarget:
+    wgpu::rwh::HasDisplayHandle
+    + wgpu::rwh::HasWindowHandle
+    + Clone
+    + fmt::Debug
+    + Send
+    + Sync
+    + 'static
+{
+}
 
-    pub(crate) trait SealedSurfaceTarget: Clone + fmt::Debug + 'static {
-        fn into_wgpu_surface_target(self) -> wgpu::SurfaceTarget<'static>;
-
-        #[cfg(not(target_arch = "wasm32"))]
-        fn cloned_wgpu_display_handle(
-            &self,
-        ) -> Box<dyn wgpu::wgt::instance::WgpuHasDisplayHandle>;
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    impl<T> SealedSurfaceTarget for T
-    where
-        T: wgpu::rwh::HasDisplayHandle
-            + wgpu::rwh::HasWindowHandle
-            + Clone
-            + fmt::Debug
-            + Send
-            + Sync
-            + 'static,
-    {
-        fn into_wgpu_surface_target(self) -> wgpu::SurfaceTarget<'static> {
-            wgpu::SurfaceTarget::DisplayAndWindow(Box::new(self))
-        }
-
-        fn cloned_wgpu_display_handle(
-            &self,
-        ) -> Box<dyn wgpu::wgt::instance::WgpuHasDisplayHandle> {
-            Box::new(self.clone())
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    impl<T> SealedSurfaceTarget for T
-    where
-        T: wgpu::rwh::HasDisplayHandle
-            + wgpu::rwh::HasWindowHandle
-            + Clone
-            + fmt::Debug
-            + 'static,
-    {
-        fn into_wgpu_surface_target(self) -> wgpu::SurfaceTarget<'static> {
-            wgpu::SurfaceTarget::DisplayAndWindow(Box::new(self))
-        }
-    }
+#[cfg(not(target_arch = "wasm32"))]
+impl<T> GpuSurfaceTarget for T where
+    T: wgpu::rwh::HasDisplayHandle
+        + wgpu::rwh::HasWindowHandle
+        + Clone
+        + fmt::Debug
+        + Send
+        + Sync
+        + 'static
+{
 }
 
 /// Safe host target accepted by the backend-neutral RunenGPU surface API.
 ///
-/// This trait is implemented automatically for owned, cloneable producers of the standardized
-/// raw-window-handle display and window traits. WGPU and window-system types remain private to the
-/// implementation boundary.
-#[allow(private_bounds)]
-pub trait GpuSurfaceTarget: target::SealedSurfaceTarget {}
+/// Web targets deliberately do not inherit native-only thread-safety requirements.
+#[cfg(target_arch = "wasm32")]
+pub trait GpuSurfaceTarget:
+    wgpu::rwh::HasDisplayHandle + wgpu::rwh::HasWindowHandle + Clone + fmt::Debug + 'static
+{
+}
 
-impl<T> GpuSurfaceTarget for T where T: target::SealedSurfaceTarget {}
-
-pub(crate) use target::SealedSurfaceTarget;
+#[cfg(target_arch = "wasm32")]
+impl<T> GpuSurfaceTarget for T where
+    T: wgpu::rwh::HasDisplayHandle
+        + wgpu::rwh::HasWindowHandle
+        + Clone
+        + fmt::Debug
+        + 'static
+{
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuSurfaceId(NonZeroU64);
@@ -434,7 +420,11 @@ impl GpuSurfaceError {
 
 impl fmt::Display for GpuSurfaceError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "GPU surface operation failed ({:?})", self.category)?;
+        write!(
+            formatter,
+            "GPU surface operation failed ({:?})",
+            self.category
+        )?;
         if let Some(detail) = &self.detail {
             write!(formatter, ": {detail}")?;
         }
@@ -509,7 +499,10 @@ mod tests {
 
         assert_eq!(
             configuration.usages(),
-            &[GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource]
+            &[
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopySource
+            ]
         );
         assert_eq!(
             configuration.view_formats(),
