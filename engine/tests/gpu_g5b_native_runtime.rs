@@ -383,3 +383,133 @@ fn native_headless_compute_executes_shader_and_reuses_dynamic_bind_group() {
     assert_eq!(stats.readback_bytes_in_flight(), 0);
     assert_eq!(stats.pending_readbacks(), 0);
 }
+
+fn native_copy_context() -> GpuContext {
+    let mut requirements = GpuCapabilityRequirements::new();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
+        .unwrap();
+    let descriptor = GpuContextDescriptor::new(requirements)
+        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+        .with_allowed_backends([GpuBackendFamily::Vulkan])
+        .with_label("G5B native texture transfer proof");
+    let context = pollster::block_on(GpuContext::request(descriptor))
+        .expect("native conformance environment must provide a Vulkan fallback adapter");
+    assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
+    assert_eq!(
+        context.adapter_facts().fallback(),
+        GpuFallbackStatus::ConfirmedFallback,
+        "native texture proof must execute through the explicitly required fallback path"
+    );
+    context
+}
+
+fn native_texture_round_trip_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u8>) {
+    const WIDTH: u32 = 3;
+    const HEIGHT: u32 = 2;
+    const LAYERS: u32 = 2;
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let texture_label = label("native texture transfer target");
+    let texture = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common("native texture transfer target"),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(
+                    &texture_label,
+                    GpuTextureDimension::D2,
+                    WIDTH,
+                    HEIGHT,
+                    LAYERS,
+                )
+                .unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &texture_label,
+                    [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let region = GpuTextureCopyRegion::new(
+        &texture,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(WIDTH, HEIGHT, LAYERS).unwrap(),
+    )
+    .unwrap();
+    let expected = (0..WIDTH * HEIGHT * LAYERS * 4)
+        .map(|value| u8::try_from((value * 17 + 5) % 251).unwrap())
+        .collect::<Vec<_>>();
+    let upload = GpuUploadOperation::new(
+        region.clone().into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer(
+            "native texture transfer payload",
+            expected.as_slice(),
+            provenance("native texture transfer payload"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(region.into(), readback_id).unwrap();
+
+    let mut builder = GpuWorkFragmentBuilder::new(
+        label("native texture transfer"),
+        provenance("native texture transfer"),
+    );
+    builder.declare_resource(texture.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "native texture upload",
+        GpuWorkOperation::Upload(upload),
+    );
+    add_operation(
+        &mut builder,
+        "native texture readback",
+        GpuWorkOperation::Readback(readback),
+    );
+    (
+        GpuPreparedWorkGraph::prepare(
+            label("native texture transfer graph"),
+            [builder.finish().unwrap()],
+        )
+        .unwrap(),
+        readback_id,
+        expected,
+    )
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_texture_upload_readback_normalizes_private_row_padding() {
+    let context = native_copy_context();
+    let (graph, readback_id, expected) = native_texture_round_trip_graph();
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    let submission = context.submit_prepared(prepared).unwrap();
+    let readback = submission
+        .readback(readback_id)
+        .expect("accepted native texture readback must remain observable")
+        .clone();
+    let bytes = progress_to_readback(&context, &submission, &readback);
+
+    assert_eq!(bytes.as_bytes(), expected.as_slice());
+    assert_eq!(bytes.layout().byte_len(), expected.len() as u64);
+    assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
+
+    let stats = context.execution_stats();
+    assert_eq!(stats.prepared_submissions(), 0);
+    assert_eq!(stats.in_flight_submissions(), 0);
+    assert_eq!(stats.upload_bytes_in_flight(), 0);
+    assert_eq!(stats.readback_bytes_in_flight(), 0);
+    assert_eq!(stats.pending_readbacks(), 0);
+}
