@@ -9,10 +9,10 @@ use crate::plugins::gpu::{
     GpuTextureFormat, GpuTextureUsage, SealedSurfaceTarget, allocate_surface_id,
 };
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard};
 use wgpu::{
     Adapter, CompositeAlphaMode, Device, Instance, InstanceDescriptor, PresentMode, Surface,
-    SurfaceColorSpace, SurfaceConfiguration, SurfaceTarget, TextureFormat, TextureUsages,
+    SurfaceColorSpace, SurfaceConfiguration, TextureFormat, TextureUsages,
 };
 
 struct WgpuSurfaceRecord {
@@ -75,7 +75,7 @@ impl WgpuSurfaceState {
 
         let id = allocate_surface_id()?;
         let generation = GpuSurfaceGeneration::first();
-        self.records(id)?.insert(
+        self.records(Some(id))?.insert(
             id,
             WgpuSurfaceRecord {
                 generation,
@@ -94,6 +94,15 @@ impl WgpuSurfaceState {
         let records = self.records(Some(handle.id()))?;
         let record = validate_handle(self.affinity, &records, handle)?;
         Ok(record.capabilities.clone())
+    }
+
+    pub(crate) fn configuration(
+        &self,
+        handle: GpuSurfaceHandle,
+    ) -> Result<Option<GpuSurfaceConfiguration>, GpuSurfaceError> {
+        let records = self.records(Some(handle.id()))?;
+        let record = validate_handle(self.affinity, &records, handle)?;
+        Ok(record.configuration.clone())
     }
 
     pub(crate) fn configure(
@@ -237,7 +246,10 @@ fn normalize_surface_capabilities(native: &wgpu::SurfaceCapabilities) -> GpuSurf
 
     let mut usages = Vec::new();
     for (native_usage, normalized) in [
-        (TextureUsages::RENDER_ATTACHMENT, GpuTextureUsage::ColorAttachment),
+        (
+            TextureUsages::RENDER_ATTACHMENT,
+            GpuTextureUsage::ColorAttachment,
+        ),
         (TextureUsages::COPY_SRC, GpuTextureUsage::CopySource),
         (TextureUsages::COPY_DST, GpuTextureUsage::CopyDestination),
     ] {
@@ -351,8 +363,9 @@ fn lower_configuration(configuration: &GpuSurfaceConfiguration) -> SurfaceConfig
             .iter()
             .copied()
             .map(|format| {
-                map_texture_format(format)
-                    .expect("surface view format construction accepts only normalized backend formats")
+                map_texture_format(format).expect(
+                    "surface view format construction accepts only normalized backend formats",
+                )
             })
             .collect(),
     }
@@ -458,7 +471,9 @@ fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &T) -> InstanceDescr
 
 fn map_surface_registration_error(error: GpuSurfaceError) -> GpuContextRequestError {
     let category = match error.category() {
-        GpuSurfaceErrorCategory::IdentityExhausted => GpuContextRequestErrorCategory::IdentityExhausted,
+        GpuSurfaceErrorCategory::IdentityExhausted => {
+            GpuContextRequestErrorCategory::IdentityExhausted
+        }
         GpuSurfaceErrorCategory::ContextOrDeviceUnavailableOrLost => {
             GpuContextRequestErrorCategory::BackendDeviceRequestFailure
         }
@@ -525,6 +540,14 @@ impl GpuContext {
         self.backend.surfaces.capabilities(surface)
     }
 
+    pub fn surface_configuration(
+        &self,
+        surface: GpuSurfaceHandle,
+    ) -> Result<Option<GpuSurfaceConfiguration>, GpuSurfaceError> {
+        ensure_surface_health(&self.backend.health, Some(surface.id()))?;
+        self.backend.surfaces.configuration(surface)
+    }
+
     pub fn configure_surface(
         &self,
         surface: GpuSurfaceHandle,
@@ -543,11 +566,19 @@ impl GpuContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{GpuContextId, GpuDeviceGeneration};
+    use std::num::NonZeroU64;
 
     fn capabilities() -> GpuSurfaceCapabilities {
         GpuSurfaceCapabilities::from_normalized_facts(
-            vec![GpuTextureFormat::Bgra8Unorm, GpuTextureFormat::Bgra8UnormSrgb],
-            vec![GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+            vec![
+                GpuTextureFormat::Bgra8Unorm,
+                GpuTextureFormat::Bgra8UnormSrgb,
+            ],
+            vec![
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopySource,
+            ],
             vec![GpuSurfacePresentMode::Fifo],
             vec![GpuSurfaceAlphaMode::Opaque],
         )
@@ -565,12 +596,21 @@ mod tests {
                 | TextureUsages::TEXTURE_BINDING,
         };
         let normalized = normalize_surface_capabilities(&native);
-        assert_eq!(normalized.formats(), &[GpuTextureFormat::Bgra8UnormSrgb]);
+        assert_eq!(
+            normalized.formats(),
+            &[GpuTextureFormat::Bgra8UnormSrgb]
+        );
         assert_eq!(
             normalized.usages(),
-            &[GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource]
+            &[
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopySource
+            ]
         );
-        assert_eq!(normalized.present_modes(), &[GpuSurfacePresentMode::Fifo]);
+        assert_eq!(
+            normalized.present_modes(),
+            &[GpuSurfacePresentMode::Fifo]
+        );
         assert_eq!(normalized.alpha_modes(), &[GpuSurfaceAlphaMode::Opaque]);
     }
 
@@ -581,7 +621,10 @@ mod tests {
             640,
             480,
             GpuTextureFormat::Bgra8Unorm,
-            [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+            [
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopySource,
+            ],
             GpuSurfacePresentMode::Fifo,
             GpuSurfaceAlphaMode::Opaque,
             2,
@@ -594,7 +637,10 @@ mod tests {
             640,
             480,
             GpuTextureFormat::Bgra8Unorm,
-            [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopyDestination],
+            [
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::CopyDestination,
+            ],
             GpuSurfacePresentMode::Fifo,
             GpuSurfaceAlphaMode::Opaque,
             2,
@@ -604,6 +650,36 @@ mod tests {
         assert!(matches!(
             validate_configuration(surface, &capabilities(), &unsupported),
             Err(error) if error.category() == GpuSurfaceErrorCategory::UnsupportedUsage
+        ));
+    }
+
+    #[test]
+    fn surface_handle_affinity_rejects_foreign_context_and_stale_device_generation() {
+        let surface = allocate_surface_id().unwrap();
+        let context_one = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
+        let context_two = GpuContextId::test_value(NonZeroU64::new(2).unwrap());
+        let generation_one = GpuDeviceGeneration::first();
+        let generation_two = GpuDeviceGeneration::test_value(NonZeroU64::new(2).unwrap());
+        let expected = GpuContextAffinity::test_value(context_one, generation_one);
+
+        let foreign = GpuSurfaceHandle::new(
+            surface,
+            GpuContextAffinity::test_value(context_two, generation_one),
+            GpuSurfaceGeneration::first(),
+        );
+        assert!(matches!(
+            validate_surface_affinity(expected, foreign),
+            Err(error) if error.category() == GpuSurfaceErrorCategory::ForeignContext
+        ));
+
+        let stale = GpuSurfaceHandle::new(
+            surface,
+            GpuContextAffinity::test_value(context_one, generation_two),
+            GpuSurfaceGeneration::first(),
+        );
+        assert!(matches!(
+            validate_surface_affinity(expected, stale),
+            Err(error) if error.category() == GpuSurfaceErrorCategory::StaleGeneration
         ));
     }
 }
