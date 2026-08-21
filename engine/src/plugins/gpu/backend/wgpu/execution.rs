@@ -2,18 +2,19 @@ use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::resource_realization::map_texture_aspect;
 use crate::plugins::gpu::{
-    GpuBufferTextureLayout, GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuCopyOperation,
-    GpuDataLayout, GpuDispatchSize, GpuExecutionLifecycleState, GpuExecutionPolicy,
-    GpuExecutionStats, GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory,
-    GpuPreparedSubmission, GpuPreparedSubmissionRejected, GpuPreparedWorkGraph,
-    GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory, GpuReadback,
-    GpuReadbackBytes, GpuReadbackId, GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer,
-    GpuRealizedComputePipeline, GpuRealizedTexture, GpuResourceProvenance,
-    GpuRuntimeBindingResource, GpuSubmission, GpuSubmissionFailure, GpuSubmissionFailureKind,
-    GpuSubmissionId, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
-    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuSubmissionStatus,
-    GpuTextureCopyRegion, GpuTextureFormat, GpuTransferRegion, GpuValidatedBindGroupBindings,
-    GpuWorkOperation, GpuWorkResourceId, PreparedGpuData, TransferData,
+    GpuBufferTextureLayout, GpuCapabilityAdmission, GpuContext, GpuContextAffinity,
+    GpuCopyOperation, GpuDataLayout, GpuDispatchSize, GpuExecutionLifecycleState,
+    GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
+    GpuPipelineRealizationErrorCategory, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
+    GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
+    GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
+    GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
+    GpuRealizedTexture, GpuResourceProvenance, GpuRuntimeBindingResource, GpuSubmission,
+    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
+    GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
+    GpuSubmissionStatus, GpuTextureCopyRegion, GpuTextureFormat, GpuTransferRegion,
+    GpuValidatedBindGroupBindings, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData,
+    TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -1260,11 +1261,7 @@ async fn prepare_execution_plan(
                     destination,
                 } => {
                     operations.push(PreparedExecutionOperation::TextureToTextureCopy {
-                        source: realized_texture(
-                            context,
-                            &mut texture_cache,
-                            source.texture(),
-                        )?,
+                        source: realized_texture(context, &mut texture_cache, source.texture())?,
                         source_region: source.clone(),
                         destination: realized_texture(
                             context,
