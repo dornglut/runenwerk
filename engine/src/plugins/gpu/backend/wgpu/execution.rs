@@ -1,3 +1,6 @@
+mod render;
+
+use self::render::{PreparedRenderOperation, encode_render_operation, prepare_render_operation};
 use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::resource_realization::map_texture_aspect;
@@ -70,7 +73,7 @@ struct PreparedExecutionPlan {
 }
 
 #[derive(Debug, Clone)]
-struct PreparedComputeBindGroup {
+struct PreparedBindGroup {
     index: u32,
     realization: GpuRealizedBindGroup,
     dynamic_offsets: Vec<u32>,
@@ -313,10 +316,11 @@ enum PreparedExecutionOperation {
     },
     Compute {
         pipeline: GpuRealizedComputePipeline,
-        bind_groups: Vec<PreparedComputeBindGroup>,
+        bind_groups: Vec<PreparedBindGroup>,
         dispatch: PreparedComputeDispatch,
         timestamp_writes: Option<PreparedTimestampWrites>,
     },
+    Render(PreparedRenderOperation),
     Copy {
         source: GpuRealizedBuffer,
         source_offset: u64,
@@ -1228,6 +1232,11 @@ async fn prepare_execution_plan(
                     .await?,
                 );
             }
+            GpuWorkOperation::Render(render) => {
+                operations.push(PreparedExecutionOperation::Render(
+                    prepare_render_operation(context, render).await?,
+                ));
+            }
             GpuWorkOperation::Copy(copy) => match copy {
                 GpuCopyOperation::BufferToBuffer {
                     source,
@@ -1414,9 +1423,9 @@ async fn prepare_execution_plan(
                     }
                 }
             }
-            _ => {
+            GpuWorkOperation::Present(_) => {
                 return unsupported(
-                    "the current G5B checkpoint executes buffer/texture Upload, Copy, BufferZero, query Resolve, Readback, and compute dispatch/timestamps only",
+                    "surface Present is owned by G7A and is intentionally outside surface-independent G5B execution",
                 );
             }
         }
@@ -1484,7 +1493,7 @@ async fn prepare_compute_operation(
             .realize_bind_group(&layout, group.values().cloned())
             .await
             .map_err(preparation_program_binding_failure)?;
-        bind_groups.push(PreparedComputeBindGroup {
+        bind_groups.push(PreparedBindGroup {
             index: group.layout().group(),
             realization,
             dynamic_offsets: checked_dynamic_offsets(group)?,
@@ -1917,6 +1926,9 @@ fn encode_submit_and_register(
                     )
                     .map_err(submission_pipeline_failure)?
                     .map_err(submission_program_binding_failure)?;
+            }
+            PreparedExecutionOperation::Render(render) => {
+                encode_render_operation(backend, &mut encoder, render)?;
             }
             PreparedExecutionOperation::Copy {
                 source,
