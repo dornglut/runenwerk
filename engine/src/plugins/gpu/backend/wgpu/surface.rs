@@ -17,6 +17,28 @@ use wgpu::{
     SurfaceColorSpace, SurfaceConfiguration, TextureFormat, TextureUsages,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+struct WgpuSurfaceDisplay<T>(Arc<T>);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<T> core::fmt::Debug for WgpuSurfaceDisplay<T> {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.debug_struct("WgpuSurfaceDisplay").finish_non_exhaustive()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<T> raw_window_handle::HasDisplayHandle for WgpuSurfaceDisplay<T>
+where
+    T: GpuSurfaceTarget,
+{
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        self.0.display_handle()
+    }
+}
+
 struct WgpuSurfaceRecord {
     generation: GpuSurfaceGeneration,
     capabilities: GpuSurfaceCapabilities,
@@ -121,11 +143,11 @@ impl WgpuSurfaceState {
         let record = validate_handle_mut(self.affinity, &mut records, handle)?;
         validate_configuration(handle.id(), &record.capabilities, &configuration)?;
 
-        let next_generation = if record.configuration.is_some() {
-            record.generation.next(handle.id())?
-        } else {
-            record.generation
-        };
+        let next_generation = surface_generation_after_configuration(
+            record.generation,
+            record.configuration.is_some(),
+            handle.id(),
+        )?;
         let native = lower_configuration(&configuration);
         record.surface.configure(device, &native);
         ensure_surface_health(health, Some(handle.id()))?;
@@ -167,13 +189,7 @@ fn validate_handle<'a>(
             "surface identity is absent from this context-local surface owner",
         )
     })?;
-    if record.generation != handle.generation() {
-        return Err(GpuSurfaceError::new(
-            GpuSurfaceErrorCategory::StaleGeneration,
-            Some(handle.id()),
-            "surface reference names a stale configuration generation",
-        ));
-    }
+    validate_surface_generation(record.generation, handle)?;
     Ok(record)
 }
 
@@ -190,14 +206,34 @@ fn validate_handle_mut<'a>(
             "surface identity is absent from this context-local surface owner",
         )
     })?;
-    if record.generation != handle.generation() {
+    validate_surface_generation(record.generation, handle)?;
+    Ok(record)
+}
+
+fn validate_surface_generation(
+    current: GpuSurfaceGeneration,
+    handle: GpuSurfaceHandle,
+) -> Result<(), GpuSurfaceError> {
+    if current != handle.generation() {
         return Err(GpuSurfaceError::new(
             GpuSurfaceErrorCategory::StaleGeneration,
             Some(handle.id()),
             "surface reference names a stale configuration generation",
         ));
     }
-    Ok(record)
+    Ok(())
+}
+
+fn surface_generation_after_configuration(
+    current: GpuSurfaceGeneration,
+    already_configured: bool,
+    surface: GpuSurfaceId,
+) -> Result<GpuSurfaceGeneration, GpuSurfaceError> {
+    if already_configured {
+        current.next(surface)
+    } else {
+        Ok(current)
+    }
 }
 
 fn validate_surface_affinity(
@@ -487,7 +523,7 @@ fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &Arc<T>) -> Instance
     #[cfg(not(target_arch = "wasm32"))]
     {
         enforce_runengpu_instance_flags(InstanceDescriptor::new_with_display_handle_from_env(
-            Box::new(Arc::clone(target)),
+            Box::new(WgpuSurfaceDisplay(Arc::clone(target))),
         ))
     }
     #[cfg(target_arch = "wasm32")]
@@ -725,6 +761,30 @@ mod tests {
             error.category(),
             GpuContextRequestErrorCategory::ContradictoryRequest
         );
+    }
+
+    #[test]
+    fn surface_reconfiguration_advances_generation_and_rejects_the_previous_handle() {
+        let surface = allocate_surface_id().unwrap();
+        let context = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
+        let affinity = GpuContextAffinity::test_value(context, GpuDeviceGeneration::first());
+        let first_generation = GpuSurfaceGeneration::first();
+        let first_handle = GpuSurfaceHandle::new(surface, affinity, first_generation);
+
+        assert_eq!(
+            surface_generation_after_configuration(first_generation, false, surface).unwrap(),
+            first_generation
+        );
+        let second_generation =
+            surface_generation_after_configuration(first_generation, true, surface).unwrap();
+        assert_ne!(second_generation, first_generation);
+        assert!(matches!(
+            validate_surface_generation(second_generation, first_handle),
+            Err(error) if error.category() == GpuSurfaceErrorCategory::StaleGeneration
+        ));
+
+        let current_handle = GpuSurfaceHandle::new(surface, affinity, second_generation);
+        assert!(validate_surface_generation(second_generation, current_handle).is_ok());
     }
 
     #[test]
