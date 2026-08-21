@@ -7,8 +7,8 @@ use crate::plugins::gpu::{
     GpuDispatchSize, GpuDrawIntent, GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat,
     GpuQueryRange, GpuQueryResolveOperation, GpuRenderColorAttachment,
     GpuRenderDepthStencilAttachment, GpuRenderDraw, GpuRenderOperation, GpuScissorRect,
-    GpuTextureAccessResource, GpuTextureViewHandle, GpuTimestampWrites, GpuUploadOperation,
-    GpuVertexBufferBinding, GpuViewport, GpuWorkOperation, PreparedGpuData, TransferData,
+    GpuTextureViewHandle, GpuTimestampWrites, GpuUploadOperation, GpuVertexBufferBinding,
+    GpuViewport, GpuWorkOperation, PreparedGpuData, TransferData,
 };
 use crate::plugins::render::graph::CompiledDrawSource;
 use crate::plugins::render::{RenderDepthPolicy, RenderIndirectDrawArgsKind};
@@ -112,8 +112,7 @@ pub(super) fn project_render_operation(
         None => GpuColorAttachmentLoad::Load,
     };
     let color_attachment = GpuRenderColorAttachment::new(
-        GpuTextureAccessResource::TextureView(color_target.view.clone()),
-        color_target.view.descriptor().subresources(),
+        color_target.view.clone(),
         color_load,
         GpuAttachmentStore::Store,
         None,
@@ -141,8 +140,7 @@ pub(super) fn project_render_operation(
             RenderDepthPolicy::ReadOnly
         );
         Some(GpuRenderDepthStencilAttachment::new(
-            GpuTextureAccessResource::TextureView(depth_target.view.clone()),
-            depth_target.view.descriptor().subresources(),
+            depth_target.view.clone(),
             if read_only {
                 GpuDepthStencilAccess::ReadOnly
             } else {
