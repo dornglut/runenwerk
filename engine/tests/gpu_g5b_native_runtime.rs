@@ -925,36 +925,16 @@ fn native_seeded_buffer_zero_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, u6
         provenance("native seeded BufferZero"),
     );
     builder.declare_resource(buffer.into()).unwrap();
-    let upload_id = builder
-        .add_node(
-            label("native seeded BufferZero upload"),
-            GpuWorkOperation::Upload(upload),
-            [],
-            GpuCapabilityRequirements::new(),
-            GpuExecutionPreference::Automatic,
-            provenance("native seeded BufferZero upload"),
-        )
-        .unwrap();
-    let clear_id = builder
-        .add_node(
-            label("native seeded BufferZero clear"),
-            GpuWorkOperation::Clear(clear),
-            [],
-            GpuCapabilityRequirements::new(),
-            GpuExecutionPreference::Automatic,
-            provenance("native seeded BufferZero clear"),
-        )
-        .unwrap();
-    builder
-        .add_explicit_order(
-            GpuExplicitOrder::new(
-                &upload_id,
-                &clear_id,
-                "seed nonzero bytes before BufferZero",
-            )
-            .unwrap(),
-        )
-        .unwrap();
+    add_operation(
+        &mut builder,
+        "native seeded BufferZero upload",
+        GpuWorkOperation::Upload(upload),
+    );
+    add_operation(
+        &mut builder,
+        "native seeded BufferZero clear",
+        GpuWorkOperation::Clear(clear),
+    );
     add_operation(
         &mut builder,
         "native seeded BufferZero readback",
