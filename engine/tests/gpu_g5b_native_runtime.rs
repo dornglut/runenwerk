@@ -865,34 +865,107 @@ fn buffer_zero_resource(
         .unwrap()
 }
 
-fn native_buffer_zero_round_trip_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, u64) {
+fn native_buffer_zero_initialization_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, u64) {
     const BYTE_LEN: u64 = 64;
     let mut allocator = GpuWorkResourceIdAllocator::new();
-    let buffer = buffer_zero_resource(&mut allocator, "native BufferZero target", BYTE_LEN);
+    let buffer = buffer_zero_resource(&mut allocator, "native BufferZero init target", BYTE_LEN);
     let whole = GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap();
     let clear = GpuClearOperation::buffer_zero(whole.clone()).unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
     let readback = GpuReadbackOperation::new(whole.into(), readback_id).unwrap();
 
-    let mut builder =
-        GpuWorkFragmentBuilder::new(label("native BufferZero"), provenance("native BufferZero"));
+    let mut builder = GpuWorkFragmentBuilder::new(
+        label("native BufferZero initialization"),
+        provenance("native BufferZero initialization"),
+    );
     builder.declare_resource(buffer.into()).unwrap();
     add_operation(
         &mut builder,
-        "native BufferZero clear",
+        "native BufferZero initialization clear",
         GpuWorkOperation::Clear(clear),
     );
     add_operation(
         &mut builder,
-        "native BufferZero readback",
+        "native BufferZero initialization readback",
         GpuWorkOperation::Readback(readback),
     );
     (
         GpuPreparedWorkGraph::prepare(
-            label("native BufferZero graph"),
+            label("native BufferZero initialization graph"),
             [builder.finish().unwrap()],
         )
         .expect("G3R must accept BufferZero as exact initialization before readback"),
+        readback_id,
+        BYTE_LEN,
+    )
+}
+
+fn native_seeded_buffer_zero_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, u64) {
+    const BYTE_LEN: u64 = 64;
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let buffer = buffer_zero_resource(&mut allocator, "native seeded BufferZero target", BYTE_LEN);
+    let whole = GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap();
+    let payload = vec![0xA5_u8; usize::try_from(BYTE_LEN).unwrap()];
+    let upload = GpuUploadOperation::new(
+        whole.clone().into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer(
+            "native seeded BufferZero payload",
+            payload.as_slice(),
+            provenance("native seeded BufferZero payload"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let clear = GpuClearOperation::buffer_zero(whole.clone()).unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(whole.into(), readback_id).unwrap();
+
+    let mut builder = GpuWorkFragmentBuilder::new(
+        label("native seeded BufferZero"),
+        provenance("native seeded BufferZero"),
+    );
+    builder.declare_resource(buffer.into()).unwrap();
+    let upload_id = builder
+        .add_node(
+            label("native seeded BufferZero upload"),
+            GpuWorkOperation::Upload(upload),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance("native seeded BufferZero upload"),
+        )
+        .unwrap();
+    let clear_id = builder
+        .add_node(
+            label("native seeded BufferZero clear"),
+            GpuWorkOperation::Clear(clear),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance("native seeded BufferZero clear"),
+        )
+        .unwrap();
+    builder
+        .add_explicit_order(
+            GpuExplicitOrder::new(
+                &upload_id,
+                &clear_id,
+                "seed nonzero bytes before BufferZero",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    add_operation(
+        &mut builder,
+        "native seeded BufferZero readback",
+        GpuWorkOperation::Readback(readback),
+    );
+    (
+        GpuPreparedWorkGraph::prepare(
+            label("native seeded BufferZero graph"),
+            [builder.finish().unwrap()],
+        )
+        .unwrap(),
         readback_id,
         BYTE_LEN,
     )
@@ -923,8 +996,8 @@ fn native_unaligned_buffer_zero_graph() -> GpuPreparedWorkGraph {
 
 #[test]
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
-fn native_buffer_zero_initializes_and_clears_without_execution_staging() {
-    let (graph, readback_id, byte_len) = native_buffer_zero_round_trip_graph();
+fn native_buffer_zero_preparation_uses_clear_initialization_without_upload_staging() {
+    let (graph, _, byte_len) = native_buffer_zero_initialization_graph();
     let policy = GpuExecutionPolicy::new(
         NonZeroUsize::new(2).unwrap(),
         NonZeroUsize::new(1).unwrap(),
@@ -935,10 +1008,34 @@ fn native_buffer_zero_initializes_and_clears_without_execution_staging() {
     let context = native_buffer_zero_context(policy);
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    assert_eq!(context.execution_stats().prepared_submissions(), 1);
+    assert_eq!(context.execution_stats().upload_bytes_in_flight(), 0);
+    drop(prepared);
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_buffer_zero_clears_seeded_bytes_without_extra_execution_staging() {
+    let (graph, readback_id, byte_len) = native_seeded_buffer_zero_graph();
+    let policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(2).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        byte_len,
+        byte_len,
+        1,
+    );
+    let context = native_buffer_zero_context(policy);
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
+    let accepted_stats = context.execution_stats();
+    assert_eq!(accepted_stats.upload_bytes_in_flight(), byte_len);
+    assert_eq!(accepted_stats.readback_bytes_in_flight(), byte_len);
+    assert_eq!(accepted_stats.pending_readbacks(), 1);
     let readback = submission
         .readback(readback_id)
-        .expect("accepted BufferZero readback must remain observable")
+        .expect("accepted seeded BufferZero readback must remain observable")
         .clone();
     let bytes = progress_to_readback(&context, &submission, &readback);
     assert_eq!(
