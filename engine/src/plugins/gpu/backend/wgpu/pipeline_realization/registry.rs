@@ -145,8 +145,8 @@ pub(super) fn reserve<K, R>(
     ready_matches: impl FnOnce(&K, &R) -> bool,
 ) -> Result<(Reservation<K, R>, PipelineCacheObservation), GpuPipelineRealizationError>
 where
-    K: Clone + Eq + Hash + Send + 'static,
-    R: Send + Sync + 'static,
+    K: Clone + Eq + Hash + 'static,
+    R: 'static,
 {
     let request = request.into();
     let mut locked = registry

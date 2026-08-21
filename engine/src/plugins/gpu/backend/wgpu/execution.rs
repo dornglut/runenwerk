@@ -38,7 +38,7 @@ pub(crate) struct WgpuExecutionState {
     next_submission: AtomicU64,
     submission_order: Mutex<()>,
     inner: Mutex<ExecutionInner>,
-    events: Mutex<VecDeque<ExecutionEvent>>,
+    events: Arc<Mutex<VecDeque<ExecutionEvent>>>,
 }
 
 #[derive(Debug)]
@@ -448,7 +448,7 @@ impl WgpuExecutionState {
             next_submission: AtomicU64::new(1),
             submission_order: Mutex::new(()),
             inner: Mutex::new(ExecutionInner::default()),
-            events: Mutex::new(VecDeque::new()),
+            events: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
@@ -748,13 +748,6 @@ impl WgpuExecutionState {
             readback.staging = Some(Arc::clone(staging));
         }
         Ok(())
-    }
-
-    fn push_event(&self, event: ExecutionEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push_back(event);
     }
 
     fn drain_events(&self) {
@@ -2190,23 +2183,25 @@ fn register_callbacks(
     command_buffer: &wgpu::CommandBuffer,
 ) {
     for (readback, staging) in &encoded.readback_staging {
-        let weak = Arc::downgrade(execution);
+        let events = Arc::clone(&execution.events);
         let readback = *readback;
         command_buffer.map_buffer_on_submit(staging, MapMode::Read, .., move |result| {
-            if let Some(execution) = weak.upgrade() {
-                execution.push_event(ExecutionEvent::ReadbackMapped {
+            events
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push_back(ExecutionEvent::ReadbackMapped {
                     submission,
                     readback,
                     result: result.map_err(|error| error.to_string()),
                 });
-            }
         });
     }
-    let weak = Arc::downgrade(execution);
+    let events = Arc::clone(&execution.events);
     command_buffer.on_submitted_work_done(move || {
-        if let Some(execution) = weak.upgrade() {
-            execution.push_event(ExecutionEvent::SubmissionCompleted(submission));
-        }
+        events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back(ExecutionEvent::SubmissionCompleted(submission));
     });
 }
 
