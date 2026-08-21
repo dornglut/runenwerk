@@ -11,7 +11,7 @@ use crate::plugins::gpu::{
     allocate_surface_id,
 };
 use std::collections::BTreeMap;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use wgpu::{
     Adapter, CompositeAlphaMode, Device, Instance, InstanceDescriptor, PresentMode, Surface,
     SurfaceColorSpace, SurfaceConfiguration, TextureFormat, TextureUsages,
@@ -457,13 +457,16 @@ where
     T: GpuSurfaceTarget,
 {
     let descriptor = descriptor_with_required_presentation(descriptor)?;
+    let target = Arc::new(target);
     let instance = Instance::new(surface_instance_descriptor(&target));
-    let surface = instance.create_surface(target).map_err(|error| {
-        GpuContextRequestError::new(
-            GpuContextRequestErrorCategory::SurfaceCreationFailure,
-            error.to_string(),
-        )
-    })?;
+    let surface = instance
+        .create_surface(Arc::clone(&target))
+        .map_err(|error| {
+            GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::SurfaceCreationFailure,
+                error.to_string(),
+            )
+        })?;
     let context = request_with_instance(
         instance,
         descriptor,
@@ -480,11 +483,11 @@ where
     Ok((context, handle))
 }
 
-fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &T) -> InstanceDescriptor {
+fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &Arc<T>) -> InstanceDescriptor {
     #[cfg(not(target_arch = "wasm32"))]
     {
         enforce_runengpu_instance_flags(InstanceDescriptor::new_with_display_handle_from_env(
-            Box::new(target.clone()),
+            Box::new(Arc::clone(target)),
         ))
     }
     #[cfg(target_arch = "wasm32")]
@@ -541,13 +544,17 @@ impl GpuContext {
         T: GpuSurfaceTarget,
     {
         ensure_surface_health(&self.backend.health, None)?;
-        let surface = self.backend.instance.create_surface(target).map_err(|error| {
-            GpuSurfaceError::new(
-                GpuSurfaceErrorCategory::BackendCreationFailure,
-                None,
-                error.to_string(),
-            )
-        })?;
+        let surface = self
+            .backend
+            .instance
+            .create_surface(Arc::new(target))
+            .map_err(|error| {
+                GpuSurfaceError::new(
+                    GpuSurfaceErrorCategory::BackendCreationFailure,
+                    None,
+                    error.to_string(),
+                )
+            })?;
         self.backend
             .surfaces
             .register_surface(&self.backend.adapter, surface)
@@ -587,9 +594,7 @@ impl GpuContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::gpu::{
-        GpuContextId, GpuDeviceGeneration, GpuPreferredFallback,
-    };
+    use crate::plugins::gpu::{GpuContextId, GpuDeviceGeneration, GpuPreferredFallback};
     use std::num::NonZeroU64;
 
     fn capabilities() -> GpuSurfaceCapabilities {
