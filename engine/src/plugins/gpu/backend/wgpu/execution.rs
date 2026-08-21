@@ -2,9 +2,9 @@ use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::resource_realization::map_texture_aspect;
 use crate::plugins::gpu::{
-    GpuBufferTextureLayout, GpuCapabilityAdmission, GpuContext, GpuContextAffinity,
-    GpuCopyOperation, GpuDataLayout, GpuDispatchSize, GpuExecutionLifecycleState,
-    GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
+    GpuBufferTextureLayout, GpuCapabilityAdmission, GpuClearOperation, GpuContext,
+    GpuContextAffinity, GpuCopyOperation, GpuDataLayout, GpuDispatchSize,
+    GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
     GpuPipelineRealizationErrorCategory, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
     GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
@@ -332,6 +332,11 @@ enum PreparedExecutionOperation {
         source_region: GpuTextureCopyRegion,
         destination: GpuRealizedTexture,
         destination_region: GpuTextureCopyRegion,
+    },
+    BufferZero {
+        destination: GpuRealizedBuffer,
+        offset: u64,
+        size: u64,
     },
     Readback {
         id: GpuReadbackId,
@@ -1272,6 +1277,19 @@ async fn prepare_execution_plan(
                     });
                 }
             },
+            GpuWorkOperation::Clear(GpuClearOperation::BufferZero(region)) => {
+                let destination = realized_buffer(context, &mut buffer_cache, region.buffer())?;
+                validate_copy_range(
+                    region.range().offset(),
+                    region.range().size(),
+                    COPY_BUFFER_ALIGNMENT,
+                )?;
+                operations.push(PreparedExecutionOperation::BufferZero {
+                    destination,
+                    offset: region.range().offset(),
+                    size: region.range().size(),
+                });
+            }
             GpuWorkOperation::Readback(readback) => {
                 if !seen_readbacks.insert(readback.id()) {
                     return Err(GpuSubmissionPreparationError::new(
@@ -1362,7 +1380,7 @@ async fn prepare_execution_plan(
             }
             _ => {
                 return unsupported(
-                    "the current G5B checkpoint executes buffer/texture Upload, Copy, and Readback plus compute dispatch only",
+                    "the current G5B checkpoint executes buffer/texture Upload, Copy, BufferZero, and Readback plus compute dispatch only",
                 );
             }
         }
@@ -1860,6 +1878,11 @@ fn encode_submit_and_register(
                 texture_copy_info(destination, destination_region),
                 texture_copy_extent(source_region),
             ),
+            PreparedExecutionOperation::BufferZero {
+                destination,
+                offset,
+                size,
+            } => encoder.clear_buffer(&destination.record.object, *offset, Some(*size)),
             PreparedExecutionOperation::Readback {
                 id: readback_id,
                 source,

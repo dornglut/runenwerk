@@ -815,3 +815,233 @@ fn native_texture_copy_rejects_nonencodable_logical_row_stride_before_acceptance
     assert_eq!(context.execution_stats().prepared_submissions(), 0);
     assert_eq!(context.execution_stats().in_flight_submissions(), 0);
 }
+
+fn native_buffer_zero_context(policy: GpuExecutionPolicy) -> GpuContext {
+    let mut requirements = GpuCapabilityRequirements::new();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
+        .unwrap();
+    let descriptor = GpuContextDescriptor::new(requirements)
+        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+        .with_allowed_backends([GpuBackendFamily::Vulkan])
+        .with_label("G5B native BufferZero proof");
+    let context = pollster::block_on(GpuContext::request_with_policies(
+        descriptor,
+        GpuRealizationPolicies::default(),
+        policy,
+    ))
+    .expect("native conformance environment must provide a Vulkan fallback adapter");
+    assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
+    assert_eq!(
+        context.adapter_facts().fallback(),
+        GpuFallbackStatus::ConfirmedFallback,
+        "native BufferZero proof must execute through the explicitly required fallback path"
+    );
+    context
+}
+
+fn buffer_zero_resource(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+    byte_len: u64,
+) -> GpuBufferHandle {
+    let resource_label = label(name);
+    allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common(name),
+                byte_len,
+                GpuBufferUsages::new(
+                    &resource_label,
+                    [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
+                )
+                .unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
+fn native_buffer_zero_initialization_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, u64) {
+    const BYTE_LEN: u64 = 64;
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let buffer = buffer_zero_resource(&mut allocator, "native BufferZero init target", BYTE_LEN);
+    let whole = GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap();
+    let clear = GpuClearOperation::buffer_zero(whole.clone()).unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(whole.into(), readback_id).unwrap();
+
+    let mut builder = GpuWorkFragmentBuilder::new(
+        label("native BufferZero initialization"),
+        provenance("native BufferZero initialization"),
+    );
+    builder.declare_resource(buffer.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "native BufferZero initialization clear",
+        GpuWorkOperation::Clear(clear),
+    );
+    add_operation(
+        &mut builder,
+        "native BufferZero initialization readback",
+        GpuWorkOperation::Readback(readback),
+    );
+    (
+        GpuPreparedWorkGraph::prepare(
+            label("native BufferZero initialization graph"),
+            [builder.finish().unwrap()],
+        )
+        .expect("G3R must accept BufferZero as exact initialization before readback"),
+        readback_id,
+        BYTE_LEN,
+    )
+}
+
+fn native_seeded_buffer_zero_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, u64) {
+    const BYTE_LEN: u64 = 64;
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let buffer = buffer_zero_resource(&mut allocator, "native seeded BufferZero target", BYTE_LEN);
+    let whole = GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap();
+    let payload = vec![0xA5_u8; usize::try_from(BYTE_LEN).unwrap()];
+    let upload = GpuUploadOperation::new(
+        whole.clone().into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer(
+            "native seeded BufferZero payload",
+            payload.as_slice(),
+            provenance("native seeded BufferZero payload"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let clear = GpuClearOperation::buffer_zero(whole.clone()).unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(whole.into(), readback_id).unwrap();
+
+    let mut builder = GpuWorkFragmentBuilder::new(
+        label("native seeded BufferZero"),
+        provenance("native seeded BufferZero"),
+    );
+    builder.declare_resource(buffer.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "native seeded BufferZero upload",
+        GpuWorkOperation::Upload(upload),
+    );
+    add_operation(
+        &mut builder,
+        "native seeded BufferZero clear",
+        GpuWorkOperation::Clear(clear),
+    );
+    add_operation(
+        &mut builder,
+        "native seeded BufferZero readback",
+        GpuWorkOperation::Readback(readback),
+    );
+    (
+        GpuPreparedWorkGraph::prepare(
+            label("native seeded BufferZero graph"),
+            [builder.finish().unwrap()],
+        )
+        .unwrap(),
+        readback_id,
+        BYTE_LEN,
+    )
+}
+
+fn native_unaligned_buffer_zero_graph() -> GpuPreparedWorkGraph {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let buffer = buffer_zero_resource(&mut allocator, "native unaligned BufferZero target", 64);
+    let region =
+        GpuBufferRegion::new(&buffer, GpuBufferRange::new(&buffer, 2, 4).unwrap()).unwrap();
+    let clear = GpuClearOperation::buffer_zero(region).unwrap();
+    let mut builder = GpuWorkFragmentBuilder::new(
+        label("native unaligned BufferZero"),
+        provenance("native unaligned BufferZero"),
+    );
+    builder.declare_resource(buffer.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "native unaligned BufferZero clear",
+        GpuWorkOperation::Clear(clear),
+    );
+    GpuPreparedWorkGraph::prepare(
+        label("native unaligned BufferZero graph"),
+        [builder.finish().unwrap()],
+    )
+    .expect("G5A logical BufferZero permits a checked range independent of WGPU clear alignment")
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_buffer_zero_preparation_uses_clear_initialization_without_upload_staging() {
+    let (graph, _, byte_len) = native_buffer_zero_initialization_graph();
+    let policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(2).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        0,
+        byte_len,
+        1,
+    );
+    let context = native_buffer_zero_context(policy);
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    assert_eq!(context.execution_stats().prepared_submissions(), 1);
+    assert_eq!(context.execution_stats().upload_bytes_in_flight(), 0);
+    drop(prepared);
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_buffer_zero_clears_seeded_bytes_without_extra_execution_staging() {
+    let (graph, readback_id, byte_len) = native_seeded_buffer_zero_graph();
+    let policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(2).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        byte_len,
+        byte_len,
+        1,
+    );
+    let context = native_buffer_zero_context(policy);
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    let submission = context.submit_prepared(prepared).unwrap();
+    let accepted_stats = context.execution_stats();
+    assert_eq!(accepted_stats.upload_bytes_in_flight(), byte_len);
+    assert_eq!(accepted_stats.readback_bytes_in_flight(), byte_len);
+    assert_eq!(accepted_stats.pending_readbacks(), 1);
+    let readback = submission
+        .readback(readback_id)
+        .expect("accepted seeded BufferZero readback must remain observable")
+        .clone();
+    let bytes = progress_to_readback(&context, &submission, &readback);
+    assert_eq!(
+        bytes.as_bytes(),
+        vec![0_u8; usize::try_from(byte_len).unwrap()]
+    );
+
+    let stats = context.execution_stats();
+    assert_eq!(stats.prepared_submissions(), 0);
+    assert_eq!(stats.in_flight_submissions(), 0);
+    assert_eq!(stats.upload_bytes_in_flight(), 0);
+    assert_eq!(stats.readback_bytes_in_flight(), 0);
+    assert_eq!(stats.pending_readbacks(), 0);
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_buffer_zero_rejects_unaligned_range_before_acceptance() {
+    let context = native_buffer_zero_context(GpuExecutionPolicy::default());
+    let error =
+        pollster::block_on(context.prepare_submission(native_unaligned_buffer_zero_graph()))
+            .expect_err("WGPU BufferZero alignment must reject during preparation");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::TransferAlignmentNotAdmitted
+    );
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+}
