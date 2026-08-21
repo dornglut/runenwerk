@@ -279,6 +279,9 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
         .declare_resource(GpuResourceRef::Texture(texture.clone()))
         .unwrap();
     stored
+        .declare_resource(GpuResourceRef::TextureView(view.clone()))
+        .unwrap();
+    stored
         .add_node(
             label("clear store"),
             render(GpuAttachmentStore::Store),
@@ -296,6 +299,9 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
     let mut discarded = builder("discarded");
     discarded
         .declare_resource(GpuResourceRef::Texture(texture.clone()))
+        .unwrap();
+    discarded
+        .declare_resource(GpuResourceRef::TextureView(view.clone()))
         .unwrap();
     discarded
         .add_node(
@@ -369,6 +375,11 @@ fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
                 .declare_resource(GpuResourceRef::Texture(resource.clone()))
                 .unwrap();
         }
+        for view in [&depth_view, &color_view] {
+            fragment
+                .declare_resource(GpuResourceRef::TextureView(view.clone()))
+                .unwrap();
+        }
         fragment
             .add_node(
                 label("clear depth"),
@@ -393,6 +404,10 @@ fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
     let mut load = builder("load depth");
     for resource in [&depth, &color] {
         load.declare_resource(GpuResourceRef::Texture(resource.clone()))
+            .unwrap();
+    }
+    for view in [&depth_view, &color_view] {
+        load.declare_resource(GpuResourceRef::TextureView(view.clone()))
             .unwrap();
     }
     load.add_node(
@@ -452,7 +467,7 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
     let render = GpuWorkOperation::Render(
         GpuRenderOperation::new(
             [GpuRenderColorAttachment::new(
-                target_view,
+                target_view.clone(),
                 GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
                 GpuAttachmentStore::Store,
                 None,
@@ -508,6 +523,7 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
         GpuResourceRef::Buffer(resolve),
         GpuResourceRef::Buffer(readback),
         GpuResourceRef::Texture(target),
+        GpuResourceRef::TextureView(target_view),
     ] {
         fragment.declare_resource(resource).unwrap();
     }
@@ -1961,9 +1977,9 @@ fn multisample_resolve_initializes_destination_despite_source_discard() {
         "resolved view",
         destination_range,
     );
-    let resolve_target = GpuMultisampleResolveTarget::new(destination_view).unwrap();
+    let resolve_target = GpuMultisampleResolveTarget::new(destination_view.clone()).unwrap();
     let attachment = GpuRenderColorAttachment::new(
-        source_view,
+        source_view.clone(),
         GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
         GpuAttachmentStore::Discard,
         Some(resolve_target),
@@ -1973,6 +1989,8 @@ fn multisample_resolve_initializes_destination_despite_source_discard() {
     for resource in [
         GpuResourceRef::Texture(source),
         GpuResourceRef::Texture(destination.clone()),
+        GpuResourceRef::TextureView(source_view),
+        GpuResourceRef::TextureView(destination_view),
     ] {
         fragment.declare_resource(resource).unwrap();
     }
