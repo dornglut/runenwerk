@@ -1,5 +1,5 @@
 use engine::plugins::gpu::*;
-use std::num::NonZeroU64;
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::time::{Duration, Instant};
 
 const DYNAMIC_COMPUTE_WGSL: &str = r#"
@@ -385,6 +385,10 @@ fn native_headless_compute_executes_shader_and_reuses_dynamic_bind_group() {
 }
 
 fn native_copy_context() -> GpuContext {
+    native_copy_context_with_policy(GpuExecutionPolicy::default())
+}
+
+fn native_copy_context_with_policy(policy: GpuExecutionPolicy) -> GpuContext {
     let mut requirements = GpuCapabilityRequirements::new();
     requirements
         .insert(GpuCapabilityRequirement::Required(
@@ -397,8 +401,12 @@ fn native_copy_context() -> GpuContext {
         .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
         .with_allowed_backends([GpuBackendFamily::Vulkan])
         .with_label("G5B native texture transfer proof");
-    let context = pollster::block_on(GpuContext::request(descriptor))
-        .expect("native conformance environment must provide a Vulkan fallback adapter");
+    let context = pollster::block_on(GpuContext::request_with_policies(
+        descriptor,
+        GpuRealizationPolicies::default(),
+        policy,
+    ))
+    .expect("native conformance environment must provide a Vulkan fallback adapter");
     assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
     assert_eq!(
         context.adapter_facts().fallback(),
@@ -491,6 +499,55 @@ fn native_texture_round_trip_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, Ve
         readback_id,
         expected,
     )
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_texture_preparation_accounts_for_private_staging_and_drop_releases_capacity() {
+    let (upload_graph, _, expected) = native_texture_round_trip_graph();
+    let logical_bytes = u64::try_from(expected.len()).unwrap();
+    let upload_policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(2).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        logical_bytes,
+        4096,
+        2,
+    );
+    let upload_context = native_copy_context_with_policy(upload_policy);
+    let error = pollster::block_on(upload_context.prepare_submission(upload_graph))
+        .expect_err("physical padded upload staging must count against execution policy");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::UploadDemandExceedsPolicy
+    );
+    assert_eq!(upload_context.execution_stats().prepared_submissions(), 0);
+
+    let (readback_graph, _, _) = native_texture_round_trip_graph();
+    let readback_policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(2).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        4096,
+        logical_bytes,
+        2,
+    );
+    let readback_context = native_copy_context_with_policy(readback_policy);
+    let error = pollster::block_on(readback_context.prepare_submission(readback_graph))
+        .expect_err("physical padded readback staging must count against execution policy");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::ReadbackDemandExceedsPolicy
+    );
+    assert_eq!(
+        readback_context.execution_stats().prepared_submissions(),
+        0
+    );
+
+    let context = native_copy_context();
+    let (graph, _, _) = native_texture_round_trip_graph();
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    assert_eq!(context.execution_stats().prepared_submissions(), 1);
+    drop(prepared);
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
 }
 
 #[test]
