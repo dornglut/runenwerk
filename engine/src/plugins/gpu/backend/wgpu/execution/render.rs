@@ -1,9 +1,10 @@
-use super::{
-    PreparedBindGroup, PreparedTimestampWrites, checked_dynamic_offsets, preparation_pipeline_failure,
-    preparation_program_binding_failure, realized_buffer, realized_query_set, realized_texture,
-    submission_pipeline_failure, submission_program_binding_failure,
-};
 use super::super::WgpuContextState;
+use super::{
+    PreparedBindGroup, PreparedTimestampWrites, checked_dynamic_offsets,
+    preparation_pipeline_failure, preparation_program_binding_failure, realized_buffer,
+    realized_query_set, realized_texture, submission_pipeline_failure,
+    submission_program_binding_failure,
+};
 use crate::plugins::gpu::{
     GpuAttachmentStore, GpuColorAttachmentLoad, GpuContext, GpuDepthAttachmentLoad,
     GpuDepthStencilAccess, GpuDrawIntent, GpuIndexFormat, GpuRealizedBuffer,
@@ -259,12 +260,7 @@ async fn prepare_render_draw(
         index_buffer,
         draw: draw_intent,
         viewport: draw.viewport().values(),
-        scissor: [
-            scissor.x(),
-            scissor.y(),
-            scissor.width(),
-            scissor.height(),
-        ],
+        scissor: [scissor.x(), scissor.y(), scissor.width(), scissor.height()],
         blend_constant: draw.blend_constant().components(),
         stencil_reference: draw.stencil_reference(),
     })
@@ -281,12 +277,14 @@ fn realized_texture_view(
         return Ok(realized.clone());
     }
     let parent = realized_texture(context, texture_cache, handle.descriptor().texture())?;
-    let realized = context.realize_texture_view(handle, &parent).map_err(|error| {
-        GpuSubmissionPreparationError::new(
-            GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
-            error.to_string(),
-        )
-    })?;
+    let realized = context
+        .realize_texture_view(handle, &parent)
+        .map_err(|error| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
+                error.to_string(),
+            )
+        })?;
     view_cache.insert(identity, realized.clone());
     Ok(realized)
 }
@@ -328,13 +326,15 @@ pub(super) fn encode_render_operation(
             stencil_ops: None,
         }
     });
-    let timestamp_writes = render.timestamp_writes.as_ref().map(|writes| {
-        RenderPassTimestampWrites {
-            query_set: &writes.query_set.record.object,
-            beginning_of_pass_write_index: writes.beginning_of_pass,
-            end_of_pass_write_index: writes.end_of_pass,
-        }
-    });
+    let timestamp_writes =
+        render
+            .timestamp_writes
+            .as_ref()
+            .map(|writes| RenderPassTimestampWrites {
+                query_set: &writes.query_set.record.object,
+                beginning_of_pass_write_index: writes.beginning_of_pass,
+                end_of_pass_write_index: writes.end_of_pass,
+            });
     let realized_pipelines = render
         .draws
         .iter()
@@ -411,11 +411,7 @@ pub(super) fn encode_render_operation(
                             indices,
                             base_vertex,
                             instances,
-                        } => pass.draw_indexed(
-                            indices.clone(),
-                            *base_vertex,
-                            instances.clone(),
-                        ),
+                        } => pass.draw_indexed(indices.clone(), *base_vertex, instances.clone()),
                         PreparedRenderDrawIntent::Indirect {
                             arguments,
                             offset,
