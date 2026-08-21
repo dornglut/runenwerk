@@ -295,7 +295,10 @@ mod tests {
         let view = allocator
             .allocate_texture_view_handle(
                 GpuTextureViewDescriptor::new(
-                    common(&format!("{} view", texture.descriptor().common().label().as_str())),
+                    common(&format!(
+                        "{} view",
+                        texture.descriptor().common().label().as_str()
+                    )),
                     texture,
                     None,
                     GpuTextureDimension::D2,
@@ -333,9 +336,7 @@ mod tests {
         let mismatch = color_attachment(&mut allocator, &mismatch_texture, 0);
         let reference_texture = color_texture(&mut allocator, "reference", 16, 8, 1, 1);
         let reference = color_attachment(&mut allocator, &reference_texture, 0);
-        assert!(
-            GpuRenderPassSignature::from_attachments(&[mismatch, reference], None).is_err()
-        );
+        assert!(GpuRenderPassSignature::from_attachments(&[mismatch, reference], None).is_err());
     }
 
     #[test]
