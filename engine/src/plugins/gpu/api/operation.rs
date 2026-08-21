@@ -32,7 +32,7 @@ pub struct GpuRenderOperation {
     depth_stencil_attachment: Option<GpuRenderDepthStencilAttachment>,
     draws: Vec<GpuRenderDraw>,
     timestamp_writes: Option<GpuTimestampWrites>,
-    signature: Option<GpuRenderPassSignature>,
+    signature: GpuRenderPassSignature,
     accesses: Vec<GpuResourceAccess>,
 }
 
@@ -45,6 +45,16 @@ impl GpuRenderOperation {
     ) -> Result<Self, GpuWorkOperationError> {
         let color_attachments = color_attachments.into_iter().collect::<Vec<_>>();
         let draws = draws.into_iter().collect::<Vec<_>>();
+
+        if color_attachments.is_empty() && depth_stencil_attachment.is_none() {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU render operation",
+                "attachments=0",
+                None,
+                GpuWorkOperationCause::InvalidAttachment,
+                "provide at least one explicit color or depth/stencil attachment view",
+            ));
+        }
 
         let clears_color = color_attachments
             .iter()
@@ -62,29 +72,14 @@ impl GpuRenderOperation {
             ));
         }
 
-        let signature = if color_attachments.is_empty() && depth_stencil_attachment.is_none() {
-            if !draws.is_empty() {
-                return Err(GpuWorkOperationError::invalid(
-                    "construct GPU render operation",
-                    "attachmentless draw",
-                    None,
-                    GpuWorkOperationCause::InvalidAttachment,
-                    "provide a color or depth/stencil attachment for render-pass draw execution",
-                ));
-            }
-            None
-        } else {
-            Some(GpuRenderPassSignature::from_attachments(
-                &color_attachments,
-                depth_stencil_attachment.as_ref(),
-            )?)
-        };
+        let signature = GpuRenderPassSignature::from_attachments(
+            &color_attachments,
+            depth_stencil_attachment.as_ref(),
+        )?;
 
-        if let Some(signature) = &signature {
-            for draw in &draws {
-                signature.validate_draw(draw)?;
-                validate_depth_access_for_draw(depth_stencil_attachment.as_ref(), draw)?;
-            }
+        for draw in &draws {
+            signature.validate_draw(draw)?;
+            validate_depth_access_for_draw(depth_stencil_attachment.as_ref(), draw)?;
         }
 
         let mut accesses = Vec::new();
@@ -142,8 +137,8 @@ impl GpuRenderOperation {
         self.timestamp_writes.as_ref()
     }
 
-    pub fn signature(&self) -> Option<&GpuRenderPassSignature> {
-        self.signature.as_ref()
+    pub fn signature(&self) -> &GpuRenderPassSignature {
+        &self.signature
     }
 
     pub fn accesses(&self) -> &[GpuResourceAccess] {
@@ -168,7 +163,13 @@ fn validate_depth_access_for_draw(
         return Err(GpuWorkOperationError::invalid(
             "validate GPU render draw depth access",
             "read-only depth attachment with depth-writing pipeline",
-            Some(attachment.source().parent_texture().diagnostic_identity()),
+            Some(
+                attachment
+                    .source()
+                    .descriptor()
+                    .texture()
+                    .diagnostic_identity(),
+            ),
             GpuWorkOperationCause::InvalidAttachment,
             "disable pipeline depth writes when the render pass uses a read-only depth attachment",
         ));

@@ -7,8 +7,8 @@ use super::{
 #[cfg(test)]
 use crate::plugins::gpu::{
     GpuAttachmentStore, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange,
-    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryKind, GpuQueryRange, GpuTextureAccessResource,
-    GpuTextureAspect, GpuTextureFormat, GpuTextureSubresourceRange, GpuWorkOperationCause,
+    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryKind, GpuQueryRange, GpuTextureAspect,
+    GpuTextureFormat, GpuTextureSubresourceRange, GpuTextureViewHandle, GpuWorkOperationCause,
 };
 
 mod attachment;

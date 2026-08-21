@@ -73,6 +73,26 @@ pub(super) fn texture(
         .unwrap()
 }
 
+pub(super) fn texture_view(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    texture: &GpuTextureHandle,
+    name: &str,
+    subresources: GpuTextureSubresourceRange,
+) -> GpuTextureViewHandle {
+    allocator
+        .allocate_texture_view_handle(
+            GpuTextureViewDescriptor::new(
+                common(name),
+                texture,
+                None,
+                GpuTextureDimension::D2,
+                subresources,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
 pub(super) fn prepared_texture_initialization(name: &str) -> GpuTextureInitialization {
     let resource_label = label(name);
     let extent = GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap();

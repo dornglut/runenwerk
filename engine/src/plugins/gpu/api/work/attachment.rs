@@ -1,7 +1,8 @@
 use super::super::{
     GpuAttachmentLoadKind, GpuAttachmentStore, GpuDepthStencilAccess, GpuTextureAccess,
-    GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureFormat,
-    GpuTextureSubresourceRange, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureDimension,
+    GpuTextureFormat, GpuTextureSubresourceRange, GpuTextureViewHandle, GpuWorkOperationCause,
+    GpuWorkOperationError,
 };
 use super::mip_extent;
 use core::fmt;
@@ -190,26 +191,29 @@ impl GpuDepthAttachmentLoad {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuMultisampleResolveTarget {
-    destination: GpuTextureAccessResource,
-    subresources: GpuTextureSubresourceRange,
+    destination: GpuTextureViewHandle,
     access: GpuTextureAccess,
 }
 
 impl GpuMultisampleResolveTarget {
-    pub fn new(
-        destination: GpuTextureAccessResource,
-        subresources: GpuTextureSubresourceRange,
-    ) -> Result<Self, GpuWorkOperationError> {
+    pub fn new(destination: GpuTextureViewHandle) -> Result<Self, GpuWorkOperationError> {
+        validate_attachment_view(
+            &destination,
+            "construct GPU multisample resolve target",
+            GpuWorkOperationCause::InvalidMultisampleResolve,
+            "use one explicit 2D texture view selecting exactly one mip and one array layer",
+        )?;
         let label = destination
-            .parent_texture()
+            .descriptor()
+            .texture()
             .descriptor()
             .common()
             .label()
             .as_str()
             .to_string();
         let access = GpuTextureAccess::new(
-            destination.clone(),
-            subresources,
+            GpuTextureAccessResource::TextureView(destination.clone()),
+            destination.descriptor().subresources(),
             GpuTextureAccessKind::MultisampleResolveDestination,
         )
         .map_err(|source| {
@@ -217,23 +221,22 @@ impl GpuMultisampleResolveTarget {
                 "construct GPU multisample resolve target",
                 label,
                 GpuWorkOperationCause::InvalidMultisampleResolve,
-                "provide a checked single-sampled color-attachment destination",
+                "provide a checked single-sampled color-attachment destination view",
                 source,
             )
         })?;
         Ok(Self {
             destination,
-            subresources,
             access,
         })
     }
 
-    pub fn destination(&self) -> &GpuTextureAccessResource {
+    pub fn destination(&self) -> &GpuTextureViewHandle {
         &self.destination
     }
 
-    pub const fn subresources(&self) -> GpuTextureSubresourceRange {
-        self.subresources
+    pub fn subresources(&self) -> GpuTextureSubresourceRange {
+        self.access.normalized_subresources()
     }
 
     pub fn access(&self) -> &GpuTextureAccess {
@@ -243,8 +246,7 @@ impl GpuMultisampleResolveTarget {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuRenderColorAttachment {
-    source: GpuTextureAccessResource,
-    subresources: GpuTextureSubresourceRange,
+    source: GpuTextureViewHandle,
     load: GpuColorAttachmentLoad,
     store: GpuAttachmentStore,
     resolve_target: Option<GpuMultisampleResolveTarget>,
@@ -253,22 +255,28 @@ pub struct GpuRenderColorAttachment {
 
 impl GpuRenderColorAttachment {
     pub fn new(
-        source: GpuTextureAccessResource,
-        subresources: GpuTextureSubresourceRange,
+        source: GpuTextureViewHandle,
         load: GpuColorAttachmentLoad,
         store: GpuAttachmentStore,
         resolve_target: Option<GpuMultisampleResolveTarget>,
     ) -> Result<Self, GpuWorkOperationError> {
+        validate_attachment_view(
+            &source,
+            "construct GPU render color attachment",
+            GpuWorkOperationCause::InvalidAttachment,
+            "use one explicit 2D color-attachment view selecting exactly one mip and one array layer",
+        )?;
         let label = source
-            .parent_texture()
+            .descriptor()
+            .texture()
             .descriptor()
             .common()
             .label()
             .as_str()
             .to_string();
         let source_access = GpuTextureAccess::new(
-            source.clone(),
-            subresources,
+            GpuTextureAccessResource::TextureView(source.clone()),
+            source.descriptor().subresources(),
             GpuTextureAccessKind::ColorAttachment {
                 load_kind: load.kind(),
                 store,
@@ -279,7 +287,7 @@ impl GpuRenderColorAttachment {
                 "construct GPU render color attachment",
                 label.clone(),
                 GpuWorkOperationCause::InvalidAttachment,
-                "provide a checked color attachment with compatible descriptor usage",
+                "provide a checked color attachment view with compatible descriptor usage",
                 source,
             )
         })?;
@@ -288,7 +296,6 @@ impl GpuRenderColorAttachment {
         }
         Ok(Self {
             source,
-            subresources,
             load,
             store,
             resolve_target,
@@ -296,12 +303,12 @@ impl GpuRenderColorAttachment {
         })
     }
 
-    pub fn source(&self) -> &GpuTextureAccessResource {
+    pub fn source(&self) -> &GpuTextureViewHandle {
         &self.source
     }
 
-    pub const fn subresources(&self) -> GpuTextureSubresourceRange {
-        self.subresources
+    pub fn subresources(&self) -> GpuTextureSubresourceRange {
+        self.source_access.normalized_subresources()
     }
 
     pub const fn load(&self) -> GpuColorAttachmentLoad {
@@ -344,7 +351,7 @@ fn validate_multisample_resolve(
     let valid = source_texture.descriptor().sample_count() > 1
         && destination_texture.descriptor().sample_count() == 1
         && effective_texture_format(source.resource())
-            == effective_texture_format(destination.destination())
+            == effective_view_format(destination.destination())
         && source_texture.descriptor().dimension() == destination_texture.descriptor().dimension()
         && same_shape
         && source_texture != destination_texture;
@@ -354,7 +361,7 @@ fn validate_multisample_resolve(
             label,
             Some(source_texture.diagnostic_identity()),
             GpuWorkOperationCause::InvalidMultisampleResolve,
-            "use non-aliasing multisampled source and single-sampled destination attachments with matching color format, extent, and subresources",
+            "use non-aliasing multisampled source and single-sampled destination attachment views with matching color format, extent, and subresources",
         ));
     }
     Ok(())
@@ -363,17 +370,19 @@ fn validate_multisample_resolve(
 fn effective_texture_format(resource: &GpuTextureAccessResource) -> GpuTextureFormat {
     match resource {
         GpuTextureAccessResource::Texture(texture) => texture.descriptor().format(),
-        GpuTextureAccessResource::TextureView(view) => view
-            .descriptor()
-            .format()
-            .unwrap_or_else(|| view.descriptor().texture().descriptor().format()),
+        GpuTextureAccessResource::TextureView(view) => effective_view_format(view),
     }
+}
+
+fn effective_view_format(view: &GpuTextureViewHandle) -> GpuTextureFormat {
+    view.descriptor()
+        .format()
+        .unwrap_or_else(|| view.descriptor().texture().descriptor().format())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuRenderDepthStencilAttachment {
-    source: GpuTextureAccessResource,
-    subresources: GpuTextureSubresourceRange,
+    source: GpuTextureViewHandle,
     access: GpuDepthStencilAccess,
     load: GpuDepthAttachmentLoad,
     store: GpuAttachmentStore,
@@ -382,33 +391,39 @@ pub struct GpuRenderDepthStencilAttachment {
 
 impl GpuRenderDepthStencilAttachment {
     pub fn new(
-        source: GpuTextureAccessResource,
-        subresources: GpuTextureSubresourceRange,
+        source: GpuTextureViewHandle,
         access: GpuDepthStencilAccess,
         load: GpuDepthAttachmentLoad,
         store: GpuAttachmentStore,
     ) -> Result<Self, GpuWorkOperationError> {
+        validate_attachment_view(
+            &source,
+            "construct GPU render depth attachment",
+            GpuWorkOperationCause::InvalidAttachment,
+            "use one explicit 2D depth-attachment view selecting exactly one mip and one array layer",
+        )?;
         let label = source
-            .parent_texture()
+            .descriptor()
+            .texture()
             .descriptor()
             .common()
             .label()
             .as_str()
             .to_string();
         if access == GpuDepthStencilAccess::ReadOnly
-            && matches!(load, GpuDepthAttachmentLoad::Clear(_))
+            && (load != GpuDepthAttachmentLoad::Load || store != GpuAttachmentStore::Store)
         {
             return Err(GpuWorkOperationError::invalid(
                 "construct GPU render depth attachment",
                 label,
-                Some(source.parent_texture().diagnostic_identity()),
+                Some(source.descriptor().texture().diagnostic_identity()),
                 GpuWorkOperationCause::InvalidAttachment,
-                "use Load for read-only depth or select read-write depth access before clearing",
+                "use canonical Load + Store semantics for read-only depth, or select read-write depth access before clearing or discarding",
             ));
         }
         let source_access = GpuTextureAccess::new(
-            source.clone(),
-            subresources,
+            GpuTextureAccessResource::TextureView(source.clone()),
+            source.descriptor().subresources(),
             GpuTextureAccessKind::DepthStencilAttachment {
                 access,
                 load_kind: load.kind(),
@@ -420,13 +435,12 @@ impl GpuRenderDepthStencilAttachment {
                 "construct GPU render depth attachment",
                 label,
                 GpuWorkOperationCause::InvalidAttachment,
-                "provide a checked depth attachment with compatible descriptor usage",
+                "provide a checked depth attachment view with compatible descriptor usage",
                 source,
             )
         })?;
         Ok(Self {
             source,
-            subresources,
             access,
             load,
             store,
@@ -434,12 +448,12 @@ impl GpuRenderDepthStencilAttachment {
         })
     }
 
-    pub fn source(&self) -> &GpuTextureAccessResource {
+    pub fn source(&self) -> &GpuTextureViewHandle {
         &self.source
     }
 
-    pub const fn subresources(&self) -> GpuTextureSubresourceRange {
-        self.subresources
+    pub fn subresources(&self) -> GpuTextureSubresourceRange {
+        self.source_access.normalized_subresources()
     }
 
     pub const fn access(&self) -> GpuDepthStencilAccess {
@@ -457,4 +471,27 @@ impl GpuRenderDepthStencilAttachment {
     pub fn source_access(&self) -> &GpuTextureAccess {
         &self.source_access
     }
+}
+
+fn validate_attachment_view(
+    view: &GpuTextureViewHandle,
+    operation: &'static str,
+    cause: GpuWorkOperationCause,
+    correction: &'static str,
+) -> Result<(), GpuWorkOperationError> {
+    let descriptor = view.descriptor();
+    let subresources = descriptor.subresources();
+    if descriptor.dimension() != GpuTextureDimension::D2
+        || subresources.mip_level_count() != 1
+        || subresources.array_layer_count() != 1
+    {
+        return Err(GpuWorkOperationError::invalid(
+            operation,
+            descriptor.common().label().as_str(),
+            Some(view.diagnostic_identity()),
+            cause,
+            correction,
+        ));
+    }
+    Ok(())
 }

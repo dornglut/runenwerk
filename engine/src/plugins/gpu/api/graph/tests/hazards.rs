@@ -209,10 +209,46 @@ fn disjoint_query_ranges_remain_independent() {
                 .unwrap(),
         )
         .unwrap();
-    let operation = |beginning_of_pass, end_of_pass| {
+    let first_target = texture(
+        &mut allocator,
+        "first query target",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [GpuTextureUsage::ColorAttachment],
+    );
+    let second_target = texture(
+        &mut allocator,
+        "second query target",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [GpuTextureUsage::ColorAttachment],
+    );
+    let first_view = texture_view(
+        &mut allocator,
+        &first_target,
+        "first query target view",
+        GpuTextureSubresourceRange::whole(&first_target).unwrap(),
+    );
+    let second_view = texture_view(
+        &mut allocator,
+        &second_target,
+        "second query target view",
+        GpuTextureSubresourceRange::whole(&second_target).unwrap(),
+    );
+    let operation = |view: GpuTextureViewHandle, beginning_of_pass, end_of_pass| {
         GpuWorkOperation::Render(
             GpuRenderOperation::new(
-                [],
+                [GpuRenderColorAttachment::new(
+                    view,
+                    GpuColorAttachmentLoad::Clear(
+                        GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+                    ),
+                    GpuAttachmentStore::Store,
+                    None,
+                )
+                .unwrap()],
                 None,
                 [],
                 Some(
@@ -224,16 +260,23 @@ fn disjoint_query_ranges_remain_independent() {
         )
     };
     let mut fragment = builder("disjoint queries");
-    fragment
-        .declare_resource(GpuResourceRef::QuerySet(queries.clone()))
-        .unwrap();
-    for (name, beginning_of_pass, end_of_pass) in
-        [("first queries", 0, 1), ("second queries", 2, 3)]
-    {
+    for resource in [
+        GpuResourceRef::QuerySet(queries.clone()),
+        GpuResourceRef::Texture(first_target),
+        GpuResourceRef::TextureView(first_view.clone()),
+        GpuResourceRef::Texture(second_target),
+        GpuResourceRef::TextureView(second_view.clone()),
+    ] {
+        fragment.declare_resource(resource).unwrap();
+    }
+    for (name, view, beginning_of_pass, end_of_pass) in [
+        ("first queries", first_view, 0, 1),
+        ("second queries", second_view, 2, 3),
+    ] {
         fragment
             .add_node(
                 label(name),
-                operation(beginning_of_pass, end_of_pass),
+                operation(view, beginning_of_pass, end_of_pass),
                 [],
                 GpuCapabilityRequirements::new(),
                 GpuExecutionPreference::GraphicsRequired,

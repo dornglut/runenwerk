@@ -8,10 +8,10 @@ use crate::plugins::gpu::{
     CurrentRenderAttachmentsTerminal, CurrentRenderIndexBufferTerminal,
     CurrentRenderIndirectBufferTerminal, CurrentRenderPipelineBindGroupsTerminal,
     CurrentRenderRenderPipelineTerminal, CurrentRenderTimestampWritesTerminal,
-    CurrentRenderVertexBufferTerminal, GpuAttachmentStore, GpuBufferRange, GpuColorAttachmentLoad,
+    CurrentRenderVertexBufferTerminal, GpuBufferRange, GpuColorAttachmentLoad,
     GpuDepthAttachmentLoad, GpuDepthStencilAccess, GpuDrawIntent, GpuIndexFormat,
     GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedTextureView, GpuRenderColorAttachment,
-    GpuRenderDraw, GpuRenderOperation, GpuTextureAccessResource,
+    GpuRenderDraw, GpuRenderOperation, GpuTextureViewHandle,
 };
 
 impl Renderer {
@@ -43,14 +43,6 @@ impl Renderer {
         if color_attachment.resolve_target().is_some() {
             bail!(
                 "canonical render operation requires multisample resolve execution owned by G5B; the current renderer projection does not author a resolve target"
-            );
-        }
-        if operation.depth_stencil_attachment().is_some_and(|depth| {
-            depth.access() == GpuDepthStencilAccess::ReadOnly
-                && depth.store() != GpuAttachmentStore::Store
-        }) {
-            bail!(
-                "canonical read-only depth operation carries discard semantics not representable by the current renderer bridge without writing the attachment"
             );
         }
 
@@ -146,13 +138,8 @@ impl Renderer {
 
 fn realized_attachment_view<'a>(
     runtime_resources: &'a FlowRuntimeResources,
-    resource: &GpuTextureAccessResource,
+    view: &GpuTextureViewHandle,
 ) -> Result<&'a GpuRealizedTextureView> {
-    let GpuTextureAccessResource::TextureView(view) = resource else {
-        bail!(
-            "canonical renderer attachment requires an explicit logical texture-view handle; synthesizing a view from a bare texture would invent execution semantics"
-        );
-    };
     realized_texture_view_for_handle("render", runtime_resources, view)
 }
 
@@ -544,9 +531,9 @@ fn depth_load(load: GpuDepthAttachmentLoad) -> LoadOp<f32> {
     }
 }
 
-const fn attachment_store(store: GpuAttachmentStore) -> StoreOp {
+const fn attachment_store(store: crate::plugins::gpu::GpuAttachmentStore) -> StoreOp {
     match store {
-        GpuAttachmentStore::Store => StoreOp::Store,
-        GpuAttachmentStore::Discard => StoreOp::Discard,
+        crate::plugins::gpu::GpuAttachmentStore::Store => StoreOp::Store,
+        crate::plugins::gpu::GpuAttachmentStore::Discard => StoreOp::Discard,
     }
 }
