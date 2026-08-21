@@ -178,11 +178,11 @@ impl core::fmt::Debug for WgpuSurfaceState {
     }
 }
 
-fn validate_handle<'a>(
+fn validate_handle(
     expected: GpuContextAffinity,
-    records: &'a BTreeMap<GpuSurfaceId, WgpuSurfaceRecord>,
+    records: &BTreeMap<GpuSurfaceId, WgpuSurfaceRecord>,
     handle: GpuSurfaceHandle,
-) -> Result<&'a WgpuSurfaceRecord, GpuSurfaceError> {
+) -> Result<&WgpuSurfaceRecord, GpuSurfaceError> {
     validate_surface_affinity(expected, handle)?;
     let record = records.get(&handle.id()).ok_or_else(|| {
         GpuSurfaceError::new(
@@ -195,11 +195,11 @@ fn validate_handle<'a>(
     Ok(record)
 }
 
-fn validate_handle_mut<'a>(
+fn validate_handle_mut(
     expected: GpuContextAffinity,
-    records: &'a mut BTreeMap<GpuSurfaceId, WgpuSurfaceRecord>,
+    records: &mut BTreeMap<GpuSurfaceId, WgpuSurfaceRecord>,
     handle: GpuSurfaceHandle,
-) -> Result<&'a mut WgpuSurfaceRecord, GpuSurfaceError> {
+) -> Result<&mut WgpuSurfaceRecord, GpuSurfaceError> {
     validate_surface_affinity(expected, handle)?;
     let record = records.get_mut(&handle.id()).ok_or_else(|| {
         GpuSurfaceError::new(
