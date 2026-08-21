@@ -371,7 +371,7 @@ pub(super) fn encode_render_operation(
                             {
                                 pass.set_bind_group(
                                     prepared.index,
-                                    **object,
+                                    *object,
                                     &prepared.dynamic_offsets,
                                 );
                             }
