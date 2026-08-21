@@ -11,12 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// own target conversion.
 #[cfg(not(target_arch = "wasm32"))]
 pub trait GpuSurfaceTarget:
-    wgpu::rwh::HasDisplayHandle
-    + wgpu::rwh::HasWindowHandle
-    + fmt::Debug
-    + Send
-    + Sync
-    + 'static
+    wgpu::rwh::HasDisplayHandle + wgpu::rwh::HasWindowHandle + fmt::Debug + Send + Sync + 'static
 {
 }
 
