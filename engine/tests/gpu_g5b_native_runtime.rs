@@ -572,3 +572,256 @@ fn native_texture_upload_readback_normalizes_private_row_padding() {
     assert_eq!(stats.readback_bytes_in_flight(), 0);
     assert_eq!(stats.pending_readbacks(), 0);
 }
+
+const DIRECT_COPY_WIDTH: u32 = 3;
+const DIRECT_COPY_HEIGHT: u32 = 2;
+const DIRECT_COPY_LAYERS: u32 = 2;
+const DIRECT_COPY_ROW_BYTES: u32 = DIRECT_COPY_WIDTH * 4;
+const DIRECT_COPY_ROWS: u32 = DIRECT_COPY_HEIGHT * DIRECT_COPY_LAYERS;
+
+fn direct_copy_footprint(bytes_per_row: u32) -> u64 {
+    u64::from(bytes_per_row) * u64::from(DIRECT_COPY_ROWS - 1)
+        + u64::from(DIRECT_COPY_ROW_BYTES)
+}
+
+fn direct_copy_buffer(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+    byte_len: u64,
+) -> GpuBufferHandle {
+    let resource_label = label(name);
+    allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common(name),
+                byte_len,
+                GpuBufferUsages::new(
+                    &resource_label,
+                    [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
+                )
+                .unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
+fn direct_copy_texture(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+) -> GpuTextureHandle {
+    let resource_label = label(name);
+    allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common(name),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(
+                    &resource_label,
+                    GpuTextureDimension::D2,
+                    DIRECT_COPY_WIDTH,
+                    DIRECT_COPY_HEIGHT,
+                    DIRECT_COPY_LAYERS,
+                )
+                .unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &resource_label,
+                    [
+                        GpuTextureUsage::CopySource,
+                        GpuTextureUsage::CopyDestination,
+                    ],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
+fn direct_copy_region(texture: &GpuTextureHandle) -> GpuTextureCopyRegion {
+    GpuTextureCopyRegion::new(
+        texture,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(
+            DIRECT_COPY_WIDTH,
+            DIRECT_COPY_HEIGHT,
+            DIRECT_COPY_LAYERS,
+        )
+        .unwrap(),
+    )
+    .unwrap()
+}
+
+fn direct_texture_copy_graph(
+    bytes_per_row: u32,
+) -> (GpuPreparedWorkGraph, Vec<GpuReadbackId>, Vec<Vec<u8>>, u64) {
+    let footprint = direct_copy_footprint(bytes_per_row);
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let source_buffer = direct_copy_buffer(&mut allocator, "native direct-copy source", footprint);
+    let destination_buffer =
+        direct_copy_buffer(&mut allocator, "native direct-copy destination", footprint);
+    let first_texture = direct_copy_texture(&mut allocator, "native direct-copy first texture");
+    let second_texture = direct_copy_texture(&mut allocator, "native direct-copy second texture");
+    let first_region = direct_copy_region(&first_texture);
+    let second_region = direct_copy_region(&second_texture);
+
+    let mut payload = vec![0xA5_u8; usize::try_from(footprint).unwrap()];
+    let mut expected_rows = Vec::new();
+    for row in 0..DIRECT_COPY_ROWS {
+        let expected = (0..DIRECT_COPY_ROW_BYTES)
+            .map(|column| u8::try_from((row * 37 + column * 11 + 3) % 251).unwrap())
+            .collect::<Vec<_>>();
+        let start = usize::try_from(u64::from(row) * u64::from(bytes_per_row)).unwrap();
+        let end = start + expected.len();
+        payload[start..end].copy_from_slice(&expected);
+        expected_rows.push(expected);
+    }
+
+    let source_whole = GpuBufferRegion::new(
+        &source_buffer,
+        GpuBufferRange::whole(&source_buffer).unwrap(),
+    )
+    .unwrap();
+    let upload = GpuUploadOperation::new(
+        source_whole.into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer(
+            "native direct-copy payload",
+            payload.as_slice(),
+            provenance("native direct-copy payload"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let source_layout =
+        GpuBufferTextureLayout::new(&source_buffer, 0, bytes_per_row, DIRECT_COPY_HEIGHT).unwrap();
+    let destination_layout = GpuBufferTextureLayout::new(
+        &destination_buffer,
+        0,
+        bytes_per_row,
+        DIRECT_COPY_HEIGHT,
+    )
+    .unwrap();
+    let buffer_to_texture =
+        GpuCopyOperation::buffer_to_texture(source_layout, first_region.clone()).unwrap();
+    let texture_to_texture =
+        GpuCopyOperation::texture_to_texture(first_region.clone(), second_region.clone()).unwrap();
+    let texture_to_buffer =
+        GpuCopyOperation::texture_to_buffer(second_region, destination_layout).unwrap();
+
+    let mut readback_ids = Vec::new();
+    let mut readbacks = Vec::new();
+    for row in 0..DIRECT_COPY_ROWS {
+        let offset = u64::from(row) * u64::from(bytes_per_row);
+        let region = GpuBufferRegion::new(
+            &destination_buffer,
+            GpuBufferRange::new(&destination_buffer, offset, u64::from(DIRECT_COPY_ROW_BYTES))
+                .unwrap(),
+        )
+        .unwrap();
+        let id = GpuReadbackId::allocate().unwrap();
+        readback_ids.push(id);
+        readbacks.push(GpuReadbackOperation::new(region.into(), id).unwrap());
+    }
+
+    let name = "native direct texture copy";
+    let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
+    builder.declare_resource(source_buffer.into()).unwrap();
+    builder.declare_resource(destination_buffer.into()).unwrap();
+    builder.declare_resource(first_texture.into()).unwrap();
+    builder.declare_resource(second_texture.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "native direct-copy upload",
+        GpuWorkOperation::Upload(upload),
+    );
+    add_operation(
+        &mut builder,
+        "native buffer to texture copy",
+        GpuWorkOperation::Copy(buffer_to_texture),
+    );
+    add_operation(
+        &mut builder,
+        "native texture to texture copy",
+        GpuWorkOperation::Copy(texture_to_texture),
+    );
+    add_operation(
+        &mut builder,
+        "native texture to buffer copy",
+        GpuWorkOperation::Copy(texture_to_buffer),
+    );
+    for (row, readback) in readbacks.into_iter().enumerate() {
+        add_operation(
+            &mut builder,
+            &format!("native direct-copy row {row} readback"),
+            GpuWorkOperation::Readback(readback),
+        );
+    }
+
+    (
+        GpuPreparedWorkGraph::prepare(
+            label("native direct texture copy graph"),
+            [builder.finish().unwrap()],
+        )
+        .unwrap(),
+        readback_ids,
+        expected_rows,
+        footprint,
+    )
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_texture_copy_executes_all_directions_without_copy_scratch() {
+    const BYTES_PER_ROW: u32 = 256;
+    let (graph, readback_ids, expected_rows, footprint) =
+        direct_texture_copy_graph(BYTES_PER_ROW);
+    let policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(2).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        footprint,
+        u64::from(DIRECT_COPY_ROW_BYTES) * u64::from(DIRECT_COPY_ROWS),
+        usize::try_from(DIRECT_COPY_ROWS).unwrap(),
+    );
+    let context = native_copy_context_with_policy(policy);
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    let submission = context.submit_prepared(prepared).unwrap();
+    for (readback_id, expected) in readback_ids.into_iter().zip(expected_rows) {
+        let readback = submission
+            .readback(readback_id)
+            .expect("accepted direct-copy row readback must remain observable")
+            .clone();
+        let bytes = progress_to_readback(&context, &submission, &readback);
+        assert_eq!(bytes.as_bytes(), expected.as_slice());
+    }
+
+    let stats = context.execution_stats();
+    assert_eq!(stats.prepared_submissions(), 0);
+    assert_eq!(stats.in_flight_submissions(), 0);
+    assert_eq!(stats.upload_bytes_in_flight(), 0);
+    assert_eq!(stats.readback_bytes_in_flight(), 0);
+    assert_eq!(stats.pending_readbacks(), 0);
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_texture_copy_rejects_nonencodable_logical_row_stride_before_acceptance() {
+    let (graph, _, _, _) = direct_texture_copy_graph(DIRECT_COPY_ROW_BYTES);
+    let context = native_copy_context();
+
+    let error = pollster::block_on(context.prepare_submission(graph))
+        .expect_err("logical row stride must be rejected before irreversible acceptance");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::TransferAlignmentNotAdmitted
+    );
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+}
