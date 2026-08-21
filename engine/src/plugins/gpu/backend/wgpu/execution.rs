@@ -196,7 +196,7 @@ impl TextureStagingLayout {
 
     fn write_tightly_packed(
         self,
-        destination: &mut [u8],
+        destination: &mut wgpu::BufferViewMut,
         source: &[u8],
     ) -> Result<(), GpuSubmissionFailure> {
         let expected_source = usize::try_from(self.logical_byte_len).map_err(|_| {
@@ -210,7 +210,7 @@ impl TextureStagingLayout {
                 "texture upload staging lengths no longer match the prepared layout",
             ));
         }
-        destination.fill(0);
+        destination.slice(..).fill(0);
         let logical_row = usize::try_from(self.logical_bytes_per_row).map_err(|_| {
             texture_staging_submission_error("logical texture row length exceeds usize")
         })?;
@@ -236,12 +236,9 @@ impl TextureStagingLayout {
             let source_row = source.get(source_start..source_end).ok_or_else(|| {
                 texture_staging_submission_error("texture upload source row is out of bounds")
             })?;
-            let destination_row = destination
-                .get_mut(destination_start..destination_end)
-                .ok_or_else(|| {
-                    texture_staging_submission_error("texture upload staging row is out of bounds")
-                })?;
-            destination_row.copy_from_slice(source_row);
+            destination
+                .slice(destination_start..destination_end)
+                .copy_from_slice(source_row);
         }
         Ok(())
     }
@@ -1647,7 +1644,7 @@ fn encode_submit_and_register(
                             format!("obtain mapped texture upload staging range: {error}"),
                         )
                     })?;
-                    staging_layout.write_tightly_packed(&mut *mapped, payload.as_bytes())?;
+                    staging_layout.write_tightly_packed(&mut mapped, payload.as_bytes())?;
                 }
                 staging.unmap();
                 encoder.copy_buffer_to_texture(
