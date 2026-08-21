@@ -11,14 +11,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// than a WGPU or window-system object. The private backend retains the producer and performs its
 /// own target conversion.
 #[cfg(not(target_arch = "wasm32"))]
-pub trait GpuSurfaceTarget:
-    HasDisplayHandle + HasWindowHandle + fmt::Debug + Send + Sync + 'static
-{
-}
+pub trait GpuSurfaceTarget: HasDisplayHandle + HasWindowHandle + Send + Sync + 'static {}
 
 #[cfg(not(target_arch = "wasm32"))]
 impl<T> GpuSurfaceTarget for T where
-    T: HasDisplayHandle + HasWindowHandle + fmt::Debug + Send + Sync + 'static
+    T: HasDisplayHandle + HasWindowHandle + Send + Sync + 'static
 {
 }
 
@@ -26,13 +23,10 @@ impl<T> GpuSurfaceTarget for T where
 ///
 /// Web targets deliberately do not inherit native-only thread-safety requirements.
 #[cfg(target_arch = "wasm32")]
-pub trait GpuSurfaceTarget: HasDisplayHandle + HasWindowHandle + fmt::Debug + 'static {}
+pub trait GpuSurfaceTarget: HasDisplayHandle + HasWindowHandle + 'static {}
 
 #[cfg(target_arch = "wasm32")]
-impl<T> GpuSurfaceTarget for T where
-    T: HasDisplayHandle + HasWindowHandle + fmt::Debug + 'static
-{
-}
+impl<T> GpuSurfaceTarget for T where T: HasDisplayHandle + HasWindowHandle + 'static {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuSurfaceId(NonZeroU64);
