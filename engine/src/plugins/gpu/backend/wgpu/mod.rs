@@ -1,7 +1,7 @@
 //! Private WGPU containment for G4A context admission.
 //!
-//! The submodules own state, normalized adapter mapping, device requests, and
-//! the bounded G7 bridge respectively. This root only composes those owners.
+//! The submodules own state, normalized adapter mapping, device requests, execution, surfaces, and
+//! bounded migration bridges. This root only composes those owners.
 
 mod adapter_mapping;
 mod current_host;
@@ -14,6 +14,7 @@ mod pipeline_realization;
 mod program_binding_realization;
 mod resource_realization;
 mod state;
+mod surface;
 
 pub(crate) use device_request::request_headless;
 pub(crate) use execution::WgpuExecutionState;
@@ -39,3 +40,4 @@ pub(crate) use resource_realization::{
     SamplerRealizationRecord, TextureRealizationRecord, TextureViewRealizationRecord,
 };
 pub(crate) use state::{CurrentRenderDeviceQueue, WgpuContextState};
+pub(crate) use surface::WgpuSurfaceState;
