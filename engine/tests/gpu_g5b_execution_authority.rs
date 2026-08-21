@@ -186,23 +186,30 @@ fn g5b_compute_preparation_owns_checked_offsets_and_retained_g4_realizations() {
     );
     assert!(
         execution.contains("pipeline:GpuRealizedComputePipeline")
-            && execution.contains("realization:GpuRealizedBindGroup"),
-        "prepared compute work must retain exact G4 pipeline and bind-group records"
+            && execution.contains("realization:GpuRealizedBindGroup")
+            && execution.contains("query_set:GpuRealizedQuerySet"),
+        "prepared compute work must retain exact G4 pipeline, bind-group, and optional timestamp query-set records"
     );
     assert!(
         execution.contains("Indirect{arguments:GpuRealizedBuffer,offset:u64"),
         "prepared indirect compute must retain the exact realized G4 argument buffer and accepted byte offset"
     );
     assert!(
-        execution.contains(
-            "ifmatches!(dispatch,PreparedComputeDispatch::Direct(size)ifsize.as_array().contains(&0)){continue;}"
-        ),
-        "zero direct dispatch must remain a no-shader-execution case without suppressing indirect dispatch"
+        execution.contains("letzero_direct=matches!(dispatch,PreparedComputeDispatch::Direct(size)ifsize.as_array().contains(&0));")
+            && execution.contains("ifzero_direct&&timestamp_writes.is_none(){continue;}")
+            && execution.contains("PreparedComputeDispatch::Direct(size)if!size.as_array().contains(&0)=>")
+            && execution.contains("PreparedComputeDispatch::Direct(_)=>{}"),
+        "zero direct dispatch must emit no shader work while preserving an otherwise observable timestamped pass"
     );
     assert!(
-        execution.contains("arguments:realized_buffer(context,cache,arguments.buffer())?")
+        execution.contains("arguments:realized_buffer(context,buffer_cache,arguments.buffer())?")
             && execution.contains("offset:arguments.range().offset()"),
         "indirect compute preparation must reuse the execution plan's G4 buffer cache and preserve the accepted offset"
+    );
+    assert!(
+        execution
+            .contains("query_set:realized_query_set(context,query_set_cache,writes.query_set())?"),
+        "timestamped compute preparation must retain the exact G4 query-set realization"
     );
     assert!(
         execution.contains("pass.dispatch_workgroups_indirect(")
