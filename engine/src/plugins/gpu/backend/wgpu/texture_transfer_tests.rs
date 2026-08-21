@@ -141,6 +141,11 @@ fn context(policy: GpuExecutionPolicy, name: &str) -> GpuContext {
         ))
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
+        .require_format_role(
+            GpuTextureFormat::Rgba8Unorm,
+            GpuFormatRole::CopyDestination,
+        )
         .with_allowed_backends([GpuBackendFamily::UnknownBackend])
         .with_label(name);
     let context = pollster::block_on(request_with_instance(
