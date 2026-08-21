@@ -1232,7 +1232,10 @@ fn native_zero_dispatch_timestamp_writes_and_resolve_execute_without_extra_stagi
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
     let accepted = context.execution_stats();
-    assert_eq!(accepted.upload_bytes_in_flight(), 4 + TIMESTAMP_RESOLVE_BYTES);
+    assert_eq!(
+        accepted.upload_bytes_in_flight(),
+        4 + TIMESTAMP_RESOLVE_BYTES
+    );
     assert_eq!(accepted.readback_bytes_in_flight(), TIMESTAMP_RESOLVE_BYTES);
     assert_eq!(accepted.pending_readbacks(), 1);
 
