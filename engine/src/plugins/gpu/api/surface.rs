@@ -7,12 +7,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// Safe host target accepted by the backend-neutral RunenGPU surface API.
 ///
 /// The contract is intentionally the standardized raw-window-handle display/window pair rather
-/// than a WGPU or window-system object. The private backend performs its own target conversion.
+/// than a WGPU or window-system object. The private backend retains the producer and performs its
+/// own target conversion.
 #[cfg(not(target_arch = "wasm32"))]
 pub trait GpuSurfaceTarget:
     wgpu::rwh::HasDisplayHandle
     + wgpu::rwh::HasWindowHandle
-    + Clone
     + fmt::Debug
     + Send
     + Sync
@@ -24,7 +24,6 @@ pub trait GpuSurfaceTarget:
 impl<T> GpuSurfaceTarget for T where
     T: wgpu::rwh::HasDisplayHandle
         + wgpu::rwh::HasWindowHandle
-        + Clone
         + fmt::Debug
         + Send
         + Sync
@@ -37,17 +36,13 @@ impl<T> GpuSurfaceTarget for T where
 /// Web targets deliberately do not inherit native-only thread-safety requirements.
 #[cfg(target_arch = "wasm32")]
 pub trait GpuSurfaceTarget:
-    wgpu::rwh::HasDisplayHandle + wgpu::rwh::HasWindowHandle + Clone + fmt::Debug + 'static
+    wgpu::rwh::HasDisplayHandle + wgpu::rwh::HasWindowHandle + fmt::Debug + 'static
 {
 }
 
 #[cfg(target_arch = "wasm32")]
 impl<T> GpuSurfaceTarget for T where
-    T: wgpu::rwh::HasDisplayHandle
-        + wgpu::rwh::HasWindowHandle
-        + Clone
-        + fmt::Debug
-        + 'static
+    T: wgpu::rwh::HasDisplayHandle + wgpu::rwh::HasWindowHandle + fmt::Debug + 'static
 {
 }
 
