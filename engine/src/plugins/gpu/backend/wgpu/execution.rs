@@ -1587,16 +1587,6 @@ fn validate_buffer_texture_copy_layout(
     layout: &GpuBufferTextureLayout,
     region: &GpuTextureCopyRegion,
 ) -> Result<(), GpuSubmissionPreparationError> {
-    let block_size = u64::from(region.texture().descriptor().format().bytes_per_texel());
-    if block_size == 0 || !layout.byte_offset().is_multiple_of(block_size) {
-        return Err(GpuSubmissionPreparationError::new(
-            GpuSubmissionPreparationErrorKind::TransferAlignmentNotAdmitted,
-            format!(
-                "buffer-texture copy offset {} is not aligned to the selected format block size {block_size}",
-                layout.byte_offset()
-            ),
-        ));
-    }
     let extent = region.extent();
     if (extent.height() > 1 || extent.depth_or_layers() > 1)
         && !layout
