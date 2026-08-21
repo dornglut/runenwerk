@@ -1154,6 +1154,8 @@ async fn prepare_execution_plan(
                     });
                 }
                 GpuTransferRegion::Texture(destination) => {
+                    let realized =
+                        realized_texture(context, &mut texture_cache, destination.texture())?;
                     let staging = TextureStagingLayout::new(destination)?;
                     if upload.payload().layout().byte_len() != staging.logical_byte_len {
                         return Err(GpuSubmissionPreparationError::new(
@@ -1161,8 +1163,6 @@ async fn prepare_execution_plan(
                             "validated texture Upload payload no longer matches its logical region",
                         ));
                     }
-                    let realized =
-                        realized_texture(context, &mut texture_cache, destination.texture())?;
                     upload_bytes = checked_staging_demand(
                         upload_bytes,
                         staging.staging_byte_len,
@@ -1247,6 +1247,8 @@ async fn prepare_execution_plan(
                         });
                     }
                     GpuTransferRegion::Texture(source) => {
+                        let realized =
+                            realized_texture(context, &mut texture_cache, source.texture())?;
                         let staging = TextureStagingLayout::new(source)?;
                         let common = source.texture().descriptor().common();
                         let format = source.texture().descriptor().format();
@@ -1278,11 +1280,7 @@ async fn prepare_execution_plan(
                         readback_ids.push(readback.id());
                         operations.push(PreparedExecutionOperation::TextureReadback {
                             id: readback.id(),
-                            source: realized_texture(
-                                context,
-                                &mut texture_cache,
-                                source.texture(),
-                            )?,
+                            source: realized,
                             region: source.clone(),
                             staging,
                             metadata,
