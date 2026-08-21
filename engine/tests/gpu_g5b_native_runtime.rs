@@ -580,8 +580,7 @@ const DIRECT_COPY_ROW_BYTES: u32 = DIRECT_COPY_WIDTH * 4;
 const DIRECT_COPY_ROWS: u32 = DIRECT_COPY_HEIGHT * DIRECT_COPY_LAYERS;
 
 fn direct_copy_footprint(bytes_per_row: u32) -> u64 {
-    u64::from(bytes_per_row) * u64::from(DIRECT_COPY_ROWS - 1)
-        + u64::from(DIRECT_COPY_ROW_BYTES)
+    u64::from(bytes_per_row) * u64::from(DIRECT_COPY_ROWS - 1) + u64::from(DIRECT_COPY_ROW_BYTES)
 }
 
 fn direct_copy_buffer(
@@ -607,10 +606,7 @@ fn direct_copy_buffer(
         .unwrap()
 }
 
-fn direct_copy_texture(
-    allocator: &mut GpuWorkResourceIdAllocator,
-    name: &str,
-) -> GpuTextureHandle {
+fn direct_copy_texture(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> GpuTextureHandle {
     let resource_label = label(name);
     allocator
         .allocate_texture_handle(
@@ -649,12 +645,7 @@ fn direct_copy_region(texture: &GpuTextureHandle) -> GpuTextureCopyRegion {
         0,
         GpuTextureOrigin::new(0, 0, 0),
         GpuTextureAspect::Color,
-        GpuCopyExtent::new(
-            DIRECT_COPY_WIDTH,
-            DIRECT_COPY_HEIGHT,
-            DIRECT_COPY_LAYERS,
-        )
-        .unwrap(),
+        GpuCopyExtent::new(DIRECT_COPY_WIDTH, DIRECT_COPY_HEIGHT, DIRECT_COPY_LAYERS).unwrap(),
     )
     .unwrap()
 }
@@ -701,13 +692,9 @@ fn direct_texture_copy_graph(
     .unwrap();
     let source_layout =
         GpuBufferTextureLayout::new(&source_buffer, 0, bytes_per_row, DIRECT_COPY_HEIGHT).unwrap();
-    let destination_layout = GpuBufferTextureLayout::new(
-        &destination_buffer,
-        0,
-        bytes_per_row,
-        DIRECT_COPY_HEIGHT,
-    )
-    .unwrap();
+    let destination_layout =
+        GpuBufferTextureLayout::new(&destination_buffer, 0, bytes_per_row, DIRECT_COPY_HEIGHT)
+            .unwrap();
     let buffer_to_texture =
         GpuCopyOperation::buffer_to_texture(source_layout, first_region.clone()).unwrap();
     let texture_to_texture =
@@ -721,8 +708,12 @@ fn direct_texture_copy_graph(
         let offset = u64::from(row) * u64::from(bytes_per_row);
         let region = GpuBufferRegion::new(
             &destination_buffer,
-            GpuBufferRange::new(&destination_buffer, offset, u64::from(DIRECT_COPY_ROW_BYTES))
-                .unwrap(),
+            GpuBufferRange::new(
+                &destination_buffer,
+                offset,
+                u64::from(DIRECT_COPY_ROW_BYTES),
+            )
+            .unwrap(),
         )
         .unwrap();
         let id = GpuReadbackId::allocate().unwrap();
@@ -780,8 +771,7 @@ fn direct_texture_copy_graph(
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_texture_copy_executes_all_directions_without_copy_scratch() {
     const BYTES_PER_ROW: u32 = 256;
-    let (graph, readback_ids, expected_rows, footprint) =
-        direct_texture_copy_graph(BYTES_PER_ROW);
+    let (graph, readback_ids, expected_rows, footprint) = direct_texture_copy_graph(BYTES_PER_ROW);
     let policy = GpuExecutionPolicy::new(
         NonZeroUsize::new(2).unwrap(),
         NonZeroUsize::new(1).unwrap(),
