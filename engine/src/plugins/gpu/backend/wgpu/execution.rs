@@ -1,5 +1,6 @@
 use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
+use super::resource_realization::map_texture_aspect;
 use crate::plugins::gpu::{
     GpuCapabilityAdmission, GpuContext, GpuContextAffinity, GpuDataLayout, GpuDispatchSize,
     GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
@@ -7,19 +8,21 @@ use crate::plugins::gpu::{
     GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
     GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
-    GpuResourceProvenance, GpuRuntimeBindingResource, GpuSubmission, GpuSubmissionFailure,
-    GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
+    GpuRealizedTexture, GpuResourceProvenance, GpuRuntimeBindingResource, GpuSubmission,
+    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
     GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
-    GpuSubmissionStatus, GpuTransferRegion, GpuValidatedBindGroupBindings, GpuWorkOperation,
-    GpuWorkResourceId, PreparedGpuData, TransferData,
+    GpuSubmissionStatus, GpuTextureCopyRegion, GpuTextureFormat, GpuTransferRegion,
+    GpuValidatedBindGroupBindings, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData,
+    TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use wgpu::{
-    Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
-    MapMode, PollType,
+    Buffer, BufferDescriptor, BufferUsages, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    CommandEncoderDescriptor, ComputePassDescriptor, Extent3d, MapMode, Origin3d, PollType,
+    TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
 };
 
 #[derive(Debug)]
@@ -88,10 +91,215 @@ struct BufferReadbackMetadata {
 }
 
 #[derive(Debug, Clone)]
+struct TextureReadbackMetadata {
+    label: String,
+    layout: GpuDataLayout,
+    format: GpuTextureFormat,
+    provenance: GpuResourceProvenance,
+    staging: TextureStagingLayout,
+}
+
+#[derive(Debug, Clone)]
+enum ReadbackMetadata {
+    Buffer(BufferReadbackMetadata),
+    Texture(TextureReadbackMetadata),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TextureStagingLayout {
+    logical_bytes_per_row: u32,
+    physical_bytes_per_row: u32,
+    rows_per_image: u32,
+    image_count: u32,
+    logical_byte_len: u64,
+    staging_byte_len: u64,
+    requires_bytes_per_row: bool,
+}
+
+impl TextureStagingLayout {
+    fn new(region: &GpuTextureCopyRegion) -> Result<Self, GpuSubmissionPreparationError> {
+        let extent = region.extent();
+        let bytes_per_texel = region.texture().descriptor().format().bytes_per_texel();
+        let logical_bytes_per_row =
+            extent.width().checked_mul(bytes_per_texel).ok_or_else(|| {
+                texture_staging_preparation_error("texture logical row byte count overflowed")
+            })?;
+        let rows_per_image = extent.height();
+        let image_count = extent.depth_or_layers();
+        let row_count = u64::from(rows_per_image)
+            .checked_mul(u64::from(image_count))
+            .ok_or_else(|| texture_staging_preparation_error("texture row count overflowed"))?;
+        let logical_byte_len = u64::from(logical_bytes_per_row)
+            .checked_mul(row_count)
+            .ok_or_else(|| {
+                texture_staging_preparation_error("texture logical staging byte count overflowed")
+            })?;
+        let requires_bytes_per_row = rows_per_image > 1 || image_count > 1;
+        let physical_bytes_per_row = if requires_bytes_per_row {
+            u32::try_from(
+                align_up(
+                    u64::from(logical_bytes_per_row),
+                    u64::from(COPY_BYTES_PER_ROW_ALIGNMENT),
+                )
+                .ok_or_else(|| {
+                    texture_staging_preparation_error("texture physical row stride overflowed")
+                })?,
+            )
+            .map_err(|_| {
+                texture_staging_preparation_error(
+                    "texture physical row stride exceeds the private WGPU u32 domain",
+                )
+            })?
+        } else {
+            logical_bytes_per_row
+        };
+        let copy_footprint = u64::from(physical_bytes_per_row)
+            .checked_mul(row_count.saturating_sub(1))
+            .and_then(|value| value.checked_add(u64::from(logical_bytes_per_row)))
+            .ok_or_else(|| {
+                texture_staging_preparation_error("texture staging copy footprint overflowed")
+            })?;
+        let staging_byte_len =
+            align_up(copy_footprint, COPY_BUFFER_ALIGNMENT).ok_or_else(|| {
+                texture_staging_preparation_error("texture staging buffer size overflowed")
+            })?;
+        Ok(Self {
+            logical_bytes_per_row,
+            physical_bytes_per_row,
+            rows_per_image,
+            image_count,
+            logical_byte_len,
+            staging_byte_len,
+            requires_bytes_per_row,
+        })
+    }
+
+    fn row_count(self) -> u64 {
+        self.rows_per_image as u64 * self.image_count as u64
+    }
+
+    const fn buffer_layout(self) -> TexelCopyBufferLayout {
+        TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: if self.requires_bytes_per_row {
+                Some(self.physical_bytes_per_row)
+            } else {
+                None
+            },
+            rows_per_image: if self.image_count > 1 {
+                Some(self.rows_per_image)
+            } else {
+                None
+            },
+        }
+    }
+
+    fn write_tightly_packed(
+        self,
+        destination: &mut wgpu::BufferViewMut,
+        source: &[u8],
+    ) -> Result<(), GpuSubmissionFailure> {
+        let expected_source = usize::try_from(self.logical_byte_len).map_err(|_| {
+            texture_staging_submission_error("logical texture payload length exceeds usize")
+        })?;
+        let expected_destination = usize::try_from(self.staging_byte_len).map_err(|_| {
+            texture_staging_submission_error("physical texture staging length exceeds usize")
+        })?;
+        if source.len() != expected_source || destination.len() != expected_destination {
+            return Err(texture_staging_submission_error(
+                "texture upload staging lengths no longer match the prepared layout",
+            ));
+        }
+        destination.slice(..).fill(0);
+        let logical_row = usize::try_from(self.logical_bytes_per_row).map_err(|_| {
+            texture_staging_submission_error("logical texture row length exceeds usize")
+        })?;
+        let physical_row = usize::try_from(self.physical_bytes_per_row).map_err(|_| {
+            texture_staging_submission_error("physical texture row length exceeds usize")
+        })?;
+        let row_count = usize::try_from(self.row_count()).map_err(|_| {
+            texture_staging_submission_error("texture staging row count exceeds usize")
+        })?;
+        for row in 0..row_count {
+            let source_start = row.checked_mul(logical_row).ok_or_else(|| {
+                texture_staging_submission_error("texture upload source offset overflowed")
+            })?;
+            let destination_start = row.checked_mul(physical_row).ok_or_else(|| {
+                texture_staging_submission_error("texture upload staging offset overflowed")
+            })?;
+            let source_end = source_start.checked_add(logical_row).ok_or_else(|| {
+                texture_staging_submission_error("texture upload source range overflowed")
+            })?;
+            let destination_end = destination_start.checked_add(logical_row).ok_or_else(|| {
+                texture_staging_submission_error("texture upload staging range overflowed")
+            })?;
+            let source_row = source.get(source_start..source_end).ok_or_else(|| {
+                texture_staging_submission_error("texture upload source row is out of bounds")
+            })?;
+            destination
+                .slice(destination_start..destination_end)
+                .copy_from_slice(source_row);
+        }
+        Ok(())
+    }
+
+    fn normalize_mapped(self, source: &[u8]) -> Result<Vec<u8>, GpuSubmissionFailure> {
+        let expected_source = usize::try_from(self.staging_byte_len).map_err(|_| {
+            texture_staging_submission_error("physical texture readback length exceeds usize")
+        })?;
+        if source.len() != expected_source {
+            return Err(texture_staging_submission_error(
+                "mapped texture readback length no longer matches the prepared staging layout",
+            ));
+        }
+        let logical_len = usize::try_from(self.logical_byte_len).map_err(|_| {
+            texture_staging_submission_error("logical texture readback length exceeds usize")
+        })?;
+        let logical_row = usize::try_from(self.logical_bytes_per_row).map_err(|_| {
+            texture_staging_submission_error("logical texture row length exceeds usize")
+        })?;
+        let physical_row = usize::try_from(self.physical_bytes_per_row).map_err(|_| {
+            texture_staging_submission_error("physical texture row length exceeds usize")
+        })?;
+        let row_count = usize::try_from(self.row_count()).map_err(|_| {
+            texture_staging_submission_error("texture readback row count exceeds usize")
+        })?;
+        let mut normalized = Vec::with_capacity(logical_len);
+        for row in 0..row_count {
+            let source_start = row.checked_mul(physical_row).ok_or_else(|| {
+                texture_staging_submission_error("texture readback staging offset overflowed")
+            })?;
+            let source_end = source_start.checked_add(logical_row).ok_or_else(|| {
+                texture_staging_submission_error("texture readback staging range overflowed")
+            })?;
+            normalized.extend_from_slice(source.get(source_start..source_end).ok_or_else(
+                || {
+                    texture_staging_submission_error(
+                        "texture readback staging row is out of bounds",
+                    )
+                },
+            )?);
+        }
+        if normalized.len() != logical_len {
+            return Err(texture_staging_submission_error(
+                "normalized texture readback length disagrees with the prepared logical layout",
+            ));
+        }
+        Ok(normalized)
+    }
+}
+
+#[derive(Debug, Clone)]
 enum PreparedExecutionOperation {
     Upload {
         destination: GpuRealizedBuffer,
         offset: u64,
+        payload: PreparedGpuData<TransferData>,
+    },
+    TextureUpload {
+        destination: GpuRealizedTexture,
+        region: GpuTextureCopyRegion,
+        staging: TextureStagingLayout,
         payload: PreparedGpuData<TransferData>,
     },
     Compute {
@@ -113,6 +321,13 @@ enum PreparedExecutionOperation {
         size: u64,
         metadata: BufferReadbackMetadata,
     },
+    TextureReadback {
+        id: GpuReadbackId,
+        source: GpuRealizedTexture,
+        region: GpuTextureCopyRegion,
+        staging: TextureStagingLayout,
+        metadata: TextureReadbackMetadata,
+    },
 }
 
 #[derive(Debug)]
@@ -130,7 +345,7 @@ struct InFlightReadback {
     status: Arc<Mutex<GpuReadbackStatus>>,
     staging: Option<Arc<Buffer>>,
     size: u64,
-    metadata: BufferReadbackMetadata,
+    metadata: ReadbackMetadata,
     terminal: bool,
 }
 
@@ -389,27 +604,34 @@ impl WgpuExecutionState {
         let mut readbacks = BTreeMap::new();
         let mut public_readbacks = Vec::with_capacity(plan.readback_ids.len());
         for operation in &plan.operations {
-            let PreparedExecutionOperation::Readback {
-                id: readback_id,
-                size,
-                metadata,
-                ..
-            } = operation
-            else {
-                continue;
+            let (readback_id, size, metadata) = match operation {
+                PreparedExecutionOperation::Readback {
+                    id, size, metadata, ..
+                } => (*id, *size, ReadbackMetadata::Buffer(metadata.clone())),
+                PreparedExecutionOperation::TextureReadback {
+                    id,
+                    staging,
+                    metadata,
+                    ..
+                } => (
+                    *id,
+                    staging.staging_byte_len,
+                    ReadbackMetadata::Texture(metadata.clone()),
+                ),
+                _ => continue,
             };
             let readback_status = Arc::new(Mutex::new(GpuReadbackStatus::Pending));
             readbacks.insert(
-                *readback_id,
+                readback_id,
                 InFlightReadback {
                     status: Arc::clone(&readback_status),
                     staging: None,
-                    size: *size,
-                    metadata: metadata.clone(),
+                    size,
+                    metadata,
                     terminal: false,
                 },
             );
-            public_readbacks.push(GpuReadback::new(*readback_id, readback_status));
+            public_readbacks.push(GpuReadback::new(readback_id, readback_status));
         }
         if readbacks.len() != plan.readback_ids.len() {
             return Err(GpuSubmissionRejectionReason::new(
@@ -583,21 +805,7 @@ impl WgpuExecutionState {
                     )),
                 };
                 staging.unmap();
-                bytes.and_then(|bytes| {
-                    GpuReadbackBytes::from_normalized_bytes(
-                        &metadata.label,
-                        bytes,
-                        metadata.layout,
-                        None,
-                        metadata.provenance,
-                    )
-                    .map_err(|error| {
-                        GpuSubmissionFailure::new(
-                            GpuSubmissionFailureKind::InternalInvariant,
-                            error.to_string(),
-                        )
-                    })
-                })
+                bytes.and_then(|bytes| materialize_readback(bytes, metadata))
             }
             (Err(detail), _) => Err(GpuSubmissionFailure::new(
                 GpuSubmissionFailureKind::ReadbackMapping,
@@ -903,7 +1111,8 @@ async fn prepare_execution_plan(
     context: &GpuContext,
     graph: &GpuPreparedWorkGraph,
 ) -> Result<PreparedExecutionPlan, GpuSubmissionPreparationError> {
-    let mut cache = BTreeMap::<GpuWorkResourceId, GpuRealizedBuffer>::new();
+    let mut buffer_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedBuffer>::new();
+    let mut texture_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedTexture>::new();
     let mut operations = Vec::with_capacity(graph.topological_order().len());
     let mut upload_bytes = 0_u64;
     let mut readback_bytes = 0_u64;
@@ -922,35 +1131,55 @@ async fn prepare_execution_plan(
                 )
             })?;
         match prepared.node().operation() {
-            GpuWorkOperation::Upload(upload) => {
-                let GpuTransferRegion::Buffer(destination) = upload.destination() else {
-                    return unsupported(
-                        "texture Upload remains outside the current G5B execution checkpoint",
-                    );
-                };
-                let alignment = copy_alignment(context)?;
-                validate_copy_range(
-                    destination.range().offset(),
-                    destination.range().size(),
-                    alignment,
-                )?;
-                let realized = realized_buffer(context, &mut cache, destination.buffer())?;
-                upload_bytes = upload_bytes
-                    .checked_add(destination.range().size())
-                    .ok_or_else(|| {
-                        GpuSubmissionPreparationError::new(
-                            GpuSubmissionPreparationErrorKind::UploadDemandExceedsPolicy,
-                            "upload byte demand overflowed the normalized u64 domain",
-                        )
-                    })?;
-                operations.push(PreparedExecutionOperation::Upload {
-                    destination: realized,
-                    offset: destination.range().offset(),
-                    payload: upload.payload().clone(),
-                });
-            }
+            GpuWorkOperation::Upload(upload) => match upload.destination() {
+                GpuTransferRegion::Buffer(destination) => {
+                    let alignment = copy_alignment(context)?;
+                    validate_copy_range(
+                        destination.range().offset(),
+                        destination.range().size(),
+                        alignment,
+                    )?;
+                    let realized =
+                        realized_buffer(context, &mut buffer_cache, destination.buffer())?;
+                    upload_bytes = checked_staging_demand(
+                        upload_bytes,
+                        destination.range().size(),
+                        GpuSubmissionPreparationErrorKind::UploadDemandExceedsPolicy,
+                        "upload",
+                    )?;
+                    operations.push(PreparedExecutionOperation::Upload {
+                        destination: realized,
+                        offset: destination.range().offset(),
+                        payload: upload.payload().clone(),
+                    });
+                }
+                GpuTransferRegion::Texture(destination) => {
+                    let realized =
+                        realized_texture(context, &mut texture_cache, destination.texture())?;
+                    let staging = TextureStagingLayout::new(destination)?;
+                    if upload.payload().layout().byte_len() != staging.logical_byte_len {
+                        return Err(GpuSubmissionPreparationError::new(
+                            GpuSubmissionPreparationErrorKind::InternalInvariant,
+                            "validated texture Upload payload no longer matches its logical region",
+                        ));
+                    }
+                    upload_bytes = checked_staging_demand(
+                        upload_bytes,
+                        staging.staging_byte_len,
+                        GpuSubmissionPreparationErrorKind::UploadDemandExceedsPolicy,
+                        "upload",
+                    )?;
+                    operations.push(PreparedExecutionOperation::TextureUpload {
+                        destination: realized,
+                        region: destination.clone(),
+                        staging,
+                        payload: upload.payload().clone(),
+                    });
+                }
+            },
             GpuWorkOperation::Compute(compute) => {
-                operations.push(prepare_compute_operation(context, &mut cache, compute).await?);
+                operations
+                    .push(prepare_compute_operation(context, &mut buffer_cache, compute).await?);
             }
             GpuWorkOperation::Copy(crate::plugins::gpu::GpuCopyOperation::BufferToBuffer {
                 source,
@@ -964,21 +1193,14 @@ async fn prepare_execution_plan(
                     alignment,
                 )?;
                 operations.push(PreparedExecutionOperation::Copy {
-                    source: realized_buffer(context, &mut cache, source.buffer())?,
+                    source: realized_buffer(context, &mut buffer_cache, source.buffer())?,
                     source_offset: source.range().offset(),
-                    destination: realized_buffer(context, &mut cache, destination.buffer())?,
+                    destination: realized_buffer(context, &mut buffer_cache, destination.buffer())?,
                     destination_offset: destination.range().offset(),
                     size: source.range().size(),
                 });
             }
             GpuWorkOperation::Readback(readback) => {
-                let GpuTransferRegion::Buffer(source) = readback.source() else {
-                    return unsupported(
-                        "texture Readback remains outside the current G5B execution checkpoint",
-                    );
-                };
-                let alignment = copy_alignment(context)?;
-                validate_copy_range(source.range().offset(), source.range().size(), alignment)?;
                 if !seen_readbacks.insert(readback.id()) {
                     return Err(GpuSubmissionPreparationError::new(
                         GpuSubmissionPreparationErrorKind::InternalInvariant,
@@ -988,34 +1210,83 @@ async fn prepare_execution_plan(
                         ),
                     ));
                 }
-                let size = source.range().size();
-                let common = source.buffer().descriptor().common();
-                let metadata = BufferReadbackMetadata {
-                    label: common.label().as_str().to_string(),
-                    layout: GpuDataLayout::new(common.label().as_str(), size, 1, size, 1).map_err(
-                        |error| {
-                            GpuSubmissionPreparationError::new(
-                                GpuSubmissionPreparationErrorKind::InternalInvariant,
-                                error.to_string(),
+                match readback.source() {
+                    GpuTransferRegion::Buffer(source) => {
+                        let alignment = copy_alignment(context)?;
+                        validate_copy_range(
+                            source.range().offset(),
+                            source.range().size(),
+                            alignment,
+                        )?;
+                        let size = source.range().size();
+                        let common = source.buffer().descriptor().common();
+                        let metadata = BufferReadbackMetadata {
+                            label: common.label().as_str().to_string(),
+                            layout: GpuDataLayout::new(common.label().as_str(), size, 1, size, 1)
+                                .map_err(|error| {
+                                GpuSubmissionPreparationError::new(
+                                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                                    error.to_string(),
+                                )
+                            })?,
+                            provenance: common.provenance().clone(),
+                        };
+                        readback_bytes = checked_staging_demand(
+                            readback_bytes,
+                            size,
+                            GpuSubmissionPreparationErrorKind::ReadbackDemandExceedsPolicy,
+                            "readback",
+                        )?;
+                        readback_ids.push(readback.id());
+                        operations.push(PreparedExecutionOperation::Readback {
+                            id: readback.id(),
+                            source: realized_buffer(context, &mut buffer_cache, source.buffer())?,
+                            source_offset: source.range().offset(),
+                            size,
+                            metadata,
+                        });
+                    }
+                    GpuTransferRegion::Texture(source) => {
+                        let realized =
+                            realized_texture(context, &mut texture_cache, source.texture())?;
+                        let staging = TextureStagingLayout::new(source)?;
+                        let common = source.texture().descriptor().common();
+                        let format = source.texture().descriptor().format();
+                        let metadata = TextureReadbackMetadata {
+                            label: common.label().as_str().to_string(),
+                            layout: GpuDataLayout::new(
+                                common.label().as_str(),
+                                staging.logical_byte_len,
+                                u64::from(format.bytes_per_texel()),
+                                u64::from(staging.logical_bytes_per_row),
+                                staging.row_count(),
                             )
-                        },
-                    )?,
-                    provenance: common.provenance().clone(),
-                };
-                readback_bytes = readback_bytes.checked_add(size).ok_or_else(|| {
-                    GpuSubmissionPreparationError::new(
-                        GpuSubmissionPreparationErrorKind::ReadbackDemandExceedsPolicy,
-                        "readback byte demand overflowed the normalized u64 domain",
-                    )
-                })?;
-                readback_ids.push(readback.id());
-                operations.push(PreparedExecutionOperation::Readback {
-                    id: readback.id(),
-                    source: realized_buffer(context, &mut cache, source.buffer())?,
-                    source_offset: source.range().offset(),
-                    size,
-                    metadata,
-                });
+                            .map_err(|error| {
+                                GpuSubmissionPreparationError::new(
+                                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                                    error.to_string(),
+                                )
+                            })?,
+                            format,
+                            provenance: common.provenance().clone(),
+                            staging,
+                        };
+                        readback_bytes = checked_staging_demand(
+                            readback_bytes,
+                            staging.staging_byte_len,
+                            GpuSubmissionPreparationErrorKind::ReadbackDemandExceedsPolicy,
+                            "readback",
+                        )?;
+                        readback_ids.push(readback.id());
+                        operations.push(PreparedExecutionOperation::TextureReadback {
+                            id: readback.id(),
+                            source: realized,
+                            region: source.clone(),
+                            staging,
+                            metadata,
+                        });
+                    }
+                }
             }
             GpuWorkOperation::Copy(_) => {
                 return unsupported(
@@ -1024,7 +1295,7 @@ async fn prepare_execution_plan(
             }
             _ => {
                 return unsupported(
-                    "the current G5B checkpoint executes buffer Upload/Copy/Readback and compute dispatch only",
+                    "the current G5B checkpoint executes buffer/texture Upload and Readback, buffer Copy, and compute dispatch only",
                 );
             }
         }
@@ -1181,6 +1452,25 @@ fn realized_buffer(
     Ok(realized)
 }
 
+fn realized_texture(
+    context: &GpuContext,
+    cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedTexture>,
+    handle: &crate::plugins::gpu::GpuTextureHandle,
+) -> Result<GpuRealizedTexture, GpuSubmissionPreparationError> {
+    let identity = handle.diagnostic_identity();
+    if let Some(realized) = cache.get(&identity) {
+        return Ok(realized.clone());
+    }
+    let realized = context.realize_texture(handle).map_err(|error| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
+            error.to_string(),
+        )
+    })?;
+    cache.insert(identity, realized.clone());
+    Ok(realized)
+}
+
 fn preparation_program_binding_failure(
     error: GpuProgramBindingRealizationError,
 ) -> GpuSubmissionPreparationError {
@@ -1221,6 +1511,20 @@ fn validate_copy_range(
         ));
     }
     Ok(())
+}
+
+fn checked_staging_demand(
+    current: u64,
+    additional: u64,
+    kind: GpuSubmissionPreparationErrorKind,
+    label: &'static str,
+) -> Result<u64, GpuSubmissionPreparationError> {
+    current.checked_add(additional).ok_or_else(|| {
+        GpuSubmissionPreparationError::new(
+            kind,
+            format!("{label} staging byte demand overflowed the normalized u64 domain"),
+        )
+    })
 }
 
 fn validate_plan_policy(
@@ -1319,6 +1623,38 @@ fn encode_submit_and_register(
                 );
                 upload_staging.push(staging);
             }
+            PreparedExecutionOperation::TextureUpload {
+                destination,
+                region,
+                staging: staging_layout,
+                payload,
+            } => {
+                let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
+                    label: Some("RunenGPU texture upload staging"),
+                    size: staging_layout.staging_byte_len,
+                    usage: BufferUsages::COPY_SRC,
+                    mapped_at_creation: true,
+                }));
+                {
+                    let mut mapped = staging.slice(..).get_mapped_range_mut().map_err(|error| {
+                        GpuSubmissionFailure::new(
+                            GpuSubmissionFailureKind::BackendValidation,
+                            format!("obtain mapped texture upload staging range: {error}"),
+                        )
+                    })?;
+                    staging_layout.write_tightly_packed(&mut mapped, payload.as_bytes())?;
+                }
+                staging.unmap();
+                encoder.copy_buffer_to_texture(
+                    TexelCopyBufferInfo {
+                        buffer: &staging,
+                        layout: staging_layout.buffer_layout(),
+                    },
+                    texture_copy_info(destination, region),
+                    texture_copy_extent(region),
+                );
+                upload_staging.push(staging);
+            }
             PreparedExecutionOperation::Compute {
                 pipeline,
                 bind_groups,
@@ -1408,6 +1744,29 @@ fn encode_submit_and_register(
                 );
                 readback_staging.push((*readback_id, staging));
             }
+            PreparedExecutionOperation::TextureReadback {
+                id: readback_id,
+                source,
+                region,
+                staging: staging_layout,
+                ..
+            } => {
+                let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
+                    label: Some("RunenGPU texture readback staging"),
+                    size: staging_layout.staging_byte_len,
+                    usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                }));
+                encoder.copy_texture_to_buffer(
+                    texture_copy_info(source, region),
+                    TexelCopyBufferInfo {
+                        buffer: &staging,
+                        layout: staging_layout.buffer_layout(),
+                    },
+                    texture_copy_extent(region),
+                );
+                readback_staging.push((*readback_id, staging));
+            }
         }
     }
 
@@ -1428,6 +1787,89 @@ fn encode_submit_and_register(
         return Err(failure_from_device_fault(&fault));
     }
     Ok(())
+}
+
+fn texture_copy_info<'a>(
+    texture: &'a GpuRealizedTexture,
+    region: &GpuTextureCopyRegion,
+) -> TexelCopyTextureInfo<'a> {
+    let origin = region.origin();
+    TexelCopyTextureInfo {
+        texture: &texture.record.object,
+        mip_level: region.mip_level(),
+        origin: Origin3d {
+            x: origin.x(),
+            y: origin.y(),
+            z: origin.z(),
+        },
+        aspect: map_texture_aspect(region.aspect()),
+    }
+}
+
+fn texture_copy_extent(region: &GpuTextureCopyRegion) -> Extent3d {
+    let extent = region.extent();
+    Extent3d {
+        width: extent.width(),
+        height: extent.height(),
+        depth_or_array_layers: extent.depth_or_layers(),
+    }
+}
+
+fn materialize_readback(
+    bytes: Vec<u8>,
+    metadata: ReadbackMetadata,
+) -> Result<GpuReadbackBytes, GpuSubmissionFailure> {
+    match metadata {
+        ReadbackMetadata::Buffer(metadata) => GpuReadbackBytes::from_normalized_bytes(
+            &metadata.label,
+            bytes,
+            metadata.layout,
+            None,
+            metadata.provenance,
+        )
+        .map_err(|error| {
+            GpuSubmissionFailure::new(
+                GpuSubmissionFailureKind::InternalInvariant,
+                error.to_string(),
+            )
+        }),
+        ReadbackMetadata::Texture(metadata) => {
+            let normalized = metadata.staging.normalize_mapped(&bytes)?;
+            GpuReadbackBytes::from_normalized_bytes(
+                &metadata.label,
+                normalized,
+                metadata.layout,
+                Some(metadata.format),
+                metadata.provenance,
+            )
+            .map_err(|error| {
+                GpuSubmissionFailure::new(
+                    GpuSubmissionFailureKind::InternalInvariant,
+                    error.to_string(),
+                )
+            })
+        }
+    }
+}
+
+fn align_up(value: u64, alignment: u64) -> Option<u64> {
+    if alignment == 0 {
+        return None;
+    }
+    let remainder = value % alignment;
+    if remainder == 0 {
+        Some(value)
+    } else {
+        value.checked_add(alignment - remainder)
+    }
+}
+
+fn texture_staging_preparation_error(detail: &'static str) -> GpuSubmissionPreparationError {
+    GpuSubmissionPreparationError::new(GpuSubmissionPreparationErrorKind::InternalInvariant, detail)
+}
+
+fn texture_staging_submission_error(detail: &'static str) -> GpuSubmissionFailure {
+    GpuSubmissionFailure::new(GpuSubmissionFailureKind::InternalInvariant, detail)
 }
 
 fn submission_program_binding_failure(

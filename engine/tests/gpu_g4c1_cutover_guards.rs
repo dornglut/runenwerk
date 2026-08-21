@@ -141,14 +141,20 @@ fn g4c1_logical_resource_creation_stays_private_while_g5b_staging_is_isolated() 
     let execution_source = compact(&read(&manifest, execution));
     assert_eq!(
         execution_source.matches(".create_buffer(").count(),
-        2,
-        "the first G5B checkpoint permits exactly upload and readback staging buffer creation"
+        4,
+        "G5B permits exactly buffer/texture upload and readback staging buffer creation"
     );
     assert!(execution_source.contains(
         "label:Some(\"RunenGPUuploadstaging\"),size:payload.layout().byte_len(),usage:BufferUsages::COPY_SRC,mapped_at_creation:true"
     ));
     assert!(execution_source.contains(
         "label:Some(\"RunenGPUreadbackstaging\"),size:*size,usage:BufferUsages::COPY_DST|BufferUsages::MAP_READ,mapped_at_creation:false"
+    ));
+    assert!(execution_source.contains(
+        "label:Some(\"RunenGPUtextureuploadstaging\"),size:staging_layout.staging_byte_len,usage:BufferUsages::COPY_SRC,mapped_at_creation:true"
+    ));
+    assert!(execution_source.contains(
+        "label:Some(\"RunenGPUtexturereadbackstaging\"),size:staging_layout.staging_byte_len,usage:BufferUsages::COPY_DST|BufferUsages::MAP_READ,mapped_at_creation:false"
     ));
 }
 
