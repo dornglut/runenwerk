@@ -522,7 +522,9 @@ impl WinitRunner {
             window.request_redraw();
         }
         match decision.next_deadline {
-            Some(deadline) => event_loop.set_control_flow(ControlFlow::WaitUntil(deadline)),
+            Some(deadline) => event_loop.set_control_flow(ControlFlow::wait_duration(
+                deadline.saturating_duration_since(Instant::now()),
+            )),
             None => event_loop.set_control_flow(ControlFlow::Wait),
         }
         self.observe_frame_pacing_decision(
