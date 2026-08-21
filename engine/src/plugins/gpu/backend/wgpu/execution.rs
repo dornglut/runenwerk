@@ -4,9 +4,9 @@ use super::resource_realization::map_texture_aspect;
 use crate::plugins::gpu::{
     GpuBufferTextureLayout, GpuCapabilityAdmission, GpuClearOperation, GpuContext,
     GpuContextAffinity, GpuCopyOperation, GpuDataLayout, GpuDispatchSize,
-    GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats,
-    GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory, GpuPreparedSubmission,
-    GpuPreparedSubmissionRejected, GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
+    GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats, GpuPipelineRealizationError,
+    GpuPipelineRealizationErrorCategory, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
+    GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
     GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
     GpuRealizedTexture, GpuResourceProvenance, GpuRuntimeBindingResource, GpuSubmission,
@@ -1278,8 +1278,7 @@ async fn prepare_execution_plan(
                 }
             },
             GpuWorkOperation::Clear(GpuClearOperation::BufferZero(region)) => {
-                let destination =
-                    realized_buffer(context, &mut buffer_cache, region.buffer())?;
+                let destination = realized_buffer(context, &mut buffer_cache, region.buffer())?;
                 validate_copy_range(
                     region.range().offset(),
                     region.range().size(),
