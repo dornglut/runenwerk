@@ -537,10 +537,7 @@ fn native_texture_preparation_accounts_for_private_staging_and_drop_releases_cap
         error.kind(),
         GpuSubmissionPreparationErrorKind::ReadbackDemandExceedsPolicy
     );
-    assert_eq!(
-        readback_context.execution_stats().prepared_submissions(),
-        0
-    );
+    assert_eq!(readback_context.execution_stats().prepared_submissions(), 0);
 
     let context = native_copy_context();
     let (graph, _, _) = native_texture_round_trip_graph();
