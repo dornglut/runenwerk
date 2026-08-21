@@ -9,12 +9,12 @@ use crate::plugins::gpu::{
     GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
     GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
-    GpuRealizedTexture, GpuResourceProvenance, GpuRuntimeBindingResource, GpuSubmission,
-    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
-    GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
-    GpuSubmissionStatus, GpuTextureCopyRegion, GpuTextureFormat, GpuTransferRegion,
-    GpuValidatedBindGroupBindings, GpuWorkOperation, GpuWorkResourceId, PreparedGpuData,
-    TransferData,
+    GpuRealizedQuerySet, GpuRealizedTexture, GpuResourceProvenance, GpuRuntimeBindingResource,
+    GpuSubmission, GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId,
+    GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind,
+    GpuSubmissionRejectionReason, GpuSubmissionStatus, GpuTextureCopyRegion, GpuTextureFormat,
+    GpuTransferRegion, GpuValidatedBindGroupBindings, GpuWorkOperation, GpuWorkResourceId,
+    PreparedGpuData, TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -22,8 +22,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use wgpu::{
     Buffer, BufferDescriptor, BufferUsages, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    CommandEncoderDescriptor, ComputePassDescriptor, Extent3d, MapMode, Origin3d, PollType,
-    TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePassTimestampWrites, Extent3d, MapMode,
+    Origin3d, PollType, QUERY_RESOLVE_BUFFER_ALIGNMENT, TexelCopyBufferInfo, TexelCopyBufferLayout,
+    TexelCopyTextureInfo,
 };
 
 #[derive(Debug)]
@@ -82,6 +83,13 @@ enum PreparedComputeDispatch {
         arguments: GpuRealizedBuffer,
         offset: u64,
     },
+}
+
+#[derive(Debug, Clone)]
+struct PreparedTimestampWrites {
+    query_set: GpuRealizedQuerySet,
+    beginning_of_pass: Option<u32>,
+    end_of_pass: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -307,6 +315,7 @@ enum PreparedExecutionOperation {
         pipeline: GpuRealizedComputePipeline,
         bind_groups: Vec<PreparedComputeBindGroup>,
         dispatch: PreparedComputeDispatch,
+        timestamp_writes: Option<PreparedTimestampWrites>,
     },
     Copy {
         source: GpuRealizedBuffer,
@@ -337,6 +346,12 @@ enum PreparedExecutionOperation {
         destination: GpuRealizedBuffer,
         offset: u64,
         size: u64,
+    },
+    Resolve {
+        source: GpuRealizedQuerySet,
+        query_range: std::ops::Range<u32>,
+        destination: GpuRealizedBuffer,
+        destination_offset: u64,
     },
     Readback {
         id: GpuReadbackId,
@@ -1137,6 +1152,7 @@ async fn prepare_execution_plan(
 ) -> Result<PreparedExecutionPlan, GpuSubmissionPreparationError> {
     let mut buffer_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedBuffer>::new();
     let mut texture_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedTexture>::new();
+    let mut query_set_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedQuerySet>::new();
     let mut operations = Vec::with_capacity(graph.topological_order().len());
     let mut upload_bytes = 0_u64;
     let mut readback_bytes = 0_u64;
@@ -1202,8 +1218,15 @@ async fn prepare_execution_plan(
                 }
             },
             GpuWorkOperation::Compute(compute) => {
-                operations
-                    .push(prepare_compute_operation(context, &mut buffer_cache, compute).await?);
+                operations.push(
+                    prepare_compute_operation(
+                        context,
+                        &mut buffer_cache,
+                        &mut query_set_cache,
+                        compute,
+                    )
+                    .await?,
+                );
             }
             GpuWorkOperation::Copy(copy) => match copy {
                 GpuCopyOperation::BufferToBuffer {
@@ -1288,6 +1311,23 @@ async fn prepare_execution_plan(
                     destination,
                     offset: region.range().offset(),
                     size: region.range().size(),
+                });
+            }
+            GpuWorkOperation::Resolve(resolve) => {
+                validate_query_resolve_offset(resolve.destination_offset())?;
+                operations.push(PreparedExecutionOperation::Resolve {
+                    source: realized_query_set(
+                        context,
+                        &mut query_set_cache,
+                        resolve.source_query_set(),
+                    )?,
+                    query_range: resolve.source_range().first()..resolve.source_range().end(),
+                    destination: realized_buffer(
+                        context,
+                        &mut buffer_cache,
+                        resolve.destination_buffer(),
+                    )?,
+                    destination_offset: resolve.destination_offset(),
                 });
             }
             GpuWorkOperation::Readback(readback) => {
@@ -1380,7 +1420,7 @@ async fn prepare_execution_plan(
             }
             _ => {
                 return unsupported(
-                    "the current G5B checkpoint executes buffer/texture Upload, Copy, BufferZero, and Readback plus compute dispatch only",
+                    "the current G5B checkpoint executes buffer/texture Upload, Copy, BufferZero, query Resolve, Readback, and compute dispatch/timestamps only",
                 );
             }
         }
@@ -1396,17 +1436,15 @@ async fn prepare_execution_plan(
 
 async fn prepare_compute_operation(
     context: &GpuContext,
-    cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedBuffer>,
+    buffer_cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedBuffer>,
+    query_set_cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedQuerySet>,
     compute: &crate::plugins::gpu::GpuComputeOperation,
 ) -> Result<PreparedExecutionOperation, GpuSubmissionPreparationError> {
-    if compute.timestamp_writes().is_some() {
-        return unsupported("compute timestamp writes remain outside this G5B checkpoint");
-    }
     let dispatch = if let Some(dispatch) = compute.dispatch().direct_size() {
         PreparedComputeDispatch::Direct(dispatch)
     } else if let Some(arguments) = compute.dispatch().indirect_access() {
         PreparedComputeDispatch::Indirect {
-            arguments: realized_buffer(context, cache, arguments.buffer())?,
+            arguments: realized_buffer(context, buffer_cache, arguments.buffer())?,
             offset: arguments.range().offset(),
         }
     } else {
@@ -1415,6 +1453,16 @@ async fn prepare_compute_operation(
             "validated compute dispatch lost both direct and indirect execution intent",
         ));
     };
+    let timestamp_writes = compute
+        .timestamp_writes()
+        .map(|writes| {
+            Ok(PreparedTimestampWrites {
+                query_set: realized_query_set(context, query_set_cache, writes.query_set())?,
+                beginning_of_pass: writes.beginning_of_pass(),
+                end_of_pass: writes.end_of_pass(),
+            })
+        })
+        .transpose()?;
 
     let descriptor = compute.pipeline();
     let program = context
@@ -1451,6 +1499,7 @@ async fn prepare_compute_operation(
         pipeline,
         bind_groups,
         dispatch,
+        timestamp_writes,
     })
 }
 
@@ -1556,6 +1605,25 @@ fn realized_texture(
     Ok(realized)
 }
 
+fn realized_query_set(
+    context: &GpuContext,
+    cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedQuerySet>,
+    handle: &crate::plugins::gpu::GpuQuerySetHandle,
+) -> Result<GpuRealizedQuerySet, GpuSubmissionPreparationError> {
+    let identity = handle.diagnostic_identity();
+    if let Some(realized) = cache.get(&identity) {
+        return Ok(realized.clone());
+    }
+    let realized = context.realize_query_set(handle).map_err(|error| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
+            error.to_string(),
+        )
+    })?;
+    cache.insert(identity, realized.clone());
+    Ok(realized)
+}
+
 fn preparation_program_binding_failure(
     error: GpuProgramBindingRealizationError,
 ) -> GpuSubmissionPreparationError {
@@ -1592,6 +1660,18 @@ fn validate_copy_range(
             GpuSubmissionPreparationErrorKind::TransferAlignmentNotAdmitted,
             format!(
                 "buffer transfer range offset={offset} size={size} is not encodable at admitted copy alignment {alignment}"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_query_resolve_offset(offset: u64) -> Result<(), GpuSubmissionPreparationError> {
+    if !offset.is_multiple_of(QUERY_RESOLVE_BUFFER_ALIGNMENT) {
+        return Err(GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::TransferAlignmentNotAdmitted,
+            format!(
+                "query-resolve destination offset {offset} is not encodable at private WGPU alignment {QUERY_RESOLVE_BUFFER_ALIGNMENT}"
             ),
         ));
     }
@@ -1779,9 +1859,11 @@ fn encode_submit_and_register(
                 pipeline,
                 bind_groups,
                 dispatch,
+                timestamp_writes,
             } => {
-                if matches!(dispatch, PreparedComputeDispatch::Direct(size) if size.as_array().contains(&0))
-                {
+                let zero_direct =
+                    matches!(dispatch, PreparedComputeDispatch::Direct(size) if size.as_array().contains(&0));
+                if zero_direct && timestamp_writes.is_none() {
                     continue;
                 }
                 let realized_groups = bind_groups
@@ -1797,10 +1879,17 @@ fn encode_submit_and_register(
                             backend
                                 .program_binding_realization
                                 .with_execution_bind_groups(&realized_groups, |group_objects| {
+                                    let timestamp_writes = timestamp_writes.as_ref().map(|writes| {
+                                        ComputePassTimestampWrites {
+                                            query_set: &writes.query_set.record.object,
+                                            beginning_of_pass_write_index: writes.beginning_of_pass,
+                                            end_of_pass_write_index: writes.end_of_pass,
+                                        }
+                                    });
                                     let mut pass =
                                         encoder.begin_compute_pass(&ComputePassDescriptor {
                                             label: Some("RunenGPU G5B compute"),
-                                            timestamp_writes: None,
+                                            timestamp_writes,
                                         });
                                     pass.set_pipeline(pipeline_object);
                                     for (prepared, object) in bind_groups.iter().zip(group_objects)
@@ -1812,10 +1901,13 @@ fn encode_submit_and_register(
                                         );
                                     }
                                     match dispatch {
-                                        PreparedComputeDispatch::Direct(size) => {
+                                        PreparedComputeDispatch::Direct(size)
+                                            if !size.as_array().contains(&0) =>
+                                        {
                                             let [x, y, z] = size.as_array();
                                             pass.dispatch_workgroups(x, y, z);
                                         }
+                                        PreparedComputeDispatch::Direct(_) => {}
                                         PreparedComputeDispatch::Indirect { arguments, offset } => {
                                             pass.dispatch_workgroups_indirect(
                                                 &arguments.record.object,
@@ -1883,6 +1975,17 @@ fn encode_submit_and_register(
                 offset,
                 size,
             } => encoder.clear_buffer(&destination.record.object, *offset, Some(*size)),
+            PreparedExecutionOperation::Resolve {
+                source,
+                query_range,
+                destination,
+                destination_offset,
+            } => encoder.resolve_query_set(
+                &source.record.object,
+                query_range.clone(),
+                &destination.record.object,
+                *destination_offset,
+            ),
             PreparedExecutionOperation::Readback {
                 id: readback_id,
                 source,
