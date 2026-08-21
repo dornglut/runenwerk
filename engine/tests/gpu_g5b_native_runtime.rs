@@ -430,7 +430,10 @@ fn native_texture_round_trip_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, Ve
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureUsages::new(
                     &texture_label,
-                    [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                    [
+                        GpuTextureUsage::CopySource,
+                        GpuTextureUsage::CopyDestination,
+                    ],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
