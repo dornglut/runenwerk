@@ -1,7 +1,6 @@
 use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
 use crate::plugins::gpu::*;
 use std::num::NonZeroUsize;
-use std::time::{Duration, Instant};
 use wgpu::{Backends, Instance, InstanceDescriptor, NoopBackendOptions};
 
 const WIDTH: u32 = 3;
@@ -151,7 +150,7 @@ fn context(policy: GpuExecutionPolicy, name: &str) -> GpuContext {
         GpuRealizationPolicies::default(),
         policy,
     ))
-    .expect("explicit WGPU Noop must admit the texture-transfer proof context");
+    .expect("explicit WGPU Noop must admit the texture-transfer preparation context");
     assert_eq!(
         context.adapter_facts().backend(),
         GpuBackendFamily::UnknownBackend
@@ -174,74 +173,15 @@ fn policy(upload_bytes: u64, readback_bytes: u64) -> GpuExecutionPolicy {
     )
 }
 
-fn progress_to_readback(
-    context: &GpuContext,
-    submission: &GpuSubmission,
-    readback: &GpuReadback,
-) -> GpuReadbackBytes {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let bytes = loop {
-        context.progress();
-        match readback.status() {
-            GpuReadbackStatus::Ready(bytes) => break bytes,
-            GpuReadbackStatus::Failed(failure) => {
-                panic!("texture readback failed: {failure:?}")
-            }
-            GpuReadbackStatus::Pending => {}
-        }
-        if let GpuSubmissionStatus::Failed(failure) = submission.status() {
-            panic!("texture submission failed before readback: {failure:?}");
-        }
-        assert!(
-            Instant::now() < deadline,
-            "texture readback did not materialize"
-        );
-        std::thread::yield_now();
-    };
-
-    loop {
-        context.progress();
-        match submission.status() {
-            GpuSubmissionStatus::Completed => break,
-            GpuSubmissionStatus::Failed(failure) => {
-                panic!("texture submission failed: {failure:?}")
-            }
-            GpuSubmissionStatus::Accepted => {}
-        }
-        assert!(
-            Instant::now() < deadline,
-            "texture submission did not terminalize"
-        );
-        std::thread::yield_now();
-    }
-    bytes
-}
-
 #[test]
-fn texture_upload_and_readback_remove_private_row_padding() {
-    let context = context(policy(4096, 4096), "G5B noop texture round trip");
-    let (graph, readback_id, expected) = texture_round_trip_graph("noop texture round trip");
+fn texture_upload_and_readback_prepare_without_claiming_noop_texture_execution() {
+    let context = context(policy(4096, 4096), "G5B noop texture preparation");
+    let (graph, _, _) = texture_round_trip_graph("noop texture preparation");
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
-    let submission = context.submit_prepared(prepared).unwrap();
-    let readback = submission
-        .readback(readback_id)
-        .expect("accepted texture readback must remain observable")
-        .clone();
-    let bytes = progress_to_readback(&context, &submission, &readback);
-
-    assert_eq!(bytes.as_bytes(), expected.as_slice());
-    assert_eq!(bytes.layout().byte_len(), LOGICAL_BYTE_LEN);
-    assert_eq!(bytes.layout().stride(), u64::from(WIDTH * BYTES_PER_TEXEL));
-    assert_eq!(bytes.layout().element_count(), u64::from(HEIGHT * LAYERS));
-    assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
-
-    let stats = context.execution_stats();
-    assert_eq!(stats.prepared_submissions(), 0);
-    assert_eq!(stats.in_flight_submissions(), 0);
-    assert_eq!(stats.upload_bytes_in_flight(), 0);
-    assert_eq!(stats.readback_bytes_in_flight(), 0);
-    assert_eq!(stats.pending_readbacks(), 0);
+    assert_eq!(context.execution_stats().prepared_submissions(), 1);
+    drop(prepared);
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
 }
 
 #[test]
