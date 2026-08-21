@@ -9,8 +9,7 @@ const HEIGHT: u32 = 2;
 const LAYERS: u32 = 2;
 const BYTES_PER_TEXEL: u32 = 4;
 const LOGICAL_BYTE_LEN: u64 =
-    u64::from(WIDTH) * u64::from(HEIGHT) * u64::from(LAYERS) * u64::from(BYTES_PER_TEXEL);
-const PHYSICAL_STAGING_BYTE_LEN: u64 = 780;
+    WIDTH as u64 * HEIGHT as u64 * LAYERS as u64 * BYTES_PER_TEXEL as u64;
 
 fn label(value: &str) -> GpuResourceLabel {
     GpuResourceLabel::new(value).unwrap()
@@ -239,7 +238,6 @@ fn texture_upload_and_readback_remove_private_row_padding() {
 
 #[test]
 fn texture_preparation_accounts_for_private_padded_staging_bytes() {
-    assert!(LOGICAL_BYTE_LEN < PHYSICAL_STAGING_BYTE_LEN);
     let context = context(
         policy(LOGICAL_BYTE_LEN, 4096),
         "G5B padded texture staging pressure",
