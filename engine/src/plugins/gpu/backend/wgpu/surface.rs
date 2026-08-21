@@ -23,7 +23,9 @@ struct WgpuSurfaceDisplay<T>(Arc<T>);
 #[cfg(not(target_arch = "wasm32"))]
 impl<T> core::fmt::Debug for WgpuSurfaceDisplay<T> {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        formatter.debug_struct("WgpuSurfaceDisplay").finish_non_exhaustive()
+        formatter
+            .debug_struct("WgpuSurfaceDisplay")
+            .finish_non_exhaustive()
     }
 }
 

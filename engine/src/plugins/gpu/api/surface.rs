@@ -14,10 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub trait GpuSurfaceTarget: HasDisplayHandle + HasWindowHandle + Send + Sync + 'static {}
 
 #[cfg(not(target_arch = "wasm32"))]
-impl<T> GpuSurfaceTarget for T where
-    T: HasDisplayHandle + HasWindowHandle + Send + Sync + 'static
-{
-}
+impl<T> GpuSurfaceTarget for T where T: HasDisplayHandle + HasWindowHandle + Send + Sync + 'static {}
 
 /// Safe host target accepted by the backend-neutral RunenGPU surface API.
 ///
