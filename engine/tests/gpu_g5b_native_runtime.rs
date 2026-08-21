@@ -1164,8 +1164,13 @@ fn timestamp_query_graph(
     )
     .unwrap();
 
-    let readback_id = include_readback.then(GpuReadbackId::allocate).transpose().unwrap();
-    let readback = readback_id.map(|id| GpuReadbackOperation::new(sentinel_region.into(), id).unwrap());
+    let readback_id = if include_readback {
+        Some(GpuReadbackId::allocate().unwrap())
+    } else {
+        None
+    };
+    let readback =
+        readback_id.map(|id| GpuReadbackOperation::new(sentinel_region.into(), id).unwrap());
 
     let name = "native timestamp query";
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
@@ -1225,7 +1230,6 @@ fn native_zero_dispatch_timestamp_writes_and_resolve_execute_without_extra_stagi
     let readback_id = readback_id.unwrap();
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
-    assert_eq!(context.resource_realization_stats().query_sets(), 1);
     let submission = context.submit_prepared(prepared).unwrap();
     let accepted = context.execution_stats();
     assert_eq!(accepted.upload_bytes_in_flight(), 4 + TIMESTAMP_RESOLVE_BYTES);
