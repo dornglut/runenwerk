@@ -1045,3 +1045,229 @@ fn native_buffer_zero_rejects_unaligned_range_before_acceptance() {
     assert_eq!(context.execution_stats().prepared_submissions(), 0);
     assert_eq!(context.execution_stats().in_flight_submissions(), 0);
 }
+
+const TIMESTAMP_RESOLVE_BYTES: u64 = 16;
+const TIMESTAMP_SENTINEL: u64 = u64::MAX;
+
+fn native_timestamp_context(policy: GpuExecutionPolicy) -> GpuContext {
+    let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TimestampQuery,
+        ))
+        .unwrap();
+    let descriptor = GpuContextDescriptor::new(requirements)
+        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+        .with_allowed_backends([GpuBackendFamily::Vulkan])
+        .with_label("G5B native timestamp query proof");
+    let context = pollster::block_on(GpuContext::request_with_policies(
+        descriptor,
+        GpuRealizationPolicies::default(),
+        policy,
+    ))
+    .expect("native conformance environment must provide timestamp-capable Vulkan fallback");
+    assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
+    assert_eq!(
+        context.adapter_facts().fallback(),
+        GpuFallbackStatus::ConfirmedFallback,
+        "native timestamp proof must execute through the explicitly required fallback path"
+    );
+    context
+}
+
+fn timestamp_query_set(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+) -> GpuQuerySetHandle {
+    allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(common(name), GpuQueryKind::Timestamp, 2).unwrap(),
+        )
+        .unwrap()
+}
+
+fn timestamp_resolve_buffer(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+    byte_len: u64,
+) -> GpuBufferHandle {
+    let resource_label = label(name);
+    allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common(name),
+                byte_len,
+                GpuBufferUsages::new(
+                    &resource_label,
+                    [
+                        GpuBufferUsage::QueryResolve,
+                        GpuBufferUsage::CopySource,
+                        GpuBufferUsage::CopyDestination,
+                    ],
+                )
+                .unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
+fn timestamp_query_graph(
+    context: &GpuContext,
+    destination_offset: u64,
+    include_readback: bool,
+) -> (GpuPreparedWorkGraph, Option<GpuReadbackId>) {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let values = compute_buffer(&mut allocator, "native timestamp values", 4);
+    let query_set = timestamp_query_set(&mut allocator, "native timestamp query set");
+    let destination = timestamp_resolve_buffer(&mut allocator, "native timestamp resolve", 512);
+
+    let values_region =
+        GpuBufferRegion::new(&values, GpuBufferRange::whole(&values).unwrap()).unwrap();
+    let values_upload = GpuUploadOperation::new(
+        values_region.into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer(
+            "native timestamp values payload",
+            &[7_u32],
+            provenance("native timestamp values payload"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    let sentinel = [TIMESTAMP_SENTINEL, TIMESTAMP_SENTINEL];
+    let sentinel_region = GpuBufferRegion::new(
+        &destination,
+        GpuBufferRange::new(&destination, destination_offset, TIMESTAMP_RESOLVE_BYTES).unwrap(),
+    )
+    .unwrap();
+    let sentinel_upload = GpuUploadOperation::new(
+        sentinel_region.clone().into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer(
+            "native timestamp sentinel",
+            &sentinel,
+            provenance("native timestamp sentinel"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    let timestamps = GpuTimestampWrites::new(&query_set, Some(0), Some(1)).unwrap();
+    let compute = dynamic_compute_operation(context, &dynamic_compute_pipeline(), &values, 0, 0)
+        .with_timestamp_writes(timestamps);
+    let resolve = GpuQueryResolveOperation::new(
+        &query_set,
+        GpuQueryRange::new(&query_set, 0, 2).unwrap(),
+        &destination,
+        destination_offset,
+    )
+    .unwrap();
+
+    let readback_id = include_readback.then(GpuReadbackId::allocate).transpose().unwrap();
+    let readback = readback_id.map(|id| GpuReadbackOperation::new(sentinel_region.into(), id).unwrap());
+
+    let name = "native timestamp query";
+    let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
+    builder.declare_resource(values.into()).unwrap();
+    builder.declare_resource(query_set.into()).unwrap();
+    builder.declare_resource(destination.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "native timestamp values upload",
+        GpuWorkOperation::Upload(values_upload),
+    );
+    add_operation(
+        &mut builder,
+        "native timestamp sentinel upload",
+        GpuWorkOperation::Upload(sentinel_upload),
+    );
+    add_operation(
+        &mut builder,
+        "native timestamp zero dispatch",
+        GpuWorkOperation::Compute(compute),
+    );
+    add_operation(
+        &mut builder,
+        "native timestamp resolve",
+        GpuWorkOperation::Resolve(resolve),
+    );
+    if let Some(readback) = readback {
+        add_operation(
+            &mut builder,
+            "native timestamp readback",
+            GpuWorkOperation::Readback(readback),
+        );
+    }
+
+    (
+        GpuPreparedWorkGraph::prepare(
+            label("native timestamp query graph"),
+            [builder.finish().unwrap()],
+        )
+        .unwrap(),
+        readback_id,
+    )
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_zero_dispatch_timestamp_writes_and_resolve_execute_without_extra_staging() {
+    let policy = GpuExecutionPolicy::new(
+        NonZeroUsize::new(2).unwrap(),
+        NonZeroUsize::new(1).unwrap(),
+        4 + TIMESTAMP_RESOLVE_BYTES,
+        TIMESTAMP_RESOLVE_BYTES,
+        1,
+    );
+    let context = native_timestamp_context(policy);
+    let (graph, readback_id) = timestamp_query_graph(&context, 0, true);
+    let readback_id = readback_id.unwrap();
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    assert_eq!(context.resource_realization_stats().query_sets(), 1);
+    let submission = context.submit_prepared(prepared).unwrap();
+    let accepted = context.execution_stats();
+    assert_eq!(accepted.upload_bytes_in_flight(), 4 + TIMESTAMP_RESOLVE_BYTES);
+    assert_eq!(accepted.readback_bytes_in_flight(), TIMESTAMP_RESOLVE_BYTES);
+    assert_eq!(accepted.pending_readbacks(), 1);
+
+    let readback = submission
+        .readback(readback_id)
+        .expect("accepted timestamp readback must remain observable")
+        .clone();
+    let bytes = progress_to_readback(&context, &submission, &readback);
+    let (timestamps, remainder) = bytes.as_bytes().as_chunks::<8>();
+    assert!(remainder.is_empty());
+    assert_eq!(timestamps.len(), 2);
+    for timestamp in timestamps {
+        assert_ne!(
+            u64::from_ne_bytes(*timestamp),
+            TIMESTAMP_SENTINEL,
+            "zero-dispatch pass timestamps must physically overwrite each resolved query slot"
+        );
+    }
+
+    let stats = context.execution_stats();
+    assert_eq!(stats.prepared_submissions(), 0);
+    assert_eq!(stats.in_flight_submissions(), 0);
+    assert_eq!(stats.upload_bytes_in_flight(), 0);
+    assert_eq!(stats.readback_bytes_in_flight(), 0);
+    assert_eq!(stats.pending_readbacks(), 0);
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_query_resolve_rejects_private_wgpu_offset_alignment_before_acceptance() {
+    let context = native_timestamp_context(GpuExecutionPolicy::default());
+    let (graph, _) = timestamp_query_graph(&context, 8, false);
+
+    let error = pollster::block_on(context.prepare_submission(graph))
+        .expect_err("misaligned WGPU query resolve must reject during preparation");
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::TransferAlignmentNotAdmitted
+    );
+    assert_eq!(context.execution_stats().prepared_submissions(), 0);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+}
