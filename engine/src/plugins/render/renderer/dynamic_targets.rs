@@ -635,8 +635,9 @@ mod tests {
         let operation = logical_upload(&original);
 
         assert!(validate_prepared_dynamic_texture_target(&original, &operation).is_ok());
-        let error = validate_prepared_dynamic_texture_target(&replacement, &operation)
-            .expect_err("replacement target must not accept an upload prepared for the old texture");
+        let error = validate_prepared_dynamic_texture_target(&replacement, &operation).expect_err(
+            "replacement target must not accept an upload prepared for the old texture",
+        );
         assert!(error.contains("replaced"));
     }
 }
