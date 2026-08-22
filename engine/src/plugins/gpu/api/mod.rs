@@ -20,6 +20,7 @@ mod render_pass;
 mod render_pass_usage;
 mod resource;
 mod surface;
+mod surface_acquisition;
 mod transfer;
 mod work;
 mod work_resource_id;
@@ -44,6 +45,7 @@ pub use render_execution::*;
 pub use render_pass::*;
 pub use resource::*;
 pub use surface::*;
+pub use surface_acquisition::*;
 pub use transfer::*;
 pub use work::{
     GpuBufferRegion, GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad,
