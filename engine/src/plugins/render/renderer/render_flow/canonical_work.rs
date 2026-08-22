@@ -40,6 +40,7 @@ pub(super) struct CanonicalPassProjection<'a> {
 /// unrelated parameters. G5C1 can therefore reuse the same boundary while moving graph preparation
 /// from invocation scope to frame/surface scope. `surface_color_view` is the exact logical view of
 /// the currently acquired G7A image when that authority has already moved to the frame caller.
+#[derive(Clone, Copy)]
 pub(super) struct CanonicalInvocationProjection<'a, 'pass> {
     pub(super) projected_uploads: &'a [RealizedLogicalBufferUpload],
     pub(super) passes: &'a [CanonicalPassProjection<'pass>],
@@ -47,10 +48,30 @@ pub(super) struct CanonicalInvocationProjection<'a, 'pass> {
     pub(super) timing: Option<&'a LogicalGpuPassTiming>,
 }
 
+/// One invocation plus the render-owned state required to resolve it into canonical GPU work.
+///
+/// The frame resolver collects these projections before allocating any auxiliary occurrence IDs.
+/// This prevents per-invocation timing tails from consuming an identity already assigned to a
+/// later invocation in the same physical submission.
+#[derive(Clone, Copy)]
+pub(super) struct CanonicalFrameInvocationProjection<'a, 'pass> {
+    pub(super) flow: &'a CompiledRenderFlowPlan,
+    pub(super) flow_inputs: &'a PreparedFlowInputs,
+    pub(super) runtime_resources: &'a FlowRuntimeResources,
+    pub(super) invocation: CanonicalInvocationProjection<'a, 'pass>,
+}
+
 pub(super) enum CanonicalInvocationResolution {
     Resolved(Vec<ResolvedRenderGpuWorkNode>),
     /// The invocation contains at least one operation whose durable logical identity/semantics is
     /// intentionally deferred to G7A/G5C. No partial canonical node set is retained in this case.
+    PreG7Residual,
+}
+
+pub(super) enum CanonicalFrameResolution {
+    Resolved(Vec<ResolvedRenderGpuWorkNode>),
+    /// At least one invocation is not fully canonical yet. G5C1 requires the entire physical
+    /// frame/surface submission to remain on the residual path rather than mixing authorities.
     PreG7Residual,
 }
 
@@ -63,7 +84,7 @@ pub(super) enum CanonicalInvocationPreparation {
 
 /// Transitional per-invocation preparation wrapper.
 ///
-/// The durable G5C1 path is `resolve_canonical_invocation` followed by one frame-level
+/// The durable G5C1 path is `resolve_canonical_frame` followed by one frame-level
 /// `prepare_render_gpu_frame_work` call. This wrapper remains only so each dependency-ordered
 /// checkpoint compiles before the large renderer caller cutover lands in the same PR.
 pub(super) fn prepare_canonical_invocation(
@@ -101,13 +122,61 @@ pub(super) fn prepare_canonical_invocation(
     }
 }
 
+/// Resolves every renderer invocation participating in one physical frame/surface submission.
+///
+/// Existing occurrence IDs are observed across the complete frame before any timing/capture-tail
+/// auxiliary identity can be allocated. This is required even when ordinary pass occurrences were
+/// already expanded with one frame-scoped allocator: resolving invocation A must not allocate the
+/// ID already assigned to invocation B. The returned node set is all-or-nothing; one residual
+/// invocation discards every canonical node accumulated for the frame so the caller cannot mix
+/// legacy and G5 execution authority inside one physical submission.
+pub(super) fn resolve_canonical_frame<'a, 'pass>(
+    context: &GpuContext,
+    invocations: impl IntoIterator<Item = CanonicalFrameInvocationProjection<'a, 'pass>>,
+) -> Result<CanonicalFrameResolution> {
+    let invocations = invocations.into_iter().collect::<Vec<_>>();
+    if invocations.is_empty() {
+        return Ok(CanonicalFrameResolution::PreG7Residual);
+    }
+
+    let mut maximum_occurrence = 0_u64;
+    for invocation in &invocations {
+        observe_existing_occurrences(invocation.invocation, &mut maximum_occurrence);
+    }
+
+    let mut nodes = Vec::<ResolvedRenderGpuWorkNode>::new();
+    for invocation in invocations {
+        match resolve_canonical_invocation(
+            context,
+            invocation.flow,
+            invocation.flow_inputs,
+            invocation.runtime_resources,
+            invocation.invocation,
+            &mut maximum_occurrence,
+        )? {
+            CanonicalInvocationResolution::Resolved(mut invocation_nodes) => {
+                nodes.append(&mut invocation_nodes);
+            }
+            CanonicalInvocationResolution::PreG7Residual => {
+                return Ok(CanonicalFrameResolution::PreG7Residual);
+            }
+        }
+    }
+
+    if nodes.is_empty() {
+        Ok(CanonicalFrameResolution::PreG7Residual)
+    } else {
+        Ok(CanonicalFrameResolution::Resolved(nodes))
+    }
+}
+
 /// Resolves one renderer invocation into execution-complete canonical GPU occurrences without
 /// preparing a G3 graph.
 ///
-/// G5C1 calls this for every invocation participating in one physical frame/surface submission,
-/// using one shared `maximum_occurrence`. Only after every invocation resolves canonically may the
-/// caller prepare one bounded frame graph. If any invocation is residual, the caller must discard
-/// all resolved canonical nodes and keep the complete frame on the residual path.
+/// G5C1 normally reaches this through `resolve_canonical_frame`, which first observes every
+/// existing occurrence in the physical frame before auxiliary IDs are allocated. The direct entry
+/// point remains for the transitional single-invocation wrapper above. If an operation is residual,
+/// no partial canonical node set from this invocation is retained.
 pub(super) fn resolve_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
@@ -236,6 +305,21 @@ pub(super) fn resolve_canonical_invocation(
     }
 
     Ok(CanonicalInvocationResolution::Resolved(nodes))
+}
+
+fn observe_existing_occurrences(
+    projection: CanonicalInvocationProjection<'_, '_>,
+    maximum_occurrence: &mut u64,
+) {
+    for upload in projection.projected_uploads {
+        *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
+    }
+    for pass in projection.passes {
+        *maximum_occurrence = (*maximum_occurrence).max(pass.occurrence.raw());
+        if let Some(upload) = pass.fixed_step_upload {
+            *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
+        }
+    }
 }
 
 fn timestamp_projection(
