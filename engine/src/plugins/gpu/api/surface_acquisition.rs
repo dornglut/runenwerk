@@ -26,10 +26,7 @@ impl GpuSurfaceLeaseIdAllocator {
         }
     }
 
-    fn allocate(
-        &self,
-        surface: GpuSurfaceId,
-    ) -> Result<GpuSurfaceLeaseId, GpuSurfaceAcquireError> {
+    fn allocate(&self, surface: GpuSurfaceId) -> Result<GpuSurfaceLeaseId, GpuSurfaceAcquireError> {
         let value = self
             .next
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
@@ -42,9 +39,9 @@ impl GpuSurfaceLeaseIdAllocator {
                     "surface lease identifier allocator exhausted",
                 )
             })?;
-        Ok(GpuSurfaceLeaseId(
-            NonZeroU64::new(value).expect("surface lease identifier allocator never returns zero"),
-        ))
+        Ok(GpuSurfaceLeaseId(NonZeroU64::new(value).expect(
+            "surface lease identifier allocator never returns zero",
+        )))
     }
 }
 
@@ -227,16 +224,39 @@ impl fmt::Display for GpuSurfaceLeaseError {
 
 impl std::error::Error for GpuSurfaceLeaseError {}
 
+/// Private backend callback used only to release one active physical surface-image lease.
+///
+/// The public acquired image owns no backend object. Its owner token retains only a weak callback,
+/// so dropping the context first remains safe and cannot create an ownership cycle.
+pub(crate) trait GpuSurfaceLeaseReleaser: fmt::Debug + Send + Sync {
+    fn release(&self, lease: GpuSurfaceResourceLease);
+}
+
 /// Private ownership marker for the one active physical surface-image lease.
 ///
 /// Only `GpuAcquiredSurfaceImage` owns a strong reference. Logical texture/view handles never do,
-/// so cloning those handles cannot keep physical swapchain authority alive.
+/// so cloning those handles cannot keep physical swapchain authority alive. Dropping this marker
+/// asks the owning G7 backend state to release the matching physical image immediately.
 #[derive(Debug)]
-pub(crate) struct GpuSurfaceLeaseOwner;
+pub(crate) struct GpuSurfaceLeaseOwner {
+    lease: GpuSurfaceResourceLease,
+    releaser: Weak<dyn GpuSurfaceLeaseReleaser>,
+}
 
 impl GpuSurfaceLeaseOwner {
-    pub(crate) fn new() -> Arc<Self> {
-        Arc::new(Self)
+    pub(crate) fn new(
+        lease: GpuSurfaceResourceLease,
+        releaser: Weak<dyn GpuSurfaceLeaseReleaser>,
+    ) -> Arc<Self> {
+        Arc::new(Self { lease, releaser })
+    }
+}
+
+impl Drop for GpuSurfaceLeaseOwner {
+    fn drop(&mut self) {
+        if let Some(releaser) = self.releaser.upgrade() {
+            releaser.release(self.lease);
+        }
     }
 }
 
