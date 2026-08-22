@@ -3,8 +3,9 @@ use super::{
     GpuTextureViewHandle,
 };
 use core::fmt;
+use core::hash::{Hash, Hasher};
 use core::num::NonZeroU64;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 
 /// Opaque process-local identity for one acquired surface-image lease.
@@ -54,28 +55,140 @@ pub(crate) fn allocate_surface_lease_id(
     PRODUCTION_SURFACE_LEASE_IDS.allocate(surface)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GpuSurfaceLeaseDisposition {
+    Active,
+    Abandoned,
+    Presented,
+}
+
+impl GpuSurfaceLeaseDisposition {
+    const ACTIVE: u8 = 0;
+    const ABANDONED: u8 = 1;
+    const PRESENTED: u8 = 2;
+
+    const fn as_u8(self) -> u8 {
+        match self {
+            Self::Active => Self::ACTIVE,
+            Self::Abandoned => Self::ABANDONED,
+            Self::Presented => Self::PRESENTED,
+        }
+    }
+
+    fn from_u8(value: u8) -> Self {
+        match value {
+            Self::ACTIVE => Self::Active,
+            Self::ABANDONED => Self::Abandoned,
+            Self::PRESENTED => Self::Presented,
+            _ => unreachable!("surface lease disposition is private and closed"),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct GpuSurfaceLeaseState {
+    disposition: AtomicU8,
+}
+
+impl GpuSurfaceLeaseState {
+    fn new() -> Self {
+        Self {
+            disposition: AtomicU8::new(GpuSurfaceLeaseDisposition::Active.as_u8()),
+        }
+    }
+
+    fn disposition(&self) -> GpuSurfaceLeaseDisposition {
+        GpuSurfaceLeaseDisposition::from_u8(self.disposition.load(Ordering::Acquire))
+    }
+
+    fn abandon(&self) {
+        let _ = self.disposition.compare_exchange(
+            GpuSurfaceLeaseDisposition::Active.as_u8(),
+            GpuSurfaceLeaseDisposition::Abandoned.as_u8(),
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+    }
+
+    fn present(&self) -> Result<(), GpuSurfaceLeaseDisposition> {
+        self.disposition
+            .compare_exchange(
+                GpuSurfaceLeaseDisposition::Active.as_u8(),
+                GpuSurfaceLeaseDisposition::Presented.as_u8(),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .map(|_| ())
+            .map_err(GpuSurfaceLeaseDisposition::from_u8)
+    }
+}
+
 /// Non-owning provenance carried by a surface-acquired logical texture lease.
 ///
-/// This value deliberately contains no backend object and no strong owner reference. Logical
-/// handle clones can therefore preserve the surface/context/generation/lease identity required for
-/// stale and foreign-context validation without extending physical swapchain authority.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// This value deliberately contains no backend object and no strong physical-owner reference.
+/// Logical handle clones retain only immutable surface/context/generation/lease identity plus the
+/// tiny terminal-state record needed to distinguish abandonment from successful presentation.
+/// Retaining this metadata cannot keep a physical swapchain image alive.
+#[derive(Clone)]
 pub(crate) struct GpuSurfaceResourceLease {
     surface: GpuSurfaceHandle,
     lease_id: GpuSurfaceLeaseId,
+    state: Arc<GpuSurfaceLeaseState>,
 }
 
 impl GpuSurfaceResourceLease {
-    pub(crate) const fn new(surface: GpuSurfaceHandle, lease_id: GpuSurfaceLeaseId) -> Self {
-        Self { surface, lease_id }
+    pub(crate) fn new(surface: GpuSurfaceHandle, lease_id: GpuSurfaceLeaseId) -> Self {
+        Self {
+            surface,
+            lease_id,
+            state: Arc::new(GpuSurfaceLeaseState::new()),
+        }
     }
 
-    pub(crate) const fn surface(self) -> GpuSurfaceHandle {
+    pub(crate) const fn surface(&self) -> GpuSurfaceHandle {
         self.surface
     }
 
-    pub(crate) const fn lease_id(self) -> GpuSurfaceLeaseId {
+    pub(crate) const fn lease_id(&self) -> GpuSurfaceLeaseId {
         self.lease_id
+    }
+
+    pub(crate) fn disposition(&self) -> GpuSurfaceLeaseDisposition {
+        self.state.disposition()
+    }
+
+    pub(crate) fn mark_abandoned(&self) {
+        self.state.abandon();
+    }
+
+    pub(crate) fn mark_presented(&self) -> Result<(), GpuSurfaceLeaseDisposition> {
+        self.state.present()
+    }
+}
+
+impl fmt::Debug for GpuSurfaceResourceLease {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GpuSurfaceResourceLease")
+            .field("surface", &self.surface)
+            .field("lease_id", &self.lease_id)
+            .field("disposition", &self.disposition())
+            .finish()
+    }
+}
+
+impl PartialEq for GpuSurfaceResourceLease {
+    fn eq(&self, other: &Self) -> bool {
+        self.surface == other.surface && self.lease_id == other.lease_id
+    }
+}
+
+impl Eq for GpuSurfaceResourceLease {}
+
+impl Hash for GpuSurfaceResourceLease {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.surface.hash(state);
+        self.lease_id.hash(state);
     }
 }
 
@@ -230,20 +343,21 @@ impl std::error::Error for GpuSurfaceLeaseError {}
 /// so dropping the context first remains safe and cannot create an ownership cycle.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) trait GpuSurfaceLeaseReleaser: fmt::Debug + Send + Sync {
-    fn release(&self, lease: GpuSurfaceResourceLease);
+    fn release(&self, lease: &GpuSurfaceResourceLease);
 }
 
 /// Web surface state is deliberately not forced through native thread-safety requirements.
 #[cfg(target_arch = "wasm32")]
 pub(crate) trait GpuSurfaceLeaseReleaser: fmt::Debug {
-    fn release(&self, lease: GpuSurfaceResourceLease);
+    fn release(&self, lease: &GpuSurfaceResourceLease);
 }
 
 /// Private ownership marker for the one active physical surface-image lease.
 ///
-/// Only `GpuAcquiredSurfaceImage` owns a strong reference. Logical texture/view handles never do,
-/// so cloning those handles cannot keep physical swapchain authority alive. Dropping this marker
-/// asks the owning G7 backend state to release the matching physical image immediately.
+/// Only `GpuAcquiredSurfaceImage` and a short private execution interval may retain this physical
+/// owner marker. Logical texture/view handles retain only `GpuSurfaceResourceLease` metadata, so
+/// cloning them cannot keep physical swapchain authority alive. Dropping this marker marks an
+/// unpresented lease abandoned and asks the owning G7 backend state to release the physical image.
 #[derive(Debug)]
 pub(crate) struct GpuSurfaceLeaseOwner {
     lease: GpuSurfaceResourceLease,
@@ -261,8 +375,9 @@ impl GpuSurfaceLeaseOwner {
 
 impl Drop for GpuSurfaceLeaseOwner {
     fn drop(&mut self) {
+        self.lease.mark_abandoned();
         if let Some(releaser) = self.releaser.upgrade() {
-            releaser.release(self.lease);
+            releaser.release(&self.lease);
         }
     }
 }
@@ -365,12 +480,52 @@ impl fmt::Debug for GpuAcquiredSurfaceImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::gpu::{GpuContextId, GpuDeviceGeneration, allocate_surface_id};
+
+    fn test_lease() -> GpuSurfaceResourceLease {
+        let context = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
+        let affinity = GpuContextAffinity::test_value(context, GpuDeviceGeneration::first());
+        let surface = GpuSurfaceHandle::new(
+            allocate_surface_id().unwrap(),
+            affinity,
+            GpuSurfaceGeneration::first(),
+        );
+        GpuSurfaceResourceLease::new(surface, allocate_surface_lease_id(surface.id()).unwrap())
+    }
 
     #[test]
     fn acquisition_categories_keep_timeout_and_occlusion_distinct() {
         assert_ne!(
             GpuSurfaceAcquireErrorCategory::Timeout,
             GpuSurfaceAcquireErrorCategory::Occluded
+        );
+    }
+
+    #[test]
+    fn lease_terminal_state_distinguishes_abandonment_from_presentation() {
+        let abandoned = test_lease();
+        let abandoned_clone = abandoned.clone();
+        abandoned.mark_abandoned();
+        assert_eq!(
+            abandoned_clone.disposition(),
+            GpuSurfaceLeaseDisposition::Abandoned
+        );
+        assert_eq!(
+            abandoned_clone.mark_presented(),
+            Err(GpuSurfaceLeaseDisposition::Abandoned)
+        );
+
+        let presented = test_lease();
+        let presented_clone = presented.clone();
+        assert_eq!(presented.mark_presented(), Ok(()));
+        presented.mark_abandoned();
+        assert_eq!(
+            presented_clone.disposition(),
+            GpuSurfaceLeaseDisposition::Presented
+        );
+        assert_eq!(
+            presented_clone.mark_presented(),
+            Err(GpuSurfaceLeaseDisposition::Presented)
         );
     }
 }
