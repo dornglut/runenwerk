@@ -14,10 +14,11 @@ use crate::plugins::gpu::{
     GpuSurfaceAlphaMode, GpuSurfaceCapabilities, GpuSurfaceConfiguration, GpuSurfaceError,
     GpuSurfaceErrorCategory, GpuSurfaceGeneration, GpuSurfaceHandle, GpuSurfaceId,
     GpuSurfaceLeaseOwner, GpuSurfaceLeaseReleaser, GpuSurfacePresentMode, GpuSurfaceResourceLease,
-    GpuSurfaceTarget, GpuTextureAspect, GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent,
-    GpuTextureFormat, GpuTextureHandle, GpuTextureInitialization, GpuTextureSubresourceRange,
-    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewHandle,
-    GpuWorkResourceId, GpuWorkResourceIdAllocator, allocate_surface_id, allocate_surface_lease_id,
+    GpuSurfaceTarget, GpuTextureAspect, GpuTextureDescriptor, GpuTextureDimension,
+    GpuTextureExtent, GpuTextureFormat, GpuTextureHandle, GpuTextureInitialization,
+    GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
+    GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator, allocate_surface_id,
+    allocate_surface_lease_id,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
@@ -397,9 +398,7 @@ fn release_abandoned_lease(record: &mut WgpuSurfaceRecord) {
         .active_lease
         .as_ref()
         .is_some_and(|lease| lease.owner.upgrade().is_none());
-    if abandoned
-        && let Some(active) = record.active_lease.take()
-    {
+    if abandoned && let Some(active) = record.active_lease.take() {
         active.lease.mark_abandoned();
     }
 }
@@ -1050,8 +1049,8 @@ mod tests {
         resource_ids: &mut GpuWorkResourceIdAllocator,
     ) -> GpuAcquiredSurfaceImage {
         let releaser: Arc<dyn GpuSurfaceLeaseReleaser> = Arc::new(TestLeaseReleaser);
-        let resources = build_acquired_surface_resources(surface, &configuration(), resource_ids)
-            .unwrap();
+        let resources =
+            build_acquired_surface_resources(surface, &configuration(), resource_ids).unwrap();
         let owner = GpuSurfaceLeaseOwner::new(resources.lease.clone(), Arc::downgrade(&releaser));
         GpuAcquiredSurfaceImage::new(
             surface,
