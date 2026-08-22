@@ -1,5 +1,5 @@
 use super::super::WgpuDeviceHealth;
-use super::{WgpuSurfaceLease, WgpuSurfaceRecord, WgpuSurfaceState, WgpuSurfaceStateInner};
+use super::{WgpuSurfaceLease, WgpuSurfaceState, WgpuSurfaceStateInner};
 use crate::plugins::gpu::{
     GpuContextAffinity, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory,
     GpuSurfaceResourceLease, GpuWorkResourceId,
@@ -68,15 +68,10 @@ fn validate_lease<'a>(
         ));
     }
     let active = record.active_lease.as_ref().ok_or_else(|| {
-        inactive_lease_error(
-            record,
-            lease,
-            "the surface has no active acquired-image lease",
-        )
+        inactive_lease_error(lease, "the surface has no active acquired-image lease")
     })?;
     if active.id != lease.lease_id() {
         return Err(inactive_lease_error(
-            record,
             lease,
             "surface-acquired resource does not name the current active lease",
         ));
@@ -122,19 +117,12 @@ fn validate_affinity(
 }
 
 fn inactive_lease_error(
-    record: &WgpuSurfaceRecord,
     lease: GpuSurfaceResourceLease,
     detail: &'static str,
 ) -> GpuSurfaceLeaseError {
-    let category = if record
-        .last_lease_id
-        .is_some_and(|last| lease.lease_id() <= last)
-    {
-        GpuSurfaceLeaseErrorCategory::AlreadyConsumed
-    } else {
-        GpuSurfaceLeaseErrorCategory::InvalidLease
-    };
-    lease_error(category, lease, detail)
+    // Abandon/drop is not presentation consumption. G7 Present will record its own terminal
+    // disposition so only a lease actually consumed by Present can report AlreadyConsumed.
+    lease_error(GpuSurfaceLeaseErrorCategory::InvalidLease, lease, detail)
 }
 
 fn ensure_lease_health(
