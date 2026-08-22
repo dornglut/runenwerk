@@ -1,0 +1,205 @@
+use super::super::surface::execution::{WgpuSurfaceLeaseGuard, WgpuSurfaceLeaseResource};
+use crate::plugins::gpu::{
+    GpuContext, GpuRealizedTexture, GpuRealizedTextureView, GpuSubmissionFailure,
+    GpuSubmissionFailureKind, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
+    GpuSurfaceResourceLease, GpuTextureAccessResource, GpuTextureHandle, GpuTextureViewHandle,
+    GpuWorkResourceId,
+};
+use std::collections::BTreeMap;
+use wgpu::{Texture, TextureView};
+
+#[derive(Debug, Clone)]
+pub(super) struct PreparedSurfaceUse {
+    lease: GpuSurfaceResourceLease,
+    resource: WgpuSurfaceLeaseResource,
+}
+
+impl PreparedSurfaceUse {
+    fn new(lease: GpuSurfaceResourceLease, resource: WgpuSurfaceLeaseResource) -> Self {
+        Self { lease, resource }
+    }
+
+    pub(super) fn lease(&self) -> &GpuSurfaceResourceLease {
+        &self.lease
+    }
+
+    pub(super) const fn resource(&self) -> WgpuSurfaceLeaseResource {
+        self.resource
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum PreparedTexture {
+    Realized(GpuRealizedTexture),
+    Surface(PreparedSurfaceUse),
+}
+
+impl PreparedTexture {
+    pub(super) fn surface_use(&self) -> Option<&PreparedSurfaceUse> {
+        match self {
+            Self::Realized(_) => None,
+            Self::Surface(surface) => Some(surface),
+        }
+    }
+
+    pub(super) fn resolve<'a>(
+        &'a self,
+        surface_guard: Option<&'a WgpuSurfaceLeaseGuard<'_>>,
+    ) -> Result<&'a Texture, GpuSubmissionFailure> {
+        match self {
+            Self::Realized(realized) => Ok(&realized.record.object),
+            Self::Surface(surface) => surface_guard
+                .ok_or_else(missing_surface_guard)?
+                .texture(surface.lease(), surface.resource().identity())
+                .map_err(GpuSubmissionFailure::from_surface_lease),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum PreparedTextureView {
+    Realized(GpuRealizedTextureView),
+    Surface(PreparedSurfaceUse),
+}
+
+pub(super) enum ResolvedTextureView<'a> {
+    Borrowed(&'a TextureView),
+    Owned(TextureView),
+}
+
+impl ResolvedTextureView<'_> {
+    pub(super) fn as_ref(&self) -> &TextureView {
+        match self {
+            Self::Borrowed(view) => view,
+            Self::Owned(view) => view,
+        }
+    }
+}
+
+impl PreparedTextureView {
+    pub(super) fn surface_use(&self) -> Option<&PreparedSurfaceUse> {
+        match self {
+            Self::Realized(_) => None,
+            Self::Surface(surface) => Some(surface),
+        }
+    }
+
+    pub(super) fn resolve<'a>(
+        &'a self,
+        surface_guard: Option<&'a WgpuSurfaceLeaseGuard<'_>>,
+    ) -> Result<ResolvedTextureView<'a>, GpuSubmissionFailure> {
+        match self {
+            Self::Realized(realized) => Ok(ResolvedTextureView::Borrowed(&realized.record.object)),
+            Self::Surface(surface) => surface_guard
+                .ok_or_else(missing_surface_guard)?
+                .create_default_view(surface.lease(), surface.resource().identity())
+                .map(ResolvedTextureView::Owned)
+                .map_err(GpuSubmissionFailure::from_surface_lease),
+        }
+    }
+}
+
+pub(super) fn prepare_texture(
+    context: &GpuContext,
+    cache: &mut BTreeMap<GpuWorkResourceId, PreparedTexture>,
+    handle: &GpuTextureHandle,
+) -> Result<PreparedTexture, GpuSubmissionPreparationError> {
+    let identity = handle.diagnostic_identity();
+    if let Some(prepared) = cache.get(&identity) {
+        return Ok(prepared.clone());
+    }
+
+    let prepared = if let Some(lease) = handle.surface_lease() {
+        let resource = WgpuSurfaceLeaseResource::Texture(identity);
+        context
+            .backend
+            .surfaces
+            .validate_execution_lease(&lease, resource, &context.backend.health)
+            .map_err(GpuSubmissionPreparationError::from_surface_lease)?;
+        PreparedTexture::Surface(PreparedSurfaceUse::new(lease, resource))
+    } else {
+        let realized = context.realize_texture(handle).map_err(|error| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
+                error.to_string(),
+            )
+        })?;
+        PreparedTexture::Realized(realized)
+    };
+    cache.insert(identity, prepared.clone());
+    Ok(prepared)
+}
+
+pub(super) fn prepare_texture_view(
+    context: &GpuContext,
+    texture_cache: &mut BTreeMap<GpuWorkResourceId, PreparedTexture>,
+    view_cache: &mut BTreeMap<GpuWorkResourceId, PreparedTextureView>,
+    handle: &GpuTextureViewHandle,
+) -> Result<PreparedTextureView, GpuSubmissionPreparationError> {
+    let identity = handle.diagnostic_identity();
+    if let Some(prepared) = view_cache.get(&identity) {
+        return Ok(prepared.clone());
+    }
+
+    let prepared = if let Some(lease) = handle.surface_lease() {
+        let resource = WgpuSurfaceLeaseResource::TextureView(identity);
+        context
+            .backend
+            .surfaces
+            .validate_execution_lease(&lease, resource, &context.backend.health)
+            .map_err(GpuSubmissionPreparationError::from_surface_lease)?;
+        PreparedTextureView::Surface(PreparedSurfaceUse::new(lease, resource))
+    } else {
+        let parent = prepare_texture(context, texture_cache, handle.descriptor().texture())?;
+        let PreparedTexture::Realized(parent) = parent else {
+            return Err(GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::InternalInvariant,
+                "ordinary texture view unexpectedly resolved to a surface acquisition lease",
+            ));
+        };
+        let realized = context.realize_texture_view(handle, &parent).map_err(|error| {
+            GpuSubmissionPreparationError::new(
+                GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
+                error.to_string(),
+            )
+        })?;
+        PreparedTextureView::Realized(realized)
+    };
+    view_cache.insert(identity, prepared.clone());
+    Ok(prepared)
+}
+
+pub(super) fn prepare_present_source(
+    context: &GpuContext,
+    source: &GpuTextureAccessResource,
+) -> Result<PreparedSurfaceUse, GpuSubmissionPreparationError> {
+    let (lease, resource) = match source {
+        GpuTextureAccessResource::Texture(texture) => (
+            texture.surface_lease(),
+            WgpuSurfaceLeaseResource::Texture(texture.diagnostic_identity()),
+        ),
+        GpuTextureAccessResource::TextureView(view) => (
+            view.surface_lease(),
+            WgpuSurfaceLeaseResource::TextureView(view.diagnostic_identity()),
+        ),
+    };
+    let lease = lease.ok_or_else(|| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::UnsupportedOperation,
+            "GpuPresentOperation requires an active SurfaceAcquired texture or its explicit acquired default view",
+        )
+    })?;
+    context
+        .backend
+        .surfaces
+        .validate_execution_lease(&lease, resource, &context.backend.health)
+        .map_err(GpuSubmissionPreparationError::from_surface_lease)?;
+    Ok(PreparedSurfaceUse::new(lease, resource))
+}
+
+fn missing_surface_guard() -> GpuSubmissionFailure {
+    GpuSubmissionFailure::new(
+        GpuSubmissionFailureKind::InternalInvariant,
+        "surface-acquired execution resource reached encoding without the validated G7 lease guard",
+    )
+}
