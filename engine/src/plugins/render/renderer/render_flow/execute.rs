@@ -8,6 +8,7 @@ use super::{
     logical_timing::LogicalGpuPassTimingPlan,
     occurrences::expand_render_pass_occurrences,
 };
+use super::super::dynamic_targets::RendererPreparedDynamicTextureUploadBatch;
 use crate::plugins::gpu::GpuWorkOperation;
 use crate::plugins::render::{
     PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, RenderGpuWorkPayload, RenderPassId,
@@ -23,6 +24,7 @@ pub enum FeaturePassAction {
 /// phase. It holds no raw device or queue reference.
 struct RendererRealizationBatch<'a> {
     packet: RendererPreparedPacket,
+    dynamic_texture_uploads: RendererPreparedDynamicTextureUploadBatch,
     capture_runtime: FrameCaptureRuntime,
     invocations: Vec<RealizedFlowInvocation<'a>>,
     final_captures: Vec<PreparedCaptureReadback>,
@@ -93,7 +95,8 @@ impl Renderer {
         timings.preflight_ms = preflight_start.elapsed().as_secs_f32() * 1000.0;
 
         let flow_encode_start = Instant::now();
-        // Phase one: all G4C1/G4C2/G4C3 realization completes without a raw device/queue loan.
+        // Phase one: all G4C1/G4C2/G4C3 realization plus renderer-owned logical G5 operation
+        // formation completes without a raw device/queue loan.
         let mut batch = self.realize_render_batch(
             context,
             frame_texture,
@@ -108,8 +111,9 @@ impl Renderer {
         )?;
 
         let encode_submit_start = Instant::now();
-        // Phase two: one non-reentrant raw loan covers only the temporary pre-G5B physical
-        // realization path. Generic GPU meaning is no longer reconstructed here.
+        // Phase two: one non-reentrant raw loan covers the temporary physical bridge path. Work
+        // already carrying canonical G5 operations is only physically applied here; ordinary
+        // renderer pending uploads remain the next bounded G5C1 residual.
         {
             let _span = tracing::info_span!("renderer.encode_submit").entered();
             let loan = context.current_render_device_queue();
@@ -119,10 +123,10 @@ impl Renderer {
                     label: Some("engine_render_encoder"),
                 });
             std::mem::take(&mut batch.packet.pending_operations).apply(context, loan.queue)?;
-            let upload_report = self.dynamic_texture_targets.apply_uploads(
+            let upload_report = self.dynamic_texture_targets.apply_prepared_uploads(
                 context,
                 loan.queue,
-                &prepared_frame.dynamic_texture_uploads,
+                std::mem::take(&mut batch.dynamic_texture_uploads),
             );
             for diagnostic in &upload_report.diagnostics {
                 tracing::warn!(
@@ -192,6 +196,9 @@ impl Renderer {
             &prepared_frame.dynamic_texture_targets,
             &dynamic_target_history_signatures,
         )?;
+        let dynamic_texture_uploads = self
+            .dynamic_texture_targets
+            .prepare_uploads(&prepared_frame.dynamic_texture_uploads);
         let (viewport, product_surface) = self.realize_ui_dynamic_bind_groups(
             context,
             &packet.prepared_ui,
@@ -459,6 +466,7 @@ impl Renderer {
         }
         Ok(RendererRealizationBatch {
             packet,
+            dynamic_texture_uploads,
             capture_runtime,
             invocations,
             final_captures,
