@@ -4,9 +4,10 @@ use super::render_flow::{
 };
 use super::resource_descriptors::{texture_descriptor, whole_texture_view_descriptor};
 use crate::plugins::gpu::{
-    CurrentRenderTextureUploadTerminal, GpuContext, GpuRealizedTexture, GpuRealizedTextureView,
-    GpuResourceLifetime, GpuTextureFormat, GpuTextureHandle, GpuTextureUsage, GpuTextureViewHandle,
-    GpuWorkResourceIdAllocator,
+    CurrentRenderTextureUploadTerminal, GpuContext, GpuCopyExtent, GpuRealizedTexture,
+    GpuRealizedTextureView, GpuResourceLifetime, GpuTextureAspect, GpuTextureCopyRegion,
+    GpuTextureFormat, GpuTextureHandle, GpuTextureOrigin, GpuTextureUsage, GpuTextureViewHandle,
+    GpuTransferRegion, GpuUploadOperation, GpuWorkResourceIdAllocator, PreparedGpuData, TransferData,
 };
 use crate::plugins::render::{
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
@@ -209,18 +210,15 @@ impl RendererDynamicTextureTargetCache {
                 target.size.1
             ));
         }
+
         let bytes = upload_bytes_for_gpu(upload);
-        context
-            .current_render_execution_bridge()
-            .for_texture_upload(
-                &target.realized,
-                UploadDynamicTexture {
-                    queue,
-                    upload,
-                    bytes: &bytes,
-                },
-            )
+        let operation = canonical_dynamic_texture_upload(target, upload, bytes)
             .map_err(|error| error.to_string())?;
+        apply_canonical_dynamic_texture_upload(context, queue, &target.realized, &operation)?;
+
+        // The legacy path advances product-generation evidence only after the physical queue write
+        // succeeds. G5C1 must preserve the same acceptance boundary when this operation joins the
+        // frame submission: authoring/preparation alone must never advance this state.
         target.uploaded_product_generation = Some(upload.product_generation);
         Ok(())
     }
@@ -316,10 +314,83 @@ impl RendererDynamicTextureTargetCache {
     }
 }
 
+fn canonical_dynamic_texture_upload(
+    target: &RendererDynamicTextureTarget,
+    upload: &RenderDynamicTextureUploadDescriptor,
+    bytes: Vec<u8>,
+) -> std::result::Result<GpuUploadOperation, Box<dyn std::error::Error>> {
+    let region = GpuTextureCopyRegion::new(
+        &target._handle,
+        0,
+        GpuTextureOrigin::new(upload.origin_x, upload.origin_y, 0),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(upload.width, upload.height, 1)?,
+    )?;
+    let common = target._handle.descriptor().common();
+    let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
+        format!("dynamic texture upload {}", upload.target_key),
+        bytes.as_slice(),
+        common.provenance().clone(),
+    )?;
+    Ok(GpuUploadOperation::new(region.into(), payload)?)
+}
+
+fn apply_canonical_dynamic_texture_upload(
+    context: &GpuContext,
+    queue: &Queue,
+    realized: &GpuRealizedTexture,
+    operation: &GpuUploadOperation,
+) -> std::result::Result<(), String> {
+    let GpuTransferRegion::Texture(region) = operation.destination() else {
+        return Err("dynamic texture upload lowered to a non-texture destination".to_string());
+    };
+    let extent = region.extent();
+    let bytes_per_row = extent
+        .width()
+        .checked_mul(region.texture().descriptor().format().bytes_per_texel())
+        .ok_or_else(|| "dynamic texture upload row byte length overflowed".to_string())?;
+    let aspect = match region.aspect() {
+        GpuTextureAspect::All | GpuTextureAspect::Color => TextureAspect::All,
+        GpuTextureAspect::DepthOnly => TextureAspect::DepthOnly,
+        GpuTextureAspect::StencilOnly => TextureAspect::StencilOnly,
+    };
+    let origin = region.origin();
+
+    context
+        .current_render_execution_bridge()
+        .for_texture_upload(
+            realized,
+            UploadDynamicTexture {
+                queue,
+                bytes: operation.payload().as_bytes(),
+                mip_level: region.mip_level(),
+                origin: Origin3d {
+                    x: origin.x(),
+                    y: origin.y(),
+                    z: origin.z(),
+                },
+                aspect,
+                bytes_per_row,
+                rows_per_image: extent.height(),
+                size: Extent3d {
+                    width: extent.width(),
+                    height: extent.height(),
+                    depth_or_array_layers: extent.depth_or_layers(),
+                },
+            },
+        )
+        .map_err(|error| error.to_string())
+}
+
 struct UploadDynamicTexture<'a> {
     queue: &'a Queue,
-    upload: &'a RenderDynamicTextureUploadDescriptor,
     bytes: &'a [u8],
+    mip_level: u32,
+    origin: Origin3d,
+    aspect: TextureAspect,
+    bytes_per_row: u32,
+    rows_per_image: u32,
+    size: Extent3d,
 }
 
 impl CurrentRenderTextureUploadTerminal for UploadDynamicTexture<'_> {
@@ -327,25 +398,17 @@ impl CurrentRenderTextureUploadTerminal for UploadDynamicTexture<'_> {
         self.queue.write_texture(
             TexelCopyTextureInfo {
                 texture,
-                mip_level: 0,
-                origin: Origin3d {
-                    x: self.upload.origin_x,
-                    y: self.upload.origin_y,
-                    z: 0,
-                },
-                aspect: TextureAspect::All,
+                mip_level: self.mip_level,
+                origin: self.origin,
+                aspect: self.aspect,
             },
             self.bytes,
             TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(self.upload.width.saturating_mul(4).max(4)),
-                rows_per_image: Some(self.upload.height.max(1)),
+                bytes_per_row: Some(self.bytes_per_row),
+                rows_per_image: Some(self.rows_per_image),
             },
-            Extent3d {
-                width: self.upload.width,
-                height: self.upload.height,
-                depth_or_array_layers: 1,
-            },
+            self.size,
         );
     }
 }
