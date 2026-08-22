@@ -170,12 +170,14 @@ pub(super) fn prepare_texture_view(
                 "ordinary texture view unexpectedly resolved to a surface acquisition lease",
             ));
         };
-        let realized = context.realize_texture_view(handle, &parent).map_err(|error| {
-            GpuSubmissionPreparationError::new(
-                GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
-                error.to_string(),
-            )
-        })?;
+        let realized = context
+            .realize_texture_view(handle, &parent)
+            .map_err(|error| {
+                GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
+                    error.to_string(),
+                )
+            })?;
         PreparedTextureView::Realized(realized)
     };
     view_cache.insert(identity, prepared.clone());
