@@ -56,17 +56,22 @@ impl WgpuSurfaceState {
 
     pub(crate) fn execution_lease_guard(
         &self,
+        representative: GpuSurfaceResourceLease,
         health: &WgpuDeviceHealth,
     ) -> Result<WgpuSurfaceLeaseGuard<'_>, GpuSurfaceLeaseError> {
+        ensure_lease_health(health, representative)?;
+        validate_affinity(self.affinity, representative)?;
         let mut inner = self.shared.inner.lock().map_err(|_| {
-            unavailable_without_lease(self.affinity, &self.shared)
+            lease_error(
+                GpuSurfaceLeaseErrorCategory::ContextOrDeviceUnavailableOrLost,
+                representative,
+                "surface lease execution authority is unavailable",
+            )
         })?;
         for record in inner.records.values_mut() {
             super::release_abandoned_lease(record);
         }
-        if let Some(fault) = health.terminal_fault() {
-            return Err(unavailable_for_first_record(&inner, fault.detail));
-        }
+        ensure_lease_health(health, representative)?;
         Ok(WgpuSurfaceLeaseGuard {
             affinity: self.affinity,
             health,
@@ -120,11 +125,20 @@ impl WgpuSurfaceLeaseGuard<'_> {
             .inner
             .records
             .get_mut(&lease.surface().id())
-            .expect("validated surface lease retains its owner record");
-        let active = record
-            .active_lease
-            .take()
-            .expect("validated surface lease retains its active physical image");
+            .ok_or_else(|| {
+                lease_error(
+                    GpuSurfaceLeaseErrorCategory::UnknownSurface,
+                    lease,
+                    "validated surface owner disappeared before Present consumption",
+                )
+            })?;
+        let active = record.active_lease.take().ok_or_else(|| {
+            inactive_lease_error(
+                record,
+                lease,
+                "validated surface lease disappeared before Present consumption",
+            )
+        })?;
         Ok(active.texture)
     }
 }
@@ -237,44 +251,4 @@ fn lease_error(
     detail: impl Into<String>,
 ) -> GpuSurfaceLeaseError {
     GpuSurfaceLeaseError::new(category, lease.surface().id(), lease.lease_id(), detail)
-}
-
-fn unavailable_without_lease(
-    affinity: GpuContextAffinity,
-    shared: &super::WgpuSurfaceShared,
-) -> GpuSurfaceLeaseError {
-    let inner = shared
-        .inner
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    unavailable_for_first_record(
-        &inner,
-        format!(
-            "surface lease execution authority is unavailable for context {:?}",
-            affinity.context()
-        ),
-    )
-}
-
-fn unavailable_for_first_record(
-    inner: &WgpuSurfaceStateInner,
-    detail: impl Into<String>,
-) -> GpuSurfaceLeaseError {
-    let (surface, lease_id) = inner
-        .records
-        .iter()
-        .find_map(|(surface, record)| {
-            record
-                .active_lease
-                .as_ref()
-                .map(|lease| (*surface, lease.id))
-                .or_else(|| record.last_lease_id.map(|lease| (*surface, lease)))
-        })
-        .expect("surface lease authority errors require an existing surface lease");
-    GpuSurfaceLeaseError::new(
-        GpuSurfaceLeaseErrorCategory::ContextOrDeviceUnavailableOrLost,
-        surface,
-        lease_id,
-        detail,
-    )
 }
