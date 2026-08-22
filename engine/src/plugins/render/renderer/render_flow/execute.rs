@@ -1,3 +1,4 @@
+use super::super::dynamic_targets::RendererPreparedDynamicTextureUploadBatch;
 use super::*;
 use super::{
     canonical_work::{
@@ -8,7 +9,6 @@ use super::{
     logical_timing::LogicalGpuPassTimingPlan,
     occurrences::expand_render_pass_occurrences,
 };
-use super::super::dynamic_targets::RendererPreparedDynamicTextureUploadBatch;
 use crate::plugins::gpu::GpuWorkOperation;
 use crate::plugins::render::{
     PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, RenderGpuWorkPayload, RenderPassId,
@@ -1460,7 +1460,7 @@ impl Renderer {
                             capture_point: RenderCapturePointIdentity {
                                 flow_id: "frame".to_string(),
                                 pass_id: "frame.final".to_string(),
-                                stage: CaptureStage::Final,
+                                stage,
                                 resource_id: SURFACE_COLOR_RESOURCE_LABEL.to_string(),
                                 texture_class: selector.texture_class,
                             },
