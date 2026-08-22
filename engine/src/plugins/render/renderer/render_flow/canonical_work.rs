@@ -33,19 +33,28 @@ pub(super) struct CanonicalPassProjection<'a> {
     pub(super) has_capture_work: bool,
 }
 
-pub(super) enum CanonicalInvocationPreparation {
-    Prepared(Box<PreparedRenderWorkPlan>),
+pub(super) enum CanonicalInvocationResolution {
+    Resolved {
+        nodes: Vec<ResolvedRenderGpuWorkNode>,
+        occurrences: Vec<RenderGpuWorkOccurrenceId>,
+    },
     /// The invocation contains at least one operation whose durable logical identity/semantics is
-    /// intentionally deferred to G7A/G5C. No partial G3 graph is retained in this case.
+    /// intentionally deferred to G7A/G5C. No partial canonical node set is retained in this case.
     PreG7Residual,
 }
 
-/// Prepare one renderer invocation as a single canonical G3 graph, or retain the whole invocation
-/// on the explicit pre-G7 residual path.
+pub(super) enum CanonicalInvocationPreparation {
+    Prepared(Box<PreparedRenderWorkPlan>),
+    /// Transitional compatibility for the current caller. G5C1 removes this per-invocation
+    /// preparation boundary when the realized frame batch owns one G3 graph.
+    PreG7Residual,
+}
+
+/// Transitional per-invocation preparation wrapper.
 ///
-/// This function never returns a partial graph. Surface/UI/present/dynamic-target/capture work and
-/// genuine copy no-work currently keep the complete invocation residual so RunenRender cannot
-/// accidentally become a second scheduler around a partial `GpuPreparedWorkGraph`.
+/// The durable G5C1 path is `resolve_canonical_invocation` followed by one frame-level
+/// `prepare_render_gpu_frame_work` call. This wrapper remains only so each dependency-ordered
+/// checkpoint compiles before the large renderer caller cutover lands in the same PR.
 pub(super) fn prepare_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
@@ -55,12 +64,54 @@ pub(super) fn prepare_canonical_invocation(
     passes: &[CanonicalPassProjection<'_>],
     timing: Option<&LogicalGpuPassTiming>,
 ) -> Result<CanonicalInvocationPreparation> {
+    let mut maximum_occurrence = 0_u64;
+    match resolve_canonical_invocation(
+        context,
+        flow,
+        flow_inputs,
+        runtime_resources,
+        projected_uploads,
+        passes,
+        timing,
+        &mut maximum_occurrence,
+    )? {
+        CanonicalInvocationResolution::Resolved { nodes, .. } => {
+            Ok(CanonicalInvocationPreparation::Prepared(Box::new(
+                prepare_render_gpu_work(flow, nodes)?,
+            )))
+        }
+        CanonicalInvocationResolution::PreG7Residual => {
+            Ok(CanonicalInvocationPreparation::PreG7Residual)
+        }
+    }
+}
+
+/// Resolves one renderer invocation into execution-complete canonical GPU occurrences without
+/// preparing a G3 graph.
+///
+/// G5C1 calls this for every invocation participating in one physical frame/surface submission,
+/// using one shared `maximum_occurrence`. Only after every invocation resolves canonically may the
+/// caller prepare one bounded frame graph. If any invocation is residual, the caller must discard
+/// all resolved canonical nodes and keep the complete frame on the residual path.
+pub(super) fn resolve_canonical_invocation(
+    context: &GpuContext,
+    flow: &CompiledRenderFlowPlan,
+    flow_inputs: &PreparedFlowInputs,
+    runtime_resources: &FlowRuntimeResources,
+    projected_uploads: &[RealizedLogicalBufferUpload],
+    passes: &[CanonicalPassProjection<'_>],
+    timing: Option<&LogicalGpuPassTiming>,
+    maximum_occurrence: &mut u64,
+) -> Result<CanonicalInvocationResolution> {
     if passes.iter().any(|pass| pass.has_capture_work) {
-        return Ok(CanonicalInvocationPreparation::PreG7Residual);
+        return Ok(CanonicalInvocationResolution::PreG7Residual);
     }
 
     let mut nodes = Vec::<ResolvedRenderGpuWorkNode>::new();
+    let mut occurrences = Vec::<RenderGpuWorkOccurrenceId>::new();
     for upload in projected_uploads {
+        *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
+        occurrences.push(upload.occurrence);
         nodes.push(ResolvedRenderGpuWorkNode::upload(
             upload.occurrence,
             occurrence_label(flow, "upload", upload.occurrence)?,
@@ -69,17 +120,12 @@ pub(super) fn prepare_canonical_invocation(
         ));
     }
 
-    let mut maximum_occurrence = projected_uploads
-        .iter()
-        .map(|upload| upload.occurrence.raw())
-        .max()
-        .unwrap_or(0);
-
     for projected in passes {
-        maximum_occurrence = maximum_occurrence.max(projected.occurrence.raw());
+        *maximum_occurrence = (*maximum_occurrence).max(projected.occurrence.raw());
         let mut pass_control = projected.control_order_after.to_vec();
         if let Some(upload) = projected.fixed_step_upload {
-            maximum_occurrence = maximum_occurrence.max(upload.occurrence.raw());
+            *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
+            occurrences.push(upload.occurrence);
             nodes.push(ResolvedRenderGpuWorkNode::upload(
                 upload.occurrence,
                 occurrence_label(flow, "fixed-step-upload", upload.occurrence)?,
@@ -117,7 +163,7 @@ pub(super) fn prepare_canonical_invocation(
                     timing,
                 )?
                 else {
-                    return Ok(CanonicalInvocationPreparation::PreG7Residual);
+                    return Ok(CanonicalInvocationResolution::PreG7Residual);
                 };
                 operation
             }
@@ -125,16 +171,17 @@ pub(super) fn prepare_canonical_invocation(
                 match project_copy_operation(runtime_resources, pass)? {
                     ProjectedCopyOperation::Canonical(operation) => *operation,
                     ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
-                        return Ok(CanonicalInvocationPreparation::PreG7Residual);
+                        return Ok(CanonicalInvocationResolution::PreG7Residual);
                     }
                 }
             }
             CompiledPassExecutionPlan::Present(_)
             | CompiledPassExecutionPlan::BuiltinUiComposite(_) => {
-                return Ok(CanonicalInvocationPreparation::PreG7Residual);
+                return Ok(CanonicalInvocationResolution::PreG7Residual);
             }
         };
 
+        occurrences.push(projected.occurrence);
         nodes.push(ResolvedRenderGpuWorkNode::pass(
             projected.occurrence,
             occurrence_label(flow, "pass", projected.occurrence)?,
@@ -151,14 +198,16 @@ pub(super) fn prepare_canonical_invocation(
             timing.resolve_buffer(),
             timing.readback_buffer(),
         )?;
-        let resolve_occurrence = allocate_aux_occurrence(&mut maximum_occurrence)?;
+        let resolve_occurrence = allocate_aux_occurrence(maximum_occurrence)?;
+        occurrences.push(resolve_occurrence);
         nodes.push(ResolvedRenderGpuWorkNode::timing_resolve(
             resolve_occurrence,
             occurrence_label(flow, "timing-resolve", resolve_occurrence)?,
             tail.resolve().clone(),
             [],
         ));
-        let readback_occurrence = allocate_aux_occurrence(&mut maximum_occurrence)?;
+        let readback_occurrence = allocate_aux_occurrence(maximum_occurrence)?;
+        occurrences.push(readback_occurrence);
         nodes.push(ResolvedRenderGpuWorkNode::timing_readback_copy(
             readback_occurrence,
             occurrence_label(flow, "timing-readback-copy", readback_occurrence)?,
@@ -168,12 +217,10 @@ pub(super) fn prepare_canonical_invocation(
     }
 
     if nodes.is_empty() {
-        return Ok(CanonicalInvocationPreparation::PreG7Residual);
+        return Ok(CanonicalInvocationResolution::PreG7Residual);
     }
 
-    Ok(CanonicalInvocationPreparation::Prepared(Box::new(
-        prepare_render_gpu_work(flow, nodes)?,
-    )))
+    Ok(CanonicalInvocationResolution::Resolved { nodes, occurrences })
 }
 
 fn timestamp_projection(
