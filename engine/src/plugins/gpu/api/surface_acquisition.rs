@@ -481,6 +481,18 @@ impl fmt::Debug for GpuAcquiredSurfaceImage {
 mod tests {
     use super::*;
     use crate::plugins::gpu::{GpuContextId, GpuDeviceGeneration, allocate_surface_id};
+    use std::sync::atomic::AtomicUsize;
+
+    #[derive(Debug, Default)]
+    struct RecordingLeaseReleaser {
+        releases: AtomicUsize,
+    }
+
+    impl GpuSurfaceLeaseReleaser for RecordingLeaseReleaser {
+        fn release(&self, _lease: &GpuSurfaceResourceLease) {
+            self.releases.fetch_add(1, Ordering::SeqCst);
+        }
+    }
 
     fn test_lease() -> GpuSurfaceResourceLease {
         let context = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
@@ -491,6 +503,15 @@ mod tests {
             GpuSurfaceGeneration::first(),
         );
         GpuSurfaceResourceLease::new(surface, allocate_surface_lease_id(surface.id()).unwrap())
+    }
+
+    fn test_owner(
+        lease: &GpuSurfaceResourceLease,
+        releaser: &Arc<RecordingLeaseReleaser>,
+    ) -> (Arc<GpuSurfaceLeaseOwner>, Arc<dyn GpuSurfaceLeaseReleaser>) {
+        let releaser_dyn: Arc<dyn GpuSurfaceLeaseReleaser> = releaser.clone();
+        let owner = GpuSurfaceLeaseOwner::new(lease.clone(), Arc::downgrade(&releaser_dyn));
+        (owner, releaser_dyn)
     }
 
     #[test]
@@ -527,5 +548,30 @@ mod tests {
             presented_clone.mark_presented(),
             Err(GpuSurfaceLeaseDisposition::Presented)
         );
+    }
+
+    #[test]
+    fn lease_owner_drop_abandons_and_releases_exactly_once() {
+        let lease = test_lease();
+        let releaser = Arc::new(RecordingLeaseReleaser::default());
+        let (owner, _releaser_dyn) = test_owner(&lease, &releaser);
+
+        drop(owner);
+
+        assert_eq!(lease.disposition(), GpuSurfaceLeaseDisposition::Abandoned);
+        assert_eq!(releaser.releases.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn lease_owner_drop_after_present_preserves_presented_state() {
+        let lease = test_lease();
+        let releaser = Arc::new(RecordingLeaseReleaser::default());
+        let (owner, _releaser_dyn) = test_owner(&lease, &releaser);
+        assert_eq!(lease.mark_presented(), Ok(()));
+
+        drop(owner);
+
+        assert_eq!(lease.disposition(), GpuSurfaceLeaseDisposition::Presented);
+        assert_eq!(releaser.releases.load(Ordering::SeqCst), 1);
     }
 }
