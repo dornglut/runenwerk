@@ -36,7 +36,7 @@ pub enum RenderGpuWorkAdapterError {
         occurrence: RenderGpuWorkOccurrenceId,
     },
     #[error(
-        "resolved render control order references occurrence '{occurrence}' that is absent from this invocation's GPU work"
+        "resolved render control order references occurrence '{occurrence}' that is absent from this bounded render work"
     )]
     MissingOrderedOccurrence {
         occurrence: RenderGpuWorkOccurrenceId,
@@ -286,7 +286,7 @@ impl RenderGpuWorkSidecar {
     }
 }
 
-/// Per-invocation G3 work plus its temporary render execution sidecar.
+/// One bounded render G3 work authority plus its temporary execution sidecar.
 ///
 /// Prepared node IDs are process-local references only. This value must never be persisted or
 /// used as a stable cache, replay, wire, or cross-process key.
@@ -327,7 +327,33 @@ struct AuthoredRenderFragment {
     pending: Vec<(GpuWorkNodeId, RenderGpuWorkPayload)>,
 }
 
-/// Prepares one renderer invocation from execution-complete logical GPU occurrences.
+/// Transitional per-invocation entry point retained until G5C1 moves its caller to the bounded
+/// frame authority below.
+pub(crate) fn prepare_render_gpu_work(
+    plan: &CompiledRenderFlowPlan,
+    nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
+) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
+    prepare_resolved_render_gpu_work(
+        GpuResourceLabel::new(format!("render.flow.{}.work", plan.flow_id))?,
+        nodes,
+    )
+}
+
+/// Prepares one bounded frame/surface render submission from execution-complete logical GPU
+/// occurrences.
+///
+/// Every canonical occurrence that currently shares one physical renderer submission must enter
+/// this one fragment in deterministic frame execution sequence. That gives G3 direct authority over
+/// cross-invocation RAW/WAR/WAW hazards and initialization without using fragment collection order
+/// or reconstructing resource dependencies in RunenRender.
+pub(crate) fn prepare_render_gpu_frame_work(
+    graph_label: GpuResourceLabel,
+    nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
+) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
+    prepare_resolved_render_gpu_work(graph_label, nodes)
+}
+
+/// Prepares one bounded render work set from execution-complete logical GPU occurrences.
 ///
 /// All kind-preserving resources are discovered from operation-derived accesses. Every non-query
 /// resource is supplied to G3R with descriptor initialization coverage, so an uninitialized
@@ -339,14 +365,13 @@ struct AuthoredRenderFragment {
 /// adapter therefore performs one provisional preparation without control edges, consumes G3's
 /// own dependency result, and retains only unsatisfied render-control requirements for the final
 /// preparation. No access intersection or hazard rule is duplicated in RunenRender.
-pub(crate) fn prepare_render_gpu_work(
-    plan: &CompiledRenderFlowPlan,
+fn prepare_resolved_render_gpu_work(
+    graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
 ) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
     validate_occurrences(&nodes)?;
 
-    let graph_label = GpuResourceLabel::new(format!("render.flow.{}.work", plan.flow_id))?;
     let graph_provenance = GpuResourceProvenance::new(graph_label.clone(), None, None);
     let resources = collect_operation_resources(&nodes)?;
     let inputs = resources
@@ -499,7 +524,7 @@ fn author_render_fragment(
                             Some(graph_provenance.clone()),
                         ),
                         GpuWorkAuthoringCause::UnknownIdentity,
-                        "include every render control predecessor as an execution occurrence in this invocation",
+                        "include every render control predecessor as an execution occurrence in this bounded render work",
                     )
                 })?;
                 let after = occurrence_nodes.get(after_occurrence).ok_or_else(|| {
@@ -513,7 +538,7 @@ fn author_render_fragment(
                             Some(graph_provenance.clone()),
                         ),
                         GpuWorkAuthoringCause::UnknownIdentity,
-                        "include every render control successor as an execution occurrence in this invocation",
+                        "include every render control successor as an execution occurrence in this bounded render work",
                     )
                 })?;
                 builder.add_explicit_order(GpuExplicitOrder::new(
@@ -640,5 +665,150 @@ fn declared_resource_for_access(access: &GpuResourceAccess) -> GpuResourceRef {
         },
         GpuResourceAccess::Query(access) => GpuResourceRef::QuerySet(access.query_set().clone()),
         GpuResourceAccess::Sampler(access) => GpuResourceRef::Sampler(access.sampler().clone()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::num::NonZeroU64;
+
+    fn label(value: &str) -> GpuResourceLabel {
+        GpuResourceLabel::new(value).expect("test label should be valid")
+    }
+
+    fn common(value: &str) -> GpuResourceCommon {
+        let resource_label = label(value);
+        GpuResourceCommon::owned(
+            resource_label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(resource_label, None, None),
+        )
+        .expect("test resource common should be valid")
+    }
+
+    fn transfer_payload(name: &str, byte_len: usize) -> PreparedGpuData<TransferData> {
+        PreparedGpuData::from_pod_transfer(
+            name,
+            &vec![0_u8; byte_len],
+            GpuResourceProvenance::new(label(name), None, None),
+        )
+        .expect("test transfer payload should be valid")
+    }
+
+    fn buffer(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        name: &str,
+        byte_len: u64,
+    ) -> GpuBufferHandle {
+        let resource_label = label(name);
+        allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common(name),
+                    byte_len,
+                    GpuBufferUsages::new(
+                        &resource_label,
+                        [GpuBufferUsage::CopySource, GpuBufferUsage::CopyDestination],
+                    )
+                    .expect("test buffer usage should be valid"),
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .expect("test buffer descriptor should be valid"),
+            )
+            .expect("test buffer handle should allocate")
+    }
+
+    fn whole_region(buffer: &GpuBufferHandle, byte_len: u64) -> GpuBufferRegion {
+        GpuBufferRegion::new(
+            buffer,
+            GpuBufferRange::new(buffer, 0, byte_len).expect("test range should be valid"),
+        )
+        .expect("test region should be valid")
+    }
+
+    #[test]
+    fn frame_work_preparation_owns_cross_invocation_raw_and_initialization() {
+        let mut allocator =
+            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(701).unwrap());
+        let shared = buffer(&mut allocator, "frame shared", 16);
+        let copied = buffer(&mut allocator, "frame copied", 16);
+        let independent = buffer(&mut allocator, "frame independent", 16);
+
+        let producer = RenderGpuWorkOccurrenceId::new(1);
+        let consumer = RenderGpuWorkOccurrenceId::new(2);
+        let unrelated = RenderGpuWorkOccurrenceId::new(3);
+        let nodes = [
+            ResolvedRenderGpuWorkNode::upload(
+                producer,
+                label("invocation a upload"),
+                GpuUploadOperation::new(
+                    whole_region(&shared, 16).into(),
+                    transfer_payload("invocation a payload", 16),
+                )
+                .expect("producer upload should be valid"),
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::pass(
+                consumer,
+                label("invocation b read"),
+                GpuWorkOperation::Copy(
+                    GpuCopyOperation::buffer_to_buffer(
+                        whole_region(&shared, 16),
+                        whole_region(&copied, 16),
+                    )
+                    .expect("consumer copy should be valid"),
+                ),
+                GpuExecutionPreference::TransferPreferred,
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::upload(
+                unrelated,
+                label("invocation c independent"),
+                GpuUploadOperation::new(
+                    whole_region(&independent, 16).into(),
+                    transfer_payload("invocation c payload", 16),
+                )
+                .expect("independent upload should be valid"),
+                [],
+            ),
+        ];
+
+        let prepared = prepare_render_gpu_frame_work(label("render frame test work"), nodes)
+            .expect("bounded frame work should prepare");
+        let by_occurrence = prepared
+            .ordered_payloads()
+            .expect("sidecar should cover every prepared node")
+            .into_iter()
+            .map(|(node, payload)| (payload.occurrence(), node))
+            .collect::<BTreeMap<_, _>>();
+        let producer_node = by_occurrence[&producer];
+        let consumer_node = by_occurrence[&consumer];
+        let unrelated_node = by_occurrence[&unrelated];
+
+        assert!(prepared.graph().dependencies().iter().any(|dependency| {
+            dependency.before() == producer_node && dependency.after() == consumer_node
+        }));
+        assert!(prepared.graph().dependencies().iter().all(|dependency| {
+            dependency.before() != unrelated_node && dependency.after() != unrelated_node
+        }));
+
+        for buffer in [&shared, &copied, &independent] {
+            let initialization = prepared
+                .graph()
+                .initialization()
+                .iter()
+                .find(|entry| {
+                    entry.resource().diagnostic_identity() == buffer.diagnostic_identity()
+                })
+                .expect("frame graph should retain initialization evidence for every buffer");
+            assert!(
+                initialization.final_coverage().is_some(),
+                "frame graph should own final initialization coverage for '{}'",
+                buffer.descriptor().common().label()
+            );
+        }
     }
 }
