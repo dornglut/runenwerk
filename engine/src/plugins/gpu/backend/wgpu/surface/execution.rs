@@ -147,3 +147,54 @@ fn lease_error(
 ) -> GpuSurfaceLeaseError {
     GpuSurfaceLeaseError::new(category, lease.surface().id(), lease.lease_id(), detail)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::gpu::{
+        GpuContextId, GpuDeviceGeneration, GpuSurfaceGeneration, GpuSurfaceHandle,
+        allocate_surface_id, allocate_surface_lease_id,
+    };
+    use std::num::NonZeroU64;
+
+    fn affinity(context: u64, generation: u64) -> GpuContextAffinity {
+        GpuContextAffinity::test_value(
+            GpuContextId::test_value(NonZeroU64::new(context).unwrap()),
+            GpuDeviceGeneration::test_value(NonZeroU64::new(generation).unwrap()),
+        )
+    }
+
+    fn lease(affinity: GpuContextAffinity) -> GpuSurfaceResourceLease {
+        let surface = GpuSurfaceHandle::new(
+            allocate_surface_id().unwrap(),
+            affinity,
+            GpuSurfaceGeneration::first(),
+        );
+        let lease_id = allocate_surface_lease_id(surface.id()).unwrap();
+        GpuSurfaceResourceLease::new(surface, lease_id)
+    }
+
+    #[test]
+    fn abandoned_lease_is_invalid_not_present_consumed() {
+        let lease = lease(affinity(1, 1));
+        let error = inactive_lease_error(lease, "abandoned");
+        assert_eq!(error.category(), GpuSurfaceLeaseErrorCategory::InvalidLease);
+    }
+
+    #[test]
+    fn lease_affinity_distinguishes_foreign_context_and_stale_generation() {
+        let expected = affinity(1, 1);
+
+        let foreign = validate_affinity(expected, lease(affinity(2, 1))).unwrap_err();
+        assert_eq!(
+            foreign.category(),
+            GpuSurfaceLeaseErrorCategory::ForeignContext
+        );
+
+        let stale = validate_affinity(expected, lease(affinity(1, 2))).unwrap_err();
+        assert_eq!(
+            stale.category(),
+            GpuSurfaceLeaseErrorCategory::StaleGeneration
+        );
+    }
+}
