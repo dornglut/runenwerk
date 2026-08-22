@@ -153,7 +153,7 @@ impl GpuTextureHandle {
         }
     }
 
-    pub(crate) const fn surface_lease(&self) -> Option<GpuSurfaceResourceLease> {
+    pub(crate) fn surface_lease(&self) -> Option<GpuSurfaceResourceLease> {
         self.lease.surface_lease
     }
 }
