@@ -44,6 +44,20 @@ pub struct RendererDynamicTextureTargetCache {
     targets: BTreeMap<RenderDynamicTextureTargetKey, RendererDynamicTextureTarget>,
 }
 
+#[derive(Debug, Clone)]
+struct RendererPreparedDynamicTextureUpload {
+    target_key: RenderDynamicTextureTargetKey,
+    product_generation: u64,
+    operation: GpuUploadOperation,
+    legacy_realized: GpuRealizedTexture,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct RendererPreparedDynamicTextureUploadBatch {
+    uploads: Vec<RendererPreparedDynamicTextureUpload>,
+    diagnostics: Vec<RendererDynamicTextureUploadDiagnostic>,
+}
+
 impl RendererDynamicTextureTargetCache {
     pub fn realize_for_frame(
         &mut self,
@@ -142,22 +156,78 @@ impl RendererDynamicTextureTargetCache {
         Ok(())
     }
 
+    pub(super) fn prepare_uploads(
+        &self,
+        uploads: &[RenderDynamicTextureUploadDescriptor],
+    ) -> RendererPreparedDynamicTextureUploadBatch {
+        let mut batch = RendererPreparedDynamicTextureUploadBatch::default();
+        for upload in uploads {
+            match self.prepare_upload(upload) {
+                Ok(prepared) => batch.uploads.push(prepared),
+                Err(message) => batch
+                    .diagnostics
+                    .push(RendererDynamicTextureUploadDiagnostic {
+                        target_key: upload.target_key.clone(),
+                        message,
+                    }),
+            }
+        }
+        batch
+    }
+
     pub fn apply_uploads(
         &mut self,
         context: &GpuContext,
         queue: &Queue,
         uploads: &[RenderDynamicTextureUploadDescriptor],
     ) -> RendererDynamicTextureUploadReport {
-        let mut report = RendererDynamicTextureUploadReport::default();
-        for upload in uploads {
-            match self.apply_upload(context, queue, upload) {
-                Ok(()) => report.applied_count = report.applied_count.saturating_add(1),
+        let prepared = self.prepare_uploads(uploads);
+        self.apply_prepared_uploads(context, queue, prepared)
+    }
+
+    pub(super) fn apply_prepared_uploads(
+        &mut self,
+        context: &GpuContext,
+        queue: &Queue,
+        prepared: RendererPreparedDynamicTextureUploadBatch,
+    ) -> RendererDynamicTextureUploadReport {
+        let mut report = RendererDynamicTextureUploadReport {
+            applied_count: 0,
+            rejected_count: prepared.diagnostics.len(),
+            diagnostics: prepared.diagnostics,
+        };
+        for upload in prepared.uploads {
+            match apply_canonical_dynamic_texture_upload(
+                context,
+                queue,
+                &upload.legacy_realized,
+                &upload.operation,
+            ) {
+                Ok(()) => {
+                    let Some(target) = self.targets.get_mut(&upload.target_key) else {
+                        report.rejected_count = report.rejected_count.saturating_add(1);
+                        report
+                            .diagnostics
+                            .push(RendererDynamicTextureUploadDiagnostic {
+                                target_key: upload.target_key,
+                                message: "prepared dynamic texture upload lost its target before physical application"
+                                    .to_string(),
+                            });
+                        continue;
+                    };
+                    // The legacy path advances product-generation evidence only after the physical
+                    // queue write succeeds. G5C1 must preserve the same acceptance boundary when
+                    // this operation joins the frame submission: preparation alone must never
+                    // advance this state.
+                    target.uploaded_product_generation = Some(upload.product_generation);
+                    report.applied_count = report.applied_count.saturating_add(1);
+                }
                 Err(message) => {
                     report.rejected_count = report.rejected_count.saturating_add(1);
                     report
                         .diagnostics
                         .push(RendererDynamicTextureUploadDiagnostic {
-                            target_key: upload.target_key.clone(),
+                            target_key: upload.target_key,
                             message,
                         });
                 }
@@ -166,14 +236,12 @@ impl RendererDynamicTextureTargetCache {
         report
     }
 
-    fn apply_upload(
-        &mut self,
-        context: &GpuContext,
-        queue: &Queue,
+    fn prepare_upload(
+        &self,
         upload: &RenderDynamicTextureUploadDescriptor,
-    ) -> std::result::Result<(), String> {
+    ) -> std::result::Result<RendererPreparedDynamicTextureUpload, String> {
         upload.validate().map_err(|err| err.to_string())?;
-        let target = self.targets.get_mut(&upload.target_key).ok_or_else(|| {
+        let target = self.targets.get(&upload.target_key).ok_or_else(|| {
             format!(
                 "dynamic texture upload references missing target '{}'",
                 upload.target_key
@@ -215,13 +283,12 @@ impl RendererDynamicTextureTargetCache {
         let bytes = upload_bytes_for_gpu(upload);
         let operation = canonical_dynamic_texture_upload(target, upload, bytes)
             .map_err(|error| error.to_string())?;
-        apply_canonical_dynamic_texture_upload(context, queue, &target.realized, &operation)?;
-
-        // The legacy path advances product-generation evidence only after the physical queue write
-        // succeeds. G5C1 must preserve the same acceptance boundary when this operation joins the
-        // frame submission: authoring/preparation alone must never advance this state.
-        target.uploaded_product_generation = Some(upload.product_generation);
-        Ok(())
+        Ok(RendererPreparedDynamicTextureUpload {
+            target_key: upload.target_key.clone(),
+            product_generation: upload.product_generation,
+            operation,
+            legacy_realized: target.realized.clone(),
+        })
     }
 
     pub fn texture_ref<'a>(
