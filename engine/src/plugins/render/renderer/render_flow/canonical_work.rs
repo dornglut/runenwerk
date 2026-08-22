@@ -127,7 +127,7 @@ pub(super) fn prepare_canonical_invocation(
 /// ID already assigned to invocation B. The returned node set is all-or-nothing; one residual
 /// invocation discards every canonical node accumulated for the frame so the caller cannot mix
 /// legacy and G5 execution authority inside one physical submission.
-pub(super) fn resolve_canonical_frame<'a, 'pass>(
+pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
     context: &GpuContext,
     invocations: impl IntoIterator<Item = CanonicalFrameInvocationProjection<'a, 'pass>>,
 ) -> Result<CanonicalFrameResolution> {
