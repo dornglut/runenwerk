@@ -1,12 +1,13 @@
 use super::logical_copy::{ProjectedCopyOperation, project_copy_operation};
 use super::logical_operations::{
-    project_compute_operation, project_render_operation, project_timing_tail,
+    project_compute_operation, project_render_operation, project_timing_tail, timestamp_writes,
 };
 use super::logical_timing::LogicalGpuPassTiming;
 use super::*;
 use crate::plugins::gpu::{
-    GpuExecutionPreference, GpuRealizedBuffer, GpuResourceLabel, GpuTextureViewHandle,
-    GpuUploadOperation,
+    GpuAttachmentStore, GpuColorAttachmentLoad, GpuExecutionPreference, GpuRealizedBuffer,
+    GpuRenderColorAttachment, GpuRenderDraw, GpuRenderOperation, GpuResourceLabel,
+    GpuTextureViewHandle, GpuUploadOperation, GpuWorkOperation,
 };
 use crate::plugins::render::{
     PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, ResolvedRenderGpuWorkNode,
@@ -40,11 +41,14 @@ pub(super) struct CanonicalPassProjection<'a> {
 /// unrelated parameters. G5C1 can therefore reuse the same boundary while moving graph preparation
 /// from invocation scope to frame/surface scope. `surface_color_view` is the exact logical view of
 /// the currently acquired G7A image when that authority has already moved to the frame caller.
+/// `builtin_ui_draws` is only an execution-complete generic lowering of the current transitional
+/// Runenwerk UI batches; it is not RunenUI or future RunenRender semantic authority.
 #[derive(Clone, Copy)]
 pub(super) struct CanonicalInvocationProjection<'a, 'pass> {
     pub(super) projected_uploads: &'a [RealizedLogicalBufferUpload],
     pub(super) passes: &'a [CanonicalPassProjection<'pass>],
     pub(super) surface_color_view: Option<&'a GpuTextureViewHandle>,
+    pub(super) builtin_ui_draws: Option<&'a [GpuRenderDraw]>,
     pub(super) timing: Option<&'a LogicalGpuPassTiming>,
 }
 
@@ -101,6 +105,7 @@ pub(super) fn prepare_canonical_invocation(
         projected_uploads,
         passes,
         surface_color_view: None,
+        builtin_ui_draws: None,
         timing,
     };
     let frame_invocation = CanonicalFrameInvocationProjection {
@@ -186,6 +191,7 @@ pub(super) fn resolve_canonical_invocation(
         projected_uploads,
         passes,
         surface_color_view,
+        builtin_ui_draws,
         timing,
     } = projection;
 
@@ -259,8 +265,37 @@ pub(super) fn resolve_canonical_invocation(
                     }
                 }
             }
-            CompiledPassExecutionPlan::Present(_)
-            | CompiledPassExecutionPlan::BuiltinUiComposite(_) => {
+            CompiledPassExecutionPlan::BuiltinUiComposite(_) => {
+                let Some(surface_color_view) = surface_color_view else {
+                    return Ok(CanonicalInvocationResolution::PreG7Residual);
+                };
+                let Some(draws) = builtin_ui_draws else {
+                    return Ok(CanonicalInvocationResolution::PreG7Residual);
+                };
+                let timing = timestamp_projection(timing, projected.timestamp_indices)?;
+                if draws.is_empty() && timing.is_none() {
+                    // A drawless, untimed UI pass is semantically no GPU work. The current
+                    // occurrence remains residual until the live frame caller omits it upstream;
+                    // fabricating a clear or zero-instance draw here would change legacy output.
+                    return Ok(CanonicalInvocationResolution::PreG7Residual);
+                }
+                let color_attachment = GpuRenderColorAttachment::new(
+                    surface_color_view.clone(),
+                    GpuColorAttachmentLoad::Load,
+                    GpuAttachmentStore::Store,
+                    None,
+                )?;
+                let timestamp_writes = timing
+                    .map(|(timing, indices)| timestamp_writes(timing, indices))
+                    .transpose()?;
+                GpuWorkOperation::Render(GpuRenderOperation::new(
+                    [color_attachment],
+                    None,
+                    draws.iter().cloned(),
+                    timestamp_writes,
+                )?)
+            }
+            CompiledPassExecutionPlan::Present(_) => {
                 return Ok(CanonicalInvocationResolution::PreG7Residual);
             }
         };
