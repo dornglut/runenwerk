@@ -108,7 +108,7 @@ fn g5b_mapping_and_completion_remain_command_buffer_local_across_g7a_segments() 
         .find("fnencode_submit_and_register(")
         .expect("private physical execution owner must remain explicit");
     let encode_end = execution[encode_start..]
-        .find("fntexture_copy_info(")
+        .find("fntexture_copy_info")
         .map(|offset| encode_start + offset)
         .expect("physical execution helper must end before texture copy lowering");
     let encode = &execution[encode_start..encode_end];
