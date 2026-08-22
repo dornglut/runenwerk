@@ -32,7 +32,7 @@ impl GpuLogicalLease {
         }
     }
 
-    const fn surface(
+    fn surface(
         id: GpuWorkResourceId,
         kind: GpuResourceKind,
         surface_lease: GpuSurfaceResourceLease,
@@ -154,7 +154,7 @@ impl GpuTextureHandle {
     }
 
     pub(crate) fn surface_lease(&self) -> Option<GpuSurfaceResourceLease> {
-        self.lease.surface_lease
+        self.lease.surface_lease.clone()
     }
 }
 
