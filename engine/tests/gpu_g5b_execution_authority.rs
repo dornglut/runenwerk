@@ -86,9 +86,9 @@ fn g5b_mapping_and_completion_remain_command_buffer_local_across_g7a_segments() 
     let attribution_gate = submit
         .find("let_attribution_gate=self.backend.error_attribution_gate.acquire();")
         .expect("accepted physical submission must retain the shared backend-operation attribution gate");
-    let surface_guard = submit
-        .find(".execution_lease_guard(")
-        .expect("G7 surface execution must acquire its lease guard inside the attributed submit interval");
+    let surface_guard = submit.find(".execution_lease_guard(").expect(
+        "G7 surface execution must acquire its lease guard inside the attributed submit interval",
+    );
     let accept = submit
         .find("self.backend.execution.accept_prepared(&prepared)")
         .expect("irreversible acceptance must remain explicit");
@@ -126,7 +126,9 @@ fn g5b_mapping_and_completion_remain_command_buffer_local_across_g7a_segments() 
         .expect("each owned segment must be submitted by the one G5 executor");
     let present = encode
         .find(".present(&backend.queue,surface.lease(),surface.resource())")
-        .expect("Present must consume the lease only after its preceding command segment is submitted");
+        .expect(
+            "Present must consume the lease only after its preceding command segment is submitted",
+        );
     assert!(
         attach < map_callbacks
             && map_callbacks < completion
