@@ -12,11 +12,20 @@ use wgpu::{Texture, TextureView};
 pub(super) struct PreparedSurfaceUse {
     lease: GpuSurfaceResourceLease,
     resource: WgpuSurfaceLeaseResource,
+    identity: GpuWorkResourceId,
 }
 
 impl PreparedSurfaceUse {
-    fn new(lease: GpuSurfaceResourceLease, resource: WgpuSurfaceLeaseResource) -> Self {
-        Self { lease, resource }
+    fn new(
+        lease: GpuSurfaceResourceLease,
+        resource: WgpuSurfaceLeaseResource,
+        identity: GpuWorkResourceId,
+    ) -> Self {
+        Self {
+            lease,
+            resource,
+            identity,
+        }
     }
 
     pub(super) fn lease(&self) -> &GpuSurfaceResourceLease {
@@ -25,6 +34,10 @@ impl PreparedSurfaceUse {
 
     pub(super) const fn resource(&self) -> WgpuSurfaceLeaseResource {
         self.resource
+    }
+
+    pub(super) const fn identity(&self) -> GpuWorkResourceId {
+        self.identity
     }
 }
 
@@ -50,7 +63,7 @@ impl PreparedTexture {
             Self::Realized(realized) => Ok(&realized.record.object),
             Self::Surface(surface) => surface_guard
                 .ok_or_else(missing_surface_guard)?
-                .texture(surface.lease(), surface.resource().identity())
+                .texture(surface.lease(), surface.identity())
                 .map_err(GpuSubmissionFailure::from_surface_lease),
         }
     }
@@ -92,7 +105,7 @@ impl PreparedTextureView {
             Self::Realized(realized) => Ok(ResolvedTextureView::Borrowed(&realized.record.object)),
             Self::Surface(surface) => surface_guard
                 .ok_or_else(missing_surface_guard)?
-                .create_default_view(surface.lease(), surface.resource().identity())
+                .create_default_view(surface.lease(), surface.identity())
                 .map(ResolvedTextureView::Owned)
                 .map_err(GpuSubmissionFailure::from_surface_lease),
         }
@@ -116,7 +129,7 @@ pub(super) fn prepare_texture(
             .surfaces
             .validate_execution_lease(&lease, resource, &context.backend.health)
             .map_err(GpuSubmissionPreparationError::from_surface_lease)?;
-        PreparedTexture::Surface(PreparedSurfaceUse::new(lease, resource))
+        PreparedTexture::Surface(PreparedSurfaceUse::new(lease, resource, identity))
     } else {
         let realized = context.realize_texture(handle).map_err(|error| {
             GpuSubmissionPreparationError::new(
@@ -148,7 +161,7 @@ pub(super) fn prepare_texture_view(
             .surfaces
             .validate_execution_lease(&lease, resource, &context.backend.health)
             .map_err(GpuSubmissionPreparationError::from_surface_lease)?;
-        PreparedTextureView::Surface(PreparedSurfaceUse::new(lease, resource))
+        PreparedTextureView::Surface(PreparedSurfaceUse::new(lease, resource, identity))
     } else {
         let parent = prepare_texture(context, texture_cache, handle.descriptor().texture())?;
         let PreparedTexture::Realized(parent) = parent else {
@@ -173,15 +186,23 @@ pub(super) fn prepare_present_source(
     context: &GpuContext,
     source: &GpuTextureAccessResource,
 ) -> Result<PreparedSurfaceUse, GpuSubmissionPreparationError> {
-    let (lease, resource) = match source {
-        GpuTextureAccessResource::Texture(texture) => (
-            texture.surface_lease(),
-            WgpuSurfaceLeaseResource::Texture(texture.diagnostic_identity()),
-        ),
-        GpuTextureAccessResource::TextureView(view) => (
-            view.surface_lease(),
-            WgpuSurfaceLeaseResource::TextureView(view.diagnostic_identity()),
-        ),
+    let (lease, resource, identity) = match source {
+        GpuTextureAccessResource::Texture(texture) => {
+            let identity = texture.diagnostic_identity();
+            (
+                texture.surface_lease(),
+                WgpuSurfaceLeaseResource::Texture(identity),
+                identity,
+            )
+        }
+        GpuTextureAccessResource::TextureView(view) => {
+            let identity = view.diagnostic_identity();
+            (
+                view.surface_lease(),
+                WgpuSurfaceLeaseResource::TextureView(identity),
+                identity,
+            )
+        }
     };
     let lease = lease.ok_or_else(|| {
         GpuSubmissionPreparationError::new(
@@ -194,7 +215,7 @@ pub(super) fn prepare_present_source(
         .surfaces
         .validate_execution_lease(&lease, resource, &context.backend.health)
         .map_err(GpuSubmissionPreparationError::from_surface_lease)?;
-    Ok(PreparedSurfaceUse::new(lease, resource))
+    Ok(PreparedSurfaceUse::new(lease, resource, identity))
 }
 
 fn missing_surface_guard() -> GpuSubmissionFailure {
