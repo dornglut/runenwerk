@@ -1,8 +1,8 @@
 use super::super::WgpuDeviceHealth;
 use super::{WgpuSurfaceLease, WgpuSurfaceState, WgpuSurfaceStateInner};
 use crate::plugins::gpu::{
-    GpuContextAffinity, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory,
-    GpuSurfaceResourceLease, GpuWorkResourceId,
+    GpuContextAffinity, GpuSurfaceLeaseDisposition, GpuSurfaceLeaseError,
+    GpuSurfaceLeaseErrorCategory, GpuSurfaceResourceLease, GpuWorkResourceId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +26,7 @@ impl WgpuSurfaceState {
     /// transient presentation leases and never become ordinary resource-registry records.
     pub(crate) fn validate_execution_lease(
         &self,
-        lease: GpuSurfaceResourceLease,
+        lease: &GpuSurfaceResourceLease,
         resource: WgpuSurfaceLeaseResource,
         health: &WgpuDeviceHealth,
     ) -> Result<(), GpuSurfaceLeaseError> {
@@ -49,7 +49,7 @@ impl WgpuSurfaceState {
 fn validate_lease<'a>(
     expected: GpuContextAffinity,
     inner: &'a WgpuSurfaceStateInner,
-    lease: GpuSurfaceResourceLease,
+    lease: &GpuSurfaceResourceLease,
     resource: WgpuSurfaceLeaseResource,
 ) -> Result<&'a WgpuSurfaceLease, GpuSurfaceLeaseError> {
     validate_affinity(expected, lease)?;
@@ -67,11 +67,17 @@ fn validate_lease<'a>(
             "surface-acquired resource belongs to a stale surface generation",
         ));
     }
+    validate_disposition(lease)?;
     let active = record.active_lease.as_ref().ok_or_else(|| {
-        inactive_lease_error(lease, "the surface has no active acquired-image lease")
+        lease_error(
+            GpuSurfaceLeaseErrorCategory::InvalidLease,
+            lease,
+            "the surface has no active acquired-image lease",
+        )
     })?;
-    if active.id != lease.lease_id() {
-        return Err(inactive_lease_error(
+    if active.lease != *lease {
+        return Err(lease_error(
+            GpuSurfaceLeaseErrorCategory::InvalidLease,
             lease,
             "surface-acquired resource does not name the current active lease",
         ));
@@ -96,7 +102,7 @@ fn validate_lease<'a>(
 
 fn validate_affinity(
     expected: GpuContextAffinity,
-    lease: GpuSurfaceResourceLease,
+    lease: &GpuSurfaceResourceLease,
 ) -> Result<(), GpuSurfaceLeaseError> {
     let observed = lease.surface().affinity();
     if observed.context() != expected.context() {
@@ -116,18 +122,25 @@ fn validate_affinity(
     Ok(())
 }
 
-fn inactive_lease_error(
-    lease: GpuSurfaceResourceLease,
-    detail: &'static str,
-) -> GpuSurfaceLeaseError {
-    // Abandon/drop is not presentation consumption. G7 Present will record its own terminal
-    // disposition so only a lease actually consumed by Present can report AlreadyConsumed.
-    lease_error(GpuSurfaceLeaseErrorCategory::InvalidLease, lease, detail)
+fn validate_disposition(lease: &GpuSurfaceResourceLease) -> Result<(), GpuSurfaceLeaseError> {
+    match lease.disposition() {
+        GpuSurfaceLeaseDisposition::Active => Ok(()),
+        GpuSurfaceLeaseDisposition::Abandoned => Err(lease_error(
+            GpuSurfaceLeaseErrorCategory::InvalidLease,
+            lease,
+            "surface acquisition was abandoned without presentation",
+        )),
+        GpuSurfaceLeaseDisposition::Presented => Err(lease_error(
+            GpuSurfaceLeaseErrorCategory::AlreadyConsumed,
+            lease,
+            "surface acquisition lease was already consumed by Present",
+        )),
+    }
 }
 
 fn ensure_lease_health(
     health: &WgpuDeviceHealth,
-    lease: GpuSurfaceResourceLease,
+    lease: &GpuSurfaceResourceLease,
 ) -> Result<(), GpuSurfaceLeaseError> {
     if let Some(fault) = health.terminal_fault() {
         Err(lease_error(
@@ -142,7 +155,7 @@ fn ensure_lease_health(
 
 fn lease_error(
     category: GpuSurfaceLeaseErrorCategory,
-    lease: GpuSurfaceResourceLease,
+    lease: &GpuSurfaceResourceLease,
     detail: impl Into<String>,
 ) -> GpuSurfaceLeaseError {
     GpuSurfaceLeaseError::new(category, lease.surface().id(), lease.lease_id(), detail)
@@ -175,23 +188,34 @@ mod tests {
     }
 
     #[test]
-    fn abandoned_lease_is_invalid_not_present_consumed() {
-        let lease = lease(affinity(1, 1));
-        let error = inactive_lease_error(lease, "abandoned");
+    fn lease_disposition_distinguishes_abandoned_from_present_consumed() {
+        let abandoned = lease(affinity(1, 1));
+        abandoned.mark_abandoned();
+        let error = validate_disposition(&abandoned).unwrap_err();
         assert_eq!(error.category(), GpuSurfaceLeaseErrorCategory::InvalidLease);
+
+        let presented = lease(affinity(1, 1));
+        presented.mark_presented().unwrap();
+        let error = validate_disposition(&presented).unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuSurfaceLeaseErrorCategory::AlreadyConsumed
+        );
     }
 
     #[test]
     fn lease_affinity_distinguishes_foreign_context_and_stale_generation() {
         let expected = affinity(1, 1);
 
-        let foreign = validate_affinity(expected, lease(affinity(2, 1))).unwrap_err();
+        let foreign_lease = lease(affinity(2, 1));
+        let foreign = validate_affinity(expected, &foreign_lease).unwrap_err();
         assert_eq!(
             foreign.category(),
             GpuSurfaceLeaseErrorCategory::ForeignContext
         );
 
-        let stale = validate_affinity(expected, lease(affinity(1, 2))).unwrap_err();
+        let stale_lease = lease(affinity(1, 2));
+        let stale = validate_affinity(expected, &stale_lease).unwrap_err();
         assert_eq!(
             stale.category(),
             GpuSurfaceLeaseErrorCategory::StaleGeneration
