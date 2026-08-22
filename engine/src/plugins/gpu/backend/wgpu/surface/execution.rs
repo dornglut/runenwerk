@@ -1,11 +1,9 @@
 use super::super::WgpuDeviceHealth;
-use super::{
-    WgpuSurfaceLease, WgpuSurfaceRecord, WgpuSurfaceState, WgpuSurfaceStateInner,
-};
+use super::{WgpuSurfaceLease, WgpuSurfaceRecord, WgpuSurfaceState, WgpuSurfaceStateInner};
 use crate::plugins::gpu::{
     GpuContextAffinity, GpuSurfaceLeaseDisposition, GpuSurfaceLeaseError,
-    GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId, GpuSurfaceLeaseOwner,
-    GpuSurfaceResourceLease, GpuWorkResourceId,
+    GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId, GpuSurfaceLeaseOwner, GpuSurfaceResourceLease,
+    GpuWorkResourceId,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, MutexGuard};
@@ -168,24 +166,29 @@ impl WgpuSurfaceLeaseGuard<'_> {
                     "surface identity disappeared before Present",
                 )
             })?;
-        let matches = record
-            .active_lease
-            .as_ref()
-            .is_some_and(|active| active.lease == *lease);
-        if !matches {
+        let Some(active) = record.active_lease.take() else {
+            return Err(lease_error(
+                GpuSurfaceLeaseErrorCategory::InvalidLease,
+                lease,
+                "active physical surface lease disappeared before Present",
+            ));
+        };
+        if active.lease != *lease {
+            record.active_lease = Some(active);
             return Err(lease_error(
                 GpuSurfaceLeaseErrorCategory::InvalidLease,
                 lease,
                 "active physical surface lease changed before Present",
             ));
         }
-        lease.mark_presented().map_err(|disposition| {
-            disposition_error(lease, disposition, "surface lease cannot be presented")
-        })?;
-        let active = record
-            .active_lease
-            .take()
-            .expect("Present validated the active lease under exclusive surface ownership");
+        if let Err(disposition) = lease.mark_presented() {
+            record.active_lease = Some(active);
+            return Err(disposition_error(
+                lease,
+                disposition,
+                "surface lease cannot be presented",
+            ));
+        }
         active.texture.present();
         Ok(())
     }
