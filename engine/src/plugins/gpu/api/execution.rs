@@ -1,4 +1,4 @@
-use super::{GpuContextAffinity, GpuReadbackBytes, GpuReadbackId};
+use super::{GpuContextAffinity, GpuReadbackBytes, GpuReadbackId, GpuSurfaceLeaseError};
 use core::fmt;
 use core::num::{NonZeroU64, NonZeroUsize};
 use std::sync::{Arc, Mutex, Weak};
@@ -140,6 +140,7 @@ pub enum GpuSubmissionFailureKind {
     BackendValidation,
     BackendResourceExhaustion,
     ContextOrDeviceUnavailableOrLost,
+    SurfaceLease,
     ReadbackMapping,
     ContextDropped,
     InternalInvariant,
@@ -149,6 +150,7 @@ pub enum GpuSubmissionFailureKind {
 pub struct GpuSubmissionFailure {
     kind: GpuSubmissionFailureKind,
     detail: String,
+    surface_error: Option<GpuSurfaceLeaseError>,
 }
 
 impl GpuSubmissionFailure {
@@ -156,6 +158,15 @@ impl GpuSubmissionFailure {
         Self {
             kind,
             detail: detail.into(),
+            surface_error: None,
+        }
+    }
+
+    pub(crate) fn from_surface_lease(error: GpuSurfaceLeaseError) -> Self {
+        Self {
+            kind: GpuSubmissionFailureKind::SurfaceLease,
+            detail: error.to_string(),
+            surface_error: Some(error),
         }
     }
 
@@ -165,6 +176,10 @@ impl GpuSubmissionFailure {
 
     pub fn detail(&self) -> &str {
         &self.detail
+    }
+
+    pub const fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
+        self.surface_error.as_ref()
     }
 }
 
@@ -297,6 +312,7 @@ pub enum GpuSubmissionPreparationErrorKind {
     DynamicOffsetNotEncodable,
     ExecutionNotRunning,
     ContextOrDeviceUnavailableOrLost,
+    SurfaceLease,
     IdentityExhausted,
     InternalInvariant,
 }
@@ -305,6 +321,7 @@ pub enum GpuSubmissionPreparationErrorKind {
 pub struct GpuSubmissionPreparationError {
     kind: GpuSubmissionPreparationErrorKind,
     detail: String,
+    surface_error: Option<GpuSurfaceLeaseError>,
 }
 
 impl GpuSubmissionPreparationError {
@@ -312,6 +329,15 @@ impl GpuSubmissionPreparationError {
         Self {
             kind,
             detail: detail.into(),
+            surface_error: None,
+        }
+    }
+
+    pub(crate) fn from_surface_lease(error: GpuSurfaceLeaseError) -> Self {
+        Self {
+            kind: GpuSubmissionPreparationErrorKind::SurfaceLease,
+            detail: error.to_string(),
+            surface_error: Some(error),
         }
     }
 
@@ -321,6 +347,10 @@ impl GpuSubmissionPreparationError {
 
     pub fn detail(&self) -> &str {
         &self.detail
+    }
+
+    pub const fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
+        self.surface_error.as_ref()
     }
 }
 
@@ -355,6 +385,7 @@ pub enum GpuSubmissionRejectionKind {
     PendingReadbacksExceeded,
     ExecutionNotRunning,
     ContextOrDeviceUnavailableOrLost,
+    SurfaceLease,
     IdentityExhausted,
 }
 
@@ -362,6 +393,7 @@ pub enum GpuSubmissionRejectionKind {
 pub struct GpuSubmissionRejectionReason {
     kind: GpuSubmissionRejectionKind,
     detail: String,
+    surface_error: Option<GpuSurfaceLeaseError>,
 }
 
 impl GpuSubmissionRejectionReason {
@@ -369,6 +401,15 @@ impl GpuSubmissionRejectionReason {
         Self {
             kind,
             detail: detail.into(),
+            surface_error: None,
+        }
+    }
+
+    pub(crate) fn from_surface_lease(error: GpuSurfaceLeaseError) -> Self {
+        Self {
+            kind: GpuSubmissionRejectionKind::SurfaceLease,
+            detail: error.to_string(),
+            surface_error: Some(error),
         }
     }
 
@@ -378,6 +419,10 @@ impl GpuSubmissionRejectionReason {
 
     pub fn detail(&self) -> &str {
         &self.detail
+    }
+
+    pub const fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
+        self.surface_error.as_ref()
     }
 }
 
