@@ -18,16 +18,15 @@ fn provenance(value: &str) -> GpuResourceProvenance {
     GpuResourceProvenance::new(label(value), None, None)
 }
 
-fn configured_surface(
-    window: Arc<Window>,
-) -> (GpuContext, GpuSurfaceHandle, GpuTextureFormat) {
+fn configured_surface(window: Arc<Window>) -> (GpuContext, GpuSurfaceHandle, GpuTextureFormat) {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::DesktopPresentationBaseline.requirements())
             .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
             .with_allowed_backends([GpuBackendFamily::Vulkan])
             .with_label("G7A2 native surface Present proof");
-    let (context, surface) = pollster::block_on(GpuContext::request_for_surface(descriptor, window))
-        .expect("native surface conformance must admit the Xvfb/Lavapipe presentation target");
+    let (context, surface) =
+        pollster::block_on(GpuContext::request_for_surface(descriptor, window))
+            .expect("native surface conformance must admit the Xvfb/Lavapipe presentation target");
     assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
     assert_eq!(
         context.adapter_facts().fallback(),
@@ -90,11 +89,8 @@ fn clear_and_present_graph(image: &GpuAcquiredSurfaceImage) -> GpuPreparedWorkGr
         None,
     )
     .unwrap();
-    let present = GpuPresentOperation::new(
-        view.clone().into(),
-        view.descriptor().subresources(),
-    )
-    .unwrap();
+    let present =
+        GpuPresentOperation::new(view.clone().into(), view.descriptor().subresources()).unwrap();
 
     let name = "native surface clear Present";
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
