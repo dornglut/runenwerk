@@ -7,7 +7,8 @@ use crate::plugins::gpu::{
     CurrentRenderTextureUploadTerminal, GpuContext, GpuCopyExtent, GpuRealizedTexture,
     GpuRealizedTextureView, GpuResourceLifetime, GpuTextureAspect, GpuTextureCopyRegion,
     GpuTextureFormat, GpuTextureHandle, GpuTextureOrigin, GpuTextureUsage, GpuTextureViewHandle,
-    GpuTransferRegion, GpuUploadOperation, GpuWorkResourceIdAllocator, PreparedGpuData, TransferData,
+    GpuTransferRegion, GpuUploadOperation, GpuWorkResourceIdAllocator, PreparedGpuData,
+    TransferData,
 };
 use crate::plugins::render::{
     RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
