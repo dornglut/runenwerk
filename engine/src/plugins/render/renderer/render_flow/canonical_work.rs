@@ -110,11 +110,9 @@ pub(super) fn prepare_canonical_invocation(
         invocation,
     };
     match resolve_canonical_frame(context, [frame_invocation])? {
-        CanonicalFrameResolution::Resolved(nodes) => {
-            Ok(CanonicalInvocationPreparation::Prepared(Box::new(
-                prepare_render_gpu_work(flow, nodes)?,
-            )))
-        }
+        CanonicalFrameResolution::Resolved(nodes) => Ok(CanonicalInvocationPreparation::Prepared(
+            Box::new(prepare_render_gpu_work(flow, nodes)?),
+        )),
         CanonicalFrameResolution::PreG7Residual => {
             Ok(CanonicalInvocationPreparation::PreG7Residual)
         }
