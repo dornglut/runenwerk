@@ -82,11 +82,11 @@ jobs:
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal
 
-      - name: Install Mesa Vulkan fallback
+      - name: Install Mesa Vulkan fallback and virtual X display
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
           icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
           test -n "$icd"
           echo "Lavapipe ICD: $icd"
@@ -109,6 +109,14 @@ jobs:
           set -euo pipefail
           cargo +stable test -p engine --test gpu_g5b_native_runtime --locked -- --ignored --nocapture
           cargo +stable test -p engine --test gpu_g5b_native_render --locked -- --ignored --nocapture
+
+      - name: Run native G7A2 surface Present proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
+            cargo +stable test -p engine --test gpu_g7a2_native_surface --locked -- --ignored --nocapture
 
       - name: Check diff hygiene
         run: git diff --check

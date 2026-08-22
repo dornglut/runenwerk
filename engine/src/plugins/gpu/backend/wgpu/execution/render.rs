@@ -1,16 +1,19 @@
 use super::super::WgpuContextState;
+use super::super::surface::execution::WgpuSurfaceLeaseGuard;
+use super::surface_resources::{
+    PreparedSurfaceUse, PreparedTexture, PreparedTextureView, prepare_texture_view,
+};
 use super::{
     PreparedBindGroup, PreparedTimestampWrites, checked_dynamic_offsets,
     preparation_pipeline_failure, preparation_program_binding_failure, realized_buffer,
-    realized_query_set, realized_texture, submission_pipeline_failure,
-    submission_program_binding_failure,
+    realized_query_set, submission_pipeline_failure, submission_program_binding_failure,
 };
 use crate::plugins::gpu::{
     GpuAttachmentStore, GpuColorAttachmentLoad, GpuContext, GpuDepthAttachmentLoad,
     GpuDepthStencilAccess, GpuDrawIntent, GpuIndexFormat, GpuRealizedBuffer,
-    GpuRealizedRenderPipeline, GpuRealizedTexture, GpuRealizedTextureView, GpuRenderDraw,
-    GpuRenderOperation, GpuSubmissionFailure, GpuSubmissionPreparationError,
-    GpuSubmissionPreparationErrorKind, GpuTextureViewHandle, GpuWorkResourceId,
+    GpuRealizedRenderPipeline, GpuRealizedTextureView, GpuRenderDraw, GpuRenderOperation,
+    GpuSubmissionFailure, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
+    GpuWorkResourceId,
 };
 use std::collections::BTreeMap;
 use wgpu::{
@@ -26,12 +29,29 @@ pub(super) struct PreparedRenderOperation {
     timestamp_writes: Option<PreparedTimestampWrites>,
 }
 
+impl PreparedRenderOperation {
+    pub(super) fn append_surface_uses(&self, uses: &mut Vec<PreparedSurfaceUse>) {
+        for attachment in &self.color_attachments {
+            if let Some(surface) = attachment.source.surface_use() {
+                uses.push(surface.clone());
+            }
+            if let Some(surface) = attachment
+                .resolve_target
+                .as_ref()
+                .and_then(PreparedTextureView::surface_use)
+            {
+                uses.push(surface.clone());
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct PreparedRenderColorAttachment {
-    source: GpuRealizedTextureView,
+    source: PreparedTextureView,
     load: GpuColorAttachmentLoad,
     store: GpuAttachmentStore,
-    resolve_target: Option<GpuRealizedTextureView>,
+    resolve_target: Option<PreparedTextureView>,
 }
 
 #[derive(Debug, Clone)]
@@ -91,28 +111,28 @@ struct PreparedRenderDraw {
 
 pub(super) async fn prepare_render_operation(
     context: &GpuContext,
+    texture_cache: &mut BTreeMap<GpuWorkResourceId, PreparedTexture>,
+    texture_view_cache: &mut BTreeMap<GpuWorkResourceId, PreparedTextureView>,
     render: &GpuRenderOperation,
 ) -> Result<PreparedRenderOperation, GpuSubmissionPreparationError> {
     let mut buffer_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedBuffer>::new();
-    let mut texture_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedTexture>::new();
-    let mut texture_view_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedTextureView>::new();
     let mut query_set_cache = BTreeMap::new();
 
     let mut color_attachments = Vec::with_capacity(render.color_attachments().len());
     for attachment in render.color_attachments() {
-        let source = realized_texture_view(
+        let source = prepare_texture_view(
             context,
-            &mut texture_cache,
-            &mut texture_view_cache,
+            texture_cache,
+            texture_view_cache,
             attachment.source(),
         )?;
         let resolve_target = attachment
             .resolve_target()
             .map(|resolve| {
-                realized_texture_view(
+                prepare_texture_view(
                     context,
-                    &mut texture_cache,
-                    &mut texture_view_cache,
+                    texture_cache,
+                    texture_view_cache,
                     resolve.destination(),
                 )
             })
@@ -128,13 +148,20 @@ pub(super) async fn prepare_render_operation(
     let depth_stencil_attachment = render
         .depth_stencil_attachment()
         .map(|attachment| {
+            let prepared = prepare_texture_view(
+                context,
+                texture_cache,
+                texture_view_cache,
+                attachment.source(),
+            )?;
+            let PreparedTextureView::Realized(source) = prepared else {
+                return Err(GpuSubmissionPreparationError::new(
+                    GpuSubmissionPreparationErrorKind::UnsupportedOperation,
+                    "SurfaceAcquired textures are presentation color resources and cannot be used as depth/stencil attachments",
+                ));
+            };
             Ok(PreparedRenderDepthStencilAttachment {
-                source: realized_texture_view(
-                    context,
-                    &mut texture_cache,
-                    &mut texture_view_cache,
-                    attachment.source(),
-                )?,
+                source,
                 access: attachment.access(),
                 load: attachment.load(),
                 store: attachment.store(),
@@ -266,45 +293,38 @@ async fn prepare_render_draw(
     })
 }
 
-fn realized_texture_view(
-    context: &GpuContext,
-    texture_cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedTexture>,
-    view_cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedTextureView>,
-    handle: &GpuTextureViewHandle,
-) -> Result<GpuRealizedTextureView, GpuSubmissionPreparationError> {
-    let identity = handle.diagnostic_identity();
-    if let Some(realized) = view_cache.get(&identity) {
-        return Ok(realized.clone());
-    }
-    let parent = realized_texture(context, texture_cache, handle.descriptor().texture())?;
-    let realized = context
-        .realize_texture_view(handle, &parent)
-        .map_err(|error| {
-            GpuSubmissionPreparationError::new(
-                GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
-                error.to_string(),
-            )
-        })?;
-    view_cache.insert(identity, realized.clone());
-    Ok(realized)
-}
-
-pub(super) fn encode_render_operation(
+pub(super) fn encode_render_operation<'a>(
     backend: &WgpuContextState,
     encoder: &mut CommandEncoder,
-    render: &PreparedRenderOperation,
+    render: &'a PreparedRenderOperation,
+    surface_guard: Option<&'a WgpuSurfaceLeaseGuard<'_>>,
 ) -> Result<(), GpuSubmissionFailure> {
-    let color_attachments = render
+    let resolved_sources = render
+        .color_attachments
+        .iter()
+        .map(|attachment| attachment.source.resolve(surface_guard))
+        .collect::<Result<Vec<_>, _>>()?;
+    let resolved_targets = render
         .color_attachments
         .iter()
         .map(|attachment| {
+            attachment
+                .resolve_target
+                .as_ref()
+                .map(|target| target.resolve(surface_guard))
+                .transpose()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let color_attachments = render
+        .color_attachments
+        .iter()
+        .zip(&resolved_sources)
+        .zip(&resolved_targets)
+        .map(|((attachment, source), resolve_target)| {
             Some(RenderPassColorAttachment {
-                view: &attachment.source.record.object,
+                view: source.as_ref(),
                 depth_slice: None,
-                resolve_target: attachment
-                    .resolve_target
-                    .as_ref()
-                    .map(|target| &target.record.object),
+                resolve_target: resolve_target.as_ref().map(|target| target.as_ref()),
                 ops: Operations {
                     load: color_load(attachment.load),
                     store: attachment_store(attachment.store),

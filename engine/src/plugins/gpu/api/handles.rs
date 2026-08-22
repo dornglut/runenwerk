@@ -1,7 +1,7 @@
 use super::{
     GpuBufferDescriptor, GpuHandleCause, GpuHandleError, GpuQuerySetDescriptor,
-    GpuSamplerDescriptor, GpuTextureDescriptor, GpuTextureViewDescriptor, GpuWorkResourceId,
-    GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
+    GpuSamplerDescriptor, GpuSurfaceResourceLease, GpuTextureDescriptor, GpuTextureViewDescriptor,
+    GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 use core::hash::{Hash, Hasher};
@@ -29,11 +29,12 @@ impl GpuLogicalLease {
 }
 
 macro_rules! typed_handle {
-    ($name:ident, $descriptor:ty, $kind:ident) => {
+    ($name:ident, $descriptor:ty, $kind:ident $(, $surface_field:ident : $surface_type:ty)?) => {
         #[derive(Clone)]
         pub struct $name {
             lease: Arc<GpuLogicalLease>,
             descriptor: Arc<$descriptor>,
+            $($surface_field: Option<$surface_type>,)?
         }
 
         impl $name {
@@ -41,6 +42,7 @@ macro_rules! typed_handle {
                 Self {
                     lease: Arc::new(GpuLogicalLease::new(id, GpuResourceKind::$kind)),
                     descriptor: Arc::new(descriptor),
+                    $($surface_field: None,)?
                 }
             }
 
@@ -72,10 +74,12 @@ macro_rules! typed_handle {
 
         impl fmt::Debug for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.debug_struct(stringify!($name))
+                let mut debug = f.debug_struct(stringify!($name));
+                debug
                     .field("diagnostic_identity", &self.lease.id)
-                    .field("descriptor", &self.descriptor)
-                    .finish()
+                    .field("descriptor", &self.descriptor);
+                $(debug.field(stringify!($surface_field), &self.$surface_field);)?
+                debug.finish()
             }
         }
 
@@ -114,10 +118,39 @@ macro_rules! typed_handle {
 }
 
 typed_handle!(GpuBufferHandle, GpuBufferDescriptor, Buffer);
-typed_handle!(GpuTextureHandle, GpuTextureDescriptor, Texture);
+typed_handle!(
+    GpuTextureHandle,
+    GpuTextureDescriptor,
+    Texture,
+    surface_lease: GpuSurfaceResourceLease
+);
 typed_handle!(GpuTextureViewHandle, GpuTextureViewDescriptor, TextureView);
 typed_handle!(GpuSamplerHandle, GpuSamplerDescriptor, Sampler);
 typed_handle!(GpuQuerySetHandle, GpuQuerySetDescriptor, QuerySet);
+
+impl GpuTextureHandle {
+    pub(crate) fn from_surface_descriptor(
+        id: GpuWorkResourceId,
+        descriptor: GpuTextureDescriptor,
+        surface_lease: GpuSurfaceResourceLease,
+    ) -> Self {
+        Self {
+            lease: Arc::new(GpuLogicalLease::new(id, GpuResourceKind::Texture)),
+            descriptor: Arc::new(descriptor),
+            surface_lease: Some(surface_lease),
+        }
+    }
+
+    pub(crate) fn surface_lease(&self) -> Option<GpuSurfaceResourceLease> {
+        self.surface_lease.clone()
+    }
+}
+
+impl GpuTextureViewHandle {
+    pub(crate) fn surface_lease(&self) -> Option<GpuSurfaceResourceLease> {
+        self.descriptor.texture().surface_lease()
+    }
+}
 
 impl GpuWorkResourceIdAllocator {
     pub fn allocate_buffer_handle(
@@ -134,6 +167,15 @@ impl GpuWorkResourceIdAllocator {
     ) -> Result<GpuTextureHandle, GpuWorkResourceIdAllocationError> {
         self.allocate()
             .map(|id| GpuTextureHandle::from_descriptor(id, descriptor))
+    }
+
+    pub(crate) fn allocate_surface_texture_handle(
+        &mut self,
+        descriptor: GpuTextureDescriptor,
+        surface_lease: GpuSurfaceResourceLease,
+    ) -> Result<GpuTextureHandle, GpuWorkResourceIdAllocationError> {
+        self.allocate()
+            .map(|id| GpuTextureHandle::from_surface_descriptor(id, descriptor, surface_lease))
     }
 
     pub fn allocate_texture_view_handle(
@@ -387,6 +429,10 @@ mod tests {
     #[test]
     fn handles_are_clone_but_not_declared_copy() {
         let source = include_str!("handles.rs");
+        let compact = source
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>();
         for name in [
             "GpuBufferHandle",
             "GpuTextureHandle",
@@ -394,8 +440,8 @@ mod tests {
             "GpuSamplerHandle",
             "GpuQuerySetHandle",
         ] {
-            let declaration = format!("typed_handle!({name}");
-            assert!(source.contains(&declaration));
+            let declaration = format!("typed_handle!({name},");
+            assert!(compact.contains(&declaration));
         }
         assert!(!source.contains(&["impl Copy", " for Gpu"].concat()));
         assert!(!source.contains(&["pub fn destroy", "_by_id("].concat()));

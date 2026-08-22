@@ -1,9 +1,15 @@
 mod render;
+mod surface_resources;
 
 use self::render::{PreparedRenderOperation, encode_render_operation, prepare_render_operation};
+use self::surface_resources::{
+    PreparedSurfaceUse, PreparedTexture, PreparedTextureView, prepare_present_source,
+    prepare_texture,
+};
 use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::resource_realization::map_texture_aspect;
+use super::surface::execution::WgpuSurfaceLeaseGuard;
 use crate::plugins::gpu::{
     GpuBufferTextureLayout, GpuCapabilityAdmission, GpuClearOperation, GpuContext,
     GpuContextAffinity, GpuCopyOperation, GpuDataLayout, GpuDispatchSize,
@@ -12,12 +18,12 @@ use crate::plugins::gpu::{
     GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
     GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
-    GpuRealizedQuerySet, GpuRealizedTexture, GpuResourceProvenance, GpuRuntimeBindingResource,
-    GpuSubmission, GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId,
-    GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind,
-    GpuSubmissionRejectionReason, GpuSubmissionStatus, GpuTextureCopyRegion, GpuTextureFormat,
-    GpuTransferRegion, GpuValidatedBindGroupBindings, GpuWorkOperation, GpuWorkResourceId,
-    PreparedGpuData, TransferData,
+    GpuRealizedQuerySet, GpuResourceProvenance, GpuRuntimeBindingResource, GpuSubmission,
+    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
+    GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
+    GpuSubmissionStatus, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId,
+    GpuTextureCopyRegion, GpuTextureFormat, GpuTransferRegion, GpuValidatedBindGroupBindings,
+    GpuWorkOperation, GpuWorkResourceId, PreparedGpuData, TransferData,
 };
 use core::num::NonZeroU64;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -25,9 +31,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use wgpu::{
     Buffer, BufferDescriptor, BufferUsages, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePassTimestampWrites, Extent3d, MapMode,
-    Origin3d, PollType, QUERY_RESOLVE_BUFFER_ALIGNMENT, TexelCopyBufferInfo, TexelCopyBufferLayout,
-    TexelCopyTextureInfo,
+    CommandEncoder, CommandEncoderDescriptor, ComputePassDescriptor, ComputePassTimestampWrites,
+    Extent3d, MapMode, Origin3d, PollType, QUERY_RESOLVE_BUFFER_ALIGNMENT, TexelCopyBufferInfo,
+    TexelCopyBufferLayout, TexelCopyTextureInfo,
 };
 
 #[derive(Debug)]
@@ -67,6 +73,7 @@ impl Default for ExecutionInner {
 #[derive(Debug, Clone)]
 struct PreparedExecutionPlan {
     operations: Vec<PreparedExecutionOperation>,
+    surface_uses: Vec<PreparedSurfaceUse>,
     upload_bytes: u64,
     readback_bytes: u64,
     readback_ids: Vec<GpuReadbackId>,
@@ -309,7 +316,7 @@ enum PreparedExecutionOperation {
         payload: PreparedGpuData<TransferData>,
     },
     TextureUpload {
-        destination: GpuRealizedTexture,
+        destination: PreparedTexture,
         region: GpuTextureCopyRegion,
         staging: TextureStagingLayout,
         payload: PreparedGpuData<TransferData>,
@@ -331,19 +338,19 @@ enum PreparedExecutionOperation {
     BufferToTextureCopy {
         source: GpuRealizedBuffer,
         layout: GpuBufferTextureLayout,
-        destination: GpuRealizedTexture,
+        destination: PreparedTexture,
         region: GpuTextureCopyRegion,
     },
     TextureToBufferCopy {
-        source: GpuRealizedTexture,
+        source: PreparedTexture,
         region: GpuTextureCopyRegion,
         destination: GpuRealizedBuffer,
         layout: GpuBufferTextureLayout,
     },
     TextureToTextureCopy {
-        source: GpuRealizedTexture,
+        source: PreparedTexture,
         source_region: GpuTextureCopyRegion,
-        destination: GpuRealizedTexture,
+        destination: PreparedTexture,
         destination_region: GpuTextureCopyRegion,
     },
     BufferZero {
@@ -366,10 +373,13 @@ enum PreparedExecutionOperation {
     },
     TextureReadback {
         id: GpuReadbackId,
-        source: GpuRealizedTexture,
+        source: PreparedTexture,
         region: GpuTextureCopyRegion,
         staging: TextureStagingLayout,
         metadata: TextureReadbackMetadata,
+    },
+    Present {
+        source: PreparedSurfaceUse,
     },
 }
 
@@ -437,6 +447,18 @@ struct AcceptedPlan {
 struct EncodedSubmission {
     upload_staging: Vec<Arc<Buffer>>,
     readback_staging: Vec<(GpuReadbackId, Arc<Buffer>)>,
+}
+
+struct MaterializedStaging {
+    encoded: EncodedSubmission,
+    uploads: BTreeMap<usize, Arc<Buffer>>,
+    readbacks: BTreeMap<usize, Arc<Buffer>>,
+}
+
+struct EncodedSegment {
+    command_buffer: wgpu::CommandBuffer,
+    readback_staging: Vec<(GpuReadbackId, Arc<Buffer>)>,
+    present_after: Option<PreparedSurfaceUse>,
 }
 
 impl WgpuExecutionState {
@@ -567,6 +589,28 @@ impl WgpuExecutionState {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .prepared
             .remove(&ticket);
+    }
+
+    fn prepared_surface_uses(
+        &self,
+        prepared: &GpuPreparedSubmission,
+    ) -> Result<Vec<PreparedSurfaceUse>, GpuSubmissionRejectionReason> {
+        let inner = self.inner.lock().map_err(|_| {
+            GpuSubmissionRejectionReason::new(
+                GpuSubmissionRejectionKind::ContextOrDeviceUnavailableOrLost,
+                "execution preparation authority is unavailable during surface revalidation",
+            )
+        })?;
+        if inner.lifecycle != GpuExecutionLifecycleState::Running {
+            return Err(rejection_not_running(inner.lifecycle));
+        }
+        let Some(Some(plan)) = inner.prepared.get(&prepared.ticket) else {
+            return Err(GpuSubmissionRejectionReason::new(
+                GpuSubmissionRejectionKind::PreparedRecordUnavailable,
+                "prepared submission is absent or was already consumed",
+            ));
+        };
+        Ok(plan.surface_uses.clone())
     }
 
     fn accept_prepared(
@@ -1087,15 +1131,57 @@ impl GpuContext {
             ));
         }
 
-        // Submission IDs define this context owner's execution order. Keep irreversible acceptance
-        // and the corresponding physical encode/submit in one owner-local interval so concurrent
-        // callers cannot publish IDs in one order and queue the work in another.
+        // Submission IDs define this context owner's execution order. Keep revalidation,
+        // irreversible acceptance, physical encoding, segmented queue submission, and Present in
+        // one owner-local interval so concurrent callers cannot reorder logical and physical work.
         let _submission_order = self
             .backend
             .execution
             .submission_order
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(fault) = self.backend.health.terminal_fault() {
+            return Err(GpuPreparedSubmissionRejected::new(
+                prepared,
+                GpuSubmissionRejectionReason::new(
+                    GpuSubmissionRejectionKind::ContextOrDeviceUnavailableOrLost,
+                    fault.detail,
+                ),
+            ));
+        }
+
+        let surface_uses = match self.backend.execution.prepared_surface_uses(&prepared) {
+            Ok(uses) => uses,
+            Err(reason) => return Err(GpuPreparedSubmissionRejected::new(prepared, reason)),
+        };
+        let _attribution_gate = self.backend.error_attribution_gate.acquire();
+        let mut surface_guard = if let Some(representative) = surface_uses.first() {
+            match self
+                .backend
+                .surfaces
+                .execution_lease_guard(representative.lease(), &self.backend.health)
+            {
+                Ok(guard) => Some(guard),
+                Err(error) => {
+                    return Err(GpuPreparedSubmissionRejected::new(
+                        prepared,
+                        GpuSubmissionRejectionReason::from_surface_lease(error),
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+        if let Some(guard) = surface_guard.as_mut() {
+            for surface in &surface_uses {
+                if let Err(error) = guard.validate_and_pin(surface.lease(), surface.resource()) {
+                    return Err(GpuPreparedSubmissionRejected::new(
+                        prepared,
+                        GpuSubmissionRejectionReason::from_surface_lease(error),
+                    ));
+                }
+            }
+        }
         if let Some(fault) = self.backend.health.terminal_fault() {
             return Err(GpuPreparedSubmissionRejected::new(
                 prepared,
@@ -1123,6 +1209,7 @@ impl GpuContext {
             &self.backend.execution,
             accepted.id,
             &accepted.plan,
+            surface_guard.as_mut(),
         ) {
             self.backend.execution.fail_submission(accepted.id, failure);
         }
@@ -1148,9 +1235,12 @@ async fn prepare_execution_plan(
     graph: &GpuPreparedWorkGraph,
 ) -> Result<PreparedExecutionPlan, GpuSubmissionPreparationError> {
     let mut buffer_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedBuffer>::new();
-    let mut texture_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedTexture>::new();
+    let mut texture_cache = BTreeMap::<GpuWorkResourceId, PreparedTexture>::new();
+    let mut texture_view_cache = BTreeMap::<GpuWorkResourceId, PreparedTextureView>::new();
     let mut query_set_cache = BTreeMap::<GpuWorkResourceId, GpuRealizedQuerySet>::new();
     let mut operations = Vec::with_capacity(graph.topological_order().len());
+    let mut surface_uses = Vec::new();
+    let mut presented_surface_leases = BTreeSet::<GpuSurfaceLeaseId>::new();
     let mut upload_bytes = 0_u64;
     let mut readback_bytes = 0_u64;
     let mut readback_ids = Vec::new();
@@ -1191,8 +1281,13 @@ async fn prepare_execution_plan(
                     });
                 }
                 GpuTransferRegion::Texture(destination) => {
-                    let realized =
-                        realized_texture(context, &mut texture_cache, destination.texture())?;
+                    let prepared_texture =
+                        prepare_texture(context, &mut texture_cache, destination.texture())?;
+                    append_texture_surface_use(
+                        &mut surface_uses,
+                        &presented_surface_leases,
+                        &prepared_texture,
+                    )?;
                     let staging = TextureStagingLayout::new(destination)?;
                     if upload.payload().layout().byte_len() != staging.logical_byte_len {
                         return Err(GpuSubmissionPreparationError::new(
@@ -1207,7 +1302,7 @@ async fn prepare_execution_plan(
                         "upload",
                     )?;
                     operations.push(PreparedExecutionOperation::TextureUpload {
-                        destination: realized,
+                        destination: prepared_texture,
                         region: destination.clone(),
                         staging,
                         payload: upload.payload().clone(),
@@ -1226,9 +1321,19 @@ async fn prepare_execution_plan(
                 );
             }
             GpuWorkOperation::Render(render) => {
-                operations.push(PreparedExecutionOperation::Render(
-                    prepare_render_operation(context, render).await?,
-                ));
+                let render = prepare_render_operation(
+                    context,
+                    &mut texture_cache,
+                    &mut texture_view_cache,
+                    render,
+                )
+                .await?;
+                let mut render_surface_uses = Vec::new();
+                render.append_surface_uses(&mut render_surface_uses);
+                for surface in render_surface_uses {
+                    append_surface_use(&mut surface_uses, &presented_surface_leases, &surface)?;
+                }
+                operations.push(PreparedExecutionOperation::Render(render));
             }
             GpuWorkOperation::Copy(copy) => match copy {
                 GpuCopyOperation::BufferToBuffer {
@@ -1260,13 +1365,18 @@ async fn prepare_execution_plan(
                 } => {
                     let realized_source =
                         realized_buffer(context, &mut buffer_cache, source.buffer())?;
-                    let realized_destination =
-                        realized_texture(context, &mut texture_cache, destination.texture())?;
+                    let prepared_destination =
+                        prepare_texture(context, &mut texture_cache, destination.texture())?;
+                    append_texture_surface_use(
+                        &mut surface_uses,
+                        &presented_surface_leases,
+                        &prepared_destination,
+                    )?;
                     validate_buffer_texture_copy_layout(source, destination)?;
                     operations.push(PreparedExecutionOperation::BufferToTextureCopy {
                         source: realized_source,
                         layout: source.clone(),
-                        destination: realized_destination,
+                        destination: prepared_destination,
                         region: destination.clone(),
                     });
                 }
@@ -1274,13 +1384,18 @@ async fn prepare_execution_plan(
                     source,
                     destination,
                 } => {
-                    let realized_source =
-                        realized_texture(context, &mut texture_cache, source.texture())?;
+                    let prepared_source =
+                        prepare_texture(context, &mut texture_cache, source.texture())?;
+                    append_texture_surface_use(
+                        &mut surface_uses,
+                        &presented_surface_leases,
+                        &prepared_source,
+                    )?;
                     let realized_destination =
                         realized_buffer(context, &mut buffer_cache, destination.buffer())?;
                     validate_buffer_texture_copy_layout(destination, source)?;
                     operations.push(PreparedExecutionOperation::TextureToBufferCopy {
-                        source: realized_source,
+                        source: prepared_source,
                         region: source.clone(),
                         destination: realized_destination,
                         layout: destination.clone(),
@@ -1290,14 +1405,24 @@ async fn prepare_execution_plan(
                     source,
                     destination,
                 } => {
+                    let prepared_source =
+                        prepare_texture(context, &mut texture_cache, source.texture())?;
+                    let prepared_destination =
+                        prepare_texture(context, &mut texture_cache, destination.texture())?;
+                    append_texture_surface_use(
+                        &mut surface_uses,
+                        &presented_surface_leases,
+                        &prepared_source,
+                    )?;
+                    append_texture_surface_use(
+                        &mut surface_uses,
+                        &presented_surface_leases,
+                        &prepared_destination,
+                    )?;
                     operations.push(PreparedExecutionOperation::TextureToTextureCopy {
-                        source: realized_texture(context, &mut texture_cache, source.texture())?,
+                        source: prepared_source,
                         source_region: source.clone(),
-                        destination: realized_texture(
-                            context,
-                            &mut texture_cache,
-                            destination.texture(),
-                        )?,
+                        destination: prepared_destination,
                         destination_region: destination.clone(),
                     });
                 }
@@ -1375,8 +1500,13 @@ async fn prepare_execution_plan(
                         });
                     }
                     GpuTransferRegion::Texture(source) => {
-                        let realized =
-                            realized_texture(context, &mut texture_cache, source.texture())?;
+                        let prepared_source =
+                            prepare_texture(context, &mut texture_cache, source.texture())?;
+                        append_texture_surface_use(
+                            &mut surface_uses,
+                            &presented_surface_leases,
+                            &prepared_source,
+                        )?;
                         let staging = TextureStagingLayout::new(source)?;
                         let common = source.texture().descriptor().common();
                         let format = source.texture().descriptor().format();
@@ -1408,7 +1538,7 @@ async fn prepare_execution_plan(
                         readback_ids.push(readback.id());
                         operations.push(PreparedExecutionOperation::TextureReadback {
                             id: readback.id(),
-                            source: realized,
+                            source: prepared_source,
                             region: source.clone(),
                             staging,
                             metadata,
@@ -1416,20 +1546,52 @@ async fn prepare_execution_plan(
                     }
                 }
             }
-            GpuWorkOperation::Present(_) => {
-                return unsupported(
-                    "surface Present is owned by G7A and is intentionally outside surface-independent G5B execution",
-                );
+            GpuWorkOperation::Present(present) => {
+                let surface = prepare_present_source(context, present.source())?;
+                append_surface_use(&mut surface_uses, &presented_surface_leases, &surface)?;
+                presented_surface_leases.insert(surface.lease().lease_id());
+                operations.push(PreparedExecutionOperation::Present { source: surface });
             }
         }
     }
 
     Ok(PreparedExecutionPlan {
         operations,
+        surface_uses,
         upload_bytes,
         readback_bytes,
         readback_ids,
     })
+}
+
+fn append_texture_surface_use(
+    uses: &mut Vec<PreparedSurfaceUse>,
+    presented: &BTreeSet<GpuSurfaceLeaseId>,
+    texture: &PreparedTexture,
+) -> Result<(), GpuSubmissionPreparationError> {
+    if let Some(surface) = texture.surface_use() {
+        append_surface_use(uses, presented, surface)?;
+    }
+    Ok(())
+}
+
+fn append_surface_use(
+    uses: &mut Vec<PreparedSurfaceUse>,
+    presented: &BTreeSet<GpuSurfaceLeaseId>,
+    surface: &PreparedSurfaceUse,
+) -> Result<(), GpuSubmissionPreparationError> {
+    if presented.contains(&surface.lease().lease_id()) {
+        return Err(GpuSubmissionPreparationError::from_surface_lease(
+            GpuSurfaceLeaseError::new(
+                GpuSurfaceLeaseErrorCategory::AlreadyConsumed,
+                surface.lease().surface().id(),
+                surface.lease().lease_id(),
+                "prepared graph uses a surface acquisition lease after an earlier Present consumed it",
+            ),
+        ));
+    }
+    uses.push(surface.clone());
+    Ok(())
 }
 
 async fn prepare_compute_operation(
@@ -1575,25 +1737,6 @@ fn realized_buffer(
         return Ok(realized.clone());
     }
     let realized = context.realize_buffer(handle).map_err(|error| {
-        GpuSubmissionPreparationError::new(
-            GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
-            error.to_string(),
-        )
-    })?;
-    cache.insert(identity, realized.clone());
-    Ok(realized)
-}
-
-fn realized_texture(
-    context: &GpuContext,
-    cache: &mut BTreeMap<GpuWorkResourceId, GpuRealizedTexture>,
-    handle: &crate::plugins::gpu::GpuTextureHandle,
-) -> Result<GpuRealizedTexture, GpuSubmissionPreparationError> {
-    let identity = handle.diagnostic_identity();
-    if let Some(realized) = cache.get(&identity) {
-        return Ok(realized.clone());
-    }
-    let realized = context.realize_texture(handle).map_err(|error| {
         GpuSubmissionPreparationError::new(
             GpuSubmissionPreparationErrorKind::ResourceRealizationFailed,
             error.to_string(),
@@ -1761,41 +1904,18 @@ fn validate_plan_policy(
     Ok(())
 }
 
-fn unsupported<T>(detail: &'static str) -> Result<T, GpuSubmissionPreparationError> {
-    Err(GpuSubmissionPreparationError::new(
-        GpuSubmissionPreparationErrorKind::UnsupportedOperation,
-        detail,
-    ))
-}
-
-fn encode_submit_and_register(
+fn materialize_staging(
     backend: &WgpuContextState,
-    execution: &Arc<WgpuExecutionState>,
-    submission: GpuSubmissionId,
     plan: &PreparedExecutionPlan,
-) -> Result<(), GpuSubmissionFailure> {
-    if let Some(fault) = backend.health.terminal_fault() {
-        return Err(failure_from_device_fault(&fault));
-    }
-    // Keep this short synchronous backend interval serialized with the residual renderer path for
-    // accepted shared error attribution. Completion/mapping ownership is command-buffer-local and
-    // therefore does not depend on queue-relative callback registration.
-    let _attribution_gate = backend.error_attribution_gate.acquire();
-    let mut encoder = backend
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("RunenGPU G5B submission"),
-        });
+) -> Result<MaterializedStaging, GpuSubmissionFailure> {
     let mut upload_staging = Vec::new();
     let mut readback_staging = Vec::new();
+    let mut uploads = BTreeMap::new();
+    let mut readbacks = BTreeMap::new();
 
-    for operation in &plan.operations {
+    for (index, operation) in plan.operations.iter().enumerate() {
         match operation {
-            PreparedExecutionOperation::Upload {
-                destination,
-                offset,
-                payload,
-            } => {
+            PreparedExecutionOperation::Upload { payload, .. } => {
                 let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
                     label: Some("RunenGPU upload staging"),
                     size: payload.layout().byte_len(),
@@ -1812,20 +1932,13 @@ fn encode_submit_and_register(
                     mapped.copy_from_slice(payload.as_bytes());
                 }
                 staging.unmap();
-                encoder.copy_buffer_to_buffer(
-                    &staging,
-                    0,
-                    &destination.record.object,
-                    *offset,
-                    payload.layout().byte_len(),
-                );
+                uploads.insert(index, Arc::clone(&staging));
                 upload_staging.push(staging);
             }
             PreparedExecutionOperation::TextureUpload {
-                destination,
-                region,
                 staging: staging_layout,
                 payload,
+                ..
             } => {
                 let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
                     label: Some("RunenGPU texture upload staging"),
@@ -1843,15 +1956,118 @@ fn encode_submit_and_register(
                     staging_layout.write_tightly_packed(&mut mapped, payload.as_bytes())?;
                 }
                 staging.unmap();
+                uploads.insert(index, Arc::clone(&staging));
+                upload_staging.push(staging);
+            }
+            PreparedExecutionOperation::Readback {
+                id: readback_id,
+                size,
+                ..
+            } => {
+                let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
+                    label: Some("RunenGPU readback staging"),
+                    size: *size,
+                    usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                }));
+                readbacks.insert(index, Arc::clone(&staging));
+                readback_staging.push((*readback_id, staging));
+            }
+            PreparedExecutionOperation::TextureReadback {
+                id: readback_id,
+                staging: staging_layout,
+                ..
+            } => {
+                let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
+                    label: Some("RunenGPU texture readback staging"),
+                    size: staging_layout.staging_byte_len,
+                    usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                }));
+                readbacks.insert(index, Arc::clone(&staging));
+                readback_staging.push((*readback_id, staging));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(MaterializedStaging {
+        encoded: EncodedSubmission {
+            upload_staging,
+            readback_staging,
+        },
+        uploads,
+        readbacks,
+    })
+}
+
+fn new_submission_encoder(backend: &WgpuContextState) -> CommandEncoder {
+    backend
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("RunenGPU G5B submission"),
+        })
+}
+
+fn encode_submit_and_register(
+    backend: &WgpuContextState,
+    execution: &Arc<WgpuExecutionState>,
+    submission: GpuSubmissionId,
+    plan: &PreparedExecutionPlan,
+    mut surface_guard: Option<&mut WgpuSurfaceLeaseGuard<'_>>,
+) -> Result<(), GpuSubmissionFailure> {
+    if let Some(fault) = backend.health.terminal_fault() {
+        return Err(failure_from_device_fault(&fault));
+    }
+
+    let staging = materialize_staging(backend, plan)?;
+    execution.attach_staging(submission, &staging.encoded)?;
+
+    let mut encoder = new_submission_encoder(backend);
+    let mut segment_readbacks = Vec::new();
+    let mut segments = Vec::new();
+
+    for (index, operation) in plan.operations.iter().enumerate() {
+        match operation {
+            PreparedExecutionOperation::Upload {
+                destination,
+                offset,
+                payload,
+            } => {
+                let staging_buffer = staging.uploads.get(&index).ok_or_else(|| {
+                    GpuSubmissionFailure::new(
+                        GpuSubmissionFailureKind::InternalInvariant,
+                        "materialized upload staging is absent during encoding",
+                    )
+                })?;
+                encoder.copy_buffer_to_buffer(
+                    staging_buffer,
+                    0,
+                    &destination.record.object,
+                    *offset,
+                    payload.layout().byte_len(),
+                );
+            }
+            PreparedExecutionOperation::TextureUpload {
+                destination,
+                region,
+                staging: staging_layout,
+                ..
+            } => {
+                let staging_buffer = staging.uploads.get(&index).ok_or_else(|| {
+                    GpuSubmissionFailure::new(
+                        GpuSubmissionFailureKind::InternalInvariant,
+                        "materialized texture upload staging is absent during encoding",
+                    )
+                })?;
                 encoder.copy_buffer_to_texture(
                     TexelCopyBufferInfo {
-                        buffer: &staging,
+                        buffer: staging_buffer,
                         layout: staging_layout.buffer_layout(),
                     },
-                    texture_copy_info(destination, region),
+                    texture_copy_info(destination, region, surface_guard.as_deref())?,
                     texture_copy_extent(region),
                 );
-                upload_staging.push(staging);
             }
             PreparedExecutionOperation::Compute {
                 pipeline,
@@ -1921,7 +2137,7 @@ fn encode_submit_and_register(
                     .map_err(submission_program_binding_failure)?;
             }
             PreparedExecutionOperation::Render(render) => {
-                encode_render_operation(backend, &mut encoder, render)?;
+                encode_render_operation(backend, &mut encoder, render, surface_guard.as_deref())?;
             }
             PreparedExecutionOperation::Copy {
                 source,
@@ -1946,7 +2162,7 @@ fn encode_submit_and_register(
                     buffer: &source.record.object,
                     layout: wgpu_buffer_texture_copy_layout(layout, region),
                 },
-                texture_copy_info(destination, region),
+                texture_copy_info(destination, region, surface_guard.as_deref())?,
                 texture_copy_extent(region),
             ),
             PreparedExecutionOperation::TextureToBufferCopy {
@@ -1955,7 +2171,7 @@ fn encode_submit_and_register(
                 destination,
                 layout,
             } => encoder.copy_texture_to_buffer(
-                texture_copy_info(source, region),
+                texture_copy_info(source, region, surface_guard.as_deref())?,
                 TexelCopyBufferInfo {
                     buffer: &destination.record.object,
                     layout: wgpu_buffer_texture_copy_layout(layout, region),
@@ -1968,8 +2184,8 @@ fn encode_submit_and_register(
                 destination,
                 destination_region,
             } => encoder.copy_texture_to_texture(
-                texture_copy_info(source, source_region),
-                texture_copy_info(destination, destination_region),
+                texture_copy_info(source, source_region, surface_guard.as_deref())?,
+                texture_copy_info(destination, destination_region, surface_guard.as_deref())?,
                 texture_copy_extent(source_region),
             ),
             PreparedExecutionOperation::BufferZero {
@@ -1995,20 +2211,20 @@ fn encode_submit_and_register(
                 size,
                 ..
             } => {
-                let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
-                    label: Some("RunenGPU readback staging"),
-                    size: *size,
-                    usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-                    mapped_at_creation: false,
-                }));
+                let staging_buffer = staging.readbacks.get(&index).ok_or_else(|| {
+                    GpuSubmissionFailure::new(
+                        GpuSubmissionFailureKind::InternalInvariant,
+                        "materialized readback staging is absent during encoding",
+                    )
+                })?;
                 encoder.copy_buffer_to_buffer(
                     &source.record.object,
                     *source_offset,
-                    &staging,
+                    staging_buffer,
                     0,
                     *size,
                 );
-                readback_staging.push((*readback_id, staging));
+                segment_readbacks.push((*readback_id, Arc::clone(staging_buffer)));
             }
             PreparedExecutionOperation::TextureReadback {
                 id: readback_id,
@@ -2017,51 +2233,82 @@ fn encode_submit_and_register(
                 staging: staging_layout,
                 ..
             } => {
-                let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
-                    label: Some("RunenGPU texture readback staging"),
-                    size: staging_layout.staging_byte_len,
-                    usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-                    mapped_at_creation: false,
-                }));
+                let staging_buffer = staging.readbacks.get(&index).ok_or_else(|| {
+                    GpuSubmissionFailure::new(
+                        GpuSubmissionFailureKind::InternalInvariant,
+                        "materialized texture readback staging is absent during encoding",
+                    )
+                })?;
                 encoder.copy_texture_to_buffer(
-                    texture_copy_info(source, region),
+                    texture_copy_info(source, region, surface_guard.as_deref())?,
                     TexelCopyBufferInfo {
-                        buffer: &staging,
+                        buffer: staging_buffer,
                         layout: staging_layout.buffer_layout(),
                     },
                     texture_copy_extent(region),
                 );
-                readback_staging.push((*readback_id, staging));
+                segment_readbacks.push((*readback_id, Arc::clone(staging_buffer)));
+            }
+            PreparedExecutionOperation::Present { source } => {
+                let next = new_submission_encoder(backend);
+                let current = std::mem::replace(&mut encoder, next);
+                segments.push(EncodedSegment {
+                    command_buffer: current.finish(),
+                    readback_staging: std::mem::take(&mut segment_readbacks),
+                    present_after: Some(source.clone()),
+                });
             }
         }
     }
 
-    let command_buffer = encoder.finish();
+    segments.push(EncodedSegment {
+        command_buffer: encoder.finish(),
+        readback_staging: segment_readbacks,
+        present_after: None,
+    });
+
     if let Some(fault) = backend.health.terminal_fault() {
         return Err(failure_from_device_fault(&fault));
     }
-    let encoded = EncodedSubmission {
-        upload_staging,
-        readback_staging,
-    };
-    // Accepted staging is published before the command buffer can be submitted or any deferred
-    // mapping/completion callback can become runnable.
-    execution.attach_staging(submission, &encoded)?;
-    register_callbacks(execution, submission, &encoded, &command_buffer);
-    backend.queue.submit([command_buffer]);
-    if let Some(fault) = backend.health.terminal_fault() {
-        return Err(failure_from_device_fault(&fault));
+
+    let segment_count = segments.len();
+    for (index, segment) in segments.into_iter().enumerate() {
+        register_readback_callbacks(
+            execution,
+            submission,
+            &segment.readback_staging,
+            &segment.command_buffer,
+        );
+        if index + 1 == segment_count {
+            register_submission_completion(execution, submission, &segment.command_buffer);
+        }
+        backend.queue.submit([segment.command_buffer]);
+        if let Some(surface) = segment.present_after {
+            let guard = surface_guard.as_deref_mut().ok_or_else(|| {
+                GpuSubmissionFailure::new(
+                    GpuSubmissionFailureKind::InternalInvariant,
+                    "prepared Present reached physical submission without the validated G7 lease guard",
+                )
+            })?;
+            guard
+                .present(&backend.queue, surface.lease(), surface.resource())
+                .map_err(GpuSubmissionFailure::from_surface_lease)?;
+        }
+        if let Some(fault) = backend.health.terminal_fault() {
+            return Err(failure_from_device_fault(&fault));
+        }
     }
     Ok(())
 }
 
 fn texture_copy_info<'a>(
-    texture: &'a GpuRealizedTexture,
+    texture: &'a PreparedTexture,
     region: &GpuTextureCopyRegion,
-) -> TexelCopyTextureInfo<'a> {
+    surface_guard: Option<&'a WgpuSurfaceLeaseGuard<'_>>,
+) -> Result<TexelCopyTextureInfo<'a>, GpuSubmissionFailure> {
     let origin = region.origin();
-    TexelCopyTextureInfo {
-        texture: &texture.record.object,
+    Ok(TexelCopyTextureInfo {
+        texture: texture.resolve(surface_guard)?,
         mip_level: region.mip_level(),
         origin: Origin3d {
             x: origin.x(),
@@ -2069,7 +2316,7 @@ fn texture_copy_info<'a>(
             z: origin.z(),
         },
         aspect: map_texture_aspect(region.aspect()),
-    }
+    })
 }
 
 fn texture_copy_extent(region: &GpuTextureCopyRegion) -> Extent3d {
@@ -2176,13 +2423,13 @@ fn submission_pipeline_failure(error: GpuPipelineRealizationError) -> GpuSubmiss
     GpuSubmissionFailure::new(kind, error.to_string())
 }
 
-fn register_callbacks(
+fn register_readback_callbacks(
     execution: &Arc<WgpuExecutionState>,
     submission: GpuSubmissionId,
-    encoded: &EncodedSubmission,
+    readback_staging: &[(GpuReadbackId, Arc<Buffer>)],
     command_buffer: &wgpu::CommandBuffer,
 ) {
-    for (readback, staging) in &encoded.readback_staging {
+    for (readback, staging) in readback_staging {
         let events = Arc::clone(&execution.events);
         let readback = *readback;
         command_buffer.map_buffer_on_submit(staging, MapMode::Read, .., move |result| {
@@ -2196,6 +2443,13 @@ fn register_callbacks(
                 });
         });
     }
+}
+
+fn register_submission_completion(
+    execution: &Arc<WgpuExecutionState>,
+    submission: GpuSubmissionId,
+    command_buffer: &wgpu::CommandBuffer,
+) {
     let events = Arc::clone(&execution.events);
     command_buffer.on_submitted_work_done(move || {
         events
