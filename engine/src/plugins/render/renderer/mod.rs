@@ -675,8 +675,8 @@ struct RendererPendingOperations {
 
 #[derive(Debug, Clone)]
 struct RendererPendingBufferUpload {
-    buffer: GpuRealizedBuffer,
-    bytes: Vec<u8>,
+    operation: crate::plugins::gpu::GpuUploadOperation,
+    legacy_realized: GpuRealizedBuffer,
 }
 
 #[derive(Debug, Clone)]

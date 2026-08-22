@@ -4,8 +4,9 @@ use super::resource_descriptors::{
 };
 use super::*;
 use crate::plugins::gpu::{
-    CurrentRenderBufferUploadTerminal, CurrentRenderTextureUploadTerminal, GpuBufferUsage,
-    GpuMemoryIntent, GpuResourceLifetime, GpuTextureDimension, GpuTextureUsage,
+    CurrentRenderBufferUploadTerminal, CurrentRenderTextureUploadTerminal, GpuBufferRange,
+    GpuBufferRegion, GpuBufferUsage, GpuMemoryIntent, GpuResourceLifetime, GpuTextureDimension,
+    GpuTextureUsage, GpuTransferRegion, GpuUploadOperation, PreparedGpuData, TransferData,
 };
 use crate::plugins::render::features::{
     MATERIAL_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, UiFontAtlasResource,
@@ -105,7 +106,7 @@ impl Renderer {
             GpuResourceLifetime::Transient,
             GpuMemoryIntent::Device,
         )?;
-        pending_operations.queue_buffer(&buffer.realized, contents);
+        pending_operations.queue_buffer(&buffer, contents)?;
         Ok(buffer)
     }
 
@@ -375,9 +376,9 @@ impl Renderer {
                 _pad: [0.0; 2],
             };
             pending_operations.queue_buffer(
-                &rect_pass.screen_buffer.realized,
+                &rect_pass.screen_buffer,
                 bytemuck::bytes_of(&screen),
-            );
+            )?;
         }
         if let Some(stroke_pass) = self.stroke_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -385,9 +386,9 @@ impl Renderer {
                 _pad: [0.0; 2],
             };
             pending_operations.queue_buffer(
-                &stroke_pass.screen_buffer.realized,
+                &stroke_pass.screen_buffer,
                 bytemuck::bytes_of(&screen),
-            );
+            )?;
         }
         if let Some(glyph_pass) = self.glyph_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -395,9 +396,9 @@ impl Renderer {
                 _pad: [0.0; 2],
             };
             pending_operations.queue_buffer(
-                &glyph_pass.screen_buffer.realized,
+                &glyph_pass.screen_buffer,
                 bytemuck::bytes_of(&screen),
-            );
+            )?;
         }
         if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -405,9 +406,9 @@ impl Renderer {
                 _pad: [0.0; 2],
             };
             pending_operations.queue_buffer(
-                &viewport_embed_pass.screen_buffer.realized,
+                &viewport_embed_pass.screen_buffer,
                 bytemuck::bytes_of(&screen),
-            );
+            )?;
         }
         if let Some(product_surface_pass) = self.product_surface_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -415,9 +416,9 @@ impl Renderer {
                 _pad: [0.0; 2],
             };
             pending_operations.queue_buffer(
-                &product_surface_pass.screen_buffer.realized,
+                &product_surface_pass.screen_buffer,
                 bytemuck::bytes_of(&screen),
-            );
+            )?;
         }
 
         let draw_plan = build_ui_draw_plan(
@@ -709,12 +710,31 @@ impl Renderer {
     }
 }
 
+fn canonical_renderer_buffer_upload(
+    buffer: &GpuBufferHandle,
+    contents: &[u8],
+) -> Result<GpuUploadOperation> {
+    let byte_len = u64::try_from(contents.len()).map_err(|_| {
+        anyhow::anyhow!("renderer pending buffer upload byte length exceeds the RunenGPU u64 domain")
+    })?;
+    let label = buffer.descriptor().common().label();
+    let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
+        format!("renderer pending buffer upload {}", label.as_str()),
+        contents,
+        buffer.descriptor().common().provenance().clone(),
+    )?;
+    let range = GpuBufferRange::new(buffer, 0, byte_len)?;
+    let region = GpuBufferRegion::new(buffer, range)?;
+    Ok(GpuUploadOperation::new(region.into(), payload)?)
+}
+
 impl RendererPendingOperations {
-    fn queue_buffer(&mut self, buffer: &GpuRealizedBuffer, contents: &[u8]) {
+    fn queue_buffer(&mut self, buffer: &RendererBufferResource, contents: &[u8]) -> Result<()> {
         self.buffer_uploads.push(RendererPendingBufferUpload {
-            buffer: buffer.clone(),
-            bytes: contents.to_vec(),
+            operation: canonical_renderer_buffer_upload(&buffer._handle, contents)?,
+            legacy_realized: buffer.realized.clone(),
         });
+        Ok(())
     }
 
     pub(super) fn apply(self, context: &GpuContext, queue: &Queue) -> Result<()> {
@@ -743,13 +763,26 @@ impl RendererPendingOperations {
         queue: &Queue,
         upload: &RendererPendingBufferUpload,
     ) -> Result<()> {
+        let GpuTransferRegion::Buffer(destination) = upload.operation.destination() else {
+            return Err(anyhow::anyhow!(
+                "renderer pending buffer upload lowered to a non-buffer destination"
+            ));
+        };
+        if upload.legacy_realized.logical_identity() != destination.buffer().diagnostic_identity() {
+            return Err(anyhow::anyhow!(
+                "renderer pending buffer upload destination '{}' disagrees with its temporary G4C1 realization '{}'",
+                destination.buffer().diagnostic_identity(),
+                upload.legacy_realized.logical_identity()
+            ));
+        }
         context
             .current_render_execution_bridge()
             .for_buffer_upload(
-                &upload.buffer,
+                &upload.legacy_realized,
                 WriteRendererBuffer {
                     queue,
-                    contents: &upload.bytes,
+                    byte_offset: destination.range().offset(),
+                    contents: upload.operation.payload().as_bytes(),
                 },
             )?;
         Ok(())
@@ -758,12 +791,14 @@ impl RendererPendingOperations {
 
 struct WriteRendererBuffer<'a> {
     queue: &'a Queue,
+    byte_offset: u64,
     contents: &'a [u8],
 }
 
 impl CurrentRenderBufferUploadTerminal for WriteRendererBuffer<'_> {
     fn upload_buffer(self, buffer: &Buffer) {
-        self.queue.write_buffer(buffer, 0, self.contents);
+        self.queue
+            .write_buffer(buffer, self.byte_offset, self.contents);
     }
 }
 
@@ -1309,6 +1344,36 @@ mod tests {
         PreparedMaterialTextureBinding, PreparedMaterialTextureBindingLocation,
         PreparedMaterialTextureKind,
     };
+
+    #[test]
+    fn pending_buffer_upload_retains_exact_logical_destination_and_payload() {
+        let mut resource_ids = GpuWorkResourceIdAllocator::new();
+        let buffer = resource_ids
+            .allocate_buffer_handle(
+                super::super::resource_descriptors::buffer_descriptor(
+                    "pending buffer upload test",
+                    16,
+                    [GpuBufferUsage::CopyDestination],
+                    GpuResourceLifetime::Transient,
+                    GpuMemoryIntent::Device,
+                )
+                .expect("test buffer descriptor should be valid"),
+            )
+            .expect("test buffer handle should allocate");
+        let operation = canonical_renderer_buffer_upload(&buffer, &[1_u8, 2, 3, 4])
+            .expect("pending buffer upload should become canonical");
+
+        let GpuTransferRegion::Buffer(destination) = operation.destination() else {
+            panic!("pending buffer upload should retain a buffer destination");
+        };
+        assert_eq!(
+            destination.buffer().diagnostic_identity(),
+            buffer.diagnostic_identity()
+        );
+        assert_eq!(destination.range().offset(), 0);
+        assert_eq!(destination.range().size(), 4);
+        assert_eq!(operation.payload().as_bytes(), &[1_u8, 2, 3, 4]);
+    }
 
     #[test]
     fn material_contribution_hash_uses_encoded_typed_parameter_payload() {
