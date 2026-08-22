@@ -85,8 +85,9 @@ pub(super) enum CanonicalInvocationPreparation {
 /// Transitional per-invocation preparation wrapper.
 ///
 /// The durable G5C1 path is `resolve_canonical_frame` followed by one frame-level
-/// `prepare_render_gpu_frame_work` call. This wrapper remains only so each dependency-ordered
-/// checkpoint compiles before the large renderer caller cutover lands in the same PR.
+/// `prepare_render_gpu_frame_work` call. The current single-invocation caller is deliberately routed
+/// through the same frame resolver so all-or-nothing residual handling and auxiliary occurrence
+/// allocation remain exercised until the caller itself moves to frame scope.
 pub(super) fn prepare_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
@@ -96,27 +97,25 @@ pub(super) fn prepare_canonical_invocation(
     passes: &[CanonicalPassProjection<'_>],
     timing: Option<&LogicalGpuPassTiming>,
 ) -> Result<CanonicalInvocationPreparation> {
-    let mut maximum_occurrence = 0_u64;
-    let projection = CanonicalInvocationProjection {
+    let invocation = CanonicalInvocationProjection {
         projected_uploads,
         passes,
         surface_color_view: None,
         timing,
     };
-    match resolve_canonical_invocation(
-        context,
+    let frame_invocation = CanonicalFrameInvocationProjection {
         flow,
         flow_inputs,
         runtime_resources,
-        projection,
-        &mut maximum_occurrence,
-    )? {
-        CanonicalInvocationResolution::Resolved(nodes) => {
+        invocation,
+    };
+    match resolve_canonical_frame(context, [frame_invocation])? {
+        CanonicalFrameResolution::Resolved(nodes) => {
             Ok(CanonicalInvocationPreparation::Prepared(Box::new(
                 prepare_render_gpu_work(flow, nodes)?,
             )))
         }
-        CanonicalInvocationResolution::PreG7Residual => {
+        CanonicalFrameResolution::PreG7Residual => {
             Ok(CanonicalInvocationPreparation::PreG7Residual)
         }
     }
@@ -175,8 +174,8 @@ pub(super) fn resolve_canonical_frame<'a, 'pass>(
 ///
 /// G5C1 normally reaches this through `resolve_canonical_frame`, which first observes every
 /// existing occurrence in the physical frame before auxiliary IDs are allocated. The direct entry
-/// point remains for the transitional single-invocation wrapper above. If an operation is residual,
-/// no partial canonical node set from this invocation is retained.
+/// point remains for the frame resolver and its bounded transitional wrapper. If an operation is
+/// residual, no partial canonical node set from this invocation is retained.
 pub(super) fn resolve_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
