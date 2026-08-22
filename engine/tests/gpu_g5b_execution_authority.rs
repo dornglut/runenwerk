@@ -33,7 +33,7 @@ fn read(manifest: &Path, relative: &str) -> String {
 }
 
 #[test]
-fn g5b_mapping_and_completion_are_command_buffer_local_before_submit() {
+fn g5b_mapping_and_completion_remain_command_buffer_local_across_g7a_segments() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let backend_root = manifest.join("src/plugins/gpu/backend/wgpu");
     let execution_path = "src/plugins/gpu/backend/wgpu/execution.rs";
@@ -56,43 +56,92 @@ fn g5b_mapping_and_completion_are_command_buffer_local_before_submit() {
     assert_eq!(
         direct_submit_paths,
         BTreeSet::from([execution_path.to_owned()]),
-        "direct private WGPU queue submission must remain owned by the G5B executor; the residual renderer receives only a gated queue loan"
+        "direct private WGPU queue submission must remain owned by the G5 executor; G7 surface presentation may segment that one logical submission but does not create another queue owner"
     );
 
     let execution = compact(&read(&manifest, execution_path));
     assert!(
         !execution.contains("current_render_execution_bridge("),
-        "reusable G5B execution must consume private G4 authority directly, not the residual renderer bridge"
+        "reusable G5 execution must consume private G4/G7 authority directly, not the residual renderer bridge"
     );
     assert!(
         !execution.contains("backend.queue.on_submitted_work_done("),
-        "G5B completion must not regress to queue-relative previous-submit ownership"
+        "G5 completion must not regress to queue-relative previous-submit ownership"
     );
     assert!(
         !execution.contains(".slice(..).map_async("),
-        "G5B readback mapping must be deferred on the command buffer before submission"
+        "G5 readback mapping must be deferred on the owning command buffer before submission"
     );
     assert!(execution.contains("command_buffer.map_buffer_on_submit("));
     assert!(execution.contains("command_buffer.on_submitted_work_done("));
 
-    let gate = execution
-        .find("let_attribution_gate=backend.error_attribution_gate.acquire();")
-        .expect("G5B physical submission must retain the accepted backend-operation gate");
-    let finish = execution
-        .find("letcommand_buffer=encoder.finish();")
-        .expect("G5B execution must finish one owned command buffer");
-    let attach = execution
-        .find("execution.attach_staging(submission,&encoded)?;")
-        .expect("accepted staging must be published before submission");
-    let callbacks = execution
-        .find("register_callbacks(execution,submission,&encoded,&command_buffer);")
-        .expect("mapping and completion callbacks must be command-buffer-local before submission");
-    let submit = execution
-        .find("backend.queue.submit([command_buffer]);")
-        .expect("G5B physical submission must submit that exact command buffer");
+    let submit_start = execution
+        .find("pubfnsubmit_prepared(")
+        .expect("public prepared submission entrypoint must remain explicit");
+    let submit_end = execution[submit_start..]
+        .find("pubfnprogress(")
+        .map(|offset| submit_start + offset)
+        .expect("submission entrypoint must end before progress");
+    let submit = &execution[submit_start..submit_end];
+    let attribution_gate = submit
+        .find("let_attribution_gate=self.backend.error_attribution_gate.acquire();")
+        .expect("accepted physical submission must retain the shared backend-operation attribution gate");
+    let surface_guard = submit
+        .find(".execution_lease_guard(")
+        .expect("G7 surface execution must acquire its lease guard inside the attributed submit interval");
+    let accept = submit
+        .find("self.backend.execution.accept_prepared(&prepared)")
+        .expect("irreversible acceptance must remain explicit");
+    let encode_submit = submit
+        .find("encode_submit_and_register(")
+        .expect("accepted physical execution must remain in the same submit entrypoint");
     assert!(
-        gate < finish && finish < attach && attach < callbacks && callbacks < submit,
-        "one accepted command buffer must own staging publication and deferred callbacks before physical submit"
+        attribution_gate < surface_guard && surface_guard < accept && accept < encode_submit,
+        "lock order must remain attribution gate -> G7 surface authority -> irreversible acceptance -> physical execution"
+    );
+    assert!(
+        !submit.contains("drop(_attribution_gate)"),
+        "the attribution gate must remain live through segmented physical submission and Present"
+    );
+
+    let encode_start = execution
+        .find("fnencode_submit_and_register(")
+        .expect("private physical execution owner must remain explicit");
+    let encode_end = execution[encode_start..]
+        .find("fntexture_copy_info(")
+        .map(|offset| encode_start + offset)
+        .expect("physical execution helper must end before texture copy lowering");
+    let encode = &execution[encode_start..encode_end];
+    let attach = encode
+        .find("execution.attach_staging(submission,&staging.encoded)?;")
+        .expect("accepted staging must be published once before any physical segment is submitted");
+    let map_callbacks = encode
+        .find("register_readback_callbacks(execution,submission,&segment.readback_staging,&segment.command_buffer);")
+        .expect("each physical segment must attach its readback callbacks to its own command buffer");
+    let completion = encode
+        .find("register_submission_completion(execution,submission,&segment.command_buffer);")
+        .expect("logical completion must remain command-buffer-local on the final segment");
+    let queue_submit = encode
+        .find("backend.queue.submit([segment.command_buffer]);")
+        .expect("each owned segment must be submitted by the one G5 executor");
+    let present = encode
+        .find(".present(&backend.queue,surface.lease(),surface.resource())")
+        .expect("Present must consume the lease only after its preceding command segment is submitted");
+    assert!(
+        attach < map_callbacks
+            && map_callbacks < completion
+            && completion < queue_submit
+            && queue_submit < present,
+        "staging publication and command-buffer-local callbacks must precede physical submit, and Present must follow the segment carrying its prior work"
+    );
+    assert!(
+        encode.contains("ifindex+1==segment_count{register_submission_completion("),
+        "only the final physical segment may own logical submission completion"
+    );
+    assert!(
+        encode.contains("present_after:Some(source.clone())")
+            && encode.contains("present_after:None"),
+        "Present must terminate a physical segment and leave one final completion segment, including the terminal-Present case"
     );
 }
 
