@@ -247,16 +247,10 @@ mod tests {
             affinity,
             GpuSurfaceGeneration::first(),
         );
-        let lease = GpuSurfaceResourceLease::new(
-            surface,
-            allocate_surface_lease_id(surface.id()).unwrap(),
-        );
+        let lease =
+            GpuSurfaceResourceLease::new(surface, allocate_surface_lease_id(surface.id()).unwrap());
         let identity = GpuWorkResourceIdAllocator::new().allocate().unwrap();
-        PreparedSurfaceUse::new(
-            lease,
-            WgpuSurfaceLeaseResource::Texture(identity),
-            identity,
-        )
+        PreparedSurfaceUse::new(lease, WgpuSurfaceLeaseResource::Texture(identity), identity)
     }
 
     #[test]
@@ -268,9 +262,11 @@ mod tests {
         super::super::append_surface_use(&mut uses, &presented, &surface).unwrap();
         presented.insert(surface.lease().lease_id());
 
-        let error =
-            super::super::append_surface_use(&mut uses, &presented, &surface).unwrap_err();
-        assert_eq!(error.kind(), GpuSubmissionPreparationErrorKind::SurfaceLease);
+        let error = super::super::append_surface_use(&mut uses, &presented, &surface).unwrap_err();
+        assert_eq!(
+            error.kind(),
+            GpuSubmissionPreparationErrorKind::SurfaceLease
+        );
         assert_eq!(
             error.surface_error().map(|error| error.category()),
             Some(GpuSurfaceLeaseErrorCategory::AlreadyConsumed)
