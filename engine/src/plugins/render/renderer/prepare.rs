@@ -375,30 +375,24 @@ impl Renderer {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            pending_operations.queue_buffer(
-                &rect_pass.screen_buffer,
-                bytemuck::bytes_of(&screen),
-            )?;
+            pending_operations
+                .queue_buffer(&rect_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
         if let Some(stroke_pass) = self.stroke_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            pending_operations.queue_buffer(
-                &stroke_pass.screen_buffer,
-                bytemuck::bytes_of(&screen),
-            )?;
+            pending_operations
+                .queue_buffer(&stroke_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
         if let Some(glyph_pass) = self.glyph_pass.as_ref() {
             let screen = ScreenUniformRaw {
                 size: [surface_width.max(1.0), surface_height.max(1.0)],
                 _pad: [0.0; 2],
             };
-            pending_operations.queue_buffer(
-                &glyph_pass.screen_buffer,
-                bytemuck::bytes_of(&screen),
-            )?;
+            pending_operations
+                .queue_buffer(&glyph_pass.screen_buffer, bytemuck::bytes_of(&screen))?;
         }
         if let Some(viewport_embed_pass) = self.viewport_embed_pass.as_ref() {
             let screen = ScreenUniformRaw {
@@ -715,7 +709,9 @@ fn canonical_renderer_buffer_upload(
     contents: &[u8],
 ) -> Result<GpuUploadOperation> {
     let byte_len = u64::try_from(contents.len()).map_err(|_| {
-        anyhow::anyhow!("renderer pending buffer upload byte length exceeds the RunenGPU u64 domain")
+        anyhow::anyhow!(
+            "renderer pending buffer upload byte length exceeds the RunenGPU u64 domain"
+        )
     })?;
     let label = buffer.descriptor().common().label();
     let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
