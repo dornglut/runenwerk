@@ -5,7 +5,8 @@ use super::logical_operations::{
 use super::logical_timing::LogicalGpuPassTiming;
 use super::*;
 use crate::plugins::gpu::{
-    GpuExecutionPreference, GpuRealizedBuffer, GpuResourceLabel, GpuUploadOperation,
+    GpuExecutionPreference, GpuRealizedBuffer, GpuResourceLabel, GpuTextureViewHandle,
+    GpuUploadOperation,
 };
 use crate::plugins::render::{
     PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, ResolvedRenderGpuWorkNode,
@@ -37,10 +38,12 @@ pub(super) struct CanonicalPassProjection<'a> {
 ///
 /// This groups the execution-complete projection instead of growing the resolver into a bag of
 /// unrelated parameters. G5C1 can therefore reuse the same boundary while moving graph preparation
-/// from invocation scope to frame/surface scope.
+/// from invocation scope to frame/surface scope. `surface_color_view` is the exact logical view of
+/// the currently acquired G7A image when that authority has already moved to the frame caller.
 pub(super) struct CanonicalInvocationProjection<'a, 'pass> {
     pub(super) projected_uploads: &'a [RealizedLogicalBufferUpload],
     pub(super) passes: &'a [CanonicalPassProjection<'pass>],
+    pub(super) surface_color_view: Option<&'a GpuTextureViewHandle>,
     pub(super) timing: Option<&'a LogicalGpuPassTiming>,
 }
 
@@ -76,6 +79,7 @@ pub(super) fn prepare_canonical_invocation(
     let projection = CanonicalInvocationProjection {
         projected_uploads,
         passes,
+        surface_color_view: None,
         timing,
     };
     match resolve_canonical_invocation(
@@ -115,6 +119,7 @@ pub(super) fn resolve_canonical_invocation(
     let CanonicalInvocationProjection {
         projected_uploads,
         passes,
+        surface_color_view,
         timing,
     } = projection;
 
@@ -172,6 +177,7 @@ pub(super) fn resolve_canonical_invocation(
                     runtime_resources,
                     projected.pass,
                     pipeline,
+                    surface_color_view,
                     timing,
                 )?
                 else {
