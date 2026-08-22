@@ -429,6 +429,10 @@ mod tests {
     #[test]
     fn handles_are_clone_but_not_declared_copy() {
         let source = include_str!("handles.rs");
+        let compact = source
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>();
         for name in [
             "GpuBufferHandle",
             "GpuTextureHandle",
@@ -436,8 +440,8 @@ mod tests {
             "GpuSamplerHandle",
             "GpuQuerySetHandle",
         ] {
-            let declaration = format!("typed_handle!({name}");
-            assert!(source.contains(&declaration));
+            let declaration = format!("typed_handle!({name},");
+            assert!(compact.contains(&declaration));
         }
         assert!(!source.contains(&["impl Copy", " for Gpu"].concat()));
         assert!(!source.contains(&["pub fn destroy", "_by_id("].concat()));
