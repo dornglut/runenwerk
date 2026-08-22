@@ -1,5 +1,5 @@
 use super::super::WgpuDeviceHealth;
-use super::{WgpuSurfaceLease, WgpuSurfaceRecord, WgpuSurfaceState, WgpuSurfaceStateInner};
+use super::{WgpuSurfaceLease, WgpuSurfaceState, WgpuSurfaceStateInner};
 use crate::plugins::gpu::{
     GpuContextAffinity, GpuSurfaceLeaseDisposition, GpuSurfaceLeaseError,
     GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId, GpuSurfaceLeaseOwner, GpuSurfaceResourceLease,
@@ -7,7 +7,7 @@ use crate::plugins::gpu::{
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, MutexGuard};
-use wgpu::{Texture, TextureView, TextureViewDescriptor};
+use wgpu::{Queue, Texture, TextureView, TextureViewDescriptor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WgpuSurfaceLeaseResource {
@@ -149,6 +149,7 @@ impl WgpuSurfaceLeaseGuard<'_> {
     /// Consumes and presents one already-pinned physical acquisition exactly once.
     pub(crate) fn present(
         &mut self,
+        queue: &Queue,
         lease: &GpuSurfaceResourceLease,
         resource: WgpuSurfaceLeaseResource,
     ) -> Result<(), GpuSurfaceLeaseError> {
@@ -189,7 +190,7 @@ impl WgpuSurfaceLeaseGuard<'_> {
                 "surface lease cannot be presented",
             ));
         }
-        active.texture.present();
+        queue.present(active.texture);
         Ok(())
     }
 }
