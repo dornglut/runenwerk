@@ -1,8 +1,8 @@
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuContext, GpuRealizedBindGroup, GpuRealizedBindGroupLayout,
     GpuRealizedBuffer, GpuRealizedRenderPipeline, GpuRealizedSampler, GpuRealizedTexture,
-    GpuRealizedTextureView, GpuRuntimeBindingValue, GpuSamplerHandle, GpuTextureHandle,
-    GpuTextureViewHandle, GpuWorkResourceIdAllocator,
+    GpuRealizedTextureView, GpuRuntimeBindingSet, GpuRuntimeBindingValue, GpuSamplerHandle,
+    GpuTextureHandle, GpuTextureViewHandle, GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::backend::WgpuCtx;
@@ -585,7 +585,7 @@ struct ScreenUniformRaw {
 struct RectPass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
-    screen_binding: GpuRuntimeBindingValue,
+    runtime_bindings: GpuRuntimeBindingSet,
     screen_bind_group: GpuRealizedBindGroup,
 }
 
@@ -593,7 +593,7 @@ struct RectPass {
 struct StrokePass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
-    screen_binding: GpuRuntimeBindingValue,
+    runtime_bindings: GpuRuntimeBindingSet,
     screen_bind_group: GpuRealizedBindGroup,
 }
 
@@ -653,7 +653,7 @@ struct RendererSamplerResource {
 
 #[derive(Debug, Clone)]
 struct UiTextureBindings {
-    logical_values: [GpuRuntimeBindingValue; 2],
+    runtime_bindings: GpuRuntimeBindingSet,
     realized: GpuRealizedBindGroup,
 }
 
