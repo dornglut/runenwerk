@@ -175,16 +175,6 @@ impl RendererDynamicTextureTargetCache {
         batch
     }
 
-    pub fn apply_uploads(
-        &mut self,
-        context: &GpuContext,
-        queue: &Queue,
-        uploads: &[RenderDynamicTextureUploadDescriptor],
-    ) -> RendererDynamicTextureUploadReport {
-        let prepared = self.prepare_uploads(uploads);
-        self.apply_prepared_uploads(context, queue, prepared)
-    }
-
     pub(super) fn apply_prepared_uploads(
         &mut self,
         context: &GpuContext,
