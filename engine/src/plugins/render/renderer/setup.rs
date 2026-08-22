@@ -251,12 +251,9 @@ impl Renderer {
             .expect("screen uniform buffers are nonempty");
         let screen_binding = GpuRuntimeBindingValue::new(
             GpuBindingKey::try_new(0, 0)?,
-            [GpuRuntimeBindingResource::Buffer(GpuRuntimeBufferBinding::new(
-                screen_buffer._handle.clone(),
-                0,
-                screen_size,
-                None,
-            ))],
+            [GpuRuntimeBindingResource::Buffer(
+                GpuRuntimeBufferBinding::new(screen_buffer._handle.clone(), 0, screen_size, None),
+            )],
         )?;
         let screen_bind_group = pollster::block_on(
             context.realize_bind_group(&screen_layout, [screen_binding.clone()]),
@@ -485,10 +482,8 @@ impl Renderer {
             _realized: context.realize_texture_view(&view_handle, &texture.realized)?,
             _handle: view_handle,
         };
-        let logical_values = ui_texture_bind_group_values(
-            view._handle.clone(),
-            texture_sampler._handle.clone(),
-        )?;
+        let logical_values =
+            ui_texture_bind_group_values(view._handle.clone(), texture_sampler._handle.clone())?;
         let bind_group = pollster::block_on(
             context.realize_bind_group(&texture_bind_group_layout, logical_values.clone()),
         )?;
