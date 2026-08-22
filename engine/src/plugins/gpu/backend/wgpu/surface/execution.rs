@@ -1,9 +1,15 @@
 use super::super::WgpuDeviceHealth;
-use super::{WgpuSurfaceLease, WgpuSurfaceState, WgpuSurfaceStateInner};
+use super::{
+    WgpuSurfaceLease, WgpuSurfaceRecord, WgpuSurfaceState, WgpuSurfaceStateInner,
+};
 use crate::plugins::gpu::{
     GpuContextAffinity, GpuSurfaceLeaseDisposition, GpuSurfaceLeaseError,
-    GpuSurfaceLeaseErrorCategory, GpuSurfaceResourceLease, GpuWorkResourceId,
+    GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId, GpuSurfaceLeaseOwner,
+    GpuSurfaceResourceLease, GpuWorkResourceId,
 };
+use std::collections::BTreeMap;
+use std::sync::{Arc, MutexGuard};
+use wgpu::{Texture, TextureView, TextureViewDescriptor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WgpuSurfaceLeaseResource {
@@ -17,6 +23,19 @@ impl WgpuSurfaceLeaseResource {
             Self::Texture(identity) | Self::TextureView(identity) => identity,
         }
     }
+}
+
+/// Short private ownership interval used by G5 submission execution.
+///
+/// The surface mutex prevents reconfiguration/acquisition/abandon release from mutating physical
+/// surface-image ownership while accepted work is encoded and submitted. `pinned_owners` retains
+/// only the private acquisition owner for leases actually validated for this interval; logical
+/// handles themselves remain non-owning with respect to the physical `SurfaceTexture`.
+pub(crate) struct WgpuSurfaceLeaseGuard<'a> {
+    affinity: GpuContextAffinity,
+    health: &'a WgpuDeviceHealth,
+    inner: MutexGuard<'a, WgpuSurfaceStateInner>,
+    pinned_owners: BTreeMap<GpuSurfaceLeaseId, Arc<GpuSurfaceLeaseOwner>>,
 }
 
 impl WgpuSurfaceState {
@@ -43,6 +62,148 @@ impl WgpuSurfaceState {
         }
         validate_lease(self.affinity, &inner, lease, resource)?;
         ensure_lease_health(health, lease)
+    }
+
+    pub(crate) fn execution_lease_guard<'a>(
+        &'a self,
+        representative: &GpuSurfaceResourceLease,
+        health: &'a WgpuDeviceHealth,
+    ) -> Result<WgpuSurfaceLeaseGuard<'a>, GpuSurfaceLeaseError> {
+        ensure_lease_health(health, representative)?;
+        validate_affinity(self.affinity, representative)?;
+        let mut inner = self.shared.inner.lock().map_err(|_| {
+            lease_error(
+                GpuSurfaceLeaseErrorCategory::ContextOrDeviceUnavailableOrLost,
+                representative,
+                "surface lease execution authority is unavailable",
+            )
+        })?;
+        for record in inner.records.values_mut() {
+            super::release_abandoned_lease(record);
+        }
+        ensure_lease_health(health, representative)?;
+        Ok(WgpuSurfaceLeaseGuard {
+            affinity: self.affinity,
+            health,
+            inner,
+            pinned_owners: BTreeMap::new(),
+        })
+    }
+}
+
+impl WgpuSurfaceLeaseGuard<'_> {
+    /// Revalidates one logical resource and pins its private physical owner for this submit interval.
+    pub(crate) fn validate_and_pin(
+        &mut self,
+        lease: &GpuSurfaceResourceLease,
+        resource: WgpuSurfaceLeaseResource,
+    ) -> Result<(), GpuSurfaceLeaseError> {
+        ensure_lease_health(self.health, lease)?;
+        let owner = {
+            let active = validate_lease(self.affinity, &self.inner, lease, resource)?;
+            active.owner.upgrade().ok_or_else(|| {
+                lease_error(
+                    GpuSurfaceLeaseErrorCategory::InvalidLease,
+                    lease,
+                    "surface acquisition owner was abandoned before execution acceptance",
+                )
+            })?
+        };
+        self.pinned_owners.entry(lease.lease_id()).or_insert(owner);
+        ensure_lease_health(self.health, lease)
+    }
+
+    /// Resolves an already-pinned surface texture without entering G4C1 realization.
+    pub(crate) fn texture(
+        &self,
+        lease: &GpuSurfaceResourceLease,
+        identity: GpuWorkResourceId,
+    ) -> Result<&Texture, GpuSurfaceLeaseError> {
+        ensure_pinned(self, lease)?;
+        let active = validate_lease(
+            self.affinity,
+            &self.inner,
+            lease,
+            WgpuSurfaceLeaseResource::Texture(identity),
+        )?;
+        Ok(&active.texture.texture)
+    }
+
+    /// Resolves the explicit G7A default view for an already-pinned surface lease.
+    pub(crate) fn create_default_view(
+        &self,
+        lease: &GpuSurfaceResourceLease,
+        identity: GpuWorkResourceId,
+    ) -> Result<TextureView, GpuSurfaceLeaseError> {
+        ensure_pinned(self, lease)?;
+        let active = validate_lease(
+            self.affinity,
+            &self.inner,
+            lease,
+            WgpuSurfaceLeaseResource::TextureView(identity),
+        )?;
+        Ok(active
+            .texture
+            .texture
+            .create_view(&TextureViewDescriptor::default()))
+    }
+
+    /// Consumes and presents one already-pinned physical acquisition exactly once.
+    pub(crate) fn present(
+        &mut self,
+        lease: &GpuSurfaceResourceLease,
+        resource: WgpuSurfaceLeaseResource,
+    ) -> Result<(), GpuSurfaceLeaseError> {
+        ensure_pinned(self, lease)?;
+        validate_lease(self.affinity, &self.inner, lease, resource)?;
+
+        let record = self
+            .inner
+            .records
+            .get_mut(&lease.surface().id())
+            .ok_or_else(|| {
+                lease_error(
+                    GpuSurfaceLeaseErrorCategory::UnknownSurface,
+                    lease,
+                    "surface identity disappeared before Present",
+                )
+            })?;
+        let matches = record
+            .active_lease
+            .as_ref()
+            .is_some_and(|active| active.lease == *lease);
+        if !matches {
+            return Err(lease_error(
+                GpuSurfaceLeaseErrorCategory::InvalidLease,
+                lease,
+                "active physical surface lease changed before Present",
+            ));
+        }
+        lease.mark_presented().map_err(|disposition| {
+            disposition_error(lease, disposition, "surface lease cannot be presented")
+        })?;
+        let active = record
+            .active_lease
+            .take()
+            .expect("Present validated the active lease under exclusive surface ownership");
+        active.texture.present();
+        Ok(())
+    }
+}
+
+fn ensure_pinned(
+    guard: &WgpuSurfaceLeaseGuard<'_>,
+    lease: &GpuSurfaceResourceLease,
+) -> Result<(), GpuSurfaceLeaseError> {
+    ensure_lease_health(guard.health, lease)?;
+    if guard.pinned_owners.contains_key(&lease.lease_id()) {
+        Ok(())
+    } else {
+        Err(lease_error(
+            GpuSurfaceLeaseErrorCategory::InvalidLease,
+            lease,
+            "surface lease was not validated and pinned before private execution",
+        ))
     }
 }
 
@@ -125,17 +286,26 @@ fn validate_affinity(
 fn validate_disposition(lease: &GpuSurfaceResourceLease) -> Result<(), GpuSurfaceLeaseError> {
     match lease.disposition() {
         GpuSurfaceLeaseDisposition::Active => Ok(()),
-        GpuSurfaceLeaseDisposition::Abandoned => Err(lease_error(
-            GpuSurfaceLeaseErrorCategory::InvalidLease,
+        disposition => Err(disposition_error(
             lease,
-            "surface acquisition was abandoned without presentation",
-        )),
-        GpuSurfaceLeaseDisposition::Presented => Err(lease_error(
-            GpuSurfaceLeaseErrorCategory::AlreadyConsumed,
-            lease,
-            "surface acquisition lease was already consumed by Present",
+            disposition,
+            "surface lease is no longer active",
         )),
     }
+}
+
+fn disposition_error(
+    lease: &GpuSurfaceResourceLease,
+    disposition: GpuSurfaceLeaseDisposition,
+    detail: &'static str,
+) -> GpuSurfaceLeaseError {
+    let category = match disposition {
+        GpuSurfaceLeaseDisposition::Active | GpuSurfaceLeaseDisposition::Abandoned => {
+            GpuSurfaceLeaseErrorCategory::InvalidLease
+        }
+        GpuSurfaceLeaseDisposition::Presented => GpuSurfaceLeaseErrorCategory::AlreadyConsumed,
+    };
+    lease_error(category, lease, detail)
 }
 
 fn ensure_lease_health(
