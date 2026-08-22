@@ -1,4 +1,4 @@
-mod execution;
+pub(crate) mod execution;
 
 use super::adapter_mapping::known_formats;
 use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
