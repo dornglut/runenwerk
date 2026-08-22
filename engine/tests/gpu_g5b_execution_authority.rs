@@ -116,7 +116,7 @@ fn g5b_mapping_and_completion_remain_command_buffer_local_across_g7a_segments() 
         .find("execution.attach_staging(submission,&staging.encoded)?;")
         .expect("accepted staging must be published once before any physical segment is submitted");
     let map_callbacks = encode
-        .find("register_readback_callbacks(execution,submission,&segment.readback_staging,&segment.command_buffer);")
+        .find("register_readback_callbacks(execution,submission,&segment.readback_staging,&segment.command_buffer,);")
         .expect("each physical segment must attach its readback callbacks to its own command buffer");
     let completion = encode
         .find("register_submission_completion(execution,submission,&segment.command_buffer);")
