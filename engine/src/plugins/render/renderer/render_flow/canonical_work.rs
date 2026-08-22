@@ -33,11 +33,19 @@ pub(super) struct CanonicalPassProjection<'a> {
     pub(super) has_capture_work: bool,
 }
 
+/// One invocation's already-realized inputs for canonical GPU-node resolution.
+///
+/// This groups the execution-complete projection instead of growing the resolver into a bag of
+/// unrelated parameters. G5C1 can therefore reuse the same boundary while moving graph preparation
+/// from invocation scope to frame/surface scope.
+pub(super) struct CanonicalInvocationProjection<'a, 'pass> {
+    pub(super) projected_uploads: &'a [RealizedLogicalBufferUpload],
+    pub(super) passes: &'a [CanonicalPassProjection<'pass>],
+    pub(super) timing: Option<&'a LogicalGpuPassTiming>,
+}
+
 pub(super) enum CanonicalInvocationResolution {
-    Resolved {
-        nodes: Vec<ResolvedRenderGpuWorkNode>,
-        occurrences: Vec<RenderGpuWorkOccurrenceId>,
-    },
+    Resolved(Vec<ResolvedRenderGpuWorkNode>),
     /// The invocation contains at least one operation whose durable logical identity/semantics is
     /// intentionally deferred to G7A/G5C. No partial canonical node set is retained in this case.
     PreG7Residual,
@@ -65,17 +73,20 @@ pub(super) fn prepare_canonical_invocation(
     timing: Option<&LogicalGpuPassTiming>,
 ) -> Result<CanonicalInvocationPreparation> {
     let mut maximum_occurrence = 0_u64;
+    let projection = CanonicalInvocationProjection {
+        projected_uploads,
+        passes,
+        timing,
+    };
     match resolve_canonical_invocation(
         context,
         flow,
         flow_inputs,
         runtime_resources,
-        projected_uploads,
-        passes,
-        timing,
+        projection,
         &mut maximum_occurrence,
     )? {
-        CanonicalInvocationResolution::Resolved { nodes, .. } => {
+        CanonicalInvocationResolution::Resolved(nodes) => {
             Ok(CanonicalInvocationPreparation::Prepared(Box::new(
                 prepare_render_gpu_work(flow, nodes)?,
             )))
@@ -98,20 +109,22 @@ pub(super) fn resolve_canonical_invocation(
     flow: &CompiledRenderFlowPlan,
     flow_inputs: &PreparedFlowInputs,
     runtime_resources: &FlowRuntimeResources,
-    projected_uploads: &[RealizedLogicalBufferUpload],
-    passes: &[CanonicalPassProjection<'_>],
-    timing: Option<&LogicalGpuPassTiming>,
+    projection: CanonicalInvocationProjection<'_, '_>,
     maximum_occurrence: &mut u64,
 ) -> Result<CanonicalInvocationResolution> {
+    let CanonicalInvocationProjection {
+        projected_uploads,
+        passes,
+        timing,
+    } = projection;
+
     if passes.iter().any(|pass| pass.has_capture_work) {
         return Ok(CanonicalInvocationResolution::PreG7Residual);
     }
 
     let mut nodes = Vec::<ResolvedRenderGpuWorkNode>::new();
-    let mut occurrences = Vec::<RenderGpuWorkOccurrenceId>::new();
     for upload in projected_uploads {
         *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
-        occurrences.push(upload.occurrence);
         nodes.push(ResolvedRenderGpuWorkNode::upload(
             upload.occurrence,
             occurrence_label(flow, "upload", upload.occurrence)?,
@@ -125,7 +138,6 @@ pub(super) fn resolve_canonical_invocation(
         let mut pass_control = projected.control_order_after.to_vec();
         if let Some(upload) = projected.fixed_step_upload {
             *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
-            occurrences.push(upload.occurrence);
             nodes.push(ResolvedRenderGpuWorkNode::upload(
                 upload.occurrence,
                 occurrence_label(flow, "fixed-step-upload", upload.occurrence)?,
@@ -181,7 +193,6 @@ pub(super) fn resolve_canonical_invocation(
             }
         };
 
-        occurrences.push(projected.occurrence);
         nodes.push(ResolvedRenderGpuWorkNode::pass(
             projected.occurrence,
             occurrence_label(flow, "pass", projected.occurrence)?,
@@ -199,7 +210,6 @@ pub(super) fn resolve_canonical_invocation(
             timing.readback_buffer(),
         )?;
         let resolve_occurrence = allocate_aux_occurrence(maximum_occurrence)?;
-        occurrences.push(resolve_occurrence);
         nodes.push(ResolvedRenderGpuWorkNode::timing_resolve(
             resolve_occurrence,
             occurrence_label(flow, "timing-resolve", resolve_occurrence)?,
@@ -207,7 +217,6 @@ pub(super) fn resolve_canonical_invocation(
             [],
         ));
         let readback_occurrence = allocate_aux_occurrence(maximum_occurrence)?;
-        occurrences.push(readback_occurrence);
         nodes.push(ResolvedRenderGpuWorkNode::timing_readback_copy(
             readback_occurrence,
             occurrence_label(flow, "timing-readback-copy", readback_occurrence)?,
@@ -220,7 +229,7 @@ pub(super) fn resolve_canonical_invocation(
         return Ok(CanonicalInvocationResolution::PreG7Residual);
     }
 
-    Ok(CanonicalInvocationResolution::Resolved { nodes, occurrences })
+    Ok(CanonicalInvocationResolution::Resolved(nodes))
 }
 
 fn timestamp_projection(
