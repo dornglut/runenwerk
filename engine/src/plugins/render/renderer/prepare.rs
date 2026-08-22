@@ -810,7 +810,8 @@ impl RendererPendingOperations {
                 "renderer pending texture upload lowered to a non-texture destination"
             ));
         };
-        if upload.legacy_realized.logical_identity() != destination.texture().diagnostic_identity() {
+        if upload.legacy_realized.logical_identity() != destination.texture().diagnostic_identity()
+        {
             return Err(anyhow::anyhow!(
                 "renderer pending texture upload destination '{}' disagrees with its temporary G4C1 realization '{}'",
                 destination.texture().diagnostic_identity(),
@@ -820,8 +821,16 @@ impl RendererPendingOperations {
         let extent = destination.extent();
         let bytes_per_row = extent
             .width()
-            .checked_mul(destination.texture().descriptor().format().bytes_per_texel())
-            .ok_or_else(|| anyhow::anyhow!("renderer pending texture upload row byte length overflowed"))?;
+            .checked_mul(
+                destination
+                    .texture()
+                    .descriptor()
+                    .format()
+                    .bytes_per_texel(),
+            )
+            .ok_or_else(|| {
+                anyhow::anyhow!("renderer pending texture upload row byte length overflowed")
+            })?;
         let aspect = match destination.aspect() {
             GpuTextureAspect::All | GpuTextureAspect::Color => TextureAspect::All,
             GpuTextureAspect::DepthOnly => TextureAspect::DepthOnly,
