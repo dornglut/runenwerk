@@ -226,3 +226,55 @@ fn missing_surface_guard() -> GpuSubmissionFailure {
         "surface-acquired execution resource reached encoding without the validated G7 lease guard",
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugins::gpu::{
+        GpuContextAffinity, GpuContextId, GpuDeviceGeneration, GpuSubmissionPreparationErrorKind,
+        GpuSurfaceGeneration, GpuSurfaceHandle, GpuSurfaceLeaseErrorCategory,
+        GpuSurfaceResourceLease, GpuWorkResourceIdAllocator, allocate_surface_id,
+        allocate_surface_lease_id,
+    };
+    use std::collections::BTreeSet;
+    use std::num::NonZeroU64;
+
+    fn surface_use() -> PreparedSurfaceUse {
+        let context = GpuContextId::test_value(NonZeroU64::new(1).unwrap());
+        let affinity = GpuContextAffinity::test_value(context, GpuDeviceGeneration::first());
+        let surface = GpuSurfaceHandle::new(
+            allocate_surface_id().unwrap(),
+            affinity,
+            GpuSurfaceGeneration::first(),
+        );
+        let lease = GpuSurfaceResourceLease::new(
+            surface,
+            allocate_surface_lease_id(surface.id()).unwrap(),
+        );
+        let identity = GpuWorkResourceIdAllocator::new().allocate().unwrap();
+        PreparedSurfaceUse::new(
+            lease,
+            WgpuSurfaceLeaseResource::Texture(identity),
+            identity,
+        )
+    }
+
+    #[test]
+    fn present_is_terminal_for_later_prepared_uses_of_the_same_surface_lease() {
+        let surface = surface_use();
+        let mut uses = Vec::new();
+        let mut presented = BTreeSet::new();
+
+        super::super::append_surface_use(&mut uses, &presented, &surface).unwrap();
+        presented.insert(surface.lease().lease_id());
+
+        let error =
+            super::super::append_surface_use(&mut uses, &presented, &surface).unwrap_err();
+        assert_eq!(error.kind(), GpuSubmissionPreparationErrorKind::SurfaceLease);
+        assert_eq!(
+            error.surface_error().map(|error| error.category()),
+            Some(GpuSurfaceLeaseErrorCategory::AlreadyConsumed)
+        );
+        assert_eq!(uses.len(), 1);
+    }
+}
