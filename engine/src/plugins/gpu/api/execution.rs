@@ -150,7 +150,7 @@ pub enum GpuSubmissionFailureKind {
 pub struct GpuSubmissionFailure {
     kind: GpuSubmissionFailureKind,
     detail: String,
-    surface_error: Option<GpuSurfaceLeaseError>,
+    surface_error: Option<Box<GpuSurfaceLeaseError>>,
 }
 
 impl GpuSubmissionFailure {
@@ -166,7 +166,7 @@ impl GpuSubmissionFailure {
         Self {
             kind: GpuSubmissionFailureKind::SurfaceLease,
             detail: error.to_string(),
-            surface_error: Some(error),
+            surface_error: Some(Box::new(error)),
         }
     }
 
@@ -178,8 +178,8 @@ impl GpuSubmissionFailure {
         &self.detail
     }
 
-    pub const fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
-        self.surface_error.as_ref()
+    pub fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
+        self.surface_error.as_deref()
     }
 }
 
@@ -321,7 +321,7 @@ pub enum GpuSubmissionPreparationErrorKind {
 pub struct GpuSubmissionPreparationError {
     kind: GpuSubmissionPreparationErrorKind,
     detail: String,
-    surface_error: Option<GpuSurfaceLeaseError>,
+    surface_error: Option<Box<GpuSurfaceLeaseError>>,
 }
 
 impl GpuSubmissionPreparationError {
@@ -337,7 +337,7 @@ impl GpuSubmissionPreparationError {
         Self {
             kind: GpuSubmissionPreparationErrorKind::SurfaceLease,
             detail: error.to_string(),
-            surface_error: Some(error),
+            surface_error: Some(Box::new(error)),
         }
     }
 
@@ -349,8 +349,8 @@ impl GpuSubmissionPreparationError {
         &self.detail
     }
 
-    pub const fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
-        self.surface_error.as_ref()
+    pub fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
+        self.surface_error.as_deref()
     }
 }
 
@@ -393,7 +393,7 @@ pub enum GpuSubmissionRejectionKind {
 pub struct GpuSubmissionRejectionReason {
     kind: GpuSubmissionRejectionKind,
     detail: String,
-    surface_error: Option<GpuSurfaceLeaseError>,
+    surface_error: Option<Box<GpuSurfaceLeaseError>>,
 }
 
 impl GpuSubmissionRejectionReason {
@@ -409,7 +409,7 @@ impl GpuSubmissionRejectionReason {
         Self {
             kind: GpuSubmissionRejectionKind::SurfaceLease,
             detail: error.to_string(),
-            surface_error: Some(error),
+            surface_error: Some(Box::new(error)),
         }
     }
 
@@ -421,8 +421,8 @@ impl GpuSubmissionRejectionReason {
         &self.detail
     }
 
-    pub const fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
-        self.surface_error.as_ref()
+    pub fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
+        self.surface_error.as_deref()
     }
 }
 
