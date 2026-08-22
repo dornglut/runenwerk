@@ -249,7 +249,7 @@ impl RenderGpuWorkSidecar {
         if self.entries.contains_key(&node_id) {
             return Err(RenderGpuWorkAdapterError::DuplicateSidecarPayload { node_id });
         }
-        self.entries.insert(node_id, payload);
+        self.entries.insert(node_id, payload)?;
         Ok(())
     }
 
@@ -333,7 +333,7 @@ pub(crate) fn prepare_render_gpu_work(
     plan: &CompiledRenderFlowPlan,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
 ) -> Result<PreparedRenderWorkPlan, RenderGpuWorkAdapterError> {
-    prepare_resolved_render_gpu_work(
+    prepare_render_gpu_frame_work(
         GpuResourceLabel::new(format!("render.flow.{}.work", plan.flow_id))?,
         nodes,
     )
@@ -807,7 +807,7 @@ mod tests {
             assert!(
                 initialization.final_coverage().is_some(),
                 "frame graph should own final initialization coverage for '{}'",
-                buffer.descriptor().common().label()
+                buffer.descriptor().common().label().as_str()
             );
         }
     }
