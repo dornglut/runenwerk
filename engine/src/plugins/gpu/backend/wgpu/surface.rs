@@ -1,7 +1,5 @@
 mod execution;
 
-pub(crate) use execution::WgpuSurfaceLeaseResource;
-
 use super::adapter_mapping::known_formats;
 use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
@@ -351,11 +349,12 @@ impl WgpuSurfaceState {
         }
 
         let releaser: Arc<dyn GpuSurfaceLeaseReleaser> = self.shared.clone();
-        let (records, resource_ids) = (&mut inner.records, &mut inner.resource_ids);
-        let record = records
+        let resources =
+            build_acquired_surface_resources(handle, &configuration, &mut inner.resource_ids)?;
+        let record = inner
+            .records
             .get_mut(&handle.id())
             .expect("validated surface record remains present while acquisition authority is held");
-        let resources = build_acquired_surface_resources(handle, &configuration, resource_ids)?;
         let owner = GpuSurfaceLeaseOwner::new(resources.lease.clone(), Arc::downgrade(&releaser));
         let image = GpuAcquiredSurfaceImage::new(
             handle,
