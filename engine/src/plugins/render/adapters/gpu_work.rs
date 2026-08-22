@@ -249,7 +249,7 @@ impl RenderGpuWorkSidecar {
         if self.entries.contains_key(&node_id) {
             return Err(RenderGpuWorkAdapterError::DuplicateSidecarPayload { node_id });
         }
-        self.entries.insert(node_id, payload)?;
+        self.entries.insert(node_id, payload);
         Ok(())
     }
 
