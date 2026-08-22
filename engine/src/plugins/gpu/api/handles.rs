@@ -20,37 +20,21 @@ enum GpuResourceKind {
 struct GpuLogicalLease {
     id: GpuWorkResourceId,
     kind: GpuResourceKind,
-    surface_lease: Option<GpuSurfaceResourceLease>,
 }
 
 impl GpuLogicalLease {
     const fn new(id: GpuWorkResourceId, kind: GpuResourceKind) -> Self {
-        Self {
-            id,
-            kind,
-            surface_lease: None,
-        }
-    }
-
-    fn surface(
-        id: GpuWorkResourceId,
-        kind: GpuResourceKind,
-        surface_lease: GpuSurfaceResourceLease,
-    ) -> Self {
-        Self {
-            id,
-            kind,
-            surface_lease: Some(surface_lease),
-        }
+        Self { id, kind }
     }
 }
 
 macro_rules! typed_handle {
-    ($name:ident, $descriptor:ty, $kind:ident) => {
+    ($name:ident, $descriptor:ty, $kind:ident $(, $surface_field:ident : $surface_type:ty)?) => {
         #[derive(Clone)]
         pub struct $name {
             lease: Arc<GpuLogicalLease>,
             descriptor: Arc<$descriptor>,
+            $($surface_field: Option<$surface_type>,)?
         }
 
         impl $name {
@@ -58,6 +42,7 @@ macro_rules! typed_handle {
                 Self {
                     lease: Arc::new(GpuLogicalLease::new(id, GpuResourceKind::$kind)),
                     descriptor: Arc::new(descriptor),
+                    $($surface_field: None,)?
                 }
             }
 
@@ -89,11 +74,12 @@ macro_rules! typed_handle {
 
         impl fmt::Debug for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.debug_struct(stringify!($name))
+                let mut debug = f.debug_struct(stringify!($name));
+                debug
                     .field("diagnostic_identity", &self.lease.id)
-                    .field("surface_lease", &self.lease.surface_lease)
-                    .field("descriptor", &self.descriptor)
-                    .finish()
+                    .field("descriptor", &self.descriptor);
+                $(debug.field(stringify!($surface_field), &self.$surface_field);)?
+                debug.finish()
             }
         }
 
@@ -132,7 +118,12 @@ macro_rules! typed_handle {
 }
 
 typed_handle!(GpuBufferHandle, GpuBufferDescriptor, Buffer);
-typed_handle!(GpuTextureHandle, GpuTextureDescriptor, Texture);
+typed_handle!(
+    GpuTextureHandle,
+    GpuTextureDescriptor,
+    Texture,
+    surface_lease: GpuSurfaceResourceLease
+);
 typed_handle!(GpuTextureViewHandle, GpuTextureViewDescriptor, TextureView);
 typed_handle!(GpuSamplerHandle, GpuSamplerDescriptor, Sampler);
 typed_handle!(GpuQuerySetHandle, GpuQuerySetDescriptor, QuerySet);
@@ -144,17 +135,14 @@ impl GpuTextureHandle {
         surface_lease: GpuSurfaceResourceLease,
     ) -> Self {
         Self {
-            lease: Arc::new(GpuLogicalLease::surface(
-                id,
-                GpuResourceKind::Texture,
-                surface_lease,
-            )),
+            lease: Arc::new(GpuLogicalLease::new(id, GpuResourceKind::Texture)),
             descriptor: Arc::new(descriptor),
+            surface_lease: Some(surface_lease),
         }
     }
 
     pub(crate) fn surface_lease(&self) -> Option<GpuSurfaceResourceLease> {
-        self.lease.surface_lease.clone()
+        self.surface_lease.clone()
     }
 }
 
