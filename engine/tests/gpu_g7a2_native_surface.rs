@@ -5,6 +5,8 @@ use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
+#[cfg(target_os = "linux")]
+use winit::platform::x11::EventLoopBuilderExtX11;
 use winit::window::{Window, WindowId};
 
 const WIDTH: u32 = 64;
@@ -213,7 +215,10 @@ impl ApplicationHandler for NativeSurfaceProof {
 #[test]
 #[ignore = "requires Xvfb plus a Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_surface_acquire_clear_present_and_reacquire_uses_public_runengpu_lifecycle() {
-    let event_loop = EventLoop::builder()
+    let mut event_loop_builder = EventLoop::builder();
+    #[cfg(target_os = "linux")]
+    event_loop_builder.with_x11().with_any_thread(true);
+    let event_loop = event_loop_builder
         .build()
         .expect("native conformance environment must create a winit event loop");
     let mut proof = NativeSurfaceProof::default();
