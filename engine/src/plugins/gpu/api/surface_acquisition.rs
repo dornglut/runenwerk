@@ -85,14 +85,24 @@ impl GpuSurfaceLeaseDisposition {
     }
 }
 
+/// One clone-bounded logical surface-lease record.
+///
+/// The record carries only backend-neutral identity and terminal lifecycle evidence. It owns no
+/// physical surface image and no backend callback. Keeping the entire record behind one `Arc`
+/// keeps surface provenance pointer-sized at logical handle sites while preserving exact shared
+/// Abandoned/Presented evidence for surviving logical clones.
 #[derive(Debug)]
 struct GpuSurfaceLeaseState {
+    surface: GpuSurfaceHandle,
+    lease_id: GpuSurfaceLeaseId,
     disposition: AtomicU8,
 }
 
 impl GpuSurfaceLeaseState {
-    fn new() -> Self {
+    fn new(surface: GpuSurfaceHandle, lease_id: GpuSurfaceLeaseId) -> Self {
         Self {
+            surface,
+            lease_id,
             disposition: AtomicU8::new(GpuSurfaceLeaseDisposition::Active.as_u8()),
         }
     }
@@ -126,43 +136,36 @@ impl GpuSurfaceLeaseState {
 /// Non-owning provenance carried by a surface-acquired logical texture lease.
 ///
 /// This value deliberately contains no backend object and no strong physical-owner reference.
-/// Logical handle clones retain only immutable surface/context/generation/lease identity plus the
-/// tiny terminal-state record needed to distinguish abandonment from successful presentation.
-/// Retaining this metadata cannot keep a physical swapchain image alive.
+/// Logical handle clones retain one shared backend-neutral identity/lifecycle record; retaining it
+/// cannot keep a physical swapchain image alive. The private G7 owner remains solely responsible
+/// for mapping that identity to the exact active physical acquisition.
+#[repr(transparent)]
 #[derive(Clone)]
-pub(crate) struct GpuSurfaceResourceLease {
-    surface: GpuSurfaceHandle,
-    lease_id: GpuSurfaceLeaseId,
-    state: Arc<GpuSurfaceLeaseState>,
-}
+pub(crate) struct GpuSurfaceResourceLease(Arc<GpuSurfaceLeaseState>);
 
 impl GpuSurfaceResourceLease {
     pub(crate) fn new(surface: GpuSurfaceHandle, lease_id: GpuSurfaceLeaseId) -> Self {
-        Self {
-            surface,
-            lease_id,
-            state: Arc::new(GpuSurfaceLeaseState::new()),
-        }
+        Self(Arc::new(GpuSurfaceLeaseState::new(surface, lease_id)))
     }
 
-    pub(crate) const fn surface(&self) -> GpuSurfaceHandle {
-        self.surface
+    pub(crate) fn surface(&self) -> GpuSurfaceHandle {
+        self.0.surface
     }
 
-    pub(crate) const fn lease_id(&self) -> GpuSurfaceLeaseId {
-        self.lease_id
+    pub(crate) fn lease_id(&self) -> GpuSurfaceLeaseId {
+        self.0.lease_id
     }
 
     pub(crate) fn disposition(&self) -> GpuSurfaceLeaseDisposition {
-        self.state.disposition()
+        self.0.disposition()
     }
 
     pub(crate) fn mark_abandoned(&self) {
-        self.state.abandon();
+        self.0.abandon();
     }
 
     pub(crate) fn mark_presented(&self) -> Result<(), GpuSurfaceLeaseDisposition> {
-        self.state.present()
+        self.0.present()
     }
 }
 
@@ -170,8 +173,8 @@ impl fmt::Debug for GpuSurfaceResourceLease {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("GpuSurfaceResourceLease")
-            .field("surface", &self.surface)
-            .field("lease_id", &self.lease_id)
+            .field("surface", &self.surface())
+            .field("lease_id", &self.lease_id())
             .field("disposition", &self.disposition())
             .finish()
     }
@@ -179,7 +182,7 @@ impl fmt::Debug for GpuSurfaceResourceLease {
 
 impl PartialEq for GpuSurfaceResourceLease {
     fn eq(&self, other: &Self) -> bool {
-        self.surface == other.surface && self.lease_id == other.lease_id
+        self.surface() == other.surface() && self.lease_id() == other.lease_id()
     }
 }
 
@@ -187,8 +190,8 @@ impl Eq for GpuSurfaceResourceLease {}
 
 impl Hash for GpuSurfaceResourceLease {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.surface.hash(state);
-        self.lease_id.hash(state);
+        self.surface().hash(state);
+        self.lease_id().hash(state);
     }
 }
 
