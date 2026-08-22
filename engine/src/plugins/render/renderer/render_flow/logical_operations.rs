@@ -488,12 +488,8 @@ mod tests {
         assert_eq!(target.size, (37, 19));
         assert!(!target.is_depth);
         assert!(
-            logical_texture_target(
-                &runtime_resources,
-                &RuntimeResourceKey::SurfaceColor,
-                None,
-            )
-            .is_none(),
+            logical_texture_target(&runtime_resources, &RuntimeResourceKey::SurfaceColor, None,)
+                .is_none(),
             "surface color remains residual until the acquired G7A view is supplied"
         );
     }
