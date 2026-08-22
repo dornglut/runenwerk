@@ -249,24 +249,23 @@ impl Renderer {
         ))?;
         let screen_size = NonZeroU64::new(screen_buffer._handle.descriptor().size_bytes())
             .expect("screen uniform buffers are nonempty");
-        let screen_bind_group = pollster::block_on(context.realize_bind_group(
-            &screen_layout,
-            [GpuRuntimeBindingValue::new(
-                GpuBindingKey::try_new(0, 0)?,
-                [GpuRuntimeBindingResource::Buffer(
-                    GpuRuntimeBufferBinding::new(
-                        screen_buffer._handle.clone(),
-                        0,
-                        screen_size,
-                        None,
-                    ),
-                )],
-            )?],
-        ))?;
+        let screen_binding = GpuRuntimeBindingValue::new(
+            GpuBindingKey::try_new(0, 0)?,
+            [GpuRuntimeBindingResource::Buffer(GpuRuntimeBufferBinding::new(
+                screen_buffer._handle.clone(),
+                0,
+                screen_size,
+                None,
+            ))],
+        )?;
+        let screen_bind_group = pollster::block_on(
+            context.realize_bind_group(&screen_layout, [screen_binding.clone()]),
+        )?;
 
         Ok(UiProgramBindingArtifacts {
             pipeline,
             screen_buffer,
+            screen_binding,
             screen_bind_group,
             texture_bind_group_layout: texture_layout,
             texture_sampler,
@@ -300,6 +299,7 @@ impl Renderer {
         self.rect_pass = Some(RectPass {
             pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
+            screen_binding: artifacts.screen_binding,
             screen_bind_group: artifacts.screen_bind_group,
         });
         self.rect_pass_format = Some(format);
@@ -329,6 +329,7 @@ impl Renderer {
         self.stroke_pass = Some(StrokePass {
             pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
+            screen_binding: artifacts.screen_binding,
             screen_bind_group: artifacts.screen_bind_group,
         });
         self.stroke_pass_format = Some(format);
@@ -357,6 +358,7 @@ impl Renderer {
         self.glyph_pass = Some(GlyphPass {
             pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
+            screen_binding: artifacts.screen_binding,
             screen_bind_group: artifacts.screen_bind_group,
             texture_bind_group_layout: artifacts
                 .texture_bind_group_layout
@@ -392,6 +394,7 @@ impl Renderer {
         self.viewport_embed_pass = Some(ViewportEmbedPass {
             pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
+            screen_binding: artifacts.screen_binding,
             screen_bind_group: artifacts.screen_bind_group,
             texture_bind_group_layout: artifacts
                 .texture_bind_group_layout
@@ -426,6 +429,7 @@ impl Renderer {
         self.product_surface_pass = Some(ProductSurfacePass {
             pipeline: artifacts.pipeline,
             screen_buffer: artifacts.screen_buffer,
+            screen_binding: artifacts.screen_binding,
             screen_bind_group: artifacts.screen_bind_group,
             texture_bind_group_layout: artifacts
                 .texture_bind_group_layout
@@ -481,26 +485,13 @@ impl Renderer {
             _realized: context.realize_texture_view(&view_handle, &texture.realized)?,
             _handle: view_handle,
         };
-        let bind_group = pollster::block_on(context.realize_bind_group(
-            &texture_bind_group_layout,
-            [
-                GpuRuntimeBindingValue::new(
-                    GpuBindingKey::try_new(1, 0)?,
-                    [GpuRuntimeBindingResource::TextureView(
-                        GpuRuntimeTextureViewBinding::new(
-                            view._handle.clone(),
-                            GpuTextureViewDimension::D2,
-                        ),
-                    )],
-                )?,
-                GpuRuntimeBindingValue::new(
-                    GpuBindingKey::try_new(1, 1)?,
-                    [GpuRuntimeBindingResource::Sampler(
-                        texture_sampler._handle.clone(),
-                    )],
-                )?,
-            ],
-        ))?;
+        let logical_values = ui_texture_bind_group_values(
+            view._handle.clone(),
+            texture_sampler._handle.clone(),
+        )?;
+        let bind_group = pollster::block_on(
+            context.realize_bind_group(&texture_bind_group_layout, logical_values.clone()),
+        )?;
 
         // The glyph texture/view/sampler resources and bind group are authoritative before G5.
         // Retain the canonical upload operation plus only the temporary realized-object sidecar
@@ -512,7 +503,10 @@ impl Renderer {
             UiGlyphAtlasGpu {
                 _texture: texture,
                 _view: view,
-                bind_group,
+                texture_bindings: UiTextureBindings {
+                    logical_values,
+                    realized: bind_group,
+                },
             },
         );
         Ok(true)
@@ -649,7 +643,13 @@ impl Renderer {
                         continue;
                     };
                     pass.set_pipeline(pipelines[slots.rect]);
-                    set_ui_bind_group(context, &mut pass, 0, &rect_pass.screen_bind_group)?;
+                    set_ui_bind_group(
+                        context,
+                        &mut pass,
+                        0,
+                        std::slice::from_ref(&rect_pass.screen_binding),
+                        &rect_pass.screen_bind_group,
+                    )?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
@@ -677,7 +677,13 @@ impl Renderer {
                         continue;
                     };
                     pass.set_pipeline(pipelines[slot]);
-                    set_ui_bind_group(context, &mut pass, 0, &stroke_pass.screen_bind_group)?;
+                    set_ui_bind_group(
+                        context,
+                        &mut pass,
+                        0,
+                        std::slice::from_ref(&stroke_pass.screen_binding),
+                        &stroke_pass.screen_bind_group,
+                    )?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
@@ -709,6 +715,7 @@ impl Renderer {
                         context,
                         &mut pass,
                         0,
+                        std::slice::from_ref(&viewport_embed_pass.screen_binding),
                         &viewport_embed_pass.screen_bind_group,
                     )?;
                     let Some(binding) =
@@ -717,10 +724,16 @@ impl Renderer {
                         continue;
                     };
 
-                    let Some(bind_group) = viewport_bind_groups.get(&binding.source) else {
+                    let Some(bindings) = viewport_bind_groups.get(&binding.source) else {
                         continue;
                     };
-                    set_ui_bind_group(context, &mut pass, 1, bind_group)?;
+                    set_ui_bind_group(
+                        context,
+                        &mut pass,
+                        1,
+                        &bindings.logical_values,
+                        &bindings.realized,
+                    )?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
@@ -752,13 +765,20 @@ impl Renderer {
                         context,
                         &mut pass,
                         0,
+                        std::slice::from_ref(&product_surface_pass.screen_binding),
                         &product_surface_pass.screen_bind_group,
                     )?;
 
-                    let Some(bind_group) = product_surface_bind_groups.get(&batch.source) else {
+                    let Some(bindings) = product_surface_bind_groups.get(&batch.source) else {
                         continue;
                     };
-                    set_ui_bind_group(context, &mut pass, 1, bind_group)?;
+                    set_ui_bind_group(
+                        context,
+                        &mut pass,
+                        1,
+                        &bindings.logical_values,
+                        &bindings.realized,
+                    )?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
@@ -786,11 +806,23 @@ impl Renderer {
                         continue;
                     };
                     pass.set_pipeline(pipelines[slot]);
-                    set_ui_bind_group(context, &mut pass, 0, &glyph_pass.screen_bind_group)?;
+                    set_ui_bind_group(
+                        context,
+                        &mut pass,
+                        0,
+                        std::slice::from_ref(&glyph_pass.screen_binding),
+                        &glyph_pass.screen_bind_group,
+                    )?;
                     let Some(atlas_gpu) = self.glyph_atlas_gpu.get(&batch.texture_id) else {
                         continue;
                     };
-                    set_ui_bind_group(context, &mut pass, 1, &atlas_gpu.bind_group)?;
+                    set_ui_bind_group(
+                        context,
+                        &mut pass,
+                        1,
+                        &atlas_gpu.texture_bindings.logical_values,
+                        &atlas_gpu.texture_bindings.realized,
+                    )?;
                     pass.set_scissor_rect(
                         batch.scissor.0,
                         batch.scissor.1,
@@ -850,14 +882,21 @@ impl Renderer {
                     else {
                         continue;
                     };
+                    let logical_values = ui_texture_bind_group_values(
+                        view_handle,
+                        viewport_embed_pass.texture_sampler._handle.clone(),
+                    )?;
                     let bind_group = pollster::block_on(context.realize_bind_group(
                         &viewport_embed_pass.texture_bind_group_layout,
-                        ui_texture_bind_group_values(
-                            view_handle,
-                            viewport_embed_pass.texture_sampler._handle.clone(),
-                        )?,
+                        logical_values.clone(),
                     ))?;
-                    viewport_bind_groups.insert(binding.source.clone(), bind_group);
+                    viewport_bind_groups.insert(
+                        binding.source.clone(),
+                        UiTextureBindings {
+                            logical_values,
+                            realized: bind_group,
+                        },
+                    );
                 }
                 UiPreparedDrawCommand::ProductSurface(index) => {
                     let Some(product_surface_pass) = self.product_surface_pass.as_ref() else {
@@ -881,14 +920,21 @@ impl Renderer {
                     else {
                         continue;
                     };
+                    let logical_values = ui_texture_bind_group_values(
+                        view_handle,
+                        product_surface_pass.texture_sampler._handle.clone(),
+                    )?;
                     let bind_group = pollster::block_on(context.realize_bind_group(
                         &product_surface_pass.texture_bind_group_layout,
-                        ui_texture_bind_group_values(
-                            view_handle,
-                            product_surface_pass.texture_sampler._handle.clone(),
-                        )?,
+                        logical_values.clone(),
                     ))?;
-                    product_surface_bind_groups.insert(batch.source.clone(), bind_group);
+                    product_surface_bind_groups.insert(
+                        batch.source.clone(),
+                        UiTextureBindings {
+                            logical_values,
+                            realized: bind_group,
+                        },
+                    );
                 }
                 UiPreparedDrawCommand::Rect(_)
                 | UiPreparedDrawCommand::Stroke(_)
@@ -904,6 +950,7 @@ impl Renderer {
 struct UiProgramBindingArtifacts {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
+    screen_binding: GpuRuntimeBindingValue,
     screen_bind_group: GpuRealizedBindGroup,
     texture_bind_group_layout: Option<GpuRealizedBindGroupLayout>,
     texture_sampler: Option<RendererSamplerResource>,
@@ -1164,8 +1211,29 @@ fn set_ui_bind_group(
     context: &GpuContext,
     pass: &mut RenderPass<'_>,
     index: u32,
+    logical_values: &[GpuRuntimeBindingValue],
     bind_group: &GpuRealizedBindGroup,
 ) -> Result<()> {
+    if bind_group.layout_descriptor().group() != index {
+        return Err(anyhow::anyhow!(
+            "UI bind-group slot {index} disagrees with realized layout group {}",
+            bind_group.layout_descriptor().group()
+        ));
+    }
+    let expected_keys = bind_group
+        .layout_descriptor()
+        .bindings()
+        .map(|binding| binding.key())
+        .collect::<Vec<_>>();
+    let logical_keys = logical_values
+        .iter()
+        .map(GpuRuntimeBindingValue::key)
+        .collect::<Vec<_>>();
+    if logical_keys != expected_keys {
+        return Err(anyhow::anyhow!(
+            "UI logical binding keys {logical_keys:?} disagree with realized group-{index} layout keys {expected_keys:?}"
+        ));
+    }
     context
         .current_render_execution_bridge()
         .for_pipeline_bind_groups(&[bind_group], SetUiBindGroup { pass, index })?;

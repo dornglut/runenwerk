@@ -1,8 +1,8 @@
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuContext, GpuRealizedBindGroup, GpuRealizedBindGroupLayout,
     GpuRealizedBuffer, GpuRealizedRenderPipeline, GpuRealizedSampler, GpuRealizedTexture,
-    GpuRealizedTextureView, GpuSamplerHandle, GpuTextureHandle, GpuTextureViewHandle,
-    GpuWorkResourceIdAllocator,
+    GpuRealizedTextureView, GpuRuntimeBindingValue, GpuSamplerHandle, GpuTextureHandle,
+    GpuTextureViewHandle, GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::backend::WgpuCtx;
@@ -585,6 +585,7 @@ struct ScreenUniformRaw {
 struct RectPass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
+    screen_binding: GpuRuntimeBindingValue,
     screen_bind_group: GpuRealizedBindGroup,
 }
 
@@ -592,6 +593,7 @@ struct RectPass {
 struct StrokePass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
+    screen_binding: GpuRuntimeBindingValue,
     screen_bind_group: GpuRealizedBindGroup,
 }
 
@@ -599,6 +601,7 @@ struct StrokePass {
 struct GlyphPass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
+    screen_binding: GpuRuntimeBindingValue,
     screen_bind_group: GpuRealizedBindGroup,
     texture_bind_group_layout: GpuRealizedBindGroupLayout,
     texture_sampler: RendererSamplerResource,
@@ -608,6 +611,7 @@ struct GlyphPass {
 struct ViewportEmbedPass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
+    screen_binding: GpuRuntimeBindingValue,
     screen_bind_group: GpuRealizedBindGroup,
     texture_bind_group_layout: GpuRealizedBindGroupLayout,
     texture_sampler: RendererSamplerResource,
@@ -617,6 +621,7 @@ struct ViewportEmbedPass {
 struct ProductSurfacePass {
     pipeline: GpuRealizedRenderPipeline,
     screen_buffer: RendererBufferResource,
+    screen_binding: GpuRuntimeBindingValue,
     screen_bind_group: GpuRealizedBindGroup,
     texture_bind_group_layout: GpuRealizedBindGroupLayout,
     texture_sampler: RendererSamplerResource,
@@ -646,6 +651,12 @@ struct RendererSamplerResource {
     _realized: GpuRealizedSampler,
 }
 
+#[derive(Debug, Clone)]
+struct UiTextureBindings {
+    logical_values: [GpuRuntimeBindingValue; 2],
+    realized: GpuRealizedBindGroup,
+}
+
 #[derive(Debug, Clone, Copy)]
 enum UiPipelineKind {
     Rect,
@@ -655,9 +666,8 @@ enum UiPipelineKind {
     ProductSurface,
 }
 
-type UiViewportBindGroups = BTreeMap<ViewportSurfaceBindingSource, GpuRealizedBindGroup>;
-type UiProductSurfaceBindGroups =
-    BTreeMap<ProductSurfaceTextureBindingSource, GpuRealizedBindGroup>;
+type UiViewportBindGroups = BTreeMap<ViewportSurfaceBindingSource, UiTextureBindings>;
+type UiProductSurfaceBindGroups = BTreeMap<ProductSurfaceTextureBindingSource, UiTextureBindings>;
 
 #[derive(Debug, Clone, Default)]
 struct UiDynamicBindGroups {
@@ -753,7 +763,7 @@ struct UiProductSurfaceBatch {
 struct UiGlyphAtlasGpu {
     _texture: RendererTextureResource,
     _view: RendererTextureViewResource,
-    bind_group: GpuRealizedBindGroup,
+    texture_bindings: UiTextureBindings,
 }
 
 #[derive(Debug, Clone, Default)]
