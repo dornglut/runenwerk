@@ -43,7 +43,8 @@ fn token_paths(root: &Path, manifest: &Path, token: &str) -> BTreeSet<String> {
     paths
         .into_iter()
         .filter_map(|path| {
-            let source = compact(&fs::read_to_string(&path).expect("Rust source should be readable"));
+            let source =
+                compact(&fs::read_to_string(&path).expect("Rust source should be readable"));
             source.contains(token).then(|| {
                 path.strip_prefix(manifest)
                     .expect("source stays in engine")
