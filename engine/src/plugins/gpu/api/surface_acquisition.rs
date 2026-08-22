@@ -57,6 +57,31 @@ pub(crate) fn allocate_surface_lease_id(
     PRODUCTION_SURFACE_LEASE_IDS.allocate(surface)
 }
 
+/// Non-owning provenance carried by a surface-acquired logical texture lease.
+///
+/// This value deliberately contains no backend object and no strong owner reference. Logical
+/// handle clones can therefore preserve the surface/context/generation/lease identity required for
+/// stale and foreign-context validation without extending physical swapchain authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct GpuSurfaceResourceLease {
+    surface: GpuSurfaceHandle,
+    lease_id: GpuSurfaceLeaseId,
+}
+
+impl GpuSurfaceResourceLease {
+    pub(crate) const fn new(surface: GpuSurfaceHandle, lease_id: GpuSurfaceLeaseId) -> Self {
+        Self { surface, lease_id }
+    }
+
+    pub(crate) const fn surface(self) -> GpuSurfaceHandle {
+        self.surface
+    }
+
+    pub(crate) const fn lease_id(self) -> GpuSurfaceLeaseId {
+        self.lease_id
+    }
+}
+
 /// Successful backend-neutral surface acquisition quality.
 ///
 /// `Suboptimal` preserves backend evidence that the acquired image is usable but the current
@@ -134,6 +159,74 @@ impl fmt::Display for GpuSurfaceAcquireError {
 
 impl std::error::Error for GpuSurfaceAcquireError {}
 
+/// Structured rejection for using a logical surface-acquired resource after its physical lease is
+/// no longer valid for the current context/surface generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuSurfaceLeaseErrorCategory {
+    UnknownSurface,
+    InvalidLease,
+    ForeignContext,
+    StaleGeneration,
+    AlreadyConsumed,
+    ContextOrDeviceUnavailableOrLost,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuSurfaceLeaseError {
+    category: GpuSurfaceLeaseErrorCategory,
+    surface: GpuSurfaceId,
+    lease_id: GpuSurfaceLeaseId,
+    detail: Option<String>,
+}
+
+impl GpuSurfaceLeaseError {
+    pub(crate) fn new(
+        category: GpuSurfaceLeaseErrorCategory,
+        surface: GpuSurfaceId,
+        lease_id: GpuSurfaceLeaseId,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            category,
+            surface,
+            lease_id,
+            detail: super::context::sanitized_diagnostic(detail.into()),
+        }
+    }
+
+    pub const fn category(&self) -> GpuSurfaceLeaseErrorCategory {
+        self.category
+    }
+
+    pub const fn surface(&self) -> GpuSurfaceId {
+        self.surface
+    }
+
+    pub const fn lease_id(&self) -> GpuSurfaceLeaseId {
+        self.lease_id
+    }
+
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+}
+
+impl fmt::Display for GpuSurfaceLeaseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "GPU surface lease use failed ({:?})",
+            self.category
+        )?;
+        if let Some(detail) = &self.detail {
+            write!(formatter, ": {detail}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for GpuSurfaceLeaseError {}
+
 /// Private ownership marker for the one active physical surface-image lease.
 ///
 /// Only `GpuAcquiredSurfaceImage` owns a strong reference. Logical texture/view handles never do,
@@ -152,6 +245,12 @@ impl GpuSurfaceLeaseOwner {
 /// This owner is intentionally not `Clone`. Dropping it (or consuming it through `abandon`) ends
 /// caller ownership of the acquisition lease. The logical texture/view handles may be cloned for
 /// work authoring, but those clones do not retain the private physical surface image.
+///
+/// ```compile_fail
+/// use engine::plugins::gpu::GpuAcquiredSurfaceImage;
+/// fn require_clone<T: Clone>() {}
+/// require_clone::<GpuAcquiredSurfaceImage>();
+/// ```
 pub struct GpuAcquiredSurfaceImage {
     surface: GpuSurfaceHandle,
     lease_id: GpuSurfaceLeaseId,
@@ -246,12 +345,5 @@ mod tests {
             GpuSurfaceAcquireErrorCategory::Timeout,
             GpuSurfaceAcquireErrorCategory::Occluded
         );
-    }
-
-    #[test]
-    fn acquired_image_type_exposes_no_clone_implementation() {
-        let source = include_str!("surface_acquisition.rs");
-        assert!(!source.contains("impl Clone for GpuAcquiredSurfaceImage"));
-        assert!(!source.contains("#[derive(Clone)]\npub struct GpuAcquiredSurfaceImage"));
     }
 }
