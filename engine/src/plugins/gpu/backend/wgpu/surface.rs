@@ -66,18 +66,10 @@ struct WgpuSurfaceRecord {
     surface: Surface<'static>,
 }
 
+#[derive(Default)]
 struct WgpuSurfaceStateInner {
     records: BTreeMap<GpuSurfaceId, WgpuSurfaceRecord>,
     resource_ids: GpuWorkResourceIdAllocator,
-}
-
-impl Default for WgpuSurfaceStateInner {
-    fn default() -> Self {
-        Self {
-            records: BTreeMap::new(),
-            resource_ids: GpuWorkResourceIdAllocator::new(),
-        }
-    }
 }
 
 struct WgpuSurfaceShared {
