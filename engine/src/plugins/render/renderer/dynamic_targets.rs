@@ -205,7 +205,7 @@ impl RendererDynamicTextureTargetCache {
                         .to_string()
                 })
                 .and_then(|target| {
-                    validate_prepared_dynamic_texture_target(target, &upload.operation)
+                    validate_prepared_dynamic_texture_target(&target._handle, &upload.operation)
                 });
             if let Err(message) = validation {
                 report.rejected_count = report.rejected_count.saturating_add(1);
@@ -404,13 +404,13 @@ impl RendererDynamicTextureTargetCache {
 }
 
 fn validate_prepared_dynamic_texture_target(
-    target: &RendererDynamicTextureTarget,
+    target: &GpuTextureHandle,
     operation: &GpuUploadOperation,
 ) -> std::result::Result<(), String> {
     let GpuTransferRegion::Texture(region) = operation.destination() else {
         return Err("prepared dynamic texture upload has a non-texture destination".to_string());
     };
-    if target._handle.diagnostic_identity() != region.texture().diagnostic_identity() {
+    if target.diagnostic_identity() != region.texture().diagnostic_identity() {
         return Err(
             "prepared dynamic texture upload targets a texture that has since been replaced"
                 .to_string(),
@@ -594,5 +594,59 @@ pub fn dynamic_format_to_wgpu(format: RenderTextureTargetFormat) -> TextureForma
         RenderTextureTargetFormat::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
         RenderTextureTargetFormat::R32Uint => TextureFormat::R32Uint,
         RenderTextureTargetFormat::Depth32Float => TextureFormat::Depth32Float,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn logical_texture(
+        resource_ids: &mut GpuWorkResourceIdAllocator,
+        label: &str,
+    ) -> GpuTextureHandle {
+        resource_ids
+            .allocate_texture_handle(
+                texture_descriptor(
+                    label,
+                    (1, 1),
+                    GpuTextureFormat::Rgba8Unorm,
+                    [GpuTextureUsage::CopyDestination],
+                    GpuResourceLifetime::Transient,
+                )
+                .expect("test texture descriptor should be valid"),
+            )
+            .expect("test texture handle should allocate")
+    }
+
+    fn logical_upload(texture: &GpuTextureHandle) -> GpuUploadOperation {
+        let region = GpuTextureCopyRegion::new(
+            texture,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::Color,
+            GpuCopyExtent::new(1, 1, 1).expect("test copy extent should be valid"),
+        )
+        .expect("test texture region should be valid");
+        let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
+            "dynamic target guard test payload",
+            &[1_u8, 2, 3, 4],
+            texture.descriptor().common().provenance().clone(),
+        )
+        .expect("test upload payload should be valid");
+        GpuUploadOperation::new(region.into(), payload).expect("test upload should be valid")
+    }
+
+    #[test]
+    fn prepared_dynamic_upload_guard_rejects_replaced_logical_texture() {
+        let mut resource_ids = GpuWorkResourceIdAllocator::new();
+        let original = logical_texture(&mut resource_ids, "original dynamic target");
+        let replacement = logical_texture(&mut resource_ids, "replacement dynamic target");
+        let operation = logical_upload(&original);
+
+        assert!(validate_prepared_dynamic_texture_target(&original, &operation).is_ok());
+        let error = validate_prepared_dynamic_texture_target(&replacement, &operation)
+            .expect_err("replacement target must not accept an upload prepared for the old texture");
+        assert!(error.contains("replaced"));
     }
 }
