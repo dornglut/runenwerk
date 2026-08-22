@@ -13,10 +13,10 @@ use crate::plugins::gpu::{
     GpuSurfaceAcquireError, GpuSurfaceAcquireErrorCategory, GpuSurfaceAcquisitionStatus,
     GpuSurfaceAlphaMode, GpuSurfaceCapabilities, GpuSurfaceConfiguration, GpuSurfaceError,
     GpuSurfaceErrorCategory, GpuSurfaceGeneration, GpuSurfaceHandle, GpuSurfaceId,
-    GpuSurfaceLeaseId, GpuSurfaceLeaseOwner, GpuSurfaceLeaseReleaser, GpuSurfacePresentMode,
-    GpuSurfaceResourceLease, GpuSurfaceTarget, GpuTextureAspect, GpuTextureDescriptor,
-    GpuTextureDimension, GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization,
-    GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
+    GpuSurfaceLeaseOwner, GpuSurfaceLeaseReleaser, GpuSurfacePresentMode, GpuSurfaceResourceLease,
+    GpuSurfaceTarget, GpuTextureAspect, GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent,
+    GpuTextureFormat, GpuTextureHandle, GpuTextureInitialization, GpuTextureSubresourceRange,
+    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewHandle,
     GpuWorkResourceId, GpuWorkResourceIdAllocator, allocate_surface_id, allocate_surface_lease_id,
 };
 use std::collections::BTreeMap;
@@ -52,7 +52,7 @@ where
 }
 
 struct WgpuSurfaceLease {
-    id: GpuSurfaceLeaseId,
+    lease: GpuSurfaceResourceLease,
     owner: Weak<GpuSurfaceLeaseOwner>,
     texture_identity: GpuWorkResourceId,
     view_identity: GpuWorkResourceId,
@@ -64,7 +64,6 @@ struct WgpuSurfaceRecord {
     capabilities: GpuSurfaceCapabilities,
     configuration: Option<GpuSurfaceConfiguration>,
     active_lease: Option<WgpuSurfaceLease>,
-    last_lease_id: Option<GpuSurfaceLeaseId>,
     surface: Surface<'static>,
 }
 
@@ -110,7 +109,7 @@ impl core::fmt::Debug for WgpuSurfaceShared {
 }
 
 impl GpuSurfaceLeaseReleaser for WgpuSurfaceShared {
-    fn release(&self, lease: GpuSurfaceResourceLease) {
+    fn release(&self, lease: &GpuSurfaceResourceLease) {
         let mut inner = self
             .inner
             .lock()
@@ -124,7 +123,7 @@ impl GpuSurfaceLeaseReleaser for WgpuSurfaceShared {
         let matches = record
             .active_lease
             .as_ref()
-            .is_some_and(|active| active.id == lease.lease_id());
+            .is_some_and(|active| active.lease == *lease);
         if matches {
             record.active_lease.take();
         }
@@ -204,7 +203,6 @@ impl WgpuSurfaceState {
                 capabilities,
                 configuration: None,
                 active_lease: None,
-                last_lease_id: None,
                 surface,
             },
         );
@@ -253,7 +251,9 @@ impl WgpuSurfaceState {
         // Reconfiguration is a lease boundary. Drop the exact physical acquired image before the
         // backend is reconfigured; caller-held logical handles never own this object and therefore
         // become stale without prolonging swapchain authority.
-        record.active_lease.take();
+        if let Some(active) = record.active_lease.take() {
+            active.lease.mark_abandoned();
+        }
         record.surface.configure(device, &native);
         ensure_surface_health(health, Some(handle.id()))?;
         record.configuration = Some(configuration);
@@ -350,30 +350,27 @@ impl WgpuSurfaceState {
         }
 
         let releaser: Arc<dyn GpuSurfaceLeaseReleaser> = self.shared.clone();
-        let image = build_acquired_surface_image(
+        let (records, resource_ids) = (&mut inner.records, &mut inner.resource_ids);
+        let record = records
+            .get_mut(&handle.id())
+            .expect("validated surface record remains present while acquisition authority is held");
+        let resources = build_acquired_surface_resources(handle, &configuration, resource_ids)?;
+        let owner = GpuSurfaceLeaseOwner::new(resources.lease.clone(), Arc::downgrade(&releaser));
+        let image = GpuAcquiredSurfaceImage::new(
             handle,
-            &configuration,
+            resources.lease.lease_id(),
             status,
-            Arc::downgrade(&releaser),
-            &mut inner.resource_ids,
-        )?;
-        let active_lease = WgpuSurfaceLease {
-            id: image.lease_id(),
+            resources.texture,
+            resources.default_view,
+            owner,
+        );
+        record.active_lease = Some(WgpuSurfaceLease {
+            lease: resources.lease,
             owner: image.owner_weak(),
             texture_identity: image.texture().diagnostic_identity(),
             view_identity: image.default_view().diagnostic_identity(),
             texture: physical,
-        };
-
-        let record = inner.records.get_mut(&handle.id()).ok_or_else(|| {
-            GpuSurfaceAcquireError::new(
-                GpuSurfaceAcquireErrorCategory::InternalInvariant,
-                Some(handle.id()),
-                "surface record disappeared while acquisition authority was held",
-            )
-        })?;
-        record.last_lease_id = Some(image.lease_id());
-        record.active_lease = Some(active_lease);
+        });
         Ok(image)
     }
 }
@@ -400,18 +397,24 @@ fn release_abandoned_lease(record: &mut WgpuSurfaceRecord) {
         .active_lease
         .as_ref()
         .is_some_and(|lease| lease.owner.upgrade().is_none());
-    if abandoned {
-        record.active_lease.take();
+    if abandoned
+        && let Some(active) = record.active_lease.take()
+    {
+        active.lease.mark_abandoned();
     }
 }
 
-fn build_acquired_surface_image(
+struct AcquiredSurfaceResources {
+    lease: GpuSurfaceResourceLease,
+    texture: GpuTextureHandle,
+    default_view: GpuTextureViewHandle,
+}
+
+fn build_acquired_surface_resources(
     surface: GpuSurfaceHandle,
     configuration: &GpuSurfaceConfiguration,
-    status: GpuSurfaceAcquisitionStatus,
-    releaser: Weak<dyn GpuSurfaceLeaseReleaser>,
     resource_ids: &mut GpuWorkResourceIdAllocator,
-) -> Result<GpuAcquiredSurfaceImage, GpuSurfaceAcquireError> {
+) -> Result<AcquiredSurfaceResources, GpuSurfaceAcquireError> {
     let lease_id = allocate_surface_lease_id(surface.id())?;
     let surface_lease = GpuSurfaceResourceLease::new(surface, lease_id);
     let texture_label = GpuResourceLabel::new("surface acquired image")
@@ -441,7 +444,7 @@ fn build_acquired_surface_image(
     )
     .map_err(|error| acquisition_invariant(surface.id(), error.to_string()))?;
     let texture = resource_ids
-        .allocate_surface_texture_handle(texture_descriptor, surface_lease)
+        .allocate_surface_texture_handle(texture_descriptor, surface_lease.clone())
         .map_err(|_| acquisition_identity_exhausted(surface.id()))?;
 
     let view_label = GpuResourceLabel::new("surface acquired default view")
@@ -461,16 +464,12 @@ fn build_acquired_surface_image(
     let default_view = resource_ids
         .allocate_texture_view_handle(view_descriptor)
         .map_err(|_| acquisition_identity_exhausted(surface.id()))?;
-    let owner = GpuSurfaceLeaseOwner::new(surface_lease, releaser);
 
-    Ok(GpuAcquiredSurfaceImage::new(
-        surface,
-        lease_id,
-        status,
+    Ok(AcquiredSurfaceResources {
+        lease: surface_lease,
         texture,
         default_view,
-        owner,
-    ))
+    })
 }
 
 fn acquisition_identity_exhausted(surface: GpuSurfaceId) -> GpuSurfaceAcquireError {
@@ -993,6 +992,7 @@ mod tests {
     use super::*;
     use crate::plugins::gpu::{
         GpuContextId, GpuDeviceGeneration, GpuPreferredFallback, GpuResourceOwnership,
+        GpuSurfaceLeaseDisposition,
     };
     use std::num::NonZeroU64;
 
@@ -1000,7 +1000,7 @@ mod tests {
     struct TestLeaseReleaser;
 
     impl GpuSurfaceLeaseReleaser for TestLeaseReleaser {
-        fn release(&self, _lease: GpuSurfaceResourceLease) {}
+        fn release(&self, _lease: &GpuSurfaceResourceLease) {}
     }
 
     fn capabilities() -> GpuSurfaceCapabilities {
@@ -1050,14 +1050,17 @@ mod tests {
         resource_ids: &mut GpuWorkResourceIdAllocator,
     ) -> GpuAcquiredSurfaceImage {
         let releaser: Arc<dyn GpuSurfaceLeaseReleaser> = Arc::new(TestLeaseReleaser);
-        build_acquired_surface_image(
+        let resources = build_acquired_surface_resources(surface, &configuration(), resource_ids)
+            .unwrap();
+        let owner = GpuSurfaceLeaseOwner::new(resources.lease.clone(), Arc::downgrade(&releaser));
+        GpuAcquiredSurfaceImage::new(
             surface,
-            &configuration(),
+            resources.lease.lease_id(),
             GpuSurfaceAcquisitionStatus::Optimal,
-            Arc::downgrade(&releaser),
-            resource_ids,
+            resources.texture,
+            resources.default_view,
+            owner,
         )
-        .unwrap()
     }
 
     #[test]
@@ -1269,10 +1272,12 @@ mod tests {
         let owner = image.owner_weak();
         let texture = image.texture().clone();
         let view = image.default_view().clone();
+        let lease = texture.surface_lease().unwrap();
 
         drop(image);
 
         assert!(owner.upgrade().is_none());
+        assert_eq!(lease.disposition(), GpuSurfaceLeaseDisposition::Abandoned);
         assert_eq!(
             view.descriptor().texture().diagnostic_identity(),
             texture.diagnostic_identity()
