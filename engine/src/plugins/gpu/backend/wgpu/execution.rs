@@ -1328,11 +1328,7 @@ async fn prepare_execution_plan(
                 let mut render_surface_uses = Vec::new();
                 render.append_surface_uses(&mut render_surface_uses);
                 for surface in render_surface_uses {
-                    append_surface_use(
-                        &mut surface_uses,
-                        &presented_surface_leases,
-                        &surface,
-                    )?;
+                    append_surface_use(&mut surface_uses, &presented_surface_leases, &surface)?;
                 }
                 operations.push(PreparedExecutionOperation::Render(render));
             }
@@ -1549,11 +1545,7 @@ async fn prepare_execution_plan(
             }
             GpuWorkOperation::Present(present) => {
                 let surface = prepare_present_source(context, present.source())?;
-                append_surface_use(
-                    &mut surface_uses,
-                    &presented_surface_leases,
-                    &surface,
-                )?;
+                append_surface_use(&mut surface_uses, &presented_surface_leases, &surface)?;
                 presented_surface_leases.insert(surface.lease().lease_id());
                 operations.push(PreparedExecutionOperation::Present { source: surface });
             }
@@ -2142,12 +2134,7 @@ fn encode_submit_and_register(
                     .map_err(submission_program_binding_failure)?;
             }
             PreparedExecutionOperation::Render(render) => {
-                encode_render_operation(
-                    backend,
-                    &mut encoder,
-                    render,
-                    surface_guard.as_deref(),
-                )?;
+                encode_render_operation(backend, &mut encoder, render, surface_guard.as_deref())?;
             }
             PreparedExecutionOperation::Copy {
                 source,
@@ -2283,7 +2270,12 @@ fn encode_submit_and_register(
 
     let segment_count = segments.len();
     for (index, segment) in segments.into_iter().enumerate() {
-        register_readback_callbacks(execution, submission, &segment.readback_staging, &segment.command_buffer);
+        register_readback_callbacks(
+            execution,
+            submission,
+            &segment.readback_staging,
+            &segment.command_buffer,
+        );
         if index + 1 == segment_count {
             register_submission_completion(execution, submission, &segment.command_buffer);
         }
