@@ -601,6 +601,9 @@ impl WgpuExecutionState {
                 "execution preparation authority is unavailable during surface revalidation",
             )
         })?;
+        if inner.lifecycle != GpuExecutionLifecycleState::Running {
+            return Err(rejection_not_running(inner.lifecycle));
+        }
         let Some(Some(plan)) = inner.prepared.get(&prepared.ticket) else {
             return Err(GpuSubmissionRejectionReason::new(
                 GpuSubmissionRejectionKind::PreparedRecordUnavailable,
