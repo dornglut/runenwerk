@@ -186,9 +186,8 @@ impl GpuWorkResourceIdAllocator {
         descriptor: GpuTextureDescriptor,
         surface_lease: GpuSurfaceResourceLease,
     ) -> Result<GpuTextureHandle, GpuWorkResourceIdAllocationError> {
-        self.allocate().map(|id| {
-            GpuTextureHandle::from_surface_descriptor(id, descriptor, surface_lease)
-        })
+        self.allocate()
+            .map(|id| GpuTextureHandle::from_surface_descriptor(id, descriptor, surface_lease))
     }
 
     pub fn allocate_texture_view_handle(
