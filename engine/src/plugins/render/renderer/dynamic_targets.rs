@@ -197,6 +197,27 @@ impl RendererDynamicTextureTargetCache {
             diagnostics: prepared.diagnostics,
         };
         for upload in prepared.uploads {
+            let current_target = self.targets.get(&upload.target_key).ok_or_else(|| {
+                "prepared dynamic texture upload lost its target before physical application"
+                    .to_string()
+            });
+            let current_target = match current_target.and_then(|target| {
+                validate_prepared_dynamic_texture_target(target, &upload.operation)
+            }) {
+                Ok(target) => target,
+                Err(message) => {
+                    report.rejected_count = report.rejected_count.saturating_add(1);
+                    report
+                        .diagnostics
+                        .push(RendererDynamicTextureUploadDiagnostic {
+                            target_key: upload.target_key,
+                            message,
+                        });
+                    continue;
+                }
+            };
+            let current_identity = current_target._handle.diagnostic_identity();
+
             match apply_canonical_dynamic_texture_upload(
                 context,
                 queue,
@@ -210,11 +231,22 @@ impl RendererDynamicTextureTargetCache {
                             .diagnostics
                             .push(RendererDynamicTextureUploadDiagnostic {
                                 target_key: upload.target_key,
-                                message: "prepared dynamic texture upload lost its target before physical application"
+                                message: "validated dynamic texture target disappeared during physical application"
                                     .to_string(),
                             });
                         continue;
                     };
+                    if target._handle.diagnostic_identity() != current_identity {
+                        report.rejected_count = report.rejected_count.saturating_add(1);
+                        report
+                            .diagnostics
+                            .push(RendererDynamicTextureUploadDiagnostic {
+                                target_key: upload.target_key,
+                                message: "validated dynamic texture target changed during physical application"
+                                    .to_string(),
+                            });
+                        continue;
+                    }
                     // The legacy path advances product-generation evidence only after the physical
                     // queue write succeeds. G5C1 must preserve the same acceptance boundary when
                     // this operation joins the frame submission: preparation alone must never
@@ -380,6 +412,22 @@ impl RendererDynamicTextureTargetCache {
         }
         Ok(target.view_handle.clone())
     }
+}
+
+fn validate_prepared_dynamic_texture_target<'a>(
+    target: &'a RendererDynamicTextureTarget,
+    operation: &GpuUploadOperation,
+) -> std::result::Result<&'a RendererDynamicTextureTarget, String> {
+    let GpuTransferRegion::Texture(region) = operation.destination() else {
+        return Err("prepared dynamic texture upload has a non-texture destination".to_string());
+    };
+    if target._handle.diagnostic_identity() != region.texture().diagnostic_identity() {
+        return Err(
+            "prepared dynamic texture upload targets a texture that has since been replaced"
+                .to_string(),
+        );
+    }
+    Ok(target)
 }
 
 fn canonical_dynamic_texture_upload(
