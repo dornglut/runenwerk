@@ -228,7 +228,14 @@ impl std::error::Error for GpuSurfaceLeaseError {}
 ///
 /// The public acquired image owns no backend object. Its owner token retains only a weak callback,
 /// so dropping the context first remains safe and cannot create an ownership cycle.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) trait GpuSurfaceLeaseReleaser: fmt::Debug + Send + Sync {
+    fn release(&self, lease: GpuSurfaceResourceLease);
+}
+
+/// Web surface state is deliberately not forced through native thread-safety requirements.
+#[cfg(target_arch = "wasm32")]
+pub(crate) trait GpuSurfaceLeaseReleaser: fmt::Debug {
     fn release(&self, lease: GpuSurfaceResourceLease);
 }
 
