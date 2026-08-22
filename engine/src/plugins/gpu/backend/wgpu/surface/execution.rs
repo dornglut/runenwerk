@@ -4,8 +4,6 @@ use crate::plugins::gpu::{
     GpuContextAffinity, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory, GpuSurfaceResourceLease,
     GpuWorkResourceId,
 };
-use std::sync::MutexGuard;
-use wgpu::{SurfaceTexture, Texture, TextureView, TextureViewDescriptor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WgpuSurfaceLeaseResource {
@@ -21,18 +19,11 @@ impl WgpuSurfaceLeaseResource {
     }
 }
 
-/// A short lexical borrow of the G7 surface owner for private execution.
-///
-/// Holding this guard pins active physical surface-image leases against concurrent abandon,
-/// reconfiguration, or acquisition while one command-encoding interval resolves them. Logical
-/// handles remain non-owning; the guard is backend-private and cannot escape RunenGPU.
-pub(crate) struct WgpuSurfaceLeaseGuard<'a> {
-    affinity: GpuContextAffinity,
-    health: &'a WgpuDeviceHealth,
-    inner: MutexGuard<'a, WgpuSurfaceStateInner>,
-}
-
 impl WgpuSurfaceState {
+    /// Validates one surface-acquired logical resource against the sole G7 physical lease owner.
+    ///
+    /// This is intentionally separate from G4C1 realization: surface-acquired resources are
+    /// transient presentation leases and never become ordinary resource-registry records.
     pub(crate) fn validate_execution_lease(
         &self,
         lease: GpuSurfaceResourceLease,
@@ -52,94 +43,6 @@ impl WgpuSurfaceState {
         }
         validate_lease(self.affinity, &inner, lease, resource)?;
         ensure_lease_health(health, lease)
-    }
-
-    pub(crate) fn execution_lease_guard(
-        &self,
-        representative: GpuSurfaceResourceLease,
-        health: &WgpuDeviceHealth,
-    ) -> Result<WgpuSurfaceLeaseGuard<'_>, GpuSurfaceLeaseError> {
-        ensure_lease_health(health, representative)?;
-        validate_affinity(self.affinity, representative)?;
-        let mut inner = self.shared.inner.lock().map_err(|_| {
-            lease_error(
-                GpuSurfaceLeaseErrorCategory::ContextOrDeviceUnavailableOrLost,
-                representative,
-                "surface lease execution authority is unavailable",
-            )
-        })?;
-        for record in inner.records.values_mut() {
-            super::release_abandoned_lease(record);
-        }
-        ensure_lease_health(health, representative)?;
-        Ok(WgpuSurfaceLeaseGuard {
-            affinity: self.affinity,
-            health,
-            inner,
-        })
-    }
-}
-
-impl WgpuSurfaceLeaseGuard<'_> {
-    pub(crate) fn texture(
-        &self,
-        lease: GpuSurfaceResourceLease,
-        identity: GpuWorkResourceId,
-    ) -> Result<&Texture, GpuSurfaceLeaseError> {
-        ensure_lease_health(self.health, lease)?;
-        let active = validate_lease(
-            self.affinity,
-            &self.inner,
-            lease,
-            WgpuSurfaceLeaseResource::Texture(identity),
-        )?;
-        Ok(&active.texture.texture)
-    }
-
-    pub(crate) fn create_default_view(
-        &self,
-        lease: GpuSurfaceResourceLease,
-        identity: GpuWorkResourceId,
-    ) -> Result<TextureView, GpuSurfaceLeaseError> {
-        ensure_lease_health(self.health, lease)?;
-        let active = validate_lease(
-            self.affinity,
-            &self.inner,
-            lease,
-            WgpuSurfaceLeaseResource::TextureView(identity),
-        )?;
-        Ok(active
-            .texture
-            .texture
-            .create_view(&TextureViewDescriptor::default()))
-    }
-
-    pub(crate) fn take_for_present(
-        &mut self,
-        lease: GpuSurfaceResourceLease,
-        resource: WgpuSurfaceLeaseResource,
-    ) -> Result<SurfaceTexture, GpuSurfaceLeaseError> {
-        ensure_lease_health(self.health, lease)?;
-        validate_lease(self.affinity, &self.inner, lease, resource)?;
-        let record = self
-            .inner
-            .records
-            .get_mut(&lease.surface().id())
-            .ok_or_else(|| {
-                lease_error(
-                    GpuSurfaceLeaseErrorCategory::UnknownSurface,
-                    lease,
-                    "validated surface owner disappeared before Present consumption",
-                )
-            })?;
-        let active = record.active_lease.take().ok_or_else(|| {
-            inactive_lease_error(
-                record,
-                lease,
-                "validated surface lease disappeared before Present consumption",
-            )
-        })?;
-        Ok(active.texture)
     }
 }
 
