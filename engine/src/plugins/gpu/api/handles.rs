@@ -1,7 +1,7 @@
 use super::{
     GpuBufferDescriptor, GpuHandleCause, GpuHandleError, GpuQuerySetDescriptor,
-    GpuSamplerDescriptor, GpuTextureDescriptor, GpuTextureViewDescriptor, GpuWorkResourceId,
-    GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
+    GpuSamplerDescriptor, GpuSurfaceResourceLease, GpuTextureDescriptor, GpuTextureViewDescriptor,
+    GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 use core::hash::{Hash, Hasher};
@@ -20,11 +20,28 @@ enum GpuResourceKind {
 struct GpuLogicalLease {
     id: GpuWorkResourceId,
     kind: GpuResourceKind,
+    surface_lease: Option<GpuSurfaceResourceLease>,
 }
 
 impl GpuLogicalLease {
     const fn new(id: GpuWorkResourceId, kind: GpuResourceKind) -> Self {
-        Self { id, kind }
+        Self {
+            id,
+            kind,
+            surface_lease: None,
+        }
+    }
+
+    const fn surface(
+        id: GpuWorkResourceId,
+        kind: GpuResourceKind,
+        surface_lease: GpuSurfaceResourceLease,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            surface_lease: Some(surface_lease),
+        }
     }
 }
 
@@ -74,6 +91,7 @@ macro_rules! typed_handle {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 f.debug_struct(stringify!($name))
                     .field("diagnostic_identity", &self.lease.id)
+                    .field("surface_lease", &self.lease.surface_lease)
                     .field("descriptor", &self.descriptor)
                     .finish()
             }
@@ -119,6 +137,33 @@ typed_handle!(GpuTextureViewHandle, GpuTextureViewDescriptor, TextureView);
 typed_handle!(GpuSamplerHandle, GpuSamplerDescriptor, Sampler);
 typed_handle!(GpuQuerySetHandle, GpuQuerySetDescriptor, QuerySet);
 
+impl GpuTextureHandle {
+    pub(crate) fn from_surface_descriptor(
+        id: GpuWorkResourceId,
+        descriptor: GpuTextureDescriptor,
+        surface_lease: GpuSurfaceResourceLease,
+    ) -> Self {
+        Self {
+            lease: Arc::new(GpuLogicalLease::surface(
+                id,
+                GpuResourceKind::Texture,
+                surface_lease,
+            )),
+            descriptor: Arc::new(descriptor),
+        }
+    }
+
+    pub(crate) const fn surface_lease(&self) -> Option<GpuSurfaceResourceLease> {
+        self.lease.surface_lease
+    }
+}
+
+impl GpuTextureViewHandle {
+    pub(crate) fn surface_lease(&self) -> Option<GpuSurfaceResourceLease> {
+        self.descriptor.texture().surface_lease()
+    }
+}
+
 impl GpuWorkResourceIdAllocator {
     pub fn allocate_buffer_handle(
         &mut self,
@@ -134,6 +179,16 @@ impl GpuWorkResourceIdAllocator {
     ) -> Result<GpuTextureHandle, GpuWorkResourceIdAllocationError> {
         self.allocate()
             .map(|id| GpuTextureHandle::from_descriptor(id, descriptor))
+    }
+
+    pub(crate) fn allocate_surface_texture_handle(
+        &mut self,
+        descriptor: GpuTextureDescriptor,
+        surface_lease: GpuSurfaceResourceLease,
+    ) -> Result<GpuTextureHandle, GpuWorkResourceIdAllocationError> {
+        self.allocate().map(|id| {
+            GpuTextureHandle::from_surface_descriptor(id, descriptor, surface_lease)
+        })
     }
 
     pub fn allocate_texture_view_handle(
