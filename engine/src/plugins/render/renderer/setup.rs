@@ -503,20 +503,9 @@ impl Renderer {
         ))?;
 
         // The glyph texture/view/sampler resources and bind group are authoritative before G5.
-        // Retain only the eventual queue write for the G5 operation interval.
-        pending_operations
-            .texture_uploads
-            .push(RendererPendingTextureUpload {
-                texture: texture.realized.clone(),
-                bytes: atlas_image.pixels.clone(),
-                bytes_per_row: atlas_image.width.max(1),
-                rows_per_image: atlas_image.height.max(1),
-                size: Extent3d {
-                    width: atlas_image.width.max(1),
-                    height: atlas_image.height.max(1),
-                    depth_or_array_layers: 1,
-                },
-            });
+        // Retain the canonical upload operation plus only the temporary realized-object sidecar
+        // required until the live frame moves to G5 submission.
+        pending_operations.queue_texture(&texture, &atlas_image.pixels)?;
 
         self.glyph_atlas_gpu.insert(
             texture_id,

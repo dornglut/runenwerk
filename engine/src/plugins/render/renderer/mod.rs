@@ -681,11 +681,8 @@ struct RendererPendingBufferUpload {
 
 #[derive(Debug, Clone)]
 struct RendererPendingTextureUpload {
-    texture: GpuRealizedTexture,
-    bytes: Vec<u8>,
-    bytes_per_row: u32,
-    rows_per_image: u32,
-    size: Extent3d,
+    operation: crate::plugins::gpu::GpuUploadOperation,
+    legacy_realized: GpuRealizedTexture,
 }
 
 #[derive(Debug, Clone)]

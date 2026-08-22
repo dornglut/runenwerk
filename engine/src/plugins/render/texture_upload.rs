@@ -8,8 +8,6 @@ pub(crate) struct MaterialKtx2Upload {
     pub dimension: TextureDimension,
     pub format: TextureFormat,
     pub bytes: Vec<u8>,
-    pub bytes_per_row: u32,
-    pub rows_per_image: u32,
 }
 
 pub(crate) fn load_material_ktx2_upload(
@@ -140,7 +138,5 @@ pub(crate) fn load_material_ktx2_upload(
         dimension: expected_dimension,
         format,
         bytes: level.data.to_vec(),
-        bytes_per_row: width.saturating_mul(4).max(4),
-        rows_per_image: height.max(1),
     })
 }

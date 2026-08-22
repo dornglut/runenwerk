@@ -5,8 +5,10 @@ use super::resource_descriptors::{
 use super::*;
 use crate::plugins::gpu::{
     CurrentRenderBufferUploadTerminal, CurrentRenderTextureUploadTerminal, GpuBufferRange,
-    GpuBufferRegion, GpuBufferUsage, GpuMemoryIntent, GpuResourceLifetime, GpuTextureDimension,
-    GpuTextureUsage, GpuTransferRegion, GpuUploadOperation, PreparedGpuData, TransferData,
+    GpuBufferRegion, GpuBufferUsage, GpuCopyExtent, GpuMemoryIntent, GpuResourceLifetime,
+    GpuTextureAspect, GpuTextureCopyRegion, GpuTextureDimension, GpuTextureHandle,
+    GpuTextureOrigin, GpuTextureUsage, GpuTransferRegion, GpuUploadOperation, PreparedGpuData,
+    TransferData,
 };
 use crate::plugins::render::features::{
     MATERIAL_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID, UiFontAtlasResource,
@@ -652,15 +654,7 @@ impl Renderer {
         // material binding set and all physical groups are realized once through the canonical
         // G4C2 `GpuRuntimeBindingSet` path in render-flow binding realization.
         for (texture, upload) in textures.iter().zip(texture_uploads) {
-            pending_operations
-                .texture_uploads
-                .push(RendererPendingTextureUpload {
-                    texture: texture.realized.clone(),
-                    bytes: upload.bytes,
-                    bytes_per_row: upload.bytes_per_row,
-                    rows_per_image: upload.rows_per_image,
-                    size: upload.size,
-                });
+            pending_operations.queue_texture(texture, &upload.bytes)?;
         }
 
         Ok(Some(PreparedMaterialGpuResources {
@@ -724,6 +718,27 @@ fn canonical_renderer_buffer_upload(
     Ok(GpuUploadOperation::new(region.into(), payload)?)
 }
 
+fn canonical_renderer_texture_upload(
+    texture: &GpuTextureHandle,
+    contents: &[u8],
+) -> Result<GpuUploadOperation> {
+    let extent = texture.descriptor().extent();
+    let region = GpuTextureCopyRegion::new(
+        texture,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(extent.width(), extent.height(), extent.depth_or_layers())?,
+    )?;
+    let label = texture.descriptor().common().label();
+    let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
+        format!("renderer pending texture upload {}", label.as_str()),
+        contents,
+        texture.descriptor().common().provenance().clone(),
+    )?;
+    Ok(GpuUploadOperation::new(region.into(), payload)?)
+}
+
 impl RendererPendingOperations {
     fn queue_buffer(&mut self, buffer: &RendererBufferResource, contents: &[u8]) -> Result<()> {
         self.buffer_uploads.push(RendererPendingBufferUpload {
@@ -733,23 +748,24 @@ impl RendererPendingOperations {
         Ok(())
     }
 
+    pub(super) fn queue_texture(
+        &mut self,
+        texture: &RendererTextureResource,
+        contents: &[u8],
+    ) -> Result<()> {
+        self.texture_uploads.push(RendererPendingTextureUpload {
+            operation: canonical_renderer_texture_upload(&texture._handle, contents)?,
+            legacy_realized: texture.realized.clone(),
+        });
+        Ok(())
+    }
+
     pub(super) fn apply(self, context: &GpuContext, queue: &Queue) -> Result<()> {
         for upload in self.buffer_uploads {
             Self::apply_buffer_upload(context, queue, &upload)?;
         }
         for upload in self.texture_uploads {
-            context
-                .current_render_execution_bridge()
-                .for_texture_upload(
-                    &upload.texture,
-                    UploadRendererTexture {
-                        queue,
-                        bytes: &upload.bytes,
-                        bytes_per_row: upload.bytes_per_row,
-                        rows_per_image: upload.rows_per_image,
-                        size: upload.size,
-                    },
-                )?;
+            Self::apply_texture_upload(context, queue, &upload)?;
         }
         Ok(())
     }
@@ -783,6 +799,60 @@ impl RendererPendingOperations {
             )?;
         Ok(())
     }
+
+    pub(super) fn apply_texture_upload(
+        context: &GpuContext,
+        queue: &Queue,
+        upload: &RendererPendingTextureUpload,
+    ) -> Result<()> {
+        let GpuTransferRegion::Texture(destination) = upload.operation.destination() else {
+            return Err(anyhow::anyhow!(
+                "renderer pending texture upload lowered to a non-texture destination"
+            ));
+        };
+        if upload.legacy_realized.logical_identity() != destination.texture().diagnostic_identity() {
+            return Err(anyhow::anyhow!(
+                "renderer pending texture upload destination '{}' disagrees with its temporary G4C1 realization '{}'",
+                destination.texture().diagnostic_identity(),
+                upload.legacy_realized.logical_identity()
+            ));
+        }
+        let extent = destination.extent();
+        let bytes_per_row = extent
+            .width()
+            .checked_mul(destination.texture().descriptor().format().bytes_per_texel())
+            .ok_or_else(|| anyhow::anyhow!("renderer pending texture upload row byte length overflowed"))?;
+        let aspect = match destination.aspect() {
+            GpuTextureAspect::All | GpuTextureAspect::Color => TextureAspect::All,
+            GpuTextureAspect::DepthOnly => TextureAspect::DepthOnly,
+            GpuTextureAspect::StencilOnly => TextureAspect::StencilOnly,
+        };
+        let origin = destination.origin();
+        context
+            .current_render_execution_bridge()
+            .for_texture_upload(
+                &upload.legacy_realized,
+                UploadRendererTexture {
+                    queue,
+                    bytes: upload.operation.payload().as_bytes(),
+                    mip_level: destination.mip_level(),
+                    origin: Origin3d {
+                        x: origin.x(),
+                        y: origin.y(),
+                        z: origin.z(),
+                    },
+                    aspect,
+                    bytes_per_row,
+                    rows_per_image: extent.height(),
+                    size: Extent3d {
+                        width: extent.width(),
+                        height: extent.height(),
+                        depth_or_array_layers: extent.depth_or_layers(),
+                    },
+                },
+            )?;
+        Ok(())
+    }
 }
 
 struct WriteRendererBuffer<'a> {
@@ -801,6 +871,9 @@ impl CurrentRenderBufferUploadTerminal for WriteRendererBuffer<'_> {
 struct UploadRendererTexture<'a> {
     queue: &'a Queue,
     bytes: &'a [u8],
+    mip_level: u32,
+    origin: Origin3d,
+    aspect: TextureAspect,
     bytes_per_row: u32,
     rows_per_image: u32,
     size: Extent3d,
@@ -811,9 +884,9 @@ impl CurrentRenderTextureUploadTerminal for UploadRendererTexture<'_> {
         self.queue.write_texture(
             TexelCopyTextureInfo {
                 texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
+                mip_level: self.mip_level,
+                origin: self.origin,
+                aspect: self.aspect,
             },
             self.bytes,
             TexelCopyBufferLayout {
@@ -1369,6 +1442,41 @@ mod tests {
         assert_eq!(destination.range().offset(), 0);
         assert_eq!(destination.range().size(), 4);
         assert_eq!(operation.payload().as_bytes(), &[1_u8, 2, 3, 4]);
+    }
+
+    #[test]
+    fn pending_texture_upload_retains_exact_logical_destination_and_payload() {
+        let mut resource_ids = GpuWorkResourceIdAllocator::new();
+        let texture = resource_ids
+            .allocate_texture_handle(
+                texture_descriptor_with_extent(
+                    "pending texture upload test",
+                    GpuTextureDimension::D2,
+                    (2, 1, 1),
+                    crate::plugins::gpu::GpuTextureFormat::Rgba8Unorm,
+                    [GpuTextureUsage::CopyDestination],
+                    GpuResourceLifetime::Transient,
+                )
+                .expect("test texture descriptor should be valid"),
+            )
+            .expect("test texture handle should allocate");
+        let bytes = [1_u8, 2, 3, 4, 5, 6, 7, 8];
+        let operation = canonical_renderer_texture_upload(&texture, &bytes)
+            .expect("pending texture upload should become canonical");
+
+        let GpuTransferRegion::Texture(destination) = operation.destination() else {
+            panic!("pending texture upload should retain a texture destination");
+        };
+        assert_eq!(
+            destination.texture().diagnostic_identity(),
+            texture.diagnostic_identity()
+        );
+        assert_eq!(destination.mip_level(), 0);
+        assert_eq!(destination.origin(), GpuTextureOrigin::new(0, 0, 0));
+        assert_eq!(destination.extent().width(), 2);
+        assert_eq!(destination.extent().height(), 1);
+        assert_eq!(destination.extent().depth_or_layers(), 1);
+        assert_eq!(operation.payload().as_bytes(), bytes.as_slice());
     }
 
     #[test]
