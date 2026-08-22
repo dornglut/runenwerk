@@ -1,8 +1,8 @@
 use super::super::WgpuDeviceHealth;
 use super::{WgpuSurfaceLease, WgpuSurfaceRecord, WgpuSurfaceState, WgpuSurfaceStateInner};
 use crate::plugins::gpu::{
-    GpuContextAffinity, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory, GpuSurfaceResourceLease,
-    GpuWorkResourceId,
+    GpuContextAffinity, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory,
+    GpuSurfaceResourceLease, GpuWorkResourceId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,7 +68,11 @@ fn validate_lease<'a>(
         ));
     }
     let active = record.active_lease.as_ref().ok_or_else(|| {
-        inactive_lease_error(record, lease, "the surface has no active acquired-image lease")
+        inactive_lease_error(
+            record,
+            lease,
+            "the surface has no active acquired-image lease",
+        )
     })?;
     if active.id != lease.lease_id() {
         return Err(inactive_lease_error(
