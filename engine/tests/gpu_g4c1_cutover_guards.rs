@@ -112,6 +112,7 @@ fn g4c1_logical_resource_creation_stays_private_while_g5b_staging_is_isolated() 
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let owner = "src/plugins/gpu/backend/wgpu/resource_realization/mod.rs";
     let execution = "src/plugins/gpu/backend/wgpu/execution.rs";
+    let surface_execution = "src/plugins/gpu/backend/wgpu/surface/execution.rs";
 
     assert_eq!(
         token_paths(&manifest, ".create_buffer("),
@@ -129,9 +130,10 @@ fn g4c1_logical_resource_creation_stays_private_while_g5b_staging_is_isolated() 
         token_paths(&manifest, ".create_view("),
         BTreeSet::from([
             owner.to_owned(),
+            surface_execution.to_owned(),
             "src/plugins/render/renderer/mod.rs".to_owned(),
         ]),
-        "G4C1 texture-view creation escaped its owner or the one presentation exception"
+        "texture-view creation escaped G4C1 or the exact renderer/G7 presentation exceptions"
     );
     assert!(
         token_paths(&manifest, ".create_buffer_init(").is_empty(),
