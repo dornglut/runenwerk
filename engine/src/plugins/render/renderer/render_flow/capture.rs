@@ -457,7 +457,8 @@ pub fn encode_legacy_prepared_texture_capture(
         padded_bytes_per_row,
     } = legacy;
 
-    let (copy_width, copy_height) = match (canonical_operation.as_ref(), is_pre_g7_surface, &source) {
+    let (copy_width, copy_height) = match (canonical_operation.as_ref(), is_pre_g7_surface, &source)
+    {
         (Some(operation), false, LegacyPreparedCaptureTextureSource::Realized(texture)) => {
             let GpuTransferRegion::Texture(region) = operation.source() else {
                 anyhow::bail!(
