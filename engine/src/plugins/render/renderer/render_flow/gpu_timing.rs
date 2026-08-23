@@ -82,7 +82,7 @@ impl GpuPassTimingFrame {
             readback_buffer,
             query_capacity,
             query_count: 0,
-            timestamp_period_ns: 0.0,
+            timestamp_period_ns: context.timestamp_period_ns().unwrap_or(0.0),
             entries: Vec::new(),
             resolve_encoded: false,
         })
@@ -96,11 +96,10 @@ impl GpuPassTimingFrame {
         self.timing_tail.readback_copy()
     }
 
-    /// Timestamp-period observation is a G5 queue operation, so it is populated only after the
-    /// batch has entered the raw operation interval. G4C1 query/buffer realization above remains
-    /// entirely in the first phase.
-    pub fn activate(&mut self, queue: &Queue) -> bool {
-        self.timestamp_period_ns = queue.get_timestamp_period();
+    /// Transitional execution gate retained until the raw renderer timing bridge is deleted.
+    /// Timestamp scale is already observed through backend-neutral RunenGPU context authority
+    /// during construction; the raw queue argument carries no timing semantics.
+    pub fn activate(&mut self, _queue: &Queue) -> bool {
         self.timestamp_period_ns > 0.0
     }
 
