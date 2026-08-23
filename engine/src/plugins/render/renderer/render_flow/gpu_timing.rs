@@ -548,14 +548,9 @@ mod tests {
             )
             .expect("resolve handle");
         let readback_id = GpuReadbackId::allocate().expect("readback identity should allocate");
-        let mut frame = GpuPassTimingFrame::new(
-            &context,
-            &query_set,
-            &resolve_buffer,
-            readback_id,
-            2,
-        )
-        .expect("timestamp resources should realize");
+        let mut frame =
+            GpuPassTimingFrame::new(&context, &query_set, &resolve_buffer, readback_id, 2)
+                .expect("timestamp resources should realize");
         let resolve_operation = frame.resolve_operation().clone();
         let readback_operation = frame.readback_operation().clone();
         let evidence = {
