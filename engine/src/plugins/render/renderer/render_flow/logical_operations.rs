@@ -5,10 +5,10 @@ use crate::plugins::gpu::{
     GpuColorAttachmentLoad, GpuColorClearValue, GpuComputeOperation, GpuDepthAttachmentLoad,
     GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchIntent, GpuDispatchSize, GpuDrawIntent,
     GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat, GpuQueryRange, GpuQueryResolveOperation,
-    GpuReadbackId, GpuReadbackOperation, GpuRenderColorAttachment,
-    GpuRenderDepthStencilAttachment, GpuRenderDraw, GpuRenderOperation, GpuScissorRect,
-    GpuTextureViewHandle, GpuTimestampWrites, GpuUploadOperation, GpuVertexBufferBinding,
-    GpuViewport, GpuWorkOperation, PreparedGpuData, TransferData,
+    GpuReadbackId, GpuReadbackOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+    GpuRenderDraw, GpuRenderOperation, GpuScissorRect, GpuTextureViewHandle, GpuTimestampWrites,
+    GpuUploadOperation, GpuVertexBufferBinding, GpuViewport, GpuWorkOperation, PreparedGpuData,
+    TransferData,
 };
 use crate::plugins::render::graph::CompiledDrawSource;
 use crate::plugins::render::{RenderDepthPolicy, RenderIndirectDrawArgsKind};
