@@ -55,19 +55,11 @@ pub(super) struct CanonicalInvocationProjection<'a, 'pass> {
     pub(super) timing: Option<&'a LogicalGpuPassTiming>,
 }
 
-/// One invocation plus the render-owned state required to resolve it into canonical GPU work.
+/// Execution-complete canonical work owned by one resolved renderer invocation.
 ///
-/// The frame resolver collects these projections before allocating any auxiliary occurrence IDs.
-/// This prevents per-invocation timing tails from consuming an identity already assigned to a
-/// later invocation in the same physical submission.
-#[derive(Clone, Copy)]
-pub(super) struct CanonicalFrameInvocationProjection<'a, 'pass> {
-    pub(super) flow: &'a CompiledRenderFlowPlan,
-    pub(super) flow_inputs: &'a PreparedFlowInputs,
-    pub(super) runtime_resources: &'a FlowRuntimeResources,
-    pub(super) invocation: CanonicalInvocationProjection<'a, 'pass>,
-}
-
+/// This value deliberately contains no borrow of `FlowRuntimeResources`. The live frame caller can
+/// therefore resolve an invocation while its mutable runtime-resource scope is active, retain this
+/// owned result, and aggregate all invocation results only after that scope has moved on.
 pub(super) struct CanonicalResolvedInvocation {
     nodes: Vec<ResolvedRenderGpuWorkNode>,
     /// One entry per terminal compiled Present omitted because its source was already
@@ -106,10 +98,11 @@ pub(super) enum CanonicalInvocationPreparation {
 
 /// Transitional per-invocation preparation wrapper.
 ///
-/// The durable G5C1 path is `resolve_canonical_frame` followed by one frame-level
-/// `prepare_render_gpu_frame_work` call. The current single-invocation caller is deliberately routed
-/// through the same frame resolver so all-or-nothing residual handling and auxiliary occurrence
-/// allocation remain exercised until the caller itself moves to frame scope.
+/// The durable G5C1 path resolves each invocation while its mutable runtime-resource scope is
+/// active, aggregates the resulting owned `CanonicalInvocationResolution` values with
+/// `resolve_canonical_frame`, then calls `prepare_render_gpu_frame_work` once. The current caller
+/// still prepares one invocation at a time, but it now exercises the same owned aggregation
+/// boundary instead of relying on a frame collection of borrowed runtime projections.
 pub(super) fn prepare_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
@@ -126,16 +119,21 @@ pub(super) fn prepare_canonical_invocation(
         builtin_ui_draws: None,
         timing,
     };
-    let frame_invocation = CanonicalFrameInvocationProjection {
+    let mut maximum_occurrence = 0_u64;
+    observe_existing_occurrences(invocation, &mut maximum_occurrence);
+    let resolved = resolve_canonical_invocation(
+        context,
         flow,
         flow_inputs,
         runtime_resources,
+        None,
         invocation,
-    };
+        &mut maximum_occurrence,
+    )?;
     // The transitional per-invocation physical bridge cannot resolve dynamic-target sidecars or
     // consume terminal-Present control metadata. Only the eventual frame-level G5 path may supply
     // and consume those authorities.
-    match resolve_canonical_frame(context, None, [frame_invocation])? {
+    match resolve_canonical_frame([resolved]) {
         CanonicalFrameResolution::Resolved(frame) => {
             if !frame.terminal_present_controls.is_empty() {
                 return Ok(CanonicalInvocationPreparation::PreG7Residual);
@@ -150,69 +148,52 @@ pub(super) fn prepare_canonical_invocation(
     }
 }
 
-/// Resolves every renderer invocation participating in one physical frame/surface submission.
+/// Aggregates already-resolved renderer invocations into one bounded frame/surface semantic result.
 ///
-/// Existing occurrence IDs are observed across the complete frame before any timing/capture-tail
-/// auxiliary identity can be allocated. This is required even when ordinary pass occurrences were
-/// already expanded with one frame-scoped allocator: resolving invocation A must not allocate the
-/// ID already assigned to invocation B. The returned frame is all-or-nothing; one residual
-/// invocation discards every canonical node and terminal-Present control record accumulated for the
-/// frame so the caller cannot mix legacy and G5 execution authority inside one physical submission.
-pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
-    context: &GpuContext,
-    dynamic_texture_targets: Option<&'a RendererDynamicTextureTargetCache>,
-    invocations: impl IntoIterator<Item = CanonicalFrameInvocationProjection<'a, 'pass>>,
-) -> Result<CanonicalFrameResolution> {
-    let invocations = invocations.into_iter().collect::<Vec<_>>();
-    if invocations.is_empty() {
-        return Ok(CanonicalFrameResolution::PreG7Residual);
-    }
-
-    let mut maximum_occurrence = 0_u64;
-    for invocation in &invocations {
-        observe_existing_occurrences(invocation.invocation, &mut maximum_occurrence);
-    }
-
+/// The caller must reserve ordinary pass occurrence IDs across the complete frame before resolving
+/// the first invocation, then pass one shared `maximum_occurrence` through every
+/// `resolve_canonical_invocation` call so upload/timing auxiliary identities cannot collide with a
+/// later invocation. Each invocation can then be resolved while its mutable `FlowRuntimeResources`
+/// scope is active; this aggregator retains only owned generic work and render-owned terminal
+/// control metadata. One residual invocation discards the complete canonical frame result so the
+/// caller cannot mix legacy and G5 execution authority inside one physical submission.
+pub(super) fn resolve_canonical_frame(
+    invocations: impl IntoIterator<Item = CanonicalInvocationResolution>,
+) -> CanonicalFrameResolution {
     let mut nodes = Vec::<ResolvedRenderGpuWorkNode>::new();
     let mut terminal_present_controls = Vec::<Vec<RenderGpuWorkOccurrenceId>>::new();
+    let mut saw_invocation = false;
+
     for invocation in invocations {
-        match resolve_canonical_invocation(
-            context,
-            invocation.flow,
-            invocation.flow_inputs,
-            invocation.runtime_resources,
-            dynamic_texture_targets,
-            invocation.invocation,
-            &mut maximum_occurrence,
-        )? {
+        saw_invocation = true;
+        match invocation {
             CanonicalInvocationResolution::Resolved(mut resolved) => {
                 nodes.append(&mut resolved.nodes);
                 terminal_present_controls.append(&mut resolved.terminal_present_controls);
             }
             CanonicalInvocationResolution::PreG7Residual => {
-                return Ok(CanonicalFrameResolution::PreG7Residual);
+                return CanonicalFrameResolution::PreG7Residual;
             }
         }
     }
 
-    if nodes.is_empty() && terminal_present_controls.is_empty() {
-        Ok(CanonicalFrameResolution::PreG7Residual)
+    if !saw_invocation || (nodes.is_empty() && terminal_present_controls.is_empty()) {
+        CanonicalFrameResolution::PreG7Residual
     } else {
-        Ok(CanonicalFrameResolution::Resolved(CanonicalResolvedFrame {
+        CanonicalFrameResolution::Resolved(CanonicalResolvedFrame {
             nodes,
             terminal_present_controls,
-        }))
+        })
     }
 }
 
 /// Resolves one renderer invocation into execution-complete canonical GPU occurrences without
 /// preparing a G3 graph.
 ///
-/// G5C1 normally reaches this through `resolve_canonical_frame`, which first observes every
-/// existing occurrence in the physical frame before auxiliary IDs are allocated. The direct entry
-/// point remains for the frame resolver and its bounded transitional wrapper. If an operation is
-/// residual, no partial canonical node set or terminal-Present control metadata from this invocation
-/// is retained.
+/// The caller owns occurrence allocation. For frame-level use it must reserve all ordinary pass
+/// occurrence IDs first and then thread the same `maximum_occurrence` through every invocation so
+/// auxiliary upload/timing IDs stay frame-unique. If an operation is residual, no partial canonical
+/// node set or terminal-Present control metadata from this invocation is retained.
 pub(super) fn resolve_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
