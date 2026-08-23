@@ -391,6 +391,7 @@ impl ProjectedTimingTail {
         query_set: &crate::plugins::gpu::GpuQuerySetHandle,
         query_range: GpuQueryRange,
         resolve_buffer: &GpuBufferHandle,
+        readback_id: GpuReadbackId,
     ) -> Result<Self> {
         let resolve = GpuQueryResolveOperation::new(query_set, query_range, resolve_buffer, 0)?;
         let byte_len = u64::from(resolve.source_range().count())
@@ -402,7 +403,7 @@ impl ProjectedTimingTail {
                 GpuBufferRange::new(resolve_buffer, 0, byte_len)?,
             )?
             .into(),
-            GpuReadbackId::allocate()?,
+            readback_id,
         )?;
         Ok(Self { resolve, readback })
     }
@@ -420,8 +421,9 @@ pub(super) fn project_timing_tail(
     query_set: &crate::plugins::gpu::GpuQuerySetHandle,
     query_range: GpuQueryRange,
     resolve_buffer: &GpuBufferHandle,
+    readback_id: GpuReadbackId,
 ) -> Result<ProjectedTimingTail> {
-    ProjectedTimingTail::new(query_set, query_range, resolve_buffer)
+    ProjectedTimingTail::new(query_set, query_range, resolve_buffer, readback_id)
 }
 
 pub(super) fn timestamp_writes(
