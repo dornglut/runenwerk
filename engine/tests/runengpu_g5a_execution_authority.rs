@@ -11,18 +11,18 @@ fn source(path: &str) -> String {
 }
 
 #[test]
-fn canonical_renderer_branch_consumes_prepared_work_without_compiled_execution_fallback() {
+fn transitional_g5_bridge_consumes_prepared_work_without_compiled_execution_fallback() {
     let execute = source("src/plugins/render/renderer/render_flow/execute.rs");
     let canonical_start = execute
-        .find("if invocation.canonical_work.is_some() {")
-        .expect("canonical invocation branch must remain explicit");
+        .find("if let Some(legacy_work) = legacy_work.as_deref() {")
+        .expect("transitional prepared-work execution branch must remain explicit until G5C removes it");
     let residual_offset = execute[canonical_start..]
         .find("let invocation_result = (|| -> Result<()> {")
-        .expect("residual renderer branch must remain distinguishable from canonical execution");
+        .expect("residual renderer branch must remain distinguishable from prepared generic execution");
     let canonical = &execute[canonical_start..canonical_start + residual_offset];
 
     for required in [
-        "schedule_invocation_passes(invocation)?",
+        "schedule_legacy_invocation_work(legacy_work)?",
         "encode_canonical_upload_operation(",
         "encode_canonical_compute_operation(",
         "encode_canonical_copy_operation(",
@@ -32,24 +32,24 @@ fn canonical_renderer_branch_consumes_prepared_work_without_compiled_execution_f
     ] {
         assert!(
             canonical.contains(required),
-            "canonical G5A renderer execution must consume prepared generic work through {required}"
+            "transitional G5 renderer execution must consume prepared generic work through {required}"
         );
     }
     assert!(
         !canonical.contains("encode_compiled_pass("),
-        "execution-complete canonical work must not fall back to the compiled renderer execution recipe"
+        "execution-complete prepared work must not fall back to the compiled renderer execution recipe"
     );
 
     let schedule_start = execute
-        .find("fn schedule_invocation_passes(")
-        .expect("canonical G3 schedule adapter must exist");
+        .find("fn schedule_legacy_invocation_work(")
+        .expect("transitional G3 schedule adapter must exist until the frame-level G5C cutover");
     let schedule_end = execute[schedule_start..]
         .find("fn encode_prepared_timing_tail(")
         .map(|offset| schedule_start + offset)
-        .expect("canonical schedule helper must end before the residual timing-tail helper");
+        .expect("transitional schedule helper must end before the residual timing-tail helper");
     assert!(
         execute[schedule_start..schedule_end].contains(".ordered_payloads()?"),
-        "canonical logical work order must come from PreparedRenderWorkPlan rather than renderer pass order"
+        "prepared logical work order must come from PreparedRenderWorkPlan rather than renderer pass order"
     );
 }
 
