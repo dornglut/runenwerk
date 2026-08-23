@@ -17,9 +17,9 @@ pub(super) struct ExpandedRenderPassOccurrence<'a> {
     pub(super) control_order_after: Vec<RenderGpuWorkOccurrenceId>,
 }
 
-/// Transitional per-invocation expansion entry point retained until G5C1 moves the frame caller to
-/// `expand_render_pass_occurrences_in_frame`.
-pub(super) fn expand_render_pass_occurrences<'a, F>(
+/// Test-local per-invocation convenience wrapper over the frame-owned occurrence allocator.
+#[cfg(test)]
+fn expand_render_pass_occurrences<'a, F>(
     flow: &'a CompiledRenderFlowPlan,
     flow_inputs: &'a PreparedFlowInputs,
     include_pass: F,

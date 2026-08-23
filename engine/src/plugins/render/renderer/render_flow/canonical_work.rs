@@ -103,6 +103,10 @@ pub(super) enum CanonicalInvocationPreparation {
 /// `resolve_canonical_frame`, then calls `prepare_render_gpu_frame_work` once. The current caller
 /// still prepares one invocation at a time, but occurrence identity is now supplied by the same
 /// frame-owned monotonic space used by live pass expansion.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "G5C1 transitional per-invocation preparation wrapper is removed at frame cutover"
+)]
 pub(super) fn prepare_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
