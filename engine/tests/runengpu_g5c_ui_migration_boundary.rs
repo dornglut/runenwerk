@@ -15,7 +15,10 @@ fn g5c_ui_execution_boundary_stays_free_of_legacy_ui_semantics() {
     let adapter = source("src/plugins/render/adapters/gpu_work.rs");
     let canonical = source("src/plugins/render/renderer/render_flow/canonical_work.rs");
 
-    for (owner, contents) in [("render-work adapter", &adapter), ("canonical work", &canonical)] {
+    for (owner, contents) in [
+        ("render-work adapter", &adapter),
+        ("canonical work", &canonical),
+    ] {
         for forbidden in [
             "UiNode",
             "UiFrame",
