@@ -2,10 +2,10 @@ use super::logical_timing::LogicalGpuPassTiming;
 use super::*;
 use crate::plugins::gpu::{
     GpuAttachmentStore, GpuBlendConstant, GpuBufferHandle, GpuBufferRange, GpuBufferRegion,
-    GpuColorAttachmentLoad, GpuColorClearValue, GpuComputeOperation, GpuCopyOperation,
-    GpuDepthAttachmentLoad, GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchIntent,
-    GpuDispatchSize, GpuDrawIntent, GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat,
-    GpuQueryRange, GpuQueryResolveOperation, GpuRenderColorAttachment,
+    GpuColorAttachmentLoad, GpuColorClearValue, GpuComputeOperation, GpuDepthAttachmentLoad,
+    GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchIntent, GpuDispatchSize, GpuDrawIntent,
+    GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat, GpuQueryRange, GpuQueryResolveOperation,
+    GpuReadbackId, GpuReadbackOperation, GpuRenderColorAttachment,
     GpuRenderDepthStencilAttachment, GpuRenderDraw, GpuRenderOperation, GpuScissorRect,
     GpuTextureViewHandle, GpuTimestampWrites, GpuUploadOperation, GpuVertexBufferBinding,
     GpuViewport, GpuWorkOperation, PreparedGpuData, TransferData,
@@ -377,13 +377,13 @@ pub(super) fn project_buffer_upload(
 
 /// Canonical timestamp tail for one expanded renderer invocation.
 ///
-/// Both the prepared G3 graph and the temporary pre-G5B physical timing adapter consume these
-/// same RunenGPU operation values. Renderer timing state may retain physical leases and diagnostic
-/// metadata, but it must not reconstruct resolve/copy ranges independently.
+/// The resolve and GPU-to-CPU readback are both first-class RunenGPU operations. The temporary raw
+/// renderer executor may derive private staging from the readback operation until frame-level G5
+/// submission is live, but it must not introduce a second logical copy destination or readback DAG.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ProjectedTimingTail {
     resolve: GpuQueryResolveOperation,
-    readback_copy: GpuCopyOperation,
+    readback: GpuReadbackOperation,
 }
 
 impl ProjectedTimingTail {
@@ -391,34 +391,28 @@ impl ProjectedTimingTail {
         query_set: &crate::plugins::gpu::GpuQuerySetHandle,
         query_range: GpuQueryRange,
         resolve_buffer: &GpuBufferHandle,
-        readback_buffer: &GpuBufferHandle,
     ) -> Result<Self> {
         let resolve = GpuQueryResolveOperation::new(query_set, query_range, resolve_buffer, 0)?;
         let byte_len = u64::from(resolve.source_range().count())
             .checked_mul(8)
             .ok_or_else(|| anyhow::anyhow!("render GPU timestamp byte coverage overflow"))?;
-        let readback_copy = GpuCopyOperation::buffer_to_buffer(
+        let readback = GpuReadbackOperation::new(
             GpuBufferRegion::new(
                 resolve_buffer,
                 GpuBufferRange::new(resolve_buffer, 0, byte_len)?,
-            )?,
-            GpuBufferRegion::new(
-                readback_buffer,
-                GpuBufferRange::new(readback_buffer, 0, byte_len)?,
-            )?,
+            )?
+            .into(),
+            GpuReadbackId::allocate()?,
         )?;
-        Ok(Self {
-            resolve,
-            readback_copy,
-        })
+        Ok(Self { resolve, readback })
     }
 
     pub(super) fn resolve(&self) -> &GpuQueryResolveOperation {
         &self.resolve
     }
 
-    pub(super) fn readback_copy(&self) -> &GpuCopyOperation {
-        &self.readback_copy
+    pub(super) fn readback(&self) -> &GpuReadbackOperation {
+        &self.readback
     }
 }
 
@@ -426,9 +420,8 @@ pub(super) fn project_timing_tail(
     query_set: &crate::plugins::gpu::GpuQuerySetHandle,
     query_range: GpuQueryRange,
     resolve_buffer: &GpuBufferHandle,
-    readback_buffer: &GpuBufferHandle,
 ) -> Result<ProjectedTimingTail> {
-    ProjectedTimingTail::new(query_set, query_range, resolve_buffer, readback_buffer)
+    ProjectedTimingTail::new(query_set, query_range, resolve_buffer)
 }
 
 pub(super) fn timestamp_writes(
