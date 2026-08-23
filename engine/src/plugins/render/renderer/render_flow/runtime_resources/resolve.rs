@@ -341,11 +341,11 @@ impl FlowRuntimeResources {
             }))
     }
 
-    pub fn resolve_logical_texture_binding<'a>(
-        &'a self,
+    pub fn resolve_logical_texture_binding(
+        &self,
         pass_id: RenderPassId,
         resource_key: RuntimeResourceKey,
-    ) -> Result<(&'a GpuTextureViewHandle, TextureFormat, bool)> {
+    ) -> Result<(&GpuTextureViewHandle, TextureFormat, bool)> {
         if resource_key == RuntimeResourceKey::SurfaceColor {
             bail!(
                 "pass '{}' binds '{}' as a shader texture before the exact G7A acquired logical view exists",
