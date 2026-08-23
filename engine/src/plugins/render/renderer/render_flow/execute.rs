@@ -2,8 +2,9 @@ use super::super::dynamic_targets::RendererPreparedDynamicTextureUploadBatch;
 use super::*;
 use super::{
     canonical_work::{
-        CanonicalInvocationPreparation, CanonicalPassProjection, RealizedLogicalBufferUpload,
-        allocate_aux_occurrence, prepare_canonical_invocation,
+        CanonicalInvocationProjection, CanonicalInvocationResolution, CanonicalPassProjection,
+        RealizedLogicalBufferUpload, allocate_aux_occurrence, prepare_legacy_invocation_work,
+        resolve_canonical_invocation,
     },
     logical_operations::project_buffer_upload,
     logical_timing::LogicalGpuPassTimingPlan,
@@ -37,7 +38,8 @@ struct RealizedFlowInvocation<'a> {
     projected_uploads: Vec<RealizedLogicalBufferUpload>,
     scheduled_passes: Vec<RealizedScheduledPass<'a>>,
     timing_frame: Option<GpuPassTimingFrame>,
-    canonical_work: Option<Box<PreparedRenderWorkPlan>>,
+    /// Owned semantic authority retained through realization and consumed before the raw bridge.
+    canonical_resolution: Option<CanonicalInvocationResolution>,
 }
 
 struct RealizedScheduledPass<'a> {
@@ -110,6 +112,28 @@ impl Renderer {
             gpu_timing_capability,
         )?;
 
+        // Consume the owned invocation resolutions into temporary per-invocation G3 plans only for
+        // the current raw execution bridge. No prepared invocation graph remains a retained
+        // realization authority, and this conversion stays outside the raw device/queue loan.
+        let canonical_resolutions = batch
+            .invocations
+            .iter_mut()
+            .map(|invocation| {
+                let resolution = invocation.canonical_resolution.take().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "flow '{}' invocation '{}' lost canonical resolution before legacy preparation",
+                        invocation.flow.flow_id,
+                        invocation.invocation.invocation_id.0
+                    )
+                })?;
+                Ok((invocation.flow, resolution))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let legacy_invocation_work = canonical_resolutions
+            .into_iter()
+            .map(|(flow, resolution)| prepare_legacy_invocation_work(flow, resolution))
+            .collect::<Result<Vec<_>>>()?;
+
         let encode_submit_start = Instant::now();
         // Phase two: one non-reentrant raw loan covers the temporary physical bridge path. Work
         // already carrying canonical G5 operations is only physically applied here; ordinary
@@ -148,6 +172,7 @@ impl Renderer {
                     debug_control,
                     gpu_timing_capability,
                     &mut batch,
+                    &legacy_invocation_work,
                 )?;
             loan.queue.submit(std::iter::once(encoder.finish()));
             if !pending_gpu_pass_timing_readbacks.is_empty() {
@@ -459,21 +484,23 @@ impl Renderer {
                                     || !scheduled.execution.after_captures.is_empty(),
                             })
                             .collect::<Vec<_>>();
-                        let canonical_work = match prepare_canonical_invocation(
+                        let canonical_resolution = resolve_canonical_invocation(
                             context,
                             flow,
                             &invocation.inputs,
                             runtime_resources,
-                            &projected_uploads,
-                            &canonical_projections,
-                            logical_timing_plan
-                                .as_ref()
-                                .and_then(LogicalGpuPassTimingPlan::timing),
+                            None,
+                            CanonicalInvocationProjection {
+                                projected_uploads: &projected_uploads,
+                                passes: &canonical_projections,
+                                surface_color_view: None,
+                                builtin_ui_draws: None,
+                                timing: logical_timing_plan
+                                    .as_ref()
+                                    .and_then(LogicalGpuPassTimingPlan::timing),
+                            },
                             &mut maximum_occurrence,
-                        )? {
-                            CanonicalInvocationPreparation::Prepared(work) => Some(work),
-                            CanonicalInvocationPreparation::PreG7Residual => None,
-                        };
+                        )?;
                         Ok(RealizedFlowInvocation {
                             flow,
                             invocation,
@@ -481,7 +508,7 @@ impl Renderer {
                             projected_uploads,
                             scheduled_passes: realized_passes,
                             timing_frame,
-                            canonical_work,
+                            canonical_resolution: Some(canonical_resolution),
                         })
                     })();
                     runtime_resources.clear_active_invocation_uniform_scope();
@@ -512,7 +539,8 @@ impl Renderer {
         }
         if !final_captures.is_empty() {
             for invocation in &mut invocations {
-                invocation.canonical_work = None;
+                invocation.canonical_resolution =
+                    Some(CanonicalInvocationResolution::PreG7Residual);
             }
         }
         Ok(RendererRealizationBatch {
@@ -537,6 +565,7 @@ impl Renderer {
         debug_control: &RenderDebugControlResource,
         gpu_timing_capability: RenderGpuTimingCapability,
         batch: &mut RendererRealizationBatch<'_>,
+        legacy_invocation_work: &[Option<Box<PreparedRenderWorkPlan>>],
     ) -> Result<(
         Vec<PendingGpuPassTimingReadback>,
         Vec<PendingCaptureReadback>,
@@ -544,9 +573,20 @@ impl Renderer {
         let frame_index = prepared_frame.context.frame_index;
         let mut pending_capture_readbacks = Vec::new();
         let mut pending_gpu_pass_timing_readbacks = Vec::new();
+        if legacy_invocation_work.len() != batch.invocations.len() {
+            bail!(
+                "legacy invocation work count {} does not match realized invocation count {}",
+                legacy_invocation_work.len(),
+                batch.invocations.len()
+            );
+        }
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
         let execution_result = (|| -> Result<()> {
-            for invocation in &mut batch.invocations {
+            for (invocation, legacy_work) in batch
+                .invocations
+                .iter_mut()
+                .zip(legacy_invocation_work.iter())
+            {
                 let runtime_resources = flow_runtime_cache
                     .get_mut(&invocation.flow.flow_id)
                     .ok_or_else(|| {
@@ -563,12 +603,12 @@ impl Renderer {
                 tracing::trace!(
                     flow_id = %invocation.flow.flow_id,
                     invocation_id = %invocation.invocation.invocation_id.0,
-                    canonical_work_prepared = invocation.canonical_work.is_some(),
-                    "renderer G5A invocation execution authority"
+                    legacy_g3_work_prepared = legacy_work.is_some(),
+                    "renderer transitional raw invocation execution bridge"
                 );
 
-                if invocation.canonical_work.is_some() {
-                    let schedule = schedule_invocation_passes(invocation)?;
+                if let Some(legacy_work) = legacy_work.as_deref() {
+                    let schedule = schedule_legacy_invocation_work(legacy_work)?;
                     let timestamp_period_available = invocation
                         .timing_frame
                         .as_mut()
@@ -1572,12 +1612,9 @@ impl Renderer {
     }
 }
 
-fn schedule_invocation_passes(
-    invocation: &RealizedFlowInvocation<'_>,
+fn schedule_legacy_invocation_work(
+    work: &PreparedRenderWorkPlan,
 ) -> Result<Vec<ScheduledInvocationWork>> {
-    let work = invocation.canonical_work.as_ref().ok_or_else(|| {
-        anyhow::anyhow!("canonical invocation scheduling requires a prepared G3 work plan")
-    })?;
     work.ordered_payloads()?
         .into_iter()
         .map(|(node_id, payload)| {

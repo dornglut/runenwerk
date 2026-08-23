@@ -89,65 +89,25 @@ pub(super) enum CanonicalFrameResolution {
     PreG7Residual,
 }
 
-pub(super) enum CanonicalInvocationPreparation {
-    Prepared(Box<PreparedRenderWorkPlan>),
-    /// Transitional compatibility for the current caller. G5C1 removes this per-invocation
-    /// preparation boundary when the realized frame batch owns one G3 graph.
-    PreG7Residual,
-}
-
-/// Transitional per-invocation preparation wrapper.
+/// Consumes one owned invocation resolution into the current temporary per-invocation G3 plan.
 ///
-/// The durable G5C1 path resolves each invocation while its mutable runtime-resource scope is
-/// active, aggregates the resulting owned `CanonicalInvocationResolution` values with
-/// `resolve_canonical_frame`, then calls `prepare_render_gpu_frame_work` once. The current caller
-/// still prepares one invocation at a time, but occurrence identity is now supplied by the same
-/// frame-owned monotonic space used by live pass expansion.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "G5C1 transitional per-invocation preparation wrapper is removed at frame cutover"
-)]
-pub(super) fn prepare_canonical_invocation(
-    context: &GpuContext,
+/// This helper exists only for the raw renderer execution bridge. The eventual G5C1 frame path
+/// retains owned invocation resolutions through realization, aggregates them at frame scope, and
+/// prepares one `prepare_render_gpu_frame_work` authority instead. Terminal Present control
+/// metadata cannot be consumed by the current per-invocation bridge and therefore keeps that
+/// invocation residual.
+pub(super) fn prepare_legacy_invocation_work(
     flow: &CompiledRenderFlowPlan,
-    flow_inputs: &PreparedFlowInputs,
-    runtime_resources: &FlowRuntimeResources,
-    projected_uploads: &[RealizedLogicalBufferUpload],
-    passes: &[CanonicalPassProjection<'_>],
-    timing: Option<&LogicalGpuPassTiming>,
-    maximum_occurrence: &mut u64,
-) -> Result<CanonicalInvocationPreparation> {
-    let invocation = CanonicalInvocationProjection {
-        projected_uploads,
-        passes,
-        surface_color_view: None,
-        builtin_ui_draws: None,
-        timing,
-    };
-    let resolved = resolve_canonical_invocation(
-        context,
-        flow,
-        flow_inputs,
-        runtime_resources,
-        None,
-        invocation,
-        maximum_occurrence,
-    )?;
-    // The transitional per-invocation physical bridge cannot resolve dynamic-target sidecars or
-    // consume terminal-Present control metadata. Only the eventual frame-level G5 path may supply
-    // and consume those authorities.
-    match resolve_canonical_frame([resolved]) {
+    resolution: CanonicalInvocationResolution,
+) -> Result<Option<Box<PreparedRenderWorkPlan>>> {
+    match resolve_canonical_frame([resolution]) {
         CanonicalFrameResolution::Resolved(frame) => {
             if !frame.terminal_present_controls.is_empty() {
-                return Ok(CanonicalInvocationPreparation::PreG7Residual);
+                return Ok(None);
             }
-            Ok(CanonicalInvocationPreparation::Prepared(Box::new(
-                prepare_render_gpu_work(flow, frame.nodes)?,
-            )))
+            Ok(Some(Box::new(prepare_render_gpu_work(flow, frame.nodes)?)))
         }
-        CanonicalFrameResolution::PreG7Residual => {
-            Ok(CanonicalInvocationPreparation::PreG7Residual)
-        }
+        CanonicalFrameResolution::PreG7Residual => Ok(None),
     }
 }
 
