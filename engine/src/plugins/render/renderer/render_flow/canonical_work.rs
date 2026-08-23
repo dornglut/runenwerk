@@ -212,10 +212,7 @@ pub(super) fn resolve_canonical_invocation(
                 upload.occurrence,
                 occurrence_label(flow, "fixed-step-upload", upload.occurrence)?,
                 upload.operation.clone(),
-                effective_controls_after_omissions(
-                    &upload.control_order_after,
-                    &omitted_controls,
-                ),
+                effective_controls_after_omissions(&upload.control_order_after, &omitted_controls),
             ));
             pass_control.clear();
             pass_control.push(upload.occurrence);
@@ -414,10 +411,7 @@ pub(super) fn resolve_canonical_invocation(
 /// dependency that was not render-owned before omission.
 fn effective_controls_after_omissions(
     controls: &[RenderGpuWorkOccurrenceId],
-    omitted_controls: &BTreeMap<
-        RenderGpuWorkOccurrenceId,
-        Vec<RenderGpuWorkOccurrenceId>,
-    >,
+    omitted_controls: &BTreeMap<RenderGpuWorkOccurrenceId, Vec<RenderGpuWorkOccurrenceId>>,
 ) -> Vec<RenderGpuWorkOccurrenceId> {
     let mut effective = Vec::new();
     for control in controls {
@@ -445,10 +439,7 @@ fn forward_no_work_occurrence(
     pass_control: &[RenderGpuWorkOccurrenceId],
     maximum_occurrence: &mut u64,
     nodes: &mut Vec<ResolvedRenderGpuWorkNode>,
-    omitted_controls: &mut BTreeMap<
-        RenderGpuWorkOccurrenceId,
-        Vec<RenderGpuWorkOccurrenceId>,
-    >,
+    omitted_controls: &mut BTreeMap<RenderGpuWorkOccurrenceId, Vec<RenderGpuWorkOccurrenceId>>,
 ) -> Result<bool> {
     let Some(after_capture_occurrences) = append_capture_readbacks(
         flow,
@@ -564,8 +555,7 @@ mod tests {
         let mut omitted = BTreeMap::new();
 
         omitted.insert(omitted_a, vec![first]);
-        let omitted_b_controls =
-            effective_controls_after_omissions(&[omitted_a, first], &omitted);
+        let omitted_b_controls = effective_controls_after_omissions(&[omitted_a, first], &omitted);
         assert_eq!(omitted_b_controls, vec![first]);
         omitted.insert(omitted_b, omitted_b_controls);
 
