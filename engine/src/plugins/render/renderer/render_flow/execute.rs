@@ -1397,14 +1397,27 @@ impl Renderer {
                 }
             };
 
-            match prepare_texture_capture_copy(
+            let logical_view = resolved_texture.view_handle;
+            let capture_source = match resolved_texture.texture {
+                RuntimeTextureRef::Surface(_) => CaptureTextureSource::Surface,
+                RuntimeTextureRef::Realized(texture) => {
+                    let view = logical_view.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "capture source '{}' has a realized texture but no logical texture view",
+                            selector.resource_id
+                        )
+                    })?;
+                    CaptureTextureSource::Logical {
+                        handle: view.descriptor().texture(),
+                        realized: texture,
+                    }
+                }
+            };
+            match prepare_texture_capture_readback(
                 context,
                 selector_index,
                 identity,
-                match resolved_texture.texture {
-                    RuntimeTextureRef::Surface(_) => CaptureTextureSource::Surface,
-                    RuntimeTextureRef::Realized(texture) => CaptureTextureSource::Realized(texture),
-                },
+                capture_source,
                 resolved_texture.size,
                 resolved_texture.format,
                 readback_format,
@@ -1528,7 +1541,7 @@ impl Renderer {
                 continue;
             };
 
-            match prepare_texture_capture_copy(
+            match prepare_texture_capture_readback(
                 context,
                 selector_index,
                 identity,
@@ -1584,7 +1597,7 @@ impl Renderer {
             let width = prepared.width;
             let height = prepared.height;
             let format = format!("{:?}", prepared.source_format);
-            match encode_prepared_texture_capture_copy(
+            match encode_legacy_prepared_texture_capture(
                 context,
                 encoder,
                 Some(frame_texture),
