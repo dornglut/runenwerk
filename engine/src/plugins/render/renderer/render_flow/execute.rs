@@ -390,7 +390,6 @@ impl Renderer {
                                 context,
                                 timing.query_set(),
                                 timing.resolve_buffer(),
-                                timing.readback_buffer(),
                                 timing.query_capacity(),
                             )?),
                             None => None,
@@ -808,10 +807,11 @@ impl Renderer {
                                     );
                                 }
                             }
-                            RenderGpuWorkPayload::TimingReadbackCopy { occurrence } => {
-                                let GpuWorkOperation::Copy(operation) = &scheduled.operation else {
+                            RenderGpuWorkPayload::TimingReadback { occurrence } => {
+                                let GpuWorkOperation::Readback(operation) = &scheduled.operation
+                                else {
                                     bail!(
-                                        "prepared timing-readback occurrence '{}' carries non-copy operation kind {:?}",
+                                        "prepared timing-readback occurrence '{}' carries non-readback operation kind {:?}",
                                         occurrence,
                                         scheduled.operation.kind()
                                     );
@@ -823,7 +823,7 @@ impl Renderer {
                                     )
                                 })?;
                                 if let Some(pending) =
-                                    frame.encode_readback_copy(context, encoder, operation)?
+                                    frame.encode_legacy_readback(context, encoder, operation)?
                                 {
                                     pending_gpu_pass_timing_readbacks.push(pending);
                                 }
@@ -1646,11 +1646,11 @@ fn encode_prepared_timing_tail(
     encoder: &mut CommandEncoder,
 ) -> Result<Option<PendingGpuPassTimingReadback>> {
     let resolve_operation = frame.resolve_operation().clone();
-    let readback_copy_operation = frame.readback_copy_operation().clone();
+    let readback_operation = frame.readback_operation().clone();
     if !frame.encode_resolve(context, encoder, &resolve_operation)? {
         return Ok(None);
     }
-    frame.encode_readback_copy(context, encoder, &readback_copy_operation)
+    frame.encode_legacy_readback(context, encoder, &readback_operation)
 }
 
 fn gpu_timing_diagnostic_evidence_for_pass(
