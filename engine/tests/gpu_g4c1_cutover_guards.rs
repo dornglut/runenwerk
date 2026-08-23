@@ -282,7 +282,8 @@ fn accepted_g4_bridge_ladder_has_one_execution_bridge_and_no_predecessor_authori
         &manifest,
         "src/plugins/render/renderer/render_flow/bindings.rs",
     ));
-    assert!(bindings.contains("SurfaceColorisnotaG4C2sampledorstorageshaderresourcebeforeG7"));
+    assert!(bindings.contains("hasnologicaltextureviewforG4C2shaderbindingrealization"));
+    assert!(bindings.contains("resolve_logical_texture_binding("));
     assert!(!bindings.contains("RuntimeTextureRef::Surface(texture)=>"));
 }
 
