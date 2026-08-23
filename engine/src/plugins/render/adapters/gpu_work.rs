@@ -98,7 +98,7 @@ pub(crate) enum RenderGpuWorkPayload {
     TimingResolve {
         occurrence: RenderGpuWorkOccurrenceId,
     },
-    TimingReadbackCopy {
+    TimingReadback {
         occurrence: RenderGpuWorkOccurrenceId,
     },
 }
@@ -112,7 +112,7 @@ impl RenderGpuWorkPayload {
             Self::Pass { .. } => None,
             Self::Upload { .. } => Some(GpuWorkNodeKind::Upload),
             Self::TimingResolve { .. } => Some(GpuWorkNodeKind::Resolve),
-            Self::TimingReadbackCopy { .. } => Some(GpuWorkNodeKind::Copy),
+            Self::TimingReadback { .. } => Some(GpuWorkNodeKind::Readback),
         }
     }
 
@@ -121,7 +121,7 @@ impl RenderGpuWorkPayload {
             Self::Pass { occurrence }
             | Self::Upload { occurrence }
             | Self::TimingResolve { occurrence }
-            | Self::TimingReadbackCopy { occurrence } => *occurrence,
+            | Self::TimingReadback { occurrence } => *occurrence,
         }
     }
 }
@@ -199,20 +199,20 @@ impl ResolvedRenderGpuWorkNode {
         }
     }
 
-    pub(crate) fn timing_readback_copy(
+    pub(crate) fn timing_readback(
         occurrence: RenderGpuWorkOccurrenceId,
         label: GpuResourceLabel,
-        operation: GpuCopyOperation,
+        operation: GpuReadbackOperation,
         control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
     ) -> Self {
         let provenance = GpuResourceProvenance::new(label.clone(), None, None);
         Self {
             occurrence,
             label,
-            operation: GpuWorkOperation::Copy(operation),
+            operation: GpuWorkOperation::Readback(operation),
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
-            payload: RenderGpuWorkPayload::TimingReadbackCopy { occurrence },
+            payload: RenderGpuWorkPayload::TimingReadback { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
