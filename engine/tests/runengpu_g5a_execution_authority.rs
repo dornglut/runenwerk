@@ -60,16 +60,26 @@ fn transitional_g5_bridge_consumes_prepared_work_without_compiled_execution_fall
 }
 
 #[test]
-fn canonical_timing_tail_owns_readback_semantics_without_a_logical_staging_copy() {
+fn canonical_timing_tail_owns_one_readback_identity_without_a_logical_staging_copy() {
     let operations = source("src/plugins/render/renderer/render_flow/logical_operations.rs");
     let timing = source("src/plugins/render/renderer/render_flow/logical_timing.rs");
+    let canonical = source("src/plugins/render/renderer/render_flow/canonical_work.rs");
+    let execute = source("src/plugins/render/renderer/render_flow/execute.rs");
     let adapter = source("src/plugins/render/adapters/gpu_work.rs");
 
     assert!(operations.contains("readback: GpuReadbackOperation"));
-    assert!(operations.contains("GpuReadbackId::allocate()?"));
+    assert!(operations.contains("readback_id: GpuReadbackId"));
     assert!(operations.contains("GpuReadbackOperation::new("));
+    assert!(!operations.contains("GpuReadbackId::allocate()?"));
     assert!(!operations.contains("readback_copy: GpuCopyOperation"));
+
+    assert!(timing.contains("readback_id: GpuReadbackId"));
+    assert!(timing.contains("let readback_id = GpuReadbackId::allocate()?;"));
+    assert!(timing.contains("pub(super) const fn readback_id(&self) -> GpuReadbackId"));
     assert!(!timing.contains("readback_buffer: GpuBufferHandle"));
+
+    assert!(canonical.contains("timing.readback_id(),"));
+    assert!(execute.contains("timing.readback_id(),"));
     assert!(adapter.contains("TimingReadback"));
     assert!(adapter.contains("Some(GpuWorkNodeKind::Readback)"));
     assert!(!adapter.contains("TimingReadbackCopy"));
