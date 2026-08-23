@@ -68,15 +68,30 @@ pub(super) struct CanonicalFrameInvocationProjection<'a, 'pass> {
     pub(super) invocation: CanonicalInvocationProjection<'a, 'pass>,
 }
 
+pub(super) struct CanonicalResolvedInvocation {
+    nodes: Vec<ResolvedRenderGpuWorkNode>,
+    /// One entry per terminal compiled Present omitted because its source was already
+    /// `SurfaceColor`. Each inner vector is the render-owned non-data predecessor set that the
+    /// eventual frame-terminal `GpuPresentOperation` must preserve.
+    terminal_present_controls: Vec<Vec<RenderGpuWorkOccurrenceId>>,
+}
+
+pub(super) struct CanonicalResolvedFrame {
+    pub(super) nodes: Vec<ResolvedRenderGpuWorkNode>,
+    /// Aggregated terminal-Present predecessor sets. An empty inner vector still records a real
+    /// omitted Present, allowing the transitional per-invocation path to remain residual.
+    pub(super) terminal_present_controls: Vec<Vec<RenderGpuWorkOccurrenceId>>,
+}
+
 pub(super) enum CanonicalInvocationResolution {
-    Resolved(Vec<ResolvedRenderGpuWorkNode>),
+    Resolved(CanonicalResolvedInvocation),
     /// The invocation contains at least one operation whose durable logical identity/semantics is
     /// intentionally deferred to G7A/G5C. No partial canonical node set is retained in this case.
     PreG7Residual,
 }
 
 pub(super) enum CanonicalFrameResolution {
-    Resolved(Vec<ResolvedRenderGpuWorkNode>),
+    Resolved(CanonicalResolvedFrame),
     /// At least one invocation is not fully canonical yet. G5C1 requires the entire physical
     /// frame/surface submission to remain on the residual path rather than mixing authorities.
     PreG7Residual,
@@ -117,12 +132,18 @@ pub(super) fn prepare_canonical_invocation(
         runtime_resources,
         invocation,
     };
-    // The transitional per-invocation physical bridge cannot resolve dynamic-target sidecars.
-    // Only the eventual frame-level G5 path may supply that logical authority.
+    // The transitional per-invocation physical bridge cannot resolve dynamic-target sidecars or
+    // consume terminal-Present control metadata. Only the eventual frame-level G5 path may supply
+    // and consume those authorities.
     match resolve_canonical_frame(context, None, [frame_invocation])? {
-        CanonicalFrameResolution::Resolved(nodes) => Ok(CanonicalInvocationPreparation::Prepared(
-            Box::new(prepare_render_gpu_work(flow, nodes)?),
-        )),
+        CanonicalFrameResolution::Resolved(frame) => {
+            if !frame.terminal_present_controls.is_empty() {
+                return Ok(CanonicalInvocationPreparation::PreG7Residual);
+            }
+            Ok(CanonicalInvocationPreparation::Prepared(Box::new(
+                prepare_render_gpu_work(flow, frame.nodes)?,
+            )))
+        }
         CanonicalFrameResolution::PreG7Residual => {
             Ok(CanonicalInvocationPreparation::PreG7Residual)
         }
@@ -134,9 +155,9 @@ pub(super) fn prepare_canonical_invocation(
 /// Existing occurrence IDs are observed across the complete frame before any timing/capture-tail
 /// auxiliary identity can be allocated. This is required even when ordinary pass occurrences were
 /// already expanded with one frame-scoped allocator: resolving invocation A must not allocate the
-/// ID already assigned to invocation B. The returned node set is all-or-nothing; one residual
-/// invocation discards every canonical node accumulated for the frame so the caller cannot mix
-/// legacy and G5 execution authority inside one physical submission.
+/// ID already assigned to invocation B. The returned frame is all-or-nothing; one residual
+/// invocation discards every canonical node and terminal-Present control record accumulated for the
+/// frame so the caller cannot mix legacy and G5 execution authority inside one physical submission.
 pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
     context: &GpuContext,
     dynamic_texture_targets: Option<&'a RendererDynamicTextureTargetCache>,
@@ -153,6 +174,7 @@ pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
     }
 
     let mut nodes = Vec::<ResolvedRenderGpuWorkNode>::new();
+    let mut terminal_present_controls = Vec::<Vec<RenderGpuWorkOccurrenceId>>::new();
     for invocation in invocations {
         match resolve_canonical_invocation(
             context,
@@ -163,8 +185,9 @@ pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
             invocation.invocation,
             &mut maximum_occurrence,
         )? {
-            CanonicalInvocationResolution::Resolved(mut invocation_nodes) => {
-                nodes.append(&mut invocation_nodes);
+            CanonicalInvocationResolution::Resolved(mut resolved) => {
+                nodes.append(&mut resolved.nodes);
+                terminal_present_controls.append(&mut resolved.terminal_present_controls);
             }
             CanonicalInvocationResolution::PreG7Residual => {
                 return Ok(CanonicalFrameResolution::PreG7Residual);
@@ -172,10 +195,13 @@ pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
         }
     }
 
-    if nodes.is_empty() {
+    if nodes.is_empty() && terminal_present_controls.is_empty() {
         Ok(CanonicalFrameResolution::PreG7Residual)
     } else {
-        Ok(CanonicalFrameResolution::Resolved(nodes))
+        Ok(CanonicalFrameResolution::Resolved(CanonicalResolvedFrame {
+            nodes,
+            terminal_present_controls,
+        }))
     }
 }
 
@@ -185,7 +211,8 @@ pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
 /// G5C1 normally reaches this through `resolve_canonical_frame`, which first observes every
 /// existing occurrence in the physical frame before auxiliary IDs are allocated. The direct entry
 /// point remains for the frame resolver and its bounded transitional wrapper. If an operation is
-/// residual, no partial canonical node set from this invocation is retained.
+/// residual, no partial canonical node set or terminal-Present control metadata from this invocation
+/// is retained.
 pub(super) fn resolve_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
@@ -208,6 +235,7 @@ pub(super) fn resolve_canonical_invocation(
     }
 
     let mut nodes = Vec::<ResolvedRenderGpuWorkNode>::new();
+    let mut terminal_present_controls = Vec::<Vec<RenderGpuWorkOccurrenceId>>::new();
     for upload in projected_uploads {
         *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
         nodes.push(ResolvedRenderGpuWorkNode::upload(
@@ -311,7 +339,11 @@ pub(super) fn resolve_canonical_invocation(
                     surface_color_view,
                 )? {
                     ProjectedCopyOperation::Canonical(operation) => *operation,
-                    ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
+                    ProjectedCopyOperation::NoWork => {
+                        terminal_present_controls.push(pass_control);
+                        continue;
+                    }
+                    ProjectedCopyOperation::PreG7Residual => {
                         return Ok(CanonicalInvocationResolution::PreG7Residual);
                     }
                 }
@@ -350,11 +382,16 @@ pub(super) fn resolve_canonical_invocation(
         ));
     }
 
-    if nodes.is_empty() {
+    if nodes.is_empty() && terminal_present_controls.is_empty() {
         return Ok(CanonicalInvocationResolution::PreG7Residual);
     }
 
-    Ok(CanonicalInvocationResolution::Resolved(nodes))
+    Ok(CanonicalInvocationResolution::Resolved(
+        CanonicalResolvedInvocation {
+            nodes,
+            terminal_present_controls,
+        },
+    ))
 }
 
 fn observe_existing_occurrences(
