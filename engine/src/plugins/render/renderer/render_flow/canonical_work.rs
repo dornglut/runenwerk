@@ -1,3 +1,4 @@
+use super::super::dynamic_targets::RendererDynamicTextureTargetCache;
 use super::logical_copy::{
     ProjectedCopyOperation, project_copy_operation, project_present_copy_operation,
 };
@@ -116,7 +117,9 @@ pub(super) fn prepare_canonical_invocation(
         runtime_resources,
         invocation,
     };
-    match resolve_canonical_frame(context, [frame_invocation])? {
+    // The transitional per-invocation physical bridge cannot resolve dynamic-target sidecars.
+    // Only the eventual frame-level G5 path may supply that logical authority.
+    match resolve_canonical_frame(context, None, [frame_invocation])? {
         CanonicalFrameResolution::Resolved(nodes) => Ok(CanonicalInvocationPreparation::Prepared(
             Box::new(prepare_render_gpu_work(flow, nodes)?),
         )),
@@ -136,6 +139,7 @@ pub(super) fn prepare_canonical_invocation(
 /// legacy and G5 execution authority inside one physical submission.
 pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
     context: &GpuContext,
+    dynamic_texture_targets: Option<&'a RendererDynamicTextureTargetCache>,
     invocations: impl IntoIterator<Item = CanonicalFrameInvocationProjection<'a, 'pass>>,
 ) -> Result<CanonicalFrameResolution> {
     let invocations = invocations.into_iter().collect::<Vec<_>>();
@@ -155,6 +159,7 @@ pub(super) fn resolve_canonical_frame<'a, 'pass: 'a>(
             invocation.flow,
             invocation.flow_inputs,
             invocation.runtime_resources,
+            dynamic_texture_targets,
             invocation.invocation,
             &mut maximum_occurrence,
         )? {
@@ -186,6 +191,7 @@ pub(super) fn resolve_canonical_invocation(
     flow: &CompiledRenderFlowPlan,
     flow_inputs: &PreparedFlowInputs,
     runtime_resources: &FlowRuntimeResources,
+    dynamic_texture_targets: Option<&RendererDynamicTextureTargetCache>,
     projection: CanonicalInvocationProjection<'_, '_>,
     maximum_occurrence: &mut u64,
 ) -> Result<CanonicalInvocationResolution> {
@@ -260,7 +266,7 @@ pub(super) fn resolve_canonical_invocation(
                 operation
             }
             CompiledPassExecutionPlan::Copy(pass) => {
-                match project_copy_operation(runtime_resources, pass)? {
+                match project_copy_operation(runtime_resources, dynamic_texture_targets, pass)? {
                     ProjectedCopyOperation::Canonical(operation) => *operation,
                     ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
                         return Ok(CanonicalInvocationResolution::PreG7Residual);
@@ -298,7 +304,12 @@ pub(super) fn resolve_canonical_invocation(
                 )?)
             }
             CompiledPassExecutionPlan::Present(pass) => {
-                match project_present_copy_operation(runtime_resources, pass, surface_color_view)? {
+                match project_present_copy_operation(
+                    runtime_resources,
+                    dynamic_texture_targets,
+                    pass,
+                    surface_color_view,
+                )? {
                     ProjectedCopyOperation::Canonical(operation) => *operation,
                     ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
                         return Ok(CanonicalInvocationResolution::PreG7Residual);
