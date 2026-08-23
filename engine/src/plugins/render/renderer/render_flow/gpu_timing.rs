@@ -3,9 +3,9 @@ use super::*;
 use crate::plugins::gpu::{
     CurrentRenderBufferCopyTerminal, CurrentRenderReadbackBufferTerminal,
     CurrentRenderTimestampResourcesTerminal, GpuBufferHandle, GpuBufferUsage, GpuContext,
-    GpuMemoryIntent, GpuQueryRange, GpuQueryResolveOperation, GpuQuerySetHandle, GpuReadbackOperation,
-    GpuRealizedBuffer, GpuRealizedQuerySet, GpuResourceLifetime, GpuTransferRegion,
-    GpuWorkResourceIdAllocator,
+    GpuMemoryIntent, GpuQueryRange, GpuQueryResolveOperation, GpuQuerySetHandle,
+    GpuReadbackOperation, GpuRealizedBuffer, GpuRealizedQuerySet, GpuResourceLifetime,
+    GpuTransferRegion, GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::renderer::resource_descriptors::buffer_descriptor;
 
@@ -78,15 +78,14 @@ impl GpuPassTimingFrame {
         // Removal condition: delete this resource with the raw timing encoder/map bridge when the
         // frame-level G5 submission path consumes `timing_tail.readback()` directly.
         let mut legacy_allocator = GpuWorkResourceIdAllocator::new();
-        let legacy_readback_buffer_handle = legacy_allocator.allocate_buffer_handle(
-            buffer_descriptor(
+        let legacy_readback_buffer_handle =
+            legacy_allocator.allocate_buffer_handle(buffer_descriptor(
                 "render.flow.timestamp_legacy_readback",
                 readback_size,
                 [GpuBufferUsage::CopyDestination],
                 GpuResourceLifetime::Transient,
                 GpuMemoryIntent::Readback,
-            )?,
-        )?;
+            )?)?;
         let legacy_readback_buffer = context.realize_buffer(&legacy_readback_buffer_handle)?;
         Ok(Self {
             timing_tail,
