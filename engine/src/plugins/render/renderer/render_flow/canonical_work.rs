@@ -1,4 +1,6 @@
-use super::logical_copy::{ProjectedCopyOperation, project_copy_operation};
+use super::logical_copy::{
+    ProjectedCopyOperation, project_copy_operation, project_present_copy_operation,
+};
 use super::logical_operations::{
     project_compute_operation, project_render_operation, project_timing_tail, timestamp_writes,
 };
@@ -295,8 +297,17 @@ pub(super) fn resolve_canonical_invocation(
                     timestamp_writes,
                 )?)
             }
-            CompiledPassExecutionPlan::Present(_) => {
-                return Ok(CanonicalInvocationResolution::PreG7Residual);
+            CompiledPassExecutionPlan::Present(pass) => {
+                match project_present_copy_operation(
+                    runtime_resources,
+                    pass,
+                    surface_color_view,
+                )? {
+                    ProjectedCopyOperation::Canonical(operation) => *operation,
+                    ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
+                        return Ok(CanonicalInvocationResolution::PreG7Residual);
+                    }
+                }
             }
         };
 
@@ -375,9 +386,12 @@ const fn execution_preference(pass: &CompiledPassExecutionPlan) -> GpuExecutionP
         CompiledPassExecutionPlan::Compute(_) => GpuExecutionPreference::ComputePreferred,
         CompiledPassExecutionPlan::Fullscreen(_)
         | CompiledPassExecutionPlan::Graphics(_)
-        | CompiledPassExecutionPlan::BuiltinUiComposite(_)
-        | CompiledPassExecutionPlan::Present(_) => GpuExecutionPreference::GraphicsRequired,
-        CompiledPassExecutionPlan::Copy(_) => GpuExecutionPreference::TransferPreferred,
+        | CompiledPassExecutionPlan::BuiltinUiComposite(_) => {
+            GpuExecutionPreference::GraphicsRequired
+        }
+        CompiledPassExecutionPlan::Copy(_) | CompiledPassExecutionPlan::Present(_) => {
+            GpuExecutionPreference::TransferPreferred
+        }
     }
 }
 
