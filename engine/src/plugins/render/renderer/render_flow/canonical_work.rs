@@ -298,11 +298,7 @@ pub(super) fn resolve_canonical_invocation(
                 )?)
             }
             CompiledPassExecutionPlan::Present(pass) => {
-                match project_present_copy_operation(
-                    runtime_resources,
-                    pass,
-                    surface_color_view,
-                )? {
+                match project_present_copy_operation(runtime_resources, pass, surface_color_view)? {
                     ProjectedCopyOperation::Canonical(operation) => *operation,
                     ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
                         return Ok(CanonicalInvocationResolution::PreG7Residual);
