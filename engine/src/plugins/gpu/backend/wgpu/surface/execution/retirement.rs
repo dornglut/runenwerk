@@ -1,4 +1,4 @@
-use super::super::{validate_handle, WgpuSurfaceState};
+use super::super::{WgpuSurfaceState, validate_handle};
 use crate::plugins::gpu::{GpuContext, GpuSurfaceError, GpuSurfaceHandle};
 
 impl WgpuSurfaceState {
