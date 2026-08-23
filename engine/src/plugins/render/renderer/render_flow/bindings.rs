@@ -55,7 +55,6 @@ impl Renderer {
     pub(super) fn resolve_compiled_bind_group(
         &mut self,
         context: &GpuContext,
-        frame_texture: &Texture,
         packet: &RendererPreparedPacket,
         flow: &CompiledRenderFlowPlan,
         pass_id: RenderPassId,
@@ -79,26 +78,33 @@ impl Renderer {
                         resource,
                         "sampled_texture",
                     )?;
-                    let texture = match resource_key.clone() {
+                    let (texture_id, texture_view, is_depth) = match resource_key.clone() {
                         RuntimeResourceKey::DynamicTexture(key) => {
-                            self.dynamic_texture_targets.texture_ref(pass_id, &key)?
+                            let texture = self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
+                            (
+                                texture.id.clone(),
+                                resolved_binding_texture_view(&texture.id, texture.view_handle)?,
+                                texture.is_depth,
+                            )
                         }
-                        _ => runtime_resources.resolve_texture(
-                            pass_id,
-                            resource_key,
-                            frame_texture,
-                            packet.surface_size,
-                            packet.surface_format,
-                        )?,
+                        _ => {
+                            let (view_handle, _format, is_depth) = runtime_resources
+                                .resolve_logical_texture_binding(pass_id, resource_key.clone())?;
+                            (
+                                resource_key,
+                                RuntimeBindingResource::TextureView(view_handle.clone()),
+                                is_depth,
+                            )
+                        }
                     };
-                    if !allow_depth_sampling && texture.is_depth {
+                    if !allow_depth_sampling && is_depth {
                         bail!(
                             "pass '{}' samples depth texture '{}' but this pass type only supports color sampled textures",
                             pass_id,
-                            texture.id
+                            texture_id
                         );
                     }
-                    let sample_class = if texture.is_depth {
+                    let sample_class = if is_depth {
                         GpuTextureSampleClass::Depth
                     } else {
                         GpuTextureSampleClass::FloatFilterable
@@ -110,10 +116,7 @@ impl Renderer {
                             GpuTextureViewDimension::D2,
                             false,
                         )?,
-                        resource: Some(resolved_binding_texture_view(
-                            &texture.id,
-                            texture.view_handle,
-                        )?),
+                        resource: Some(texture_view),
                     });
                 }
                 CompiledBindingEntry::Sampler { key } => {
@@ -133,36 +136,47 @@ impl Renderer {
                         resource,
                         "storage_texture",
                     )?;
-                    let texture = match resource_key.clone() {
-                        RuntimeResourceKey::DynamicTexture(key) => {
-                            self.dynamic_texture_targets.texture_ref(pass_id, &key)?
-                        }
-                        _ => runtime_resources.resolve_texture(
-                            pass_id,
-                            resource_key,
-                            frame_texture,
-                            packet.surface_size,
-                            packet.surface_format,
-                        )?,
-                    };
-                    if texture.is_depth {
+                    let (texture_id, texture_view, texture_format, is_depth) =
+                        match resource_key.clone() {
+                            RuntimeResourceKey::DynamicTexture(key) => {
+                                let texture =
+                                    self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
+                                (
+                                    texture.id.clone(),
+                                    resolved_binding_texture_view(
+                                        &texture.id,
+                                        texture.view_handle,
+                                    )?,
+                                    texture.format,
+                                    texture.is_depth,
+                                )
+                            }
+                            _ => {
+                                let (view_handle, format, is_depth) = runtime_resources
+                                    .resolve_logical_texture_binding(pass_id, resource_key.clone())?;
+                                (
+                                    resource_key,
+                                    RuntimeBindingResource::TextureView(view_handle.clone()),
+                                    format,
+                                    is_depth,
+                                )
+                            }
+                        };
+                    if is_depth {
                         bail!(
                             "pass '{}' declares storage texture '{}' as depth; storage-texture bindings require color-like resources",
                             pass_id,
-                            texture.id
+                            texture_id
                         );
                     }
                     resolved_entries.push(RuntimeBindingResolved {
                         key: *key,
                         kind: GpuBindingKind::storage_texture(
                             gpu_storage_texture_access(*access),
-                            gpu_texture_format_from_wgpu(texture.format)?,
+                            gpu_texture_format_from_wgpu(texture_format)?,
                             GpuTextureViewDimension::D2,
                         )?,
-                        resource: Some(resolved_binding_texture_view(
-                            &texture.id,
-                            texture.view_handle,
-                        )?),
+                        resource: Some(texture_view),
                     });
                 }
                 CompiledBindingEntry::UniformBuffer { key, resource } => {
@@ -305,7 +319,7 @@ fn resolved_binding_texture_view(
 ) -> Result<RuntimeBindingResource> {
     let Some(view_handle) = view_handle else {
         bail!(
-            "pass resource '{}' is an acquired surface texture; SurfaceColor is not a G4C2 sampled or storage shader resource before G7",
+            "pass resource '{}' has no logical texture view for G4C2 shader binding realization",
             id
         );
     };
@@ -894,20 +908,17 @@ mod tests {
     };
 
     #[test]
-    fn surface_color_rejects_before_sampled_or_storage_bind_group_realization() {
-        for role in ["sampled", "storage"] {
-            let error = match resolved_binding_texture_view(&RuntimeResourceKey::SurfaceColor, None)
-            {
-                Err(error) => error,
-                Ok(_) => panic!("SurfaceColor must reject before {role} bind-group realization"),
-            };
-            assert!(
-                error
-                    .to_string()
-                    .contains("not a G4C2 sampled or storage shader resource before G7"),
-                "unexpected SurfaceColor {role} rejection: {error}"
-            );
-        }
+    fn missing_logical_texture_view_rejects_before_bind_group_realization() {
+        let error = match resolved_binding_texture_view(&RuntimeResourceKey::SurfaceColor, None) {
+            Err(error) => error,
+            Ok(_) => panic!("missing logical view must reject before bind-group realization"),
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("has no logical texture view for G4C2 shader binding realization"),
+            "unexpected missing-view rejection: {error}"
+        );
     }
 
     fn material_with_bindings(

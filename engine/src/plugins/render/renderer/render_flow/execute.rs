@@ -102,7 +102,6 @@ impl Renderer {
         let mut batch = self.realize_render_batch(
             context,
             frame_texture,
-            frame_view,
             prepared_frame,
             packet,
             compiled_flows,
@@ -205,7 +204,6 @@ impl Renderer {
         &mut self,
         context: &GpuContext,
         frame_texture: &Texture,
-        frame_view: &TextureView,
         prepared_frame: &'a PreparedRenderFrame,
         mut packet: RendererPreparedPacket,
         compiled_flows: &'a [CompiledRenderFlowPlan],
@@ -430,8 +428,6 @@ impl Renderer {
                             }
                             let pipeline = self.realize_compiled_pass(
                                 context,
-                                frame_texture,
-                                frame_view,
                                 &invocation_packet,
                                 flow,
                                 &invocation.inputs,

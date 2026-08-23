@@ -278,6 +278,60 @@ impl Renderer {
         self.encode_texture_copy(context, encoder, pass.pass_id, source, destination)
     }
 
+    fn resolve_color_target_format_from_plan(
+        &self,
+        runtime_resources: &FlowRuntimeResources,
+        pass_id: RenderPassId,
+        targets: &CompiledTargetPlan,
+        surface_format: TextureFormat,
+    ) -> Result<TextureFormat> {
+        if targets.color_outputs.len() != 1 {
+            bail!(
+                "pass '{}' declares {} color outputs, but runtime execution currently requires exactly one color output",
+                pass_id,
+                targets.color_outputs.len()
+            );
+        }
+        let output = targets.color_outputs.first().ok_or_else(|| {
+            anyhow::anyhow!(
+                "pass '{}' is missing a color output target in execution plan",
+                pass_id
+            )
+        })?;
+        let output_key = runtime_resources.resolve_resource_key(pass_id, output, "color_output")?;
+        match output_key {
+            RuntimeResourceKey::DynamicTexture(key) => self
+                .dynamic_texture_targets
+                .color_target_view(pass_id, &key)
+                .map(|target| target.format),
+            _ => runtime_resources.resolve_color_target_format_from_plan(
+                pass_id,
+                targets,
+                surface_format,
+            ),
+        }
+    }
+
+    fn resolve_depth_target_format_from_plan(
+        &self,
+        runtime_resources: &FlowRuntimeResources,
+        pass_id: RenderPassId,
+        targets: &CompiledTargetPlan,
+    ) -> Result<Option<TextureFormat>> {
+        let Some(depth_target) = targets.depth_output.as_ref() else {
+            return Ok(None);
+        };
+        let resource_key =
+            runtime_resources.resolve_resource_key(pass_id, depth_target, "depth_output")?;
+        match resource_key {
+            RuntimeResourceKey::DynamicTexture(key) => self
+                .dynamic_texture_targets
+                .depth_target_view(pass_id, &key)
+                .map(|target| Some(target.format)),
+            _ => runtime_resources.resolve_depth_target_format_from_plan(pass_id, targets),
+        }
+    }
+
     fn resolve_color_target_from_plan<'a>(
         &self,
         runtime_resources: &'a FlowRuntimeResources,

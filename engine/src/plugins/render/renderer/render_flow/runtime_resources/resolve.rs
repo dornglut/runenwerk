@@ -1,6 +1,11 @@
 use super::*;
 use crate::plugins::gpu::GpuWorkResourceId;
 
+enum ResolvedColorTarget<'a> {
+    Surface,
+    Texture(&'a RuntimeTextureResource),
+}
+
 impl FlowRuntimeResources {
     pub(crate) fn resolve_resource_key_from_input(
         &self,
@@ -173,13 +178,11 @@ impl FlowRuntimeResources {
         }
     }
 
-    pub fn resolve_color_target_from_plan<'a>(
+    fn resolve_color_target<'a>(
         &'a self,
         pass_id: RenderPassId,
         targets: &CompiledTargetPlan,
-        frame_view: &'a TextureView,
-        frame_format: TextureFormat,
-    ) -> Result<ResolvedColorTargetView<'a>> {
+    ) -> Result<ResolvedColorTarget<'a>> {
         if targets.color_outputs.len() != 1 {
             bail!(
                 "pass '{}' declares {} color outputs, but runtime execution currently requires exactly one color output",
@@ -197,10 +200,7 @@ impl FlowRuntimeResources {
         let output_key = self.resolve_resource_key(pass_id, output, "color_output")?;
 
         if output_key == RuntimeResourceKey::SurfaceColor {
-            return Ok(ResolvedColorTargetView {
-                view: RuntimeTextureView::Surface(frame_view),
-                format: frame_format,
-            });
+            return Ok(ResolvedColorTarget::Surface);
         }
 
         let kind = self.kind_of_key(&output_key).ok_or_else(|| {
@@ -234,17 +234,45 @@ impl FlowRuntimeResources {
             );
         }
 
-        Ok(ResolvedColorTargetView {
-            view: RuntimeTextureView::Realized(texture.realized_view.clone()),
-            format: texture.format,
-        })
+        Ok(ResolvedColorTarget::Texture(texture))
     }
 
-    pub fn resolve_depth_target_from_plan(
+    pub fn resolve_color_target_format_from_plan(
         &self,
         pass_id: RenderPassId,
         targets: &CompiledTargetPlan,
-    ) -> Result<Option<ResolvedDepthTargetView>> {
+        surface_format: TextureFormat,
+    ) -> Result<TextureFormat> {
+        Ok(match self.resolve_color_target(pass_id, targets)? {
+            ResolvedColorTarget::Surface => surface_format,
+            ResolvedColorTarget::Texture(texture) => texture.format,
+        })
+    }
+
+    pub fn resolve_color_target_from_plan<'a>(
+        &'a self,
+        pass_id: RenderPassId,
+        targets: &CompiledTargetPlan,
+        frame_view: &'a TextureView,
+        frame_format: TextureFormat,
+    ) -> Result<ResolvedColorTargetView<'a>> {
+        Ok(match self.resolve_color_target(pass_id, targets)? {
+            ResolvedColorTarget::Surface => ResolvedColorTargetView {
+                view: RuntimeTextureView::Surface(frame_view),
+                format: frame_format,
+            },
+            ResolvedColorTarget::Texture(texture) => ResolvedColorTargetView {
+                view: RuntimeTextureView::Realized(texture.realized_view.clone()),
+                format: texture.format,
+            },
+        })
+    }
+
+    fn resolve_depth_target<'a>(
+        &'a self,
+        pass_id: RenderPassId,
+        targets: &CompiledTargetPlan,
+    ) -> Result<Option<&'a RuntimeTextureResource>> {
         let Some(depth_target) = targets.depth_output.as_ref() else {
             return Ok(None);
         };
@@ -287,10 +315,76 @@ impl FlowRuntimeResources {
             );
         }
 
-        Ok(Some(ResolvedDepthTargetView {
-            view: texture.realized_view.clone(),
-            format: texture.format,
-        }))
+        Ok(Some(texture))
+    }
+
+    pub fn resolve_depth_target_format_from_plan(
+        &self,
+        pass_id: RenderPassId,
+        targets: &CompiledTargetPlan,
+    ) -> Result<Option<TextureFormat>> {
+        Ok(self
+            .resolve_depth_target(pass_id, targets)?
+            .map(|texture| texture.format))
+    }
+
+    pub fn resolve_depth_target_from_plan(
+        &self,
+        pass_id: RenderPassId,
+        targets: &CompiledTargetPlan,
+    ) -> Result<Option<ResolvedDepthTargetView>> {
+        Ok(self
+            .resolve_depth_target(pass_id, targets)?
+            .map(|texture| ResolvedDepthTargetView {
+                view: texture.realized_view.clone(),
+                format: texture.format,
+            }))
+    }
+
+    pub fn resolve_logical_texture_binding<'a>(
+        &'a self,
+        pass_id: RenderPassId,
+        resource_key: RuntimeResourceKey,
+    ) -> Result<(&'a GpuTextureViewHandle, TextureFormat, bool)> {
+        if resource_key == RuntimeResourceKey::SurfaceColor {
+            bail!(
+                "pass '{}' binds '{}' as a shader texture before the exact G7A acquired logical view exists",
+                pass_id,
+                SURFACE_COLOR_RESOURCE_LABEL
+            );
+        }
+        if matches!(resource_key, RuntimeResourceKey::DynamicTexture(_)) {
+            bail!(
+                "pass '{}' references dynamic texture '{}' through flow runtime resources; dynamic textures must be resolved through the renderer dynamic target cache",
+                pass_id,
+                resource_key
+            );
+        }
+
+        let kind = self.kind_of_key(&resource_key).ok_or_else(|| {
+            anyhow::anyhow!(
+                "pass '{}' references unknown resource '{}' during logical binding resolution",
+                pass_id,
+                resource_key
+            )
+        })?;
+        if matches!(kind, RuntimeResourceKind::BufferLike) {
+            bail!(
+                "pass '{}' references '{}' as a texture, but it is buffer-like",
+                pass_id,
+                resource_key
+            );
+        }
+
+        let Some(texture) = self.texture_resource_for_key(&resource_key) else {
+            bail!(
+                "pass '{}' references imported texture '{}' but only imported '{}' is supported in core runtime execution",
+                pass_id,
+                resource_key,
+                SURFACE_COLOR_RESOURCE_LABEL
+            );
+        };
+        Ok((&texture.view_handle, texture.format, texture.is_depth))
     }
 
     pub fn resolve_storage_buffer_ref<'a>(

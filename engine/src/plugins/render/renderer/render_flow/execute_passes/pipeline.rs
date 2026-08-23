@@ -15,13 +15,11 @@ use crate::plugins::render::{RenderDepthPolicy, RenderIndirectDrawArgsKind, Rend
 
 impl Renderer {
     /// First half of the renderer's two-phase integration: realize every G4C1/G4C2/G4C3
-    /// dependency while no raw device/queue operation loan is live.
+    /// dependency while no raw device/queue or physical surface object is required.
     #[allow(clippy::too_many_arguments)]
     pub(in crate::plugins::render::renderer::render_flow) fn realize_compiled_pass(
         &mut self,
         context: &GpuContext,
-        frame_texture: &Texture,
-        frame_view: &TextureView,
         packet: &RendererPreparedPacket,
         flow: &CompiledRenderFlowPlan,
         flow_inputs: &PreparedFlowInputs,
@@ -57,7 +55,6 @@ impl Renderer {
                 )?;
                 let bindings = self.resolve_compiled_bind_group(
                     context,
-                    frame_texture,
                     packet,
                     flow,
                     value.pass_id,
@@ -108,11 +105,10 @@ impl Renderer {
                         value.pass_id
                     );
                 }
-                let color_target = self.resolve_color_target_from_plan(
+                let color_format = self.resolve_color_target_format_from_plan(
                     runtime_resources,
                     value.pass_id,
                     &value.targets,
-                    frame_view,
                     packet.surface_format,
                 )?;
                 let shader = resolve_shader_material_for_packet(
@@ -141,7 +137,6 @@ impl Renderer {
                 )?;
                 let bindings = self.resolve_compiled_bind_group(
                     context,
-                    frame_texture,
                     packet,
                     flow,
                     value.pass_id,
@@ -152,7 +147,7 @@ impl Renderer {
                     &value.bindings,
                     ShaderStages::VERTEX_FRAGMENT,
                     true,
-                    vec![color_target.format],
+                    vec![color_format],
                     None,
                     runtime_resources,
                 )?;
@@ -180,14 +175,13 @@ impl Renderer {
                 }))
             }
             CompiledPassExecutionPlan::Graphics(value) => {
-                let color_target = self.resolve_color_target_from_plan(
+                let color_format = self.resolve_color_target_format_from_plan(
                     runtime_resources,
                     value.pass_id,
                     &value.targets,
-                    frame_view,
                     packet.surface_format,
                 )?;
-                let depth_target = self.resolve_depth_target_from_plan(
+                let depth_format = self.resolve_depth_target_format_from_plan(
                     runtime_resources,
                     value.pass_id,
                     &value.targets,
@@ -218,7 +212,6 @@ impl Renderer {
                 )?;
                 let bindings = self.resolve_compiled_bind_group(
                     context,
-                    frame_texture,
                     packet,
                     flow,
                     value.pass_id,
@@ -229,8 +222,8 @@ impl Renderer {
                     &value.bindings,
                     ShaderStages::VERTEX_FRAGMENT,
                     true,
-                    vec![color_target.format],
-                    depth_target.as_ref().map(|target| target.format),
+                    vec![color_format],
+                    depth_format,
                     runtime_resources,
                 )?;
                 let pipeline = match &bindings.pipeline_key.pipeline_descriptor {
