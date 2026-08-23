@@ -75,14 +75,13 @@ impl LogicalGpuPassTimingPlan {
 
 /// Logical timestamp resources and timestamp-local query ranges prepared before G3 work.
 ///
-/// This value contains only backend-neutral RunenGPU handles. Physical query/buffer realization
-/// remains in `GpuPassTimingFrame`, and resolve/readback operation construction remains part of the
-/// late G5A operation projection.
+/// This value contains only the backend-neutral resources that participate in canonical timing
+/// semantics. G5 readback targets the resolve buffer directly; any renderer-owned staging buffer
+/// retained by the temporary raw executor is a physical compatibility sidecar, not logical work.
 #[derive(Debug, Clone)]
 pub(super) struct LogicalGpuPassTiming {
     query_set: GpuQuerySetHandle,
     resolve_buffer: GpuBufferHandle,
-    readback_buffer: GpuBufferHandle,
     query_capacity: u32,
 }
 
@@ -116,18 +115,10 @@ impl LogicalGpuPassTiming {
             GpuResourceLifetime::Transient,
             GpuMemoryIntent::Device,
         )?)?;
-        let readback_buffer = allocator.allocate_buffer_handle(buffer_descriptor(
-            "render.flow.timestamp_readback",
-            byte_len,
-            [GpuBufferUsage::CopyDestination],
-            GpuResourceLifetime::Transient,
-            GpuMemoryIntent::Readback,
-        )?)?;
 
         Ok(Some(Self {
             query_set,
             resolve_buffer,
-            readback_buffer,
             query_capacity,
         }))
     }
@@ -138,10 +129,6 @@ impl LogicalGpuPassTiming {
 
     pub(super) fn resolve_buffer(&self) -> &GpuBufferHandle {
         &self.resolve_buffer
-    }
-
-    pub(super) fn readback_buffer(&self) -> &GpuBufferHandle {
-        &self.readback_buffer
     }
 
     pub(super) const fn query_capacity(&self) -> u32 {
@@ -162,7 +149,7 @@ impl LogicalGpuPassTiming {
         if end >= self.query_capacity {
             anyhow::bail!(
                 "render GPU timestamp occurrence {timestamp_ordinal} exceeds query capacity {}",
-                self.query_capacity
+                self.query_capacity,
             );
         }
         Ok(GpuPassTimestampIndices { begin, end })
