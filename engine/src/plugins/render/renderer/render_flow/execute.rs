@@ -390,6 +390,7 @@ impl Renderer {
                                 context,
                                 timing.query_set(),
                                 timing.resolve_buffer(),
+                                timing.readback_id(),
                                 timing.query_capacity(),
                             )?),
                             None => None,
