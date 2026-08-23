@@ -438,10 +438,12 @@ pub fn encode_legacy_prepared_texture_capture(
     frame_texture: Option<&Texture>,
     prepared: PreparedCaptureReadback,
 ) -> Result<PendingCaptureReadback> {
+    let canonical_operation = prepared.canonical_operation().cloned();
+    let is_pre_g7_surface = prepared.is_pre_g7_surface();
     let PreparedCaptureReadback {
         selector_index,
         identity,
-        authority,
+        authority: _,
         legacy,
         width,
         height,
@@ -455,11 +457,8 @@ pub fn encode_legacy_prepared_texture_capture(
         padded_bytes_per_row,
     } = legacy;
 
-    let (copy_width, copy_height) = match (&authority, &source) {
-        (
-            PreparedCaptureAuthority::Canonical(operation),
-            LegacyPreparedCaptureTextureSource::Realized(texture),
-        ) => {
+    let (copy_width, copy_height) = match (canonical_operation.as_ref(), is_pre_g7_surface, &source) {
+        (Some(operation), false, LegacyPreparedCaptureTextureSource::Realized(texture)) => {
             let GpuTransferRegion::Texture(region) = operation.source() else {
                 anyhow::bail!(
                     "canonical renderer texture capture has a non-texture readback source"
@@ -479,9 +478,7 @@ pub fn encode_legacy_prepared_texture_capture(
             }
             (extent.width(), extent.height())
         }
-        (PreparedCaptureAuthority::PreG7Surface, LegacyPreparedCaptureTextureSource::Surface) => {
-            (width, height)
-        }
+        (None, true, LegacyPreparedCaptureTextureSource::Surface) => (width, height),
         _ => anyhow::bail!(
             "renderer capture semantic authority disagrees with its temporary physical source"
         ),
