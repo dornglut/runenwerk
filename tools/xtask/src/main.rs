@@ -2,49 +2,64 @@
 
 use std::{
     collections::BTreeSet,
-    env, fs,
+    env,
+    fmt::Write as _,
+    fs,
     io::ErrorKind,
     path::{Path, PathBuf},
     process::{Command, ExitCode},
+    time::{Duration, Instant},
 };
 
-const TOOLING_CARGO_STEPS: &[&[&str]] = &[
-    &[
-        "fmt",
-        "--manifest-path",
-        "tools/xtask/Cargo.toml",
-        "--check",
-    ],
-    &[
-        "test",
-        "--manifest-path",
-        "tools/xtask/Cargo.toml",
-        "--locked",
-    ],
-    &[
-        "clippy",
-        "--manifest-path",
-        "tools/xtask/Cargo.toml",
-        "--all-targets",
-        "--locked",
-        "--",
-        "-D",
-        "warnings",
-    ],
+const TOOLING_CARGO_STEPS: &[(&str, &[&str])] = &[
+    (
+        "tooling fmt",
+        &[
+            "fmt",
+            "--manifest-path",
+            "tools/xtask/Cargo.toml",
+            "--check",
+        ],
+    ),
+    (
+        "tooling tests",
+        &[
+            "test",
+            "--manifest-path",
+            "tools/xtask/Cargo.toml",
+            "--locked",
+        ],
+    ),
+    (
+        "tooling clippy",
+        &[
+            "clippy",
+            "--manifest-path",
+            "tools/xtask/Cargo.toml",
+            "--all-targets",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    ),
 ];
 
-const PRODUCT_CARGO_STEPS: &[&[&str]] = &[
-    &["fmt", "--all", "--check"],
-    &["test", "--workspace", "--locked"],
-    &[
-        "clippy",
-        "--workspace",
-        "--all-targets",
-        "--locked",
-        "--",
-        "-D",
-        "warnings",
-    ],
+const PRODUCT_CARGO_STEPS: &[(&str, &[&str])] = &[
+    ("workspace fmt", &["fmt", "--all", "--check"]),
+    ("workspace tests", &["test", "--workspace", "--locked"]),
+    (
+        "workspace clippy",
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    ),
 ];
 
 const RETIRED_PATHS: &[&str] = &[
@@ -97,18 +112,78 @@ fn main() -> ExitCode {
 }
 
 fn validate() -> Result<(), String> {
-    let root = repository_root()?;
+    let validation_started = Instant::now();
+    let mut timings = Vec::new();
+    let result = (|| {
+        let root = repository_root()?;
 
-    for args in TOOLING_CARGO_STEPS {
-        run(&root, "cargo", args)?;
+        for (name, args) in TOOLING_CARGO_STEPS {
+            measure_validation_stage(&mut timings, name, || run(&root, "cargo", args))?;
+        }
+
+        for (name, args) in PRODUCT_CARGO_STEPS {
+            measure_validation_stage(&mut timings, name, || run(&root, "cargo", args))?;
+        }
+
+        measure_validation_stage(&mut timings, "docs validation", || validate_docs(&root))?;
+        measure_validation_stage(&mut timings, "repository audit", || audit_repository(&root))
+    })();
+
+    eprint!(
+        "{}",
+        format_validation_timings(&timings, validation_started.elapsed())
+    );
+    result
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ValidationTiming {
+    name: &'static str,
+    elapsed: Duration,
+}
+
+fn measure_validation_stage<F>(
+    timings: &mut Vec<ValidationTiming>,
+    name: &'static str,
+    stage: F,
+) -> Result<(), String>
+where
+    F: FnOnce() -> Result<(), String>,
+{
+    let started = Instant::now();
+    let result = stage();
+    timings.push(ValidationTiming {
+        name,
+        elapsed: started.elapsed(),
+    });
+    result
+}
+
+fn format_validation_timings(timings: &[ValidationTiming], total: Duration) -> String {
+    let label_width = timings
+        .iter()
+        .map(|timing| timing.name.len())
+        .chain(std::iter::once("total".len()))
+        .max()
+        .unwrap_or_default();
+    let mut report = String::from("validation timings:\n");
+    for timing in timings {
+        writeln!(
+            report,
+            "  {:label_width$}  {:>8.2}s",
+            timing.name,
+            timing.elapsed.as_secs_f64()
+        )
+        .expect("writing validation timing to a String cannot fail");
     }
-
-    for args in PRODUCT_CARGO_STEPS {
-        run(&root, "cargo", args)?;
-    }
-
-    validate_docs(&root)?;
-    audit_repository(&root)
+    writeln!(
+        report,
+        "  {:label_width$}  {:>8.2}s",
+        "total",
+        total.as_secs_f64()
+    )
+    .expect("writing validation total to a String cannot fail");
+    report
 }
 
 fn validate_docs(root: &Path) -> Result<(), String> {
@@ -674,13 +749,46 @@ fn print_usage() {
 #[cfg(test)]
 mod tests {
     use super::{
-        ci_workflow_matches, documentation_workflow_matches, is_product_rust_source,
-        is_sdf_gitlink, sdf_manifest_violation,
+        ValidationTiming, ci_workflow_matches, documentation_workflow_matches,
+        format_validation_timings, is_product_rust_source, is_sdf_gitlink,
+        measure_validation_stage, sdf_manifest_violation,
     };
+    use std::time::Duration;
 
     fn mutate(text: &str, before: &str, after: &str) -> String {
         assert!(text.contains(before), "missing mutation target {before:?}");
         text.replacen(before, after, 1)
+    }
+
+    #[test]
+    fn validation_timing_report_preserves_stage_order_and_total() {
+        let timings = [
+            ValidationTiming {
+                name: "tooling fmt",
+                elapsed: Duration::from_millis(240),
+            },
+            ValidationTiming {
+                name: "workspace tests",
+                elapsed: Duration::from_millis(184_220),
+            },
+        ];
+
+        assert_eq!(
+            format_validation_timings(&timings, Duration::from_millis(264_360)),
+            "validation timings:\n  tooling fmt          0.24s\n  workspace tests    184.22s\n  total              264.36s\n"
+        );
+    }
+
+    #[test]
+    fn failed_validation_stage_is_timed_and_keeps_its_error() {
+        let mut timings = Vec::new();
+        let result = measure_validation_stage(&mut timings, "workspace tests", || {
+            Err("workspace tests failed".to_owned())
+        });
+
+        assert_eq!(result, Err("workspace tests failed".to_owned()));
+        assert_eq!(timings.len(), 1);
+        assert_eq!(timings[0].name, "workspace tests");
     }
 
     #[test]
