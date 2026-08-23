@@ -32,7 +32,9 @@ fn transitional_g5_bridge_consumes_prepared_work_without_compiled_execution_fall
         "encode_canonical_copy_operation(",
         "encode_canonical_render_operation(",
         "frame.encode_resolve(context, encoder, operation)?",
-        "frame.encode_readback_copy(context, encoder, operation)?",
+        "RenderGpuWorkPayload::TimingReadback { occurrence }",
+        "GpuWorkOperation::Readback(operation)",
+        "frame.encode_legacy_readback(context, encoder, operation)?",
     ] {
         assert!(
             canonical.contains(required),
@@ -55,6 +57,22 @@ fn transitional_g5_bridge_consumes_prepared_work_without_compiled_execution_fall
         execute[schedule_start..schedule_end].contains(".ordered_payloads()?"),
         "prepared logical work order must come from PreparedRenderWorkPlan rather than renderer pass order"
     );
+}
+
+#[test]
+fn canonical_timing_tail_owns_readback_semantics_without_a_logical_staging_copy() {
+    let operations = source("src/plugins/render/renderer/render_flow/logical_operations.rs");
+    let timing = source("src/plugins/render/renderer/render_flow/logical_timing.rs");
+    let adapter = source("src/plugins/render/adapters/gpu_work.rs");
+
+    assert!(operations.contains("readback: GpuReadbackOperation"));
+    assert!(operations.contains("GpuReadbackId::allocate()?"));
+    assert!(operations.contains("GpuReadbackOperation::new("));
+    assert!(!operations.contains("readback_copy: GpuCopyOperation"));
+    assert!(!timing.contains("readback_buffer: GpuBufferHandle"));
+    assert!(adapter.contains("TimingReadback"));
+    assert!(adapter.contains("Some(GpuWorkNodeKind::Readback)"));
+    assert!(!adapter.contains("TimingReadbackCopy"));
 }
 
 #[test]
