@@ -168,20 +168,11 @@ fn run_surface_proof(window: Arc<Window>) {
         "successful Present must release physical surface authority even while the old logical image token still exists",
     );
     assert_ne!(next.lease_id(), image.lease_id());
-    let next_lease = next
-        .texture()
-        .surface_lease()
-        .expect("reacquired surface image must retain lease provenance");
-    assert_eq!(next_lease.disposition(), GpuSurfaceLeaseDisposition::Active);
+    let retired_graph = clear_and_present_graph(&next);
 
     context
         .detach_surface(surface)
         .expect("surface retirement must release an active acquired-image lease");
-    assert_eq!(
-        next_lease.disposition(),
-        GpuSurfaceLeaseDisposition::Abandoned,
-        "retirement must invalidate the active physical acquisition before dropping the surface"
-    );
     assert!(matches!(
         context.surface_capabilities(surface),
         Err(error) if error.category() == GpuSurfaceErrorCategory::UnknownSurface
@@ -194,7 +185,22 @@ fn run_surface_proof(window: Arc<Window>) {
         context.detach_surface(surface),
         Err(error) if error.category() == GpuSurfaceErrorCategory::UnknownSurface
     ));
-    drop(next);
+
+    let retired_prepare = pollster::block_on(context.prepare_submission(retired_graph))
+        .expect_err("logical resources from a retired surface must not enter G5 preparation");
+    assert_eq!(
+        retired_prepare.kind(),
+        GpuSubmissionPreparationErrorKind::SurfaceLease
+    );
+    assert_eq!(
+        retired_prepare
+            .surface_error()
+            .expect("surface-lease rejection must preserve structured G7 evidence")
+            .category(),
+        GpuSurfaceLeaseErrorCategory::UnknownSurface
+    );
+
+    next.abandon();
     drop(image);
 
     let stats = context.execution_stats();
