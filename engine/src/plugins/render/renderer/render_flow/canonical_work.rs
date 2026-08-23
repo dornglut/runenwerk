@@ -308,7 +308,6 @@ pub(super) fn resolve_canonical_invocation(
             timing.query_set(),
             timing.query_range()?,
             timing.resolve_buffer(),
-            timing.readback_buffer(),
         )?;
         let resolve_occurrence = allocate_aux_occurrence(maximum_occurrence)?;
         nodes.push(ResolvedRenderGpuWorkNode::timing_resolve(
@@ -318,10 +317,10 @@ pub(super) fn resolve_canonical_invocation(
             [],
         ));
         let readback_occurrence = allocate_aux_occurrence(maximum_occurrence)?;
-        nodes.push(ResolvedRenderGpuWorkNode::timing_readback_copy(
+        nodes.push(ResolvedRenderGpuWorkNode::timing_readback(
             readback_occurrence,
-            occurrence_label(flow, "timing-readback-copy", readback_occurrence)?,
-            tail.readback_copy().clone(),
+            occurrence_label(flow, "timing-readback", readback_occurrence)?,
+            tail.readback().clone(),
             [],
         ));
     }
