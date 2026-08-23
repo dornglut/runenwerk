@@ -104,7 +104,8 @@ pub(super) fn project_copy_operation(
                 dynamic_texture_targets,
                 pass.pass_id,
                 &source_key,
-            )? else {
+            )?
+            else {
                 return Ok(ProjectedCopyOperation::PreG7Residual);
             };
             let Some(destination) = logical_texture(
@@ -112,7 +113,8 @@ pub(super) fn project_copy_operation(
                 dynamic_texture_targets,
                 pass.pass_id,
                 &destination_key,
-            )? else {
+            )?
+            else {
                 return Ok(ProjectedCopyOperation::PreG7Residual);
             };
             project_texture_to_texture(
@@ -176,7 +178,8 @@ pub(super) fn project_present_copy_operation(
         dynamic_texture_targets,
         pass.pass_id,
         &source_key,
-    )? else {
+    )?
+    else {
         return Ok(ProjectedCopyOperation::PreG7Residual);
     };
     let Some(surface_color_view) = surface_color_view else {
