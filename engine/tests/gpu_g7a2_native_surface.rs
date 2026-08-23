@@ -168,7 +168,33 @@ fn run_surface_proof(window: Arc<Window>) {
         "successful Present must release physical surface authority even while the old logical image token still exists",
     );
     assert_ne!(next.lease_id(), image.lease_id());
-    next.abandon();
+    let next_lease = next
+        .texture()
+        .surface_lease()
+        .expect("reacquired surface image must retain lease provenance");
+    assert_eq!(next_lease.disposition(), GpuSurfaceLeaseDisposition::Active);
+
+    context
+        .detach_surface(surface)
+        .expect("surface retirement must release an active acquired-image lease");
+    assert_eq!(
+        next_lease.disposition(),
+        GpuSurfaceLeaseDisposition::Abandoned,
+        "retirement must invalidate the active physical acquisition before dropping the surface"
+    );
+    assert!(matches!(
+        context.surface_capabilities(surface),
+        Err(error) if error.category() == GpuSurfaceErrorCategory::UnknownSurface
+    ));
+    assert!(matches!(
+        context.acquire_surface_image(surface),
+        Err(error) if error.category() == GpuSurfaceAcquireErrorCategory::UnknownSurface
+    ));
+    assert!(matches!(
+        context.detach_surface(surface),
+        Err(error) if error.category() == GpuSurfaceErrorCategory::UnknownSurface
+    ));
+    drop(next);
     drop(image);
 
     let stats = context.execution_stats();
@@ -214,7 +240,7 @@ impl ApplicationHandler for NativeSurfaceProof {
 
 #[test]
 #[ignore = "requires Xvfb plus a Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
-fn native_surface_acquire_clear_present_and_reacquire_uses_public_runengpu_lifecycle() {
+fn native_surface_acquire_clear_present_reacquire_and_retire_uses_public_runengpu_lifecycle() {
     let mut event_loop_builder = EventLoop::builder();
     #[cfg(target_os = "linux")]
     event_loop_builder.with_x11().with_any_thread(true);
