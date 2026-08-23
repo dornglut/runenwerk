@@ -16,6 +16,7 @@ use crate::plugins::render::{
     PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, RenderGpuWorkPayload,
     ResolvedRenderGpuWorkNode, prepare_render_gpu_work,
 };
+use std::collections::BTreeMap;
 
 /// One execution-complete logical upload paired only with its already-realized physical buffer.
 ///
@@ -166,9 +167,10 @@ pub(super) fn resolve_canonical_frame(
 /// occurrence IDs first and then thread the same `maximum_occurrence` through every invocation so
 /// auxiliary upload/timing/capture IDs stay frame-unique. Capture stage ordering is render-owned
 /// control meaning: Before readbacks become predecessors of the target pass and After readbacks
-/// become successors even when G3 derives no data hazard between them. If an operation is residual,
-/// no partial canonical node set or terminal-Present control metadata from this invocation is
-/// retained.
+/// become successors even when G3 derives no data hazard between them. True no-work occurrences are
+/// omitted and their effective predecessors are forwarded to later render-owned controls; no fake
+/// GPU node is authored only to preserve occurrence identity. If an operation is residual, no
+/// partial canonical node set or terminal-Present control metadata from this invocation is retained.
 pub(super) fn resolve_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
@@ -188,6 +190,8 @@ pub(super) fn resolve_canonical_invocation(
 
     let mut nodes = Vec::<ResolvedRenderGpuWorkNode>::new();
     let mut terminal_present_controls = Vec::<Vec<RenderGpuWorkOccurrenceId>>::new();
+    let mut omitted_controls =
+        BTreeMap::<RenderGpuWorkOccurrenceId, Vec<RenderGpuWorkOccurrenceId>>::new();
     for upload in projected_uploads {
         *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
         nodes.push(ResolvedRenderGpuWorkNode::upload(
@@ -200,14 +204,18 @@ pub(super) fn resolve_canonical_invocation(
 
     for projected in passes {
         *maximum_occurrence = (*maximum_occurrence).max(projected.occurrence.raw());
-        let mut pass_control = projected.control_order_after.to_vec();
+        let mut pass_control =
+            effective_controls_after_omissions(projected.control_order_after, &omitted_controls);
         if let Some(upload) = projected.fixed_step_upload {
             *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
             nodes.push(ResolvedRenderGpuWorkNode::upload(
                 upload.occurrence,
                 occurrence_label(flow, "fixed-step-upload", upload.occurrence)?,
                 upload.operation.clone(),
-                upload.control_order_after.iter().copied(),
+                effective_controls_after_omissions(
+                    &upload.control_order_after,
+                    &omitted_controls,
+                ),
             ));
             pass_control.clear();
             pass_control.push(upload.occurrence);
@@ -262,7 +270,20 @@ pub(super) fn resolve_canonical_invocation(
             CompiledPassExecutionPlan::Copy(pass) => {
                 match project_copy_operation(runtime_resources, dynamic_texture_targets, pass)? {
                     ProjectedCopyOperation::Canonical(operation) => *operation,
-                    ProjectedCopyOperation::NoWork | ProjectedCopyOperation::PreG7Residual => {
+                    ProjectedCopyOperation::NoWork => {
+                        if !forward_no_work_occurrence(
+                            flow,
+                            projected,
+                            &pass_control,
+                            maximum_occurrence,
+                            &mut nodes,
+                            &mut omitted_controls,
+                        )? {
+                            return Ok(CanonicalInvocationResolution::PreG7Residual);
+                        }
+                        continue;
+                    }
+                    ProjectedCopyOperation::PreG7Residual => {
                         return Ok(CanonicalInvocationResolution::PreG7Residual);
                     }
                 }
@@ -276,10 +297,17 @@ pub(super) fn resolve_canonical_invocation(
                 };
                 let timing = timestamp_projection(timing, projected.timestamp_indices)?;
                 if draws.is_empty() && timing.is_none() {
-                    // A drawless, untimed UI pass is semantically no GPU work. The current
-                    // occurrence remains residual until the live frame caller omits it upstream;
-                    // fabricating a clear or zero-instance draw here would change legacy output.
-                    return Ok(CanonicalInvocationResolution::PreG7Residual);
+                    if !forward_no_work_occurrence(
+                        flow,
+                        projected,
+                        &pass_control,
+                        maximum_occurrence,
+                        &mut nodes,
+                        &mut omitted_controls,
+                    )? {
+                        return Ok(CanonicalInvocationResolution::PreG7Residual);
+                    }
+                    continue;
                 }
                 let color_attachment = GpuRenderColorAttachment::new(
                     surface_color_view.clone(),
@@ -372,16 +400,73 @@ pub(super) fn resolve_canonical_invocation(
         ));
     }
 
-    if nodes.is_empty() && terminal_present_controls.is_empty() {
-        return Ok(CanonicalInvocationResolution::PreG7Residual);
-    }
-
     Ok(CanonicalInvocationResolution::Resolved(
         CanonicalResolvedInvocation {
             nodes,
             terminal_present_controls,
         },
     ))
+}
+
+/// Replaces references to already-omitted no-work occurrences with their effective real
+/// predecessors. Values stored in `omitted_controls` are themselves fully contracted when they are
+/// recorded, so one deterministic substitution pass is sufficient and can never synthesize a GPU
+/// dependency that was not render-owned before omission.
+fn effective_controls_after_omissions(
+    controls: &[RenderGpuWorkOccurrenceId],
+    omitted_controls: &BTreeMap<
+        RenderGpuWorkOccurrenceId,
+        Vec<RenderGpuWorkOccurrenceId>,
+    >,
+) -> Vec<RenderGpuWorkOccurrenceId> {
+    let mut effective = Vec::new();
+    for control in controls {
+        if let Some(predecessors) = omitted_controls.get(control) {
+            for predecessor in predecessors {
+                if !effective.contains(predecessor) {
+                    effective.push(*predecessor);
+                }
+            }
+        } else if !effective.contains(control) {
+            effective.push(*control);
+        }
+    }
+    effective
+}
+
+/// Omits one true no-work pass occurrence while preserving all surrounding real work. Before-stage
+/// captures and fixed-step uploads have already been folded into `pass_control`; any after-stage
+/// captures are appended here and become the effective predecessors forwarded to later controls.
+/// A pre-G7 surface capture still makes the invocation residual because its logical readback source
+/// does not exist yet.
+fn forward_no_work_occurrence(
+    flow: &CompiledRenderFlowPlan,
+    projected: &CanonicalPassProjection<'_>,
+    pass_control: &[RenderGpuWorkOccurrenceId],
+    maximum_occurrence: &mut u64,
+    nodes: &mut Vec<ResolvedRenderGpuWorkNode>,
+    omitted_controls: &mut BTreeMap<
+        RenderGpuWorkOccurrenceId,
+        Vec<RenderGpuWorkOccurrenceId>,
+    >,
+) -> Result<bool> {
+    let Some(after_capture_occurrences) = append_capture_readbacks(
+        flow,
+        projected.after_captures,
+        pass_control,
+        maximum_occurrence,
+        nodes,
+    )?
+    else {
+        return Ok(false);
+    };
+    let effective = if after_capture_occurrences.is_empty() {
+        pass_control.to_vec()
+    } else {
+        after_capture_occurrences
+    };
+    omitted_controls.insert(projected.occurrence, effective);
+    Ok(true)
 }
 
 fn append_capture_readbacks(
@@ -464,4 +549,32 @@ pub(super) fn allocate_aux_occurrence(
         anyhow::anyhow!("render GPU execution occurrence identity space is exhausted")
     })?;
     Ok(RenderGpuWorkOccurrenceId::new(*maximum_occurrence))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn omitted_occurrence_controls_contract_without_ghost_nodes() {
+        let first = RenderGpuWorkOccurrenceId::new(1);
+        let omitted_a = RenderGpuWorkOccurrenceId::new(2);
+        let omitted_b = RenderGpuWorkOccurrenceId::new(3);
+        let independent = RenderGpuWorkOccurrenceId::new(4);
+        let mut omitted = BTreeMap::new();
+
+        omitted.insert(omitted_a, vec![first]);
+        let omitted_b_controls =
+            effective_controls_after_omissions(&[omitted_a, first], &omitted);
+        assert_eq!(omitted_b_controls, vec![first]);
+        omitted.insert(omitted_b, omitted_b_controls);
+
+        assert_eq!(
+            effective_controls_after_omissions(
+                &[omitted_b, independent, omitted_a, first],
+                &omitted,
+            ),
+            vec![first, independent]
+        );
+    }
 }
