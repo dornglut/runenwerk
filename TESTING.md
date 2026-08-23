@@ -14,6 +14,12 @@ python tools/docs/validate_docs.py
 
 Focused checks support iteration. They do not replace the merge baseline.
 
+## Integration-test boundaries
+
+An integration-test executable represents an actual isolation or external-boundary requirement, not an individual issue, milestone, phase, or small contract. Related contract tests should normally be modules inside a boundary-owned integration target.
+
+Keep separate executables where platform behavior, process or environment isolation, compile-fail behavior, crash or panic isolation, native GPU conformance, or explicit backend/runtime evidence requires them. Target consolidation must not introduce shared mutable runtime state or weaken test isolation.
+
 ## Required baseline
 
 Before merge:

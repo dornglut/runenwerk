@@ -82,6 +82,9 @@ jobs:
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal
 
+      - name: Cache Cargo data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
       - name: Install Mesa Vulkan fallback and virtual X display
         run: |
           set -euo pipefail
@@ -182,6 +185,9 @@ jobs:
           set -euo pipefail
           rustup toolchain install stable --profile minimal
           rustup target add --toolchain stable wasm32-unknown-unknown
+
+      - name: Cache Cargo data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Check RunenGPU-containing engine library for Wasm WebGPU
         run: cargo +stable check -p engine --lib --target wasm32-unknown-unknown --locked
