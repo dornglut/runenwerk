@@ -480,8 +480,8 @@ impl Renderer {
                                 pipeline: scheduled.execution.pipeline.as_ref(),
                                 timestamp_indices: scheduled.execution.timestamp_indices,
                                 fixed_step_upload: scheduled.fixed_step_upload.as_ref(),
-                                has_capture_work: !scheduled.execution.before_captures.is_empty()
-                                    || !scheduled.execution.after_captures.is_empty(),
+                                before_captures: &scheduled.execution.before_captures,
+                                after_captures: &scheduled.execution.after_captures,
                             })
                             .collect::<Vec<_>>();
                         let canonical_resolution = resolve_canonical_invocation(
@@ -828,6 +828,12 @@ impl Renderer {
                                 {
                                     pending_gpu_pass_timing_readbacks.push(pending);
                                 }
+                            }
+                            RenderGpuWorkPayload::CaptureReadback { occurrence } => {
+                                bail!(
+                                    "canonical capture readback occurrence '{}' reached the legacy executor despite the G5C1 residual guard",
+                                    occurrence
+                                );
                             }
                         }
                     }

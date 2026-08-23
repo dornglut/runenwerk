@@ -13,8 +13,8 @@ use crate::plugins::gpu::{
     GpuTextureViewHandle, GpuUploadOperation, GpuWorkOperation,
 };
 use crate::plugins::render::{
-    PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, ResolvedRenderGpuWorkNode,
-    prepare_render_gpu_work,
+    PreparedRenderWorkPlan, RenderGpuWorkOccurrenceId, RenderGpuWorkPayload,
+    ResolvedRenderGpuWorkNode, prepare_render_gpu_work,
 };
 
 /// One execution-complete logical upload paired only with its already-realized physical buffer.
@@ -35,7 +35,8 @@ pub(super) struct CanonicalPassProjection<'a> {
     pub(super) pipeline: Option<&'a PreparedPipelinePass>,
     pub(super) timestamp_indices: Option<GpuPassTimestampIndices>,
     pub(super) fixed_step_upload: Option<&'a RealizedLogicalBufferUpload>,
-    pub(super) has_capture_work: bool,
+    pub(super) before_captures: &'a [PreparedCaptureReadback],
+    pub(super) after_captures: &'a [PreparedCaptureReadback],
 }
 
 /// One invocation's already-realized inputs for canonical GPU-node resolution.
@@ -94,8 +95,8 @@ pub(super) enum CanonicalFrameResolution {
 /// This helper exists only for the raw renderer execution bridge. The eventual G5C1 frame path
 /// retains owned invocation resolutions through realization, aggregates them at frame scope, and
 /// prepares one `prepare_render_gpu_frame_work` authority instead. Terminal Present control
-/// metadata cannot be consumed by the current per-invocation bridge and therefore keeps that
-/// invocation residual.
+/// metadata and canonical capture readbacks cannot be consumed by the current per-invocation raw
+/// bridge and therefore keep that invocation on the residual physical path.
 pub(super) fn prepare_legacy_invocation_work(
     flow: &CompiledRenderFlowPlan,
     resolution: CanonicalInvocationResolution,
@@ -105,7 +106,14 @@ pub(super) fn prepare_legacy_invocation_work(
             if !frame.terminal_present_controls.is_empty() {
                 return Ok(None);
             }
-            Ok(Some(Box::new(prepare_render_gpu_work(flow, frame.nodes)?)))
+            let work = Box::new(prepare_render_gpu_work(flow, frame.nodes)?);
+            let has_capture_readback = work.ordered_payloads()?.iter().any(|(_, payload)| {
+                matches!(payload, RenderGpuWorkPayload::CaptureReadback { .. })
+            });
+            if has_capture_readback {
+                return Ok(None);
+            }
+            Ok(Some(work))
         }
         CanonicalFrameResolution::PreG7Residual => Ok(None),
     }
@@ -115,11 +123,12 @@ pub(super) fn prepare_legacy_invocation_work(
 ///
 /// The caller must reserve ordinary pass occurrence IDs across the complete frame before resolving
 /// the first invocation, then pass one shared `maximum_occurrence` through every
-/// `resolve_canonical_invocation` call so upload/timing auxiliary identities cannot collide with a
-/// later invocation. Each invocation can then be resolved while its mutable `FlowRuntimeResources`
-/// scope is active; this aggregator retains only owned generic work and render-owned terminal
-/// control metadata. One residual invocation discards the complete canonical frame result so the
-/// caller cannot mix legacy and G5 execution authority inside one physical submission.
+/// `resolve_canonical_invocation` call so upload/timing/capture auxiliary identities cannot collide
+/// with a later invocation. Each invocation can then be resolved while its mutable
+/// `FlowRuntimeResources` scope is active; this aggregator retains only owned generic work and
+/// render-owned terminal control metadata. One residual invocation discards the complete canonical
+/// frame result so the caller cannot mix legacy and G5 execution authority inside one physical
+/// submission.
 pub(super) fn resolve_canonical_frame(
     invocations: impl IntoIterator<Item = CanonicalInvocationResolution>,
 ) -> CanonicalFrameResolution {
@@ -155,8 +164,11 @@ pub(super) fn resolve_canonical_frame(
 ///
 /// The caller owns occurrence allocation. For frame-level use it must reserve all ordinary pass
 /// occurrence IDs first and then thread the same `maximum_occurrence` through every invocation so
-/// auxiliary upload/timing IDs stay frame-unique. If an operation is residual, no partial canonical
-/// node set or terminal-Present control metadata from this invocation is retained.
+/// auxiliary upload/timing/capture IDs stay frame-unique. Capture stage ordering is render-owned
+/// control meaning: Before readbacks become predecessors of the target pass and After readbacks
+/// become successors even when G3 derives no data hazard between them. If an operation is residual,
+/// no partial canonical node set or terminal-Present control metadata from this invocation is
+/// retained.
 pub(super) fn resolve_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
@@ -173,10 +185,6 @@ pub(super) fn resolve_canonical_invocation(
         builtin_ui_draws,
         timing,
     } = projection;
-
-    if passes.iter().any(|pass| pass.has_capture_work) {
-        return Ok(CanonicalInvocationResolution::PreG7Residual);
-    }
 
     let mut nodes = Vec::<ResolvedRenderGpuWorkNode>::new();
     let mut terminal_present_controls = Vec::<Vec<RenderGpuWorkOccurrenceId>>::new();
@@ -203,6 +211,20 @@ pub(super) fn resolve_canonical_invocation(
             ));
             pass_control.clear();
             pass_control.push(upload.occurrence);
+        }
+
+        let Some(before_capture_occurrences) = append_capture_readbacks(
+            flow,
+            projected.before_captures,
+            &pass_control,
+            maximum_occurrence,
+            &mut nodes,
+        )?
+        else {
+            return Ok(CanonicalInvocationResolution::PreG7Residual);
+        };
+        if !before_capture_occurrences.is_empty() {
+            pass_control = before_capture_occurrences;
         }
 
         let operation = match projected.pass {
@@ -284,7 +306,21 @@ pub(super) fn resolve_canonical_invocation(
                 )? {
                     ProjectedCopyOperation::Canonical(operation) => *operation,
                     ProjectedCopyOperation::NoWork => {
-                        terminal_present_controls.push(pass_control);
+                        let Some(after_capture_occurrences) = append_capture_readbacks(
+                            flow,
+                            projected.after_captures,
+                            &pass_control,
+                            maximum_occurrence,
+                            &mut nodes,
+                        )?
+                        else {
+                            return Ok(CanonicalInvocationResolution::PreG7Residual);
+                        };
+                        terminal_present_controls.push(if after_capture_occurrences.is_empty() {
+                            pass_control
+                        } else {
+                            after_capture_occurrences
+                        });
                         continue;
                     }
                     ProjectedCopyOperation::PreG7Residual => {
@@ -301,6 +337,16 @@ pub(super) fn resolve_canonical_invocation(
             execution_preference(projected.pass),
             pass_control,
         ));
+        let Some(_) = append_capture_readbacks(
+            flow,
+            projected.after_captures,
+            &[projected.occurrence],
+            maximum_occurrence,
+            &mut nodes,
+        )?
+        else {
+            return Ok(CanonicalInvocationResolution::PreG7Residual);
+        };
     }
 
     if let Some(timing) = timing {
@@ -336,6 +382,36 @@ pub(super) fn resolve_canonical_invocation(
             terminal_present_controls,
         },
     ))
+}
+
+fn append_capture_readbacks(
+    flow: &CompiledRenderFlowPlan,
+    captures: &[PreparedCaptureReadback],
+    control_order_after: &[RenderGpuWorkOccurrenceId],
+    maximum_occurrence: &mut u64,
+    nodes: &mut Vec<ResolvedRenderGpuWorkNode>,
+) -> Result<Option<Vec<RenderGpuWorkOccurrenceId>>> {
+    let mut occurrences = Vec::with_capacity(captures.len());
+    for capture in captures {
+        if capture.is_pre_g7_surface() {
+            return Ok(None);
+        }
+        let operation = capture.canonical_operation().ok_or_else(|| {
+            anyhow::anyhow!(
+                "non-surface renderer capture '{}' has no canonical G5 readback operation",
+                capture.identity.pass_id()
+            )
+        })?;
+        let occurrence = allocate_aux_occurrence(maximum_occurrence)?;
+        nodes.push(ResolvedRenderGpuWorkNode::capture_readback(
+            occurrence,
+            occurrence_label(flow, "capture-readback", occurrence)?,
+            operation.clone(),
+            control_order_after.iter().copied(),
+        ));
+        occurrences.push(occurrence);
+    }
+    Ok(Some(occurrences))
 }
 
 fn timestamp_projection(

@@ -101,6 +101,9 @@ pub(crate) enum RenderGpuWorkPayload {
     TimingReadback {
         occurrence: RenderGpuWorkOccurrenceId,
     },
+    CaptureReadback {
+        occurrence: RenderGpuWorkOccurrenceId,
+    },
 }
 
 impl RenderGpuWorkPayload {
@@ -112,7 +115,9 @@ impl RenderGpuWorkPayload {
             Self::Pass { .. } => None,
             Self::Upload { .. } => Some(GpuWorkNodeKind::Upload),
             Self::TimingResolve { .. } => Some(GpuWorkNodeKind::Resolve),
-            Self::TimingReadback { .. } => Some(GpuWorkNodeKind::Readback),
+            Self::TimingReadback { .. } | Self::CaptureReadback { .. } => {
+                Some(GpuWorkNodeKind::Readback)
+            }
         }
     }
 
@@ -121,7 +126,8 @@ impl RenderGpuWorkPayload {
             Self::Pass { occurrence }
             | Self::Upload { occurrence }
             | Self::TimingResolve { occurrence }
-            | Self::TimingReadback { occurrence } => *occurrence,
+            | Self::TimingReadback { occurrence }
+            | Self::CaptureReadback { occurrence } => *occurrence,
         }
     }
 }
@@ -213,6 +219,24 @@ impl ResolvedRenderGpuWorkNode {
             preference: GpuExecutionPreference::TransferPreferred,
             provenance,
             payload: RenderGpuWorkPayload::TimingReadback { occurrence },
+            control_order_after: control_order_after.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn capture_readback(
+        occurrence: RenderGpuWorkOccurrenceId,
+        label: GpuResourceLabel,
+        operation: GpuReadbackOperation,
+        control_order_after: impl IntoIterator<Item = RenderGpuWorkOccurrenceId>,
+    ) -> Self {
+        let provenance = GpuResourceProvenance::new(label.clone(), None, None);
+        Self {
+            occurrence,
+            label,
+            operation: GpuWorkOperation::Readback(operation),
+            preference: GpuExecutionPreference::TransferPreferred,
+            provenance,
+            payload: RenderGpuWorkPayload::CaptureReadback { occurrence },
             control_order_after: control_order_after.into_iter().collect(),
         }
     }
@@ -810,5 +834,102 @@ mod tests {
                 buffer.descriptor().common().label().as_str()
             );
         }
+    }
+
+    #[test]
+    fn capture_readback_control_order_survives_without_data_hazards() {
+        let mut allocator =
+            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(702).unwrap());
+        let captured = buffer(&mut allocator, "capture source", 16);
+        let pass_source = buffer(&mut allocator, "pass source", 16);
+        let pass_destination = buffer(&mut allocator, "pass destination", 16);
+
+        let capture_init = RenderGpuWorkOccurrenceId::new(1);
+        let pass_init = RenderGpuWorkOccurrenceId::new(2);
+        let before_capture = RenderGpuWorkOccurrenceId::new(3);
+        let pass = RenderGpuWorkOccurrenceId::new(4);
+        let after_capture = RenderGpuWorkOccurrenceId::new(5);
+        let nodes = [
+            ResolvedRenderGpuWorkNode::upload(
+                capture_init,
+                label("capture init"),
+                GpuUploadOperation::new(
+                    whole_region(&captured, 16).into(),
+                    transfer_payload("capture init payload", 16),
+                )
+                .expect("capture source upload should be valid"),
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::upload(
+                pass_init,
+                label("pass init"),
+                GpuUploadOperation::new(
+                    whole_region(&pass_source, 16).into(),
+                    transfer_payload("pass init payload", 16),
+                )
+                .expect("pass source upload should be valid"),
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::capture_readback(
+                before_capture,
+                label("capture before"),
+                GpuReadbackOperation::new(
+                    whole_region(&captured, 16).into(),
+                    GpuReadbackId::allocate().expect("readback id should allocate"),
+                )
+                .expect("before capture readback should be valid"),
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::pass(
+                pass,
+                label("independent pass"),
+                GpuWorkOperation::Copy(
+                    GpuCopyOperation::buffer_to_buffer(
+                        whole_region(&pass_source, 16),
+                        whole_region(&pass_destination, 16),
+                    )
+                    .expect("independent pass copy should be valid"),
+                ),
+                GpuExecutionPreference::TransferPreferred,
+                [before_capture],
+            ),
+            ResolvedRenderGpuWorkNode::capture_readback(
+                after_capture,
+                label("capture after"),
+                GpuReadbackOperation::new(
+                    whole_region(&captured, 16).into(),
+                    GpuReadbackId::allocate().expect("readback id should allocate"),
+                )
+                .expect("after capture readback should be valid"),
+                [pass],
+            ),
+        ];
+
+        let prepared = prepare_render_gpu_frame_work(label("capture stage order test"), nodes)
+            .expect("capture stage work should prepare");
+        let by_occurrence = prepared
+            .ordered_payloads()
+            .expect("sidecar should cover every capture stage node")
+            .into_iter()
+            .map(|(node, payload)| (payload.occurrence(), node))
+            .collect::<BTreeMap<_, _>>();
+        let before_node = by_occurrence[&before_capture];
+        let pass_node = by_occurrence[&pass];
+        let after_node = by_occurrence[&after_capture];
+
+        assert!(prepared.graph().dependencies().iter().any(|dependency| {
+            dependency.before() == before_node && dependency.after() == pass_node
+        }));
+        assert!(prepared.graph().dependencies().iter().any(|dependency| {
+            dependency.before() == pass_node && dependency.after() == after_node
+        }));
+        assert!(matches!(
+            prepared.payload(before_node).unwrap(),
+            RenderGpuWorkPayload::CaptureReadback { occurrence } if *occurrence == before_capture
+        ));
+        assert!(matches!(
+            prepared.payload(after_node).unwrap(),
+            RenderGpuWorkPayload::CaptureReadback { occurrence } if *occurrence == after_capture
+        ));
     }
 }
