@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[path = "runengpu_g5a_execution_authority/renderer_ui_boundary.rs"]
+mod renderer_ui_boundary;
+
 fn engine_path(path: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(path)
 }

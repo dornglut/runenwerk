@@ -1,17 +1,7 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-
-fn engine_path(path: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(path)
-}
-
-fn source(path: &str) -> String {
-    fs::read_to_string(engine_path(path))
-        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-}
+use super::source;
 
 #[test]
-fn g5c_ui_execution_boundary_stays_free_of_legacy_ui_semantics() {
+fn canonical_renderer_gpu_boundary_rejects_legacy_ui_semantics() {
     let adapter = source("src/plugins/render/adapters/gpu_work.rs");
     let canonical = source("src/plugins/render/renderer/render_flow/canonical_work.rs");
 
