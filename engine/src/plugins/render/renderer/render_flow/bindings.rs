@@ -80,7 +80,8 @@ impl Renderer {
                     )?;
                     let (texture_id, texture_view, is_depth) = match resource_key.clone() {
                         RuntimeResourceKey::DynamicTexture(key) => {
-                            let texture = self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
+                            let texture =
+                                self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
                             (
                                 texture.id.clone(),
                                 resolved_binding_texture_view(&texture.id, texture.view_handle)?,
@@ -136,32 +137,30 @@ impl Renderer {
                         resource,
                         "storage_texture",
                     )?;
-                    let (texture_id, texture_view, texture_format, is_depth) =
-                        match resource_key.clone() {
-                            RuntimeResourceKey::DynamicTexture(key) => {
-                                let texture =
-                                    self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
-                                (
-                                    texture.id.clone(),
-                                    resolved_binding_texture_view(
-                                        &texture.id,
-                                        texture.view_handle,
-                                    )?,
-                                    texture.format,
-                                    texture.is_depth,
-                                )
-                            }
-                            _ => {
-                                let (view_handle, format, is_depth) = runtime_resources
-                                    .resolve_logical_texture_binding(pass_id, resource_key.clone())?;
-                                (
-                                    resource_key,
-                                    RuntimeBindingResource::TextureView(view_handle.clone()),
-                                    format,
-                                    is_depth,
-                                )
-                            }
-                        };
+                    let (texture_id, texture_view, texture_format, is_depth) = match resource_key
+                        .clone()
+                    {
+                        RuntimeResourceKey::DynamicTexture(key) => {
+                            let texture =
+                                self.dynamic_texture_targets.texture_ref(pass_id, &key)?;
+                            (
+                                texture.id.clone(),
+                                resolved_binding_texture_view(&texture.id, texture.view_handle)?,
+                                texture.format,
+                                texture.is_depth,
+                            )
+                        }
+                        _ => {
+                            let (view_handle, format, is_depth) = runtime_resources
+                                .resolve_logical_texture_binding(pass_id, resource_key.clone())?;
+                            (
+                                resource_key,
+                                RuntimeBindingResource::TextureView(view_handle.clone()),
+                                format,
+                                is_depth,
+                            )
+                        }
+                    };
                     if is_depth {
                         bail!(
                             "pass '{}' declares storage texture '{}' as depth; storage-texture bindings require color-like resources",

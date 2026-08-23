@@ -68,7 +68,9 @@ fn g4_compiled_pass_realization_does_not_require_physical_surface_objects() {
     let encoding_start = pipeline[realization_start..]
         .find("fn encode_compiled_pass(")
         .map(|offset| realization_start + offset)
-        .expect("legacy physical encoding boundary must remain distinguishable from G4 realization");
+        .expect(
+            "legacy physical encoding boundary must remain distinguishable from G4 realization",
+        );
     let realization = &pipeline[realization_start..encoding_start];
 
     for forbidden in [
