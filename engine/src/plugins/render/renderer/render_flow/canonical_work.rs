@@ -101,8 +101,8 @@ pub(super) enum CanonicalInvocationPreparation {
 /// The durable G5C1 path resolves each invocation while its mutable runtime-resource scope is
 /// active, aggregates the resulting owned `CanonicalInvocationResolution` values with
 /// `resolve_canonical_frame`, then calls `prepare_render_gpu_frame_work` once. The current caller
-/// still prepares one invocation at a time, but it now exercises the same owned aggregation
-/// boundary instead of relying on a frame collection of borrowed runtime projections.
+/// still prepares one invocation at a time, but occurrence identity is now supplied by the same
+/// frame-owned monotonic space used by live pass expansion.
 pub(super) fn prepare_canonical_invocation(
     context: &GpuContext,
     flow: &CompiledRenderFlowPlan,
@@ -111,6 +111,7 @@ pub(super) fn prepare_canonical_invocation(
     projected_uploads: &[RealizedLogicalBufferUpload],
     passes: &[CanonicalPassProjection<'_>],
     timing: Option<&LogicalGpuPassTiming>,
+    maximum_occurrence: &mut u64,
 ) -> Result<CanonicalInvocationPreparation> {
     let invocation = CanonicalInvocationProjection {
         projected_uploads,
@@ -119,8 +120,6 @@ pub(super) fn prepare_canonical_invocation(
         builtin_ui_draws: None,
         timing,
     };
-    let mut maximum_occurrence = 0_u64;
-    observe_existing_occurrences(invocation, &mut maximum_occurrence);
     let resolved = resolve_canonical_invocation(
         context,
         flow,
@@ -128,7 +127,7 @@ pub(super) fn prepare_canonical_invocation(
         runtime_resources,
         None,
         invocation,
-        &mut maximum_occurrence,
+        maximum_occurrence,
     )?;
     // The transitional per-invocation physical bridge cannot resolve dynamic-target sidecars or
     // consume terminal-Present control metadata. Only the eventual frame-level G5 path may supply
@@ -373,21 +372,6 @@ pub(super) fn resolve_canonical_invocation(
             terminal_present_controls,
         },
     ))
-}
-
-fn observe_existing_occurrences(
-    projection: CanonicalInvocationProjection<'_, '_>,
-    maximum_occurrence: &mut u64,
-) {
-    for upload in projection.projected_uploads {
-        *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
-    }
-    for pass in projection.passes {
-        *maximum_occurrence = (*maximum_occurrence).max(pass.occurrence.raw());
-        if let Some(upload) = pass.fixed_step_upload {
-            *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
-        }
-    }
 }
 
 fn timestamp_projection(

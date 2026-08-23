@@ -7,7 +7,7 @@ use super::{
     },
     logical_operations::project_buffer_upload,
     logical_timing::LogicalGpuPassTimingPlan,
-    occurrences::expand_render_pass_occurrences,
+    occurrences::expand_render_pass_occurrences_in_frame,
 };
 use crate::plugins::gpu::GpuWorkOperation;
 use crate::plugins::render::{
@@ -221,6 +221,60 @@ impl Renderer {
             flow_runtime_cache.retain(|flow_id, _| active_flow_ids.contains(flow_id));
             self.flow_pipeline_cache.retain_flows(&active_flow_ids);
 
+            // Reserve every ordinary pass occurrence in one frame-owned identity space before any
+            // projected-uniform, fixed-step, or timing-tail auxiliary occurrence is allocated.
+            // The resulting schedules are then consumed in the same flow/invocation order while
+            // each invocation's mutable runtime-resource scope is active.
+            let mut maximum_occurrence = 0_u64;
+            let mut scheduled_invocations = std::collections::VecDeque::new();
+            for flow in compiled_flows {
+                for invocation in prepared_frame.flow_invocations_for_flow(flow.flow_id) {
+                    let Some(view) = prepared_frame.view(invocation.view_id.as_str()) else {
+                        bail!(
+                            "prepared flow invocation '{}' references missing view '{}'",
+                            invocation.invocation_id.0,
+                            invocation.view_id
+                        );
+                    };
+                    let mut invocation_packet = packet.clone();
+                    invocation_packet.pending_operations = RendererPendingOperations::default();
+                    invocation_packet.view_id = view.view_id.clone();
+                    invocation_packet.surface_size = view.target_size_px;
+                    let occurrences = expand_render_pass_occurrences_in_frame(
+                        flow,
+                        &invocation.inputs,
+                        &mut maximum_occurrence,
+                        |pass| {
+                            if !self.pass_targets_active_view(
+                                pass,
+                                view.view_id.as_str(),
+                                view.kind,
+                            ) {
+                                return Ok(false);
+                            }
+                            let pass_id = execution_pass_id(pass);
+                            if let Some(feature_id) = execution_pass_feature_id(pass)
+                                && self.resolve_feature_pass_action(
+                                    feature_id,
+                                    pass_id,
+                                    &invocation_packet,
+                                )? == FeaturePassAction::Skip
+                            {
+                                return Ok(false);
+                            }
+                            ensure_compiled_pass_is_supported(pass)?;
+                            Ok(true)
+                        },
+                    )?;
+                    scheduled_invocations.push_back((
+                        flow.flow_id.to_string(),
+                        invocation.invocation_id.0.clone(),
+                        invocation_packet,
+                        occurrences,
+                    ));
+                }
+            }
+
             let mut invocations = Vec::new();
             for flow in compiled_flows {
                 let runtime_resources = flow_runtime_cache.entry(flow.flow_id).or_default();
@@ -237,6 +291,30 @@ impl Renderer {
                 runtime_resources.retain_invocation_uniform_scopes(invocation_ids);
 
                 for invocation in prepared_frame.flow_invocations_for_flow(flow.flow_id) {
+                    let Some((
+                        scheduled_flow_id,
+                        scheduled_invocation_id,
+                        invocation_packet,
+                        occurrences,
+                    )) = scheduled_invocations.pop_front()
+                    else {
+                        bail!(
+                            "frame occurrence reservation is missing flow '{}' invocation '{}'",
+                            flow.flow_id,
+                            invocation.invocation_id.0
+                        );
+                    };
+                    if scheduled_flow_id != flow.flow_id.to_string()
+                        || scheduled_invocation_id.as_str() != invocation.invocation_id.0.as_str()
+                    {
+                        bail!(
+                            "frame occurrence reservation order mismatch: expected flow '{}' invocation '{}', found flow '{}' invocation '{}'",
+                            flow.flow_id,
+                            invocation.invocation_id.0,
+                            scheduled_flow_id,
+                            scheduled_invocation_id
+                        );
+                    }
                     let Some(view) = prepared_frame.view(invocation.view_id.as_str()) else {
                         bail!(
                             "prepared flow invocation '{}' references missing view '{}'",
@@ -244,10 +322,6 @@ impl Renderer {
                             invocation.view_id
                         );
                     };
-                    let mut invocation_packet = packet.clone();
-                    invocation_packet.pending_operations = RendererPendingOperations::default();
-                    invocation_packet.view_id = view.view_id.clone();
-                    invocation_packet.surface_size = view.target_size_px;
                     runtime_resources.target_alias_bindings =
                         invocation.target_alias_bindings.clone();
                     runtime_resources
@@ -266,36 +340,6 @@ impl Renderer {
                             effective_history_signature,
                         )?;
 
-                        // Resolve render-domain runtime control before any canonical G3 work is
-                        // constructed. A skipped pass has no GPU occurrence and therefore no
-                        // hidden fixed-step mutation or timestamp slot.
-                        let occurrences =
-                            expand_render_pass_occurrences(flow, &invocation.inputs, |pass| {
-                                if !self.pass_targets_active_view(
-                                    pass,
-                                    view.view_id.as_str(),
-                                    view.kind,
-                                ) {
-                                    return Ok(false);
-                                }
-                                let pass_id = execution_pass_id(pass);
-                                if let Some(feature_id) = execution_pass_feature_id(pass)
-                                    && self.resolve_feature_pass_action(
-                                        feature_id,
-                                        pass_id,
-                                        &invocation_packet,
-                                    )? == FeaturePassAction::Skip
-                                {
-                                    return Ok(false);
-                                }
-                                ensure_compiled_pass_is_supported(pass)?;
-                                Ok(true)
-                            })?;
-                        let mut maximum_occurrence = occurrences
-                            .iter()
-                            .map(|occurrence| occurrence.occurrence_id.raw())
-                            .max()
-                            .unwrap_or(0);
                         let projected_uploads = self.realize_projected_uniform_uploads(
                             context,
                             flow,
@@ -425,6 +469,7 @@ impl Renderer {
                             logical_timing_plan
                                 .as_ref()
                                 .and_then(LogicalGpuPassTimingPlan::timing),
+                            &mut maximum_occurrence,
                         )? {
                             CanonicalInvocationPreparation::Prepared(work) => Some(work),
                             CanonicalInvocationPreparation::PreG7Residual => None,
@@ -444,6 +489,12 @@ impl Renderer {
                 }
                 self.last_runtime_resources
                     .extend(runtime_resources.inspect_entries(flow.flow_id));
+            }
+            if !scheduled_invocations.is_empty() {
+                bail!(
+                    "frame occurrence reservation retained {} unconsumed invocation schedules",
+                    scheduled_invocations.len()
+                );
             }
             Ok(invocations)
         })();
