@@ -3,7 +3,7 @@ use super::*;
 use crate::plugins::gpu::{
     CurrentRenderBufferCopyTerminal, CurrentRenderReadbackBufferTerminal,
     CurrentRenderTimestampResourcesTerminal, GpuBufferHandle, GpuBufferUsage, GpuContext,
-    GpuMemoryIntent, GpuQueryRange, GpuQueryResolveOperation, GpuQuerySetHandle,
+    GpuMemoryIntent, GpuQueryRange, GpuQueryResolveOperation, GpuQuerySetHandle, GpuReadbackId,
     GpuReadbackOperation, GpuRealizedBuffer, GpuRealizedQuerySet, GpuResourceLifetime,
     GpuTransferRegion, GpuWorkResourceIdAllocator,
 };
@@ -52,6 +52,7 @@ impl GpuPassTimingFrame {
         context: &GpuContext,
         query_set_handle: &GpuQuerySetHandle,
         resolve_buffer_handle: &GpuBufferHandle,
+        readback_id: GpuReadbackId,
         query_capacity: u32,
     ) -> Result<Self> {
         if query_capacity == 0 {
@@ -71,6 +72,7 @@ impl GpuPassTimingFrame {
             query_set_handle,
             GpuQueryRange::new(query_set_handle, 0, query_capacity)?,
             resolve_buffer_handle,
+            readback_id,
         )?;
         let query_set = context.realize_query_set(query_set_handle)?;
         let resolve_buffer = context.realize_buffer(resolve_buffer_handle)?;
@@ -545,8 +547,15 @@ mod tests {
                 .expect("resolve descriptor"),
             )
             .expect("resolve handle");
-        let mut frame = GpuPassTimingFrame::new(&context, &query_set, &resolve_buffer, 2)
-            .expect("timestamp resources should realize");
+        let readback_id = GpuReadbackId::allocate().expect("readback identity should allocate");
+        let mut frame = GpuPassTimingFrame::new(
+            &context,
+            &query_set,
+            &resolve_buffer,
+            readback_id,
+            2,
+        )
+        .expect("timestamp resources should realize");
         let resolve_operation = frame.resolve_operation().clone();
         let readback_operation = frame.readback_operation().clone();
         let evidence = {
