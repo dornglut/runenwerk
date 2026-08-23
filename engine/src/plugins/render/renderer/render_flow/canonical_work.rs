@@ -308,6 +308,7 @@ pub(super) fn resolve_canonical_invocation(
             timing.query_set(),
             timing.query_range()?,
             timing.resolve_buffer(),
+            timing.readback_id(),
         )?;
         let resolve_occurrence = allocate_aux_occurrence(maximum_occurrence)?;
         nodes.push(ResolvedRenderGpuWorkNode::timing_resolve(
