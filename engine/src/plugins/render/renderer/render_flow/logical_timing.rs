@@ -1,7 +1,8 @@
 use super::*;
 use crate::plugins::gpu::{
     GpuBufferHandle, GpuBufferUsage, GpuMemoryIntent, GpuQueryKind, GpuQueryRange,
-    GpuQuerySetDescriptor, GpuQuerySetHandle, GpuResourceLifetime, GpuWorkResourceIdAllocator,
+    GpuQuerySetDescriptor, GpuQuerySetHandle, GpuReadbackId, GpuResourceLifetime,
+    GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::renderer::resource_descriptors::{buffer_descriptor, owned_common};
 
@@ -73,15 +74,18 @@ impl LogicalGpuPassTimingPlan {
     }
 }
 
-/// Logical timestamp resources and timestamp-local query ranges prepared before G3 work.
+/// Logical timestamp resources, result identity, and timestamp-local query ranges prepared before
+/// G3 work.
 ///
-/// This value contains only the backend-neutral resources that participate in canonical timing
-/// semantics. G5 readback targets the resolve buffer directly; any renderer-owned staging buffer
-/// retained by the temporary raw executor is a physical compatibility sidecar, not logical work.
+/// The readback ID is allocated exactly once here because it identifies the eventual G5 result,
+/// while the readback operation itself is projected later from the exact used query range. G5
+/// readback targets the resolve buffer directly; any renderer-owned staging buffer retained by the
+/// temporary raw executor is a physical compatibility sidecar, not logical work.
 #[derive(Debug, Clone)]
 pub(super) struct LogicalGpuPassTiming {
     query_set: GpuQuerySetHandle,
     resolve_buffer: GpuBufferHandle,
+    readback_id: GpuReadbackId,
     query_capacity: u32,
 }
 
@@ -115,10 +119,12 @@ impl LogicalGpuPassTiming {
             GpuResourceLifetime::Transient,
             GpuMemoryIntent::Device,
         )?)?;
+        let readback_id = GpuReadbackId::allocate()?;
 
         Ok(Some(Self {
             query_set,
             resolve_buffer,
+            readback_id,
             query_capacity,
         }))
     }
@@ -129,6 +135,10 @@ impl LogicalGpuPassTiming {
 
     pub(super) fn resolve_buffer(&self) -> &GpuBufferHandle {
         &self.resolve_buffer
+    }
+
+    pub(super) const fn readback_id(&self) -> GpuReadbackId {
+        self.readback_id
     }
 
     pub(super) const fn query_capacity(&self) -> u32 {
