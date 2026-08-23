@@ -68,7 +68,7 @@ pub(super) struct PreparedPipelinePass {
 
 pub(super) use capture::{
     CaptureTextureSource, FrameCaptureRuntime, PendingCaptureReadback, PreparedCaptureReadback,
-    encode_prepared_texture_capture_copy, prepare_texture_capture_copy, read_capture_back,
+    encode_legacy_prepared_texture_capture, prepare_texture_capture_readback, read_capture_back,
     texture_readback_format,
 };
 #[cfg(test)]
