@@ -15,6 +15,7 @@ mod program_binding_realization;
 mod resource_realization;
 mod state;
 mod surface;
+mod timestamp;
 
 pub(crate) use device_request::request_headless;
 pub(crate) use execution::WgpuExecutionState;
