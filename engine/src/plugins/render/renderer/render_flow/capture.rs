@@ -3,8 +3,8 @@ use crate::plugins::gpu::{
     CurrentRenderReadbackBufferTerminal, CurrentRenderTextureReadbackCopyTerminal,
     CurrentSurfaceReadbackCopyTerminal, GpuBufferHandle, GpuBufferUsage, GpuContext, GpuCopyExtent,
     GpuMemoryIntent, GpuReadbackId, GpuReadbackOperation, GpuRealizedBuffer, GpuRealizedTexture,
-    GpuResourceLifetime, GpuTextureAspect, GpuTextureCopyRegion, GpuTextureHandle, GpuTextureOrigin,
-    GpuTransferRegion, GpuWorkResourceIdAllocator,
+    GpuResourceLifetime, GpuTextureAspect, GpuTextureCopyRegion, GpuTextureHandle,
+    GpuTextureOrigin, GpuTransferRegion, GpuWorkResourceIdAllocator,
 };
 use crate::plugins::render::renderer::resource_descriptors::buffer_descriptor;
 
@@ -372,9 +372,7 @@ pub fn prepare_texture_capture_readback(
             }
             (
                 PreparedCaptureAuthority::Canonical(canonical_capture_readback_operation(
-                    handle,
-                    width,
-                    height,
+                    handle, width, height,
                 )?),
                 LegacyPreparedCaptureTextureSource::Realized(realized.clone()),
             )
@@ -463,7 +461,9 @@ pub fn encode_legacy_prepared_texture_capture(
             LegacyPreparedCaptureTextureSource::Realized(texture),
         ) => {
             let GpuTransferRegion::Texture(region) = operation.source() else {
-                anyhow::bail!("canonical renderer texture capture has a non-texture readback source");
+                anyhow::bail!(
+                    "canonical renderer texture capture has a non-texture readback source"
+                );
             };
             if region.texture().diagnostic_identity() != texture.logical_identity() {
                 anyhow::bail!(
@@ -471,9 +471,7 @@ pub fn encode_legacy_prepared_texture_capture(
                 );
             }
             let extent = region.extent();
-            if extent.width() != width
-                || extent.height() != height
-                || extent.depth_or_layers() != 1
+            if extent.width() != width || extent.height() != height || extent.depth_or_layers() != 1
             {
                 anyhow::bail!(
                     "canonical renderer capture extent disagrees with renderer capture metadata"
@@ -481,10 +479,9 @@ pub fn encode_legacy_prepared_texture_capture(
             }
             (extent.width(), extent.height())
         }
-        (
-            PreparedCaptureAuthority::PreG7Surface,
-            LegacyPreparedCaptureTextureSource::Surface,
-        ) => (width, height),
+        (PreparedCaptureAuthority::PreG7Surface, LegacyPreparedCaptureTextureSource::Surface) => {
+            (width, height)
+        }
         _ => anyhow::bail!(
             "renderer capture semantic authority disagrees with its temporary physical source"
         ),
