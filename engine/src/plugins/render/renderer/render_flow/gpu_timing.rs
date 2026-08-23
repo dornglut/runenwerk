@@ -78,7 +78,7 @@ impl GpuPassTimingFrame {
         let resolve_buffer = context.realize_buffer(resolve_buffer_handle)?;
 
         // Removal condition: delete this resource with the raw timing encoder/map bridge when the
-        // frame-level G5 submission path consumes `timing_tail.readback()` directly.
+        // frame-wide GPU submission path consumes `timing_tail.readback()` directly.
         let mut legacy_allocator = GpuWorkResourceIdAllocator::new();
         let legacy_readback_buffer_handle =
             legacy_allocator.allocate_buffer_handle(buffer_descriptor(
@@ -111,14 +111,19 @@ impl GpuPassTimingFrame {
         self.timing_tail.readback()
     }
 
-    /// Transitional execution gate retained until the raw renderer timing bridge is deleted.
-    /// Timestamp scale is already observed through backend-neutral RunenGPU context authority
-    /// during construction; the raw queue argument carries no timing semantics.
-    pub fn activate(&mut self, _queue: &Queue) -> bool {
+    /// Renderer timing interpretation is backend-neutral. The temporary raw executor only needs
+    /// to know whether timestamp values can be interpreted for this frame; no Queue observation is
+    /// part of that decision.
+    pub fn timestamp_scale_available(&self) -> bool {
         self.timestamp_period_ns > 0.0
     }
 
-    pub fn register_pass(
+    /// Registers renderer-owned evidence identity for one already-admitted timestamp range.
+    ///
+    /// This is realization metadata, not physical encoder state. The temporary raw bridge consumes
+    /// it later only to decode bytes; the eventual frame-wide submission path can consume the same
+    /// metadata with normalized readback results.
+    pub fn register_pass_metadata(
         &mut self,
         indices: GpuPassTimestampIndices,
         frame_index: u64,
@@ -126,12 +131,12 @@ impl GpuPassTimingFrame {
         flow_id: impl Into<String>,
         pass_id: impl Into<String>,
         pass_kind: impl Into<String>,
-    ) -> Option<GpuPassTimestampIndices> {
+    ) -> bool {
         if indices.begin >= indices.end
             || indices.end >= self.query_capacity
             || self.entries.iter().any(|entry| entry.indices == indices)
         {
-            return None;
+            return false;
         }
         self.query_count = self.query_count.max(indices.end.saturating_add(1));
         self.entries.push(GpuPassTimingEntry {
@@ -142,7 +147,7 @@ impl GpuPassTimingFrame {
             pass_kind: pass_kind.into(),
             indices,
         });
-        Some(indices)
+        true
     }
 
     pub fn timestamp_writes(&self, indices: GpuPassTimestampIndices) -> GpuPassTimestampWrites {
@@ -189,11 +194,11 @@ impl GpuPassTimingFrame {
         Ok(true)
     }
 
-    /// Temporary raw execution of the canonical G5 readback operation.
+    /// Temporary raw execution of the canonical readback operation.
     ///
     /// Source range and readback identity come exclusively from `operation`; the renderer-owned
     /// destination below is private staging required only because the frame still submits through
-    /// the legacy encoder. It is not part of G3/G5 semantic work and is deleted with that bridge.
+    /// the legacy encoder. It is not part of canonical GPU work and is deleted with that bridge.
     pub fn encode_legacy_readback(
         self,
         context: &GpuContext,
@@ -213,7 +218,7 @@ impl GpuPassTimingFrame {
         };
         if source.buffer().diagnostic_identity() != self.resolve_buffer.logical_identity() {
             anyhow::bail!(
-                "scheduled canonical timing readback source disagrees with its G4C1 resolve-buffer realization"
+                "scheduled canonical timing readback source disagrees with its admitted resolve-buffer realization"
             );
         }
         let readback_size = source.range().size();
@@ -553,19 +558,18 @@ mod tests {
                 .expect("timestamp resources should realize");
         let resolve_operation = frame.resolve_operation().clone();
         let readback_operation = frame.readback_operation().clone();
+        let indices = GpuPassTimestampIndices { begin: 0, end: 1 };
+        assert!(frame.register_pass_metadata(
+            indices,
+            1,
+            1,
+            "runtime.gpu",
+            "timestamp.empty_compute",
+            "compute",
+        ));
         let evidence = {
             let loan = context.current_render_device_queue();
-            assert!(frame.activate(loan.queue));
-            let indices = frame
-                .register_pass(
-                    GpuPassTimestampIndices { begin: 0, end: 1 },
-                    1,
-                    1,
-                    "runtime.gpu",
-                    "timestamp.empty_compute",
-                    "compute",
-                )
-                .expect("timestamp pass should reserve queries");
+            assert!(frame.timestamp_scale_available());
             let writes = frame.timestamp_writes(indices);
             let mut encoder = loan
                 .device

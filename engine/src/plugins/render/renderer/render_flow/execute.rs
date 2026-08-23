@@ -380,7 +380,7 @@ impl Renderer {
                             } else {
                                 None
                             };
-                        let timing_frame = match logical_timing_plan
+                        let mut timing_frame = match logical_timing_plan
                             .as_ref()
                             .and_then(LogicalGpuPassTimingPlan::timing)
                         {
@@ -454,6 +454,28 @@ impl Renderer {
                                 .map(|plan| plan.range_for_occurrence(ordinal))
                                 .transpose()?
                                 .flatten();
+                            if let Some(indices) = timestamp_indices {
+                                let frame = timing_frame.as_mut().ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "timestampable pass '{}' has no realized timing resources",
+                                        execution_pass_id(pass)
+                                    )
+                                })?;
+                                if !frame.register_pass_metadata(
+                                    indices,
+                                    frame_index,
+                                    prepared_frame.surface.render_surface_id.raw(),
+                                    flow.flow_id.to_string(),
+                                    execution_pass_id(pass).to_string(),
+                                    execution_pass_kind_name(pass).to_string(),
+                                ) {
+                                    bail!(
+                                        "renderer timing metadata for flow '{}' pass '{}' disagrees with its admitted query range",
+                                        flow.flow_id,
+                                        execution_pass_id(pass)
+                                    );
+                                }
+                            }
                             realized_passes.push(RealizedScheduledPass {
                                 occurrence: occurrence.occurrence_id,
                                 control_order_after: occurrence.control_order_after,
@@ -607,8 +629,8 @@ impl Renderer {
                     let schedule = schedule_legacy_invocation_work(legacy_work)?;
                     let timestamp_period_available = invocation
                         .timing_frame
-                        .as_mut()
-                        .map(|frame| frame.activate(queue))
+                        .as_ref()
+                        .map(GpuPassTimingFrame::timestamp_scale_available)
                         .unwrap_or(false);
 
                     for scheduled in schedule {
@@ -667,21 +689,8 @@ impl Renderer {
                                 let pass_encode_start = Instant::now();
                                 let pass_label = execution_pass_id(pass).to_string();
                                 let pass_kind = execution_pass_kind_name(pass).to_string();
-                                let gpu_timestamp_indices =
-                                    execution.timestamp_indices.and_then(|indices| {
-                                        invocation.timing_frame.as_mut().and_then(|frame| {
-                                            frame.register_pass(
-                                                indices,
-                                                frame_index,
-                                                prepared_frame.surface.render_surface_id.raw(),
-                                                invocation.flow.flow_id.to_string(),
-                                                pass_label.clone(),
-                                                pass_kind.clone(),
-                                            )
-                                        })
-                                    });
                                 let gpu_timestamp_writes =
-                                    gpu_timestamp_indices.and_then(|indices| {
+                                    execution.timestamp_indices.and_then(|indices| {
                                         invocation
                                             .timing_frame
                                             .as_ref()
@@ -848,8 +857,8 @@ impl Renderer {
                     }
                     let timestamp_active = invocation
                         .timing_frame
-                        .as_mut()
-                        .map(|frame| frame.activate(queue))
+                        .as_ref()
+                        .map(GpuPassTimingFrame::timestamp_scale_available)
                         .unwrap_or(false);
                     for scheduled_pass in &mut invocation.scheduled_passes {
                         if let Some(upload) = scheduled_pass.fixed_step_upload.as_ref() {
@@ -874,18 +883,7 @@ impl Renderer {
                         let pass_label = execution_pass_id(pass).to_string();
                         let pass_kind = execution_pass_kind_name(pass).to_string();
                         let gpu_timestamp_indices = if timestamp_active {
-                            execution.timestamp_indices.and_then(|indices| {
-                                invocation.timing_frame.as_mut().and_then(|frame| {
-                                    frame.register_pass(
-                                        indices,
-                                        frame_index,
-                                        prepared_frame.surface.render_surface_id.raw(),
-                                        invocation.flow.flow_id.to_string(),
-                                        pass_label.clone(),
-                                        pass_kind.clone(),
-                                    )
-                                })
-                            })
+                            execution.timestamp_indices
                         } else {
                             None
                         };
