@@ -15,10 +15,14 @@ fn transitional_g5_bridge_consumes_prepared_work_without_compiled_execution_fall
     let execute = source("src/plugins/render/renderer/render_flow/execute.rs");
     let canonical_start = execute
         .find("if let Some(legacy_work) = legacy_work.as_deref() {")
-        .expect("transitional prepared-work execution branch must remain explicit until G5C removes it");
+        .expect(
+            "transitional prepared-work execution branch must remain explicit until G5C removes it",
+        );
     let residual_offset = execute[canonical_start..]
         .find("let invocation_result = (|| -> Result<()> {")
-        .expect("residual renderer branch must remain distinguishable from prepared generic execution");
+        .expect(
+            "residual renderer branch must remain distinguishable from prepared generic execution",
+        );
     let canonical = &execute[canonical_start..canonical_start + residual_offset];
 
     for required in [
