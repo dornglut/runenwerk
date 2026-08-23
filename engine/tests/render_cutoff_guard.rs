@@ -335,7 +335,7 @@ fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar()
     }
 
     let execute = read("src/plugins/render/renderer/render_flow/execute.rs");
-    let schedule = function_body(&execute, "fn schedule_invocation_passes(");
+    let schedule = function_body(&execute, "fn schedule_legacy_invocation_work(");
     assert!(schedule.contains(".ordered_payloads()?"));
     for alternate_order in ["flow.execution.passes", "topological_sort", "sort_by"] {
         assert!(
@@ -343,6 +343,38 @@ fn g3_render_cutover_has_one_prepared_graph_authority_and_payload_only_sidecar()
             "runtime scheduling must not restore alternate order path '{alternate_order}'"
         );
     }
+
+    let invocation_start = execute
+        .find("struct RealizedFlowInvocation<'a> {")
+        .expect("renderer should retain one realized invocation handoff");
+    let invocation_tail = &execute[invocation_start..];
+    let invocation_end = invocation_tail
+        .find("\n}\n\nstruct RealizedScheduledPass")
+        .expect("realized invocation declaration should precede scheduled-pass state");
+    let invocation = &invocation_tail[..invocation_end];
+    assert!(
+        invocation.contains("canonical_resolution: Option<CanonicalInvocationResolution>"),
+        "realized invocation must retain owned canonical resolution as its semantic authority"
+    );
+    assert!(
+        !invocation.contains("canonical_work") && !invocation.contains("PreparedRenderWorkPlan"),
+        "realized invocation must not retain a prepared per-invocation G3 graph alongside semantic resolution"
+    );
+
+    let render_packet = function_body(&execute, "    pub(crate) fn render_packet(");
+    let drain = render_packet
+        .find("let canonical_resolutions = batch")
+        .expect("render packet should drain owned invocation resolutions before raw execution");
+    let legacy_prepare = render_packet
+        .find("let legacy_invocation_work = canonical_resolutions")
+        .expect("render packet should derive temporary legacy G3 plans from drained resolutions");
+    let raw_loan = render_packet
+        .find("let loan = context.current_render_device_queue();")
+        .expect("transitional renderer should still expose the bounded raw loan before final G5C1 cutover");
+    assert!(
+        drain < legacy_prepare && legacy_prepare < raw_loan,
+        "owned invocation resolutions must be drained before temporary legacy plans are prepared, and all G3 preparation must remain outside the raw device/queue loan"
+    );
 }
 
 #[test]
