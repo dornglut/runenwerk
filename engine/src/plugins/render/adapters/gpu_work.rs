@@ -994,14 +994,8 @@ mod tests {
                 GpuTextureDescriptor::new(
                     common("frame present texture"),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &texture_label,
-                        GpuTextureDimension::D2,
-                        4,
-                        4,
-                        1,
-                    )
-                    .expect("present texture extent should be valid"),
+                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 4, 4, 1)
+                        .expect("present texture extent should be valid"),
                     1,
                     1,
                     GpuTextureFormat::Rgba8Unorm,
@@ -1012,15 +1006,9 @@ mod tests {
                 .expect("present texture descriptor should be valid"),
             )
             .expect("present texture handle should allocate");
-        let subresource = GpuTextureSubresourceRange::new(
-            &texture_label,
-            0,
-            1,
-            0,
-            1,
-            GpuTextureAspect::Color,
-        )
-        .expect("present subresource should be valid");
+        let subresource =
+            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 0, 1, GpuTextureAspect::Color)
+                .expect("present subresource should be valid");
         let operation = GpuPresentOperation::new(texture.clone().into(), subresource)
             .expect("present operation should be valid");
         let present = ResolvedRenderGpuWorkNode::present(
@@ -1034,7 +1022,10 @@ mod tests {
             prepare_render_gpu_frame_work(label("frame present graph"), [present.clone()])
                 .expect("frame-only Present should prepare");
         assert_eq!(frame_graph.nodes().len(), 1);
-        assert_eq!(frame_graph.nodes()[0].node().kind(), GpuWorkNodeKind::Present);
+        assert_eq!(
+            frame_graph.nodes()[0].node().kind(),
+            GpuWorkNodeKind::Present
+        );
 
         let (legacy_graph, pending) =
             prepare_resolved_render_gpu_work(label("legacy present rejection"), [present])
