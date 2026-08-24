@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-08-18
+last_reviewed: 2026-08-23
 ---
 
 # Active Designs
@@ -135,6 +135,8 @@ active design contains older conflicting target language.
 - [RunenGPU G4B Contracts and G4C Delivery Design](runengpu-g4b-contracts-g4c-delivery-design.md)
 - [RunenGPU G4C2 Presentation-Surface Binding Boundary](runengpu-g4c2-presentation-surface-binding-boundary.md)
 - [RunenGPU G5 Execution Lifecycle Design](runengpu-g5-execution-lifecycle-design.md)
+- [RunenGPU Post-G5C Hardening Design](runengpu-post-g5c-hardening-design.md)
+- [RunenGPU Phase Requirements and Proof Matrix](runengpu-phase-requirements-proof-matrix.md)
 - [RunenRender Architecture and Decomposition Design](runenrender-decomposition-design.md)
 - [RunenGPU and RunenRender Decomposition Execution Plan](runenrender-internal-decomposition-execution-plan.md)
 - [Runen Family Operational Hardening Design](runen-family-operational-hardening-design.md)
