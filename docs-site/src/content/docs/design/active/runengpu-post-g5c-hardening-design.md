@@ -77,9 +77,12 @@ G3R current rule
     Prepared descriptor -> checked prepared initialized coverage
 
 G5R corrected rule
-    Prepared descriptor -> retained source/reconstruction material only
+    Prepared descriptor -> declarative initial-content request + retained source material
+    descriptor metadata alone -> no initialized coverage
     completed canonical materialization -> initialized coverage
 ```
+
+The existing public `GpuBufferInitialization::Prepared(data)` and `GpuTextureInitialization::Prepared(data)` vocabulary remains valid as **authoring intent**: it requests initial contents from prepared source data. The variant does not certify that those contents already exist physically. G5R must lower that request through canonical graph-visible materialization before graph-entry initialization may rely on it. A rename or parallel source enum is not required merely to correct the current semantic bug.
 
 All other G3R distinctions remain intact unless a later explicit correction says otherwise:
 
@@ -103,11 +106,11 @@ Zeroed
     creation/postcondition only where the accepted backend contract proves zero content
 
 Prepared(data)
-    retained source/reconstruction material only
-    no physical-content or initialized-coverage claim by itself
+    declarative request for initial content from retained source/reconstruction material
+    no physical-content or initialized-coverage claim by metadata alone
 ```
 
-Creation-with-data convenience must lower to the same authority as:
+The `Prepared(data)` request must lower to the same authority as:
 
 ```text
 create logical resource
@@ -122,6 +125,7 @@ A different implementation is acceptable only if an explicit design revision pro
 
 G5R must leave these invariants true:
 
+- public `Prepared(data)` descriptor state denotes requested initialization from source data, not completed initialization evidence;
 - prepared payload metadata alone never grants graph-entry initialized coverage;
 - physical materialization participates in the same G3/G5 work authority as other transfers;
 - no resource-constructor write, hidden queue write, or compatibility transfer path bypasses canonical work ordering;
